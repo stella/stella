@@ -6,6 +6,8 @@
  * disagree about the same slice.
  */
 
+import { Result } from "better-result";
+
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ReconciliationListingItem,
@@ -45,9 +47,11 @@ type ListReconciliationSliceOptions = {
 };
 
 /**
- * Every page of one slice, or a throw. Never a partial listing: an undercount
- * would be recorded as if it were the whole slice, and an undercounted slice
- * can read as fully collected.
+ * Every page of one slice, or an error. Never a partial listing: an
+ * undercount would be recorded as if it were the whole slice, and an
+ * undercounted slice can read as fully collected. A page request that rejects
+ * rejects this call with the adapter's own error, so a caller that classifies
+ * adapter failures still sees them unchanged.
  */
 export const listReconciliationSlice = async ({
   adapterKey,
@@ -56,7 +60,9 @@ export const listReconciliationSlice = async ({
   pageTimeoutMs,
   slice,
   sleep,
-}: ListReconciliationSliceOptions): Promise<ListedSlice> => {
+}: ListReconciliationSliceOptions): Promise<
+  Result<ListedSlice, AdapterFetchError>
+> => {
   const listing: ListedSlice = {
     keyed: new Map(),
     listed: 0,
@@ -88,14 +94,16 @@ export const listReconciliationSlice = async ({
       listing.keyed.set(identityKey, item);
     }
     if (page + 1 >= listed.totalPages) {
-      return listing;
+      return Result.ok(listing);
     }
     if (page + 1 >= MAX_SLICE_PAGES) {
-      throw new AdapterFetchError({
-        message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
-        adapterKey,
-        cursor: slice,
-      });
+      return Result.err(
+        new AdapterFetchError({
+          message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
+          adapterKey,
+          cursor: slice,
+        }),
+      );
     }
     // No clock here on purpose: a listing has nowhere to resume from, so
     // cutting one off on time would make a slowly-listing slice unlistable

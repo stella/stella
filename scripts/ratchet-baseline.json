@@ -241,7 +241,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1057,
+    "count": 1053,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -510,7 +510,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx": 1,
       "apps/web/src/routes/agent-claim.tsx": 2,
-      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 14,
+      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 10,
       "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx": 6,
       "apps/web/src/routes/auth/index.tsx": 2,
       "apps/web/src/routes/auth/organization.tsx": 5,
@@ -910,7 +910,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 96,
+    "count": 97,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -919,6 +919,7 @@
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
       "apps/api/src/handlers/case-law/research/columns-reorder.ts": 1,
@@ -993,7 +994,7 @@
     "files": {}
   },
   "no-swallowed-rejection-suppressions": {
-    "count": 8,
+    "count": 7,
     "files": {
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
       "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
@@ -1001,7 +1002,6 @@
       "apps/api/src/lib/with-timeout.ts": 1,
       "apps/web/src/workers/anonymize-chat-worker.ts": 1,
       "packages/agent-engine/src/bun-docker/provider.ts": 1,
-      "packages/scripts/src/dev-runner.ts": 1,
       "packages/ui/src/components/destructive-confirm-dialog.tsx": 1
     }
   },

@@ -195,15 +195,16 @@ type RunOptions = {
   maxSlices: number;
   /** Absent: `TO`. `null`: no end, so the call adopts the stored census. */
   to?: Date | null | undefined;
+  now?: Date | undefined;
 };
 
-const run = async ({ maxSlices, publisher, to = TO }: RunOptions) =>
+const run = async ({ maxSlices, now = NOW, publisher, to = TO }: RunOptions) =>
   await runListingCensus({
     scopedDb,
     adapter: publisher.adapter,
     from: FROM,
     to: to ?? undefined,
-    now: NOW,
+    now,
     maxSlices,
     sleep: publisher.sleep,
   });
@@ -245,6 +246,7 @@ describe("runListingCensus", () => {
         asOf: TO.toISOString(),
         slicesCounted: SLICE_COUNT,
         total: EXPECTED_TOTAL,
+        lastSliceCount: 2,
       },
     });
     const row = await readSource(adapterKey);
@@ -350,12 +352,141 @@ describe("runListingCensus", () => {
     const requestsBefore = publisher.requests.length;
 
     const explicit = unwrap(await run({ publisher, maxSlices: 1 }));
-    const adopted = unwrap(await run({ publisher, maxSlices: 1, to: null }));
 
     expect(explicit.type).toBe("already-complete");
-    expect(adopted.type).toBe("already-complete");
     expect(publisher.requests).toHaveLength(requestsBefore);
     expect(await readSource(adapterKey)).toEqual(before);
+  });
+
+  test("an open-ended census whose tip has not moved is a no-op", async () => {
+    const adapterKey = await seedSource();
+    const publisher = fakePublisher({ key: adapterKey });
+    const atTip = new Date("2026-01-06T12:00:00.000Z");
+    unwrap(
+      await run({
+        publisher,
+        maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN,
+        to: null,
+        now: atTip,
+      }),
+    );
+    const requestsBefore = publisher.requests.length;
+
+    const again = unwrap(
+      await run({ publisher, maxSlices: 1, to: null, now: atTip }),
+    );
+
+    expect(again.type).toBe("already-complete");
+    expect(publisher.requests).toHaveLength(requestsBefore);
+  });
+
+  test("an open-ended run after the tip moved extends the census and rewrites the total", async () => {
+    const adapterKey = await seedSource();
+    const listed = { ...LISTED };
+    const publisher = fakePublisher({ key: adapterKey, listed });
+    unwrap(
+      await run({ publisher, maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN }),
+    );
+    // The old end day was still the tip when counted and has grown since; a
+    // later day now lists too.
+    listed["2026-01-06"] = ["k", "l", "m"];
+    listed["2026-01-07"] = ["n"];
+    const requestsBefore = publisher.requests.length;
+
+    const plan = unwrap(
+      await inspectListingCensus({
+        scopedDb,
+        adapter: publisher.adapter,
+        from: FROM,
+        now: NOW,
+      }),
+    );
+    expect(plan.start.type).toBe("extend");
+    const outcome = unwrap(
+      await run({
+        publisher,
+        maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN,
+        to: null,
+      }),
+    );
+
+    expect(outcome.type).toBe("completed");
+    const row = await readSource(adapterKey);
+    expect(row.reportedTotal).toBe(EXPECTED_TOTAL - 2 + 3 + 1);
+    expect(row.reportedTotalAsOf).toEqual(NOW);
+    // Listing resumed at the old end day; nothing before it was listed again.
+    const extension = publisher.requests.slice(requestsBefore);
+    expect(extension.at(0)).toBe("2026-01-06#0");
+    expect(extension.some((request) => request < "2026-01-06")).toBe(false);
+    expect(row.config?.[LISTING_CENSUS_CONFIG_KEY]).toMatchObject({
+      status: LISTING_CENSUS_STATUS.COMPLETE,
+      toSlice: toUtcDateString(NOW),
+      slicesCounted: 32,
+    });
+  });
+
+  test("a later observation of the same end day recounts that day", async () => {
+    const adapterKey = await seedSource();
+    const listed = { ...LISTED };
+    const publisher = fakePublisher({ key: adapterKey, listed });
+    unwrap(
+      await run({ publisher, maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN }),
+    );
+    listed["2026-01-06"] = ["k", "l", "m"];
+    const requestsBefore = publisher.requests.length;
+    const evening = new Date("2026-01-06T18:00:00.000Z");
+
+    const outcome = unwrap(await run({ publisher, maxSlices: 1, to: evening }));
+
+    expect(outcome).toMatchObject({
+      type: "completed",
+      slicesThisRun: 1,
+      checkpoint: { total: EXPECTED_TOTAL + 1, asOf: evening.toISOString() },
+    });
+    expect(publisher.requests.slice(requestsBefore)).toEqual([
+      "2026-01-06#0",
+      "2026-01-06#1",
+    ]);
+    const row = await readSource(adapterKey);
+    expect(row.reportedTotal).toBe(EXPECTED_TOTAL + 1);
+    expect(row.reportedTotalAsOf).toEqual(evening);
+  });
+
+  test("the floor is the publisher's first slice or the configured sweep floor", async () => {
+    const adapterKey = await seedSource();
+    await db
+      .update(caseLawSources)
+      .set({ config: { reconciliation: { firstSlice: "2026-01-03" } } })
+      .where(eq(caseLawSources.adapterKey, adapterKey));
+    const publisher = fakePublisher({ key: adapterKey });
+
+    const between = await runListingCensus({
+      scopedDb,
+      adapter: publisher.adapter,
+      from: new Date("2026-01-02T00:00:00.000Z"),
+      to: TO,
+      now: NOW,
+      maxSlices: 3,
+      sleep: publisher.sleep,
+    });
+    expect(Result.isError(between)).toBe(true);
+    expect(publisher.requests).toHaveLength(0);
+
+    // No floor given: the configured sweep floor.
+    const floored = unwrap(
+      await runListingCensus({
+        scopedDb,
+        adapter: publisher.adapter,
+        to: TO,
+        now: NOW,
+        maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN,
+        sleep: publisher.sleep,
+      }),
+    );
+    expect(floored).toMatchObject({
+      type: "completed",
+      checkpoint: { fromSlice: "2026-01-03", total: 8 },
+    });
   });
 
   test("without an end, a call resumes the stored census rather than restarting", async () => {
@@ -468,13 +599,7 @@ describe("runListingCensus", () => {
       { maxSlices: MAX_LISTING_CENSUS_SLICES_PER_RUN + 1 },
     ],
     ["an end in the future", { to: new Date("2026-03-01T00:00:00.000Z") }],
-    [
-      "an end before the floor",
-      {
-        from: new Date("2026-01-05T00:00:00.000Z"),
-        to: new Date("2026-01-02T00:00:00.000Z"),
-      },
-    ],
+    ["an end before the floor", { to: new Date("2025-12-31T00:00:00.000Z") }],
     [
       "a floor before the first slice",
       { from: new Date("2025-12-31T00:00:00.000Z") },

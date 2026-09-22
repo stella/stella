@@ -26,6 +26,13 @@
  * finds the checkpoint moved and stops as `superseded`. The last slice, the
  * completed checkpoint and the total are written in one transaction, so a
  * completed census writes the total exactly once.
+ *
+ * A completed census is extended rather than recounted when its end moves
+ * later: the tip slice moved on, or the same end slice is asked for at a later
+ * instant. The old end slice was the publisher's still-mutable tip when it was
+ * counted, so the extension recounts it (the checkpoint keeps its count to
+ * take back out) and continues from there; the earlier slices are not listed
+ * again.
  */
 
 import { panic, Result } from "better-result";
@@ -35,6 +42,7 @@ import * as v from "valibot";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
+import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { listReconciliationSlice } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -85,6 +93,8 @@ const checkpointSchema = v.variant("status", [
     status: v.literal(LISTING_CENSUS_STATUS.COMPLETE),
     ...censusRangeFields,
     total: nonNegativeInteger,
+    /** The end slice's own count, taken back out when it is recounted. */
+    lastSliceCount: nonNegativeInteger,
   }),
 ]);
 
@@ -115,6 +125,8 @@ export type ListingCensusStart =
   /** A census over a different range was stored; this one replaces it. */
   | { type: "restart"; replaced: ListingCensusCheckpoint }
   | { type: "resume"; checkpoint: CountingCheckpoint }
+  /** A completed census whose end moved later; its end slice is recounted. */
+  | { type: "extend"; completed: CompleteCheckpoint }
   | { type: "complete"; checkpoint: CompleteCheckpoint };
 
 export type ListingCensusPlan = {
@@ -128,11 +140,14 @@ export type ListingCensusPlan = {
 type InspectListingCensusOptions = {
   scopedDb: ScopedDb;
   adapter: ListingCensusAdapter;
-  /** Floor date; the census starts at the slice holding it. */
-  from: Date;
   /**
-   * End date, and the as-of of the total. Absent: resume the stored census
-   * over the same floor whatever its end, or start one ending `now`.
+   * Floor date; the census starts at the slice holding it. Absent: the
+   * source's sweep floor. Either way it must be one of the two floors below.
+   */
+  from?: Date | undefined;
+  /**
+   * End date, and the as-of of the total. Absent: resume the stored census,
+   * or extend a completed one to the current tip, or start one ending `now`.
    */
   to?: Date | undefined;
   now: Date;
@@ -148,18 +163,66 @@ const refuse = (
     }),
   );
 
-const sameRange = (
-  checkpoint: ListingCensusCheckpoint,
-  { fromSlice, toSlice }: { fromSlice: string; toSlice: string },
-): boolean =>
-  checkpoint.fromSlice === fromSlice && checkpoint.toSlice === toSlice;
+type ResolveStartOptions = {
+  checkpoint: ListingCensusCheckpoint | undefined;
+  fromSlice: string;
+  toSlice: string;
+  end: Date;
+  /** Whether the caller named the end, rather than taking the tip. */
+  explicitEnd: boolean;
+};
 
-const startFrom = (checkpoint: ListingCensusCheckpoint): ListingCensusStart => {
+type ResolvedStart = {
+  toSlice: string;
+  asOf: Date;
+  start: ListingCensusStart;
+};
+
+const resolveStart = ({
+  checkpoint,
+  end,
+  explicitEnd,
+  fromSlice,
+  toSlice,
+}: ResolveStartOptions): ResolvedStart => {
+  const requested = (start: ListingCensusStart): ResolvedStart => ({
+    toSlice,
+    asOf: end,
+    start,
+  });
+  const adopted = (
+    stored: ListingCensusCheckpoint,
+    start: ListingCensusStart,
+  ): ResolvedStart => ({
+    toSlice: stored.toSlice,
+    asOf: new Date(stored.asOf),
+    start,
+  });
+
+  if (checkpoint === undefined) {
+    return requested({ type: "fresh" });
+  }
+  if (checkpoint.fromSlice !== fromSlice) {
+    return requested({ type: "restart", replaced: checkpoint });
+  }
   switch (checkpoint.status) {
     case LISTING_CENSUS_STATUS.COUNTING:
-      return { type: "resume", checkpoint };
-    case LISTING_CENSUS_STATUS.COMPLETE:
-      return { type: "complete", checkpoint };
+      // An in-progress census keeps its own end until it completes; only an
+      // explicitly different end replaces it.
+      return !explicitEnd || checkpoint.toSlice === toSlice
+        ? adopted(checkpoint, { type: "resume", checkpoint })
+        : requested({ type: "restart", replaced: checkpoint });
+    case LISTING_CENSUS_STATUS.COMPLETE: {
+      if (toSlice < checkpoint.toSlice) {
+        return requested({ type: "restart", replaced: checkpoint });
+      }
+      const later =
+        toSlice > checkpoint.toSlice ||
+        (explicitEnd && end.getTime() > new Date(checkpoint.asOf).getTime());
+      return later
+        ? requested({ type: "extend", completed: checkpoint })
+        : adopted(checkpoint, { type: "complete", checkpoint });
+    }
     default: {
       checkpoint satisfies never;
       return panic("unhandled listing census checkpoint");
@@ -170,6 +233,17 @@ const startFrom = (checkpoint: ListingCensusCheckpoint): ListingCensusStart => {
 /**
  * Read the stored checkpoint and decide what a call over this range would do,
  * without contacting the publisher or writing anything. A dry run is this.
+ *
+ * The floor is either the first slice the publisher lists or the source's
+ * configured reconciliation floor, and nothing in between. The stored total
+ * the census is compared against counts every decision the source holds, so
+ * the denominator has to cover the range the source is meant to hold: the
+ * whole listing, or, where an operator has floored the source because its
+ * earlier years are held under another source (the Polish Supreme Court
+ * before 2016-06-23 is republished by SAOS under `pl-courts`), the range from
+ * that floor. The sweep never ingests below the floor, so only a floor raised
+ * after older rows were ingested can leave the numerator wider; lowering the
+ * floor back is the remedy, and a census from it recounts.
  */
 export const inspectListingCensus = async ({
   scopedDb,
@@ -181,18 +255,8 @@ export const inspectListingCensus = async ({
   Result<ListingCensusPlan, ConfigurationError>
 > => {
   const walk = adapter.reconciliation;
-  const fromSlice = walk.sliceOf(from);
-  if (fromSlice < walk.firstSlice) {
-    return refuse(
-      adapter.key,
-      `floor ${fromSlice} precedes the first slice the publisher lists, ${walk.firstSlice}`,
-    );
-  }
   if (to !== undefined && to.getTime() > now.getTime()) {
     return refuse(adapter.key, `end ${to.toISOString()} is in the future`);
-  }
-  if (to !== undefined && walk.sliceOf(to) < fromSlice) {
-    return refuse(adapter.key, `end precedes floor ${fromSlice}`);
   }
 
   const row = (
@@ -214,6 +278,29 @@ export const inspectListingCensus = async ({
     return refuse(adapter.key, "the source's config is not a JSON object");
   }
 
+  const floored = floorSliceWalk({
+    adapterKey: adapter.key,
+    config: row.config,
+    now,
+    walk,
+  });
+  if (Result.isError(floored)) {
+    return Result.err(floored.error);
+  }
+  const sweepFloor = floored.value.firstSlice;
+  const fromSlice = from === undefined ? sweepFloor : walk.sliceOf(from);
+  if (fromSlice !== walk.firstSlice && fromSlice !== sweepFloor) {
+    return refuse(
+      adapter.key,
+      `floor ${fromSlice} is neither the publisher's first slice ${walk.firstSlice} nor this source's reconciliation floor ${sweepFloor}`,
+    );
+  }
+  const end = to ?? now;
+  const toSlice = walk.sliceOf(end);
+  if (toSlice < fromSlice) {
+    return refuse(adapter.key, `end precedes floor ${fromSlice}`);
+  }
+
   const stored = row.config?.[LISTING_CENSUS_CONFIG_KEY];
   const parsed =
     stored === undefined ? undefined : v.safeParse(checkpointSchema, stored);
@@ -223,37 +310,18 @@ export const inspectListingCensus = async ({
       `the stored checkpoint is malformed: ${v.summarize(parsed.issues)}`,
     );
   }
-  const checkpoint = parsed?.output;
 
-  const fresh = (end: Date): ListingCensusPlan => ({
+  return Result.ok({
     sourceId: row.id,
     fromSlice,
-    toSlice: walk.sliceOf(end),
-    asOf: end,
-    start:
-      checkpoint === undefined
-        ? { type: "fresh" }
-        : { type: "restart", replaced: checkpoint },
+    ...resolveStart({
+      checkpoint: parsed?.output,
+      fromSlice,
+      toSlice,
+      end,
+      explicitEnd: to !== undefined,
+    }),
   });
-  const adopt = (existing: ListingCensusCheckpoint): ListingCensusPlan => ({
-    sourceId: row.id,
-    fromSlice: existing.fromSlice,
-    toSlice: existing.toSlice,
-    asOf: new Date(existing.asOf),
-    start: startFrom(existing),
-  });
-
-  if (to === undefined) {
-    return Result.ok(
-      checkpoint?.fromSlice === fromSlice ? adopt(checkpoint) : fresh(now),
-    );
-  }
-  const toSlice = walk.sliceOf(to);
-  return Result.ok(
-    checkpoint !== undefined && sameRange(checkpoint, { fromSlice, toSlice })
-      ? adopt(checkpoint)
-      : fresh(to),
-  );
 };
 
 /** What one call did. */
@@ -287,24 +355,31 @@ export type RunListingCensusOptions = InspectListingCensusOptions & {
   sleep: (ms: number) => Promise<void>;
 };
 
-type AdvanceCheckpointOptions = {
+type RecordSliceOptions = {
   tx: Transaction;
+  adapterKey: string;
   sourceId: SafeId<"caseLawSource">;
+  asOf: Date;
   observed: ListingCensusCheckpoint | null;
   next: ListingCensusCheckpoint;
 };
 
+type RecordedSlice = "advanced" | "completed" | "nothing-listed" | "superseded";
+
 /**
- * Compare-and-set the checkpoint. `IS NOT DISTINCT FROM` compares the stored
- * jsonb with the value this call read, so a checkpoint another call moved in
- * between matches no row.
+ * Compare-and-set the checkpoint, and on the last slice write the total in
+ * the same transaction. `IS NOT DISTINCT FROM` compares the stored jsonb with
+ * the value this call read, so a checkpoint another call moved in between
+ * matches no row and nothing is written.
  */
-const advanceCheckpoint = async ({
+const recordSlice = async ({
+  adapterKey,
+  asOf,
   next,
   observed,
   sourceId,
   tx,
-}: AdvanceCheckpointOptions): Promise<boolean> => {
+}: RecordSliceOptions): Promise<RecordedSlice> => {
   // audit: skip — public case-law corpus bookkeeping, no workspace data
   const updated = await tx
     .update(caseLawSources)
@@ -318,18 +393,30 @@ const advanceCheckpoint = async ({
       ),
     )
     .returning({ id: caseLawSources.id });
-  return updated.length > 0;
+  if (updated.length === 0) {
+    return "superseded";
+  }
+  switch (next.status) {
+    case LISTING_CENSUS_STATUS.COUNTING:
+      return "advanced";
+    case LISTING_CENSUS_STATUS.COMPLETE:
+      if (next.total === 0) {
+        return "nothing-listed";
+      }
+      await setSourceReportedTotal({
+        scopedDb: async (write) => await write(tx),
+        adapterKey,
+        total: next.total,
+        asOf,
+        origin: SOURCE_TOTAL_ORIGIN.LISTING_CENSUS,
+      });
+      return "completed";
+    default: {
+      next satisfies never;
+      return panic("unhandled listing census checkpoint");
+    }
+  }
 };
-
-const initialCheckpoint = (plan: ListingCensusPlan): CountingCheckpoint => ({
-  status: LISTING_CENSUS_STATUS.COUNTING,
-  fromSlice: plan.fromSlice,
-  toSlice: plan.toSlice,
-  asOf: plan.asOf.toISOString(),
-  slicesCounted: 0,
-  nextSlice: plan.fromSlice,
-  counted: 0,
-});
 
 type CountSliceOptions = {
   adapter: ListingCensusAdapter;
@@ -362,7 +449,63 @@ const countSlice = async ({
             cause,
           }),
   });
-  return listing.map(({ keyed }) => keyed.size);
+  return listing.andThen((listed) => listed).map(({ keyed }) => keyed.size);
+};
+
+/** The checkpoint a call starts counting from, and the value it replaces. */
+const startingCheckpoint = (
+  plan: ListingCensusPlan,
+): {
+  checkpoint: CountingCheckpoint;
+  observed: ListingCensusCheckpoint | null;
+} => {
+  const range = {
+    status: LISTING_CENSUS_STATUS.COUNTING,
+    fromSlice: plan.fromSlice,
+    toSlice: plan.toSlice,
+    asOf: plan.asOf.toISOString(),
+  };
+  const { start } = plan;
+  switch (start.type) {
+    case "fresh":
+      return {
+        checkpoint: {
+          ...range,
+          slicesCounted: 0,
+          nextSlice: plan.fromSlice,
+          counted: 0,
+        },
+        observed: null,
+      };
+    case "restart":
+      return {
+        checkpoint: {
+          ...range,
+          slicesCounted: 0,
+          nextSlice: plan.fromSlice,
+          counted: 0,
+        },
+        observed: start.replaced,
+      };
+    case "resume":
+      return { checkpoint: start.checkpoint, observed: start.checkpoint };
+    case "extend":
+      return {
+        checkpoint: {
+          ...range,
+          slicesCounted: start.completed.slicesCounted - 1,
+          nextSlice: start.completed.toSlice,
+          counted: start.completed.total - start.completed.lastSliceCount,
+        },
+        observed: start.completed,
+      };
+    case "complete":
+      return panic("a complete census has no starting checkpoint");
+    default: {
+      start satisfies never;
+      return panic("unhandled listing census start");
+    }
+  }
 };
 
 /**
@@ -398,32 +541,14 @@ export const runListingCensus = async (
     return planned;
   }
   const plan = planned.value;
-  const { start } = plan;
-  if (start.type === "complete") {
+  if (plan.start.type === "complete") {
     return Result.ok({
       type: "already-complete",
-      checkpoint: start.checkpoint,
+      checkpoint: plan.start.checkpoint,
     });
   }
 
-  let observed: ListingCensusCheckpoint | null = null;
-  let checkpoint = initialCheckpoint(plan);
-  switch (start.type) {
-    case "resume":
-      observed = start.checkpoint;
-      checkpoint = start.checkpoint;
-      break;
-    case "restart":
-      observed = start.replaced;
-      break;
-    case "fresh":
-      break;
-    default: {
-      start satisfies never;
-      return panic("unhandled listing census start");
-    }
-  }
-
+  let { checkpoint, observed } = startingCheckpoint(plan);
   for (let slicesThisRun = 0; slicesThisRun < maxSlices; slicesThisRun += 1) {
     if (slicesThisRun > 0) {
       await sleep(adapter.minRequestIntervalMs);
@@ -433,76 +558,68 @@ export const runListingCensus = async (
     if (Result.isError(counted)) {
       return counted;
     }
-    const counting = {
-      ...checkpoint,
-      counted: checkpoint.counted + counted.value,
+    const range = {
+      fromSlice: checkpoint.fromSlice,
+      toSlice: checkpoint.toSlice,
+      asOf: checkpoint.asOf,
       slicesCounted: checkpoint.slicesCounted + 1,
     };
-
-    if (target === plan.toSlice) {
-      const complete = {
-        status: LISTING_CENSUS_STATUS.COMPLETE,
-        fromSlice: counting.fromSlice,
-        toSlice: counting.toSlice,
-        asOf: counting.asOf,
-        slicesCounted: counting.slicesCounted,
-        total: counting.counted,
-      };
-      const previous = observed;
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the loop's last iteration: completes the census once
-      const finished = await scopedDb(async (tx) => {
-        if (
-          !(await advanceCheckpoint({
-            tx,
-            sourceId: plan.sourceId,
-            observed: previous,
-            next: complete,
-          }))
-        ) {
-          return "superseded" as const;
-        }
-        if (complete.total === 0) {
-          return "nothing-listed" as const;
-        }
-        await setSourceReportedTotal({
-          scopedDb: async (write) => await write(tx),
-          adapterKey: adapter.key,
-          total: complete.total,
-          asOf: plan.asOf,
-          origin: SOURCE_TOTAL_ORIGIN.LISTING_CENSUS,
-        });
-        return "completed" as const;
-      });
-      if (finished === "superseded") {
-        return Result.ok({ type: "superseded", slicesThisRun });
-      }
-      return Result.ok({
-        type: finished,
-        checkpoint: complete,
-        slicesThisRun: slicesThisRun + 1,
-      });
-    }
-
-    const nextSlice =
-      adapter.reconciliation.nextSlice(target) ??
-      panic(`${adapter.key}: no slice after ${target}, before ${plan.toSlice}`);
-    const next = { ...counting, nextSlice };
+    const next: ListingCensusCheckpoint =
+      target === plan.toSlice
+        ? {
+            status: LISTING_CENSUS_STATUS.COMPLETE,
+            ...range,
+            total: checkpoint.counted + counted.value,
+            lastSliceCount: counted.value,
+          }
+        : {
+            status: LISTING_CENSUS_STATUS.COUNTING,
+            ...range,
+            nextSlice:
+              adapter.reconciliation.nextSlice(target) ??
+              panic(
+                `${adapter.key}: no slice after ${target}, before ${plan.toSlice}`,
+              ),
+            counted: checkpoint.counted + counted.value,
+          };
     const previous = observed;
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- checkpoint after each listed slice, so an interruption loses at most one
-    const advanced = await scopedDb(
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- durable progress: each listed slice is checkpointed before the next is requested, so an interrupted census resumes instead of relisting
+    const recorded = await scopedDb(
       async (tx) =>
-        await advanceCheckpoint({
+        await recordSlice({
           tx,
+          adapterKey: adapter.key,
           sourceId: plan.sourceId,
+          asOf: plan.asOf,
           observed: previous,
           next,
         }),
     );
-    if (!advanced) {
-      return Result.ok({ type: "superseded", slicesThisRun });
+    switch (recorded) {
+      case "superseded":
+        return Result.ok({ type: "superseded", slicesThisRun });
+      case "completed":
+      case "nothing-listed":
+        if (next.status !== LISTING_CENSUS_STATUS.COMPLETE) {
+          return panic("a counting checkpoint cannot complete a census");
+        }
+        return Result.ok({
+          type: recorded,
+          checkpoint: next,
+          slicesThisRun: slicesThisRun + 1,
+        });
+      case "advanced":
+        if (next.status !== LISTING_CENSUS_STATUS.COUNTING) {
+          return panic("a complete checkpoint cannot leave a census counting");
+        }
+        observed = next;
+        checkpoint = next;
+        break;
+      default: {
+        recorded satisfies never;
+        return panic("unhandled listing census slice record");
+      }
     }
-    observed = next;
-    checkpoint = next;
   }
 
   return Result.ok({

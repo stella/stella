@@ -1,10 +1,15 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import type { Transaction } from "@/api/db/root";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import {
   getAdapter,
   listAdapterKeys,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  inspectListingCensus,
+  runListingCensus,
+} from "@/api/handlers/case-law/ingestion/listing-census";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -41,6 +46,10 @@ import { isoCalendarDay } from "@/api/lib/dates";
  *   # poll every adapter that exposes a count, or just one
  *   bun run src/scripts/case-law-source-total.ts --poll [--adapter cz-us]
  *
+ *   # sum a countless publisher's own listing (see ingestion/listing-census.ts)
+ *   bun run src/scripts/case-law-source-total.ts \
+ *     --census --adapter sk-us --max-slices 500 [--from ...] [--to ...] [--dry-run]
+ *
  * Not a scheduled job: a deliberate operation under an operator who reads
  * the report.
  */
@@ -55,10 +64,18 @@ Modes (exactly one):
   --total <n>            Record <n> for --adapter, origin "operator".
   --poll                 Poll adapters that expose a count, origin
                          "adapter-poll".
+  --census               Sum what --adapter's publisher lists, slice by slice,
+                         origin "listing-census"; resumable, one bounded run
+                         per call.
 
 Options:
-  --adapter <key>        Required with --total; narrows --poll to one source.
+  --adapter <key>        Required with --total and --census; narrows --poll.
   --as-of <YYYY-MM-DD>   The day the figure was stated (default: now).
+  --max-slices <n>       Census: slices this run may list (required to run).
+  --from <YYYY-MM-DD>    Census floor (default: the source's sweep floor).
+  --to <YYYY-MM-DD>      Census end and as-of (default: resume the stored
+                         census, or extend it to today).
+  --dry-run              Census: print the plan, contact no publisher.
 
 Adapter keys: ${listAdapterKeys().join(", ")}`;
 
@@ -82,13 +99,20 @@ const DECIMAL_INTEGER = /^\d+$/u;
 
 const list = hasFlag("list");
 const poll = hasFlag("poll");
+const census = hasFlag("census");
+const dryRun = hasFlag("dry-run");
 const totalFlag = flagValue("total");
 const adapterFlag = flagValue("adapter");
 const asOfFlag = flagValue("as-of");
+const maxSlicesFlag = flagValue("max-slices");
+const fromFlag = flagValue("from");
+const toFlag = flagValue("to");
 
-const modes = [list, poll, totalFlag !== undefined].filter(Boolean);
+const modes = [list, poll, census, totalFlag !== undefined].filter(Boolean);
 if (modes.length !== 1) {
-  console.error("Exactly one of --list, --total or --poll is required.");
+  console.error(
+    "Exactly one of --list, --total, --poll or --census is required.",
+  );
   console.error(USAGE);
   process.exit(1);
 }
@@ -103,35 +127,129 @@ if (
   process.exit(1);
 }
 
-const asOf = (() => {
-  if (asOfFlag === undefined) {
-    return new Date();
-  }
+const bareDay = (name: string, raw: string): Date => {
   // `new Date(string)` accepts locale-ambiguous forms: "01/02/2026" is
   // 2 January to its parser and 1 February to much of the world. It also
   // rolls a day that does not exist ("2026-02-31") forward into the next
   // month rather than rejecting it. `isoCalendarDay` is the shared guard
   // against both, used here rather than restated.
-  const day = isoCalendarDay(asOfFlag);
+  const day = isoCalendarDay(raw);
   // A datetime canonicalizes to its date part, so requiring the round-trip
   // is what keeps an operator's time-of-day from being dropped in silence:
   // a figure is stated on a day, and only a bare day is accepted.
-  if (day === null || day !== asOfFlag) {
+  if (day === null || day !== raw) {
     console.error(
-      `--as-of must be a bare ISO calendar date (YYYY-MM-DD), got: ${asOfFlag}`,
+      `--${name} must be a bare ISO calendar date (YYYY-MM-DD), got: ${raw}`,
     );
     process.exit(1);
   }
   // No zone to interpret, so the day is anchored at UTC midnight rather
   // than at whatever local midnight the operator's machine is in.
   return new Date(`${day}T00:00:00.000Z`);
-})();
+};
 
-// --list only reads, so it takes no lane; --total and --poll record a figure
-// and serialize with every other writing pass.
-const { ingestionDb } = list
-  ? await openCaseLawReadOnlySession()
-  : await enterCaseLawMaintenanceLane();
+const asOf = asOfFlag === undefined ? new Date() : bareDay("as-of", asOfFlag);
+
+// --list and a census dry run only read, so they take no lane; everything
+// else records a figure and serializes with every other writing pass.
+const { ingestionDb, rootDb } =
+  list || (census && dryRun)
+    ? await openCaseLawReadOnlySession()
+    : await enterCaseLawMaintenanceLane();
+
+if (census) {
+  const adapter =
+    adapterFlag === undefined ? undefined : getAdapter(adapterFlag);
+  if (adapter === undefined) {
+    console.error("--census requires --adapter.");
+    console.error(USAGE);
+    process.exit(1);
+  }
+  const maxSlices =
+    maxSlicesFlag !== undefined && DECIMAL_INTEGER.test(maxSlicesFlag)
+      ? Number.parseInt(maxSlicesFlag, 10)
+      : Number.NaN;
+  // The checkpoint lives in the source's configuration, which the ingestion
+  // role may not write, so the census runs on the lane's owner connection.
+  const request = {
+    scopedDb: async <T>(operation: (tx: Transaction) => Promise<T>) =>
+      await rootDb.transaction(operation),
+    adapter,
+    from: fromFlag === undefined ? undefined : bareDay("from", fromFlag),
+    to: toFlag === undefined ? undefined : bareDay("to", toFlag),
+    now: new Date(),
+  };
+  const plan = await inspectListingCensus(request);
+  if (Result.isError(plan)) {
+    console.error(plan.error.message);
+    process.exit(1);
+  }
+  const { asOf: planAsOf, fromSlice, start, toSlice } = plan.value;
+  console.log(
+    `${adapter.key}: census ${fromSlice} .. ${toSlice} as of ${planAsOf.toISOString()}, ${start.type}`,
+  );
+  if (dryRun) {
+    process.exit(0);
+  }
+  if (maxSlicesFlag === undefined) {
+    console.error("--census requires --max-slices unless --dry-run.");
+    process.exit(1);
+  }
+  const ran = await runListingCensus({
+    ...request,
+    maxSlices,
+    sleep: async (ms) => {
+      await Bun.sleep(ms);
+    },
+  });
+  if (Result.isError(ran)) {
+    console.error(
+      `${ran.error.message}; every slice before it is kept, and a re-run resumes there`,
+    );
+    process.exit(1);
+  }
+  const outcome = ran.value;
+  const report = ((): { line: string; exitCode: 0 | 1 } => {
+    switch (outcome.type) {
+      case "counting":
+        return {
+          line: `${outcome.checkpoint.counted.toLocaleString()} counted over ${outcome.checkpoint.slicesCounted} slices; re-run to continue at ${outcome.checkpoint.nextSlice}`,
+          exitCode: 0,
+        };
+      case "completed":
+        return {
+          line: `recorded ${outcome.checkpoint.total.toLocaleString()} as of ${outcome.checkpoint.asOf} (listing-census)`,
+          exitCode: 0,
+        };
+      case "already-complete":
+        return {
+          line: `unchanged, complete with ${outcome.checkpoint.total.toLocaleString()}`,
+          exitCode: 0,
+        };
+      case "nothing-listed":
+        return {
+          line: "the publisher listed nothing over the whole range, nothing recorded",
+          exitCode: 1,
+        };
+      case "superseded":
+        return {
+          line: `another run moved the checkpoint after ${outcome.slicesThisRun} slices`,
+          exitCode: 1,
+        };
+      default: {
+        outcome satisfies never;
+        return panic(`Unhandled census outcome: ${JSON.stringify(outcome)}`);
+      }
+    }
+  })();
+  const line = `${adapter.key}: ${report.line}`;
+  if (report.exitCode === 0) {
+    console.log(line);
+  } else {
+    console.error(line);
+  }
+  process.exit(report.exitCode);
+}
 
 if (list) {
   const rows = await readSourceReportedTotals(ingestionDb);

@@ -993,19 +993,22 @@ const walkSlice = async ({
     slice,
     sleep,
   });
-  summary.listed = listing.listed;
-  summary.unidentifiable = listing.unidentifiable;
-  summary.duplicate = listing.duplicate;
+  if (Result.isError(listing)) {
+    // A walk fails by throwing: the unit's caller records it on the ledger as
+    // a failed slice, exactly as a rejected page request is.
+    throw listing.error;
+  }
+  const { keyed } = listing.value;
+  summary.listed = listing.value.listed;
+  summary.unidentifiable = listing.value.unidentifiable;
+  summary.duplicate = listing.value.duplicate;
 
-  const items = Array.from(
-    listing.keyed,
-    ([identityKey, { identity, payload }]) => ({
-      identity,
-      payload,
-      identityKey,
-      slice,
-    }),
-  );
+  const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
+    identity,
+    payload,
+    identityKey,
+    slice,
+  }));
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const held = await selectHeldIdentityKeys(scopedDb, {

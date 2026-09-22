@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -15,6 +16,11 @@ const documentItem = (id: string): ReconciliationListingItem => ({
   payload: { id },
 });
 
+const unwrapListing = <T, E>(result: Result<T, E>): T =>
+  Result.isError(result)
+    ? panic(`expected a listing, got ${String(result.error)}`)
+    : result.value;
+
 const pagedListing =
   (pages: ReconciliationListingItem[][]) =>
   async ({ page }: ReconciliationSlicePageOptions) =>
@@ -25,25 +31,27 @@ const pagedListing =
 
 test("keys each identity once and counts what it could not key", async () => {
   const sleeps: number[] = [];
-  const listing = await listReconciliationSlice({
-    adapterKey: "fake",
-    listSlicePage: pagedListing([
-      [documentItem("a"), documentItem("b")],
-      [
-        documentItem("a"),
-        { identity: { type: "unidentifiable" }, payload: null },
-        documentItem(""),
-        documentItem("c"),
-      ],
-    ]),
-    pageDelayMs: 1000,
-    pageTimeoutMs: 5000,
-    slice: "2026-01-01",
-    sleep: async (ms) => {
-      sleeps.push(ms);
-      await Promise.resolve();
-    },
-  });
+  const listing = unwrapListing(
+    await listReconciliationSlice({
+      adapterKey: "fake",
+      listSlicePage: pagedListing([
+        [documentItem("a"), documentItem("b")],
+        [
+          documentItem("a"),
+          { identity: { type: "unidentifiable" }, payload: null },
+          documentItem(""),
+          documentItem("c"),
+        ],
+      ]),
+      pageDelayMs: 1000,
+      pageTimeoutMs: 5000,
+      slice: "2026-01-01",
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        await Promise.resolve();
+      },
+    }),
+  );
 
   expect([...listing.keyed.keys()]).toEqual([
     "document:a",
@@ -59,26 +67,28 @@ test("keys each identity once and counts what it could not key", async () => {
 
 test("an empty slice lists nothing after one request", async () => {
   let requests = 0;
-  const listing = await listReconciliationSlice({
-    adapterKey: "fake",
-    listSlicePage: async () => {
-      requests += 1;
-      return await Promise.resolve({ items: [], totalPages: 0 });
-    },
-    pageDelayMs: 0,
-    pageTimeoutMs: 5000,
-    slice: "2026-01-01",
-    sleep: async () => {
-      await Promise.resolve();
-    },
-  });
+  const listing = unwrapListing(
+    await listReconciliationSlice({
+      adapterKey: "fake",
+      listSlicePage: async () => {
+        requests += 1;
+        return await Promise.resolve({ items: [], totalPages: 0 });
+      },
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      slice: "2026-01-01",
+      sleep: async () => {
+        await Promise.resolve();
+      },
+    }),
+  );
   expect(listing.keyed.size).toBe(0);
   expect(requests).toBe(1);
 });
 
 test("a listing past the page ceiling is refused, not truncated", async () => {
   let requests = 0;
-  const listed = listReconciliationSlice({
+  const listed = await listReconciliationSlice({
     adapterKey: "fake",
     listSlicePage: async ({ page }) => {
       requests += 1;
@@ -94,10 +104,8 @@ test("a listing past the page ceiling is refused, not truncated", async () => {
       await Promise.resolve();
     },
   });
-  const refusal = await listed.then(
-    () => null,
-    (error: unknown) => error,
+  expect(Result.isError(listed) ? listed.error : null).toBeInstanceOf(
+    AdapterFetchError,
   );
-  expect(refusal).toBeInstanceOf(AdapterFetchError);
   expect(requests).toBe(MAX_SLICE_PAGES);
 });
