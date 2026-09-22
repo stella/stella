@@ -66,6 +66,7 @@ import { richChatParts } from "./__fixtures__/rich-chat-parts";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
+  chatTurnRejectsStreamingTools,
   collectInitialRestorationPlaceholders,
   createChatAttemptState,
   hydrateMessages,
@@ -146,6 +147,46 @@ describe("tool-call history pruning", () => {
         part.type === "tool-call" ? [part.state] : [],
       ),
     ).toEqual(["input-complete", "error"]);
+  });
+});
+
+describe("streaming tool-use capability gate", () => {
+  test("refuses a tool-carrying turn on a model without streaming tool use", () => {
+    expect(
+      chatTurnRejectsStreamingTools({
+        model: { modelId: "us.deepseek.r1-v1:0" },
+        toolCount: 12,
+      }),
+    ).toBe(true);
+  });
+
+  test("allows a turn that offers no tools at all", () => {
+    // The sandbox path reaches stella tools through its MCP bridge, so its
+    // stream carries no tool schemas and the provider limit never applies.
+    expect(
+      chatTurnRejectsStreamingTools({
+        model: { modelId: "us.deepseek.r1-v1:0" },
+        toolCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test("allows a tool-carrying turn on a model that streams tools", () => {
+    expect(
+      chatTurnRejectsStreamingTools({
+        model: { modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0" },
+        toolCount: 12,
+      }),
+    ).toBe(false);
+  });
+
+  test("allows an uncatalogued model rather than stripping its tools", () => {
+    expect(
+      chatTurnRejectsStreamingTools({
+        model: { modelId: "some-env-override-model" },
+        toolCount: 12,
+      }),
+    ).toBe(false);
   });
 });
 

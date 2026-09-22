@@ -47,6 +47,7 @@ const {
   isDeferredServiceTierAvailableForRole,
   isTanStackAIProviderSupported,
   modelAcceptsPdfDocumentInput,
+  modelAcceptsStreamingToolUse,
   modelAcceptsTextualDocumentInput,
   requireTanStackAIAvailableForRole,
   resolveEffectiveServiceTierForProvider,
@@ -539,6 +540,40 @@ describe("TanStack text model resolution", () => {
     } finally {
       env.AI_PROVIDER = originalProvider;
     }
+  });
+
+  test("withholds streaming structured output from a Bedrock model without streaming tool use", () => {
+    const orgConfig = orgConfigForProvider("bedrock");
+    orgConfig.overrideModels.chat = {
+      provider: "bedrock",
+      modelId: "us.deepseek.r1-v1:0",
+    };
+
+    const model = getTanStackTextModelForRole("chat", orgConfig, {
+      organizationId: orgId,
+    });
+
+    expect(modelAcceptsStreamingToolUse(model)).toBe(false);
+    // Absent, not throwing: the engine reads this property to decide
+    // whether to stream the forced structured-output tool or to await it
+    // on the non-streaming Converse call, which the model does accept.
+    expect(model.adapter.structuredOutputStream).toBeUndefined();
+    expect(model.adapter.structuredOutput).toBeDefined();
+  });
+
+  test("keeps streaming structured output for a Bedrock model with streaming tool use", () => {
+    const orgConfig = orgConfigForProvider("bedrock");
+    orgConfig.overrideModels.chat = {
+      provider: "bedrock",
+      modelId: "us.amazon.nova-lite-v1:0",
+    };
+
+    const model = getTanStackTextModelForRole("chat", orgConfig, {
+      organizationId: orgId,
+    });
+
+    expect(modelAcceptsStreamingToolUse(model)).toBe(true);
+    expect(model.adapter.structuredOutputStream).toBeDefined();
   });
 
   test("resolves Bedrock BYOK selections through the TanStack adapter", () => {

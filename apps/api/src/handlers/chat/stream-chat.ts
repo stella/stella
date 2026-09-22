@@ -152,6 +152,7 @@ import {
   resolveTanStackTextModel,
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
+import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
@@ -416,6 +417,16 @@ export const streamChat = async ({
     role: "chat",
   });
 
+  // Tool schemas are mostly server-built but may include org-configured
+  // external MCP tool descriptions, so a hit here is telemetry, not a
+  // turn-killing panic (the guard only panics for the system prompt).
+  const modelTools = guardModelToolSchemas({
+    tools: chatToolMapToArray(
+      prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
+    ),
+    workspaceIds: tenantWorkspaceIds,
+  });
+
   // Provider adapters accept different document formats: the Mistral adapter
   // takes a PDF `document` part (via `document_url`) but throws on a textual
   // one, and no adapter accepts a raw docx. A document attachment reaches the
@@ -430,6 +441,10 @@ export const streamChat = async ({
     documentAttachmentMimeTypes.some(
       (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
     );
+  const modelRejectsStreamingTools = (
+    model: ResolvedTanStackTextModel,
+  ): boolean =>
+    chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
@@ -444,6 +459,16 @@ export const streamChat = async ({
     );
   }
 
+  if (modelRejectsStreamingTools(primaryModel)) {
+    return new Response(
+      JSON.stringify({
+        message:
+          "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
+      }),
+      { status: 422, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   const resolvedFallbackModel =
     devModelId === undefined
       ? resolveFallbackTextModel({
@@ -453,23 +478,16 @@ export const streamChat = async ({
           threadId,
         })
       : null;
-  // Drop a fallback that would crash on a document the primary accepted; a
-  // failover must not resurrect the modality mismatch.
+  // Drop a fallback that would crash on a document the primary accepted, or
+  // that cannot carry this turn's tools; a failover must not resurrect a
+  // capability mismatch the primary already cleared.
   const fallbackModel =
     resolvedFallbackModel !== null &&
-    modelRejectsAnyDocument(resolvedFallbackModel)
+    (modelRejectsAnyDocument(resolvedFallbackModel) ||
+      modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
-  // Tool schemas are mostly server-built but may include org-configured
-  // external MCP tool descriptions, so a hit here is telemetry, not a
-  // turn-killing panic (the guard only panics for the system prompt).
-  const modelTools = guardModelToolSchemas({
-    tools: chatToolMapToArray(
-      prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
-    ),
-    workspaceIds: tenantWorkspaceIds,
-  });
   const restorationPairs: ChatAnonRestoration[] = [];
   const mapAssistantMessageId = createChatMessageIdMapper();
   let responseMessage: ChatMessage | null = null;
@@ -594,6 +612,26 @@ export const resolveAgentRunBoundaryError = ({
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
   });
 };
+
+type ChatTurnRejectsStreamingToolsOptions = {
+  model: Pick<ResolvedTanStackTextModel, "modelId">;
+  toolCount: number;
+};
+
+/**
+ * Whether this turn would have to offer tools on a stream its model cannot
+ * carry them on. An agent turn sends its tool schemas with the streaming
+ * request itself, and such a model answers with a fatal stream error.
+ * Structured output has a non-streaming path the engine falls back to; a
+ * tool-carrying chat stream has none, so the turn is refused rather than
+ * stripped of its tools, which would leave the model answering about a
+ * matter it can no longer read.
+ */
+export const chatTurnRejectsStreamingTools = ({
+  model,
+  toolCount,
+}: ChatTurnRejectsStreamingToolsOptions): boolean =>
+  toolCount > 0 && !modelAcceptsStreamingToolUse(model);
 
 type ChatAttemptState = {
   emptyCompletion: ChatEmptyCompletionError | null;
