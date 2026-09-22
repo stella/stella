@@ -1,6 +1,7 @@
 import { useBlocker } from "@tanstack/react-router";
 import type { ShouldBlockFn } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { create } from "zustand";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
@@ -19,17 +20,32 @@ type UnsavedWorkSurface =
   | "playbook-editor"
   | "template-studio";
 
-const registrations = new Set<symbol>();
+// Open registrations per surface: a surface can be dirty in more than one
+// mounted instance (a chat provider per shell), and each unregisters itself.
+const useUnsavedWorkStore = create<
+  Readonly<Record<UnsavedWorkSurface, number>>
+>(() => ({
+  "chat-draft": 0,
+  "docx-edit-session": 0,
+  "document-docx-editor": 0,
+  "pdf-page-organizer": 0,
+  "playbook-editor": 0,
+  "template-studio": 0,
+}));
 
-const registerUnsavedWork = (surface: UnsavedWorkSurface): (() => void) => {
-  const registration = Symbol(surface);
-  registrations.add(registration);
-  return () => {
-    registrations.delete(registration);
-  };
+const adjustRegistrations = (surface: UnsavedWorkSurface, delta: 1 | -1) => {
+  useUnsavedWorkStore.setState((counts) => ({
+    [surface]: counts[surface] + delta,
+  }));
 };
 
-export const hasUnsavedWork = (): boolean => registrations.size > 0;
+const registerUnsavedWork = (surface: UnsavedWorkSurface): (() => void) => {
+  adjustRegistrations(surface, 1);
+  return () => adjustRegistrations(surface, -1);
+};
+
+export const hasUnsavedWork = (): boolean =>
+  Object.values(useUnsavedWorkStore.getState()).some((count) => count > 0);
 
 type UnsavedWorkGuard =
   // Only defers the silent stale-client reload; no prompt, no route block.
