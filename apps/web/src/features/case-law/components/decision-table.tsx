@@ -1,33 +1,20 @@
 /**
- * The public results table.
+ * Decisions in the public-law results table.
  *
- * It is the workspace table: the same shell, the same header menus, the same
- * column drag-and-drop, pinning and resizing, the same field-value cell for an
- * AI answer and the same justification card behind it. What this module adds is
- * the decision half — the rows, their columns, and where a reader's
- * arrangement of them is kept — so a decision reads the same here as in a
- * matter, and neither table can drift from the other.
+ * The table is the shared one (`PublicLawTable`, itself the workspace table);
+ * what this module adds is the decision half — the rows, their columns, the
+ * render scope every decision cell reads, and the rail that adds a question —
+ * so a decision reads the same here as in a matter, and the decision and
+ * statute tables cannot drift from each other.
  */
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { useTable } from "@tanstack/react-table";
-import type { RowSelectionState } from "@tanstack/react-table";
-import { useTranslations } from "use-intl";
-
-import { cn } from "@stll/ui/utils";
-
 import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
-import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
+import { PublicLawTable } from "@/components/public-law-table/public-law-table";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
-import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
-import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
-import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
-import { useTableState } from "@/components/workspaces/table/use-table-state";
-import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
-import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionExtraColumn } from "@/features/case-law/decision-columns.logic";
@@ -58,30 +45,22 @@ const withHeadnoteToggled = (
   return next;
 };
 
+const decisionRowId = (row: DecisionRowData): string => row.decision.id;
+
 type DecisionTableProps = {
   decisions: readonly Decision[];
   /** The ordinal of the first row: a page's first position in the whole list. */
   firstRowNumber: number;
-  /**
-   * What stands where the rows would be when there are none, for a screen
-   * that can say why. The plain "no results" line otherwise.
-   */
+  /** See `PublicLawTable`. */
   emptyState?: ReactNode | undefined;
-  /**
-   * How many rows the page being loaded will hold, so the waiting table stands
-   * in at that size. Defaults to a compact stand-in where a screen cannot say.
-   */
+  /** See `PublicLawTable`. */
   expectedRowCount?: number | undefined;
   /** Columns this screen adds to the shared model; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   /** The find's marks, or null when no term is applied. */
   findHighlight?: TableFindHighlight | null | undefined;
   isLoading: boolean;
-  /**
-   * The rows on screen answer the previous search while a new one is in
-   * flight. They stay readable and fade, rather than being replaced by a
-   * skeleton the reader has already read past.
-   */
+  /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
@@ -112,7 +91,6 @@ export const DecisionTable = ({
   questions,
   selectedIds,
 }: DecisionTableProps) => {
-  const t = useTranslations();
   const columns = useDecisionTableColumns({ extraColumns, questions });
   const rows = useMemo(
     () =>
@@ -123,55 +101,10 @@ export const DecisionTable = ({
       })),
     [decisions],
   );
-  const rowSelection: RowSelectionState = useMemo(() => {
-    const selection: RowSelectionState = {};
-    for (const decisionId of selectedIds) {
-      selection[decisionId] = true;
-    }
-    return selection;
-  }, [selectedIds]);
-
-  const tableState = useTableState({
-    columnLayout: {
-      hidden: layout.hidden,
-      order: layout.order,
-      pinned: layout.pinned,
-      onChange: ({ hidden, order, pinned }) => {
-        onLayoutChange({
-          ...layout,
-          ...(hidden === undefined ? {} : { hidden }),
-          ...(order === undefined ? {} : { order }),
-          ...(pinned === undefined ? {} : { pinned }),
-        });
-      },
-    },
-    columnSizing: {
-      sizing: layout.sizing,
-      onChange: (sizing) => onLayoutChange({ ...layout, sizing }),
-    },
-    rowSelection: {
-      selection: rowSelection,
-      onChange: (updater) => {
-        const next =
-          typeof updater === "function" ? updater(rowSelection) : updater;
-        // A selection map holds only picked rows, so its keys are the selection.
-        onSelectedIdsChange(Object.keys(next));
-      },
-    },
-    // The search decides the order; no column of this table does.
-    sorting: null,
-  });
-
-  const table = useTable({
-    features: workspaceTableFeatures,
-    columnResizeMode: "onChange",
-    data: rows,
-    columns,
-    defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
-    getRowId: (row) => row.decision.id,
-    state: tableState.state,
-    ...tableState.listeners,
-  });
+  const selection = useMemo(
+    () => ({ onSelectedIdsChange, selectedIds }),
+    [onSelectedIdsChange, selectedIds],
+  );
 
   // The rail is a transparent strip pinned over the table's end columns, so it
   // is reserved only where it actually carries a control; otherwise it would
@@ -210,43 +143,22 @@ export const DecisionTable = ({
   );
 
   return (
-    <MobileTableOrientationGate>
-      <div
-        aria-busy={isRefreshing}
-        className={cn(
-          // The table owns its scroll: it claims the height the page gives it
-          // rather than growing to its rows. Without a bounded box the
-          // virtualizer's scroll element never scrolls, so every row is drawn
-          // and the frozen header has nothing to freeze against.
-          "border-border/45 bg-background/60 flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
-          isRefreshing && "opacity-56",
-        )}
-      >
-        <DecisionRenderScope value={renderScope}>
-          <FindHighlightScope highlight={findHighlight}>
-            <WorkspaceTable
-              contentMode={layout.contentMode}
-              // A results list is as tall as its results. The end filler has
-              // nothing to fill here and nothing to add at the end of, so it
-              // would draw as one empty bordered row under the last decision.
-              fillHeight={false}
-              firstRowNumber={firstRowNumber}
-              rowHost={rowHost}
-              skeletonRowCount={
-                isLoading ? tableSkeletonRowCount(expectedRowCount) : 0
-              }
-              table={table}
-            />
-          </FindHighlightScope>
-        </DecisionRenderScope>
-        {rows.length === 0 &&
-          !isLoading &&
-          (emptyState ?? (
-            <div className="text-muted-foreground p-4 text-sm">
-              {t("common.noResults")}
-            </div>
-          ))}
-      </div>
-    </MobileTableOrientationGate>
+    <DecisionRenderScope value={renderScope}>
+      <PublicLawTable
+        columns={columns}
+        emptyState={emptyState}
+        expectedRowCount={expectedRowCount}
+        findHighlight={findHighlight}
+        firstRowNumber={firstRowNumber}
+        getRowId={decisionRowId}
+        isLoading={isLoading}
+        isRefreshing={isRefreshing}
+        layout={layout}
+        onLayoutChange={onLayoutChange}
+        rowHost={rowHost}
+        rows={rows}
+        selection={selection}
+      />
+    </DecisionRenderScope>
   );
 };

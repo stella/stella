@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
-import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -13,23 +12,32 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import {
-  DECISION_PAGE_SIZES,
-  decisionPageSearchValue,
-} from "@/features/case-law/decision-pagination.logic";
+import { PUBLIC_LAW_PAGE_SIZES } from "@/components/public-law-table/public-law-pagination.logic";
 import type {
-  DecisionPagerModel,
-  DecisionPageSize,
-} from "@/features/case-law/decision-pagination.logic";
+  PublicLawPagerModel,
+  PublicLawPageSize,
+} from "@/components/public-law-table/public-law-pagination.logic";
 
-type DecisionPagerProps = {
+/**
+ * The link to one page, as the calling route addresses it: an element with no
+ * children, carrying the label as its accessible name. The route writes its
+ * own search, so the rest of the URL — the query, the filters, the size —
+ * travels with the reader.
+ */
+export type PublicLawPageLink = (input: {
+  label: string;
+  page: number;
+}) => ReactElement;
+
+type PublicLawPagerProps = {
   /** True while the step forward is fetching the page after the chain. */
   isWalking: boolean;
-  model: DecisionPagerModel;
-  onPageSizeChange: (pageSize: DecisionPageSize) => void;
+  model: PublicLawPagerModel;
+  onPageSizeChange: (pageSize: PublicLawPageSize) => void;
   /** Asked for the page after the last one walked; it has no cursor yet. */
   onWalkForward: () => void;
-  pageSize: DecisionPageSize;
+  pageLink: PublicLawPageLink;
+  pageSize: PublicLawPageSize;
 };
 
 /**
@@ -39,13 +47,14 @@ type DecisionPagerProps = {
  * crawler; the page after the chain is a button, because its cursor only
  * exists once the page before it has been fetched.
  */
-export const DecisionPager = ({
+export const PublicLawPager = ({
   isWalking,
   model,
   onPageSizeChange,
   onWalkForward,
+  pageLink,
   pageSize,
-}: DecisionPagerProps) => {
+}: PublicLawPagerProps) => {
   const t = useTranslations();
   const walkedCount = model.pages.length;
 
@@ -58,6 +67,7 @@ export const DecisionPager = ({
         <StepLink
           label={t("common.previous")}
           page={model.previousPage}
+          pageLink={pageLink}
           placement="previous"
         />
 
@@ -78,6 +88,7 @@ export const DecisionPager = ({
                     page: String(page),
                   })}
                   page={page}
+                  pageLink={pageLink}
                 >
                   {page}
                 </PageLink>
@@ -105,6 +116,7 @@ export const DecisionPager = ({
           <StepLink
             label={t("common.next")}
             page={model.nextPage}
+            pageLink={pageLink}
             placement="next"
           />
         )}
@@ -114,7 +126,7 @@ export const DecisionPager = ({
         {t("caseLaw.pagination.perPage")}
         <Select
           onValueChange={(value: string | null) => {
-            const next = DECISION_PAGE_SIZES.find(
+            const next = PUBLIC_LAW_PAGE_SIZES.find(
               (size) => String(size) === value,
             );
             if (next !== undefined) {
@@ -131,7 +143,7 @@ export const DecisionPager = ({
             <SelectValue>{String(pageSize)}</SelectValue>
           </SelectTrigger>
           <SelectPopup>
-            {DECISION_PAGE_SIZES.map((size) => (
+            {PUBLIC_LAW_PAGE_SIZES.map((size) => (
               <SelectItem key={size} value={String(size)}>
                 {String(size)}
               </SelectItem>
@@ -143,33 +155,23 @@ export const DecisionPager = ({
   );
 };
 
-/**
- * One page of the chain. The search is written as an updater so the rest of
- * the URL — the query, the facets, the size — travels with the reader.
- */
+/** One page of the chain, as the route's own link. */
 const PageLink = ({
   children,
   className,
   label,
   page,
+  pageLink,
 }: {
   children: ReactNode;
   className: string;
   label: string;
   page: number;
+  pageLink: PublicLawPageLink;
 }) => (
   <Button
     className={className}
-    render={
-      <Link
-        aria-label={label}
-        search={(previous) => ({
-          ...previous,
-          page: decisionPageSearchValue(page),
-        })}
-        to="/law/cases"
-      />
-    }
+    render={pageLink({ label, page })}
     size="sm"
     variant="ghost"
   >
@@ -181,10 +183,12 @@ const PageLink = ({
 const StepLink = ({
   label,
   page,
+  pageLink,
   placement,
 }: {
   label: string;
   page: number | null;
+  pageLink: PublicLawPageLink;
   placement: "previous" | "next";
 }) => {
   const icon =
@@ -217,7 +221,12 @@ const StepLink = ({
     );
   }
   return (
-    <PageLink className="h-7 min-h-0" label={label} page={page}>
+    <PageLink
+      className="h-7 min-h-0"
+      label={label}
+      page={page}
+      pageLink={pageLink}
+    >
       {body}
     </PageLink>
   );

@@ -247,3 +247,32 @@ export const tableFindMatches = ({
     const cell = text.get(columnId);
     return cell !== undefined && containsMatch(cell, term);
   });
+
+type FindTableRowsInput<TRow> = {
+  /** The columns the find reaches; empty while no term is applied. */
+  columnIds: readonly string[];
+  rows: readonly TRow[];
+  /** What one row shows, per column id, for the columns a find reaches. */
+  rowText: (row: TRow) => TableFindRowText;
+  /** The submitted term once it clears the floor; null below it. */
+  term: string | null;
+};
+
+/**
+ * The rows a client-side find leaves on screen. The same list, by identity,
+ * when no term is applied: a table compares its rows by identity, and a list
+ * rebuilt per render loops a controlled table.
+ */
+export const findTableRows = <TRow>({
+  columnIds,
+  rows,
+  rowText,
+  term,
+}: FindTableRowsInput<TRow>): readonly TRow[] => {
+  if (term === null) {
+    return rows;
+  }
+  return rows.filter((row) =>
+    tableFindMatches({ columnIds, term, text: rowText(row) }),
+  );
+};

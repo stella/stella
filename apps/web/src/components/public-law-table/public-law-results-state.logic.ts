@@ -7,33 +7,33 @@
  * shell away and gives back a skeleton, so it awaits only when there is
  * nothing to take away.
  */
-export type DecisionsLoadMode =
+export type PublicLawLoadMode =
   /** Nothing is on screen: the rows are the page, and the markup lists them. */
   | "await"
   /** A result set is already drawn: the components swap the rows in place. */
   | "background";
 
-type DecisionsLoadModeInput = {
+type PublicLawLoadModeInput = {
   /** Why the router is loading: `stay` means this match is already rendered. */
   cause: "enter" | "preload" | "stay";
   /** Whether this exact search already has its pages in the query cache. */
   hasCachedPages: boolean;
 };
 
-export const decisionsLoadMode = ({
+export const publicLawLoadMode = ({
   cause,
   hasCachedPages,
-}: DecisionsLoadModeInput): DecisionsLoadMode =>
+}: PublicLawLoadModeInput): PublicLawLoadMode =>
   hasCachedPages || cause === "stay" ? "background" : "await";
 
 /**
  * Whether the router has this page's rows yet. Both renders are the same page:
  * pending is the page the URL describes, before any row exists.
  */
-export type DecisionRouteState = "pending" | "loaded";
+export type PublicLawRouteState = "pending" | "loaded";
 
 /** What the results region shows while the page around it stays put. */
-export type DecisionRowsPhase =
+export type PublicLawRowsPhase =
   /** There are no rows to draw: the grid stands in skeleton. */
   | "skeleton"
   /** The rows on screen answer the search before this one. */
@@ -41,8 +41,8 @@ export type DecisionRowsPhase =
   /** The rows answer the search the rest of the page describes. */
   | "rows";
 
-type DecisionRowsPhaseInput = {
-  routeState: DecisionRouteState;
+type PublicLawRowsPhaseInput = {
+  routeState: PublicLawRouteState;
   /** Whether the row query has yet to resolve anything for this search. */
   isLoading: boolean;
   /** Whether the rows on screen were kept from the previous search. */
@@ -55,11 +55,11 @@ type DecisionRowsPhaseInput = {
  * thing to the reader — the page is drawn and the grid is empty — and rows are
  * only called stale when there are rows to keep.
  */
-export const decisionRowsPhase = ({
+export const publicLawRowsPhase = ({
   isLoading,
   isPlaceholderData,
   routeState,
-}: DecisionRowsPhaseInput): DecisionRowsPhase => {
+}: PublicLawRowsPhaseInput): PublicLawRowsPhase => {
   if (routeState === "pending" || isLoading) {
     return "skeleton";
   }
@@ -71,21 +71,21 @@ export const decisionRowsPhase = ({
  * What a load can say about the search behind its results: the backend
  * answered it, or could not be reached at all.
  */
-export const DECISIONS_SEARCH_STATE = {
+export const PUBLIC_LAW_SEARCH_STATE = {
   answered: "answered",
   unavailable: "unavailable",
 } as const;
 
-type DecisionsSearchState =
-  (typeof DECISIONS_SEARCH_STATE)[keyof typeof DECISIONS_SEARCH_STATE];
+type PublicLawSearchState =
+  (typeof PUBLIC_LAW_SEARCH_STATE)[keyof typeof PUBLIC_LAW_SEARCH_STATE];
 
-type DecisionsSearchOutageInput = {
+type PublicLawSearchOutageInput = {
   /** Whether the row query itself reports the backend as unreachable. */
   isQueryOutage: boolean;
   /** Whether the row query holds any page at all, this search's or the last. */
   hasPages: boolean;
   /** What the load that drew this page concluded, once one has. */
-  loaded: DecisionsSearchState | undefined;
+  loaded: PublicLawSearchState | undefined;
 };
 
 /**
@@ -100,12 +100,13 @@ type DecisionsSearchOutageInput = {
  * empty table. A query that answers for itself (a page, or a failure raised in
  * this browser) decides from then on.
  */
-export const decisionsSearchOutage = ({
+export const publicLawSearchOutage = ({
   hasPages,
   isQueryOutage,
   loaded,
-}: DecisionsSearchOutageInput): boolean =>
-  isQueryOutage || (!hasPages && loaded === DECISIONS_SEARCH_STATE.unavailable);
+}: PublicLawSearchOutageInput): boolean =>
+  isQueryOutage ||
+  (!hasPages && loaded === PUBLIC_LAW_SEARCH_STATE.unavailable);
 
 /**
  * Whether an action beside the rows may act on the search the URL asks for.
@@ -116,11 +117,11 @@ export const decisionsSearchOutage = ({
  * cannot see yet: it is withheld until the rows and the URL are one search
  * again.
  */
-export const rowsAnswerRequestedSearch = (phase: DecisionRowsPhase): boolean =>
+export const rowsAnswerRequestedSearch = (phase: PublicLawRowsPhase): boolean =>
   phase === "rows";
 
 type QueryAnsweredByRowsInput = {
-  phase: DecisionRowsPhase;
+  phase: PublicLawRowsPhase;
   /** What the URL asks for now. */
   requested: string | undefined;
   /** The term the rows currently on screen were drawn for. */

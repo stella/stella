@@ -1,21 +1,24 @@
-import type { ReactNode } from "react";
 import { useId, useState } from "react";
 
-import { ChevronRightIcon, SlidersHorizontalIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  Popover,
-  PopoverPanel,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import {
+  FACET_SECTION_LIMIT,
+  facetSectionView,
+} from "@/components/public-law-table/public-law-facets.logic";
+import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
+import {
+  FacetOptions,
+  FacetSection,
+  FilterSectionHeading,
+  PublicLawFilterPopover,
+  ShowAllButton,
+} from "@/components/public-law-table/public-law-filter-popover";
 import type {
   CaseLawFilterKey,
   DecisionDateRange,
@@ -27,16 +30,9 @@ import {
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
-  FACET_SECTION_LIMIT,
-  facetSectionView,
   YEAR_SECTION_LIMIT,
 } from "@/features/case-law/decision-filter-facets.logic";
-import type {
-  DecisionFilterFacets,
-  FacetItem,
-  FacetSourceBucket,
-} from "@/features/case-law/decision-filter-facets.logic";
-import { useFormatter } from "@/i18n/formatting-context";
+import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
@@ -53,14 +49,10 @@ type DecisionFilterPopoverProps = {
 };
 
 /**
- * Refinement behind one button, so the results keep the width and the search
- * box keeps the page. Every section shows what the current result set
- * actually holds, so a filter can never lead to an empty page, and the
- * reader's own choice stays visible even once the counts stop reporting it.
- *
- * Nothing here is only in the popover: the button carries the count and the
- * chips under the box name each filter and take it back out, so a reader who
- * never opens this still knows what narrows the list.
+ * The decision facets in the shared public-law filter popover: courts by
+ * tier, the decision date, the type and the language. Every section shows
+ * what the current result set actually holds, so a filter can never lead to
+ * an empty page.
  */
 export const DecisionFilterPopover = ({
   activeFilterCount,
@@ -71,54 +63,12 @@ export const DecisionFilterPopover = ({
   selection,
 }: DecisionFilterPopoverProps) => {
   const t = useTranslations();
-  const format = useFormatter();
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button className="shrink-0" size="sm" variant="outline" />}
-      >
-        <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-        {t("common.filters")}
-        {activeFilterCount > 0 && (
-          <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
-            {format.number(activeFilterCount)}
-          </span>
-        )}
-      </PopoverTrigger>
-      <PopoverPanel
-        align="start"
-        className="w-72 max-w-[calc(100vw-2rem)]"
-        contentClassName="gap-5"
-      >
-        {/* The trigger names the button, not the portaled popup. */}
-        <PopoverTitle className="sr-only">{t("common.filters")}</PopoverTitle>
-        <FacetSections
-          dateRange={dateRange}
-          facets={facets}
-          onDateRangeChange={onDateRangeChange}
-          onSelect={onSelect}
-          selection={selection}
-        />
-      </PopoverPanel>
-    </Popover>
-  );
-};
-
-const FacetSections = ({
-  dateRange,
-  facets,
-  onDateRangeChange,
-  onSelect,
-  selection,
-}: Omit<DecisionFilterPopoverProps, "activeFilterCount">) => {
-  const t = useTranslations();
-
-  return (
-    <>
+    <PublicLawFilterPopover activeFilterCount={activeFilterCount}>
       {facets.courtTiers.length > 0 && (
         <section>
-          <SectionHeading>{t("common.court")}</SectionHeading>
+          <FilterSectionHeading>{t("common.court")}</FilterSectionHeading>
           <div className="flex flex-col gap-3">
             {facets.courtTiers.map(({ courts, tier }) => (
               <CourtTierSection
@@ -139,24 +89,22 @@ const FacetSections = ({
       />
       <FacetSection
         buckets={facets.decisionType}
-        filterKey="type"
         heading={t("common.type")}
-        limit={FACET_SECTION_LIMIT}
-        onSelect={onSelect}
+        name="type"
+        onSelect={(value) => onSelect("type", value)}
         selectedValue={selection.type}
       />
       {/* One language is the corpus's language, not a choice. */}
       {facets.language.length > 1 && (
         <FacetSection
           buckets={facets.language}
-          filterKey="lang"
           heading={t("common.language")}
-          limit={FACET_SECTION_LIMIT}
-          onSelect={onSelect}
+          name="lang"
+          onSelect={(value) => onSelect("lang", value)}
           selectedValue={selection.lang}
         />
       )}
-    </>
+    </PublicLawFilterPopover>
   );
 };
 
@@ -188,7 +136,7 @@ const DateSection = ({
 
   return (
     <section>
-      <SectionHeading>{t("common.date")}</SectionHeading>
+      <FilterSectionHeading>{t("common.date")}</FilterSectionHeading>
       {items.length > 0 && (
         <FacetOptions
           groupLabel={t("workspaces.views.calendar.year")}
@@ -249,65 +197,6 @@ const DateBound = ({
     />
   </label>
 );
-
-const SectionHeading = ({ children }: { children: ReactNode }) => (
-  <h3 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-    {children}
-  </h3>
-);
-
-type FacetSectionProps = {
-  buckets: readonly FacetSourceBucket[];
-  filterKey: CaseLawFilterKey;
-  /**
-   * Already translated. A `TranslationKey` prop would hand `t()` the whole
-   * key union at this call site, which costs more to instantiate than the
-   * section is worth.
-   */
-  heading: string;
-  limit: number;
-  onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
-  selectedValue: string | undefined;
-};
-
-const FacetSection = ({
-  buckets,
-  filterKey,
-  heading,
-  limit,
-  onSelect,
-  selectedValue,
-}: FacetSectionProps) => {
-  const t = useTranslations();
-  const [expanded, setExpanded] = useState(false);
-  const { hiddenCount, items } = facetSectionView({
-    buckets,
-    expanded,
-    limit,
-    selectedValue,
-  });
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <section>
-      <SectionHeading>{heading}</SectionHeading>
-      <FacetOptions
-        groupLabel={heading}
-        items={items}
-        name={filterKey}
-        onSelect={(value) => onSelect(filterKey, value)}
-        selectedValue={selectedValue}
-      />
-      {hiddenCount > 0 && (
-        <ShowAllButton onClick={() => setExpanded(true)}>
-          {t("common.showAll")}
-        </ShowAllButton>
-      )}
-    </section>
-  );
-};
 
 const CourtTierSection = ({
   courts,
@@ -396,83 +285,3 @@ const CourtTierSection = ({
 };
 
 type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];
-
-const ShowAllButton = ({
-  children,
-  onClick,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-}) => (
-  <button
-    className="text-muted-foreground hover:text-foreground -mx-1 min-h-11 px-1 py-1.5 text-xs transition-colors"
-    onClick={onClick}
-    type="button"
-  >
-    {children}
-  </button>
-);
-
-/**
- * One choice out of a section. Native radios, so the group is a group to a
- * screen reader and arrow keys move through it without a roving-tabindex
- * imitation; clicking the chosen one again clears the filter, which a radio
- * group alone cannot express.
- */
-const FacetOptions = ({
-  groupLabel,
-  items,
-  name,
-  onSelect,
-  selectedValue,
-}: {
-  groupLabel: string;
-  items: readonly FacetItem[];
-  name: string;
-  onSelect: (value: string | undefined) => void;
-  selectedValue: string | undefined;
-}) => {
-  const format = useFormatter();
-
-  return (
-    <ul aria-label={groupLabel} className="flex flex-col">
-      {items.map((item) => {
-        const checked = item.value === selectedValue;
-        return (
-          <li key={item.value}>
-            <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm py-1.5 ps-1 pe-1 text-xs transition-colors has-[:focus-visible]:ring-2">
-              <input
-                checked={checked}
-                className="accent-primary size-3.5 shrink-0"
-                name={name}
-                onChange={() => onSelect(item.value)}
-                onClick={() => {
-                  if (checked) {
-                    onSelect(undefined);
-                  }
-                }}
-                type="radio"
-                value={item.value}
-              />
-              <BidiText
-                as="span"
-                className={cn(
-                  "min-w-0 flex-1 truncate",
-                  checked ? "text-foreground font-medium" : "text-foreground",
-                )}
-                title={item.label}
-              >
-                {item.label}
-              </BidiText>
-              {item.count !== null && (
-                <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">
-                  {format.number(item.count)}
-                </span>
-              )}
-            </label>
-          </li>
-        );
-      })}
-    </ul>
-  );
-};

@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createFileRoute,
+  Link,
   notFound,
   redirect,
   useNavigate,
@@ -35,6 +36,34 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
+import {
+  publicLawPageIndex,
+  publicLawPageNumber,
+  publicLawPagerModel,
+  publicLawPageSearchSchema,
+  publicLawPageSearchValue,
+  publicLawPageSize,
+  publicLawPageSizeSearchSchema,
+  publicLawPageSizeSearchValue,
+  publicLawPagesToWalk,
+  reachablePublicLawPage,
+} from "@/components/public-law-table/public-law-pagination.logic";
+import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
+import {
+  PUBLIC_LAW_SEARCH_STATE,
+  publicLawRowsPhase,
+  publicLawLoadMode,
+  publicLawSearchOutage,
+  queryAnsweredByRows,
+  rowsAnswerRequestedSearch,
+} from "@/components/public-law-table/public-law-results-state.logic";
+import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
+import {
+  PublicLawFilterChips,
+  PublicLawResultsToolbar,
+} from "@/components/public-law-table/public-law-results-toolbar";
+import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import {
   activeCaseLawFilterCount,
@@ -59,40 +88,19 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
+import { useDecisionColumnGroups } from "@/features/case-law/components/decision-column-groups";
 import { DecisionFilterPopover } from "@/features/case-law/components/decision-filter-popover";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
-import { DecisionPager } from "@/features/case-law/components/decision-pager";
-import {
-  DecisionFilterChips,
-  DecisionResultsToolbar,
-} from "@/features/case-law/components/decision-results-toolbar";
-import type { DecisionFilterChip } from "@/features/case-law/components/decision-results-toolbar";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
+import {
+  DecisionExcerptControl,
+  DecisionSortControl,
+} from "@/features/case-law/components/decision-toolbar-controls";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { decisionFilterFacets } from "@/features/case-law/decision-filter-facets";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
-import {
-  decisionPageIndex,
-  decisionPageNumber,
-  decisionPagerModel,
-  decisionPageSearchValue,
-  decisionPageSize,
-  decisionPageSizeSearchValue,
-  decisionPagesToWalk,
-  reachableDecisionPage,
-} from "@/features/case-law/decision-pagination.logic";
-import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
-import {
-  DECISIONS_SEARCH_STATE,
-  decisionRowsPhase,
-  decisionsLoadMode,
-  decisionsSearchOutage,
-  queryAnsweredByRows,
-  rowsAnswerRequestedSearch,
-} from "@/features/case-law/decisions-load-mode.logic";
-import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -194,41 +202,13 @@ const optionalStrictSchema = v.fallback(
   undefined,
 );
 
-/**
- * Which page of the results, and how large a page is. Both are dropped from
- * the URL at their default, and both are read leniently: a public link may be
- * typed or crawled, and a page number nobody can reach is the first page, not
- * an error screen.
- */
-const optionalPageSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.union([v.number(), v.string()]),
-      v.transform((value) => decisionPageNumber(Number(value))),
-      v.transform((page) => decisionPageSearchValue(page)),
-    ),
-  ),
-  undefined,
-);
-
-const optionalPageSizeSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.union([v.number(), v.string()]),
-      v.transform((value) => decisionPageSize(Number(value))),
-      v.transform((pageSize) => decisionPageSizeSearchValue(pageSize)),
-    ),
-  ),
-  undefined,
-);
-
 const searchSchema = v.object({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,
   lang: optionalBrowseStringSchema(16),
-  page: optionalPageSchema,
-  pageSize: optionalPageSizeSchema,
+  page: publicLawPageSearchSchema,
+  pageSize: publicLawPageSizeSearchSchema,
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
@@ -357,7 +337,7 @@ const shownDecisions = (
     return [];
   }
   const shown = walked.pages.at(
-    decisionPageIndex(decisionPageNumber(page), walked.pages.length),
+    publicLawPageIndex(publicLawPageNumber(page), walked.pages.length),
   );
   return shown ? shown.decisions : [];
 };
@@ -417,11 +397,11 @@ export const Route = createFileRoute("/law/cases/")({
     );
     const decisionsOptions = decisionsInfiniteOptions(
       filters,
-      decisionPageSize(search.pageSize),
+      publicLawPageSize(search.pageSize),
     );
     const walked =
       queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
-    const wanted = decisionPageNumber(search.page);
+    const wanted = publicLawPageNumber(search.page);
     // Only a deep arrival pays for the walk. A first page, and a page the
     // chain already holds, leave the fetching to the loader, which decides
     // whether this navigation is worth awaiting at all.
@@ -430,7 +410,7 @@ export const Route = createFileRoute("/law/cases/")({
       const chain = await resultsOrOutage(
         ensureRouteInfiniteQueryData(queryClient, {
           ...decisionsOptions,
-          pages: decisionPagesToWalk(wanted, walked),
+          pages: publicLawPagesToWalk(wanted, walked),
         }),
       );
       // An outage proves nothing about which pages exist, so the walk stops
@@ -441,8 +421,8 @@ export const Route = createFileRoute("/law/cases/")({
       // the page this URL names rather than serving page one under it.
       reached = chain === null ? wanted : chain.pages.length;
     }
-    const page = decisionPageSearchValue(
-      reachableDecisionPage(wanted, reached),
+    const page = publicLawPageSearchValue(
+      reachablePublicLawPage(wanted, reached),
     );
     if (search.country !== countryParam || search.page !== page) {
       throw redirect({
@@ -463,9 +443,9 @@ export const Route = createFileRoute("/law/cases/")({
       createDecisionFiltersFromSearch(deps, {
         excerpt: DEFAULT_SEARCH_EXCERPT,
       }),
-      decisionPageSize(deps.pageSize),
+      publicLawPageSize(deps.pageSize),
     );
-    const mode = decisionsLoadMode({
+    const mode = publicLawLoadMode({
       cause,
       hasCachedPages:
         queryClient.getQueryData(decisionsOptions.queryKey) !== undefined,
@@ -481,7 +461,7 @@ export const Route = createFileRoute("/law/cases/")({
           queryClient.getQueryData(decisionsOptions.queryKey),
           deps.page,
         ),
-        search: DECISIONS_SEARCH_STATE.answered,
+        search: PUBLIC_LAW_SEARCH_STATE.answered,
       };
     }
 
@@ -492,14 +472,14 @@ export const Route = createFileRoute("/law/cases/")({
     // page needs is what keeps the rows and the URL the same page.
     const walked =
       queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
-    const wanted = decisionPageNumber(deps.page);
+    const wanted = publicLawPageNumber(deps.page);
     const [decisionPages] = await Promise.all([
       resultsOrOutage(
         ensureRouteInfiniteQueryData(queryClient, {
           ...decisionsOptions,
           ...(wanted > 1 &&
             wanted > walked && {
-              pages: decisionPagesToWalk(wanted, walked),
+              pages: publicLawPagesToWalk(wanted, walked),
             }),
         }),
       ),
@@ -511,19 +491,19 @@ export const Route = createFileRoute("/law/cases/")({
     // filters are the URL's own and stay usable. Every other failure is still
     // the error boundary's.
     if (decisionPages === null) {
-      return { decisions: [], search: DECISIONS_SEARCH_STATE.unavailable };
+      return { decisions: [], search: PUBLIC_LAW_SEARCH_STATE.unavailable };
     }
 
     return {
       decisions: shownDecisions(decisionPages, deps.page),
-      search: DECISIONS_SEARCH_STATE.answered,
+      search: PUBLIC_LAW_SEARCH_STATE.answered,
     };
   },
   // The document is drawn, but it lists nothing and the results it stands for
   // are still out there. 503 tells a crawler to come back for them instead of
   // recording this page as empty.
   headers: ({ loaderData }) =>
-    loaderData?.search === DECISIONS_SEARCH_STATE.unavailable
+    loaderData?.search === PUBLIC_LAW_SEARCH_STATE.unavailable
       ? ssrStatusHeaders(SEARCH_UNAVAILABLE_STATUS)
       : undefined,
   head: ({ loaderData, match }) => {
@@ -574,7 +554,7 @@ export const Route = createFileRoute("/law/cases/")({
 
 type PublicCaseLawIndexProps = {
   /** Whether the router has this page's rows yet. */
-  routeState: DecisionRouteState;
+  routeState: PublicLawRouteState;
 };
 
 function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
@@ -662,7 +642,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // belongs to, so a press with a cell focused opens this table's find.
   const paneRef = useRef<HTMLDivElement>(null);
 
-  const pageSize = decisionPageSize(search.pageSize);
+  const pageSize = publicLawPageSize(search.pageSize);
   // Read, not suspended on: the loader primes this only on a cold arrival, and
   // a jurisdiction switch must not take the whole page down for a list of
   // court names. The previous facets stay until the new ones land.
@@ -692,7 +672,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const loadedSearch = Route.useMatch({
     select: (match) => match.loaderData?.search,
   });
-  const isSearchUnavailable = decisionsSearchOutage({
+  const isSearchUnavailable = publicLawSearchOutage({
     hasPages: data !== undefined,
     isQueryOutage: isSearchUnavailableError(error),
     loaded: loadedSearch,
@@ -700,7 +680,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // The rows are the only region that waits: either they are not there yet,
   // or they answer the search before this one and say so themselves rather
   // than the page being replaced.
-  const rows = decisionRowsPhase({ isLoading, isPlaceholderData, routeState });
+  const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
   const isRefreshing = rows === "stale";
 
   // The search the rows on screen answer, which lags the URL while their
@@ -720,7 +700,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
   const walkedPageCount = data?.pages.length ?? 0;
-  const wantedPage = decisionPageNumber(search.page);
+  const wantedPage = publicLawPageNumber(search.page);
 
   // The router walked the default length's chain, because the length the
   // reader chose lives in their browser and `beforeLoad` cannot read it. A
@@ -733,7 +713,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     async () =>
       await ensureRouteInfiniteQueryData(queryClient, {
         ...decisionsOptions,
-        pages: decisionPagesToWalk(wantedPage, walkedPageCount),
+        pages: publicLawPagesToWalk(wantedPage, walkedPageCount),
       }),
   );
   useExternalSyncEffect(() => {
@@ -743,7 +723,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     detached(walkToWantedPage(), "cases.walk-chosen-excerpt");
   }, [walkToWantedPage, walkedPageCount, wantedPage]);
 
-  const pager = decisionPagerModel({
+  const pager = publicLawPagerModel({
     hasNextPage,
     page: wantedPage,
     walkedPageCount,
@@ -809,7 +789,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         await navigate({
           search: (previous) => ({
             ...previous,
-            page: decisionPageSearchValue(walked),
+            page: publicLawPageSearchValue(walked),
           }),
         });
       })(),
@@ -851,6 +831,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   });
   // Find-in-table over the page on screen, beside the control that narrows the
   // search itself. Kept per jurisdiction, the way the arrangement is.
+  const columnGroups = useDecisionColumnGroups({
+    questions: questions.surface,
+  });
   const find = useDecisionFind({
     decisions: ordered,
     layout,
@@ -859,11 +842,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     surfaceKey: countryParam,
   });
 
-  const setPageSize = (next: DecisionPageSize) => {
+  const setPageSize = (next: PublicLawPageSize) => {
     detached(
       searchNavigation((previous) => ({
         ...previous,
-        pageSize: decisionPageSizeSearchValue(next),
+        pageSize: publicLawPageSizeSearchValue(next),
       })),
       "cases.page-size-navigate",
     );
@@ -904,7 +887,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   };
 
   const dateRange = decisionDateRange(search);
-  const chips: DecisionFilterChip[] = [];
+  const chips: PublicLawFilterChip[] = [];
   // The same three shapes, and the same strings, the workspace view's own
   // date chip uses; built here rather than in a helper taking `t`, because
   // handing the translator through a parameter widens its key union at the
@@ -996,12 +979,21 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
-        <DecisionResultsToolbar
-          // A browse listing draws each decision's own headnote, not a matched
-          // passage, so there is no excerpt to widen and the control is not
-          // offered. `filters.search` is what the search endpoint was actually
-          // given, so it answers that exactly.
-          excerpt={filters.search === undefined ? null : layout.excerpt}
+        <PublicLawResultsToolbar
+          actions={<QuestionColumnControls controller={questions} />}
+          columnGroups={columnGroups}
+          controls={
+            // A browse listing draws each decision's own headnote, not a
+            // matched passage, so there is no excerpt to widen and the control
+            // is not offered. `filters.search` is what the search endpoint was
+            // actually given, so it answers that exactly.
+            filters.search === undefined ? undefined : (
+              <DecisionExcerptControl
+                excerpt={layout.excerpt}
+                onExcerptChange={(excerpt) => setLayout({ ...layout, excerpt })}
+              />
+            )
+          }
           filters={
             <DecisionFilterPopover
               activeFilterCount={activeCaseLawFilterCount(search)}
@@ -1017,17 +1009,24 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
             />
           }
           find={<TableFindBar {...find.bar} />}
-          actions={<QuestionColumnControls controller={questions} />}
           layout={layout}
           onLayoutChange={setLayout}
-          onSortChange={(next) => {
-            detached(
-              searchNavigation((previous) => ({ ...previous, sort: next })),
-              "cases.sort-navigate",
-            );
-          }}
-          questions={questions.surface}
-          sort={sort}
+          sort={
+            sort === null ? undefined : (
+              <DecisionSortControl
+                onSortChange={(next) => {
+                  detached(
+                    searchNavigation((previous) => ({
+                      ...previous,
+                      sort: next,
+                    })),
+                    "cases.sort-navigate",
+                  );
+                }}
+                sort={sort}
+              />
+            )
+          }
           summary={
             // The widened-search note sits on the count's line, not on a
             // line of its own: it qualifies the count, and a row between the
@@ -1052,7 +1051,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           }
         />
 
-        <DecisionFilterChips
+        <PublicLawFilterChips
           chips={chips}
           onClearAll={() => {
             // Clear the filters, not the query the reader typed into the box:
@@ -1076,7 +1075,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         ) : (
           <>
             <DecisionTable
-              decisions={find.decisions}
+              decisions={find.rows}
               emptyState={
                 warnings.emptyState === null ? undefined : (
                   <NoResultsReason state={warnings.emptyState} />
@@ -1094,11 +1093,21 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
               questions={questions.surface}
               selectedIds={selectedIds}
             />
-            <DecisionPager
+            <PublicLawPager
               isWalking={isFetchingNextPage}
               model={pager}
               onPageSizeChange={setPageSize}
               onWalkForward={walkForward}
+              pageLink={({ label, page }) => (
+                <Link
+                  aria-label={label}
+                  search={(previous) => ({
+                    ...previous,
+                    page: publicLawPageSearchValue(page),
+                  })}
+                  to="/law/cases"
+                />
+              )}
               pageSize={pageSize}
             />
           </>

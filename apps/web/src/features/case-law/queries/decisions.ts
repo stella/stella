@@ -9,11 +9,11 @@ import {
   type SearchSort,
 } from "@stll/api-contract/search";
 
-import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import {
-  DEFAULT_DECISION_PAGE_SIZE,
-  type DecisionPageSize,
-} from "@/features/case-law/decision-pagination.logic";
+  DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  type PublicLawPageSize,
+} from "@/components/public-law-table/public-law-pagination.logic";
+import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -96,7 +96,7 @@ const caseLawDecisionKeys = {
  * is what the cursors in the chain were cut at: the same filters read 25 at a
  * time are a different chain from the same filters read 100 at a time.
  */
-type DecisionListKey = DecisionListFilters & { pageSize: DecisionPageSize };
+type DecisionListKey = DecisionListFilters & { pageSize: PublicLawPageSize };
 
 type DecisionBySlugKey = {
   country: PublicCaseLawCountry;
@@ -205,7 +205,7 @@ export type LatestDecisionsCourt = Awaited<
 
 export const decisionsInfiniteOptions = (
   filters: DecisionListFilters,
-  pageSize: DecisionPageSize = DEFAULT_DECISION_PAGE_SIZE,
+  pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
 ) =>
   infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list({ ...filters, pageSize }),

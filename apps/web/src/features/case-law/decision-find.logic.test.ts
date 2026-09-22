@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 
+import { findTableRows } from "@/components/workspaces/table/table-find.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
   decisionFindRowText,
-  findDecisions,
   isFindableDecisionColumn,
 } from "@/features/case-law/decision-find.logic";
 import {
@@ -91,11 +91,15 @@ const find = ({
   columnIds: readonly string[];
   term: string | null;
 }) =>
-  findDecisions({
-    answersByKey: ANSWERS,
+  findTableRows({
     columnIds,
-    decisions: [TERMINATION, EASEMENT],
-    questionColumns: [QUESTION, NUMERIC_QUESTION],
+    rows: [TERMINATION, EASEMENT],
+    rowText: (row) =>
+      decisionFindRowText({
+        answersByKey: ANSWERS,
+        decision: row,
+        questionColumns: [QUESTION, NUMERIC_QUESTION],
+      }),
     term,
   });
 
@@ -223,11 +227,15 @@ describe("the rows a decision find leaves", () => {
     const decisions = [TERMINATION, EASEMENT];
 
     expect(
-      findDecisions({
-        answersByKey: ANSWERS,
+      findTableRows({
         columnIds: [],
-        decisions,
-        questionColumns: NO_QUESTIONS,
+        rows: decisions,
+        rowText: (row) =>
+          decisionFindRowText({
+            answersByKey: ANSWERS,
+            decision: row,
+            questionColumns: NO_QUESTIONS,
+          }),
         term: null,
       }),
     ).toBe(decisions);
