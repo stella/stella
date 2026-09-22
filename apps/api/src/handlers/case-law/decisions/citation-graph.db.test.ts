@@ -357,6 +357,7 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
     neutral: 0,
     positive: 1,
     supportive: 0,
+    mixed: 0,
     unclassified: 1,
   });
 });

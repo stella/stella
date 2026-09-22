@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
       "stripLabel": "Zitate nach Jahr",
       "treatment": {
+        "mixed": "Uneinheitlich",
         "negative": "Ablehnend",
         "neutral": "Erwähnt",
         "positive": "Gebilligt",

@@ -625,6 +625,7 @@ type Messages = {
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
       "stripLabel": "Citations by year";
       "treatment": {
+        "mixed": "Mixed";
         "negative": "Negative";
         "neutral": "Mentioned";
         "positive": "Endorsed";

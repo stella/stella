@@ -23,7 +23,10 @@ import {
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
-import type { CitationContexts } from "@/api/handlers/case-law/polarity/context";
+import type {
+  CitationContexts,
+  CitationWindows,
+} from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import {
   incrementMatchCount,
@@ -47,6 +50,11 @@ const EXCERPT_WINDOWS = 5;
  * case named forty times is bounded to the first two mentions and the last
  * three: the first is where a party's reliance is reported, the last is
  * where the court settles it.
+ *
+ * One excerpt, one answer: a model tier reads the mentions together and
+ * gives the citation a single reading. `mixed` needs each mention read on
+ * its own, which only the rule tier does, so it is a verdict that tier
+ * reaches (`selectCitationPolarity`) and the model tiers do not.
  */
 export const excerptOf = (contexts: CitationContexts): string => {
   if (contexts.length <= EXCERPT_WINDOWS) {
@@ -78,8 +86,8 @@ type ClassifyResult = {
  * 3. Track the LLM's key phrase for future rule generation
  */
 type ClassifyCitationArgs = {
-  /** The citation's mentions in the citing decision (`extractContexts`). */
-  contexts: CitationContexts;
+  /** The citation's surroundings in the citing decision (`extractContexts`). */
+  windows: CitationWindows;
   citationText: string;
   language: string;
   observedAt: Date;
@@ -97,16 +105,17 @@ type ClassifyCitationArgs = {
 };
 
 export const classifyCitation = async ({
-  contexts,
+  windows,
   citationText,
   language,
   observedAt,
   scopedDb,
   options,
 }: ClassifyCitationArgs): Promise<ClassifyResult> => {
-  // Tier 1: regex rules
+  // Tier 1: regex rules, over the mentions rather than the merged windows,
+  // so two mentions that disagree are two readings and not one.
   const ruleMatch = await matchRule(
-    contexts,
+    windows.mentions,
     language,
     scopedDb,
     options?.ruleCache,
@@ -135,7 +144,7 @@ export const classifyCitation = async ({
   // through, including a transport failure and a deployment with no decision
   // model, rather than becoming an `unknown` polarity: the generative tier
   // still reads.
-  const context = excerptOf(contexts);
+  const context = excerptOf(windows.contexts);
   const reading = await classifyWithSystemOne({
     client: options?.decisionModel,
     context,

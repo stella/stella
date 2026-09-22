@@ -177,6 +177,7 @@ const BENCH_DECISION = {
 
 /** Sixty years of citations: the strip at the widest span the API allows. */
 const BENCH_CITATION_YEARS = Array.from({ length: 60 }, (_, index) => ({
+  mixed: index % 11 === 0 ? 1 : 0,
   negative: index % 7 === 0 ? 1 : 0,
   neutral: index % 3 === 0 ? 2 : 0,
   positive: index % 5 === 0 ? 1 : 0,

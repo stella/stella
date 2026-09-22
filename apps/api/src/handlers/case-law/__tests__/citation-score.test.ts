@@ -292,12 +292,24 @@ describe("polarity weighting", () => {
     ).toBe(0);
   });
 
+  test("a mixed treatment adds nothing either", () => {
+    // It carries a departure, and the weight is binary: a court that went
+    // against the decision anywhere is not vouching for it.
+    expect(
+      citationScore([{ ...citation, polarity: POLARITY.MIXED }], now, SEED_MAP),
+    ).toBe(0);
+  });
+
   test("an unclassified citation weighs the same as a classified neutral one", () => {
     // The corpus is mostly unclassified; scoring null below `neutral` would
     // rank classification coverage instead of case law.
+    //
+    // The readings that confer nothing are skipped by their weight rather
+    // than by name, so a new one joins them here without the test having to
+    // be told about it.
     const unclassified = weightedCitationSum([citation], now, SEED_MAP);
     for (const polarity of POLARITIES) {
-      if (polarity !== POLARITY.NEGATIVE) {
+      if (POLARITY_AUTHORITY_WEIGHT[polarity] > 0) {
         expect(
           weightedCitationSum([{ ...citation, polarity }], now, SEED_MAP),
         ).toBeCloseTo(unclassified, 12);

@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
       "stripLabel": "Hivatkozások évenként",
       "treatment": {
+        "mixed": "Vegyes",
         "negative": "Elutasító",
         "neutral": "Említett",
         "positive": "Megerősített",

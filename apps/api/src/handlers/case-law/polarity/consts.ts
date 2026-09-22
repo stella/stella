@@ -12,6 +12,7 @@ export const POLARITIES = [
   "supportive",
   "neutral",
   "negative",
+  "mixed",
   "unknown",
 ] as const;
 
@@ -22,16 +23,24 @@ export const POLARITY = {
   SUPPORTIVE: "supportive",
   NEUTRAL: "neutral",
   NEGATIVE: "negative",
+  MIXED: "mixed",
   UNKNOWN: "unknown",
 } as const satisfies ConstantMap<Polarity>;
 
 /**
- * Polarities that record the pipeline's own state rather than a reading of
- * the text. `unknown` means classification did not produce an answer — the
- * LLM call failed, or the row predates the classifier — so no classifier
- * may emit it and no rule may carry it.
+ * Polarities the pipeline derives, which no single reading may emit.
+ *
+ * `unknown` records the pipeline's own state rather than a reading of the
+ * text: classification did not produce an answer, because the LLM call failed
+ * or the row predates the classifier.
+ *
+ * `mixed` is a reading, but of the citation rather than of any one mention of
+ * it: it is what `aggregateMentionPolarities` returns when the citing court
+ * departs from the decision at one mention and relies on it at another.
+ * Neither belongs in the classifier codomain, so no rule may carry one and no
+ * model may be offered one.
  */
-const PIPELINE_POLARITIES = [POLARITY.UNKNOWN] as const;
+const PIPELINE_POLARITIES = [POLARITY.MIXED, POLARITY.UNKNOWN] as const;
 
 /** A polarity a classifier is allowed to assign to a citation. */
 export type ClassifiablePolarity = Exclude<
@@ -55,14 +64,16 @@ export const CLASSIFIABLE_POLARITIES = POLARITIES.filter(
  *
  * Stricter than `isValidPolarity`, and deliberately so at the read boundary:
  * the CHECK constraint keeps values inside `POLARITIES`, but nothing stops a
- * row carrying `unknown`, which is the pipeline's word about itself.
+ * row carrying a polarity the pipeline derived rather than read.
  */
 export const isClassifiablePolarity = (
   value: string,
 ): value is ClassifiablePolarity => includes(CLASSIFIABLE_POLARITIES, value);
 
 /**
- * Order in which competing rule matches are resolved: lower wins.
+ * Order in which competing readings are resolved: lower wins. It settles
+ * which rule match labels a mention, which mention labels a citation, and
+ * whether a recheck's verdict is an improvement on the stored one.
  *
  * Severity first. A court that distinguishes or overrules a decision has
  * said something stronger than one that also happens to cite it approvingly,
@@ -70,16 +81,21 @@ export const isClassifiablePolarity = (
  * `positive` and `supportive` are deliberately equal: they differ in how
  * explicit the reliance is, not in how strong it is.
  *
+ * `mixed` sits between the two sides because it contains both: it carries a
+ * departure, so it outranks every affirming reading, and it is not the plain
+ * departure `negative` records, so it does not outrank that.
+ *
  * `matchCount` must never enter this order. Ordering by it is
  * self-reinforcing — every win raises the winner's precedence — so a common
  * generic rule ends up permanently shadowing a rare specific one.
  */
 export const POLARITY_PRECEDENCE = {
   negative: 0,
-  positive: 1,
-  supportive: 1,
-  neutral: 2,
-  unknown: 3,
+  mixed: 1,
+  positive: 2,
+  supportive: 2,
+  neutral: 3,
+  unknown: 4,
 } as const satisfies Record<Polarity, number>;
 
 /**
@@ -114,10 +130,15 @@ export const PROMOTION_THRESHOLD = 5;
  *
  * Binary on purpose. A court that overrules or distinguishes a decision is
  * not vouching for it, so a negative treatment confers no authority; every
- * other reading does, in full. Grading the middle (neutral below supportive
- * below positive) would rank a decision by how enthusiastically it happens to
- * have been cited, and it would make the score move as classification
- * coverage grows rather than as the case law changes.
+ * other reading does, in full. `mixed` weighs as `negative` does: the citing
+ * court departed somewhere, and a departure is not a vouch. That also keeps
+ * the scores still as classification gets finer, because the citations now
+ * labelled `mixed` were labelled `negative` before the label existed.
+ *
+ * Grading the middle (neutral below supportive below positive) would rank a
+ * decision by how enthusiastically it happens to have been cited, and it
+ * would make the score move as classification coverage grows rather than as
+ * the case law changes.
  *
  * A citation with no polarity yet weighs the same as `unknown`: the corpus is
  * mostly unclassified, and anything else would rank unclassified citations
@@ -131,6 +152,7 @@ export const POLARITY_AUTHORITY_WEIGHT = {
   supportive: 1,
   neutral: 1,
   negative: 0,
+  mixed: 0,
   unknown: 1,
 } as const satisfies Record<Polarity, number>;
 

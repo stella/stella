@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {
+        "mixed": "Mieszane",
         "negative": "Negatywne",
         "neutral": "Wzmiankowane",
         "positive": "Zaaprobowane",

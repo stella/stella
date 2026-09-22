@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
       "stripLabel": "Citas por año",
       "treatment": {
+        "mixed": "Mixta",
         "negative": "Negativa",
         "neutral": "Mencionada",
         "positive": "Respaldada",
