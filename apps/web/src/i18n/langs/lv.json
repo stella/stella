@@ -4165,7 +4165,7 @@
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",
       "memoryExtraction": {
-        "description": "Kad ieslēgts, stella fonā pārskata apkopotos tērzēšanas pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
+        "description": "Kad ieslēgts, stella fonā pārskata apkopotos tērzēšanas pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu organizācijas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
@@ -4913,7 +4913,7 @@
       "description": "Izmantojiet savas tīmekļa meklēšanas API atslēgas, lai tērzēšana varētu meklēt tīmeklī un lasīt lapas ar jūsu pakalpojumu sniedzēja kontu. Bez tām tērzēšana izmanto platformas koplietotās atslēgas, ja tās ir pieejamas. Lapu lasīšana darbojas arī bez atslēgas; pievienojiet atslēgu, lai paaugstinātu pieprasījumu limitus.",
       "fetchTitle": "Lapu lasītāja atslēga (Jina)",
       "platformFallback": "Tiek izmantota platformas koplietotā atslēga. Pievienojiet savu atslēgu, lai izmantotu savu pakalpojumu sniedzēja kontu un kvotu.",
-      "searchTitle": "Meklēšanas pakalpojuma sniedzēja atslēga (Tavily)",
+      "searchTitle": "Meklēšanas pakalpojumu sniedzēja atslēga (Tavily)",
       "title": "Meklēšanas tīmeklī atslēgas"
     }
   },

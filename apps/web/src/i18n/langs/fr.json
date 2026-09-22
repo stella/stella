@@ -108,7 +108,7 @@
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
     "requireAccount": {
       "askAboutDocument": "Créez un compte gratuit pour poser une question sur ce document",
-      "askInChat": "Créez un compte gratuit pour poser cette question dans le chat",
+      "askInChat": "Créez un compte gratuit pour poser cette question dans une conversation",
       "description": "Vous reviendrez à cette page dès que votre compte sera prêt.",
       "generateHeadnotes": "Créez un compte gratuit pour générer des sommaires par IA",
       "writeResearchQuestion": "Créez un compte gratuit pour poser une question à ces résultats"
@@ -838,7 +838,7 @@
   "chat": {
     "acceptAllCount": "Tout accepter ({count})",
     "actionExpand": {
-      "toastDescription": "Le chat en plein écran arrive, avec des conversations conservées.",
+      "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
     "aiPrompt": "Champ de message IA",
@@ -882,7 +882,7 @@
     "audioContent": "Audio généré",
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
-    "chatAbout": "Insérer dans le chat IA",
+    "chatAbout": "Insérer dans la conversation IA",
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
     "composerMenu": {
       "context": "Contexte",
@@ -905,20 +905,20 @@
     "contextMeter": {
       "attachments": "Documents joints",
       "autoCompact": "À 100 %, stella résume automatiquement les anciens messages pour libérer de la place.",
-      "cache": "Les suites rapides réutilisent la discussion mise en cache. La partie fixe (instructions système, outils) est toujours en cache.",
+      "cache": "Les suites rapides réutilisent la conversation mise en cache. La partie fixe (instructions système, outils) est toujours en cache.",
       "cached": "en cache",
-      "conversation": "Discussion",
+      "conversation": "Conversation",
       "full": "{percent} % plein",
       "instructions": "Instructions système",
       "percent": "{percent} %",
       "summary": "Résumé des anciens messages",
       "summaryWithCount": "Résumé de {count} anciens messages",
-      "title": "Contexte de la discussion",
+      "title": "Contexte de la conversation",
       "tokens": "~{used} / {total} jetons",
       "tools": "Outils",
-      "triggerLabel": "Contexte de la discussion : {percent} % plein"
+      "triggerLabel": "Contexte de la conversation : {percent} % plein"
     },
-    "contextPlaceholder": "Chat sur {context}, / pour les skills, @ pour ajouter du contexte",
+    "contextPlaceholder": "Discuter de {context}, / pour les compétences, @ pour ajouter du contexte",
     "createDocument": {
       "continue": "Créer le document",
       "created": "Document créé",
@@ -946,15 +946,15 @@
     "emptyThreadDescription": "Posez une question sur ce dossier, rédigez du texte ou demandez une courte note de recherche.",
     "emptyThreadTitle": "Démarrer une conversation",
     "extractingContent": "Extraction du contenu...",
-    "fileThreadRebound": "Le chat sur ce fichier a déjà été lancé dans une autre session. Votre message a été conservé ; envoyez-le à nouveau.",
+    "fileThreadRebound": "La conversation sur ce fichier a déjà été lancée dans une autre session. Votre message a été conservé ; envoyez-le à nouveau pour continuer là-bas.",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",
-    "forkFromHere": "Créer un nouveau chat à partir d’ici",
+    "forkFromHere": "Créer une nouvelle conversation à partir d’ici",
     "forkedFrom": "Créée à partir de <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Créé à partir d’un chat qui n’est plus disponible",
-    "forkedThread": "Issu d’un autre chat",
-    "forkingThread": "Création d’un nouveau chat…",
+    "forkedFromUnavailable": "Créée à partir d’une conversation qui n’est plus disponible",
+    "forkedThread": "Issue d’une autre conversation",
+    "forkingThread": "Création d’une nouvelle conversation…",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
@@ -968,11 +968,11 @@
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",
-      "noPrompts": "Aucun skill pour le moment",
-      "noRecentChats": "Aucun chat récent",
+      "noPrompts": "Aucune compétence pour le moment",
+      "noRecentChats": "Aucune conversation récente",
       "pinnedMatters": "Dossiers épinglés",
       "prompts": "Compétences",
-      "recentChats": "Chats récents"
+      "recentChats": "Conversations récentes"
     },
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
@@ -1002,10 +1002,10 @@
         "xhigh": "Très élevé"
       },
       "selectionLabel": "{model} | {effort}",
-      "title": "Sélectionner le modèle de chat",
+      "title": "Sélectionner le modèle de conversation",
       "viaProvider": "par {provider}"
     },
-    "newChat": "Nouveau chat",
+    "newChat": "Nouvelle conversation",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -1017,7 +1017,7 @@
       "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères}}",
       "fromPromptFallback": "Compétence"
     },
-    "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
+    "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1037,9 +1037,9 @@
       }
     },
     "prompts": {
-      "noResults": "Aucun skill correspondant",
+      "noResults": "Aucune compétence correspondante",
       "noShortcuts": "Aucune compétence pour le moment. Ajoutez-en dans Connaissances → Compétences.",
-      "tryOne": "Essaie l'un d'entre eux pour commencer"
+      "tryOne": "Essayez l’une d’entre elles pour commencer"
     },
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
     "queuedNotice": "En file d’attente : envoi à la fin de la réponse en cours",
@@ -1067,8 +1067,8 @@
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "skills": {
       "scope": {
-        "private": "Vos skills IA",
-        "team": "Skills IA d'équipe"
+        "private": "Vos compétences IA",
+        "team": "Compétences IA d'équipe"
       }
     },
     "sourcePlaceholder": "Discuter de {title}",
@@ -1139,7 +1139,7 @@
       "docxSplitTableCellSummary": "Fractionner la cellule de tableau à {blockId}",
       "execute-typescript": "Lecture des données du dossier",
       "execute_typescript": "Lecture des données du dossier",
-      "expand-chat-history": "Lecture de l’historique du chat",
+      "expand-chat-history": "Lecture de l’historique des conversations",
       "fetch_url": "Lecture de la page",
       "fill_template": "Remplissage du modèle",
       "find_text": "Recherche dans le texte du document",
@@ -1173,7 +1173,7 @@
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
       "search-across-matters": "Recherche dans tous les dossiers",
-      "search-chat-history": "Recherche dans l’historique du chat",
+      "search-chat-history": "Recherche dans l’historique des conversations",
       "set_field_value": "Définir la valeur du champ",
       "set_practice_jurisdictions": "Définir les juridictions d’exercice",
       "show_in_document": "Affichage dans le document",
@@ -1347,7 +1347,7 @@
     "archive": "Archiver",
     "ask": "Demander",
     "askAI": "Demander à l’IA",
-    "askInChat": "Demander dans le chat",
+    "askInChat": "Demander dans la conversation",
     "assignee": "Assigné",
     "author": "Auteur",
     "back": "Retour",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
-    "scopeChat": "Lire et gérer vos chats et messages",
+    "scopeChat": "Lire et gérer vos conversations et vos messages",
     "scopeContactsWrite": "Créer, modifier et supprimer des contacts dans toute votre organisation",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
@@ -2511,7 +2511,7 @@
           "plusMenu": {
             "body": "Utilisez + pour joindre un fichier ou faire référence à un dossier.",
             "title": "Ajouter du contexte avec +",
-            "when": "Quand le contexte nécessaire n’est pas encore dans le chat."
+            "when": "Quand le contexte nécessaire n’est pas encore dans la conversation."
           },
           "send": {
             "body": "Envoie le message avec tout ce que vous avez joint, référencé ou activé ci-dessus. L'éditeur reste en place, si bien qu'une question de suivi peut ajouter ce qui manquait à la première réponse.",
@@ -2519,13 +2519,13 @@
             "when": "La première réponse montre ce qui manque encore."
           }
         },
-        "title": "Commencer par le chat"
+        "title": "Commencer par une conversation"
       },
       "chatPower": {
         "description": "Utilisez des compétences ou connectez d’autres outils utiles",
         "steps": {
           "mcp": {
-            "body": "Active ou désactive les outils d'un serveur connecté pour vos chats : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
+            "body": "Active ou désactive les outils d'un serveur connecté pour vos conversations : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
             "title": "Serveurs d'outils connectés",
             "when": "Activez-en un quand la réponse a besoin de données à jour venant de l'extérieur de l'espace de travail. Laissez les autres désactivés : moins il y a d'outils en jeu, plus la réponse est ciblée et prévisible."
           },
@@ -2543,7 +2543,7 @@
             "when": "Utilisez-en une quand la tâche se répète et que la formulation compte, par exemple une revue de contrat standard ou un résumé d'ouverture. Taper / dans un éditeur vide ouvre directement cette liste."
           }
         },
-        "title": "Aller plus loin dans le chat"
+        "title": "Aller plus loin avec les conversations"
       },
       "documents": {
         "description": "Classez un document, puis retrouvez-le facilement",
@@ -2555,7 +2555,7 @@
           "upload": {
             "body": "Le bouton « Importer » ouvre le sélecteur de fichiers ; vous pouvez également faire glisser des fichiers dans le dossier. Chaque fichier devient un document de ce dossier, que votre équipe peut retrouver et que stella peut utiliser lors de la révision.",
             "title": "Classer un document dans le dossier",
-            "when": "Importez le fichier ici s’il appartient au dossier et doit rester disponible. Joignez-le directement au chat uniquement s’il sert de contexte temporaire pour une seule conversation."
+            "when": "Importez le fichier ici s’il appartient au dossier et doit rester disponible. Joignez-le directement à la conversation uniquement s’il ne sert que de contexte temporaire pour celle-ci."
           }
         },
         "title": "Travailler avec des documents"
@@ -2747,8 +2747,8 @@
     },
     "groups": {
       "addContext": "Ajouter le contexte",
-      "chatMoveDescription": "<bdi>{chatName}</bdi> sera regroupé sous <bdi>{matterName}</bdi>. Ajoutez le dossier au contexte du chat afin qu’il puisse utiliser ses fichiers et ses informations.",
-      "chatMoveTitle": "Ajouter ce dossier au chat ?",
+      "chatMoveDescription": "La conversation <bdi>{chatName}</bdi> sera regroupée sous le dossier <bdi>{matterName}</bdi>. Ajoutez le dossier au contexte de la conversation afin qu’elle puisse utiliser ses fichiers et ses informations.",
+      "chatMoveTitle": "Ajouter ce dossier à la conversation ?",
       "collapse": "Réduire {groupName}",
       "color": "Couleur du groupe",
       "colorOption": "Couleur {number}",
@@ -2769,7 +2769,7 @@
     "hidePane": "Masquer le volet",
     "matterPicker": {
       "allMatters": "Tous les dossiers",
-      "description": "Choisissez les dossiers sur lesquels ce chat peut s'appuyer.",
+      "description": "Choisissez les dossiers sur lesquels cette conversation peut s'appuyer.",
       "empty": "Aucun dossier disponible.",
       "noMatter": "Aucun dossier",
       "noResults": "Aucun dossier ne correspond à « {query} ».",
@@ -2820,7 +2820,7 @@
     },
     "moveToMain": "Déplacer vers la vue principale",
     "moveToSide": "Déplacer vers le panneau latéral",
-    "openChat": "Ouvrir le chat",
+    "openChat": "Ouvrir la conversation",
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {
@@ -2882,7 +2882,7 @@
       "filterDeviations": "Écarts",
       "flag": "Signaler",
       "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés}}",
-      "fromChat": "Depuis le chat",
+      "fromChat": "Depuis la conversation",
       "fromThisMatter": "De ce dossier",
       "history": {
         "backToLatest": "Retour à la dernière version",
@@ -3029,7 +3029,7 @@
       "deleteConfirmDescription": "« {name} » sera supprimée de cet espace de travail.",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
-      "description": "Installez des packs SKILL.md qui ajoutent au chat des méthodes spécialisées et des ressources en lecture seule.",
+      "description": "Installez des packs SKILL.md qui ajoutent aux conversations des méthodes spécialisées et des ressources en lecture seule.",
       "disableSkill": "Désactiver la compétence",
       "disabled": "Désactivée",
       "discoverSkills": "Rechercher des compétences",
@@ -3110,7 +3110,7 @@
       "bearerTokenDescription": "Ce serveur utilise un jeton Bearer. Collez le jeton fourni pour terminer la connexion.",
       "connectedToast": "MCP connecté",
       "connectedWithLastUsed": "Connecté · dernière utilisation {time}",
-      "description": "Gérez les intégrations qui peuvent ajouter des outils au chat. Les jetons sont stockés par utilisateur.",
+      "description": "Gérez les intégrations qui peuvent ajouter des outils aux conversations. Les jetons sont stockés par utilisateur.",
       "detected": "{authType} détecté",
       "disable": "Désactiver",
       "disabled": "Connecté · désactivé",
@@ -3119,7 +3119,7 @@
       "enable": "Activer",
       "errorDescription": "L’intégration n’a pas pu être mise à jour.",
       "errorTitle": "Échec MCP",
-      "mcpExplainer": "Les intégrations connectent au chat des services externes avec lesquels l’IA peut travailler.",
+      "mcpExplainer": "Les intégrations connectent aux conversations des services externes avec lesquels l’IA peut travailler.",
       "needsReauth": "Reconnexion requise",
       "off": "Désactivé",
       "on": "Activé",
@@ -3133,7 +3133,7 @@
       "tokenPlaceholder": "Coller le jeton",
       "urlLabel": "URL du serveur MCP",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Utiliser dans le chat",
+      "useInChat": "Utiliser dans les conversations",
       "whatIsAnMcpServer": "Qu'est-ce qu'un serveur MCP ?"
     },
     "playbooks": {
@@ -3339,7 +3339,7 @@
         "description": "Listes de contrôle évaluées qui examinent les documents au regard de vos référentiels"
       },
       "prompts": {
-        "description": "Compétences réutilisables disponibles avec / dans le chat",
+        "description": "Compétences réutilisables disponibles avec / dans les conversations",
         "title": "Compétences"
       },
       "templates": {
@@ -3347,7 +3347,7 @@
         "title": "Modèles"
       },
       "tools": {
-        "description": "Connectez stella aux registres publics et autres sources",
+        "description": "Compétences, intégrations et outils toujours disponibles que l’IA peut utiliser dans les conversations",
         "title": "Outils"
       },
       "workflows": {
@@ -3380,7 +3380,7 @@
         "title": "Comment votre compétence doit-elle fonctionner ?"
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
-      "commandHelp": "Saisissez-la dans le chat pour exécuter cette compétence.",
+      "commandHelp": "Saisissez-la dans une conversation pour exécuter cette compétence.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
@@ -3403,7 +3403,7 @@
         "descriptionPlaceholder": "Brève description affichée dans le sélecteur",
         "name": "Nom",
         "namePlaceholder": "ex. Résumer le document",
-        "promptPlaceholder": "Instructions insérées dans le compositeur du chat lorsque cette compétence est utilisée",
+        "promptPlaceholder": "Instructions insérées dans la zone de saisie de la conversation lorsque cette compétence est utilisée",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
         "scopeTeam": "Tout le monde dans l’équipe"
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Sélectionnez un dossier pour afficher sa mémoire."
     },
-    "pageDescription": "Notes et contexte dont l'assistant se souvient d'un chat à l'autre.",
+    "pageDescription": "Notes et contexte dont l'assistant se souvient d'une conversation à l'autre.",
     "pageTitle": "Mémoire",
     "provenance": "{source} · {date}",
     "restoredToast": "Mémoire restaurée",
@@ -3496,7 +3496,7 @@
     }
   },
   "navigation": {
-    "chat": "Chat",
+    "chat": "Conversation",
     "contacts": "Contacts",
     "inbox": "Boîte de réception",
     "knowledge": "Connaissances",
@@ -3524,7 +3524,7 @@
     "sidebar": "Barre latérale",
     "sidebarDescription": "Affiche la barre latérale mobile.",
     "templates": "Modèles",
-    "toggleChat": "Afficher / masquer le chat",
+    "toggleChat": "Afficher / masquer la conversation",
     "toggleSidebar": "Afficher/masquer la barre latérale"
   },
   "notifications": {
@@ -3566,7 +3566,7 @@
     "cataloguePreviewEmpty": "Choisissez dans le pack recommandé ou découvrez d’autres outils ci-dessous.",
     "cataloguePreviewYourStack": "Votre sélection",
     "catalogueProposeTool": "Proposer un nouvel outil",
-    "catalogueSearchPlaceholder": "Rechercher des skills et outils",
+    "catalogueSearchPlaceholder": "Rechercher des compétences et des outils",
     "catalogueSubtitle": "stella peut faire appel à ces outils dans ses réponses. Choisissez ceux qui correspondent à votre pratique ; vous pouvez modifier ce choix à tout moment dans les paramètres.",
     "catalogueThirdPartyConfirm": "Ajouter quand même",
     "catalogueThirdPartyDisclaimer": "Ce code est fourni par {author}, pas par stella. stella ne l’examine pas et ne le maintient pas. Avant de l’ajouter, vérifiez qu’il convient à votre travail.",
@@ -3677,7 +3677,7 @@
       "removeProvider": "Supprimer le fournisseur",
       "replaceKey": "Remplacer la clé",
       "roles": {
-        "chat": "Chat",
+        "chat": "Conversation",
         "fast": "Rapide",
         "pdf": "PDF",
         "reasoning": "Raisonnement"
@@ -3859,7 +3859,7 @@
     },
     "mcpConfigHint": "Paramètres de connexion indépendants du client. Collez-les dans tout client compatible MCP et ajoutez vos propres identifiants.",
     "metaDescription": "Parcourez le catalogue ouvert de compétences, d'intégrations et d'outils intégrés pour le travail juridique.",
-    "nativeToolInfo": "Cette fonctionnalité est intégrée à stella. Activez-la depuis votre espace de travail pour l’utiliser dans le chat.",
+    "nativeToolInfo": "Cette fonctionnalité est intégrée à stella. Activez-la depuis votre espace de travail pour l’utiliser dans les conversations.",
     "notFound": "Outil introuvable.",
     "practiceArea": "Domaine juridique",
     "practiceAreas": {
@@ -3903,7 +3903,7 @@
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
-    "continueInChat": "Continuer dans le chat",
+    "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
     "dateTo": "Au",
     "deleteSearchDescription": "Cette action supprimera définitivement \"<bdi>{name}</bdi>\".",
@@ -3918,7 +3918,7 @@
     "hintOpen": "<kbd>↵</kbd> ouvrir",
     "kinds": {
       "caseLaw": "Jurisprudence",
-      "chat": "Chat",
+      "chat": "Conversation",
       "contact": "Contact",
       "folder": "Dossier",
       "link": "Lien",
@@ -4165,9 +4165,9 @@
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Manage who has access to this organization",
       "memoryExtraction": {
-        "description": "Lorsque cette option est activée, stella examine en arrière-plan les chats résumés et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
+        "description": "Lorsque cette option est activée, stella examine en arrière-plan les conversations résumées et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
         "title": "Extraction de mémoire",
-        "toggleLabel": "Suggérer des souvenirs à partir de l'historique de chat en arrière-plan"
+        "toggleLabel": "Suggérer des souvenirs à partir de l'historique des conversations en arrière-plan"
       },
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
@@ -4910,7 +4910,7 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Utilisez vos propres clés d’API de recherche web pour que le chat puisse chercher sur le web et lire des pages avec votre propre compte fournisseur. Sans elles, le chat utilise les clés partagées de la plateforme lorsqu’elles sont disponibles. La lecture de pages fonctionne sans clé ; ajoutez-en une pour relever les limites de débit.",
+      "description": "Utilisez vos propres clés d’API de recherche web pour que l’IA puisse, dans les conversations, chercher sur le web et lire des pages avec votre propre compte fournisseur. Sans elles, elle utilise les clés partagées de la plateforme lorsqu’elles sont disponibles. La lecture de pages fonctionne sans clé ; ajoutez-en une pour relever les limites de débit.",
       "fetchTitle": "Clé du lecteur de pages (Jina)",
       "platformFallback": "La clé partagée de la plateforme est utilisée. Ajoutez la vôtre pour utiliser votre propre compte et quota auprès du fournisseur.",
       "searchTitle": "Clé du fournisseur de recherche (Tavily)",
@@ -5305,13 +5305,13 @@
           "delegatedBy": "Délégué par un agent pour {user}",
           "dispatched": "Demandé par un utilisateur",
           "dispatchedBy": "Demandé par {user}",
-          "dispatchedInChatBy": "Demandé par {user} dans le chat",
+          "dispatchedInChatBy": "Demandé par {user} dans une conversation",
           "scheduled": "Démarré selon le planning",
           "scheduledBy": "Automatisation planifiée de {user}"
         },
         "runCount": "{count, plural, one {# activité} other {# activités}}",
         "sources": {
-          "chat": "Conversation de chat",
+          "chat": "Conversation IA",
           "mcp": "Outil connecté"
         },
         "targets": {

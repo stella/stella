@@ -838,7 +838,7 @@
   "chat": {
     "acceptAllCount": "Összes elfogadása ({count})",
     "actionExpand": {
-      "toastDescription": "A teljes oldalas csevegés megjelenik, mentett beszélgetésekkel.",
+      "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
     "aiPrompt": "AI-üzenetmező",
@@ -946,7 +946,7 @@
     "emptyThreadDescription": "Kérdezzen erről az ügyről, fogalmazzon szöveget, vagy kérjen rövid kutatási jegyzetet.",
     "emptyThreadTitle": "Beszélgetés indítása",
     "extractingContent": "Tartalom kinyerése...",
-    "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra.",
+    "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra, hogy ott folytassa.",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",
@@ -1173,7 +1173,7 @@
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
       "search-across-matters": "Keresés az ügyek között",
-      "search-chat-history": "Csevegési előzmények keresése",
+      "search-chat-history": "Keresés a csevegési előzményekben",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
       "show_in_document": "Megjelenítés a dokumentumban",
@@ -2555,7 +2555,7 @@
           "upload": {
             "body": "A Feltöltés megnyitja a fájlválasztót; a fájlokat rá is húzhatja az ügyre. Minden fájlból dokumentum lesz ebben az ügyben, így a csapata megtalálhatja, stella pedig felhasználhatja a felülvizsgálat során.",
             "title": "Dokumentum iktatása az ügybe",
-            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha egyetlen beszélgetés ideiglenes kontextusául szolgál."
+            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha csak az adott csevegés ideiglenes kontextusául szolgál."
           }
         },
         "title": "Munka dokumentumokkal"
@@ -3347,7 +3347,7 @@
         "title": "Sablonok"
       },
       "tools": {
-        "description": "Kapcsolja össze stella-t nyilvános nyilvántartásokkal és más forrásokkal",
+        "description": "Készségek, integrációk és mindig elérhető eszközök, amelyeket az AI a csevegésben használhat",
         "title": "Eszközök"
       },
       "workflows": {
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Válasszon ügyet a memóriájának megtekintéséhez."
     },
-    "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a csevegéseken át megjegyez.",
+    "pageDescription": "Megjegyzések és kontextus, amelyekre az asszisztens a csevegések között is emlékszik.",
     "pageTitle": "Memória",
     "provenance": "{source} · {date}",
     "restoredToast": "Emlék visszaállítva",
@@ -4167,7 +4167,7 @@
       "memoryExtraction": {
         "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt csevegéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
         "title": "Memóriakinyerés",
-        "toggleLabel": "Memóriabejegyzések javaslása a csevegési előzményekből a háttérben"
+        "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Használja saját webes keresési API-kulcsait, hogy a csevegés a saját szolgáltatói fiókjával kereshessen a weben és olvashasson oldalakat. Ezek nélkül a csevegés a platform megosztott kulcsait használja, ha elérhetők. Az oldalak olvasása kulcs nélkül is működik; kulcs hozzáadásával megemelheti a kéréskorlátokat.",
+      "description": "Használja saját webes keresési API-kulcsait, hogy a csevegés az Ön szolgáltatói fiókján keresztül kereshessen a weben és olvashasson oldalakat. Ezek nélkül a csevegés a platform megosztott kulcsait használja, ha elérhetők. Az oldalak olvasása kulcs nélkül is működik; kulcs hozzáadásával magasabb kéréskorlátot kaphat.",
       "fetchTitle": "Oldalolvasó kulcsa (Jina)",
       "platformFallback": "A platform megosztott kulcsa van használatban. Saját szolgáltatói fiókja és kvótája használatához adja hozzá a saját kulcsát.",
-      "searchTitle": "Keresési szolgáltató kulcsa (Tavily)",
+      "searchTitle": "Keresőszolgáltató kulcsa (Tavily)",
       "title": "Webes keresési kulcsok"
     }
   },
