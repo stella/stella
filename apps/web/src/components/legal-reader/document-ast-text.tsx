@@ -1001,7 +1001,13 @@ export const BlockRenderer = ({
         {provision === null ? (
           <>
             <InlineContent {...sharedInlineProps} inlines={block.inlines} />
-            {headingPermalink}
+            {/* Zero-width, so the glyph hangs after the last word without
+                pulling a centred line off the column's axis. */}
+            {headingPermalink !== null && (
+              <span className="inline-block w-0 whitespace-nowrap">
+                {headingPermalink}
+              </span>
+            )}
           </>
         ) : (
           <>
@@ -1015,19 +1021,19 @@ export const BlockRenderer = ({
               </span>
             )}
             {/* The designation stays on the column's axis; the details
-                action and the permalink hang off the inline end, so a wide
-                accessory never nudges "§ 120" off centre. */}
-            <span className="relative flex items-center justify-center">
-              <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
+                action and the permalink hang right after it, out of flow,
+                so a wide accessory never nudges "§ 120" off centre. */}
+            <span className="flex justify-center">
+              <span className="text-foreground relative text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
                 <InlineContent
                   {...sharedInlineProps}
                   initialOffset={provision.designation.initialOffset}
                   inlines={provision.designation.inlines}
                 />
-              </span>
-              <span className="absolute inset-e-0 top-1/2 flex -translate-y-1/2 items-center gap-2">
-                {provision.accessory}
-                {headingPermalink}
+                <span className="absolute start-full top-1/2 ms-3 flex -translate-y-1/2 items-center gap-2 text-base whitespace-nowrap">
+                  {provision.accessory}
+                  {headingPermalink}
+                </span>
               </span>
             </span>
             {provision.below.inlines.length > 0 && (
