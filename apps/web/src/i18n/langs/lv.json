@@ -865,7 +865,7 @@
       "deny": "Noraidīt",
       "externalMcpDescription": "Tiks nosūtīta tikai šim rīka izsaukumam nepieciešamā informācija.",
       "externalMcpQuestion": "Vai stella drīkst nosūtīt šo pieprasījumu uz {provider}?",
-      "searchAllPastChatsDescription": "Līdz šim meklēts tikai tērzēšanās par šīs tērzēšanas lietām. Tagad tiks meklēts arī jūsu tērzēšanās par citām lietām.",
+      "searchAllPastChatsDescription": "Līdz šim tika meklēts tikai tērzēšanās par šīs tērzēšanas lietām. Tagad tiks meklēts arī jūsu tērzēšanās par citām lietām.",
       "searchAllPastChatsQuestion": "Meklēt visās jūsu tērzēšanās?",
       "uploadedDocumentPlaceholder": "(augšupielādēts dokuments)"
     },

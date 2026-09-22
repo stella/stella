@@ -865,8 +865,8 @@
       "deny": "Refuser",
       "externalMcpDescription": "Seules les informations nécessaires à cet appel d’outil seront envoyées.",
       "externalMcpQuestion": "stella peut-elle envoyer cette requête à {provider} ?",
-      "searchAllPastChatsDescription": "Jusqu’ici, la recherche ne portait que sur les chats liés aux dossiers de ce chat. Elle porte désormais aussi sur vos chats liés à d’autres dossiers.",
-      "searchAllPastChatsQuestion": "Rechercher dans tous vos chats ?",
+      "searchAllPastChatsDescription": "Jusqu’ici, seules les conversations liées aux dossiers de la conversation en cours ont été consultées. Cette recherche couvre aussi vos conversations liées à d’autres dossiers.",
+      "searchAllPastChatsQuestion": "Rechercher dans toutes vos conversations ?",
       "uploadedDocumentPlaceholder": "(document importé)"
     },
     "askAnything": "Posez n’importe quelle question",
