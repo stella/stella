@@ -31,9 +31,9 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
-      "cta": "Atidaryti AI nustatymus",
-      "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
-      "title": "Prijungti AI teikėją"
+      "cta": "Atidaryti DI nustatymus",
+      "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti DI funkcijas.",
+      "title": "Prijungti DI teikėją"
     },
     "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
     "rewriteDraftChanged": "Juodraštis pasikeitė, todėl perrašymas nebuvo pritaikytas.",
@@ -118,7 +118,7 @@
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
-    "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su AI pagalba.",
+    "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
     "twoFactor": {
       "backupCodePlaceholder": "Įveskite atsarginį kodą",
       "enterAuthenticatorCode": "Įveskite patvirtinimo kodą iš savo autentifikavimo programėlės.",
@@ -863,7 +863,7 @@
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
-      "externalMcpQuestion": "Ar stella gali siųsti šią užklausą tiekėjui {provider}?",
+      "externalMcpQuestion": "Ar stella gali siųsti šią užklausą teikėjui {provider}?",
       "uploadedDocumentPlaceholder": "(įkeltas dokumentas)"
     },
     "askAnything": "Klauskite bet ko",
@@ -881,8 +881,8 @@
     "attachment": "Priedas",
     "audioContent": "Sugeneruotas garsas",
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
-    "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
-    "chatAbout": "Įterpti į AI pokalbį",
+    "caseLawGreeting": "Klauskite apie šį sprendimą — visas tekstas pasiekiamas čia.",
+    "chatAbout": "Įterpti į DI pokalbį",
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
     "composerMenu": {
       "context": "Kontekstas",
@@ -929,7 +929,7 @@
       "pickMatterPrompt": "Pasirinkite bylą, į kurią išsaugoti šį dokumentą.",
       "previewName": "Dokumentas: {name}",
       "previewWaiting": "Laukiama turinio…",
-      "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius AI pasiūlymus."
+      "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius DI pasiūlymus."
     },
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {
@@ -1057,18 +1057,18 @@
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
-    "sendErrorLoopDetected": "AI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
-    "sendErrorModelUnavailable": "Sukonfigūruotas AI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
-    "sendErrorProviderBilling": "AI tiekėjas pranešė apie atsiskaitymo problemą. Susisiekite su darbo srities administratoriumi.",
-    "sendErrorProviderCredentialsRejected": "AI tiekėjas atmetė sukonfigūruotus prisijungimo duomenis. Paprašykite darbo srities administratoriaus patikrinti API raktą organizacijos nustatymuose.",
-    "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
-    "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
+    "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
+    "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
+    "sendErrorProviderBilling": "DI teikėjas pranešė apie atsiskaitymo problemą. Susisiekite su darbo srities administratoriumi.",
+    "sendErrorProviderCredentialsRejected": "DI teikėjas atmetė sukonfigūruotus prisijungimo duomenis. Paprašykite darbo srities administratoriaus patikrinti API raktą organizacijos nustatymuose.",
+    "sendErrorProviderUnavailable": "DI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
+    "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendPrompt": "Siųsti pranešimą",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {
       "scope": {
-        "private": "Jūsų DI įgūdžiai",
-        "team": "Komandos DI įgūdžiai"
+        "private": "Jūsų įgūdžiai",
+        "team": "Komandos įgūdžiai"
       }
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
@@ -1205,10 +1205,10 @@
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
-    "usageFallbackNotice": "Dienos AI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu.",
+    "usageFallbackNotice": "Dienos DI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu.",
     "videoContent": "Sugeneruotas vaizdo įrašas",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Interneto paieškos santrauka",
       "answerDisclaimer": "Apibendrinta iš toliau pateiktų viešų interneto rezultatų. Patikrinkite pagal pateiktus šaltinius.",
       "fetchedFrom": "iš {source}",
       "openSource": "Atidaryti {source} naujame skirtuke",
@@ -2291,7 +2291,7 @@
       "namePlaceholder": "Žingsnio pavadinimas",
       "nameRequired": "Įveskite kiekvieno žingsnio pavadinimą.",
       "prompt": "Užklausa",
-      "promptPlaceholder": "Nurodymai DI žingsniui",
+      "promptPlaceholder": "pvz., Peržiūrėkite pridėtą konfidencialumo sutartį pagal įprastas rinkos sąlygas ir pažymėkite neįprastas sąlygas",
       "promptRequired": "Įveskite DI žingsnio užklausą.",
       "required": "Pridėkite bent vieną žingsnį.",
       "reviewGate": "Peržiūros kontrolė",
@@ -3546,8 +3546,8 @@
   "onboarding": {
     "aiConfigFailed": "Nepavyko išsaugoti dirbtinio intelekto konfigūracijos. Galite ją užbaigti nustatymuose.",
     "aiSubtitle": "Pridėkite savo API raktą. Modelius galėsite pasirinkti vėliau nustatymuose.",
-    "aiTitle": "Prijunkite savo AI tiekėją",
-    "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų AI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
+    "aiTitle": "Prijunkite savo DI teikėją",
+    "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
     "assistantDocsLink": "Kaip prijungti savo asistentą",
     "catalogueAlwaysOn": "Visada įjungta",
@@ -3587,7 +3587,7 @@
     "jurisdictionSaveFailed": "Nepavyko išsaugoti jurisdikcijų. Tai galėsite užbaigti nustatymuose.",
     "jurisdictionSearchLabel": "Ieškoti šalių",
     "jurisdictionSearchPlaceholder": "Ieškoti šalių",
-    "jurisdictionSubtitle": "Pasirinkite šalis, kuriose vykdote teisinę praktiką. stella pagal jas pritaikys AI atsakymus ir pasiūlys prieinamus šaltinius: teismų praktiką, teisės aktus ir įmonių registrus.",
+    "jurisdictionSubtitle": "Pasirinkite šalis, kuriose vykdote teisinę praktiką. stella pagal jas pritaikys DI atsakymus ir pasiūlys prieinamus šaltinius: teismų praktiką, teisės aktus ir įmonių registrus.",
     "jurisdictionTitle": "Pasirinkite savo praktikos jurisdikcijas",
     "mcpCardDescription": "Pridėkite stella kaip papildinį ir jūsų asistentas galės ieškoti jūsų bylose bei dirbti su jūsų dokumentais. Sąranka užtrunka apie minutę.",
     "mcpCardTitle": "Naudokite stella iš Claude arba ChatGPT",
@@ -3597,7 +3597,7 @@
     "orgTitle": "Pavadinkite savo komandą",
     "skipStep": "Praleisti",
     "someInvitesFailed": "{count, plural, one {nepavyko išsiųsti # kvietimo} few {nepavyko išsiųsti # kvietimų} many {nepavyko išsiųsti # kvietimo} other {nepavyko išsiųsti # kvietimų}}",
-    "stepAi": "AI",
+    "stepAi": "DI",
     "stepApps": "Programos ir įrankiai",
     "stepCatalogue": "Katalogas",
     "stepJurisdiction": "Jurisdikcija",
@@ -3623,7 +3623,7 @@
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "dataRegion": "Duomenų regionas",
-      "dataRegionDescription": "Nukreipia AI užklausas per pasirinktą regioną dėl duomenų suverenumo.",
+      "dataRegionDescription": "Nukreipia DI užklausas per pasirinktą regioną dėl duomenų suverenumo.",
       "dataRegionUnsupported": "Nukreipimas pagal regioną galimas tik su Google AI (Vertex AI).",
       "decision": {
         "add": "Pridėti sprendimų modelį",
@@ -3637,13 +3637,13 @@
       "defaultModelOption": "Numatytasis",
       "deploymentNamePlaceholder": "Diegimo pavadinimas",
       "description": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną.",
-      "editProviders": "Redaguoti tiekėjus",
+      "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
-      "modelsDescription": "Kiekvienai AI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
+      "modelsDescription": "Kiekvienai DI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
       "modelsPanel": "Režimai",
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
@@ -3652,8 +3652,8 @@
       "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
       "prices": {
         "azureManaged": "Diegimo kainos valdomos Azure.",
-        "empty": "Pridėkite tiekėją, kad matytumėte modelių kainas",
-        "emptyHint": "Kairėje pasirinkite tiekėją — čia parodysime jo modelių kainas.",
+        "empty": "Pridėkite teikėją, kad matytumėte modelių kainas",
+        "emptyHint": "Kairėje pasirinkite teikėją — čia parodysime jo modelių kainas.",
         "inMtok": "Įv/M",
         "model": "Modelis",
         "outMtok": "Išv/M",
@@ -3685,7 +3685,7 @@
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
-      "title": "AI konfigūracija"
+      "title": "DI konfigūracija"
     },
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Peržiūrėkite komercinių sutarčių sąlygas pagal derybų gaires; nukrypimai ir siūlomi pakeitimai bus aiškiai pažymėti.",
       "editorsPick": "Redaktoriaus pasirinkimai",
       "exampleReview": "Apžvalgos pavyzdys",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Pradėkite nuo darbo eigos",
       "fromCommunity": "Iš bendruomenės",
       "groups": {
         "dataSources": "Duomenų šaltiniai ir integracijos",
@@ -3823,14 +3823,14 @@
         "includedBody": "Pagrindinės galimybės, kurias galima naudoti nepridedant atskirų įgūdžių ar paskyros.",
         "skillsBody": "Daugkartinio naudojimo teisinės darbo eigos su instrukcijomis, kurias galite peržiūrėti prieš pridėdami."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Ieškokite pagal užduotį, jurisdikciją arba šaltinį. Kiekvieną įrankį galite peržiūrėti prieš pridėdami jį prie savo darbo srities.",
+      "heroTitle": "Prie ko dirbate?",
       "howBody": "Įgūdis pateikia teisinį metodą kaip peržiūrimas instrukcijas. Pridėkite jį vieną kartą ir tą patį metodą taikykite kaskart prireikus.",
       "howTitle": "Kas yra įgūdis?",
       "includedBadge": "Įtraukta",
       "jurisRankBody": "Įvertinkite Argentinos Aukščiausiojo Teismo precedentų autoritetą pasitelkdami citavimo įtaką ir doktrinos raidą.",
       "noResults": "Dar nėra įrankių, atitinkančių šią paiešką.",
-      "openSkill": "Explore skill",
+      "openSkill": "Kaip tai veikia",
       "review": {
         "aligned": "Atitinka",
         "governingLaw": "Taikytina teisė",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Peržiūrėkite susitarimus",
         "verifyOrganizations": "Patvirtinkite organizaciją"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Arba pasirinkite užduotį"
     },
     "documentation": "Dokumentacija",
     "downloadUpstream": "Atsisiųsti šaltinio archyvą",
@@ -4104,7 +4104,7 @@
     },
     "organization": {
       "activeMembers": "Aktyvūs nariai",
-      "ai": "AI konfigūracija",
+      "ai": "DI konfigūracija",
       "aiDescription": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
@@ -4163,9 +4163,9 @@
       },
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Tvarkykite, kas turi prieigą prie šios organizacijos, ir laukiančius kvietimus",
       "memoryExtraction": {
-        "description": "Kai įjungta, stella fone peržiūri apibendrintus pokalbius ir siūlo atminties įrašus, kuriuos žmogus turi patvirtinti, kol jie nepaveikė asistento. Tai veikia naudojant jūsų komandos pačios AI tiekėjo raktą, todėl palikite išjungtą, nebent norite, kad šis fone vykstantis AI naudojimas būtų apmokestinamas jūsų raktui.",
+        "description": "Kai įjungta, stella fone peržiūri apibendrintus pokalbius ir siūlo atminties įrašus, kuriuos žmogus turi patvirtinti, kol jie nepaveikė asistento. Tai veikia naudojant jūsų komandos pačios DI teikėjo raktą, todėl palikite išjungtą, nebent norite, kad šis fone vykstantis DI naudojimas būtų apmokestinamas jūsų raktui.",
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
@@ -4173,27 +4173,27 @@
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
       "promptCaching": {
-        "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau tiekėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su tiekėju visiškai išjungia talpyklavimą serverio pusėje.",
+        "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės DI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas DI teikėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau teikėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su teikėju visiškai išjungia talpyklavimą serverio pusėje.",
         "title": "Užklausų talpyklavimas",
-        "toggleLabel": "Leisti užklausų talpyklavimą su AI tiekėjais"
+        "toggleLabel": "Leisti užklausų talpyklavimą su DI teikėjais"
       },
       "renameDescription": "Nariai naują pavadinimą matys iš karto.",
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
-      "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos AI funkcijos.",
+      "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
       "usageEmptyTitle": "Nėra naudojimo teisės",
       "usageEndsOnTemplate": "Baigiasi {date}",
       "usageLimitAvailable": "Pasiekiama",
       "usageLimitDescriptionEntitlementInactive": "Organizacijos naudojimo teisė pristabdyta arba neaktyvi. Peržiūrėkite prieglobos naudojimo valdymą arba susisiekite su operatoriumi.",
-      "usageLimitDescriptionNoEntitlement": "AI funkcijoms šioje organizacijoje reikia aktyvios naudojimo teisės.",
+      "usageLimitDescriptionNoEntitlement": "DI funkcijoms šioje organizacijoje reikia aktyvios naudojimo teisės.",
       "usageLimitDescriptionUsageLimitExceeded": "Šio veiksmo negalima vykdyti esant dabartinei organizacijos naudojimo būsenai.",
       "usageLimitNeeded": "Reikia",
       "usageLimitNotNow": "Ne dabar",
       "usageLimitTitleEntitlementInactive": "Naudojimo teisė neaktyvi",
       "usageLimitTitleNoEntitlement": "Reikalinga naudojimo teisė",
-      "usageLimitTitleUsageLimitExceeded": "Pasiektas AI naudojimo limitas",
+      "usageLimitTitleUsageLimitExceeded": "Pasiektas DI naudojimo limitas",
       "usageManage": "Tvarkyti prieglobos naudojimą",
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
@@ -4377,8 +4377,8 @@
     "untitledDocument": "Dokumentas be pavadinimo"
   },
   "success": {
-    "aiConfigDeleted": "AI konfigūracija pašalinta",
-    "aiConfigUpdated": "AI konfigūracija atnaujinta",
+    "aiConfigDeleted": "DI konfigūracija pašalinta",
+    "aiConfigUpdated": "DI konfigūracija atnaujinta",
     "clientUpdated": "Klientas atnaujintas",
     "contactCreated": "Klientas sukurtas",
     "contactDeleted": "Klientas ištrintas",
@@ -4841,7 +4841,7 @@
     "whenNotToUse": "Kada nenaudoti",
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
     "whenToUse": "Kada naudoti",
-    "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda AI pasirinkti šabloną)"
+    "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
   },
   "translate": {
     "dialog": {
@@ -5493,8 +5493,8 @@
       "editConditionsWhen": "Gavybą vykdyti tik tada, kai …",
       "enterAValue": "Įveskite reikšmę",
       "extractEntityType": "Išgauti informaciją",
-      "extractEntityTypeDescription": "Sukurkite AI pildomą lentelės stulpelį.",
-      "extractionInstruction": "Nurodymai AI",
+      "extractEntityTypeDescription": "Sukurkite DI pildomą lentelės stulpelį.",
+      "extractionInstruction": "Nurodymai DI",
       "extractionInstructionHelp": "Paleidžiama iš naujo, kai pasikeičia šaltinio dokumentai arba nurodyti stulpeliai.",
       "extractionInstructionPlaceholder": "Pavyzdys: raskite sutarties nutraukimo datą. Grąžinkite tik datą.",
       "extractionPlaceholder": "Aprašykite, ko ieškoti. Rašykite @, kad nurodytumėte kitą stulpelį.",
@@ -5503,7 +5503,7 @@
       "flowNoInputs": "nėra įvesčių",
       "ifNoMatchFound": "Jei atitikmuo nerastas",
       "inputs": "Įvestys",
-      "inputsHelp": "Pasirink stulpelius, kuriuos AI turi skaityti. Spausk pridėti ar pašalinti.",
+      "inputsHelp": "Pasirinkite stulpelius, kuriuos DI turi skaityti. Spustelėkite, kad pridėtumėte ar pašalintumėte.",
       "int": "Sveikasis skaičius",
       "keepEmpty": "Palikti tuščią",
       "manualColumn": "Rankinis stulpelis",
@@ -5522,10 +5522,10 @@
       "noConditionFields": "Nėra laukų, pagal kuriuos galima filtruoti.",
       "noFirstDocument": "Dar nėra dokumentų peržiūrai.",
       "noPropertiesFound": "Savybių nerasta",
-      "optionsHelp": "Apibrėžk reikšmes, iš kurių AI gali rinktis.",
+      "optionsHelp": "Apibrėžkite reikšmes, iš kurių DI gali rinktis.",
       "optionsLabel": "Parinktys",
       "person": "Person",
-      "previewEmpty": "AI negrąžino jokios reikšmės.",
+      "previewEmpty": "DI negrąžino jokios reikšmės.",
       "previewMockNotice": "Demonstracinė peržiūra — galinė dalis dar nesujungta.",
       "previewOnFirst": "Peržiūra: {document}",
       "previewSkipped": "Šiame dokumente nėra tinkamos įvesties.",
@@ -5552,7 +5552,7 @@
       "sortDescending": "Rūšiuoti mažėjimo tvarka",
       "sortDescendingDate": "Naujausi pirmi",
       "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
-      "suggestWithAI": "Pasiūlyti su AI",
+      "suggestWithAI": "Pasiūlyti su DI",
       "text": "Tekstas",
       "typeChangeWarning": "Esami duomenys bus išvalyti ir perkurti išsaugant.",
       "unnamedColumn": "šis stulpelis",
@@ -5602,7 +5602,7 @@
     "tasksCount": "{count, plural, one {# agendos elementas} few {# agendos elementai} other {# agendos elementų}}",
     "team": "Komanda",
     "tools": {
-      "aiModel": "AI modelis",
+      "aiModel": "DI modelis",
       "manualInput": "Rankiniu būdu"
     },
     "unarchiveMatter": "Išarchyvuoti",
@@ -5612,7 +5612,7 @@
       "addFields": "Pridėti laukus",
       "advancedFilter": "Išplėstinis",
       "advancedFilterCount": "{count, plural, =0 {bet kuris} one {# taisyklė} few {# taisyklės} other {# taisyklių}}",
-      "aiGenerated": "Sugeneruota AI",
+      "aiGenerated": "Sugeneruota DI",
       "calendar": {
         "addDates": "+ Datos",
         "additionalDates": "+{count} datų",
@@ -5671,7 +5671,7 @@
       "removeAdvancedFilter": "Pašalinti išplėstinį filtrą",
       "reportExport": {
         "action": "Eksportuoti ataskaitą…",
-        "aiSummaries": "Įtraukti AI santraukas",
+        "aiSummaries": "Įtraukti DI santraukas",
         "completed": "Ataskaita paruošta",
         "customize": "Tinkinti",
         "customized": "Nukopijuota į jūsų šablonus",
@@ -5720,7 +5720,7 @@
       "viewSettings": "Rodinio nustatymai"
     },
     "workflow": {
-      "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",
+      "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną DI savybę",
       "allManualInputsTitle": "Visos savybės yra rankinis įvedimas",
       "generate": "Generuoti",
       "largeRunPrompt": {
@@ -5730,7 +5730,7 @@
       },
       "noFieldsToProcess": "Nėra laukų apdorojimui",
       "serviceTierPrompt": {
-        "description": "Ši darbo eiga į eilę įtrauks AI išgavimą {count} dokumentų. Paleiskite dabar naudodami standartinius kreditus arba naudokite sumažintus kreditus ir palaukite ilgiau.",
+        "description": "Ši darbo eiga į eilę įtrauks DI išgavimą {count} dokumentų. Paleiskite dabar naudodami standartinius kreditus arba naudokite sumažintus kreditus ir palaukite ilgiau.",
         "flex": "Naudoti sumažintus kreditus",
         "standard": "Paleisti dabar",
         "title": "Naudoti sumažintus kreditus?"

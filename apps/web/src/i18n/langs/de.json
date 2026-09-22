@@ -31,9 +31,9 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
-      "cta": "AI-Einstellungen öffnen",
-      "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
-      "title": "AI-Provider verbinden"
+      "cta": "KI-Einstellungen öffnen",
+      "description": "Fügen Sie Anbieter-Zugangsdaten hinzu, um KI-Funktionen zu nutzen.",
+      "title": "KI-Anbieter verbinden"
     },
     "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
     "rewriteDraftChanged": "Der Entwurf wurde geändert, daher wurde die Überarbeitung nicht angewendet.",
@@ -801,7 +801,7 @@
     "filter": {
       "mcps": "MCP-Server",
       "nativeTools": "Integrierte Tools",
-      "skills": "Fähigkeiten"
+      "skills": "Skills"
     },
     "filterHint": "Gefiltert nach {codes}",
     "firstParty": "stella",
@@ -882,7 +882,7 @@
     "audioContent": "Generiertes Audio",
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
-    "chatAbout": "In AI-Chat einfügen",
+    "chatAbout": "In KI-Chat einfügen",
     "choosePromptImprovementStrategy": "Optionen zur Prompt-Verbesserung",
     "composerMenu": {
       "context": "Kontext",
@@ -892,15 +892,15 @@
       "noFiles": "Keine Dateien in dieser Akte",
       "noMatters": "Keine Akten verfügbar",
       "noMcpServers": "Keine MCP-Server verfügbar",
-      "noSkills": "Keine Fähigkeiten verfügbar",
+      "noSkills": "Keine Skills verfügbar",
       "open": "Menü für Anhänge und Werkzeuge öffnen",
       "openMcpSettings": "MCP-Einstellungen öffnen",
-      "openSkills": "Fähigkeiten öffnen",
+      "openSkills": "Skills öffnen",
       "referenceMatter": "Auf diese Akte verweisen",
       "searchFiles": "Dateien suchen",
       "searchMatters": "Akten suchen",
       "searchMcpServers": "MCP-Server suchen...",
-      "searchSkills": "Fähigkeiten suchen"
+      "searchSkills": "Skills suchen"
     },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
@@ -971,7 +971,7 @@
       "noPrompts": "Noch keine Skills",
       "noRecentChats": "Keine letzten Chats",
       "pinnedMatters": "Angeheftete Akten",
-      "prompts": "Fähigkeiten",
+      "prompts": "Skills",
       "recentChats": "Letzte Chats"
     },
     "loadEarlierMessages": "Ältere Nachrichten laden",
@@ -1015,7 +1015,7 @@
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Fähigkeit"
+      "fromPromptFallback": "Skill"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "promptImprovementStrategies": {
@@ -1061,14 +1061,14 @@
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitte deinen Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
     "sendErrorProviderBilling": "Der KI-Anbieter hat ein Abrechnungsproblem gemeldet. Wende dich an deinen Arbeitsbereichs-Admin.",
     "sendErrorProviderCredentialsRejected": "Der KI-Anbieter hat die hinterlegten Zugangsdaten abgelehnt. Bitte deinen Arbeitsbereichs-Admin, den API-Schlüssel in den Organisationseinstellungen zu prüfen.",
-    "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
-    "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist ausgeschöpft. Versuche es in einer Minute erneut oder wende dich an deinen Arbeitsbereichs-Admin.",
+    "sendErrorProviderUnavailable": "Der KI-Anbieter ist vorübergehend nicht verfügbar. Bitte versuchen Sie es gleich noch einmal.",
+    "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendPrompt": "Nachricht senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "skills": {
       "scope": {
-        "private": "Eigene KI-Skills",
-        "team": "Team-KI-Skills"
+        "private": "Ihre Skills",
+        "team": "Team-Skills"
       }
     },
     "sourcePlaceholder": "Chat über {title}",
@@ -2278,7 +2278,7 @@
     },
     "steps": {
       "add": "Schritt hinzufügen:",
-      "ai": "AI-Schritt",
+      "ai": "KI-Schritt",
       "aiHelp": "Erstellt anhand Ihrer Anweisungen Text und kann die ausgewählten Eingabedokumente lesen.",
       "createDocument": "Dokument erstellen",
       "createDocumentHelp": "Speichert die neueste KI-Ausgabe als Dokument in der Akte, aus der die Ausführung gestartet wurde.",
@@ -2291,8 +2291,8 @@
       "namePlaceholder": "Schrittname",
       "nameRequired": "Geben Sie für jeden Schritt einen Namen ein.",
       "prompt": "Prompt",
-      "promptPlaceholder": "Anweisungen für den AI-Schritt",
-      "promptRequired": "Geben Sie einen Prompt für den AI-Schritt ein.",
+      "promptPlaceholder": "z. B. Prüfen Sie die beigefügte Geheimhaltungsvereinbarung anhand marktüblicher Bedingungen und markieren Sie ungewöhnliche Klauseln",
+      "promptRequired": "Geben Sie einen Prompt für den KI-Schritt ein.",
       "required": "Fügen Sie mindestens einen Schritt hinzu.",
       "reviewGate": "Prüfschritt",
       "reviewGateHelp": "Hält die Ausführung an, bis eine Person sie genehmigt oder ablehnt.",
@@ -2538,8 +2538,8 @@
             "title": "Mehr hinter der Schaltfläche +"
           },
           "skills": {
-            "body": "Fügt einen gespeicherten Prompt oder eine von Ihrem Team geschriebene Fähigkeit ein: ein geprüftes Anweisungspaket, das dieselbe Aufgabe jedes Mal gleich behandelt.",
-            "title": "Fähigkeiten und gespeicherte Prompts",
+            "body": "Fügt einen gespeicherten Prompt oder einen von Ihrem Team geschriebenen Skill ein: ein geprüftes Anweisungspaket, das dieselbe Aufgabe jedes Mal gleich behandelt.",
+            "title": "Skills und gespeicherte Prompts",
             "when": "Nutzen Sie eine, wenn die Aufgabe wiederkehrt und die Formulierung zählt, etwa bei einer Standardvertragsprüfung oder einer Erstaufnahme. Ein / im leeren Editor öffnet diese Liste direkt."
           }
         },
@@ -3643,7 +3643,7 @@
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
-      "modelsDescription": "Wähle für jede AI-Kategorie einen Provider und ein angebotenes multimodales Modell.",
+      "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
       "modelsPanel": "Modi",
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",

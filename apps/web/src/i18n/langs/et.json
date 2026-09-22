@@ -368,7 +368,7 @@
     },
     "origins": {
       "default": "Hindamata",
-      "model": "TI"
+      "model": "AI"
     },
     "review": {
       "droppedRows": "{count, plural, one {# rida jäeti vahele} other {# rida jäeti vahele}}: need ei sisalda tõlgitavat teksti.",
@@ -2176,7 +2176,7 @@
       "blankAction": "Alusta tühjalt lehelt",
       "description": "Käivitage see toimiku vahekaardilt „Töövood“, ajakava järgi või automaatselt failide üleslaadimisel. Miski pole lõplik, enne kui keegi selle kinnitab, ja tulemuse saate salvestada toimikusse dokumendina.",
       "examplesTitle": "Alusta näitest",
-      "title": "Salvestage sammud korra ja käivitage need mis tahes toimiku dokumentidel. Töö teeb TI, teie meeskond kontrollib, ja iga käivitus annab sama tulemuse."
+      "title": "Salvestage sammud korra ja käivitage need mis tahes toimiku dokumentidel. Töö teeb AI, teie meeskond kontrollib, ja iga käivitus annab sama tulemuse."
     },
     "enableFlow": "Luba töövoog",
     "enabledDescription": "Keelatud töövoogusid ei saa käivitada ega vallandada.",
@@ -4684,7 +4684,7 @@
     "structureWarningParagraph": "Lõik {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {
-      "aiAdaptInstructionPlaceholder": "Valikuline: kuidas TI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",
+      "aiAdaptInstructionPlaceholder": "Valikuline: kuidas AI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",
       "aiDrafted": "AI koostatud",
       "aiNoFields": "AI ei pakkunud ühtegi välja",
       "aiPresetPrompt": "Paku malli täidetavaid välju",
@@ -4802,7 +4802,7 @@
       "sourceEnable": "Täida toimikust",
       "sourceHint": "Väärtus täidetakse dokumendi loomisel toimikust (selle klient, osapool, toimik ise, advokaat või büroo).",
       "sourcePickSource": "Andmeallikas",
-      "textPlusAi": "Isik + TI",
+      "textPlusAi": "Isik + AI",
       "useExisting": "Kasuta olemasolevat välja {name}",
       "whoFills": "Kes selle välja hiljem täidab?"
     },

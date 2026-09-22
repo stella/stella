@@ -918,7 +918,7 @@
       "tools": "Herramientas",
       "triggerLabel": "Contexto de la conversación: {percent}% lleno"
     },
-    "contextPlaceholder": "Chat sobre {context}, / para skills, @ para añadir contexto",
+    "contextPlaceholder": "Chat sobre {context}, / para habilidades, @ para añadir contexto",
     "createDocument": {
       "continue": "Crear documento",
       "created": "Documento creado",
@@ -1017,7 +1017,7 @@
       "fromClipboard": "Pegado: {count, plural, one {# carácter} other {# caracteres}}",
       "fromPromptFallback": "Habilidad"
     },
-    "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
+    "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Convierte el trabajo complejo en subtareas ordenadas.",
@@ -3566,7 +3566,7 @@
     "cataloguePreviewEmpty": "Elija del paquete recomendado o descubra más herramientas abajo.",
     "cataloguePreviewYourStack": "Su selección",
     "catalogueProposeTool": "Proponer una herramienta nueva",
-    "catalogueSearchPlaceholder": "Buscar skills y herramientas",
+    "catalogueSearchPlaceholder": "Buscar habilidades y herramientas",
     "catalogueSubtitle": "stella puede usar estas herramientas al responder. Seleccione las que se ajustan a su práctica; podrá cambiarlo en cualquier momento en los ajustes.",
     "catalogueThirdPartyConfirm": "Añadir de todos modos",
     "catalogueThirdPartyDisclaimer": "Este código lo proporciona {author}, no stella. stella no lo revisa ni lo mantiene. Antes de añadirlo, compruebe que sea adecuado para su trabajo.",

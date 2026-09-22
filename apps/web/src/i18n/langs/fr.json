@@ -712,7 +712,7 @@
         "showSource": "Afficher la source",
         "yes": "Oui"
       },
-      "deleteColumnConfirm": "Supprime la question et toutes ses réponses.",
+      "deleteColumnConfirm": "Cette action supprime la question et toutes ses réponses.",
       "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
       "nothingToRun": "Chaque cellule a déjà une réponse",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",
@@ -881,7 +881,7 @@
     "attachment": "Pièce jointe",
     "audioContent": "Audio généré",
     "cancelQueuedMessage": "Annuler le message en file d’attente",
-    "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
+    "caseLawGreeting": "Posez vos questions sur cette décision — son texte intégral est disponible ici.",
     "chatAbout": "Insérer dans la conversation IA",
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
     "composerMenu": {
@@ -1054,21 +1054,21 @@
     "richContentLoading": "Chargement du contenu interactif…",
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
-    "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
+    "sendError": "Un problème est survenu lors de l’envoi de votre message. Contactez le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retire le fichier ou envoie ce message sans anonymisation.",
-    "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessaie ou reformule ton message.",
-    "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessaie avec une demande plus ciblée.",
-    "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demande à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
-    "sendErrorProviderBilling": "Le fournisseur d’IA a signalé un problème de facturation. Contacte l’administrateur de l’espace de travail.",
-    "sendErrorProviderCredentialsRejected": "Le fournisseur d’IA a rejeté les identifiants configurés. Demande à l’administrateur de l’espace de travail de vérifier la clé API dans les paramètres de l’organisation.",
-    "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessaie dans un instant.",
-    "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessaie dans une minute ou contacte l’administrateur de l’espace de travail.",
+    "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
+    "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
+    "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
+    "sendErrorProviderBilling": "Le fournisseur d’IA a signalé un problème de facturation. Contactez l’administrateur de l’espace de travail.",
+    "sendErrorProviderCredentialsRejected": "Le fournisseur d’IA a rejeté les identifiants configurés. Demandez à l’administrateur de l’espace de travail de vérifier la clé API dans les paramètres de l’organisation.",
+    "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessayez dans un instant.",
+    "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
     "sendPrompt": "Envoyer le message",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "skills": {
       "scope": {
-        "private": "Vos compétences IA",
-        "team": "Compétences IA d'équipe"
+        "private": "Vos compétences",
+        "team": "Compétences de l’équipe"
       }
     },
     "sourcePlaceholder": "Discuter de {title}",
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Quota d’IA quotidien épuisé — les réponses se poursuivent sur le modèle standard.",
     "videoContent": "Vidéo générée",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Synthèse de la recherche web",
       "answerDisclaimer": "Synthèse des résultats web publics ci-dessous. Vérifiez auprès des sources liées.",
       "fetchedFrom": "depuis {source}",
       "openSource": "Ouvrir {source} dans un nouvel onglet",
@@ -2291,7 +2291,7 @@
       "namePlaceholder": "Nom de l’étape",
       "nameRequired": "Saisissez un nom pour chaque étape.",
       "prompt": "Instruction",
-      "promptPlaceholder": "Instructions pour l’étape IA",
+      "promptPlaceholder": "p. ex. Examinez l’accord de confidentialité joint au regard des conditions usuelles du marché et signalez les clauses inhabituelles",
       "promptRequired": "Saisissez un prompt pour l’étape IA.",
       "required": "Ajoutez au moins une étape.",
       "reviewGate": "Point de contrôle",
@@ -3814,23 +3814,23 @@
       "contractReviewBody": "Examinez les accords commerciaux clause par clause selon un guide de négociation, avec les écarts et les modifications proposées clairement signalés.",
       "editorsPick": "Choix de la rédaction",
       "exampleReview": "Exemple d’analyse",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Commencer par un flux de travail",
       "fromCommunity": "De la communauté",
       "groups": {
         "dataSources": "Sources de données et intégrations",
         "dataSourcesBody": "Connectez les registres faisant autorité et les services spécialisés lorsqu’une affaire nécessite des informations externes.",
         "included": "Inclus dans stella",
         "includedBody": "Des fonctionnalités de base prêtes à être utilisées sans ajouter de compétence ou de compte distinct.",
-        "skillsBody": "Des workflows juridiques réutilisables avec des instructions que vous pouvez consulter avant de les ajouter."
+        "skillsBody": "Des flux de travail juridiques réutilisables, avec des instructions que vous pouvez consulter avant de les ajouter."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Recherchez par tâche, juridiction ou source. Vous pouvez examiner chaque outil avant de l’ajouter à votre espace de travail.",
+      "heroTitle": "Sur quoi travaillez-vous ?",
       "howBody": "Une compétence présente une méthode juridique sous forme d’instructions consultables. Ajoutez-la une fois, puis réutilisez la même approche chaque fois que cette tâche se présente.",
-      "howTitle": "Qu'est-ce qu'une compétence ?",
+      "howTitle": "Qu’est-ce qu’une compétence ?",
       "includedBadge": "Inclus",
       "jurisRankBody": "Évaluer l'autorité des précédents de la Cour suprême argentine à travers l'influence des citations et l'évolution doctrinale.",
       "noResults": "Aucun outil ne correspond encore à cette recherche.",
-      "openSkill": "Explore skill",
+      "openSkill": "Voir le fonctionnement",
       "review": {
         "aligned": "Conforme",
         "governingLaw": "Loi applicable",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Examiner les accords",
         "verifyOrganizations": "Vérifier une organisation"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Ou choisissez une tâche"
     },
     "documentation": "Documentation",
     "downloadUpstream": "Télécharger l’archive source",
@@ -4163,7 +4163,7 @@
       },
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Gérez qui a accès à cette organisation et les invitations en attente",
       "memoryExtraction": {
         "description": "Lorsque cette option est activée, stella examine en arrière-plan les conversations résumées et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
         "title": "Extraction de mémoire",
@@ -5503,7 +5503,7 @@
       "flowNoInputs": "aucune entrée",
       "ifNoMatchFound": "Si aucune correspondance trouvée",
       "inputs": "Entrées",
-      "inputsHelp": "Choisis les colonnes que l'IA doit lire. Clic pour ajouter ou retirer.",
+      "inputsHelp": "Choisissez les colonnes que l’IA doit lire. Cliquez pour les ajouter ou les retirer.",
       "int": "Entier",
       "keepEmpty": "Laisser vide",
       "manualColumn": "Colonne manuelle",
@@ -5522,7 +5522,7 @@
       "noConditionFields": "Aucun champ disponible pour le filtrage.",
       "noFirstDocument": "Aucun document à prévisualiser.",
       "noPropertiesFound": "Aucune propriété trouvée",
-      "optionsHelp": "Définis les valeurs parmi lesquelles l'IA peut choisir.",
+      "optionsHelp": "Définissez les valeurs parmi lesquelles l’IA peut choisir.",
       "optionsLabel": "Options",
       "person": "Person",
       "previewEmpty": "L'IA n'a renvoyé aucune valeur.",

@@ -1573,6 +1573,121 @@
         "fr": "Conversation",
         "pt-BR": "chat"
       }
+    },
+    {
+      "id": "ai",
+      "en": "AI",
+      "note": "The abbreviation for artificial intelligence, alone or as the first part of a hyphenated compound (hu \"AI-szolgáltató\", de \"KI-Anbieter\", et \"AI-ga\"). Each locale uses one abbreviation, chosen by Microsoft's localized usage and the catalog majority when this entry was added: lv AI (was 59 AI vs 53 MI; microsoft.com/lv-lv/ai writes \"AI aģenti\", \"AI drošība\"; the national MI is common in government text but tezaurs.lv does not list it), lt DI (66 vs 46 AI; Microsoft lt \"DI pagalbinė priemonė\"), hu AI (79 vs 37 MI; Microsoft hu \"AI-segéd\", \"AI-megoldásokkal\"; e-nyelv.hu accepts both), de KI (101 vs 13 AI; Microsoft de \"KI-Assistent\"), et AI (92 vs 4 TI; Sõnaveeb lists both, Microsoft et uses both), es/fr/pt-BR IA. cs/sk/pl use AI throughout; their native abbreviations are not banned because cs/sk \"UI\" also means user interface. ar still mixes Latin \"AI\" with الذكاء الاصطناعي and has no ban yet. Product names keep \"AI\" (stella AI, Google AI, Vertex AI) through `keyExempt`. The hu ban lists \"az MI\" and the hyphenated MI forms rather than bare \"MI\", because the whole-word, case-insensitive match would also hit the pronoun \"mi\" (\"what\", \"we\"); a bare \"MI\" label is not caught. fr has no ban: \"AI\" would match the verb in \"j’ai\". Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "keyExempt": [
+        "organization.aiConfig.dataRegionUnsupported",
+        "translate.dialog.aiDescription",
+        "translate.dialog.bilingualDocument",
+        "translate.dialog.docxOnly",
+        "translate.dialog.translatedDocumentAi"
+      ],
+      "forbidden": {
+        "de": ["AI"],
+        "et": ["TI"],
+        "hu": [
+          "az MI",
+          "MI-t",
+          "MI-vel",
+          "MI-nek",
+          "MI-hez",
+          "MI-ben",
+          "MI-re",
+          "MI-ről",
+          "MI-től",
+          "MI-alapú",
+          "MI-ügynök",
+          "MI-ügynököt",
+          "MI-modell",
+          "MI-modellt",
+          "MI-szolgáltató",
+          "MI-szolgáltatót",
+          "MI-szolgáltatóját",
+          "MI-szolgáltatónál",
+          "MI-szolgáltatóval",
+          "MI-szolgáltatóknál",
+          "MI-funkciók",
+          "MI-funkciókat",
+          "MI-konfiguráció",
+          "MI-konfigurációt",
+          "MI-kimenet",
+          "MI-kimenetet",
+          "MI-kérések",
+          "MI-asszisztens",
+          "MI-asszisztensében",
+          "MI-osztályozó"
+        ],
+        "lt": ["AI"],
+        "lv": ["MI"],
+        "es": ["AI"],
+        "pt-BR": ["AI"]
+      },
+      "translations": {
+        "ar": "الذكاء الاصطناعي",
+        "cs": "AI",
+        "sk": "AI",
+        "pl": "AI",
+        "de": "KI",
+        "et": "AI",
+        "hu": "AI",
+        "lt": "DI",
+        "lv": "AI",
+        "es": "IA",
+        "fr": "IA",
+        "pt-BR": "IA"
+      }
+    },
+    {
+      "id": "skill",
+      "en": "Skill",
+      "note": "The agent skill feature (a SKILL.md package of instructions the chat can invoke), not a person's ability. Each locale keeps the rendering its catalog majority already used when this entry was added: cs dovednost, sk zručnosť, pl umiejętność, et oskus, lt įgūdis, lv prasme, es habilidad, fr compétence, pt-BR habilidade, ar مهارة, hu készség (71 vs 12 \"skill\"/\"Skillek\" in the composer), de Skill (92 vs 8 \"Fähigkeit\"; Skill is the established term in German developer tooling). The bare English \"skill\" is not banned because the file name SKILL.md matches it whole-word; the plural and Hungarian inflected forms are. The directory placeholder is a literal path (`skills/my-skill`). Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "keyExempt": ["publicTools.contribute.form.directoryPlaceholder"],
+      "forbidden": {
+        "ar": ["skills"],
+        "cs": ["skills"],
+        "sk": ["skills"],
+        "pl": ["skills"],
+        "de": ["Fähigkeit", "Fähigkeiten"],
+        "et": ["skills"],
+        "hu": [
+          "skills",
+          "skillek",
+          "skilleket",
+          "skillt",
+          "skillhez",
+          "skillekhez",
+          "skillben",
+          "skillekben",
+          "skillel",
+          "skillekkel",
+          "skillre",
+          "skillről",
+          "skillerőforrás",
+          "skillerőforrások"
+        ],
+        "lt": ["skills"],
+        "lv": ["skills"],
+        "es": ["skills"],
+        "fr": ["skills"],
+        "pt-BR": ["skills"]
+      },
+      "translations": {
+        "ar": "مهارة",
+        "cs": "dovednost",
+        "sk": "zručnosť",
+        "pl": "umiejętność",
+        "de": "Skill",
+        "et": "oskus",
+        "hu": "készség",
+        "lt": "įgūdis",
+        "lv": "prasme",
+        "es": "habilidad",
+        "fr": "compétence",
+        "pt-BR": "habilidade"
+      }
     }
   ]
 }
