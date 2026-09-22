@@ -25,6 +25,11 @@ import {
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_STATUS,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  citationKeyOf,
+  extractCitations,
+  normalizeDecisionIdentifierValue,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -355,6 +360,81 @@ test("resolves a structured citation through its normalized identifier", async (
     citationKey: "347 us 483",
     identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     normalizedIdentifierValue: "347us483",
+  });
+
+  await resolveCitationsForDecision(asTx(), citingId);
+
+  const [citation] = await db
+    .select()
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, citationId))
+    .limit(1);
+  expect(citation?.citedDecisionId).toBe(targetId);
+  expect(citation?.resolutionStatus).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
+});
+
+test("a Hungarian docket printed the way the courts print it reaches the listed decision", async () => {
+  // The target is stored as the adapter stores it: the listed docket is the
+  // case number, and the printed docket rides along as a second identifier
+  // whose normalized value predates the Hungarian key. The citation comes
+  // from real Kúria prose (the recorded decision Gfv.VI.30.197/2024/4).
+  const targetId = createSafeId<"caseLawDecision">();
+  const citingId = createSafeId<"caseLawDecision">();
+  const listed = "Gfv.30429/2014/5";
+  const hungarian = { ...base, court: "Kúria", language: "hu", country: "HUN" };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...hungarian,
+      id: targetId,
+      caseNumber: listed,
+      citationKey: citationKeyOf(listed),
+      decisionDate: "2015-01-01",
+    },
+    {
+      ...hungarian,
+      id: citingId,
+      caseNumber: "Gfv.30197/2024/4",
+      citationKey: citationKeyOf("Gfv.30197/2024/4"),
+      decisionDate: "2024-06-01",
+    },
+  ]);
+  await db.insert(caseLawDecisionIdentifiers).values([
+    {
+      decisionId: targetId,
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: listed,
+      normalizedValue: normalizeDecisionIdentifierValue(
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        listed,
+      ),
+    },
+    {
+      decisionId: targetId,
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: "Gfv.VII.30.429/2014/5",
+      normalizedValue: "gfv.vii.30.429/2014/5",
+    },
+  ]);
+  const [extracted] = extractCitations([
+    {
+      index: 0,
+      text: "A Kúria a Gfv.VII.30.429/2014/5. számú ítéletével a jogerős ítéletet hatályában fenntartotta.",
+    },
+  ]);
+  if (extracted === undefined) {
+    throw new Error("the Kúria docket was not extracted");
+  }
+  const citationId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawCitations).values({
+    id: citationId,
+    citingDecisionId: citingId,
+    citationText: extracted.citationText,
+    citationKey: citationKeyOf(extracted.citationText),
+    identifierType: extracted.identifierType,
+    normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+      extracted.identifierType,
+      extracted.identifierValue,
+    ),
   });
 
   await resolveCitationsForDecision(asTx(), citingId);

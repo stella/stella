@@ -7,11 +7,17 @@ import {
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import {
+  normalizeHuBhgyRow,
+  readHuBhgySearch,
+} from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import {
   bareCitationKey,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
   extractCitations,
+  hungarianCitationForm,
   isSelfCitation,
+  normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
@@ -2371,5 +2377,299 @@ describe("captures the docket grammar rejects", () => {
     ]).map((citation) => citation.citationText);
 
     expect(texts).toEqual(["sp. zn. A 9/2003", "č.j. Nad 224/2014"]);
+  });
+});
+
+describe("Hungarian citations", () => {
+  // Verbatim from the recorded Kúria decision Gfv.VI.30.197/2024/4
+  // (`parsers/__fixtures__/hu-bhgy-decision.docx`), paragraphs [14] and [15].
+  const KURIA_PROSE =
+    "a BH-k alapjául szolgáló kúriai határozatok egy része a BHGY-ban " +
+    "közzétételre került (BH2019. 19. alapjául szolgáló Kúria Pfv. " +
+    "20.187/2017/12. sz. határozat, a BH2023. 129. alapjául szolgáló " +
+    "Pfv.20626/2022/4. sz. határozat, a BH2022. 332. alapjául szolgáló " +
+    "Mfv.10043/2022/5. sz. határozat), így ezek figyelembe vehetők. " +
+    "(Kúria Pfv.V.20.675/2022/2., Pfv.V.21.323/2022/2. - BH2023. 71., PK " +
+    "vélemény 1. pont)";
+
+  const extract = (text: string) => extractCitations([{ index: 0, text }]);
+
+  const reporterKey = (text: string): string | undefined => {
+    const citations = extract(text);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.identifierType).toBe(
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    );
+    const value = citations[0]?.identifierValue;
+    return value === undefined
+      ? undefined
+      : normalizeDecisionIdentifierValue(
+          DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value,
+        );
+  };
+
+  test("reads every docket and reporter entry of real Kúria prose", () => {
+    const citations = extract(KURIA_PROSE);
+
+    expect(
+      citations.map(({ citationText, identifierType }) => [
+        citationText,
+        identifierType,
+      ]),
+    ).toEqual([
+      ["Pfv. 20.187/2017/12", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["Pfv.20626/2022/4", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["Mfv.10043/2022/5", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["Pfv.V.20.675/2022/2", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["Pfv.V.21.323/2022/2", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["BH2019. 19", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+      ["BH2023. 129", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+      ["BH2022. 332", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+      ["BH2023. 71", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+    ]);
+  });
+
+  test("lower-court dockets in a legacy decision, but not the prosecutor's file", () => {
+    // Verbatim from the recorded Győri Ítélőtábla decision Bhar.31/2009/6
+    // (`parsers/__fixtures__/hu-bhgy-decision.rtf`). The prosecution office
+    // numbers its files in the court shape and adds a dashed suffix.
+    const text =
+      "A Komárom-Esztergom Megyei Bíróság a 2009. január 13. napján kelt " +
+      "1.Bf.327/2008/6. számú ítéletével a Komáromi Városi Bíróság " +
+      "5.B.19/2008/4. számú ítéletét annyiban változtatta meg. A Győri " +
+      "Fellebbviteli Főügyészség a Bf.90/2009/1-I. számú átiratában a " +
+      "helybenhagyását indítványozta.";
+
+    expect(extract(text).map((citation) => citation.citationText)).toEqual([
+      "1.Bf.327/2008/6",
+      "5.B.19/2008/4",
+    ]);
+  });
+
+  test("every printed spelling of a docket keys to the spelling the publisher lists", () => {
+    // The listing stores `Gfv.30091/2025/4`; the document prints
+    // `Gfv.VI.30.091/2025/4.` (hu-bhgy.research.md). Each decoration is one
+    // axis, and every combination of them must land on the listed key.
+    const listed = "Pfv.20123/2019/5";
+    const leads = ["", "3.", "3. "];
+    const numerals = ["", "III.", "III. "];
+    const registers = ["20123", "20.123"];
+    const registryGaps = ["", " "];
+    const contexts = [
+      (docket: string) => `a Kúria ${docket}. számú ítélete`,
+      (docket: string) => `a Fővárosi Ítélőtábla ${docket}. sz. végzése`,
+      (docket: string) => `(Kúria ${docket}.)`,
+      (docket: string) => `a ${docket} számú határozat`,
+    ];
+
+    for (const lead of leads) {
+      for (const numeral of numerals) {
+        for (const register of registers) {
+          for (const gap of registryGaps) {
+            for (const context of contexts) {
+              const docket = `${lead}Pfv.${gap}${numeral}${register}/2019/5`;
+              expect(
+                extract(context(docket)).map((c) => c.citationText),
+              ).toEqual([docket]);
+              expect(bareCitationKey(docket)).toBe(bareCitationKey(listed));
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test("the key of a listed docket is the key stored for it today", async () => {
+    // `citation_key` and the case-number identifier rows of stored Hungarian
+    // decisions were written from the listed docket when its key was the
+    // docket lowercased. A key that moved would orphan them.
+    const raw: unknown = JSON.parse(
+      await Bun.file(
+        new URL(
+          "adapters/__fixtures__/hu-bhgy-listing-2000-gazdasagi.json",
+          import.meta.url,
+        ),
+      ).text(),
+    );
+    const dockets = (readHuBhgySearch(raw)?.rows ?? [])
+      .map((row) => normalizeHuBhgyRow(row).Azonosito)
+      .filter((docket) => docket !== undefined)
+      .filter((docket) => hungarianCitationForm(docket)?.type === "docket");
+
+    expect(dockets.length).toBeGreaterThan(0);
+    for (const docket of dockets) {
+      expect(bareCitationKey(docket)).toBe(docket.toLowerCase());
+    }
+  });
+
+  test("the printed and listed dockets are one identity of the decision", () => {
+    const identifiers = decisionIdentifiersFromMetadata({
+      caseNumber: "Gfv.30197/2024/4",
+      identifiers: [
+        { type: "case-number", value: "Gfv.30197/2024/4" },
+        { type: "case-number", value: "Gfv.VI.30.197/2024/4" },
+      ],
+    });
+
+    expect(identifiers).toEqual([
+      { type: "case-number", value: "Gfv.30197/2024/4" },
+    ]);
+    expect(isSelfCitation("Gfv.VI.30.197/2024/4", identifiers)).toBe(true);
+    expect(isSelfCitation("Gfv.VI.30.198/2024/4", identifiers)).toBe(false);
+  });
+
+  test("another document of the file, or another registry, is another decision", () => {
+    expect(bareCitationKey("Pfv.III.20.123/2019/5")).not.toBe(
+      bareCitationKey("Pfv.III.20.123/2019/6"),
+    );
+    expect(bareCitationKey("Pfv.III.20.123/2019/5")).not.toBe(
+      bareCitationKey("Pf.III.20.123/2019/5"),
+    );
+  });
+
+  test("every registry the courts use, with and without a panel", () => {
+    const dockets = [
+      "Pfv.III.20.123/2019/5",
+      "Kfv.I.35.456/2020/8",
+      "Bfv.II.1.234/2021/9",
+      "Gfv.VII.30.091/2025/4",
+      "Mfv.X.10.123/2019/6",
+      "Kpkf.IV.39.123/2020/2",
+      "Pkf.25.123/2020/3",
+      "Pf.20.123/2019/4",
+      "Kf.650.123/2019/7",
+      "Bf.339/2013/6",
+      "Gf.30.329/2007/6",
+      "Mf.30.123/2020/5",
+      "5.Pf.20.123/2019/4",
+      "2.Kf.650.123/2019/7",
+      "14.G.40.123/2020/12",
+      "B.61/2013/37",
+    ];
+
+    for (const docket of dockets) {
+      expect(extract(`a ${docket}. számú határozat`)).toMatchObject([
+        {
+          citationText: docket,
+          identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        },
+      ]);
+    }
+  });
+
+  test("reporter entries are reporter citations, keyed across spacing", () => {
+    const spellings = [
+      ["BH 2019.123.", "BH2019. 123."],
+      ["BH 2020.7.201", "BH 2020. 7. 201."],
+      ["EBH 2018.G.3.", "EBH2018. G. 3.", "EBH.2018.G.3.", "EBH..2018.G.3."],
+      ["EBH2011. 2345.", "EBH 2011.2345"],
+      ["EBD 2016.M.12.", "EBD2016. M. 12."],
+      ["BDT 2019.4012.", "BDT2019. 4012."],
+      ["KGD 2020.15.", "KGD2020. 15."],
+      ["ÍH 2018.45.", "ÍH2018. 45."],
+    ];
+    const keys = spellings.map((group) => {
+      const groupKeys = new Set(
+        group.map((spelling) => reporterKey(`lásd ${spelling} alatt`)),
+      );
+      expect(groupKeys.size).toBe(1);
+      return [...groupKeys][0];
+    });
+
+    expect(new Set(keys).size).toBe(spellings.length);
+  });
+
+  test("uniformity decisions, opinions and Constitutional Court decisions key by designation", () => {
+    const spellings = [
+      [
+        "4/2021. PJE",
+        "4/2021. Polgári jogegységi határozat",
+        "4/2021. polgári jogegységi határozatra",
+      ],
+      ["4/2021. BJE", "4/2021. Büntető jogegységi határozat"],
+      ["2/2020. KMPJE"],
+      ["1/2021. KMJE", "1/2021. Közigazgatási-munkaügyi jogegységi határozat"],
+      ["1/2021. KJE", "1/2021. közigazgatási jogegységi határozat"],
+      ["3/2018. BJE"],
+      ["1/2014. PK vélemény", "PK vélemény 1/2014", "1/2014. PK véleményben"],
+      ["1/2014. GK vélemény"],
+      [
+        "3123/2019. (V. 30.) AB határozat",
+        "3123/2019. (V.30.) AB határozatában",
+        "3123/2019. AB határozat",
+        "3123/2019. (V. 30.) AB végzés",
+      ],
+      ["12/2020. (VI. 22.) AB határozat"],
+    ];
+    const keys = spellings.map((group) => {
+      const groupKeys = new Set(
+        group.map((spelling) => reporterKey(`a ${spelling} szerint`)),
+      );
+      expect(groupKeys.size).toBe(1);
+      return [...groupKeys][0];
+    });
+
+    expect(new Set(keys).size).toBe(spellings.length);
+  });
+
+  test("a docket beside its reporter entry keeps the docket's identity", () => {
+    // A Czech collection number folds into the docket beside it; a Hungarian
+    // docket already names one decision, and the reporter entry resolves to
+    // nothing the Hungarian corpus stores.
+    const citations = extract("Kúria Pfv.20626/2022/4, BH2023. 129");
+
+    expect(
+      citations.map(({ citationText, identifierType }) => [
+        citationText,
+        identifierType,
+      ]),
+    ).toEqual([
+      ["Pfv.20626/2022/4", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["BH2023. 129", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+    ]);
+  });
+
+  test("statutes, dates, decrees and editorial series are not decision citations", () => {
+    const texts = [
+      "a Polgári Törvénykönyvről szóló 2013. évi V. törvény (Ptk.) 6:519. §-a",
+      "Budapest, 2019. május 30.",
+      "Budapest, 2024.05.06.",
+      "a 9/2006. (II.27.) IM rendelet 34. § (1) bekezdése",
+      "a 15/1990. BM rendelet",
+      "a BH-k alapjául szolgáló határozatok",
+      "GK.34 és EBH számmal megjelölt határozatok",
+      "a Pfv.20.123/2019. számú ügyben",
+      "a jogegységi határozat szerint",
+      "PK vélemény 1. pont",
+    ];
+
+    for (const text of texts) {
+      expect(extract(text)).toEqual([]);
+    }
+  });
+
+  test("Czech, Slovak, Polish and EU citations never read as Hungarian", () => {
+    const foreign = [
+      "sp. zn. 22 Cdo 1234/2019",
+      "č. j. 8 As 287/2020-33",
+      "sp. zn. 5Obdo/23/2016",
+      "sp. zn. 36 Co 52/53/2023",
+      "sygn. akt II CSK 123/19",
+      "II CSK 123/19",
+      "IV. ÚS 23/05",
+      "C-283/81",
+      "č. 123/2020 Sb. rozh. tr.",
+    ];
+
+    for (const text of foreign) {
+      const citations = extract(text);
+      expect(citations).toHaveLength(1);
+      expect(
+        citations.map((citation) =>
+          hungarianCitationForm(citation.citationText),
+        ),
+      ).toEqual([null]);
+    }
   });
 });

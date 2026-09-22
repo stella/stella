@@ -15,6 +15,9 @@
  * to be appealed, which is the opposite of what authority means.
  */
 
+import { panic } from "better-result";
+
+import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Closed set; persisted, so a CHECK constraint mirrors it in the schema. */
@@ -146,6 +149,49 @@ const AUTHORITY_REGISTRIES = new Set([
   "vobdo",
   "svs",
 ]);
+
+/**
+ * The Kúria's registers whose decisions are published and cited as
+ * authority: the review registers of its civil, commercial, criminal, labour
+ * and administrative chambers, and the uniformity panel's. Kept apart from
+ * `AUTHORITY_REGISTRIES` because the Hungarian registry is read by the
+ * Hungarian docket grammar, not by `registryOf`, and a mark in one set says
+ * nothing about the same letters in the other. The appeal registers (`Pf`,
+ * `Gf`, `Bf`) are absent: the regional courts of appeal use them too, and a
+ * Kúria decision reaches them as the judgment under review.
+ */
+const HUNGARIAN_AUTHORITY_REGISTRIES = new Set([
+  "pfv",
+  "gfv",
+  "bfv",
+  "mfv",
+  "kfv",
+  "jpe",
+]);
+
+/**
+ * The registry tier: whether the cited court's publication status makes the
+ * citation authority. A Hungarian published designation (a reporter entry, a
+ * uniformity decision, an opinion, a Constitutional Court decision) is
+ * authority by being published.
+ */
+const isAuthorityByRegistry = (citationText: string): boolean => {
+  const hungarian = hungarianCitationForm(citationText);
+  if (hungarian === null) {
+    const registry = registryOf(withoutPrefix(citationText));
+    return registry !== null && AUTHORITY_REGISTRIES.has(registry);
+  }
+  switch (hungarian.type) {
+    case "published":
+      return true;
+    case "docket":
+      return HUNGARIAN_AUTHORITY_REGISTRIES.has(hungarian.registry);
+    default: {
+      hungarian satisfies never;
+      return panic(`Unhandled Hungarian citation form: ${String(hungarian)}`);
+    }
+  }
+};
 
 /**
  * Phrases that mark the recitals: the appeal, the judgment under review,
@@ -321,12 +367,10 @@ export const classifyCitationVerdict = ({
     }
   }
 
-  const registry = registryOf(withoutPrefix(citationText));
   return {
-    kind:
-      registry !== null && AUTHORITY_REGISTRIES.has(registry)
-        ? CITATION_KIND.PRECEDENT
-        : CITATION_KIND.PROCEDURAL,
+    kind: isAuthorityByRegistry(citationText)
+      ? CITATION_KIND.PRECEDENT
+      : CITATION_KIND.PROCEDURAL,
     evidence: CITATION_KIND_EVIDENCE.REGISTRY,
   };
 };

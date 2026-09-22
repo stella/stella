@@ -575,3 +575,53 @@ describe("Polish cues and registries", () => {
     });
   });
 });
+
+describe("Hungarian registries and published designations", () => {
+  const registryVerdict = (citationText: string) =>
+    classifyCitationVerdict({ citationText, context: null });
+
+  test("the Kúria's review registers are authority, with or without a panel", () => {
+    for (const citationText of [
+      "Pfv.V.20.675/2022/2",
+      "Gfv.30.293/2022/11",
+      "Mfv.10043/2022/5",
+      "Bfv.II.1.234/2021/9",
+      "Kfv.I.35.456/2020/8",
+    ]) {
+      expect(registryVerdict(citationText)).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("first- and second-instance dockets are the case's history", () => {
+    // Verbatim from the recorded Kúria decision Gfv.VI.30.197/2024/4, which
+    // names the judgments under review by these dockets.
+    for (const citationText of [
+      "5.Gf.40.014/2023/15",
+      "21.G.40.036/2022/64",
+      "Gf.II.30.094/2014/6",
+    ]) {
+      expect(registryVerdict(citationText)).toEqual({
+        kind: CITATION_KIND.PROCEDURAL,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("a published designation is authority", () => {
+    for (const citationText of [
+      "BH2019. 19",
+      "EBH 2018.G.3",
+      "4/2021. Polgári jogegységi határozat",
+      "1/2014. PK vélemény",
+      "3123/2019. (V. 30.) AB határozat",
+    ]) {
+      expect(registryVerdict(citationText)).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+});
