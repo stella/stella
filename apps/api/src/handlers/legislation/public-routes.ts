@@ -11,6 +11,10 @@ import {
   readStatuteBySlugParamsSchema,
   readStatuteBySlugQuerySchema,
 } from "@/api/handlers/legislation/by-slug";
+import {
+  legislationFacetsQuerySchema,
+  readLegislationFacetsHandler,
+} from "@/api/handlers/legislation/facets";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   listStatutesHandler,
@@ -66,6 +70,23 @@ const readLegislationShelf = createSafePublicHandler(
       Result.tryPromise(
         async () =>
           await readLegislationShelfHandler(query, legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readLegislationFacets = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: legislationFacetsQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readLegislationFacetsHandler(query, legislationPublicReadDb),
       ),
     );
 
@@ -232,6 +253,10 @@ export const publicLegislationRoute = new Elysia({
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
   .get("/statutes/shelf", readLegislationShelf.handler, {
     query: readLegislationShelf.config.query,
+  })
+  // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
+  .get("/statutes/facets", readLegislationFacets.handler, {
+    query: readLegislationFacets.config.query,
   })
   // Ahead of `/statutes/:documentId`, or the literal segment would be read as
   // a document id and rejected by the UUID schema.
