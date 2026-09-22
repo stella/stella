@@ -1577,7 +1577,7 @@
     {
       "id": "ai",
       "en": "AI",
-      "note": "The abbreviation for artificial intelligence, alone or as the first part of a hyphenated compound (hu \"AI-szolgáltató\", de \"KI-Anbieter\", et \"AI-ga\"). Each locale uses one abbreviation, chosen by Microsoft's localized usage and the catalog majority when this entry was added: lv AI (was 59 AI vs 53 MI; microsoft.com/lv-lv/ai writes \"AI aģenti\", \"AI drošība\"; the national MI is common in government text but tezaurs.lv does not list it), lt DI (66 vs 46 AI; Microsoft lt \"DI pagalbinė priemonė\"), hu AI (79 vs 37 MI; Microsoft hu \"AI-segéd\", \"AI-megoldásokkal\"; e-nyelv.hu accepts both), de KI (101 vs 13 AI; Microsoft de \"KI-Assistent\"), et AI (92 vs 4 TI; Sõnaveeb lists both, Microsoft et uses both), es/fr/pt-BR IA. cs/sk/pl use AI throughout; their native abbreviations are not banned because cs/sk \"UI\" also means user interface. ar still mixes Latin \"AI\" with الذكاء الاصطناعي and has no ban yet. Product names keep \"AI\" (stella AI, Google AI, Vertex AI) through `keyExempt`. The hu ban lists \"az MI\" and the hyphenated MI forms rather than bare \"MI\", because the whole-word, case-insensitive match would also hit the pronoun \"mi\" (\"what\", \"we\"); a bare \"MI\" label is not caught. fr has no ban: \"AI\" would match the verb in \"j’ai\". Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "note": "The abbreviation for artificial intelligence, alone or as the first part of a hyphenated compound (hu \"AI-szolgáltató\", de \"KI-Anbieter\", et \"AI-ga\"). Each locale uses one abbreviation, chosen by Microsoft's localized usage and the catalog majority when this entry was added: lv AI (was 59 AI vs 53 MI; microsoft.com/lv-lv/ai writes \"AI aģenti\", \"AI drošība\"; the national MI is common in government text but tezaurs.lv does not list it), lt DI (66 vs 46 AI; Microsoft lt \"DI pagalbinė priemonė\"), hu AI (79 vs 37 MI; Microsoft hu \"AI-segéd\", \"AI-megoldásokkal\"; e-nyelv.hu accepts both), de KI (101 vs 13 AI; Microsoft de \"KI-Assistent\"), et AI (92 vs 4 TI; Sõnaveeb lists both, Microsoft et uses both), es/fr/pt-BR IA. cs/sk/pl use AI throughout; their native abbreviations are not banned because cs/sk \"UI\" also means user interface. ar uses الذكاء الاصطناعي (Microsoft Arabic terminology; the catalog was split 44 Latin \"AI\" vs 52 الذكاء الاصطناعي when the ban was added) and bans Latin \"AI\": the lint's Arabic proclitic prefix still requires a whole Latin word, so the ban cannot fire on Arabic text. Product names keep \"AI\" (stella AI, Google AI, Vertex AI) through `keyExempt`. The hu ban lists \"az MI\" and the hyphenated MI forms rather than bare \"MI\", because the whole-word, case-insensitive match would also hit the pronoun \"mi\" (\"what\", \"we\"); a bare \"MI\" label is not caught. fr has no ban: \"AI\" would match the verb in \"j’ai\". Lint-only entry (not tabulated in TERMINOLOGY.md).",
       "keyExempt": [
         "organization.aiConfig.dataRegionUnsupported",
         "translate.dialog.aiDescription",
@@ -1586,6 +1586,7 @@
         "translate.dialog.translatedDocumentAi"
       ],
       "forbidden": {
+        "ar": ["AI"],
         "de": ["AI"],
         "et": ["TI"],
         "hu": [

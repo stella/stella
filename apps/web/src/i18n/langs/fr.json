@@ -851,7 +851,7 @@
       "tooltip": "Envoyé au modèle sous la forme {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",
       "title": "Appliquer les modifications avec le suivi des modifications ?",
       "tracked": "Oui, avec suivi"
@@ -2288,7 +2288,7 @@
       "includeDocuments": "Inclure les documents d’entrée",
       "instructions": "Consignes",
       "instructionsPlaceholder": "Ce que le relecteur doit vérifier",
-      "namePlaceholder": "Nom de l’étape",
+      "namePlaceholder": "p. ex. Examiner l’accord de confidentialité",
       "nameRequired": "Saisissez un nom pour chaque étape.",
       "prompt": "Instruction",
       "promptPlaceholder": "p. ex. Examinez l’accord de confidentialité joint au regard des conditions usuelles du marché et signalez les clauses inhabituelles",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",
-      "addNote": "Ajouter une note pour la contrepartie",
+      "addNote": "Ajouter un commentaire pour la contrepartie",
       "addNotePlaceholder": "Ce que la contrepartie doit voir",
-      "addNoteSubmit": "Ajouter la note",
+      "addNoteSubmit": "Ajouter le commentaire",
       "addReference": "Ajouter {name} comme référence",
       "addTopic": "Ajouter un thème",
       "allDecided": "Tous les constats ici ont été traités.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Favorable",
-        "neutral": "Neutral",
+        "neutral": "Sans effet",
         "notJudged": "Non évalué",
         "unfavourable": "Défavorable"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Aucun document DOCX correspondant.",
       "notCompared": "Non comparé",
       "notComparedCount": "Non comparé : {count, number}",
-      "noteAdded": "Note ajoutée pour la contrepartie",
-      "noteBlockedChecking": "stella vérifie encore si ce document peut être modifié sans risque. Votre note est conservée ; réessayez dans un instant.",
-      "noteBlockedCollaboration": "La session d'édition partagée est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
-      "noteBlockedOpening": "Le document est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
-      "noteBlockedReadOnly": "Ce document partagé est ouvert en lecture seule. Votre note est conservée ; réessayez une fois que vous pourrez le modifier.",
-      "noteNotAdded": "Note non ajoutée",
+      "noteAdded": "Commentaire ajouté pour la contrepartie",
+      "noteBlockedChecking": "stella vérifie encore si ce document peut être modifié sans risque. Votre commentaire est conservé ; réessayez dans un instant.",
+      "noteBlockedCollaboration": "La session d'édition partagée est en cours d'ouverture. Votre commentaire est conservé ; réessayez dans un instant.",
+      "noteBlockedOpening": "Le document est en cours d'ouverture. Votre commentaire est conservé ; réessayez dans un instant.",
+      "noteBlockedReadOnly": "Ce document partagé est ouvert en lecture seule. Votre commentaire est conservé ; réessayez une fois que vous pourrez le modifier.",
+      "noteNotAdded": "Commentaire non ajouté",
       "openPlaybooks": "Ouvrir les playbooks",
       "pane": {
         "document": "Panneau : constats à côté du document",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Personnaliser la question et le format de réponse",
       "termKind": {
         "enumeration": "Énumération",
-        "language": "Language",
+        "language": "Formulation",
         "parameter": "Paramètre",
         "presence": "Présence"
       },
@@ -5461,10 +5461,10 @@
         "createMany": "Créer {count} colonnes",
         "createdMany": "{count} colonnes créées",
         "createdOne": "Colonne créée",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Que doit extraire cette colonne ? Affinez-la dans la boîte de dialogue de la colonne pour utiliser / et @.",
         "title": "Ajouter des colonnes"
       },
-      "chipManual": "Manual",
+      "chipManual": "Sans IA",
       "chipMulti": "Étiquettes",
       "chipNumber": "Nombre",
       "chipSingle": "Étiquette",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Aucune entrée applicable sur ce document.",
       "previewSubject": "Essayer sur un échantillon",
       "previewUnsupported": "Aperçu non disponible pour ce type de document.",
-      "readingFrom": "Reading from",
+      "readingFrom": "L’IA lit à partir de",
       "referencesItself": "La propriété se référence elle-même via d'autres propriétés",
       "rerunColumn": "Relancer la colonne",
       "resultType": "Type de résultat",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Format",
       "scopeFile": "Fichier actuel",
       "scopeFileDescription": "Utiliser {property} et lancer ce fichier maintenant.",
       "scopeFileUnavailable": "Aucune source de fichier n'est disponible pour cette vue.",

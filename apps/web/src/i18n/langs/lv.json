@@ -851,7 +851,7 @@
       "tooltip": "Modelim nosūtīts kā {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",
       "title": "Vai lietot labojumus ar izmaiņu izsekošanu?",
       "tracked": "Jā, ar izsekošanu"
@@ -2288,7 +2288,7 @@
       "includeDocuments": "Iekļaut ievades dokumentus",
       "instructions": "Norādījumi",
       "instructionsPlaceholder": "Kas pārbaudītājam jāpārbauda",
-      "namePlaceholder": "Soļa nosaukums",
+      "namePlaceholder": "piem., Pārbaudīt konfidencialitātes līgumu",
       "nameRequired": "Ievadiet nosaukumu katram solim.",
       "prompt": "Uzvedne",
       "promptPlaceholder": "piem., Pārbaudiet pievienoto konfidencialitātes līgumu, salīdzinot ar tirgū ierastajiem noteikumiem, un atzīmējiet neparastas klauzulas",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
-      "addNote": "Pievienot piezīmi pretpusei",
+      "addNote": "Pievienot komentāru pretpusei",
       "addNotePlaceholder": "Ko pretpusei vajadzētu redzēt",
-      "addNoteSubmit": "Pievienot piezīmi",
+      "addNoteSubmit": "Pievienot komentāru",
       "addReference": "Pievienot {name} kā atsauci",
       "addTopic": "Pievienot tēmu",
       "allDecided": "Par visiem šeit redzamajiem secinājumiem ir pieņemts lēmums.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Labvēlīgs",
-        "neutral": "Neutral",
+        "neutral": "Bez ietekmes",
         "notJudged": "Nav vērtēts",
         "unfavourable": "Nelabvēlīgs"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Nav atrasti atbilstoši DOCX dokumenti.",
       "notCompared": "Nav salīdzināts",
       "notComparedCount": "Nav salīdzināts: {count, number}",
-      "noteAdded": "Pretpusei pievienota piezīme",
-      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedReadOnly": "Šis koplietotais dokuments ir atvērts tikai lasīšanai. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz, kad varēsiet to rediģēt.",
-      "noteNotAdded": "Piezīme nav pievienota",
+      "noteAdded": "Pretpusei pievienots komentārs",
+      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedReadOnly": "Šis koplietotais dokuments ir atvērts tikai lasīšanai. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz, kad varēsiet to rediģēt.",
+      "noteNotAdded": "Komentārs nav pievienots",
       "openPlaybooks": "Atvērt pārbaudes ceļvežus",
       "pane": {
         "document": "Panelis: secinājumi blakus dokumentam",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Pielāgot jautājumu un atbildes formātu",
       "termKind": {
         "enumeration": "Uzskaitījums",
-        "language": "Language",
+        "language": "Formulējums",
         "parameter": "Parametrs",
         "presence": "Klātbūtne"
       },
@@ -5461,10 +5461,10 @@
         "createMany": "{count, plural, zero {Izveidot # kolonnu} one {Izveidot # kolonnu} other {Izveidot # kolonnas}}",
         "createdMany": "{count, plural, zero {Izveidotas # kolonnas} one {Izveidota # kolonna} other {Izveidotas # kolonnas}}",
         "createdOne": "Kolonna izveidota",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Ko šai kolonnai jāizgūst? Lai izmantotu / un @, precizējiet to kolonnas dialoglodziņā.",
         "title": "Pievienot kolonnas"
       },
-      "chipManual": "Manual",
+      "chipManual": "Bez AI",
       "chipMulti": "Birkas",
       "chipNumber": "Skaitlis",
       "chipSingle": "Birka",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Šajā dokumentā nav piemērotas ievades.",
       "previewSubject": "Izmēģini paraugā",
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
-      "readingFrom": "Reading from",
+      "readingFrom": "AI lasa no",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
       "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formāts",
       "scopeFile": "Pašreizējais fails",
       "scopeFileDescription": "Izmantojiet {property} un palaidiet šo failu tagad.",
       "scopeFileUnavailable": "Šim skatam nav pieejams faila avots.",

@@ -851,7 +851,7 @@
       "tooltip": "A modellnek elküldve mint {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",
       "title": "Alkalmazza a módosításokat követett változásokként?",
       "tracked": "Igen, követett változásként"
@@ -2288,7 +2288,7 @@
       "includeDocuments": "Bemeneti dokumentumok belefoglalása",
       "instructions": "Utasítások",
       "instructionsPlaceholder": "Mit ellenőrizzen az ellenőr",
-      "namePlaceholder": "Lépés neve",
+      "namePlaceholder": "pl. A titoktartási megállapodás átvizsgálása",
       "nameRequired": "Adjon nevet minden lépésnek.",
       "prompt": "Utasítás",
       "promptPlaceholder": "pl. Vizsgálja át a csatolt titoktartási megállapodást a piacon szokásos feltételek alapján, és jelölje meg a szokatlan kikötéseket",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Kedvező",
-        "neutral": "Neutral",
+        "neutral": "Nincs hatás",
         "notJudged": "Nem értékelt",
         "unfavourable": "Kedvezőtlen"
       },
@@ -2920,11 +2920,11 @@
       "notCompared": "Nem összevetve",
       "notComparedCount": "Nem összevetve: {count, number}",
       "noteAdded": "Megjegyzés hozzáadva az ellenfélnek",
-      "noteBlockedChecking": "A stella még ellenőrzi, hogy a dokumentum biztonságosan szerkeszthető-e. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedOpening": "A dokumentum még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedReadOnly": "Ez a megosztott dokumentum csak olvasásra van megnyitva. A jegyzete megmarad; próbálja meg újra, amint szerkesztheti.",
-      "noteNotAdded": "A jegyzet nem lett hozzáadva",
+      "noteBlockedChecking": "A stella még ellenőrzi, hogy a dokumentum biztonságosan szerkeszthető-e. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedOpening": "A dokumentum még betöltődik. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedReadOnly": "Ez a megosztott dokumentum csak olvasásra van megnyitva. A megjegyzése megmarad; próbálja meg újra, amint szerkesztheti.",
+      "noteNotAdded": "A megjegyzés nem lett hozzáadva",
       "openPlaybooks": "Playbookok megnyitása",
       "pane": {
         "document": "Panel: megállapítások a dokumentum mellett",
@@ -3296,7 +3296,7 @@
       "switchToManual": "A kérdés és a válaszformátum testreszabása",
       "termKind": {
         "enumeration": "Felsorolás",
-        "language": "Language",
+        "language": "Megfogalmazás",
         "parameter": "Paraméter",
         "presence": "Jelenlét"
       },
@@ -5461,10 +5461,10 @@
         "createMany": "{count} oszlop létrehozása",
         "createdMany": "{count} oszlop létrehozva",
         "createdOne": "Oszlop létrehozva",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Mit nyerjen ki ez az oszlop? A / és a @ használatához pontosítsa az oszlop párbeszédpaneljén.",
         "title": "Oszlopok hozzáadása"
       },
-      "chipManual": "Manual",
+      "chipManual": "AI nélkül",
       "chipMulti": "Címkék",
       "chipNumber": "Szám",
       "chipSingle": "Címke",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Ezen a dokumentumon nincs alkalmazható bemenet.",
       "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
-      "readingFrom": "Reading from",
+      "readingFrom": "Az AI innen olvas:",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "rerunColumn": "Oszlop újrafuttatása",
       "resultType": "Eredmény típusa",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formátum",
       "scopeFile": "Aktuális fájl",
       "scopeFileDescription": "Használja ezt: {property}, és futtassa most ezt a fájlt.",
       "scopeFileUnavailable": "Ehhez a nézethez nem érhető el fájlforrás.",

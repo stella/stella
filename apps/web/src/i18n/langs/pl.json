@@ -851,7 +851,7 @@
       "tooltip": "Wysłano do modelu jako {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
       "direct": "Nie, zastosuj bezpośrednio",
       "title": "Zastosować zmiany z włączonym śledzeniem zmian?",
       "tracked": "Tak, ze śledzeniem zmian"
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym.",
     "videoContent": "Wygenerowane wideo",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Podsumowanie wyszukiwania w internecie",
       "answerDisclaimer": "Opracowano na podstawie publicznych wyników wyszukiwania poniżej. Zweryfikuj w powiązanych źródłach.",
       "fetchedFrom": "z {source}",
       "openSource": "Otwórz {source} w nowej karcie",
@@ -2288,10 +2288,10 @@
       "includeDocuments": "Uwzględnij dokumenty wejściowe",
       "instructions": "Instrukcje",
       "instructionsPlaceholder": "Co ma sprawdzić recenzent",
-      "namePlaceholder": "Nazwa kroku",
+      "namePlaceholder": "np. Sprawdź umowę NDA",
       "nameRequired": "Wprowadź nazwę dla każdego kroku.",
       "prompt": "Prompt",
-      "promptPlaceholder": "Instrukcje dla kroku AI",
+      "promptPlaceholder": "np. Sprawdź załączoną umowę NDA pod kątem standardów rynkowych i oznacz nietypowe klauzule",
       "promptRequired": "Wprowadź prompt dla kroku AI.",
       "required": "Dodaj co najmniej jeden krok.",
       "reviewGate": "Punkt przeglądu",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
-      "addNote": "Dodaj notatkę dla kontrahenta",
+      "addNote": "Dodaj komentarz dla kontrahenta",
       "addNotePlaceholder": "Co ma zobaczyć kontrahent",
-      "addNoteSubmit": "Dodaj notatkę",
+      "addNoteSubmit": "Dodaj komentarz",
       "addReference": "Dodaj {name} jako referencję",
       "addTopic": "Dodaj temat",
       "allDecided": "Wszystkie ustalenia zostały rozstrzygnięte.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Korzystne",
-        "neutral": "Neutral",
+        "neutral": "Bez wpływu",
         "notJudged": "Nieocenione",
         "unfavourable": "Niekorzystne"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Nie znaleziono pasujących dokumentów DOCX.",
       "notCompared": "Nieporównane",
       "notComparedCount": "Nieporównane: {count, number}",
-      "noteAdded": "Dodano notatkę dla kontrahenta",
-      "noteBlockedChecking": "stella nadal sprawdza, czy ten dokument można bezpiecznie edytować. Notatka została zachowana; spróbuj ponownie za chwilę.",
-      "noteBlockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
-      "noteBlockedOpening": "Dokument dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
-      "noteBlockedReadOnly": "Ten udostępniony dokument jest otwarty tylko do odczytu. Notatka została zachowana; spróbuj ponownie, gdy będziesz móc go edytować.",
-      "noteNotAdded": "Notatka nie została dodana",
+      "noteAdded": "Dodano komentarz dla kontrahenta",
+      "noteBlockedChecking": "stella nadal sprawdza, czy ten dokument można bezpiecznie edytować. Komentarz został zachowany; spróbuj ponownie za chwilę.",
+      "noteBlockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Komentarz został zachowany; spróbuj ponownie za chwilę.",
+      "noteBlockedOpening": "Dokument dopiero się otwiera. Komentarz został zachowany; spróbuj ponownie za chwilę.",
+      "noteBlockedReadOnly": "Ten udostępniony dokument jest otwarty tylko do odczytu. Komentarz został zachowany; spróbuj ponownie, gdy będziesz móc go edytować.",
+      "noteNotAdded": "Komentarz nie został dodany",
       "openPlaybooks": "Otwórz playbooki",
       "pane": {
         "document": "Panel: ustalenia obok dokumentu",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Dostosuj pytanie i format odpowiedzi",
       "termKind": {
         "enumeration": "Wyliczenie",
-        "language": "Language",
+        "language": "Brzmienie",
         "parameter": "Parametr",
         "presence": "Obecność"
       },
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Sprawdzaj umowy handlowe klauzula po klauzuli na podstawie wytycznych negocjacyjnych, z wyraźnie wskazanymi odstępstwami i sugerowanymi zmianami.",
       "editorsPick": "Wybór redakcji",
       "exampleReview": "Przykładowa analiza",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Zacznij od przepływu pracy",
       "fromCommunity": "Od społeczności",
       "groups": {
         "dataSources": "Źródła danych i integracje",
@@ -3823,14 +3823,14 @@
         "includedBody": "Podstawowe funkcje gotowe do użycia bez dodawania osobnej umiejętności ani konta.",
         "skillsBody": "Prawnicze procedury wielokrotnego użytku z instrukcjami, które można sprawdzić przed ich dodaniem."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Wyszukuj według zadania, jurysdykcji lub źródła. Każde narzędzie możesz sprawdzić, zanim dodasz je do swojego obszaru roboczego.",
+      "heroTitle": "Nad czym pracujesz?",
       "howBody": "Umiejętność zapisuje metodę prawniczą w postaci instrukcji, które można przejrzeć. Dodaj ją raz, a potem stosuj to samo podejście za każdym razem, gdy pojawi się dane zadanie.",
       "howTitle": "Czym jest umiejętność?",
       "includedBadge": "W zestawie",
       "jurisRankBody": "Oceń rangę precedensów argentyńskiego Sądu Najwyższego na podstawie wpływu cytowań i rozwoju doktryny.",
       "noResults": "Żadne narzędzie nie pasuje jeszcze do tego wyszukiwania.",
-      "openSkill": "Explore skill",
+      "openSkill": "Zobacz, jak to działa",
       "review": {
         "aligned": "Zgodne",
         "governingLaw": "Prawo właściwe",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Przeanalizuj umowy",
         "verifyOrganizations": "Zweryfikuj organizację"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Albo wybierz zadanie"
     },
     "documentation": "Dokumentacja",
     "downloadUpstream": "Pobierz archiwum źródłowe",
@@ -4163,7 +4163,7 @@
       },
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Zarządzaj tym, kto ma dostęp do tej organizacji, oraz oczekującymi zaproszeniami",
       "memoryExtraction": {
         "description": "Gdy włączone, stella w tle analizuje podsumowane wątki czatów i proponuje wpisy do pamięci, które musi zatwierdzić człowiek, zanim wpłyną na asystenta. Działa to na własnym kluczu dostawcy AI Twojego zespołu, więc pozostaw wyłączone, chyba że chcesz, aby to działające w tle użycie AI było rozliczane na Twój klucz.",
         "title": "Wyodrębnianie pamięci",
@@ -5461,10 +5461,10 @@
         "createMany": "Utwórz {count} kolumn",
         "createdMany": "Utworzono {count} kolumn",
         "createdOne": "Utworzono kolumnę",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Co ta kolumna ma wyodrębnić? Aby użyć / i @, doprecyzuj ją w oknie dialogowym kolumny.",
         "title": "Dodaj kolumny"
       },
-      "chipManual": "Manual",
+      "chipManual": "Bez AI",
       "chipMulti": "Tagi",
       "chipNumber": "Liczba",
       "chipSingle": "Tag",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Brak odpowiedniego wejścia w tym dokumencie.",
       "previewSubject": "Wypróbuj na próbce",
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
-      "readingFrom": "Reading from",
+      "readingFrom": "AI czyta z",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
       "rerunColumn": "Uruchom kolumnę ponownie",
       "resultType": "Typ wyniku",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Format",
       "scopeFile": "Bieżący plik",
       "scopeFileDescription": "Użyj {property} i uruchom teraz ten plik.",
       "scopeFileUnavailable": "Dla tego widoku nie ma dostępnego źródła pliku.",

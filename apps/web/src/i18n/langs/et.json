@@ -851,7 +851,7 @@
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
       "title": "Kas rakendada muudatused jälgituna?",
       "tracked": "Jah, jälgituna"
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
     "videoContent": "Loodud video",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Veebiotsingu kokkuvõte",
       "answerDisclaimer": "Koostatud allpool toodud avalike veebitulemuste põhjal. Kontrollige seotud allikatega.",
       "fetchedFrom": "allikast {source}",
       "openSource": "Ava {source} uuel vahekaardil",
@@ -2288,10 +2288,10 @@
       "includeDocuments": "Kaasa sisenddokumendid",
       "instructions": "Juhised",
       "instructionsPlaceholder": "Mida ülevaataja peaks kontrollima",
-      "namePlaceholder": "Sammu nimi",
+      "namePlaceholder": "nt Vaata konfidentsiaalsusleping üle",
       "nameRequired": "Sisesta igale sammule nimi.",
       "prompt": "Viip",
-      "promptPlaceholder": "Juhised AI sammu jaoks",
+      "promptPlaceholder": "nt Vaata lisatud konfidentsiaalsusleping turul tavapäraste tingimuste alusel üle ja märgi ebatavalised klauslid",
       "promptRequired": "Sisesta AI sammu jaoks viip.",
       "required": "Lisa vähemalt üks samm.",
       "reviewGate": "Ülevaatuse värav",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
-      "addNote": "Lisa märkus vastaspoolele",
+      "addNote": "Lisa kommentaar vastaspoolele",
       "addNotePlaceholder": "Mida vastaspool peaks nägema",
-      "addNoteSubmit": "Lisa märkus",
+      "addNoteSubmit": "Lisa kommentaar",
       "addReference": "Lisa {name} võrdlusena",
       "addTopic": "Lisa teema",
       "allDecided": "Kõik siinsed leiud on otsustatud.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Soodne",
-        "neutral": "Neutral",
+        "neutral": "Mõjuta",
         "notJudged": "Hindamata",
         "unfavourable": "Ebasoodne"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Sobivaid DOCX-dokumente ei leitud.",
       "notCompared": "Võrdlemata",
       "notComparedCount": "Võrdlemata: {count, number}",
-      "noteAdded": "Vastaspoolele lisati märkus",
-      "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedOpening": "Dokument on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks. Sinu märkus on alles; proovi uuesti, kui saad seda muuta.",
-      "noteNotAdded": "Märkust ei lisatud",
+      "noteAdded": "Vastaspoolele lisati kommentaar",
+      "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedOpening": "Dokument on veel avanemas. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks. Sinu kommentaar on alles; proovi uuesti, kui saad seda muuta.",
+      "noteNotAdded": "Kommentaari ei lisatud",
       "openPlaybooks": "Ava playbookid",
       "pane": {
         "document": "Paneel: leiud dokumendi kõrval",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Kohanda küsimust ja vastuse vormingut",
       "termKind": {
         "enumeration": "Loend",
-        "language": "Language",
+        "language": "Sõnastus",
         "parameter": "Parameeter",
         "presence": "Olemasolu"
       },
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Võrdle kaubanduslepingute iga klauslit läbirääkimisjuhendiga; kõrvalekalded ja soovitatud muudatused tuuakse selgelt esile.",
       "editorsPick": "Toimetaja valikud",
       "exampleReview": "Näidisülevaade",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Alusta töövooga",
       "fromCommunity": "Kogukonnast",
       "groups": {
         "dataSources": "Andmeallikad ja integratsioonid",
@@ -3823,14 +3823,14 @@
         "includedBody": "Põhivõimalused, mis on kasutamiseks valmis ilma eraldi oskusi või kontot lisamata.",
         "skillsBody": "Korduvkasutatavad juriidilised töövood koos juhistega, mida saate enne lisamist kontrollida."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Otsi ülesande, jurisdiktsiooni või allika järgi. Iga tööriista saad enne tööruumi lisamist üle vaadata.",
+      "heroTitle": "Millega sa tegeled?",
       "howBody": "Oskus esitab õigusmeetodi kontrollitavate juhistena. Lisa see üks kord ja kasuta sama lähenemist alati, kui ülesanne kordub.",
       "howTitle": "Mis on oskus?",
       "includedBadge": "Kaasas",
       "jurisRankBody": "Hinnake Argentina ülemkohtu pretsedentide autoriteeti tsiteerimise mõju ja õpetusliku arengu kaudu.",
       "noResults": "Sellele otsingule ei vasta veel ükski tööriist.",
-      "openSkill": "Explore skill",
+      "openSkill": "Vaata, kuidas see töötab",
       "review": {
         "aligned": "Kooskõlas",
         "governingLaw": "Kohaldatav õigus",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Vaata lepingud üle",
         "verifyOrganizations": "Kontrolli organisatsiooni"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Või vali ülesanne"
     },
     "documentation": "Dokumentatsioon",
     "downloadUpstream": "Laadi alla lähtearhiiv",
@@ -4163,7 +4163,7 @@
       },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Halda, kellel on juurdepääs sellele organisatsioonile, ja ootel kutseid",
       "memoryExtraction": {
         "description": "Kui see on sisse lülitatud, vaatab stella taustal kokkuvõtlikke vestlusi ja pakub mälukirjeid, mille inimene peab kinnitama, enne kui need assistenti mõjutavad. See kasutab teie meeskonna enda AI-teenusepakkuja võtit, seega jätke see välja, kui te ei soovi, et see taustal toimuv AI-kasutus arvestataks teie võtmele.",
         "title": "Mälu ekstraktimine",
@@ -5461,10 +5461,10 @@
         "createMany": "Loo {count} veergu",
         "createdMany": "Loodi {count} veergu",
         "createdOne": "Veerg loodud",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Mida see veerg peaks välja võtma? / ja @ kasutamiseks täpsusta seda veeru dialoogis.",
         "title": "Lisa veerud"
       },
-      "chipManual": "Manual",
+      "chipManual": "AI-ta",
       "chipMulti": "Sildid",
       "chipNumber": "Arv",
       "chipSingle": "Silt",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Sellel dokumendil pole sobivat sisendit.",
       "previewSubject": "Proovi näidisel",
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
-      "readingFrom": "Reading from",
+      "readingFrom": "AI loeb:",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
       "rerunColumn": "Käivita veerg uuesti",
       "resultType": "Tulemuse tüüp",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Vorming",
       "scopeFile": "Praegune fail",
       "scopeFileDescription": "Kasutage välja {property} ja käivitage see fail nüüd.",
       "scopeFileUnavailable": "Selles vaates pole failiallikat saadaval.",

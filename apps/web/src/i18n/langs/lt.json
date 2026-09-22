@@ -851,7 +851,7 @@
       "tooltip": "Modeliui išsiųsta kaip {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
       "direct": "Ne, taikyti tiesiogiai",
       "title": "Taikyti redagavimus su sekamais pakeitimais?",
       "tracked": "Taip, su sekimu"
@@ -2288,7 +2288,7 @@
       "includeDocuments": "Įtraukti įvesties dokumentus",
       "instructions": "Nurodymai",
       "instructionsPlaceholder": "Ką turėtų patikrinti peržiūrėtojas",
-      "namePlaceholder": "Žingsnio pavadinimas",
+      "namePlaceholder": "pvz., Peržiūrėti konfidencialumo sutartį",
       "nameRequired": "Įveskite kiekvieno žingsnio pavadinimą.",
       "prompt": "Užklausa",
       "promptPlaceholder": "pvz., Peržiūrėkite pridėtą konfidencialumo sutartį pagal įprastas rinkos sąlygas ir pažymėkite neįprastas sąlygas",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
-      "addNote": "Pridėti pastabą priešingai šaliai",
+      "addNote": "Pridėti komentarą priešingai šaliai",
       "addNotePlaceholder": "Ką turėtų matyti priešinga šalis",
-      "addNoteSubmit": "Pridėti pastabą",
+      "addNoteSubmit": "Pridėti komentarą",
       "addReference": "Pridėti {name} kaip referenciją",
       "addTopic": "Pridėti temą",
       "allDecided": "Visos čia esančios išvados nuspręstos.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Palanki",
-        "neutral": "Neutral",
+        "neutral": "Be poveikio",
         "notJudged": "Neįvertinta",
         "unfavourable": "Nepalanki"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Atitinkančių DOCX dokumentų nerasta.",
       "notCompared": "Nepalyginta",
       "notComparedCount": "Nepalyginta: {count, number}",
-      "noteAdded": "Priešingai šaliai pridėta pastaba",
-      "noteBlockedChecking": "stella dar tikrina, ar šį dokumentą galima saugiai redaguoti. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
-      "noteBlockedCollaboration": "Bendro redagavimo sesija dar atveriama. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
-      "noteBlockedOpening": "Dokumentas dar atveriamas. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
-      "noteBlockedReadOnly": "Šis bendrinamas dokumentas atvertas tik skaityti. Jūsų pastaba išsaugota; pabandykite dar kartą, kai galėsite jį redaguoti.",
-      "noteNotAdded": "Pastaba nepridėta",
+      "noteAdded": "Priešingai šaliai pridėtas komentaras",
+      "noteBlockedChecking": "stella dar tikrina, ar šį dokumentą galima saugiai redaguoti. Jūsų komentaras išsaugotas; pabandykite dar kartą po akimirkos.",
+      "noteBlockedCollaboration": "Bendro redagavimo sesija dar atveriama. Jūsų komentaras išsaugotas; pabandykite dar kartą po akimirkos.",
+      "noteBlockedOpening": "Dokumentas dar atveriamas. Jūsų komentaras išsaugotas; pabandykite dar kartą po akimirkos.",
+      "noteBlockedReadOnly": "Šis bendrinamas dokumentas atvertas tik skaityti. Jūsų komentaras išsaugotas; pabandykite dar kartą, kai galėsite jį redaguoti.",
+      "noteNotAdded": "Komentaras nepridėtas",
       "openPlaybooks": "Atverti peržiūros vadovus",
       "pane": {
         "document": "Skydelis: išvados šalia dokumento",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Tinkinti klausimą ir atsakymo formatą",
       "termKind": {
         "enumeration": "Išvardijimas",
-        "language": "Language",
+        "language": "Formuluotė",
         "parameter": "Parametras",
         "presence": "Buvimas"
       },
@@ -5461,10 +5461,10 @@
         "createMany": "Sukurti {count} stulpelius",
         "createdMany": "Sukurta {count} stulpelių",
         "createdOne": "Stulpelis sukurtas",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Ką turėtų išgauti šis stulpelis? Norėdami naudoti / ir @, patikslinkite jį stulpelio dialogo lange.",
         "title": "Pridėti stulpelius"
       },
-      "chipManual": "Manual",
+      "chipManual": "Be DI",
       "chipMulti": "Žymos",
       "chipNumber": "Skaičius",
       "chipSingle": "Žyma",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Šiame dokumente nėra tinkamos įvesties.",
       "previewSubject": "Išbandyk pavyzdyje",
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
-      "readingFrom": "Reading from",
+      "readingFrom": "DI skaito iš",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
       "rerunColumn": "Paleisti stulpelį iš naujo",
       "resultType": "Rezultato tipas",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formatas",
       "scopeFile": "Dabartinis failas",
       "scopeFileDescription": "Naudokite {property} ir paleiskite šį failą dabar.",
       "scopeFileUnavailable": "Šiam rodiniui nėra failo šaltinio.",

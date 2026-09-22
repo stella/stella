@@ -800,7 +800,7 @@
     "empty": "Žádné položky neodpovídají aktuálnímu filtru.",
     "filter": {
       "mcps": "Integrace",
-      "nativeTools": "Vždy dostupné",
+      "nativeTools": "Vestavěné nástroje",
       "skills": "Dovednosti"
     },
     "filterHint": "Filtrováno: {codes}",
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Porovnejte obchodní smlouvy článek po článku s vyjednávacím playbookem a přehledně zobrazte odchylky i navrhované revize.",
       "editorsPick": "Výběr redakce",
       "exampleReview": "Ukázková kontrola",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Začněte pracovním postupem",
       "fromCommunity": "Od komunity",
       "groups": {
         "dataSources": "Datové zdroje a integrace",
@@ -3823,14 +3823,14 @@
         "includedBody": "Základní funkce připravené k použití bez přidání samostatné dovednosti nebo účtu.",
         "skillsBody": "Opakovaně použitelné právní postupy s pokyny, které si před přidáním můžete prohlédnout."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Hledejte podle úkolu, jurisdikce nebo zdroje. Každý nástroj si můžete prohlédnout, než ho přidáte do svého pracovního prostoru.",
+      "heroTitle": "Na čem pracujete?",
       "howBody": "Dovednost převádí právní metodu do přehledných pokynů. Přidejte ji jednou a stejný postup pak použijte pokaždé, když se úkol objeví.",
       "howTitle": "Co je dovednost?",
       "includedBadge": "Zahrnuto",
       "jurisRankBody": "Posuďte váhu precedentů argentinského Nejvyššího soudu podle vlivu citací a vývoje doktríny.",
       "noResults": "Tomuto hledání zatím neodpovídají žádné nástroje.",
-      "openSkill": "Explore skill",
+      "openSkill": "Jak to funguje",
       "review": {
         "aligned": "V souladu",
         "governingLaw": "Rozhodné právo",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Zkontrolovat smlouvy",
         "verifyOrganizations": "Ověřit organizaci"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Nebo vyberte úkol"
     },
     "documentation": "Dokumentace",
     "downloadUpstream": "Stáhnout upstream archiv",
@@ -5461,7 +5461,7 @@
         "createMany": "Vytvořit {count} sloupců",
         "createdMany": "Vytvořeno {count} sloupců",
         "createdOne": "Sloupec vytvořen",
-        "promptPlaceholder": "Co má tento sloupec extrahovat? V dialogu sloupce použijte / a @.",
+        "promptPlaceholder": "Co má tento sloupec extrahovat? Chcete-li použít / a @, upřesněte ho v dialogu sloupce.",
         "title": "Přidat sloupce"
       },
       "chipManual": "Bez AI",

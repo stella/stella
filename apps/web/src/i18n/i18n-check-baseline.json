@@ -399,12 +399,24 @@
     "catalogue.configuration": [
       "fr"
     ],
+    "catalogue.filter.skills": [
+      "de"
+    ],
+    "chat.contextMeter.conversation": [
+      "fr"
+    ],
     "chat.contextMeter.tools": [
       "de"
     ],
     "chat.folioCitationFallback": [
       "es",
       "fr"
+    ],
+    "chat.landing.prompts": [
+      "de"
+    ],
+    "chat.pastedText.fromPromptFallback": [
+      "de"
     ],
     "chat.suggestionSeverity.style": [
       "fr"
@@ -1371,6 +1383,11 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "workspaces.properties.returnsLabel": [
+      "de",
+      "fr",
+      "pl"
     ],
     "workspaces.properties.text": [
       "cs",
