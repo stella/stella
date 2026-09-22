@@ -47,13 +47,13 @@ describe("BYOK provider and model configuration", () => {
       pdf: { provider: "google", modelId: "gemini-3.8-flash" },
     });
     expect(createDefaultRoleModels(["openrouter"])).toEqual({
-      chat: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
-      fast: { provider: "openrouter", modelId: "openai/gpt-5.6-luna" },
+      chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+      fast: { provider: "openrouter", modelId: "openai/gpt-6-luna" },
       reasoning: {
         provider: "openrouter",
-        modelId: "openai/gpt-5.6-terra",
+        modelId: "openai/gpt-6-sol",
       },
-      pdf: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
+      pdf: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
     });
   });
 
@@ -65,7 +65,7 @@ describe("BYOK provider and model configuration", () => {
         provider: "mistral",
         modelId: "mistral-medium-latest",
       },
-      pdf: { provider: "openai", modelId: "gpt-5.6-terra" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
 
     expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
@@ -244,10 +244,10 @@ describe("BYOK provider and model configuration", () => {
         roleModels: createDefaultRoleModels(["openai"]),
       }),
     ).toEqual({
-      chat: { provider: "openai", modelId: "gpt-5.6-terra" },
-      fast: { provider: "openai", modelId: "gpt-5.6-luna" },
-      reasoning: { provider: "openai", modelId: "gpt-5.6-terra" },
-      pdf: { provider: "openai", modelId: "gpt-5.6-terra" },
+      chat: { provider: "openai", modelId: "gpt-6-sol" },
+      fast: { provider: "openai", modelId: "gpt-6-luna" },
+      reasoning: { provider: "openai", modelId: "gpt-6-sol" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
   });
 
@@ -261,10 +261,10 @@ describe("BYOK provider and model configuration", () => {
         },
       }),
     ).toEqual({
-      chat: { provider: "openai", modelId: "gpt-5.6-terra" },
+      chat: { provider: "openai", modelId: "gpt-6-sol" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "openai", modelId: "gpt-5.6-terra" },
-      pdf: { provider: "openai", modelId: "gpt-5.6-terra" },
+      reasoning: { provider: "openai", modelId: "gpt-6-sol" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
   });
 
@@ -431,7 +431,7 @@ describe("BYOK provider and model configuration", () => {
     });
     expect(pdfRow?.selection).toEqual({
       provider: "openai",
-      modelId: "gpt-5.6-terra",
+      modelId: "gpt-6-sol",
     });
     expect(pdfRow?.modelOptions).not.toContainEqual({
       provider: "mistral",

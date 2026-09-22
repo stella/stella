@@ -86,6 +86,40 @@ export const MODEL_RATES = {
       cachedWriteInputPerMTok: 2_500_000,
     },
   },
+  // models.dev: openai:gpt-6-sol
+  "gpt-6-sol": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_000_000,
+      cachedInputPerMTok: 20_000,
+      cachedWriteInputPerMTok: 250_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 400_000,
+      outputPerMTok: 1_500_000,
+      cachedInputPerMTok: 40_000,
+      cachedWriteInputPerMTok: 500_000,
+    },
+  },
+  // models.dev: openai:gpt-6-luna
+  "gpt-6-luna": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 10_000,
+      outputPerMTok: 50_000,
+      cachedInputPerMTok: 1000,
+      cachedWriteInputPerMTok: 12_500,
+    },
+    aboveThreshold: {
+      inputPerMTok: 20_000,
+      outputPerMTok: 75_000,
+      cachedInputPerMTok: 2000,
+      cachedWriteInputPerMTok: 25_000,
+    },
+  },
   // models.dev: openai:gpt-5.6
   "gpt-5.6": {
     kind: "input-token-tiered",

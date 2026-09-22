@@ -351,6 +351,10 @@ describe("MODEL_RATES economic ordering", () => {
     expect(getModelRate("google/gemini-3.8-flash")).toBe(
       getModelRate("gemini-3.8-flash"),
     );
+    for (const modelId of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
+      expect(getModelRate(modelId)).toBeDefined();
+      expect(getModelRate(`openai/${modelId}`)).toBe(getModelRate(modelId));
+    }
   });
 
   test("floating provider pointers do not inherit fixed-model metadata", () => {
