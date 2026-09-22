@@ -227,9 +227,11 @@ describe("sample plan", () => {
         bucket.scope === "stored-label" ? bucket.label : null,
       ),
     ).toEqual([...STORED_LABELS]);
-    expect(buckets.map((bucket) => bucket.limit)).toEqual(
-      STORED_LABELS.map(() => 10),
-    );
+    // Evenly, to within the remainder: no label may be sampled twice as
+    // often as another because the vocabulary does not divide the limit.
+    const limits = buckets.map((bucket) => bucket.limit);
+    expect(limits.reduce((total, limit) => total + limit, 0)).toBe(60);
+    expect(Math.max(...limits) - Math.min(...limits)).toBeLessThanOrEqual(1);
   });
 
   test("spends the whole sample whatever the limit", () => {
@@ -255,7 +257,10 @@ describe("stored labels", () => {
   test("separates a column that was never written from one that decided nothing", () => {
     expect(storedLabelOf(null)).toBe(STORED_LABEL_ABSENT);
     expect(storedLabelOf(POLARITY.UNKNOWN)).toBe(POLARITY.UNKNOWN);
+    // Every stored label the tier cannot produce, so none of them can be
+    // scored against it: the pipeline's own words and the empty column.
     expect(UNSCORED_STORED_LABELS).toEqual([
+      POLARITY.MIXED,
       POLARITY.UNKNOWN,
       STORED_LABEL_ABSENT,
     ]);
@@ -381,14 +386,14 @@ describe("agreement", () => {
 
   test("reports what the tier read where the corpus reads nothing", () => {
     expect(summary.unscored.map((entry) => entry.stored)).toEqual([
-      POLARITY.UNKNOWN,
-      STORED_LABEL_ABSENT,
+      ...UNSCORED_STORED_LABELS,
     ]);
-    expect(summary.unscored[0]?.read).toBe(1);
+    const unknown = summary.unscored.find(
+      (entry) => entry.stored === POLARITY.UNKNOWN,
+    );
+    expect(unknown?.read).toBe(1);
     expect(
-      summary.unscored[0]?.byJev.find(
-        ({ label }) => label === POLARITY.SUPPORTIVE,
-      )?.count,
+      unknown?.byJev.find(({ label }) => label === POLARITY.SUPPORTIVE)?.count,
     ).toBe(1);
   });
 

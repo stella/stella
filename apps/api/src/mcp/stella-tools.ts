@@ -1021,7 +1021,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "this one, `cites` the ones it cites; neither means agreement. " +
       `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
       "not a doctrinal act, so it never says followed, distinguished or " +
-      "overruled. 'unclassified' means none was read. " +
+      "overruled. 'unclassified' means none was read; 'mixed' means the " +
+      "citing decision departed from the cited one where it named it once " +
+      "and relied on it where it named it again. " +
       "`passage.text` is at most " +
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +

@@ -35,14 +35,17 @@ export const GRAPH_DIRECTION = {
  *
  * `unclassified` folds a row the classifier never reached (`null`) together
  * with one it reached and could not answer (`unknown`): neither is a reading
- * of the text, so neither may pose as one. The classifiable polarities pass
- * through by name.
+ * of the text, so neither may pose as one. Every other stored polarity is a
+ * reading and passes through by name, including `mixed`, which is the one the
+ * pipeline derives: the citing decision departed from the cited one at one
+ * mention and relied on it at another.
  */
 export const CITATION_TREATMENTS = [
   "negative",
   "neutral",
   "positive",
   "supportive",
+  "mixed",
   "unclassified",
 ] as const;
 export type CitationTreatment = (typeof CITATION_TREATMENTS)[number];

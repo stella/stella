@@ -622,6 +622,7 @@
       "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
       "stripLabel": "الاستشهادات حسب السنة",
       "treatment": {
+        "mixed": "متباين",
         "negative": "سلبي",
         "neutral": "مذكور",
         "positive": "مُقرّ",

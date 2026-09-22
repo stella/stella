@@ -320,6 +320,7 @@ const emptyTreatmentCounts = (): CitationTreatmentCounts => ({
   neutral: 0,
   positive: 0,
   supportive: 0,
+  mixed: 0,
   unclassified: 0,
 });
 

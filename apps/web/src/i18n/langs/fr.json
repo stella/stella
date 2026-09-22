@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Afficher la décision} many {Afficher les # décisions} other {Afficher les # décisions}}",
       "stripLabel": "Citations par année",
       "treatment": {
+        "mixed": "Mitigée",
         "negative": "Négative",
         "neutral": "Mentionnée",
         "positive": "Approuvée",

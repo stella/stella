@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
       "stripLabel": "Citatos pagal metus",
       "treatment": {
+        "mixed": "Mišrus",
         "negative": "Neigiamas",
         "neutral": "Paminėtas",
         "positive": "Patvirtintas",

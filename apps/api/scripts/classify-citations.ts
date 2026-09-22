@@ -71,7 +71,7 @@ import {
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import {
   loadRules,
-  selectRuleMatch,
+  selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type {
   CompiledRule,
@@ -300,7 +300,7 @@ const recheckPage = async ({
       noContext++;
       continue;
     }
-    const match = selectRuleMatch(rules, contexts);
+    const match = selectCitationPolarity(rules, contexts);
     if (match === null) {
       continue;
     }

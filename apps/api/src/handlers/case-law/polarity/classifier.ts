@@ -47,6 +47,11 @@ const EXCERPT_WINDOWS = 5;
  * case named forty times is bounded to the first two mentions and the last
  * three: the first is where a party's reliance is reported, the last is
  * where the court settles it.
+ *
+ * One excerpt, one answer: a model tier reads the mentions together and
+ * gives the citation a single reading. `mixed` needs each mention read on
+ * its own, which only the rule tier does, so it is a verdict that tier
+ * reaches (`selectCitationPolarity`) and the model tiers do not.
  */
 export const excerptOf = (contexts: CitationContexts): string => {
   if (contexts.length <= EXCERPT_WINDOWS) {

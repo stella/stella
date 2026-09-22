@@ -13,7 +13,7 @@ import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import {
   compileRules,
-  selectRuleMatch,
+  selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
   RETIRED_SEED_RULES,
@@ -235,10 +235,11 @@ describe("seed rules", () => {
 
   /**
    * A case recited with "srov." and rejected a page later: the rule tier
-   * reads both windows and the rejection outranks the recital. Reading the
-   * first window alone is what filed the overruled case as supported.
+   * reads both windows and records that they disagree. Reading the first
+   * window alone is what filed the overruled case as supported; reading only
+   * the severest of the two lost the reliance the court also expressed.
    */
-  test("the most severe reading across a citation's mentions wins", () => {
+  test("mentions that disagree are stored as one mixed reading", () => {
     const rules = compileRules(
       SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
         id: createSafeId<"caseLawPolarityRule">(),
@@ -258,11 +259,14 @@ describe("seed rules", () => {
     );
 
     expect(windows).toHaveLength(2);
-    expect(selectRuleMatch(rules, windows?.[0] ?? "")?.polarity).toBe(
+    expect(selectCitationPolarity(rules, windows?.[0] ?? "")?.polarity).toBe(
       POLARITY.SUPPORTIVE,
     );
-    expect(selectRuleMatch(rules, windows ?? [])?.polarity).toBe(
+    expect(selectCitationPolarity(rules, windows?.[1] ?? "")?.polarity).toBe(
       POLARITY.NEGATIVE,
+    );
+    expect(selectCitationPolarity(rules, windows ?? [])?.polarity).toBe(
+      POLARITY.MIXED,
     );
   });
 
@@ -323,7 +327,9 @@ describe("seed rules", () => {
     );
     const context =
       "Dovolatel odkazuje na rozsudek Nejvyššího soudu ze dne 25. 11. 2008, sp. zn. 22 Cdo 3554/2008; tento rozsudek však nelze aplikovat, neboť vychází z jiných skutkových okolností.";
-    expect(selectRuleMatch(rules, context)?.polarity).toBe(POLARITY.NEGATIVE);
+    expect(selectCitationPolarity(rules, context)?.polarity).toBe(
+      POLARITY.NEGATIVE,
+    );
   });
 
   test("Czech supportive rules match expected phrases", () => {
@@ -387,7 +393,10 @@ describe("seed rules", () => {
 describe("the classifier codomain is one list", () => {
   test("every polarity but the pipeline's own is classifiable", () => {
     expect([...CLASSIFIABLE_POLARITIES]).toEqual(
-      POLARITIES.filter((polarity) => polarity !== POLARITY.UNKNOWN),
+      POLARITIES.filter(
+        (polarity) =>
+          polarity !== POLARITY.UNKNOWN && polarity !== POLARITY.MIXED,
+      ),
     );
   });
 
@@ -395,6 +404,13 @@ describe("the classifier codomain is one list", () => {
     // It records that classification did not happen. A model returning it
     // would be claiming the pipeline failed, which is not its to say.
     expect([...CLASSIFIABLE_POLARITIES]).not.toContain(POLARITY.UNKNOWN);
+  });
+
+  test("`mixed` is not something a classifier may emit", () => {
+    // It is a reading of a citation, not of a mention: it exists only once
+    // two mentions have been read and found to disagree. A rule or a model
+    // reads one stretch of text and cannot know that.
+    expect([...CLASSIFIABLE_POLARITIES]).not.toContain(POLARITY.MIXED);
   });
 
   test("both tiers label with the same set", () => {
@@ -447,8 +463,12 @@ describe("rule precedence", () => {
       ),
     );
 
-    expect(selectRuleMatch(retired, context)?.polarity).toBe(POLARITY.NEGATIVE);
-    expect(selectRuleMatch(rules, context)?.polarity).toBe(POLARITY.SUPPORTIVE);
+    expect(selectCitationPolarity(retired, context)?.polarity).toBe(
+      POLARITY.NEGATIVE,
+    );
+    expect(selectCitationPolarity(rules, context)?.polarity).toBe(
+      POLARITY.SUPPORTIVE,
+    );
   });
 
   test("a rare specific negative rule beats a popular generic positive one", () => {
@@ -463,7 +483,7 @@ describe("rule precedence", () => {
       rule({ pattern: "na\\s+rozdíl\\s+od", polarity: POLARITY.NEGATIVE }),
     ]);
 
-    const match = selectRuleMatch(
+    const match = selectCitationPolarity(
       rules,
       "Na rozdíl od věci sp. zn. 21 Cdo 1234/2020, na kterou žalobce " +
         "odkazuje na podporu svého názoru, jde zde o jiný skutkový základ.",
@@ -478,7 +498,7 @@ describe("rule precedence", () => {
       rule({ pattern: "překonán[aouy]?", polarity: POLARITY.NEGATIVE }),
     ]);
 
-    const match = selectRuleMatch(
+    const match = selectCitationPolarity(
       rules,
       "Tento závěr byl překonán; srov. rozsudek velkého senátu.",
     );
@@ -504,7 +524,7 @@ describe("rule precedence", () => {
       rule({ pattern: "v\\s+souladu\\s+s", polarity: POLARITY.POSITIVE }),
     ]);
 
-    const match = selectRuleMatch(
+    const match = selectCitationPolarity(
       rules,
       "V souladu s citovaným rozhodnutím, proti rozsudku odvolacího soudu.",
     );
@@ -539,7 +559,7 @@ describe("rule precedence", () => {
     ]);
 
     expect(rules).toHaveLength(1);
-    expect(selectRuleMatch(rules, "viz nález")?.polarity).toBe(
+    expect(selectCitationPolarity(rules, "viz nález")?.polarity).toBe(
       POLARITY.SUPPORTIVE,
     );
   });
@@ -566,7 +586,7 @@ describe("rule precedence", () => {
       },
     ]);
 
-    expect(selectRuleMatch(rules, "viz nález")?.confidence).toBe(0.8);
+    expect(selectCitationPolarity(rules, "viz nález")?.confidence).toBe(0.8);
   });
 
   test("no match returns null", () => {
@@ -574,6 +594,6 @@ describe("rule precedence", () => {
       rule({ pattern: "viz", polarity: POLARITY.SUPPORTIVE }),
     ]);
 
-    expect(selectRuleMatch(rules, "nothing to see here")).toBeNull();
+    expect(selectCitationPolarity(rules, "nothing to see here")).toBeNull();
   });
 });

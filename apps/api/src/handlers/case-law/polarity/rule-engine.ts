@@ -15,13 +15,17 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawPolarityRules } from "@/api/db/schema";
+import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/aggregate";
 import {
   CLASSIFIABLE_POLARITIES,
   isClassifiablePolarity,
   POLARITY_PRECEDENCE,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
-import type { ClassifiablePolarity } from "@/api/handlers/case-law/polarity/consts";
+import type {
+  ClassifiablePolarity,
+  Polarity,
+} from "@/api/handlers/case-law/polarity/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
@@ -32,8 +36,9 @@ export type CompiledRule = {
   regex: RegExp;
   /**
    * Narrower than the column, which the CHECK constraint still lets carry any
-   * `Polarity`. A rule labelling a citation `unknown` would be asserting that
-   * classification did not happen, which is not something a match can mean.
+   * `Polarity`. A rule reads one mention, so it can neither assert that
+   * classification did not happen (`unknown`) nor that two mentions disagreed
+   * (`mixed`); both are the pipeline's own words about a citation.
    */
   polarity: ClassifiablePolarity;
   /** Kept for the specificity tiebreak; the compiled regex hides its length. */
@@ -41,9 +46,10 @@ export type CompiledRule = {
   confidence: number;
 };
 
-export type RuleMatch = {
+/** The rule tier's label for one citation, over all of its mentions. */
+export type CitationPolarityVerdict = {
+  polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule">;
-  polarity: ClassifiablePolarity;
   confidence: number;
 };
 
@@ -131,10 +137,10 @@ export const ACTIVE_RULE_SOURCES = [
  * the same rules on every run.
  *
  * Only the classifiable polarities are read. The CHECK constraint still lets
- * a row carry `unknown`, and one that did would otherwise open a fifth
- * partition — taking a share of a budget divided among four, and, worse,
- * matching: a citation would be labelled "classification did not happen"
- * without anything having tried to classify it.
+ * a row carry a polarity the pipeline derives, and one that did would
+ * otherwise open a partition of its own — taking a share of a budget divided
+ * among four, and, worse, matching: one mention would be labelled
+ * "classification did not happen", or "the mentions disagreed", on its own.
  */
 export const rankPolarityRulesByTier = (language: string) =>
   new QueryBuilder()
@@ -169,11 +175,12 @@ type PolarityRuleRow = Pick<
  *
  * A row is dropped, and reported, when it cannot take part in matching:
  * either its pattern does not compile, or it carries a polarity no match may
- * assign (outside `POLARITIES`, which the CHECK constraint forbids, or
- * `unknown`, which the constraint permits but which means classification did
- * not happen). Both are reported rather than dropped quietly, because such a
- * row is a rule that can never fire and still occupies its tier's budget:
- * left invisible, it is subtracted from the working set forever.
+ * assign (outside `POLARITIES`, which the CHECK constraint forbids, or one
+ * the pipeline derives, which the constraint permits but which is a word
+ * about the citation rather than a reading of a mention). Both are reported
+ * rather than dropped quietly, because such a row is a rule that can never
+ * fire and still occupies its tier's budget: left invisible, it is
+ * subtracted from the working set forever.
  *
  * The ranked query filters the polarity case out too. This is the guard that
  * does not depend on the caller having done so.
@@ -218,31 +225,50 @@ export const compileRules = (
 };
 
 /**
- * The highest-precedence rule matching any of a citation's windows, or null.
+ * The rule tier's verdict for one citation, or null when no rule reads it.
  *
  * `rules` must be in `compileRules` order, which is what makes the first
- * match the winning one. The windows are the citation's mentions in the
- * citing decision (`extractContexts`); the rule order is walked once across
- * all of them, so a negative cue at the third mention outranks a supportive
- * one at the first, and the label is the most severe thing the court said
- * about the case anywhere, not what it said where it first named it.
+ * rule matching a window that window's label. The windows are the citation's
+ * mentions in the citing decision (`extractContexts`): each is read on its
+ * own, and `aggregateMentionPolarities` collapses the readings. So a
+ * supportive recital followed by a rejection is stored `mixed` rather than
+ * reduced to whichever mention outranked the other, and a citation whose
+ * mentions agree keeps the label it always had.
+ *
+ * `ruleId` and `confidence` are the most severe contributing match's. A
+ * `mixed` verdict has no single rule behind it; it is attributed to the
+ * departure, because that is the reading whose rule, once retired, changes
+ * the answer, and retiring a rule is what hands its citations back to the
+ * classifier.
  */
-export const selectRuleMatch = (
+export const selectCitationPolarity = (
   rules: readonly CompiledRule[],
   contexts: string | readonly string[],
-): RuleMatch | null => {
+): CitationPolarityVerdict | null => {
   const windows = typeof contexts === "string" ? [contexts] : contexts;
-  for (const rule of rules) {
-    if (windows.some((window) => rule.regex.test(window))) {
-      return {
-        ruleId: rule.id,
-        polarity: rule.polarity,
-        confidence: rule.confidence,
-      };
+  const mentions: CompiledRule[] = [];
+  for (const window of windows) {
+    const rule = rules.find((candidate) => candidate.regex.test(window));
+    if (rule) {
+      mentions.push(rule);
     }
   }
 
-  return null;
+  // Ranked, so the winner is the same rule the whole-citation walk used to
+  // return and the aggregate's tiebreak is this tier's own.
+  const [winner, ...rest] = mentions.toSorted(compareRulePrecedence);
+  if (!winner) {
+    return null;
+  }
+
+  return {
+    polarity: aggregateMentionPolarities([
+      winner.polarity,
+      ...rest.map((rule) => rule.polarity),
+    ]),
+    ruleId: winner.id,
+    confidence: winner.confidence,
+  };
 };
 
 /**
@@ -257,8 +283,9 @@ export const selectRuleMatch = (
  *
  * Exported so a caller classifying a batch of citations against one
  * language pays the read once and then matches in memory with
- * {@link selectRuleMatch}, instead of going through {@link matchRule} per
- * citation and relying on a cache to hide the difference.
+ * {@link selectCitationPolarity}, instead of going through
+ * {@link matchRule} per citation and relying on a cache to hide the
+ * difference.
  */
 export const loadRules = async (
   language: string,
@@ -293,19 +320,18 @@ export const loadRules = async (
 };
 
 /**
- * Match a citation context against all active rules for a language.
+ * Match a citation's mentions against all active rules for a language.
  *
- * Rules are held in `compareRulePrecedence` order, so the first match is the
- * highest-precedence match rather than whichever rule happened to be read
- * first. Returns null when nothing matches.
+ * The read, then {@link selectCitationPolarity}. Returns null when no rule
+ * reads any mention.
  */
 export const matchRule = async (
   contexts: string | readonly string[],
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,
-): Promise<RuleMatch | null> =>
-  selectRuleMatch(await loadRules(language, scopedDb, cache), contexts);
+): Promise<CitationPolarityVerdict | null> =>
+  selectCitationPolarity(await loadRules(language, scopedDb, cache), contexts);
 
 /**
  * Record that a rule fired.

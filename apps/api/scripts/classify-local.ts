@@ -168,6 +168,7 @@ const POLARITY_COLORS = {
   supportive: "\u001b[36m", // cyan
   neutral: "\u001b[33m", // yellow
   negative: "\u001b[31m", // red
+  mixed: "\u001b[35m", // magenta
   unknown: "\u001b[90m", // gray
 } as const satisfies Record<Polarity, string>;
 const RESET = "\u001b[0m";

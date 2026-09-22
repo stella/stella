@@ -40,11 +40,14 @@ export type CitationTreatment = DecisionCitation["treatment"];
 
 /**
  * Display order: the treatment a reader must not miss comes first, and the
- * absence of a reading comes last. Total over the API's union, so a new
- * treatment fails typecheck here rather than rendering unlabelled.
+ * absence of a reading comes last. `mixed` follows `negative` because it
+ * carries a departure of its own, though not a plain one. Total over the
+ * API's union, so a new treatment fails typecheck here rather than rendering
+ * unlabelled.
  */
 export const CITATION_TREATMENT_ORDER = [
   "negative",
+  "mixed",
   "neutral",
   "positive",
   "supportive",
@@ -63,6 +66,7 @@ type MissingFromOrder = Exclude<
 
 export const CITATION_TREATMENT_LABEL = {
   negative: "caseLaw.citation.treatment.negative",
+  mixed: "caseLaw.citation.treatment.mixed",
   neutral: "caseLaw.citation.treatment.neutral",
   positive: "caseLaw.citation.treatment.positive",
   supportive: "caseLaw.citation.treatment.supportive",
@@ -84,10 +88,13 @@ export const CITATION_TREATMENT_LABEL = {
  *
  * Red against green is the colour-blind reader's hard pair, so both graphics
  * hatch negative on top of the colour (`CitationNegativeHatch`) and every
- * count carries its label: colour is never the only thing that says it.
+ * count carries its label: colour is never the only thing that says it. It is
+ * also why `mixed` takes `warning`, where a third green or a second red would
+ * read as one more grade of the neighbour it is not.
  */
 export const CITATION_TREATMENT_FILL = {
   negative: "fill-destructive",
+  mixed: "fill-warning",
   neutral: "fill-foreground-muted",
   positive: "fill-success",
   supportive: "fill-success/60",
@@ -96,6 +103,7 @@ export const CITATION_TREATMENT_FILL = {
 
 export const CITATION_TREATMENT_DOT = {
   negative: "bg-destructive",
+  mixed: "bg-warning",
   neutral: "bg-foreground-muted",
   positive: "bg-success",
   supportive: "bg-success/60",
@@ -110,13 +118,15 @@ export const CITATION_TREATMENT_DOT = {
  * keeps its own colour and its underline, which is what still marks the
  * reference for a reader who cannot see the tint or is reading it on paper.
  * The vocabulary is the strip's and the chart's: what went against the cited
- * decision is destructive, what stood by it is success.
+ * decision is destructive, what stood by it is success, and what did both is
+ * warning.
  */
 const DECISION_REFERENCE_UNKNOWN_TINT =
   "bg-foreground/6 hover:bg-foreground/10";
 
 const CITATION_TREATMENT_TINT = {
   negative: "bg-destructive/8 hover:bg-destructive/14",
+  mixed: "bg-warning/8 hover:bg-warning/14",
   neutral: DECISION_REFERENCE_UNKNOWN_TINT,
   positive: "bg-success/10 hover:bg-success/16",
   supportive: "bg-success/8 hover:bg-success/14",

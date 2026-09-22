@@ -16,8 +16,9 @@ const WINDOW_CHARS = 200;
  * recital of the line it belongs to, and only then in the sentence that
  * rejects it. Reading the first window alone read the recital and missed the
  * rejection, which is how a velký senát judgment came to be filed as
- * approving the case it overruled. The rule tier reads all of them and the
- * most severe reading wins (see `selectRuleMatch`).
+ * approving the case it overruled. The rule tier reads all of them, and the
+ * readings are collapsed into the citation's one label by
+ * `aggregateMentionPolarities` (see `selectCitationPolarity`).
  *
  * Windows come back composed. Their readers (the kind cues and the polarity
  * rules) match words against them, and both are written with precomposed

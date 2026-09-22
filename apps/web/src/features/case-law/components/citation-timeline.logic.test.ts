@@ -11,6 +11,7 @@ import {
 } from "@/features/case-law/components/citation-timeline.logic";
 
 const counts = ({
+  mixed = 0,
   negative = 0,
   neutral = 0,
   positive = 0,
@@ -18,33 +19,35 @@ const counts = ({
   unclassified = 0,
   year,
 }: {
+  mixed?: number;
   negative?: number;
   neutral?: number;
   positive?: number;
   supportive?: number;
   unclassified?: number;
   year: number;
-}) => ({ negative, neutral, positive, supportive, unclassified, year });
+}) => ({ mixed, negative, neutral, positive, supportive, unclassified, year });
 
 describe("stackColumnSegments", () => {
   test("the stack never exceeds the column and every treatment stays visible", () => {
-    // Five present treatments at 16px: independent rounding plus the 1px
-    // floor would sum to 18 and push the top segment above the strip.
+    // Six present treatments at 16px: independent rounding plus the 1px
+    // floor would sum to 17 and push the top segment above the strip.
     const segments = stackColumnSegments({
       baseline: 16,
       columnHeight: 16,
       counts: counts({
-        negative: 5,
-        neutral: 5,
-        positive: 5,
-        supportive: 5,
-        unclassified: 12,
+        mixed: 3,
+        negative: 3,
+        neutral: 3,
+        positive: 3,
+        supportive: 3,
+        unclassified: 13,
         year: 2020,
       }),
     });
     const stacked = segments.reduce((sum, part) => sum + part.height, 0);
     expect(stacked).toBeLessThanOrEqual(16);
-    expect(segments).toHaveLength(5);
+    expect(segments).toHaveLength(6);
     for (const segment of segments) {
       expect(segment.height).toBeGreaterThanOrEqual(1);
       expect(segment.y).toBeGreaterThanOrEqual(0);
@@ -64,13 +67,15 @@ describe("stackColumnSegments", () => {
   });
 
   test("a year with more treatments than pixels keeps every one of them", () => {
-    // Five treatments scaled to a single pixel: the floor cannot be paid off
+    // Six treatments scaled to a single pixel: the floor cannot be paid off
     // against a 1px column, so the stack settles at one pixel per treatment
-    // rather than overrunning the height it was asked for.
+    // rather than overrunning the height it was asked for. Six treatments is
+    // the ceiling on that overshoot, and the baseline it stands on carries it.
     const segments = stackColumnSegments({
-      baseline: 5,
+      baseline: 6,
       columnHeight: 1,
       counts: counts({
+        mixed: 1,
         negative: 1,
         neutral: 1,
         positive: 1,
@@ -80,8 +85,8 @@ describe("stackColumnSegments", () => {
       }),
     });
     const stacked = segments.reduce((sum, part) => sum + part.height, 0);
-    expect(segments).toHaveLength(5);
-    expect(stacked).toBe(5);
+    expect(segments).toHaveLength(6);
+    expect(stacked).toBe(6);
     for (const segment of segments) {
       expect(segment.height).toBe(1);
       expect(segment.y).toBeGreaterThanOrEqual(0);

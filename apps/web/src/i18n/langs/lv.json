@@ -622,6 +622,7 @@
       "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
       "stripLabel": "Atsauces pa gadiem",
       "treatment": {
+        "mixed": "Pretrunīgs",
         "negative": "Negatīvs",
         "neutral": "Pieminēts",
         "positive": "Apstiprināts",

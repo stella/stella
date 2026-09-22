@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
       "stripLabel": "Viited aastate kaupa",
       "treatment": {
+        "mixed": "Vastuoluline",
         "negative": "Negatiivne",
         "neutral": "Mainitud",
         "positive": "Heaks kiidetud",

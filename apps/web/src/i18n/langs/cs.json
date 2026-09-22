@@ -622,6 +622,7 @@
       "showAll": "{count, plural, one {Zobrazit # rozhodnutí} few {Zobrazit všechna # rozhodnutí} many {Zobrazit všech # rozhodnutí} other {Zobrazit všech # rozhodnutí}}",
       "stripLabel": "Citace podle let",
       "treatment": {
+        "mixed": "Smíšené",
         "negative": "Negativní",
         "neutral": "Zmíněno",
         "positive": "Potvrzeno",

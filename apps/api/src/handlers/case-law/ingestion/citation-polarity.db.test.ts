@@ -253,12 +253,16 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
 /**
  * The shape of an overruling: the case is recited with "srov." as part of
  * the line it belongs to, and rejected a page later. One row is published
- * for it, and the row carries the rejection, because the rule tier reads
- * every mention and the most severe reading wins. Reading the first mention
- * alone is what filed 23 Cdo 5068/2014 as supported by the velký senát
- * judgment that overruled it.
+ * for it, and it carries both readings: the rule tier reads every mention,
+ * and mentions that disagree are stored as `mixed`. Reading the first
+ * mention alone is what filed 23 Cdo 5068/2014 as supported by the velký
+ * senát judgment that departed from it; reading only the severest of the two
+ * lost the reliance the same judgment expressed.
+ *
+ * The row is attributed to the rule that read the departure, which is the
+ * one whose retirement would change the answer.
  */
-test("a case recited and then overruled in one section is published as negative", async () => {
+test("a case recited and then overruled in one section is published as mixed", async () => {
   const recital =
     "Rozhodovací praxe se ustálila v názoru, že ke skutečnostem, které " +
     "nastaly po sjednání smluvní pokuty, nelze přihlížet (srov. rozsudek " +
@@ -301,7 +305,7 @@ test("a case recited and then overruled in one section is published as negative"
       eq(caseLawPolarityRules.id, caseLawCitations.polarityRuleId),
     )
     .where(eq(caseLawCitations.citationText, "sp. zn. 23 Cdo 5068/2014"));
-  expect(row).toEqual({ polarity: "negative", rulePolarity: "negative" });
+  expect(row).toEqual({ polarity: "mixed", rulePolarity: "negative" });
 });
 
 test("a verdict from a rule retired mid-cycle is not published", async () => {

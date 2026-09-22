@@ -65,7 +65,7 @@ import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
-  selectRuleMatch,
+  selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
@@ -582,6 +582,9 @@ type BuildCitationRowsOptions = {
  * matched nothing" value, and inventing one here would empty that queue
  * without classifying anything.
  *
+ * Every mention of the cited decision is read, not the first: see
+ * `selectCitationPolarity` for how the readings become one label.
+ *
  * Cost: one rules read per language per pipeline run where the caller owns a
  * cache, one per decision otherwise, and none at all for a decision that
  * cites nothing. Never one per citation.
@@ -616,7 +619,7 @@ const buildCitationRows = async ({
     });
     const match =
       kind === CITATION_KIND.PRECEDENT && contexts !== null
-        ? selectRuleMatch(rules, contexts)
+        ? selectCitationPolarity(rules, contexts)
         : null;
     return {
       citingDecisionId,

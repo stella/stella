@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  CLASSIFIABLE_POLARITIES,
-  POLARITIES,
-  POLARITY,
-} from "@/api/handlers/case-law/polarity/consts";
-import type { ClassifiablePolarity } from "@/api/handlers/case-law/polarity/consts";
+import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import {
   CITATION_TREATMENTS,
   GRAPH_DIRECTION,
@@ -19,10 +15,21 @@ type AssertEqual<A, B> = [A] extends [B]
     : never
   : never;
 
+/**
+ * Every stored polarity that is a reading of the text. `unknown` is the one
+ * that is not: it is the pipeline's word about itself, so it is the one
+ * stored polarity deliberately without a treatment of its own.
+ */
+type ReadablePolarity = Exclude<Polarity, typeof POLARITY.UNKNOWN>;
+
+const READABLE_POLARITIES = POLARITIES.filter(
+  (polarity): polarity is ReadablePolarity => polarity !== POLARITY.UNKNOWN,
+);
+
 describe("the treatment vocabulary and the polarity domain", () => {
   test("are the same set once `unclassified` is taken out, at compile time", () => {
     const bound: AssertEqual<
-      ClassifiablePolarity,
+      ReadablePolarity,
       Exclude<CitationTreatment, "unclassified">
     > = true;
 
@@ -31,17 +38,15 @@ describe("the treatment vocabulary and the polarity domain", () => {
 
   test("are the same set at run time, in both directions", () => {
     const declared: string[] = [...CITATION_TREATMENTS];
-    const derived: string[] = [...CLASSIFIABLE_POLARITIES, "unclassified"];
+    const derived: string[] = [...READABLE_POLARITIES, "unclassified"];
 
     expect(declared.sort()).toEqual(derived.sort());
   });
 
   test("keep every stored polarity readable as a treatment", () => {
-    // `unknown` is the pipeline's word about itself, so it is the one stored
-    // polarity that is deliberately not a treatment of its own.
     expect(
-      POLARITIES.filter((polarity) => polarity !== POLARITY.UNKNOWN).every(
-        (polarity) => CITATION_TREATMENTS.includes(polarity),
+      READABLE_POLARITIES.every((polarity) =>
+        CITATION_TREATMENTS.includes(polarity),
       ),
     ).toBe(true);
   });

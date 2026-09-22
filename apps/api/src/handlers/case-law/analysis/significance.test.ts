@@ -29,6 +29,7 @@ const facts: CitationGraphFacts = {
     neutral: 0,
     positive: 2,
     supportive: 0,
+    mixed: 0,
     unclassified: 0,
   },
   countsByCourtTier: [

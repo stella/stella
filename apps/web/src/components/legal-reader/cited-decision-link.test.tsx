@@ -56,10 +56,11 @@ describe("CitedDecisionPreview", () => {
       <CitedDecisionPreview decision={decision} onOpen={() => undefined} />,
     );
 
-    expect(markup).not.toContain(messages.caseLaw.citation.treatment.negative);
-    expect(markup).not.toContain(
-      messages.caseLaw.citation.treatment.unclassified,
-    );
+    // Every label, not a chosen few: a treatment added later cannot creep
+    // into a preview that was given none.
+    for (const label of Object.values(messages.caseLaw.citation.treatment)) {
+      expect(markup).not.toContain(label);
+    }
   });
 });
 
