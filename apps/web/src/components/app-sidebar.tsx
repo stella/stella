@@ -1042,6 +1042,15 @@ const MatterItem = ({
   // updates immediately after toggling (the prop may be stale
   // while the popover is open).
   const isPinned = usePinnedStore((s) => s.isPinned(ws.id));
+  const pinAttention = usePinnedStore((s) =>
+    s.pinAttention.type === "pending" && s.pinAttention.matterId === ws.id
+      ? s.pinAttention
+      : null,
+  );
+  const acknowledgePinAttention = usePinnedStore(
+    (s) => s.acknowledgePinAttention,
+  );
+  const [pinFlashSequence, setPinFlashSequence] = useState<number | null>(null);
   const t = useTranslations();
   const { state, setOpen, isMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1116,6 +1125,14 @@ const MatterItem = ({
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
+
+  useExternalSyncEffect(() => {
+    if (!isPinned || pinAttention === null) {
+      return;
+    }
+    setPinFlashSequence(pinAttention.sequence);
+    acknowledgePinAttention(pinAttention.sequence);
+  }, [acknowledgePinAttention, isPinned, pinAttention, ws.id]);
 
   const handleReorder = useLatestCallback(
     (draggedId: string, targetId: string) => {
@@ -1340,7 +1357,7 @@ const MatterItem = ({
         <SidebarMenuButton
           asChild
           className={cn(
-            "py-0 ps-8 group-data-[collapsible=icon]:ps-2",
+            "relative py-0 ps-8 group-data-[collapsible=icon]:ps-2",
             activityIsKnownEmpty ? "pe-12" : "pe-20",
           )}
           tooltip={[
@@ -1352,12 +1369,19 @@ const MatterItem = ({
             .join(" — ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
+            {pinFlashSequence !== null && (
+              <span
+                aria-hidden
+                className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute inset-0 opacity-0 motion-reduce:animate-none"
+                key={pinFlashSequence}
+              />
+            )}
             {/* Collapsed rail: the icon is the whole item, so it stays
                 inside the link (left click navigates) and only right
                 click opens the colour picker. */}
             {isCollapsed && (
               <MatterColorContextPicker
-                className="size-4"
+                className="relative size-4"
                 matter={ws}
                 trigger="contextmenu"
               >
@@ -1367,7 +1391,7 @@ const MatterItem = ({
                 />
               </MatterColorContextPicker>
             )}
-            <span className="flex min-w-0 flex-col">
+            <span className="relative flex min-w-0 flex-col">
               <BidiText as="span" className="truncate">
                 {ws.name}
               </BidiText>
