@@ -562,11 +562,14 @@ export const envApiInvariantViolation = ({
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
     return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
   }
+  // Tests boot with the developer's local .env, so the command may be set
+  // there; only a deployed environment refuses it, and the route that runs it
+  // answers 404 outside development either way.
   if (
     DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined &&
-    nodeEnv !== "development"
+    DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")
   ) {
-    return "DEV_PUBLIC_LAW_CONNECT_COMMAND is dev-only and requires NODE_ENV=development.";
+    return "DEV_PUBLIC_LAW_CONNECT_COMMAND is only supported in local development and tests.";
   }
   if (USE_MOCK_AI && DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
     return "USE_MOCK_AI is only supported in local development and tests.";
