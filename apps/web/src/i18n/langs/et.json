@@ -44,13 +44,6 @@
       "polish": "Viimistle sõnastust"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "Sulge uuendusteade",
-      "message": "Saadaval on uus versioon (v{latest}). Kasutusel on v{installed}.",
-      "refresh": "Värskenda uuendamiseks"
-    }
-  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",

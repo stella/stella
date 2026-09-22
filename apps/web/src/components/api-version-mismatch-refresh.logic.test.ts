@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { shouldRefreshAfterNavigation } from "./api-version-mismatch-banner.logic";
+import { shouldRefreshAfterNavigation } from "./api-version-mismatch-refresh.logic";
 
 describe("version refresh boundary", () => {
-  test("keeps the update user-controlled on the working route", () => {
+  test("defers the reload while the user stays on the working route", () => {
     expect(
       shouldRefreshAfterNavigation({
         currentPathname: "/workspaces/active-matter",

@@ -44,13 +44,6 @@
       "polish": "Vylepšiť znenie"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "Zavrieť oznámenie o aktualizácii",
-      "message": "Je dostupná nová verzia (v{latest}). Používate v{installed}.",
-      "refresh": "Obnoviť a aktualizovať"
-    }
-  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",

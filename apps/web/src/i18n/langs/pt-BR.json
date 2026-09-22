@@ -44,13 +44,6 @@
       "polish": "Aprimorar a redação"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "Ignorar aviso de atualização",
-      "message": "Uma nova versão está disponível (v{latest}). Você está em v{installed}.",
-      "refresh": "Atualizar agora"
-    }
-  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",

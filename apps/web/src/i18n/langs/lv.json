@@ -44,13 +44,6 @@
       "polish": "Uzlabot formulējumu"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "Noraidīt atjauninājuma paziņojumu",
-      "message": "Ir pieejama jauna versija (v{latest}). Jūs izmantojat v{installed}.",
-      "refresh": "Pārlādēt, lai atjauninātu"
-    }
-  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",

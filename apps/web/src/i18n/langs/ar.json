@@ -44,13 +44,6 @@
       "polish": "تحسين الصياغة"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "تجاهُل إشعار التحديث",
-      "message": "يتوفر إصدار جديد (الإصدار {latest}). أنت على الإصدار {installed}.",
-      "refresh": "أعد التحميل للتحديث"
-    }
-  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",

@@ -49,7 +49,6 @@
     "account.sessions.currentSession",
     "agentClaim.approve",
     "agentClaim.error",
-    "app.versionMismatch.dismiss",
     "appearance.calendar",
     "auth.continueWithEmail",
     "billing.approve",

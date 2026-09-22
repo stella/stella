@@ -44,13 +44,6 @@
       "polish": "Patobulinti formuluotę"
     }
   },
-  "app": {
-    "versionMismatch": {
-      "dismiss": "Atmesti atnaujinimo pranešimą",
-      "message": "Yra nauja versija (v{latest}). Naudojate v{installed}.",
-      "refresh": "Atnaujinti įkeliant iš naujo"
-    }
-  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
