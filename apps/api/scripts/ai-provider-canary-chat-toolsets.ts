@@ -16,6 +16,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -162,6 +163,12 @@ const buildChatToolsForScenario = ({
     memoryEnabled: true,
     organizationId,
     orgAIConfig,
+    // A matters scope registers both past-chat tools, so the approval-gated
+    // wider search also runs through the provider matrix.
+    pastChatScope: {
+      type: PAST_CHAT_SCOPE_TYPE.matters,
+      workspaceIds: [workspaceId],
+    },
     pinServerValidatedWorkspaceId: () => true,
     recordAuditEvent: inertAuditRecorder,
     refRegistry: createChatRefRegistry(),

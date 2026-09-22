@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -9,7 +9,6 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { ChatMessageRole } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
@@ -154,11 +153,18 @@ export const createPastChatTools = ({
     searchScope: PastChatScope;
   }) => {
     const normalizedQuery = query.trim();
+    const hint =
+      searchScope.type === PAST_CHAT_SCOPE_TYPE.matters
+        ? MATTER_SCOPE_HINT
+        : null;
+    // The schema requires one character, so only a whitespace query lands here.
     if (!normalizedQuery) {
-      throw new ChatToolError({
-        kind: "invalid-input",
-        message: "Past-chat search query must not be empty.",
-      });
+      return {
+        query: normalizedQuery,
+        scope: searchScope.type,
+        hint,
+        results: [],
+      };
     }
 
     const tsQuery = buildSearchTsQuery(normalizedQuery);
@@ -191,23 +197,13 @@ export const createPastChatTools = ({
         LIMIT ${limit ?? LIMITS.chatHistorySearchPageSizeDefault}
       `),
     );
-
-    if (Result.isError(result)) {
-      throw new ChatToolError({
-        kind: "server-defect",
-        message: "Failed to search past chats.",
-        cause: result.error,
-      });
-    }
+    const rows = result.unwrap("Failed to search past chats.");
 
     return {
       query: normalizedQuery,
       scope: searchScope.type,
-      hint:
-        searchScope.type === PAST_CHAT_SCOPE_TYPE.matters
-          ? MATTER_SCOPE_HINT
-          : null,
-      results: result.value.map((row) => {
+      hint,
+      results: rows.map((row) => {
         // Registering every matter the source chat embeds folds them into
         // this thread's data scope at turn end, so copied content cannot
         // outlive the user's access to its matter.

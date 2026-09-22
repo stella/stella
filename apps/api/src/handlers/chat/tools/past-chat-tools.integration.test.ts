@@ -110,8 +110,10 @@ beforeAll(async () => {
                 typeof row === "object" &&
                 row !== null &&
                 "createdAt" in row &&
-                typeof row.createdAt === "string"
-                  ? Object.assign(row, { createdAt: new Date(row.createdAt) })
+                typeof row["createdAt"] === "string"
+                  ? Object.assign(row, {
+                      createdAt: new Date(row["createdAt"]),
+                    })
                   : row,
               ),
           }),
@@ -157,11 +159,9 @@ const toolsFor = (scope: PastChatScope) => {
   return { refRegistry, tools };
 };
 
-const runSearch = async (
-  tool: ReturnType<
-    typeof toolsFor
-  >["tools"][typeof SEARCH_PAST_CHATS_TOOL_NAME],
-) => {
+type PastChatTools = ReturnType<typeof toolsFor>["tools"];
+
+const runSearch = async (tool: PastChatTools[keyof PastChatTools]) => {
   const output = await tool.execute?.(
     { query: TERM, limit: 10 },
     asTestRaw<Parameters<NonNullable<typeof tool.execute>>[1]>({}),
