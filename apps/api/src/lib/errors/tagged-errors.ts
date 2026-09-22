@@ -265,6 +265,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   IDENTIFIER_COUNT: "identifier-count",
   SOURCE_DOCUMENT_ID: "source-document-id",
   SOURCE_DOCUMENT_ID_LENGTH: "source-document-id-length",
+  VALUE_LIST: "value-list",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -274,7 +275,7 @@ export type UnpersistableDecisionField =
  * A publisher's row carries a field the corpus cannot store: an identifier
  * past the stored length or with no visible content, more identifiers than
  * one decision may hold, a document identity that does not survive
- * sanitization.
+ * sanitization, a list-valued field sent in a shape that is not a list.
  *
  * Tagged, because this is the ingestion boundary's own refusal and callers
  * act on it. The reconciliation engine parks a failed item under

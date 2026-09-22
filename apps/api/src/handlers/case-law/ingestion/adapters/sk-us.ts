@@ -87,11 +87,13 @@ import {
 import {
   AdapterFetchError,
   FetchBoundaryError,
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { logger } from "@/api/lib/observability/logger";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -208,54 +210,64 @@ const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
  * what the key's name suggests. `mkDifferentView` is a single value from a
  * three-entry vocabulary, and `mkTypeOfProposer` is one value on a decision
  * and several on an archived one.
+ *
+ * The service answers every key on every row and sends `null` for the ones
+ * a corpus leaves empty, so each value is nullable as well as optional. The
+ * three keys that are one value on some rows and several on others are
+ * `unknown` here: nothing upstream validates them, and only
+ * {@link publisherList} may read them.
  */
+type SearchDocumentFields = {
+  documentId: string;
+  docType: string;
+  title: string;
+  content: string;
+  index: number;
+  extension: string;
+  size: number;
+  contentType: string;
+  mkDocumentType: string;
+  mkRSAPNumberOfFile: string;
+  mkRVPNumberOfFile: string;
+  mkECLI: string;
+  mkDateOfDecision: string;
+  mkDateOfLegalForce: string;
+  mkPublicationDate: string;
+  mkFormOfDecision: string;
+  mkTypeOfDecision: string[];
+  mkTypeOfProceeding: string;
+  mkTypeOfNegotiation: string[];
+  mkDecisionInTermsOf: string[];
+  mkDecisionInTermsOfForSort: string;
+  mkResultOfNegotiation: string[];
+  mkCause: string[];
+  mkJudgeReporter: string;
+  mkDifferentView: string;
+  mkWordRegister: string[];
+  mkMaterialRegister: string[];
+  mkComplainedLegalRegulation: unknown;
+  mkClarificationOfLegalRegulation: unknown;
+  mkFileReference: string[];
+  mkReferences: string[];
+  mkTypeOfProposer: unknown;
+  mkAffectedLegalRegulation: string;
+  mkUnderage: string;
+  mkIncludeToZnaU: boolean;
+  mkEntryDate: string;
+  mkFormOfEntry: string;
+  mkTypeOfEntry: string;
+  mkParentIdDecision: string;
+  mkLawReportsNumber: string | number;
+  mkVolumeOfLawReports: string | number;
+  mkYearOfLawReports: number;
+  mkTimePeriodZNaU: string;
+  mkClauseTitle: string;
+  mkClauseText: string;
+  mkWebTitle: string;
+};
+
 type SearchDocument = {
-  documentId?: string;
-  docType?: string;
-  title?: string;
-  content?: string | null;
-  index?: number;
-  extension?: string | null;
-  size?: number | null;
-  contentType?: string | null;
-  mkDocumentType?: string;
-  mkRSAPNumberOfFile?: string;
-  mkRVPNumberOfFile?: string;
-  mkECLI?: string;
-  mkDateOfDecision?: string;
-  mkDateOfLegalForce?: string;
-  mkPublicationDate?: string;
-  mkFormOfDecision?: string;
-  mkTypeOfDecision?: string[];
-  mkTypeOfProceeding?: string;
-  mkTypeOfNegotiation?: string[];
-  mkDecisionInTermsOf?: string[];
-  mkDecisionInTermsOfForSort?: string;
-  mkResultOfNegotiation?: string[];
-  mkCause?: string[];
-  mkJudgeReporter?: string;
-  mkDifferentView?: string;
-  mkWordRegister?: string[];
-  mkMaterialRegister?: string[];
-  mkComplainedLegalRegulation?: string | string[];
-  mkClarificationOfLegalRegulation?: string | string[];
-  mkFileReference?: string[];
-  mkReferences?: string[];
-  mkTypeOfProposer?: string | string[];
-  mkAffectedLegalRegulation?: string;
-  mkUnderage?: string;
-  mkIncludeToZnaU?: boolean;
-  mkEntryDate?: string;
-  mkFormOfEntry?: string;
-  mkTypeOfEntry?: string;
-  mkParentIdDecision?: string;
-  mkLawReportsNumber?: string | number;
-  mkVolumeOfLawReports?: string | number;
-  mkYearOfLawReports?: number;
-  mkTimePeriodZNaU?: string;
-  mkClauseTitle?: string;
-  mkClauseText?: string;
-  mkWebTitle?: string;
+  [Key in keyof SearchDocumentFields]?: SearchDocumentFields[Key] | null;
 };
 
 type SearchResponse = {
@@ -283,7 +295,7 @@ const isSearchResponse = (value: unknown): value is SearchResponse =>
  * Parse the API's date format "MM/DD/YYYY HH:mm:ss" to
  * ISO "YYYY-MM-DD".
  */
-const parseApiDate = (raw: string | undefined): string | undefined => {
+const parseApiDate = (raw: string | null | undefined): string | undefined => {
   if (!raw) {
     return undefined;
   }
@@ -635,16 +647,41 @@ const courtFileHeader = (
   );
 };
 
-const dedupe = (arr: readonly string[] | undefined): string[] =>
+const dedupe = (arr: readonly string[] | null | undefined): string[] =>
   arr ? [...new Set(arr)] : [];
 
-/** A field the service sends as one value on a decision and several on an archived one. */
-const asList = (value: string | readonly string[] | undefined): string[] => {
-  if (value === undefined) {
+/** The keys the service sends as one value on a decision and several on an archived one. */
+type PublisherListField =
+  | "mkComplainedLegalRegulation"
+  | "mkClarificationOfLegalRegulation"
+  | "mkTypeOfProposer";
+
+/**
+ * One of those keys as a list. Absent and `null` are the service stating no
+ * value; any shape other than a string or a list of strings is refused as the
+ * field it is, rather than left to a spread that throws a bare `TypeError`.
+ */
+const publisherList = (
+  doc: SearchDocument,
+  field: PublisherListField,
+): string[] => {
+  const value = doc[field];
+  if (value === undefined || value === null) {
     return [];
   }
-  return typeof value === "string" ? [value] : [...value];
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (isUnknownArray(value) && value.every(isString)) {
+    return [...value];
+  }
+  throw new UnpersistableDecisionFieldError({
+    message: `SK ÚS ${field} is neither a value nor a list of values`,
+    field: UNPERSISTABLE_DECISION_FIELDS.VALUE_LIST,
+  });
 };
+
+const isString = (value: unknown): value is string => typeof value === "string";
 
 /**
  * The two fields an item must state for this adapter to keep it: the docket it
@@ -748,6 +785,10 @@ const skUsJudges = ({
     })),
   ].filter(({ nameAsPrinted }) => nameAsPrinted.trim().length > 0);
 
+/** The rapporteur the row names; the service sends `null` on a row without one. */
+const skUsRapporteurs = (doc: SearchDocument): string[] =>
+  typeof doc.mkJudgeReporter === "string" ? [doc.mkJudgeReporter] : [];
+
 /**
  * The court's own statement that a collection entry has no legal sentence.
  *
@@ -812,12 +853,15 @@ const skUsMetadata = ({
   dissentingOpinion: doc.mkDifferentView,
   proceedingSubject: dedupe(doc.mkWordRegister),
   subjectIndex: dedupe(doc.mkMaterialRegister),
-  challengedLegislation: asList(doc.mkComplainedLegalRegulation),
-  clarificationOfLegalRegulation: asList(doc.mkClarificationOfLegalRegulation),
+  challengedLegislation: publisherList(doc, "mkComplainedLegalRegulation"),
+  clarificationOfLegalRegulation: publisherList(
+    doc,
+    "mkClarificationOfLegalRegulation",
+  ),
   legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
   publicationDate: parseApiDate(doc.mkPublicationDate),
   fileReference: doc.mkFileReference,
-  typeOfProposer: asList(doc.mkTypeOfProposer),
+  typeOfProposer: publisherList(doc, "mkTypeOfProposer"),
   affectedLegalRegulation: doc.mkAffectedLegalRegulation,
   underage: doc.mkUnderage,
   includeToZnaU: doc.mkIncludeToZnaU,
@@ -869,7 +913,7 @@ export const buildSkUsDecision = async (
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision?.toLowerCase();
-  const ecli = doc.mkECLI;
+  const ecli = doc.mkECLI ?? undefined;
   const court = "Ústavný súd SR";
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
 
@@ -878,14 +922,14 @@ export const buildSkUsDecision = async (
     decisionDate === undefined
       ? undefined
       : await page.facets({ caseNumber, decisionDate }, signal);
+  const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
   const courtFileJson =
-    doc.mkRVPNumberOfFile === undefined
+    rvpNumber === undefined
       ? undefined
-      : await page.courtFile(doc.mkRVPNumberOfFile, signal);
+      : await page.courtFile(rvpNumber, signal);
   const pdfBytes = await fetchPdfBytes(documentId, signal);
 
-  const rapporteurs =
-    doc.mkJudgeReporter === undefined ? [] : [doc.mkJudgeReporter];
+  const rapporteurs = skUsRapporteurs(doc);
   const dissenters = facetValues(facetsJson, "mkDifferentViewJudges");
   const codelist = await page.codelist(signal);
 
@@ -1909,7 +1953,7 @@ const reparseStoredRaw = (
       : parseSkUsDocumentXhtml({
           xhtml: documentXhtml,
           caseNumber: fields.caseNumber,
-          ecli: listing.mkECLI,
+          ecli: listing.mkECLI ?? undefined,
           court,
           decisionDate,
           decisionType,
@@ -1921,7 +1965,7 @@ const reparseStoredRaw = (
     result: {
       caseNumber: fields.caseNumber,
       sourceDocumentId: fields.documentId,
-      ecli: listing.mkECLI,
+      ecli: listing.mkECLI ?? undefined,
       court,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
       language: SK_US_LANGUAGE,
@@ -1929,10 +1973,7 @@ const reparseStoredRaw = (
       decisionType,
       ...(parsed === null ? {} : { fulltext: parsed.fulltext }),
       judges: skUsJudges({
-        rapporteurs:
-          listing.mkJudgeReporter === undefined
-            ? []
-            : [listing.mkJudgeReporter],
+        rapporteurs: skUsRapporteurs(listing),
         dissenters: facetValues(facetsJson, "mkDifferentViewJudges"),
       }),
       sourceUrl: documentUrl,
@@ -2150,6 +2191,16 @@ export const skUsAdapter = defineSourceAdapter({
             if (error instanceof DOMException) {
               throw error;
             }
+            // The cursor moves past this document and the reconciliation walk
+            // is what recovers it; reported so a build failing on every row
+            // is not read as a page with nothing on it.
+            logger.warn("case_law.ingestion.item_build_failed", {
+              adapterKey: ADAPTER_KEYS.SK_US,
+              ...(typeof doc.documentId === "string"
+                ? { documentId: doc.documentId }
+                : {}),
+              "error.type": errorTag(error),
+            });
             continue;
           }
         }
