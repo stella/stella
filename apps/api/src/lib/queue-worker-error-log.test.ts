@@ -19,6 +19,31 @@ const CONNECT_TIMEOUT = "ERR_REDIS_CONNECTION_TIMEOUT";
 const POLL_BLIP = "ERR_REDIS_INVALID_RESPONSE";
 const START = new Date("2026-08-27T17:54:00.000Z");
 
+const at = (elapsedMs: number): void => {
+  setSystemTime(new Date(START.getTime() + elapsedMs));
+};
+
+type StreamOptions = {
+  everyMs?: number;
+  fromMs: number;
+  toMs: number;
+};
+
+/**
+ * Drive one worker the way a Redis disruption does: a failed poll every few
+ * seconds for as long as it lasts. The gaps stay under the log interval, so
+ * the whole run is a single episode.
+ */
+const streamTransients = (
+  log: (error: unknown) => void,
+  { everyMs = 10_000, fromMs, toMs }: StreamOptions,
+): void => {
+  for (let elapsed = fromMs; elapsed <= toMs; elapsed += everyMs) {
+    at(elapsed);
+    log(withCode(TRANSIENT));
+  }
+};
+
 describe("createQueueWorkerErrorLogger", () => {
   let logs: RecordingLogger;
 
@@ -32,19 +57,21 @@ describe("createQueueWorkerErrorLogger", () => {
     setSystemTime();
   });
 
-  test("logs a non-transient worker error on every occurrence", () => {
+  test("logs a non-transient worker error as an error on every occurrence", () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
     log(withCode("ECONNREFUSED"));
     log(withCode("ECONNREFUSED"));
 
-    const errors = logs.at("ERROR");
-    expect(errors).toHaveLength(2);
-    expect(errors.at(0)?.message).toBe("file_derivative.worker_error");
-    // A defect carries no tally: it was not suppressed, so there is nothing
-    // to count.
+    // A defect is not graded: it is an error from the first occurrence, with
+    // no grace and no tally, because it was never suppressed.
+    expect(logs.records.map((record) => record.severityText)).toEqual([
+      "ERROR",
+      "ERROR",
+    ]);
+    expect(logs.records.at(0)?.message).toBe("file_derivative.worker_error");
     expect(
-      errors.at(0)?.attributes?.["occurrencesSinceLastLog"],
+      logs.records.at(0)?.attributes?.["occurrencesSinceLastLog"],
     ).toBeUndefined();
   });
 
@@ -58,75 +85,139 @@ describe("createQueueWorkerErrorLogger", () => {
         log(withCode(code));
       }
 
-      expect(logs.at("ERROR")).toHaveLength(1);
-      expect(
-        logs.at("ERROR").at(0)?.attributes?.["occurrencesSinceLastLog"],
-      ).toBe("1");
+      expect(logs.records).toHaveLength(1);
+      expect(logs.records.at(0)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+        "1",
+      );
 
-      setSystemTime(new Date(START.getTime() + 60_000));
+      at(60_000);
       log(withCode(code));
 
-      expect(logs.at("ERROR")).toHaveLength(2);
+      expect(logs.records).toHaveLength(2);
       // The 49,999 swallowed above plus this one, and the count restarts from
       // the previous line rather than accumulating.
-      expect(
-        logs.at("ERROR").at(1)?.attributes?.["occurrencesSinceLastLog"],
-      ).toBe("50000");
+      expect(logs.records.at(1)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+        "50000",
+      );
 
-      setSystemTime(new Date(START.getTime() + 120_000));
+      at(120_000);
       log(withCode(code));
 
-      expect(logs.at("ERROR")).toHaveLength(3);
-      expect(
-        logs.at("ERROR").at(2)?.attributes?.["occurrencesSinceLastLog"],
-      ).toBe("1");
+      expect(logs.records).toHaveLength(3);
+      expect(logs.records.at(2)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+        "1",
+      );
     },
   );
 
-  test("flushes the tally when the disruption stops inside the interval", async () => {
+  test("flushes the tally at warning when the disruption stops inside the interval", async () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
     log(withCode(TRANSIENT));
-    expect(logs.at("ERROR")).toHaveLength(1);
-    expect(
-      logs.at("ERROR").at(0)?.attributes?.["occurrencesSinceLastLog"],
-    ).toBe("1");
+    expect(logs.records).toHaveLength(1);
+    expect(logs.records.at(0)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+      "1",
+    );
 
     // Land the burst just short of the boundary so the trailing flush is
     // scheduled a few ms out and a real timer can run it inside the test.
-    setSystemTime(new Date(START.getTime() + 59_990));
+    at(59_990);
     for (let i = 0; i < 50_000; i += 1) {
       log(withCode(TRANSIENT));
     }
 
     // Nothing more arrives: without the trailing flush these 50,000 would be
     // stranded and the episode would read as a single occurrence.
-    expect(logs.at("ERROR")).toHaveLength(1);
+    expect(logs.records).toHaveLength(1);
 
     await Bun.sleep(50);
 
-    expect(logs.at("ERROR")).toHaveLength(2);
-    expect(
-      logs.at("ERROR").at(1)?.attributes?.["occurrencesSinceLastLog"],
-    ).toBe("50000");
+    expect(logs.records).toHaveLength(2);
+    expect(logs.records.at(1)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+      "50000",
+    );
+    // The episode healed inside the grace, so both the leading line and the
+    // flush that closes it are warnings, even though the flush itself runs a
+    // whole interval after the last occurrence.
+    expect(logs.records.map((record) => record.severityText)).toEqual([
+      "WARN",
+      "WARN",
+    ]);
+    expect(logs.at("ERROR")).toHaveLength(0);
+  });
+
+  test("grades a trailing flush by the episode it summarizes, not by when it runs", async () => {
+    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+
+    log(withCode(TRANSIENT));
+    at(60_000);
+    log(withCode(TRANSIENT));
+    // Last failure just inside the grace, with the flush scheduled a few ms
+    // out; the clock then moves past the grace while nothing is reported.
+    at(119_990);
+    log(withCode(TRANSIENT));
+    at(130_000);
+
+    await Bun.sleep(50);
+
+    expect(logs.records.map((record) => record.severityText)).toEqual([
+      "WARN",
+      "WARN",
+      "WARN",
+    ]);
+    expect(logs.records.at(2)?.attributes?.["episodeAgeMs"]).toBe("119990");
   });
 
   test("does not flush an interval that recorded nothing", async () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
     log(withCode(TRANSIENT));
-    setSystemTime(new Date(START.getTime() + 59_990));
+    at(59_990);
     log(withCode(TRANSIENT));
 
     await Bun.sleep(50);
-    expect(logs.at("ERROR")).toHaveLength(2);
+    expect(logs.records).toHaveLength(2);
 
     // The flush already drained the count, so no further line is owed.
     await Bun.sleep(50);
-    expect(logs.at("ERROR")).toHaveLength(2);
+    expect(logs.records).toHaveLength(2);
   });
 
-  test("keeps severity and the connection fields on a suppressed report", () => {
+  test("escalates to an error once the episode outlasts the grace", () => {
+    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+
+    streamTransients(log, { fromMs: 0, toMs: 150_000 });
+
+    // One line per interval: the onset, one still inside the grace, and one
+    // past it, which is the line the error-rate signal is built on.
+    expect(logs.records.map((record) => record.severityText)).toEqual([
+      "WARN",
+      "WARN",
+      "ERROR",
+    ]);
+    expect(
+      logs.records.map((record) => record.attributes?.["episodeAgeMs"]),
+    ).toEqual(["0", "60000", "120000"]);
+  });
+
+  test("starts a fresh grace window after the worker goes quiet", () => {
+    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+
+    streamTransients(log, { fromMs: 0, toMs: 150_000 });
+    expect(logs.at("ERROR")).toHaveLength(1);
+
+    // Quiet for longer than the log interval: the worker was polling
+    // successfully again, so this failure opens a new episode rather than
+    // inheriting the escalated one.
+    at(400_000);
+    log(withCode(TRANSIENT));
+
+    const last = logs.records.at(-1);
+    expect(last?.severityText).toBe("WARN");
+    expect(last?.attributes?.["episodeAgeMs"]).toBe("0");
+  });
+
+  test("keeps the connection fields on a suppressed report", () => {
     const log = createQueueWorkerErrorLogger(
       "document_review_run.worker_error",
       {
@@ -140,7 +231,7 @@ describe("createQueueWorkerErrorLogger", () => {
 
     expect(logs.records).toHaveLength(1);
     expect(logs.records.at(0)).toMatchObject({
-      severityText: "ERROR",
+      severityText: "WARN",
       message: "document_review_run.worker_error",
       attributes: {
         "error.code": TRANSIENT,
@@ -159,7 +250,7 @@ describe("createQueueWorkerErrorLogger", () => {
     first(withCode(TRANSIENT));
     second(withCode(TRANSIENT));
 
-    expect(logs.at("ERROR").map((record) => record.message)).toEqual([
+    expect(logs.records.map((record) => record.message)).toEqual([
       "flow.worker_error",
       "bilingual_run.worker_error",
     ]);
@@ -172,12 +263,14 @@ describe("createQueueWorkerErrorLogger", () => {
     log(withCode(TRANSIENT));
     log(new Error("worker crashed"));
 
-    // Two transients inside one interval yield one line; the defect is never
-    // withheld, because only the codes classified as transient are counted.
+    // Two transients inside one interval yield one warning; the defect is
+    // neither withheld nor downgraded, because only the codes classified as
+    // transient are graded.
+    expect(logs.at("WARN")).toHaveLength(1);
     const errors = logs.at("ERROR");
-    expect(errors).toHaveLength(2);
+    expect(errors).toHaveLength(1);
     expect(
-      errors.at(1)?.attributes?.["occurrencesSinceLastLog"],
+      errors.at(0)?.attributes?.["occurrencesSinceLastLog"],
     ).toBeUndefined();
   });
 });
