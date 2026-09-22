@@ -1,15 +1,13 @@
 import { useRef, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
-import { panic, Result, TaggedError } from "better-result";
-import { useTranslations } from "use-intl";
+import { Result, TaggedError } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
-import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth";
@@ -32,19 +30,24 @@ import {
   runDevQuickStart,
 } from "./dev-quick-start.logic";
 
-const QUICK_START_MATTER_COUNT = 10;
-const MATTER_IMPORT_POLL_INTERVAL_MS = 1000;
-const MATTER_IMPORT_MAX_POLLS = 15 * 60;
+const QUICK_START_MATTER_COUNT = 3;
 const QUICK_START_INCOMPLETE_MATTER_MODE = "replace";
 
-const PHASE_LABEL_KEYS = {
-  [DEV_QUICK_START_PHASE.authenticate]:
-    "auth.devQuickStart.phase.authenticating",
-  [DEV_QUICK_START_PHASE.organization]:
-    "auth.devQuickStart.phase.creatingOrganization",
-  [DEV_QUICK_START_PHASE.skills]: "auth.devQuickStart.phase.addingSkills",
-  [DEV_QUICK_START_PHASE.matters]: "auth.devQuickStart.phase.startingImport",
-} as const satisfies Record<DevQuickStartPhase, TranslationKey>;
+const PHASE_LABELS = {
+  [DEV_QUICK_START_PHASE.authenticate]: "Signing in",
+  [DEV_QUICK_START_PHASE.organization]: "Creating organization",
+  [DEV_QUICK_START_PHASE.skills]: "Adding skills",
+  [DEV_QUICK_START_PHASE.matters]: "Starting LAB matter import",
+} as const satisfies Record<DevQuickStartPhase, string>;
+
+const DEV_QUICK_START_COPY = {
+  button: "Dev quick start",
+  errorFallback: "Check the API log and try again.",
+  errorTitle: "Dev quick start failed",
+  successDescription:
+    "The import of 3 Harvey LAB matters has started and will continue in the background.",
+  successTitle: "Dev setup ready",
+} as const;
 
 const DEV_QUICK_START_ERROR = {
   matterImport: "matterImport",
@@ -55,12 +58,13 @@ const DEV_QUICK_START_ERROR = {
 type DevQuickStartErrorCode =
   (typeof DEV_QUICK_START_ERROR)[keyof typeof DEV_QUICK_START_ERROR];
 
-const ERROR_MESSAGE_KEYS = {
-  [DEV_QUICK_START_ERROR.matterImport]: "auth.devQuickStart.error.matterImport",
+const ERROR_MESSAGES = {
+  [DEV_QUICK_START_ERROR.matterImport]:
+    "The Harvey LAB import could not start.",
   [DEV_QUICK_START_ERROR.otpUnavailable]:
-    "auth.devQuickStart.error.otpUnavailable",
-  [DEV_QUICK_START_ERROR.seed]: "auth.devQuickStart.error.fallback",
-} as const satisfies Record<DevQuickStartErrorCode, TranslationKey>;
+    "The development OTP was not available.",
+  [DEV_QUICK_START_ERROR.seed]: DEV_QUICK_START_COPY.errorFallback,
+} as const satisfies Record<DevQuickStartErrorCode, string>;
 
 class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   code: DevQuickStartErrorCode;
@@ -146,53 +150,7 @@ const seedSkills = async (organizationId: string) => {
   }
 };
 
-const waitForMatterImport = async (
-  jobId: string,
-  remainingPolls = MATTER_IMPORT_MAX_POLLS,
-): Promise<void> => {
-  if (remainingPolls === 0) {
-    throw new DevQuickStartError({
-      code: DEV_QUICK_START_ERROR.matterImport,
-      message: "The Harvey LAB import did not finish before the timeout.",
-    });
-  }
-
-  const { data, error } = await api.dev["seed-firm-knowledge"].get({
-    query: { jobId },
-  });
-  if (error !== null || data instanceof Response) {
-    throw new DevQuickStartError({
-      code: DEV_QUICK_START_ERROR.matterImport,
-      message: "The Harvey LAB import status was unavailable.",
-    });
-  }
-
-  switch (data.status) {
-    case "failed":
-      throw new DevQuickStartError({
-        code: DEV_QUICK_START_ERROR.matterImport,
-        message: data.message,
-      });
-    case "idle":
-      throw new DevQuickStartError({
-        code: DEV_QUICK_START_ERROR.matterImport,
-        message: "The Harvey LAB import stopped before completion.",
-      });
-    case "running":
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, MATTER_IMPORT_POLL_INTERVAL_MS);
-      });
-      await waitForMatterImport(jobId, remainingPolls - 1);
-      return undefined;
-    case "succeeded":
-      return undefined;
-    default:
-      data satisfies never;
-      return panic(`Unhandled data: ${String(data)}`);
-  }
-};
-
-const seedMatters = async (
+const startMatterImport = async (
   { selectionSeed }: DevQuickStartIdentity,
   organizationId: string,
 ) => {
@@ -215,18 +173,16 @@ const seedMatters = async (
       message: "The Harvey LAB import could not start.",
     });
   }
-
-  await waitForMatterImport(response.data.jobId);
 };
 
 export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
-  const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
   const attemptRef = useRef<DevQuickStartAttempt | null>(null);
   const runningRef = useRef(false);
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
+  const currentPhaseLabel = phase === null ? null : PHASE_LABELS[phase];
 
   const runQuickStart = async () => {
     const attempt =
@@ -250,12 +206,12 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       setPhase(null);
       analytics.captureError(result.error);
       stellaToast.add({
-        title: t("auth.devQuickStart.error.title"),
+        title: DEV_QUICK_START_COPY.errorTitle,
         description: DevQuickStartError.is(result.error)
-          ? t(ERROR_MESSAGE_KEYS[result.error.code])
+          ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
-              t("auth.devQuickStart.error.fallback"),
+              DEV_QUICK_START_COPY.errorFallback,
             ),
         type: "error",
       });
@@ -311,9 +267,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       type="button"
       variant="outline"
     >
-      {phase === null
-        ? t("auth.devQuickStart.button")
-        : t(PHASE_LABEL_KEYS[phase])}
+      {currentPhaseLabel ?? DEV_QUICK_START_COPY.button}
     </Button>
   );
 };
@@ -323,12 +277,12 @@ export const DevQuickStartContinuation = ({
 }: {
   redirectTo: string;
 }) => {
-  const t = useTranslations();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
   const attemptRef = useRef<DevQuickStartAttempt | null>(null);
   const runningRef = useRef(false);
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
+  const currentPhaseLabel = phase === null ? null : PHASE_LABELS[phase];
 
   const runContinuation = async () => {
     if (runningRef.current) {
@@ -367,7 +321,7 @@ export const DevQuickStartContinuation = ({
             writeDevQuickStartAttempt(nextAttempt);
           },
           onPhase: setPhase,
-          seedMatters,
+          startMatterImport,
           seedSkills,
         });
         await invalidateSession.mutateAsync();
@@ -381,12 +335,12 @@ export const DevQuickStartContinuation = ({
       setPhase(null);
       analytics.captureError(result.error);
       stellaToast.add({
-        title: t("auth.devQuickStart.error.title"),
+        title: DEV_QUICK_START_COPY.errorTitle,
         description: DevQuickStartError.is(result.error)
-          ? t(ERROR_MESSAGE_KEYS[result.error.code])
+          ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
-              t("auth.devQuickStart.error.fallback"),
+              DEV_QUICK_START_COPY.errorFallback,
             ),
         type: "error",
       });
@@ -394,8 +348,8 @@ export const DevQuickStartContinuation = ({
     }
 
     stellaToast.add({
-      title: t("auth.devQuickStart.success.title"),
-      description: t("auth.devQuickStart.success.description"),
+      title: DEV_QUICK_START_COPY.successTitle,
+      description: DEV_QUICK_START_COPY.successDescription,
       type: "success",
     });
     window.location.assign(redirectTo);
@@ -417,9 +371,7 @@ export const DevQuickStartContinuation = ({
       type="button"
       variant="outline"
     >
-      {phase === null
-        ? t("auth.devQuickStart.button")
-        : t(PHASE_LABEL_KEYS[phase])}
+      {currentPhaseLabel ?? DEV_QUICK_START_COPY.button}
     </Button>
   );
 };

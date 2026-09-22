@@ -44,7 +44,7 @@ type RunDevQuickStartOptions = {
   createOrganization: (identity: DevQuickStartIdentity) => Promise<string>;
   onAttemptUpdated: (attempt: DevQuickStartAttempt) => void;
   onPhase: (phase: DevQuickStartPhase) => void;
-  seedMatters: (
+  startMatterImport: (
     identity: DevQuickStartIdentity,
     organizationId: string,
   ) => Promise<void>;
@@ -71,7 +71,7 @@ export const runDevQuickStart = async ({
   createOrganization,
   onAttemptUpdated,
   onPhase,
-  seedMatters,
+  startMatterImport,
   seedSkills,
 }: RunDevQuickStartOptions): Promise<void> => {
   let currentAttempt = attempt;
@@ -125,7 +125,7 @@ export const runDevQuickStart = async ({
     shouldRunPhase(currentAttempt.completedPhase, DEV_QUICK_START_PHASE.matters)
   ) {
     onPhase(DEV_QUICK_START_PHASE.matters);
-    await seedMatters(currentAttempt.identity, organizationId);
+    await startMatterImport(currentAttempt.identity, organizationId);
     completePhase(DEV_QUICK_START_PHASE.matters);
   }
 };

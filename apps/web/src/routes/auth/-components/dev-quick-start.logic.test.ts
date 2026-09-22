@@ -41,7 +41,7 @@ describe("runDevQuickStart", () => {
       onPhase: (phase) => {
         calls.push(`phase:${phase}`);
       },
-      seedMatters: async (_identity, organizationId) => {
+      startMatterImport: async (_identity, organizationId) => {
         expect(organizationId).toBe(ORGANIZATION_ID);
         calls.push("matters");
       },
@@ -83,7 +83,7 @@ describe("runDevQuickStart", () => {
         },
         onAttemptUpdated: () => undefined,
         onPhase: () => undefined,
-        seedMatters: async () => {
+        startMatterImport: async () => {
           calls.push("matters");
         },
         seedSkills: async () => {
@@ -120,7 +120,7 @@ describe("runDevQuickStart", () => {
           progress = { completedPhase, organizationId };
         },
         onPhase: () => undefined,
-        seedMatters: async (attemptIdentity, organizationId) => {
+        startMatterImport: async (attemptIdentity, organizationId) => {
           expect(attemptIdentity).toBe(identity);
           expect(organizationId).toBe(ORGANIZATION_ID);
           matterAttempts += 1;
@@ -172,7 +172,7 @@ describe("runDevQuickStart", () => {
       createOrganization: async () => "unexpected-organization",
       onAttemptUpdated: () => undefined,
       onPhase: () => undefined,
-      seedMatters: async (_identity, organizationId) => {
+      startMatterImport: async (_identity, organizationId) => {
         seededOrganizations.push(organizationId);
       },
       seedSkills: async (organizationId) => {
