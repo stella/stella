@@ -7,6 +7,7 @@ import {
   getInspectorTabGroupId,
   normalizeInspectorGroupAssignments,
 } from "@/components/inspector/inspector-groups.logic";
+import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import type {
   ExternalTabId,
   FileTab,
@@ -551,6 +552,7 @@ export const createInspectorTabsSlice = (
 
   openChat: (args = {}) => {
     const id = resolveChatTabThreadId(args);
+    const { pane = INSPECTOR_PANE_INTENT.expand } = args;
     set((state) => {
       const existing = state.tabs.find((tab) => tab.id === id);
       if (!existing) {
@@ -582,7 +584,9 @@ export const createInspectorTabsSlice = (
       }
       activateInspectorTab(state, id);
       state.activationSeq += 1;
-      state.minimized = false;
+      if (pane === INSPECTOR_PANE_INTENT.expand) {
+        state.minimized = false;
+      }
     });
   },
 
@@ -621,7 +625,14 @@ export const createInspectorTabsSlice = (
     }
   },
 
-  openView: ({ type, id, label, payload, ownerRouteId }) =>
+  openView: ({
+    type,
+    id,
+    label,
+    payload,
+    ownerRouteId,
+    pane = INSPECTOR_PANE_INTENT.expand,
+  }) =>
     set((state) => {
       const existing = state.tabs.find((tab) => tab.id === id);
       if (!existing) {
@@ -641,7 +652,9 @@ export const createInspectorTabsSlice = (
       }
       activateInspectorTab(state, id);
       state.activationSeq += 1;
-      state.minimized = false;
+      if (pane === INSPECTOR_PANE_INTENT.expand) {
+        state.minimized = false;
+      }
       if (state.reviveSuggestion?.id === id) {
         state.reviveSuggestion = null;
       }

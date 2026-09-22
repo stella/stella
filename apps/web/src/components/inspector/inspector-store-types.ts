@@ -234,6 +234,19 @@ export type OpenTabsArgs = {
   activeId: string;
 };
 
+/**
+ * What an opener does with the pane. A page that seeds tabs beside its own
+ * content passes `keep`, so mounting it never takes the pane from a reader
+ * who collapsed it.
+ */
+export const INSPECTOR_PANE_INTENT = {
+  expand: "expand",
+  keep: "keep",
+} as const;
+
+type InspectorPaneIntent =
+  (typeof INSPECTOR_PANE_INTENT)[keyof typeof INSPECTOR_PANE_INTENT];
+
 export type InspectorTabsActions = {
   createGroup: (args: { name: string; color: string }) => string;
   updateGroup: (args: { id: string; name: string; color: string }) => void;
@@ -287,6 +300,7 @@ export type InspectorTabsActions = {
     contextMatterIds?: string[];
     activeLegalKey?: LegalDocumentChatKey;
     activeSkill?: ChatTab["activeSkill"];
+    pane?: InspectorPaneIntent;
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;
   resetChatTabId: (oldId: ChatThreadId, newId: ChatThreadId) => void;
@@ -296,6 +310,7 @@ export type InspectorTabsActions = {
     label: string;
     payload: StructuredCloneable<P>;
     ownerRouteId?: string;
+    pane?: InspectorPaneIntent;
   }) => void;
   updateView: <P>(args: {
     id: string;

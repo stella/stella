@@ -14,6 +14,7 @@ import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
+import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import {
@@ -162,7 +163,12 @@ const AutoOpenDecisionChat = ({
 }) => {
   const openChat = useInspectorTabsStore((state) => state.openChat);
   useMountEffect(() => {
-    openChat({ activeLegalKey: decisionChatKey(decisionId) });
+    // The rail gets the decision's chat; the pane belongs to the reader, and
+    // DecisionDetailsTab already settled it for this mount.
+    openChat({
+      activeLegalKey: decisionChatKey(decisionId),
+      pane: INSPECTOR_PANE_INTENT.keep,
+    });
   });
   return null;
 };
