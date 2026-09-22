@@ -3,6 +3,8 @@ import { Result } from "better-result";
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
 import { decodeCompactUuid, encodeCompactUuid } from "@stll/uuid-codec";
 
+import type { useFormatter } from "@/i18n/formatting-context";
+
 /**
  * Jurisdiction the statutes browser opens on when the current route carries
  * none (the shell's statutes link is reachable from country-less pages).
@@ -27,6 +29,22 @@ export const isPublicStatuteCountry = (
   value: string,
 ): value is StatuteCountry =>
   isStatuteCountry(value) && isPublicLegislationCountry(value.toUpperCase());
+
+/**
+ * A statute jurisdiction as a reader names it, from its route segment. One
+ * helper, because the box and the top-bar menu have to say the same country
+ * the same way.
+ */
+export const statuteCountryName = (
+  format: ReturnType<typeof useFormatter>,
+  segment: string,
+): string =>
+  format.displayName(
+    isStatuteCountry(segment)
+      ? STATUTE_COUNTRIES[segment].region
+      : segment.toUpperCase(),
+    { type: "region" },
+  );
 
 const COUNTRY_SEGMENT_PATTERN = /^[a-z]{2,3}$/u;
 

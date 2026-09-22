@@ -4,7 +4,7 @@
     "files": {}
   },
   "legacy-paint-transitions": {
-    "count": 234,
+    "count": 233,
     "files": {
       "apps/desktop/src/mainview/index.css": 2,
       "apps/landing/src/components/react/ProductShowcase.tsx": 3,

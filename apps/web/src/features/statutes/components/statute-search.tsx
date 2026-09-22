@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { PublicLawSearch } from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
-import { isStatuteCountry, STATUTE_COUNTRIES } from "@/lib/statute-route";
+import { statuteCountryName } from "@/lib/statute-route";
 
 type StatuteSearchProps = {
   /** The jurisdiction the page is scoped to, as its route segment. */
@@ -47,19 +47,3 @@ export const StatuteSearch = ({
     />
   );
 };
-
-/**
- * A statute jurisdiction as a reader names it, from its route segment. One
- * helper, because the box and the top-bar menu have to say the same country
- * the same way.
- */
-export const statuteCountryName = (
-  format: ReturnType<typeof useFormatter>,
-  segment: string,
-): string =>
-  format.displayName(
-    isStatuteCountry(segment)
-      ? STATUTE_COUNTRIES[segment].region
-      : segment.toUpperCase(),
-    { type: "region" },
-  );

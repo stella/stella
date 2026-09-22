@@ -19,12 +19,12 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { countryScopedLawRoute } from "@/features/case-law/country-scope.logic";
-import { statuteCountryName } from "@/features/statutes/components/statute-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   isPublicStatuteCountry,
   STATUTE_COUNTRIES,
+  statuteCountryName,
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
