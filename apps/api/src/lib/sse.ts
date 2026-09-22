@@ -981,6 +981,22 @@ const sendKeepAlive = () => {
   }
 };
 
+const closeLocalConnections = (): void => {
+  for (const set of connections.values()) {
+    for (const connection of set) {
+      closeControllerQuietly(connection.controller);
+    }
+  }
+  connections.clear();
+
+  for (const set of userConnections.values()) {
+    for (const connection of set) {
+      closeControllerQuietly(connection.controller);
+    }
+  }
+  userConnections.clear();
+};
+
 // ── Lifecycle ────────────────────────────────────────────
 //
 // Importing this module must have no side effects: route-level realtime
@@ -1322,10 +1338,13 @@ export const startSse = (
 };
 
 /**
- * Stop the keep-alive heartbeat and close the Redis subscriber. Safe to
- * call when `startSse` was never called, and safe to call more than once.
+ * Close local streams, stop the keep-alive heartbeat, and close the Redis
+ * subscriber. Safe to call when `startSse` was never called, and safe to call
+ * more than once.
  */
 export const stopSse = (): void => {
+  closeLocalConnections();
+
   if (!activeLifecycle) {
     return;
   }

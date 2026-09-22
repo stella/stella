@@ -131,6 +131,19 @@ const settlePendingWork = async (): Promise<void> => {
   await Bun.sleep(0);
 };
 
+const observeStreamRead = async (stream: ReadableStream) => {
+  const reader = stream.getReader();
+  try {
+    return await Promise.race([
+      reader.read(),
+      Bun.sleep(100).then(() => "test-deadline" as const),
+    ]);
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
@@ -276,6 +289,19 @@ describe("startSse / stopSse lifecycle", () => {
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
     expect(client?.close).toHaveBeenCalledTimes(1);
 
+    await settlePendingWork();
+  });
+
+  test("stopSse closes active local streams so HTTP shutdown can drain", async () => {
+    startTestSse();
+    const stream = subscribeToWorkspace(new AbortController().signal);
+
+    stopSse();
+
+    expect(await observeStreamRead(stream)).toEqual({
+      done: true,
+      value: undefined,
+    });
     await settlePendingWork();
   });
 
