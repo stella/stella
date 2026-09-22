@@ -184,7 +184,7 @@
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.83.0",
     "@shadcn/lint": "0.1.0",
-    "@silurus/ooxml": "0.86.1",
+    "@silurus/ooxml": "0.87.0",
     "@stll/anonymize": "3.0.1",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.1",

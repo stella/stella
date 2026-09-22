@@ -1153,7 +1153,7 @@
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.83.0",
     "@shadcn/lint": "0.1.0",
-    "@silurus/ooxml": "0.86.1",
+    "@silurus/ooxml": "0.87.0",
     "@stll/anonymize": "3.0.1",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.1",
@@ -2539,7 +2539,7 @@
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
-    "@silurus/ooxml": ["@silurus/ooxml@0.86.1", "", {}, "sha512-Ah8o9RtKyPytAGP8a+7VJhde8tHNCLA7pi1CRv1jkLOd1eLrRLXxjnoEWOkpce/9zPeS9IBWRzNye7vS/KN4Sw=="],
+    "@silurus/ooxml": ["@silurus/ooxml@0.87.0", "", {}, "sha512-Wj6j2vRrtSBpuk9vbaKelG/rW3yll53rGYbI+PSInTlc76Ifm1QLvR09mkVmX+QVIi0szVFUgRP7cLO3lYs9zA=="],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.52", "", {}, "sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw=="],
 
