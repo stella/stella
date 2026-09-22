@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -442,6 +442,91 @@ test("a count that cannot finish leaves the previous figure standing", async () 
     storedTotal: 2,
     storedTotalAsOf: NOW,
   });
+});
+
+// ── the role that actually runs it ────────────────────────────────────────
+//
+// Every test above runs as the database owner, which holds every column. In
+// production this module runs as `stella_ingestion`, whose UPDATE on
+// `case_law_sources` is granted column by column, so a column added without a
+// grant is refused with 42501 and the refresh reports "unavailable" rather
+// than raising. That is how `stored_total` shipped: counted on every cycle,
+// written on none. These run the real writers under the real role.
+
+const ingestionScopedDb: ScopedDb = async (callback) =>
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    // SAFETY: pglite's transaction stands in for the one the helper expects.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite transaction is the test's transaction
+    return await callback(tx as unknown as Transaction);
+  });
+
+test("the ingestion role counts a source and writes the stored pair", async () => {
+  const sourceId = await seedCountedSource(3);
+  const countedAt = new Date("2026-09-22T08:00:00.000Z");
+
+  expect(
+    await refreshSourceStoredTotal({
+      scopedDb: ingestionScopedDb,
+      sourceId,
+      now: countedAt,
+    }),
+  ).toBe("refreshed");
+  // A refused UPDATE would surface as "unavailable", and one that matched no
+  // row as "fresh", so the figure is what proves the write landed.
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 3,
+    storedTotalAsOf: countedAt,
+  });
+});
+
+test("the ingestion role writes the reported trio", async () => {
+  const sourceId = createSafeId<"caseLawSource">();
+  const adapterKey = `reported-total-role-${sourceId}`;
+  await db
+    .insert(caseLawSources)
+    .values({ id: sourceId, adapterKey, name: "reported total role fixture" });
+  const asOf = new Date("2026-09-22T08:30:00.000Z");
+
+  expect(
+    await setSourceReportedTotal({
+      scopedDb: ingestionScopedDb,
+      adapterKey,
+      total: 42,
+      asOf,
+      origin: "adapter-poll",
+    }),
+  ).toBe(true);
+  expect(await readTrio(adapterKey)).toEqual({
+    reportedTotal: 42,
+    reportedTotalAsOf: asOf,
+    reportedTotalOrigin: "adapter-poll",
+  });
+});
+
+test("the ingestion role is refused a source column outside the grant", async () => {
+  const sourceId = await seedCountedSource(0);
+
+  const refusal = await db
+    .transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await tx.execute(
+        sql`UPDATE case_law_sources SET name = 'renamed' WHERE id = ${sourceId}`,
+      );
+      return "no rejection";
+    })
+    // Drizzle wraps the driver error, so the refusal is on the cause chain.
+    .catch((error: unknown) => {
+      const messages: string[] = [];
+      let current = error;
+      while (current instanceof Error) {
+        messages.push(current.message);
+        current = current.cause;
+      }
+      return messages.join(" | ");
+    });
+
+  expect(refusal).toContain("permission denied");
 });
 
 test("a worker holding a stale as-of loses to the one that already wrote", async () => {

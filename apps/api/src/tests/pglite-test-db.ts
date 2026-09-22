@@ -226,7 +226,14 @@ export const ROLE_GRANT_STATEMENTS = [
       last_sync_at,
       updated_at,
       observation_order,
-      checkpoint_observation_order
+      checkpoint_observation_order,
+      ingestion_lease_token,
+      ingestion_lease_expires_at,
+      reported_total,
+      reported_total_as_of,
+      reported_total_origin,
+      stored_total,
+      stored_total_as_of
     )
       ON TABLE "case_law_sources"
       TO stella_ingestion

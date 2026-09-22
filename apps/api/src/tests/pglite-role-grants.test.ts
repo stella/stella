@@ -64,6 +64,13 @@ const PRIVILEGE_WORDS = new Set([
   "option",
 ]);
 
+/**
+ * A column-scoped grant carries its list in parentheses after the privilege
+ * and before `ON`, which the table parser above deliberately discards.
+ */
+const COLUMN_GRANT =
+  /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)[\s\S]*?\bON\s+(?:TABLE\s+)?("?[a-zA-Z_][a-zA-Z0-9_]*"?)/giu;
+
 const unquote = (value: string): string => value.replaceAll('"', "");
 
 /** Every `(role, table)` pair the given SQL grants, as `role:table`. */
@@ -87,6 +94,29 @@ const grantedPairs = (sqlText: string): Set<string> => {
         continue;
       }
       pairs.add(`${role}:${name}`);
+    }
+  }
+  return pairs;
+};
+
+/**
+ * Every `(role, table, column, privilege)` the given SQL grants column by
+ * column, as `role:table:column:PRIVILEGE`.
+ */
+const grantedColumnPairs = (sqlText: string): Set<string> => {
+  const pairs = new Set<string>();
+  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
+    const [, body = "", rawRole = ""] = match;
+    const role = unquote(rawRole);
+    for (const columnGrant of body.matchAll(COLUMN_GRANT)) {
+      const [, privilege = "", columnList = "", rawTable = ""] = columnGrant;
+      const table = unquote(rawTable);
+      for (const rawColumn of columnList.split(",")) {
+        const column = unquote(rawColumn.trim());
+        if (column.length > 0) {
+          pairs.add(`${role}:${table}:${column}:${privilege.toUpperCase()}`);
+        }
+      }
     }
   }
   return pairs;
@@ -134,6 +164,33 @@ describe("pglite role grants mirror the committed migrations", () => {
     expect(missing).toEqual([]);
   });
 
+  /**
+   * Column-scoped grants drift the same way, and worse in both directions. A
+   * harness that grants fewer columns than the migrations makes a SET ROLE
+   * suite fail on access the deployment has; a harness that grants more makes
+   * one pass on access the deployment does not. `stored_total` was the second
+   * kind of gap in reverse: the columns landed with a reader grant and none
+   * for `stella_ingestion`, and nothing here or in any suite noticed, because
+   * the pair check above sees only `stella_ingestion:case_law_sources`.
+   *
+   * So this compares the sets, both ways. The tables the schema still defines
+   * and the roles the harness does not grant wholesale are the scope.
+   */
+  test("the migration and harness column grants are the same set", async () => {
+    const inScope = (pair: string): boolean => {
+      const [role = "", table = ""] = pair.split(":");
+      return !WHOLESALE_ROLES.has(role) && schemaTableNames.has(table);
+    };
+    const migrationColumns = [
+      ...grantedColumnPairs(await readMigrationSql()),
+    ].filter(inScope);
+    const harnessColumns = [
+      ...grantedColumnPairs(ROLE_GRANT_STATEMENTS.join(";\n")),
+    ].filter(inScope);
+
+    expect(harnessColumns.toSorted()).toEqual(migrationColumns.toSorted());
+  });
+
   test("the parser reads both migration and harness grant spellings", async () => {
     // A parser that matched nothing would pass the mirror check silently.
     const migrationPairs = grantedPairs(await readMigrationSql());
@@ -146,5 +203,15 @@ describe("pglite role grants mirror the committed migrations", () => {
       migrationPairs.has("stella_ingestion:case_law_reconciliation_items"),
     ).toBe(true);
     expect(harnessPairs.has("stella_ingestion:case_law_decisions")).toBe(true);
+
+    // An empty column set on both sides would satisfy the equality above.
+    const migrationColumns = grantedColumnPairs(await readMigrationSql());
+    const harnessColumns = grantedColumnPairs(
+      ROLE_GRANT_STATEMENTS.join(";\n"),
+    );
+    const storedTotalGrant =
+      "stella_ingestion:case_law_sources:stored_total:UPDATE";
+    expect(migrationColumns.has(storedTotalGrant)).toBe(true);
+    expect(harnessColumns.has(storedTotalGrant)).toBe(true);
   });
 });
