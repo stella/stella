@@ -176,10 +176,10 @@
   "catalog": {
     "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.8.0",
-    "@better-auth/api-key": "1.7.4",
-    "@better-auth/cimd": "1.7.4",
-    "@better-auth/core": "1.7.4",
-    "@better-auth/oauth-provider": "1.7.4",
+    "@better-auth/api-key": "1.7.5",
+    "@better-auth/cimd": "1.7.5",
+    "@better-auth/core": "1.7.5",
+    "@better-auth/oauth-provider": "1.7.5",
     "@libpdf/core": "0.4.2",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.82.0",
@@ -215,7 +215,7 @@
     "@typescript-eslint/utils": "8.69.0",
     "bun-types": "1.4.2",
     "@vitejs/plugin-react": "^6.1.1",
-    "better-auth": "1.7.4",
+    "better-auth": "1.7.5",
     "better-result": "3.0.1",
     "diff": "9.0.0",
     "disposable-email-domains-js": "1.25.0",
@@ -257,7 +257,7 @@
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@tanstack/ai-mcp@0.3.9": "patches/@tanstack%2Fai-mcp@0.3.9.patch",
-    "@better-auth/oauth-provider@1.7.4": "patches/@better-auth%2Foauth-provider@1.7.4.patch"
+    "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch"
   },
   "trustedDependencies": [
     "lefthook"

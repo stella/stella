@@ -1112,9 +1112,9 @@
   ],
   "patchedDependencies": {
     "eslint-plugin-drizzle@0.2.3": "patches/eslint-plugin-drizzle@0.2.3.patch",
-    "@better-auth/oauth-provider@1.7.4": "patches/@better-auth%2Foauth-provider@1.7.4.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
+    "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
     "@tanstack/ai-mcp@0.3.9": "patches/@tanstack%2Fai-mcp@0.3.9.patch",
   },
   "overrides": {
@@ -1145,10 +1145,10 @@
   "catalog": {
     "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.8.0",
-    "@better-auth/api-key": "1.7.4",
-    "@better-auth/cimd": "1.7.4",
-    "@better-auth/core": "1.7.4",
-    "@better-auth/oauth-provider": "1.7.4",
+    "@better-auth/api-key": "1.7.5",
+    "@better-auth/cimd": "1.7.5",
+    "@better-auth/core": "1.7.5",
+    "@better-auth/oauth-provider": "1.7.5",
     "@libpdf/core": "0.4.2",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.82.0",
@@ -1183,7 +1183,7 @@
     "@types/node": "26.1.2",
     "@typescript-eslint/utils": "8.69.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "better-auth": "1.7.4",
+    "better-auth": "1.7.5",
     "better-result": "3.0.1",
     "bun-types": "1.4.2",
     "diff": "9.0.0",
@@ -1487,29 +1487,29 @@
 
     "@base-ui/utils": ["@base-ui/utils@0.4.0", "", { "dependencies": { "@babel/runtime": "^7.29.7", "@floating-ui/utils": "^0.2.12", "reselect": "^5.2.0", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@types/react": "^17 || ^18 || ^19", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-bO9fz25kKtPf+aZVyfQrC0PDmJdmVni31W2hCS5/Owb+inwdIL3XU26pCPRPlt4LSxZrBgLwubXQXQlKaFEZzw=="],
 
-    "@better-auth/api-key": ["@better-auth/api-key@1.7.4", "", { "dependencies": { "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "better-auth": "^1.7.4", "better-call": "1.4.0" } }, "sha512-CIpY45AvvTKzvbB9VTONB7FIYgJZXn1HYuxGRRXGnCKzWGe58SDLjB2UqWuix7TRicqanq3TwVCOZTDt6Np9JA=="],
+    "@better-auth/api-key": ["@better-auth/api-key@1.7.5", "", { "dependencies": { "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "better-auth": "^1.7.5", "better-call": "1.4.0" } }, "sha512-wrRacs0Gx2MyoOITjjrEBCR5dTxLVhCqkXhRNbeZXveVMBOXtCBPnruB0z+sccNAcynz0496IXVJq/AVexgN0g=="],
 
-    "@better-auth/cimd": ["@better-auth/cimd@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/oauth-provider": "^1.7.4", "better-auth": "^1.7.4", "better-call": "1.4.0" } }, "sha512-GxtLqVzAmA9Q5PiXYq7RfIkEWyp8AFBklPmzfH94+6MXz1PJaqYTLN7RsxpO4lhTkrtLkisCI0XXFZ+UWzm4TA=="],
+    "@better-auth/cimd": ["@better-auth/cimd@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/oauth-provider": "^1.7.5", "better-auth": "^1.7.5", "better-call": "1.4.0" } }, "sha512-7mQF9eWZ0gkYt57zTuUKYcA4w07CvQM5Cr9D7N0qmiPNjyNHGAZoe29L3a8k6OIrI0+rGFAGb0qOXwaOWidLPw=="],
 
-    "@better-auth/core": ["@better-auth/core@1.7.4", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.41.1", "@standard-schema/spec": "^1.1.0", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.1", "@cloudflare/workers-types": ">=4", "@opentelemetry/api": "^1.9.0", "better-call": "1.4.0", "jose": "^6.1.0", "kysely": "^0.28.5 || ^0.29.0", "nanostores": "^1.0.1" }, "optionalPeers": ["@cloudflare/workers-types", "@opentelemetry/api"] }, "sha512-g66dKOMB5PLxoujkxkZeYb6dh5wLhfAx/D+w9XtcO669Dslnyen2naBYqnD1r5ZwnxFKcr6aSrUPaH952V89Lg=="],
+    "@better-auth/core": ["@better-auth/core@1.7.5", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.41.1", "@standard-schema/spec": "^1.1.0", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.2", "@opentelemetry/api": "^1.9.0", "better-call": "1.4.0", "jose": "^6.1.0", "kysely": "^0.28.5 || ^0.29.0", "nanostores": "^1.0.1" }, "optionalPeers": ["@opentelemetry/api"] }, "sha512-kVlSu4H8OKQfjg4b/Zj5MOaospt83N0JbX38wsDzE58Yw95jzovFkU3pxzB1eUFYc4mkuhUMZD8iT1gpUjNMcQ=="],
 
-    "@better-auth/drizzle-adapter": ["@better-auth/drizzle-adapter@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0" }, "optionalPeers": ["drizzle-orm"] }, "sha512-J9JMl0DGYNYwtDj5nq/fzycU9dzPUDEtTNn89KmToUrwPDGfByDgfmiQ9jGK+LN3EnfsG1Pt/dDmRocbnfihlA=="],
+    "@better-auth/drizzle-adapter": ["@better-auth/drizzle-adapter@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0" }, "optionalPeers": ["drizzle-orm"] }, "sha512-9SM7v1735SoaedRDcDbHc5ULgXEd2vUlEJkvRHpMF2Q9qf59TRh1b5A9hryyecyi56bm/0CNUDU3nY0uVWj5/Q=="],
 
-    "@better-auth/kysely-adapter": ["@better-auth/kysely-adapter@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "kysely": "^0.28.17 || ^0.29.0" }, "optionalPeers": ["kysely"] }, "sha512-WHLsTs4ZwTKorifdK6Whol6Zy+0gIzOJEXzWsvzmLtlT1uIZFpd7IPBlDZTrXvIZnxPWJHPIv8/uHqS9QFPZOA=="],
+    "@better-auth/kysely-adapter": ["@better-auth/kysely-adapter@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "kysely": "^0.28.17 || ^0.29.0" }, "optionalPeers": ["kysely"] }, "sha512-1wE5gvnjW+c1i4GrLtL9HLn3s0Xrq4YneCDan1NO1dpz0mEguLFNlzfnUGykTFrDwvFh2X5rkIbA8ALCj6WzXQ=="],
 
-    "@better-auth/memory-adapter": ["@better-auth/memory-adapter@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2" } }, "sha512-xAihOPh4mFjvKLzmu2XNzj7RchDmytA/d/xjrGyps1oHVGCTGDGghlSt/rIT5fagtTn2R9+TBLh5QrZnTvYu9g=="],
+    "@better-auth/memory-adapter": ["@better-auth/memory-adapter@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2" } }, "sha512-YDmnfR9zOXbn5SNYYwfHBPuc19hg1d1C1vUXb+Hm8Q91pTsstFNX5OTlZbo7f28q06FpogAEfGGCN/2QV39cig=="],
 
-    "@better-auth/mongo-adapter": ["@better-auth/mongo-adapter@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "mongodb": "^6.0.0 || ^7.0.0" }, "optionalPeers": ["mongodb"] }, "sha512-sIdIc8vONXgQxKPfzL4bbk6gO3gdFEDzC5VG8rD18xSFB6j7blBKcuzOofbswbwwbyuspnshoViGRqSoqp2PnA=="],
+    "@better-auth/mongo-adapter": ["@better-auth/mongo-adapter@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "mongodb": "^6.0.0 || ^7.0.0" }, "optionalPeers": ["mongodb"] }, "sha512-Yq0LfF0VlA9Kfjcjp/v43MSsChv7vKd1ct0Mt15px4zlqaCPIGfPbjw9YNM6jTo0fGpqLR0n15PllSWmLLRp9g=="],
 
-    "@better-auth/oauth-provider": ["@better-auth/oauth-provider@1.7.4", "", { "dependencies": { "jose": "^6.2.3", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.1", "better-auth": "^1.7.4", "better-call": "1.4.0" } }, "sha512-yQrQM6iXXlsq+nfmJcQEJmXu4bZB59ySn3GiDq+xZ1hHVbVttT/SwbGzpIFX+B0l5o4pmBpJqhoJz8Ugr/rP+w=="],
+    "@better-auth/oauth-provider": ["@better-auth/oauth-provider@1.7.5", "", { "dependencies": { "jose": "^6.2.3", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.2", "better-auth": "^1.7.5", "better-call": "1.4.0" } }, "sha512-hVHb1TfydO8hWJXeZaGeJ+1506Fn+8hsffes+TFwi6/gl/ui+GqJVliPhHhuaOqpC1gN8ZFiLr0u8bh0aSnTLg=="],
 
-    "@better-auth/prisma-adapter": ["@better-auth/prisma-adapter@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0" }, "optionalPeers": ["@prisma/client", "prisma"] }, "sha512-cvsMNaXLcwQiAIxQCx5Gq2VA1reW4RjkC5oLNXNJR4IhgeiqcvYF6qKF6UEC0vV2x3euKz5V/SDY/hblHWwx+w=="],
+    "@better-auth/prisma-adapter": ["@better-auth/prisma-adapter@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0" }, "optionalPeers": ["@prisma/client", "prisma"] }, "sha512-QfW6HS9vK0FMcbI/GsQLdplICxOz0EPzYWGONZT4ovL3cSItd4YH/09USbPPVl+VUQCdznAQIk+n+NKvHdmSag=="],
 
-    "@better-auth/telemetry": ["@better-auth/telemetry@1.7.4", "", { "peerDependencies": { "@better-auth/core": "^1.7.4", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.1" } }, "sha512-FycnvWXP1gZ8BlSN1lW9L/YYFVqxi7+n6A9i66gJKdoJqREDdmhxBKOaVCbNhNC2UNDAo9PbBm/6J3gv6WmAEA=="],
+    "@better-auth/telemetry": ["@better-auth/telemetry@1.7.5", "", { "peerDependencies": { "@better-auth/core": "^1.7.5", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.2" } }, "sha512-e/REPqMy9Em+gC6G0xWBikiMLRuy532Er7jqdoNkPBa65FbywgWcm1cZbgdW5CnHsrM3OLZsmKn14yeGoDISeg=="],
 
     "@better-auth/utils": ["@better-auth/utils@0.4.2", "", { "dependencies": { "@noble/hashes": "^2.0.1" } }, "sha512-AUxrvu+HaaODsUyzDxFgwd/8RZ1yZaYo42LXKSrU2oGgR38pS1ij8nqQKNgtTWoYGpNevNXtCfgTy6loHveW9A=="],
 
-    "@better-fetch/fetch": ["@better-fetch/fetch@1.3.1", "", {}, "sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g=="],
+    "@better-fetch/fetch": ["@better-fetch/fetch@1.3.2", "", {}, "sha512-Gs7n99b5tqUC6cQAPbV0uED3IraHB6xQbHLQ/C3l7ZFafHScOx9pQ+DYmP5blbLFShVWLqxNUlI9wi4xU/X+ow=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 
@@ -3373,7 +3373,7 @@
 
     "bcp-47-match": ["bcp-47-match@2.0.3", "", {}, "sha512-JtTezzbAibu8G0R9op9zb3vcWZd9JF6M0xOYGPn0fNCd7wOpRB1mU2mH9T8gaBGbAAyIIVgB2G7xG0GP98zMAQ=="],
 
-    "better-auth": ["better-auth@1.7.4", "", { "dependencies": { "@better-auth/core": "1.7.4", "@better-auth/drizzle-adapter": "1.7.4", "@better-auth/kysely-adapter": "1.7.4", "@better-auth/memory-adapter": "1.7.4", "@better-auth/mongo-adapter": "1.7.4", "@better-auth/prisma-adapter": "1.7.4", "@better-auth/telemetry": "1.7.4", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.1", "@noble/ciphers": "^2.2.0", "@noble/hashes": "^2.2.0", "better-call": "1.4.0", "defu": "^6.1.4", "jose": "^6.2.3", "kysely": "^0.28.17 || ^0.29.0", "nanostores": "^1.3.0", "zod": "^4.5.4" }, "peerDependencies": { "@lynx-js/react": "*", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "@sveltejs/kit": "^2.0.0", "@tanstack/react-start": "^1.0.0", "@tanstack/solid-start": "^1.0.0", "better-sqlite3": "^12.0.0", "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1", "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0", "mongodb": "^6.0.0 || ^7.0.0", "mysql2": "^3.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0", "pg": "^8.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "solid-js": "^1.0.0", "svelte": "^4.0.0 || ^5.0.0", "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0", "vue": "^3.0.0" }, "optionalPeers": ["@lynx-js/react", "@prisma/client", "@sveltejs/kit", "@tanstack/react-start", "@tanstack/solid-start", "better-sqlite3", "drizzle-kit", "drizzle-orm", "mongodb", "mysql2", "next", "pg", "prisma", "react", "react-dom", "solid-js", "svelte", "vitest", "vue"] }, "sha512-rjL9g8b8UvdwK/ZSdawhqYzOm8YegurB6Fuzqtu/zFJamlFrPa+eEhP8Qj2vFWsMzHOk2mb/L4FRYh9pgaU7OA=="],
+    "better-auth": ["better-auth@1.7.5", "", { "dependencies": { "@better-auth/core": "1.7.5", "@better-auth/drizzle-adapter": "1.7.5", "@better-auth/kysely-adapter": "1.7.5", "@better-auth/memory-adapter": "1.7.5", "@better-auth/mongo-adapter": "1.7.5", "@better-auth/prisma-adapter": "1.7.5", "@better-auth/telemetry": "1.7.5", "@better-auth/utils": "0.4.2", "@better-fetch/fetch": "1.3.2", "@noble/ciphers": "^2.2.0", "@noble/hashes": "^2.2.0", "better-call": "1.4.0", "defu": "^6.1.4", "jose": "^6.2.3", "kysely": "^0.28.17 || ^0.29.0", "nanostores": "^1.3.0", "zod": "^4.5.4" }, "peerDependencies": { "@lynx-js/react": "*", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "@sveltejs/kit": "^2.0.0", "@tanstack/react-start": "^1.0.0", "@tanstack/solid-start": "^1.0.0", "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1", "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0", "mongodb": "^6.0.0 || ^7.0.0", "mysql2": "^3.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0", "pg": "^8.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "solid-js": "^1.0.0", "svelte": "^4.0.0 || ^5.0.0", "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0", "vue": "^3.0.0" }, "optionalPeers": ["@lynx-js/react", "@prisma/client", "@sveltejs/kit", "@tanstack/react-start", "@tanstack/solid-start", "drizzle-kit", "drizzle-orm", "mongodb", "mysql2", "next", "pg", "prisma", "react", "react-dom", "solid-js", "svelte", "vitest", "vue"] }, "sha512-aKE0Zt2EPTpFvmq4/oATNyG/mAfc6JUqWkW9pzGlrVnzUb0lso7GJ9BPxD6JPhLqYV1a9zOAb0uAz1Q5fm+eHA=="],
 
     "better-call": ["better-call@1.4.0", "", { "dependencies": { "@better-auth/utils": "^0.5.0", "@better-fetch/fetch": "^1.3.1", "rou3": "^0.9.1", "set-cookie-parser": "^3.1.2" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-bBKOT4vv1kZLDgxVePdilk/Jwkn+dtRRsmi3DzHcDP+WnswyVl6dR59l2HEeP/0cB+bDoopASAesWDPIdd/zZA=="],
 
@@ -5708,6 +5708,8 @@
     "babel-plugin-polyfill-corejs2/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "better-call/@better-auth/utils": ["@better-auth/utils@0.5.0", "", { "dependencies": { "@noble/hashes": "^2.0.1" } }, "sha512-BL8W4EfIZFwlu0r54m3v1ztjDhu6dDe/amLTm0xybmbZaNgYUqhD3SjpAsnq0q8YD6/ki4iwIgxJNLP/N3TxiA=="],
+
+    "better-call/@better-fetch/fetch": ["@better-fetch/fetch@1.3.1", "", {}, "sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g=="],
 
     "body-parser/content-type": ["content-type@2.0.0", "", {}, "sha512-j/O/d7GcZCyNl7/hwZAb606rzqkyvaDctLmckbxLzHvFBzTJHuGEdodATcP3yIRoDrLHkIATJuvzbFlp/ki2cQ=="],
 

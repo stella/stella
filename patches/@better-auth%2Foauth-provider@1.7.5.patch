@@ -1,7 +1,7 @@
-diff --git a/dist/introspect-Dlc-aIaF.mjs b/dist/introspect-Dlc-aIaF.mjs
-index 4076d0580f0a7fb69684637d2d16092609713262..e0b2098a7994a104c08fccb9ed3e6f62f6c7af29 100644
---- a/dist/introspect-Dlc-aIaF.mjs
-+++ b/dist/introspect-Dlc-aIaF.mjs
+diff --git a/dist/introspect-njKASm3q.mjs b/dist/introspect-njKASm3q.mjs
+index c8d635e57ca4cd3fe8f7cbfd5c769d61b7e96874..61814b7418ca78b61433eee5766e1a138e0fe12c 100644
+--- a/dist/introspect-njKASm3q.mjs
++++ b/dist/introspect-njKASm3q.mjs
 @@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
@@ -28,7 +28,7 @@ index 4076d0580f0a7fb69684637d2d16092609713262..e0b2098a7994a104c08fccb9ed3e6f62
  	policy_uri: z.string().optional(),
  	software_id: z.string().optional(),
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
-index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..131bb887b6fe106aaf3c1ca0987be91764bb7d64 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts
 +++ b/dist/oauth-1Ud-hvZY.d.mts
 @@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
