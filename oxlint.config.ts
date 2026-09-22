@@ -2794,6 +2794,8 @@ export default defineConfig({
         "apps/web/src/routes/dev/**/*.{ts,tsx}",
         "apps/web/src/components/dev/**/*.{ts,tsx}",
         "apps/web/src/components/dev-sidebar-group.tsx",
+        // Dev-only onboarding stays English and out of the production catalog.
+        "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx",
       ],
       rules: {
         "no-untranslated-jsx-literal/no-untranslated-jsx-literal": "off",
