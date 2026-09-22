@@ -172,7 +172,7 @@ export const GuideHelpDrawer = ({
 
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetPopup side="inline-end">
+      <SheetPopup side="inline-start">
         <SheetHeader>
           <SheetTitle>{t("guides.help.title")}</SheetTitle>
         </SheetHeader>

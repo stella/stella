@@ -26,7 +26,10 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
-import { useGuideDrawerStore } from "@/features/guides/guide-drawer-store";
+import {
+  GUIDE_DRAWER_OPEN_SOURCES,
+  useGuideDrawerStore,
+} from "@/features/guides/guide-drawer-store";
 import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -725,7 +728,7 @@ export const OnboardingWizard = () => {
           onNext={() => {
             // Set before navigating: the sidebar that owns the drawer mounts
             // with the chat route and reads the store on first render.
-            openGuideDrawer();
+            openGuideDrawer(GUIDE_DRAWER_OPEN_SOURCES.onboarding);
             detached(
               navigate({ to: "/chat", replace: true }),
               "onboarding-wizard.navigate",

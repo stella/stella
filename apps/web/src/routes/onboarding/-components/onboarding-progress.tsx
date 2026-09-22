@@ -22,7 +22,7 @@ export const OnboardingProgress = ({
   ];
 
   return (
-    <div className="mb-10 flex items-start gap-4">
+    <div className="mb-6 flex items-start gap-4 [@media(min-height:700px)]:mb-10">
       {Array.from({ length: totalSteps }, (_, i) => (
         <div className="flex min-w-0 flex-1 flex-col gap-1.5" key={i}>
           <div
