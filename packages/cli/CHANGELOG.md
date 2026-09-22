@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.19.2
+
+### Patch Changes
+
+- [#3694](https://github.com/stella/stella/pull/3694) [`036952a`](https://github.com/stella/stella/commit/036952a1bc97d05abefd2976b53c0647485c04f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A citation's polarity can now read `mixed`, for a citing decision that departs from the cited one at one mention and relies on it at another.
+
 ## 1.19.1
 
 ### Patch Changes
