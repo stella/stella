@@ -20,7 +20,6 @@ import {
   Navigate,
   createFileRoute,
   stripSearchParams,
-  useBlocker,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { UploadIcon } from "lucide-react";
@@ -74,6 +73,7 @@ import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-ju
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   DOCX_MIME,
@@ -641,10 +641,11 @@ function RouteComponentInner({
     }
     return !leaveResult.value;
   });
-  useBlocker({
-    disabled: !docxUnlocked,
-    enableBeforeUnload: docxUnlocked,
-    shouldBlockFn: leaveDocxBeforeNavigation,
+  useUnsavedWork({
+    surface: "document-docx-editor",
+    guard: "decide-navigation",
+    isDirty: docxUnlocked,
+    shouldBlockNavigation: leaveDocxBeforeNavigation,
   });
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);

@@ -13,8 +13,9 @@ import { useDebouncedCallback } from "use-debounce";
 
 import { useLatest } from "@stll/ui/use-latest";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
@@ -127,16 +128,7 @@ export const useEditSession = ({
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
 
-  // Warn the user before closing the tab with unsaved changes
-  useExternalSyncEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
+  useUnsavedWork({ surface: "docx-edit-session", guard: "unload", isDirty });
 
   const open = async (force?: boolean) => {
     const releaseContext: EditSessionReleaseContext = {

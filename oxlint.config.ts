@@ -1086,6 +1086,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-native-s3-object-read.ts",
     "./.oxlint-plugins/no-native-s3-object-write.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
@@ -1422,6 +1423,16 @@ export default defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Exercise no-direct-unsaved-work-guard against its regression fixture;
+      // the rule is otherwise scoped to apps/web/src.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-direct-unsaved-work-guard.fixture.ts",
+      ],
+      rules: {
+        "no-direct-unsaved-work-guard/no-direct-unsaved-work-guard": "error",
+      },
     },
     {
       // Exercise require-query-signal against its regression fixture; the
@@ -2676,6 +2687,12 @@ export default defineConfig({
         "no-raw-use-effect/no-raw-use-effect": [
           "error",
           { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
+        ],
+        // Unsaved-work guards go through useUnsavedWork so the stale-client
+        // refresh can see them.
+        "no-direct-unsaved-work-guard/no-direct-unsaved-work-guard": [
+          "error",
+          { allowedFiles: ["apps/web/src/hooks/use-unsaved-work.ts"] },
         ],
         "@tanstack/query/exhaustive-deps": "error",
         "@tanstack/query/infinite-query-property-order": "error",

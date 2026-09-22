@@ -36,6 +36,7 @@ import "@stll/folio-react/editor.css";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
@@ -485,16 +486,8 @@ export const TemplateStudioPage = ({
     });
   }, [showDirectives]);
 
-  // Warn before a tab close / hard navigation while there are unsaved edits.
-  useMountEffect(() => {
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (useTemplateStudioStore.getState().isDirty) {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  });
+  const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  useUnsavedWork({ surface: "template-studio", guard: "unload", isDirty });
 
   // Folio defers creating the ProseMirror view until first interaction, so
   // onEditorViewReady never fires and the selection->inspector binding can't

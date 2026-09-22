@@ -71,6 +71,7 @@ import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-ext
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   areDraftDocsEqual,
@@ -79,6 +80,7 @@ import {
   nextDraftForEditorUpdate,
   shouldApplyStoredDraftToEditor,
   useChatDraftStore,
+  useHasUnsentChatDraft,
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
@@ -449,10 +451,20 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   return (
     <ChatEditorManagerContext value={contextValue}>
       <ChatEditorExtensionVersionContext value={extensionVersion}>
+        <UnsentChatDraftGuard />
         {children}
       </ChatEditorExtensionVersionContext>
     </ChatEditorManagerContext>
   );
+};
+
+// Drafts live in memory for every thread, including threads whose composer is
+// not mounted, so the provider that owns their lifecycle reports them; a
+// separate component keeps the flip from re-rendering the provider.
+const UnsentChatDraftGuard = () => {
+  const isDirty = useHasUnsentChatDraft();
+  useUnsavedWork({ surface: "chat-draft", guard: "silent-reload", isDirty });
+  return null;
 };
 
 export const useChatEditorExtensions = () => {

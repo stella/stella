@@ -7,12 +7,16 @@ import * as v from "valibot";
 
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { hasUnsavedWork } from "@/hooks/use-unsaved-work";
 import { browserApiRootUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
 
-import { shouldRefreshAfterNavigation } from "./api-version-mismatch-refresh.logic";
+import {
+  shouldRefreshAfterNavigation,
+  shouldRefreshWhenHidden,
+} from "./api-version-mismatch-refresh.logic";
 
 export const ApiVersionMismatchProvider = ({ children }: PropsWithChildren) => {
   const pathname = useRouterState({
@@ -94,18 +98,40 @@ type VersionRefreshObserverProps = {
 
 const VersionRefreshObserver = ({ pathname }: VersionRefreshObserverProps) => {
   const [detectedPathname] = useState(pathname);
-  const refreshAfterNavigation = shouldRefreshAfterNavigation({
-    currentPathname: pathname,
-    detectedPathname,
-  });
 
   // A completed SPA navigation is a safe update boundary: route blockers have
-  // already saved, discarded, or refused local-only work before this changes.
+  // already saved, discarded, or refused route-owned work before this changes.
   useExternalSyncEffect(() => {
-    if (refreshAfterNavigation) {
+    if (
+      shouldRefreshAfterNavigation({
+        currentPathname: pathname,
+        detectedPathname,
+        hasUnsavedWork: hasUnsavedWork(),
+      })
+    ) {
       window.location.reload();
     }
-  }, [refreshAfterNavigation]);
+  }, [detectedPathname, pathname]);
+
+  // A hidden tab is the other: the user cannot see the reload happen.
+  useMountEffect(() => {
+    const refreshIfHidden = () => {
+      if (
+        shouldRefreshWhenHidden({
+          visibilityState: document.visibilityState,
+          hasUnsavedWork: hasUnsavedWork(),
+        })
+      ) {
+        window.location.reload();
+      }
+    };
+    refreshIfHidden();
+    const controller = new AbortController();
+    document.addEventListener("visibilitychange", refreshIfHidden, {
+      signal: controller.signal,
+    });
+    return () => controller.abort();
+  });
 
   return null;
 };
