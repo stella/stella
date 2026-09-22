@@ -101,7 +101,7 @@ $body$`;
  * queries (`to_tsquery('simple', unaccent(...))`) run under PGlite.
  */
 const unaccentPgliteSql = (): string =>
-  `CREATE OR REPLACE FUNCTION unaccent(input text)
+  `CREATE OR REPLACE FUNCTION unaccent(text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
