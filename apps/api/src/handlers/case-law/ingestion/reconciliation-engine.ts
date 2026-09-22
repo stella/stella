@@ -69,8 +69,11 @@ import {
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import {
+  listReconciliationSlice,
+  MAX_SLICE_PAGES,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -140,16 +143,6 @@ const LIST_DELAY_MS = 200;
  * avoid.
  */
 const LIST_TIMEOUT_MS = 5 * 60_000;
-/**
- * Pages requested for one slice before the walk gives up on it.
- *
- * `totalPages` is the publisher's number and the response validators only
- * require it to be a number at all. Without a ceiling one wrong value turns a
- * single work unit into an unbounded request sequence against that publisher.
- * Far above any real slice, so reaching it means the listing is not walkable
- * rather than merely large.
- */
-const MAX_SLICE_PAGES = 200;
 /** Terminal rows examined when pruning a walked slice. */
 const PRUNE_ROW_LIMIT = 1000;
 /**
@@ -990,52 +983,32 @@ const walkSlice = async ({
   summary.reason = reason;
   summary.slice = slice;
 
-  const keyed = new Map<string, KeyedListingItem>();
-  for (let page = 0; ; page += 1) {
-    if (page > 0) {
-      await sleep(LIST_DELAY_MS);
-    }
-    const listed = await reconciliation.listSlicePage({
-      slice,
-      page,
-      signal: AbortSignal.timeout(LIST_TIMEOUT_MS),
-    });
-    summary.listed += listed.items.length;
-    for (const item of listed.items) {
-      const identityKey = listingIdentityKey(item.identity);
-      if (identityKey === null) {
-        summary.unidentifiable += 1;
-        continue;
-      }
-      if (keyed.has(identityKey)) {
-        // A publisher lists a document once per docket it settles; ingesting
-        // the same identity twice in one walk would only have the second
-        // observation refresh the first.
-        summary.duplicate += 1;
-        continue;
-      }
-      keyed.set(identityKey, { ...item, identityKey, slice });
-    }
-    if (page + 1 >= listed.totalPages) {
-      break;
-    }
-    if (page + 1 >= MAX_SLICE_PAGES) {
-      // Refused rather than truncated: a partial listing would be written to
-      // the ledger as if it were the whole slice, and an undercounted
-      // `reported` can read as fully collected. Left unwritten, the slice
-      // keeps its previous row and the failure surfaces in the loop's tally.
-      throw new AdapterFetchError({
-        message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
-        adapterKey,
-        cursor: slice,
-      });
-    }
-    // No clock here on purpose; see RECONCILIATION_INGEST_BUDGET_MS. A listing
-    // has nowhere to resume from, so cutting one off on time would make a
-    // slowly-listing slice unreconcilable rather than merely slow.
+  // A listing that throws leaves the slice's previous ledger row standing, and
+  // the failure surfaces in the loop's tally.
+  const listing = await listReconciliationSlice({
+    adapterKey,
+    listSlicePage: reconciliation.listSlicePage,
+    pageDelayMs: LIST_DELAY_MS,
+    pageTimeoutMs: LIST_TIMEOUT_MS,
+    slice,
+    sleep,
+  });
+  if (Result.isError(listing)) {
+    // A walk fails by throwing: the unit's caller records it on the ledger as
+    // a failed slice, exactly as a rejected page request is.
+    throw listing.error;
   }
+  const { keyed } = listing.value;
+  summary.listed = listing.value.listed;
+  summary.unidentifiable = listing.value.unidentifiable;
+  summary.duplicate = listing.value.duplicate;
 
-  const items = [...keyed.values()];
+  const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
+    identity,
+    payload,
+    identityKey,
+    slice,
+  }));
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const held = await selectHeldIdentityKeys(scopedDb, {

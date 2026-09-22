@@ -64,6 +64,7 @@ export const CASE_LAW_COVERAGE_AVAILABILITY_TONES = {
 
 /** The warranty a stated total carries, which the page names rather than hides. */
 export const CASE_LAW_TOTAL_REPORTER_LABEL_KEYS = {
+  listing: "caseLaw.coverage.reportedByListing",
   operator: "caseLaw.coverage.reportedByOperator",
   publisher: "caseLaw.coverage.reportedByPublisher",
 } as const satisfies Record<CaseLawTotalReporter, TranslationKey>;

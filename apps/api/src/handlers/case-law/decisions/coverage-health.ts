@@ -133,6 +133,11 @@ export const caseLawCountryHealth = (
 export const CASE_LAW_TOTAL_REPORTER = {
   /** Read from the publisher's own count endpoint. */
   PUBLISHER: "publisher",
+  /**
+   * Summed from the publisher's own listing, slice by slice, where the
+   * publisher states no total: the publisher's items, counted by us.
+   */
+  LISTING: "listing",
   /** Recorded by hand where the publisher exposes no count. */
   OPERATOR: "operator",
 } as const;
