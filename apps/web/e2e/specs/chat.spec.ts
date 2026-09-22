@@ -1,5 +1,90 @@
 import { expect, test } from "../helpers/test";
 
+test("model picker keeps its help and workspace chrome aligned", async ({
+  page,
+}) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+  await page.addStyleTag({
+    content: "html::-webkit-scrollbar { width: 15px; }",
+  });
+
+  const inspectorRail = page.getByRole("navigation", { name: "Inspector" });
+  await expect(inspectorRail).toBeVisible({ timeout: 30_000 });
+  const inspectorInlineEndGap = async () =>
+    inspectorRail.evaluate(
+      (rail) => window.innerWidth - rail.getBoundingClientRect().right,
+    );
+  await expect
+    .poll(async () => Math.abs(await inspectorInlineEndGap()))
+    .toBeLessThanOrEqual(1);
+  const closedInspectorInlineEndGap = await inspectorInlineEndGap();
+
+  const modelPicker = page.getByRole("button", { name: "Auto", exact: true });
+  await expect(modelPicker).toBeVisible({ timeout: 30_000 });
+  await modelPicker.click();
+  await page.evaluate(() => {
+    document.documentElement.style.scrollbarGutter = "stable";
+  });
+  const documentScrollState = await page.evaluate(() => ({
+    gutter: getComputedStyle(document.documentElement).scrollbarGutter,
+    overflowY: getComputedStyle(document.documentElement).overflowY,
+  }));
+  expect(documentScrollState).toEqual({ gutter: "auto", overflowY: "hidden" });
+  expect(
+    Math.abs((await inspectorInlineEndGap()) - closedInspectorInlineEndGap),
+  ).toBeLessThanOrEqual(1);
+
+  const helpTrigger = page
+    .getByRole("button", { name: "About reasoning effort" })
+    .first();
+  await expect(helpTrigger).toBeVisible();
+
+  const verticalCenters = await helpTrigger.evaluate((trigger) => {
+    const row = trigger.parentElement;
+    if (!(row instanceof HTMLElement)) {
+      throw new Error("Reasoning-effort help trigger is missing its model row");
+    }
+
+    const rowRect = row.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    return {
+      row: rowRect.top + rowRect.height / 2,
+      trigger: triggerRect.top + triggerRect.height / 2,
+    };
+  });
+  expect(verticalCenters.trigger).toBeCloseTo(verticalCenters.row, 0);
+
+  await helpTrigger.click();
+  const helpPopup = page.getByRole("dialog");
+  await expect(helpPopup).toContainText(
+    "Controls how much reasoning the model uses before answering.",
+  );
+
+  const popoverPaintsAboveMenu = await helpPopup.evaluate((popup) => {
+    const menu = document.querySelector('[data-slot="menu-popup"]');
+    if (!(menu instanceof HTMLElement)) {
+      throw new Error("Model picker menu popup is missing");
+    }
+
+    const menuRect = menu.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const overlapStartX = Math.max(menuRect.left, popupRect.left);
+    const overlapEndX = Math.min(menuRect.right, popupRect.right);
+    const overlapStartY = Math.max(menuRect.top, popupRect.top);
+    const overlapEndY = Math.min(menuRect.bottom, popupRect.bottom);
+    if (overlapStartX >= overlapEndX || overlapStartY >= overlapEndY) {
+      throw new Error("Reasoning-effort help does not overlap the model menu");
+    }
+
+    const topElement = document.elementFromPoint(
+      (overlapStartX + overlapEndX) / 2,
+      (overlapStartY + overlapEndY) / 2,
+    );
+    return topElement !== null && popup.contains(topElement);
+  });
+  expect(popoverPaintsAboveMenu).toBe(true);
+});
+
 test("prompt improvement menu uses task strategies", async ({ page }) => {
   await page.goto("/chat", { waitUntil: "commit" });
 

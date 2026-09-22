@@ -343,13 +343,20 @@ const EffortHelp = () => {
     <Popover>
       <PopoverTrigger
         aria-label={t("chat.modelSelector.effortHelpLabel")}
-        render={<Button className="size-11" size="icon" variant="muted" />}
+        render={
+          <Button
+            className="size-11 self-center sm:size-11"
+            size="icon"
+            variant="muted"
+          />
+        }
       >
         <InfoIcon className="size-3.5" />
       </PopoverTrigger>
       <PopoverPopup
         align="end"
         className="w-72 text-xs text-pretty"
+        layer="popup"
         side="inline-start"
         sideOffset={6}
       >

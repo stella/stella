@@ -1105,6 +1105,13 @@
      * in dark mode, so they read as bright strips against the dark surface. */
     color-scheme: light;
   }
+  /* WorkspaceShell owns the viewport and its content scroller. Keep the
+   * document locked so modal overlays cannot reserve a browser scrollbar
+   * gutter and pull the inline-end inspector away from the viewport edge. */
+  html:has([data-slot="workspace-shell"]) {
+    overflow: hidden;
+    scrollbar-gutter: auto !important;
+  }
   html.dark {
     color-scheme: dark;
   }
