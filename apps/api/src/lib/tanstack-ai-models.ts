@@ -28,6 +28,7 @@ import {
   isChatPdfAttachmentModelSupported,
   resolveReasoningEffort,
   shouldEmitTemperature,
+  supportsStreamingToolUse,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
@@ -258,6 +259,16 @@ export const modelAcceptsTextualDocumentInput = (
     modelId: model.modelId,
     role: "pdf",
   });
+
+/**
+ * Whether a resolved model can run an agent turn, which is a stream that
+ * carries tool schemas. Structured output has a non-streaming path the
+ * engine falls back to; a tool-carrying chat stream has none, so a model
+ * without streaming tool use cannot serve a turn that offers tools at all.
+ */
+export const modelAcceptsStreamingToolUse = (
+  model: Pick<ResolvedTanStackTextModel, "modelId">,
+): boolean => supportsStreamingToolUse(model.modelId);
 
 export const isAllowedBYOKModel = (
   provider: AIProvider,
@@ -565,11 +576,24 @@ const createBedrockTextAdapter = (
       // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
       return await Reflect.apply(adapter.structuredOutput, adapter, [options]);
     },
-    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
-    structuredOutputStream: (options) => {
-      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
-      return Reflect.apply(adapter.structuredOutputStream, adapter, [options]);
-    },
+    // Structured output is a forced tool call, and Converse refuses a
+    // toolConfig on a streaming request for a model that declares no
+    // streaming tool use. `structuredOutputStream` is optional on the
+    // adapter contract: withholding it routes the engine through its own
+    // fallback, one awaited `structuredOutput` call on the non-streaming
+    // Converse API, which those models do accept. A streaming consumer
+    // still sees a complete run, with the object in one delta.
+    ...(supportsStreamingToolUse(adapter.model)
+      ? {
+          // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+          structuredOutputStream: (options) => {
+            // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+            return Reflect.apply(adapter.structuredOutputStream, adapter, [
+              options,
+            ]);
+          },
+        }
+      : {}),
     // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
     supportsCombinedToolsAndSchema: (options) => {
       // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream

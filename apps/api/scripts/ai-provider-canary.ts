@@ -11,6 +11,7 @@ import {
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   MODEL_ROLES,
+  supportsStreamingToolUse,
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
@@ -1956,6 +1957,17 @@ const runWeeklyCanaryProbes = async (
   }
 
   const label = `weekly-tool-${context.rotation.toolShape}:${context.rotation.modelId}`;
+  // A tool round trip is a stream that carries tool schemas, so a model the
+  // catalog declares without streaming tool use cannot run this probe at
+  // all. Report the declared limit rather than the provider's refusal of a
+  // request stella no longer sends such a model.
+  if (!supportsStreamingToolUse(context.rotation.modelId)) {
+    console.log(
+      `[ai-canary] ${context.provider}/${label}: skipped (unsupported streaming tool use)`,
+    );
+    return totalFailures;
+  }
+
   const result = await runCanaryProbe({
     run: async (signal) => {
       await runWeeklyToolShapeProbe({ context, signal });

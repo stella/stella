@@ -60,6 +60,14 @@ export const TEMPERATURE_POLICIES = ["emit", "omit"] as const;
 
 export type TemperaturePolicy = (typeof TEMPERATURE_POLICIES)[number];
 
+export const STREAMING_TOOL_USE_SUPPORTS = [
+  "supported",
+  "unsupported",
+] as const;
+
+export type StreamingToolUseSupport =
+  (typeof STREAMING_TOOL_USE_SUPPORTS)[number];
+
 export const AI_PROVIDERS = [
   "google",
   "openrouter",
@@ -839,6 +847,92 @@ const MODEL_TEMPERATURE_POLICY_BY_ID: Readonly<
  */
 export const shouldEmitTemperature = (modelId: string): boolean =>
   MODEL_TEMPERATURE_POLICY_BY_ID[normalizeModelCatalogId(modelId)] === "emit";
+
+/**
+ * Whether a model accepts tool use on a streaming request.
+ *
+ * Every tool-carrying request stella sends is a stream, and structured
+ * output is a forced tool call, so `"unsupported"` withdraws both: the
+ * provider answers such a request with a fatal stream error rather than a
+ * degraded result. models.dev does not publish this, so the map is
+ * hand-declared here rather than in the generated `capabilities.gen.ts`,
+ * and it is total over the offered catalog: a new model forces a decision.
+ *
+ * Consumers must go through `supportsStreamingToolUse`.
+ */
+export const MODEL_STREAMING_TOOL_USE = {
+  "gemini-3.8-flash": "supported",
+  "gemini-3.7-flash": "supported",
+  "gemini-3.6-flash": "supported",
+  "gemini-3.5-flash-lite": "supported",
+  "gemini-3.1-pro-preview": "supported",
+  "gemini-3.5-flash": "supported",
+  "gemini-3.1-flash-lite": "supported",
+  "openai/gpt-6-astra": "supported",
+  "openai/gpt-5.6-sol": "supported",
+  "openai/gpt-5.6-terra": "supported",
+  "openai/gpt-5.6-luna": "supported",
+  "google/gemini-3.8-flash": "supported",
+  "google/gemini-3.7-flash": "supported",
+  "google/gemini-3.6-flash": "supported",
+  "google/gemini-3.5-flash-lite": "supported",
+  "google/gemini-3.1-pro-preview": "supported",
+  "google/gemini-3.5-flash": "supported",
+  "google/gemini-3.1-flash-lite": "supported",
+  "anthropic/claude-sonnet-5": "supported",
+  "anthropic/claude-opus-5": "supported",
+  "anthropic/claude-opus-4.8": "supported",
+  "anthropic/claude-sonnet-4.6": "supported",
+  "openai/gpt-5.5": "supported",
+  "openai/gpt-5.4-mini": "supported",
+  "gpt-6-astra": "supported",
+  "gpt-5.6": "supported",
+  "gpt-5.6-terra": "supported",
+  "gpt-5.6-luna": "supported",
+  "gpt-5.5": "supported",
+  "gpt-5.4": "supported",
+  "gpt-5.4-mini": "supported",
+  "gpt-5.4-nano": "supported",
+  "gpt-5.2": "supported",
+  "claude-sonnet-5": "supported",
+  "claude-fable-5-1": "supported",
+  "claude-fable-5": "supported",
+  "claude-opus-5": "supported",
+  "claude-opus-4-8": "supported",
+  "claude-opus-4-7": "supported",
+  "claude-sonnet-4-6": "supported",
+  "claude-opus-4-6": "supported",
+  "claude-haiku-4-5-20251001": "supported",
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "supported",
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": "supported",
+  "us.amazon.nova-pro-v1:0": "supported",
+  "us.amazon.nova-lite-v1:0": "supported",
+  "us.amazon.nova-micro-v1:0": "supported",
+  "openai.gpt-oss-120b-1:0": "supported",
+  "openai.gpt-oss-20b-1:0": "supported",
+  // 2026-09-21 weekly provider canary: Bedrock Converse answers every
+  // streaming request that carries a toolConfig with "This model doesn't
+  // support tool use in streaming mode."
+  "us.deepseek.r1-v1:0": "unsupported",
+  "mistral-large-latest": "supported",
+  "mistral-medium-latest": "supported",
+  "mistral-small-latest": "supported",
+} as const satisfies Record<OfferedBYOKModelId, StreamingToolUseSupport>;
+
+const MODEL_STREAMING_TOOL_USE_BY_ID: Readonly<
+  Record<string, StreamingToolUseSupport>
+> = MODEL_STREAMING_TOOL_USE;
+
+/**
+ * Whether stella may send tools (or a structured-output schema) to this
+ * model on a streaming request. Unlisted ids resolve to `true`: custom
+ * deployments and env overrides are overwhelmingly tool-capable, and
+ * withdrawing tools from an uncatalogued model would silently strip the
+ * agent loop rather than fail where it can be seen.
+ */
+export const supportsStreamingToolUse = (modelId: string): boolean =>
+  MODEL_STREAMING_TOOL_USE_BY_ID[normalizeModelCatalogId(modelId)] !==
+  "unsupported";
 
 const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
   Record<string, readonly ReasoningEffort[] | null>
