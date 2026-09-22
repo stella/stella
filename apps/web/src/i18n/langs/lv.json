@@ -882,7 +882,7 @@
     "audioContent": "Ģenerēts audio",
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
-    "chatAbout": "Ievietot AI čatā",
+    "chatAbout": "Ievietot MI tērzēšanā",
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "composerMenu": {
       "context": "Konteksts",
@@ -950,11 +950,11 @@
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
-    "forkFromHere": "Sākt jaunu sarunu no šejienes",
+    "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Izveidota no sarunas, kas vairs nav pieejama",
-    "forkedThread": "No citas sarunas",
-    "forkingThread": "Tiek veidota jauna saruna…",
+    "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
+    "forkedThread": "No citas tērzēšanas",
+    "forkingThread": "Tiek veidota jauna tērzēšana…",
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
@@ -969,10 +969,10 @@
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
       "noPrompts": "Prasmju vēl nav",
-      "noRecentChats": "Nav nesenu čatu",
+      "noRecentChats": "Nav nesenu tērzēšanu",
       "pinnedMatters": "Piespraustās lietas",
       "prompts": "Prasmes",
-      "recentChats": "Nesenie čati"
+      "recentChats": "Nesenās tērzēšanas"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
@@ -1005,7 +1005,7 @@
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
     },
-    "newChat": "Jauna saruna",
+    "newChat": "Jauna tērzēšana",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "Lasīt jūsu organizācijas audita žurnālu",
     "scopeAdminWrite": "Pārvaldīt organizācijas dalībniekus un iestatījumus",
     "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
-    "scopeChat": "Lasīt un pārvaldīt jūsu čatus un ziņas",
+    "scopeChat": "Lasīt un pārvaldīt jūsu tērzēšanas un ziņas",
     "scopeContactsWrite": "Izveidot, rediģēt un dzēst kontaktpersonas visā jūsu organizācijā",
     "scopeDocumentsWrite": "Izveidot, rediģēt un dzēst jūsu dokumentus",
     "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
@@ -2525,7 +2525,7 @@
         "description": "Izmantojiet prasmes vai pievienojiet citus noderīgus rīkus",
         "steps": {
           "mcp": {
-            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu tērzēšanās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
             "title": "Pievienotie rīku serveri",
             "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
           },
@@ -3110,7 +3110,7 @@
       "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
       "connectedToast": "MCP pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
-      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus tērzēšanai. Tokeni tiek glabāti katram lietotājam atsevišķi.",
       "detected": "Noteikts: {authType}",
       "disable": "Izslēgt",
       "disabled": "Pievienots · izslēgts",
@@ -3119,7 +3119,7 @@
       "enable": "Ieslēgt",
       "errorDescription": "Integrāciju neizdevās atjaunināt.",
       "errorTitle": "MCP neizdevās",
-      "mcpExplainer": "Integrācijas pievieno čatam ārējus pakalpojumus, ar kuriem var strādāt MI.",
+      "mcpExplainer": "Integrācijas pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt MI.",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
       "off": "Izslēgts",
       "on": "Ieslēgts",
@@ -3133,7 +3133,7 @@
       "tokenPlaceholder": "Ielīmējiet tokenu",
       "urlLabel": "MCP servera URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Izmantot čatā",
+      "useInChat": "Izmantot tērzēšanā",
       "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
     "playbooks": {
@@ -3339,7 +3339,7 @@
         "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
       },
       "prompts": {
-        "description": "Atkārtoti izmantojamas prasmes, kas čatā pieejamas ar /",
+        "description": "Atkārtoti izmantojamas prasmes, kas tērzēšanā pieejamas ar /",
         "title": "Prasmes"
       },
       "templates": {
@@ -3403,7 +3403,7 @@
         "descriptionPlaceholder": "Īss apraksts, kas redzams atlasītājā",
         "name": "Nosaukums",
         "namePlaceholder": "piem., Apkopot dokumentu",
-        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas čata rakstīšanas laukā, izmantojot šo prasmi",
+        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas tērzēšanas rakstīšanas laukā, izmantojot šo prasmi",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi komandā"
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Izvēlieties lietu, lai skatītu tās atmiņu."
     },
-    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās sarunās.",
+    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās tērzēšanās.",
     "pageTitle": "Atmiņa",
     "provenance": "{source} · {date}",
     "restoredToast": "Atmiņa atjaunota",
@@ -3524,7 +3524,7 @@
     "sidebar": "Sānjosla",
     "sidebarDescription": "Parāda mobilo sānjoslu.",
     "templates": "Veidnes",
-    "toggleChat": "Pārslēgt sarunu",
+    "toggleChat": "Pārslēgt tērzēšanu",
     "toggleSidebar": "Pārslēgt sānjoslu"
   },
   "notifications": {
@@ -4165,7 +4165,7 @@
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",
       "memoryExtraction": {
-        "description": "Kad ieslēgts, stella fonā pārskata apkopotos sarunu pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
+        "description": "Kad ieslēgts, stella fonā pārskata apkopotos tērzēšanas pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Izmantojiet savas tīmekļa meklēšanas API atslēgas, lai tērzēšana varētu meklēt tīmeklī un lasīt lapas ar jūsu pakalpojumu sniedzēja kontu. Bez tām tērzēšana izmanto platformas koplietotās atslēgas, ja tās ir pieejamas. Lapu lasīšana darbojas arī bez atslēgas; pievienojiet atslēgu, lai paaugstinātu pieprasījumu limitus.",
+      "fetchTitle": "Lapu lasītāja atslēga (Jina)",
       "platformFallback": "Tiek izmantota platformas koplietotā atslēga. Pievienojiet savu atslēgu, lai izmantotu savu pakalpojumu sniedzēja kontu un kvotu.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Meklēšanas pakalpojuma sniedzēja atslēga (Tavily)",
       "title": "Meklēšanas tīmeklī atslēgas"
     }
   },

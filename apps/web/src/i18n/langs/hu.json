@@ -882,7 +882,7 @@
     "audioContent": "Generált hang",
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
-    "chatAbout": "Beszúrás az AI chatbe",
+    "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "composerMenu": {
       "context": "Kontextus",
@@ -918,7 +918,7 @@
       "tools": "Eszközök",
       "triggerLabel": "Beszélgetés kontextusa: {percent}% megtelt"
     },
-    "contextPlaceholder": "Chat erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
+    "contextPlaceholder": "Csevegés erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
     "createDocument": {
       "continue": "Dokumentum létrehozása",
       "created": "Dokumentum létrehozva",
@@ -969,10 +969,10 @@
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",
       "noPrompts": "Még nincsenek skillek",
-      "noRecentChats": "Nincsenek legutóbbi chatek",
+      "noRecentChats": "Nincsenek legutóbbi csevegések",
       "pinnedMatters": "Kitűzött ügyek",
       "prompts": "Skillek",
-      "recentChats": "Legutóbbi chatek"
+      "recentChats": "Legutóbbi csevegések"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
@@ -1347,7 +1347,7 @@
     "archive": "Archiválás",
     "ask": "Kérdezés",
     "askAI": "AI megkérdezése",
-    "askInChat": "Kérdezze meg a chatben",
+    "askInChat": "Kérdezze meg a csevegésben",
     "assignee": "Felelős",
     "author": "Szerző",
     "back": "Vissza",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
-    "scopeChat": "Chatek és üzenetek olvasása és kezelése",
+    "scopeChat": "Csevegések és üzenetek olvasása és kezelése",
     "scopeContactsWrite": "Kapcsolatok létrehozása, szerkesztése és törlése a teljes szervezetben",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
@@ -2511,7 +2511,7 @@
           "plusMenu": {
             "body": "A + gombbal fájlt csatolhat vagy ügyre hivatkozhat.",
             "title": "Adjon hozzá anyagokat a + gombbal",
-            "when": "Ha a szükséges anyagok még nincsenek a chatben."
+            "when": "Ha a szükséges anyagok még nincsenek a csevegésben."
           },
           "send": {
             "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
@@ -2519,7 +2519,7 @@
             "when": "Az első válasz megmutatja, mi hiányzik még."
           }
         },
-        "title": "Kezdje a chattel"
+        "title": "Kezdje a csevegéssel"
       },
       "chatPower": {
         "description": "Használjon skilleket, vagy csatlakoztasson további hasznos eszközöket",
@@ -2543,7 +2543,7 @@
             "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
           }
         },
-        "title": "Hozzon ki többet a chatből"
+        "title": "Hozzon ki többet a csevegésből"
       },
       "documents": {
         "description": "Iktasson egy dokumentumot, majd találja meg később",
@@ -2769,7 +2769,7 @@
     "hidePane": "Panel elrejtése",
     "matterPicker": {
       "allMatters": "Összes ügy",
-      "description": "Válassza ki, mely ügyekre támaszkodhat ez a chat.",
+      "description": "Válassza ki, mely ügyekre támaszkodhat ez a csevegés.",
       "empty": "Nincs elérhető ügy.",
       "noMatter": "Nincs ügy",
       "noResults": "Egyetlen ügy sem egyezik a következővel: „{query}”.",
@@ -2820,7 +2820,7 @@
     },
     "moveToMain": "Áthelyezés a fő nézetbe",
     "moveToSide": "Áthelyezés az oldalsó panelbe",
-    "openChat": "Chat megnyitása",
+    "openChat": "Csevegés megnyitása",
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
     "review": {
@@ -2882,7 +2882,7 @@
       "filterDeviations": "Eltérések",
       "flag": "Megjelölés",
       "flaggedPositions": "{total, plural, one {{flagged, number} megjelölve # álláspontból} other {{flagged, number} megjelölve # álláspontból}}",
-      "fromChat": "Chatből",
+      "fromChat": "Csevegésből",
       "fromThisMatter": "Ebből az ügyből",
       "history": {
         "backToLatest": "Vissza a legutóbbihoz",
@@ -3029,7 +3029,7 @@
       "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törlöd a fájlt? Ez nem vonható vissza.",
-      "description": "Telepíts SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a chathez.",
+      "description": "Telepíts SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a csevegéshez.",
       "disableSkill": "Készség kikapcsolása",
       "disabled": "Kikapcsolva",
       "discoverSkills": "Készségek keresése",
@@ -3110,7 +3110,7 @@
       "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
       "connectedToast": "MCP csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
-      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
+      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a csevegéshez. A tokeneket felhasználónként tároljuk.",
       "detected": "Felismerve: {authType}",
       "disable": "Kikapcsolás",
       "disabled": "Csatlakoztatva · kikapcsolva",
@@ -3119,7 +3119,7 @@
       "enable": "Bekapcsolás",
       "errorDescription": "Az integrációt nem sikerült frissíteni.",
       "errorTitle": "MCP sikertelen",
-      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a chathez, amelyekkel az MI dolgozhat.",
+      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a csevegéshez, amelyekkel az MI dolgozhat.",
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
@@ -3133,7 +3133,7 @@
       "tokenPlaceholder": "Token beillesztése",
       "urlLabel": "MCP-szerver URL-je",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Használat a chatben",
+      "useInChat": "Használat a csevegésben",
       "whatIsAnMcpServer": "Mi az az MCP-szerver?"
     },
     "playbooks": {
@@ -3339,7 +3339,7 @@
         "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
       },
       "prompts": {
-        "description": "A chatben / paranccsal elérhető, újrahasználható készségek",
+        "description": "A csevegésben / paranccsal elérhető, újrahasználható készségek",
         "title": "Készségek"
       },
       "templates": {
@@ -3403,7 +3403,7 @@
         "descriptionPlaceholder": "A választóban megjelenő rövid leírás",
         "name": "Név",
         "namePlaceholder": "pl. Dokumentum összefoglalása",
-        "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
+        "promptPlaceholder": "A csevegés szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "A csapat minden tagja"
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Válasszon ügyet a memóriájának megtekintéséhez."
     },
-    "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a beszélgetéseken át megjegyez.",
+    "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a csevegéseken át megjegyez.",
     "pageTitle": "Memória",
     "provenance": "{source} · {date}",
     "restoredToast": "Emlék visszaállítva",
@@ -3903,7 +3903,7 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
-    "continueInChat": "Folytatás chatben",
+    "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",
     "deleteSearchDescription": "Ezzel véglegesen törli ezt: \"<bdi>{name}</bdi>\".",
@@ -4165,9 +4165,9 @@
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Manage who has access to this organization",
       "memoryExtraction": {
-        "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt beszélgetéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
+        "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt csevegéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
         "title": "Memóriakinyerés",
-        "toggleLabel": "Memóriabejegyzések javaslása a beszélgetési előzményekből a háttérben"
+        "toggleLabel": "Memóriabejegyzések javaslása a csevegési előzményekből a háttérben"
       },
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Használja saját webes keresési API-kulcsait, hogy a csevegés a saját szolgáltatói fiókjával kereshessen a weben és olvashasson oldalakat. Ezek nélkül a csevegés a platform megosztott kulcsait használja, ha elérhetők. Az oldalak olvasása kulcs nélkül is működik; kulcs hozzáadásával megemelheti a kéréskorlátokat.",
+      "fetchTitle": "Oldalolvasó kulcsa (Jina)",
       "platformFallback": "A platform megosztott kulcsa van használatban. Saját szolgáltatói fiókja és kvótája használatához adja hozzá a saját kulcsát.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Keresési szolgáltató kulcsa (Tavily)",
       "title": "Webes keresési kulcsok"
     }
   },

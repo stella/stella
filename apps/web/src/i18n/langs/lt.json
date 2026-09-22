@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Naudokite savo žiniatinklio paieškos API raktus, kad pokalbis galėtų ieškoti žiniatinklyje ir skaityti puslapius naudodamas jūsų teikėjo paskyrą. Be jų pokalbis naudoja bendrus platformos raktus, kai jų yra. Puslapių skaitymas veikia ir be rakto; pridėkite raktą, kad padidintumėte užklausų ribas.",
+      "fetchTitle": "Puslapių skaitytuvo raktas (Jina)",
       "platformFallback": "Naudojamas bendras platformos raktas. Pridėkite savo raktą, kad naudotumėte savo teikėjo paskyrą ir kvotą.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Paieškos teikėjo raktas (Tavily)",
       "title": "Žiniatinklio paieškos raktai"
     }
   },

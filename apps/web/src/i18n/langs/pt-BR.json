@@ -969,10 +969,10 @@
       "lastAccessedMatters": "Últimos casos acessados",
       "noMatters": "Ainda não há casos",
       "noPrompts": "Nenhuma habilidade ainda",
-      "noRecentChats": "Nenhum bate-papo recente",
+      "noRecentChats": "Nenhum chat recente",
       "pinnedMatters": "Casos fixados",
       "prompts": "Habilidades",
-      "recentChats": "Bate-papos recentes"
+      "recentChats": "Chats recentes"
     },
     "loadEarlierMessages": "Carregar mensagens anteriores",
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
@@ -1005,7 +1005,7 @@
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
     },
-    "newChat": "Novo bate-papo",
+    "newChat": "Novo chat",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "Ler o registro de auditoria da sua organização",
     "scopeAdminWrite": "Gerenciar membros e configurações da organização",
     "scopeBillingWrite": "Criar, editar e excluir seus lançamentos de horas",
-    "scopeChat": "Ler e gerenciar seus bate-papos e mensagens",
+    "scopeChat": "Ler e gerenciar seus chats e mensagens",
     "scopeContactsWrite": "Criar, editar e excluir contatos em toda a sua organização",
     "scopeDocumentsWrite": "Criar, editar e excluir seus documentos",
     "scopeExternalMcps": "Usar suas ferramentas externas conectadas",
@@ -2820,7 +2820,7 @@
     },
     "moveToMain": "Mover para a visualização principal",
     "moveToSide": "Mover para o painel lateral",
-    "openChat": "Abrir bate-papo",
+    "openChat": "Abrir chat",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Redimensionar painel",
     "review": {
@@ -3496,7 +3496,7 @@
     }
   },
   "navigation": {
-    "chat": "Bate-papo",
+    "chat": "Chat",
     "contacts": "Contatos",
     "inbox": "Caixa de entrada",
     "knowledge": "Conhecimento",
@@ -3524,7 +3524,7 @@
     "sidebar": "Barra lateral",
     "sidebarDescription": "Exibe a barra lateral móvel.",
     "templates": "Modelos",
-    "toggleChat": "Alternar bate-papo",
+    "toggleChat": "Alternar chat",
     "toggleSidebar": "Alternar barra lateral"
   },
   "notifications": {
@@ -3677,7 +3677,7 @@
       "removeProvider": "Remover provedor",
       "replaceKey": "Substituir chave",
       "roles": {
-        "chat": "Bate-papo",
+        "chat": "Chat",
         "fast": "Rápido",
         "pdf": "PDF",
         "reasoning": "Raciocínio"
@@ -3903,7 +3903,7 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
-    "continueInChat": "Continuar no bate-papo",
+    "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",
     "deleteSearchDescription": "Isto excluirá \"<bdi>{name}</bdi>\" permanentemente.",
@@ -3918,7 +3918,7 @@
     "hintOpen": "<kbd>↵</kbd> abrir",
     "kinds": {
       "caseLaw": "Jurisprudência",
-      "chat": "Bate-papo",
+      "chat": "Chat",
       "contact": "Contato",
       "folder": "Pasta",
       "link": "Link",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Use suas próprias chaves de API de pesquisa na web para que o chat possa pesquisar na web e ler páginas com sua própria conta do provedor. Sem elas, o chat usa as chaves compartilhadas da plataforma quando disponíveis. A leitura de páginas funciona sem chave; adicione uma para aumentar os limites de uso.",
+      "fetchTitle": "Chave do leitor de páginas (Jina)",
       "platformFallback": "A chave compartilhada da plataforma está em uso. Adicione a sua para usar sua própria conta e cota do provedor.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Chave do provedor de pesquisa (Tavily)",
       "title": "Chaves de pesquisa na web"
     }
   },

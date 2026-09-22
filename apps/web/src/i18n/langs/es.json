@@ -1005,7 +1005,7 @@
       "title": "Seleccionar modelo de chat",
       "viaProvider": "mediante {provider}"
     },
-    "newChat": "Nueva conversación",
+    "newChat": "Nuevo chat",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Usa tus propias claves de API de búsqueda web para que el chat pueda buscar en la web y leer páginas con tu propia cuenta del proveedor. Sin ellas, el chat usa las claves compartidas de la plataforma cuando están disponibles. La lectura de páginas funciona sin clave; añade una para aumentar los límites de uso.",
+      "fetchTitle": "Clave del lector de páginas (Jina)",
       "platformFallback": "Se está usando la clave compartida de la plataforma. Añade la tuya para usar tu propia cuenta y cuota del proveedor.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Clave del proveedor de búsqueda (Tavily)",
       "title": "Claves de búsqueda web"
     }
   },

@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Verwenden Sie eigene API-Schlüssel für die Websuche, damit der Chat über Ihr eigenes Anbieterkonto im Web suchen und Seiten lesen kann. Ohne sie nutzt der Chat die gemeinsamen Schlüssel der Plattform, sofern verfügbar. Das Lesen von Seiten funktioniert ohne Schlüssel; mit einem Schlüssel steigen die Ratenlimits.",
+      "fetchTitle": "Schlüssel für den Seitenleser (Jina)",
       "platformFallback": "Der gemeinsam genutzte Schlüssel der Plattform wird verwendet. Fügen Sie einen eigenen hinzu, um Ihr eigenes Anbieterkonto und Kontingent zu nutzen.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Schlüssel des Suchanbieters (Tavily)",
       "title": "Schlüssel für die Websuche"
     }
   },

@@ -2555,7 +2555,7 @@
           "upload": {
             "body": "Možnosť Nahrať otvorí výber súborov; súbory môžete tiež presunúť myšou do spisu. Každý súbor sa stane dokumentom v tomto spise, takže ho váš tím môže nájsť a stella ho môže použiť pri revízii.",
             "title": "Zaradiť dokument do spisu",
-            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v čete ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
+            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v chate ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
           }
         },
         "title": "Práca s dokumentmi"
@@ -3859,7 +3859,7 @@
     },
     "mcpConfigHint": "Údaje o pripojení nezávislé od klienta. Vložte ich do ľubovoľného klienta kompatibilného s MCP a pridajte vlastné prihlasovacie údaje.",
     "metaDescription": "Prehliadajte otvorený katalóg zručností, integrácií a vstavaných nástrojov na právnu prácu.",
-    "nativeToolInfo": "Toto je vstavaná funkcia stella. Ak ju chcete používať v čete, povoľte ju vo svojom pracovnom priestore.",
+    "nativeToolInfo": "Toto je vstavaná funkcia stella. Ak ju chcete používať v chate, povoľte ju vo svojom pracovnom priestore.",
     "notFound": "Nástroj sa nenašiel.",
     "practiceArea": "Právna oblasť",
     "practiceAreas": {
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Použite vlastné API kľúče na webové vyhľadávanie, aby chat mohol vyhľadávať na webe a čítať stránky cez váš účet u poskytovateľa. Bez nich chat používa zdieľané kľúče platformy, ak sú k dispozícii. Čítanie stránok funguje aj bez kľúča; pridaním kľúča zvýšite limity požiadaviek.",
+      "fetchTitle": "Kľúč na čítanie stránok (Jina)",
       "platformFallback": "Používa sa zdieľaný kľúč platformy. Ak chcete používať vlastný účet a kvótu u poskytovateľa, pridajte svoj kľúč.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Kľúč poskytovateľa vyhľadávania (Tavily)",
       "title": "Kľúče na vyhľadávanie na webe"
     }
   },

@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Použijte vlastní API klíče pro webové vyhledávání, aby chat mohl vyhledávat na webu a číst stránky přes váš účet u poskytovatele. Bez nich chat používá sdílené klíče platformy, pokud jsou k dispozici. Čtení stránek funguje i bez klíče; přidáním klíče zvýšíte limity požadavků.",
+      "fetchTitle": "Klíč pro čtení stránek (Jina)",
       "platformFallback": "Používá se sdílený klíč platformy. Přidejte vlastní klíč, chcete-li používat svůj účet a kvótu u poskytovatele.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Klíč poskytovatele vyhledávání (Tavily)",
       "title": "Klíče pro webové vyhledávání"
     }
   },

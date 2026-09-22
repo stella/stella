@@ -969,10 +969,10 @@
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
       "noPrompts": "Nie ma jeszcze umiejętności",
-      "noRecentChats": "Brak ostatnich chatów",
+      "noRecentChats": "Brak ostatnich czatów",
       "pinnedMatters": "Przypięte sprawy",
       "prompts": "Umiejętności",
-      "recentChats": "Ostatnie chaty"
+      "recentChats": "Ostatnie czaty"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Użyj własnych kluczy API wyszukiwania w internecie, aby czat mógł przeszukiwać sieć i czytać strony przez Twoje konto u dostawcy. Bez nich czat korzysta ze współdzielonych kluczy platformy, jeśli są dostępne. Czytanie stron działa bez klucza; dodaj klucz, aby zwiększyć limity zapytań.",
+      "fetchTitle": "Klucz czytnika stron (Jina)",
       "platformFallback": "Używany jest współdzielony klucz platformy. Dodaj własny klucz, aby korzystać ze swojego konta i limitu u dostawcy.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Klucz dostawcy wyszukiwania (Tavily)",
       "title": "Klucze wyszukiwania w internecie"
     }
   },

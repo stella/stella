@@ -946,15 +946,15 @@
     "emptyThreadDescription": "Posez une question sur ce dossier, rédigez du texte ou demandez une courte note de recherche.",
     "emptyThreadTitle": "Démarrer une conversation",
     "extractingContent": "Extraction du contenu...",
-    "fileThreadRebound": "La discussion sur ce fichier a déjà été lancée dans une autre session. Votre message a été conservé ; envoyez-le à nouveau.",
+    "fileThreadRebound": "Le chat sur ce fichier a déjà été lancé dans une autre session. Votre message a été conservé ; envoyez-le à nouveau.",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",
-    "forkFromHere": "Créer une nouvelle discussion à partir d’ici",
+    "forkFromHere": "Créer un nouveau chat à partir d’ici",
     "forkedFrom": "Créée à partir de <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Créée à partir d’une discussion qui n’est plus disponible",
-    "forkedThread": "Issue d’une autre discussion",
-    "forkingThread": "Création d’une nouvelle discussion…",
+    "forkedFromUnavailable": "Créé à partir d’un chat qui n’est plus disponible",
+    "forkedThread": "Issu d’un autre chat",
+    "forkingThread": "Création d’un nouveau chat…",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
@@ -1005,7 +1005,7 @@
       "title": "Sélectionner le modèle de chat",
       "viaProvider": "par {provider}"
     },
-    "newChat": "Nouvelle conversation",
+    "newChat": "Nouveau chat",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -2525,7 +2525,7 @@
         "description": "Utilisez des compétences ou connectez d’autres outils utiles",
         "steps": {
           "mcp": {
-            "body": "Active ou désactive les outils d'un serveur connecté pour vos discussions : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
+            "body": "Active ou désactive les outils d'un serveur connecté pour vos chats : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
             "title": "Serveurs d'outils connectés",
             "when": "Activez-en un quand la réponse a besoin de données à jour venant de l'extérieur de l'espace de travail. Laissez les autres désactivés : moins il y a d'outils en jeu, plus la réponse est ciblée et prévisible."
           },
@@ -2769,7 +2769,7 @@
     "hidePane": "Masquer le volet",
     "matterPicker": {
       "allMatters": "Tous les dossiers",
-      "description": "Choisissez les dossiers sur lesquels cette conversation peut s'appuyer.",
+      "description": "Choisissez les dossiers sur lesquels ce chat peut s'appuyer.",
       "empty": "Aucun dossier disponible.",
       "noMatter": "Aucun dossier",
       "noResults": "Aucun dossier ne correspond à « {query} ».",
@@ -2820,7 +2820,7 @@
     },
     "moveToMain": "Déplacer vers la vue principale",
     "moveToSide": "Déplacer vers le panneau latéral",
-    "openChat": "Ouvrir la conversation",
+    "openChat": "Ouvrir le chat",
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {
@@ -3380,7 +3380,7 @@
         "title": "Comment votre compétence doit-elle fonctionner ?"
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
-      "commandHelp": "Saisissez-la dans la discussion pour exécuter cette compétence.",
+      "commandHelp": "Saisissez-la dans le chat pour exécuter cette compétence.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
@@ -3524,7 +3524,7 @@
     "sidebar": "Barre latérale",
     "sidebarDescription": "Affiche la barre latérale mobile.",
     "templates": "Modèles",
-    "toggleChat": "Afficher / masquer la conversation",
+    "toggleChat": "Afficher / masquer le chat",
     "toggleSidebar": "Afficher/masquer la barre latérale"
   },
   "notifications": {
@@ -4165,7 +4165,7 @@
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Manage who has access to this organization",
       "memoryExtraction": {
-        "description": "Lorsque cette option est activée, stella examine en arrière-plan les fils de discussion résumés et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
+        "description": "Lorsque cette option est activée, stella examine en arrière-plan les chats résumés et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
         "title": "Extraction de mémoire",
         "toggleLabel": "Suggérer des souvenirs à partir de l'historique de chat en arrière-plan"
       },
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Utilisez vos propres clés d’API de recherche web pour que le chat puisse chercher sur le web et lire des pages avec votre propre compte fournisseur. Sans elles, le chat utilise les clés partagées de la plateforme lorsqu’elles sont disponibles. La lecture de pages fonctionne sans clé ; ajoutez-en une pour relever les limites de débit.",
+      "fetchTitle": "Clé du lecteur de pages (Jina)",
       "platformFallback": "La clé partagée de la plateforme est utilisée. Ajoutez la vôtre pour utiliser votre propre compte et quota auprès du fournisseur.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Clé du fournisseur de recherche (Tavily)",
       "title": "Clés de recherche web"
     }
   },
