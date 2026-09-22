@@ -17,6 +17,10 @@ import {
   resolveStatuteWorkVersion,
 } from "@/api/handlers/legislation/by-eli";
 import {
+  readLegislationFacets,
+  readLegislationFacetsHandler,
+} from "@/api/handlers/legislation/facets";
+import {
   readLegislationHandler,
   readPublicLegislationHandler,
 } from "@/api/handlers/legislation/get";
@@ -110,6 +114,8 @@ const recencyOrder = [
   czechCivilCodeAmendment,
   czechCivilCode,
   labourCode,
+  // Its only wording closed today: listed as ended, not dropped.
+  sunsetAct,
   longTitleAct,
   registerAct,
 ];
@@ -124,6 +130,7 @@ const today = new Date().toISOString().slice(0, 10);
 
 type DocumentSeed = {
   id: SafeId<"legislationDocument">;
+  documentType?: string;
   sourceId: SafeId<"legislationSource">;
   eli: string;
   title: string;
@@ -138,6 +145,7 @@ type DocumentSeed = {
 
 const seedDocument = ({
   id,
+  documentType = "act",
   sourceId,
   eli,
   title,
@@ -155,7 +163,7 @@ const seedDocument = ({
   title,
   country,
   language,
-  documentType: "act",
+  documentType,
   status: "current",
   versionValidFrom,
   versionValidTo,
@@ -325,6 +333,7 @@ beforeAll(
       }),
       seedDocument({
         id: labourCode,
+        documentType: "code",
         sourceId: openSourceId,
         eli: "CZ/2006/262",
         title: "Labour Code",
@@ -640,9 +649,13 @@ describe("legislation shelf", () => {
 
 type StatutePage = {
   items: {
+    amendmentCount: number;
     citationCaseCount: number | null;
+    firstVersionValidFrom: string | null;
     id: string;
+    lastAmendedOn: string | null;
     title: string;
+    validity: string;
     versionValidFrom: string | null;
   }[];
   nextCursor: string | null;
@@ -736,12 +749,93 @@ describe("public statute list", () => {
     ).toBe(true);
   });
 
-  test("drops a version whose validity window closes today", async () => {
+  test("lists a work whose last window closes today as ended", async () => {
     const page = expectPage(
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
-    expect(page.items.map((item) => item.id)).not.toContain(sunsetAct);
+    expect(page.items.find((item) => item.id === sunsetAct)?.validity).toBe(
+      "ended",
+    );
+    expect(
+      page.items
+        .filter((item) => item.id !== sunsetAct)
+        .every((item) => item.validity === "in-force"),
+    ).toBe(true);
+  });
+
+  test("narrows to works in force or to works that ended", async () => {
+    const inForce = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", validity: "in-force" },
+        legislationDb,
+      ),
+    );
+    const ended = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", validity: "ended" },
+        legislationDb,
+      ),
+    );
+
+    expect(inForce.items.map((item) => item.id)).toEqual(
+      recencyOrder.filter((id) => id !== sunsetAct),
+    );
+    expect(ended.items.map((item) => item.id)).toEqual([sunsetAct]);
+  });
+
+  test("dates the first wording and counts the wordings that replaced it up to today", async () => {
+    const page = expectPage(
+      await listStatutesHandler({ country: "CZE" }, legislationDb),
+    );
+    const byId = new Map(page.items.map((item) => [item.id, item]));
+
+    // Three windows opened by today; the one opening in 2999 is not counted.
+    expect(byId.get(civilCodeCurrent)).toMatchObject({
+      amendmentCount: 2,
+      firstVersionValidFrom: "2014-01-01",
+      lastAmendedOn: "2020-01-01",
+      versionValidFrom: "2020-01-01",
+    });
+    // Each language is its own Work: the English text has one wording.
+    expect(byId.get(civilCodeEnglish)).toMatchObject({
+      amendmentCount: 0,
+      firstVersionValidFrom: "2020-01-01",
+      lastAmendedOn: null,
+    });
+    expect(byId.get(registerAct)).toMatchObject({
+      amendmentCount: 0,
+      firstVersionValidFrom: null,
+      lastAmendedOn: null,
+    });
+  });
+
+  test("counts wordings up to the requested date", async () => {
+    const page = expectPage(
+      await listStatutesHandler(
+        { asOf: "2017-06-01", country: "CZE", number: "89/2012" },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items).toMatchObject([
+      {
+        amendmentCount: 1,
+        id: civilCodeOpenOlder,
+        lastAmendedOn: "2016-01-01",
+      },
+    ]);
+  });
+
+  test("narrows to one kind of act", async () => {
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", documentType: "code" },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([labourCode]);
   });
 
   test("returns a historical work when the requested date covers it", async () => {
@@ -1025,6 +1119,30 @@ describe("public statute list", () => {
       }),
       propertyConfig({ numRuns: 40 }),
     );
+  });
+});
+
+describe("statute facets", () => {
+  test("counts each published work once per kind of act, most common first", async () => {
+    const facets = await readLegislationFacets(legislationDb, "CZE");
+
+    // The civil code's two languages are two Works; the withheld source's act
+    // and the superseded windows add nothing.
+    expect(facets).toEqual({
+      documentType: [
+        { value: "act", count: 8 },
+        { value: "code", count: 1 },
+      ],
+    });
+  });
+
+  test("the handler rejects a malformed jurisdiction before reading anything", async () => {
+    const rejected = await readLegislationFacetsHandler(
+      { country: "s-k" },
+      legislationDb,
+    );
+
+    expect("documentType" in rejected).toBe(false);
   });
 });
 
