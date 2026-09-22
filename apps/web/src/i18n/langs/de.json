@@ -3629,7 +3629,7 @@
         "add": "Entscheidungsmodell hinzufügen",
         "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
-        "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; füge ein eigenes nur hinzu, um ein anderes zu nutzen.",
+        "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
         "label": "Entscheidungsmodell",
         "modelId": "Modell-ID"
       },
@@ -5394,7 +5394,7 @@
         "applyCrop": "Zuschnitt anwenden",
         "crop": "Zuschneiden",
         "cropBottom": "Unten",
-        "cropDescription": "{count, plural, one {Lege die Schnittbereiche für die ausgewählte Seite fest.} other {Lege die Schnittbereiche für die # ausgewählten Seiten fest.}}",
+        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten fest.}}",
         "cropLeft": "Links",
         "cropRight": "Rechts",
         "cropTitle": "Seiten zuschneiden",
