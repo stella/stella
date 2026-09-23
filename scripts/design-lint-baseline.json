@@ -506,8 +506,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 3,
     "apps/api/src/handlers/chat/chat-prompt.ts": 1,
-    "apps/api/src/handlers/chat/send-message.ts": 1,
-    "apps/api/src/handlers/chat/upload-files.ts": 1,
     "apps/api/src/handlers/clauses/template-slot-preview.ts": 1,
     "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts": 2,
     "apps/api/src/handlers/entities/download-zip.ts": 1,
@@ -516,7 +514,7 @@
     "apps/api/src/handlers/entities/version-diff-sources.ts": 2,
     "apps/api/src/handlers/files/document-properties.ts": 1,
     "apps/api/src/handlers/files/email-attachment-loader.ts": 1,
-    "apps/api/src/handlers/files/get.ts": 3,
+    "apps/api/src/handlers/files/get.ts": 2,
     "apps/api/src/handlers/files/scrubbed-download.ts": 1,
     "apps/api/src/handlers/files/update-document-properties.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 2,
@@ -533,6 +531,7 @@
     "apps/api/src/lib/entity-versions/compute-version-diff.ts": 2,
     "apps/api/src/lib/entity-versions/load-entity-version-file-buffer.ts": 1,
     "apps/api/src/lib/file-derivative-queue.ts": 1,
+    "apps/api/src/lib/file-scan/stored-file.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 2,
     "apps/api/src/lib/files/office-evidence.ts": 1,
     "apps/api/src/lib/health/readiness.ts": 1,
@@ -543,7 +542,7 @@
     "apps/api/src/lib/templates/template-fill-service.ts": 1,
     "apps/api/src/lib/web-search/jina.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 2,
-    "apps/api/src/lib/workflow/generate-batch.ts": 3,
+    "apps/api/src/lib/workflow/generate-batch.ts": 2,
     "apps/api/src/mcp/stella-tools.ts": 1
   }
 }
