@@ -14,15 +14,12 @@
  */
 import { compareDocx } from "@stll/folio-core";
 import {
-  applyDocxXmlPatchProposal,
   applyFolioAIEditsToBuffer,
   compareDocxVersions,
   createBilingualDocx,
   docxToMarkdown,
   extractDocumentStyleSetFromDocx,
-  extractDocxText,
   FolioDocxReviewer,
-  inspectDocxPackage,
   materializeYjsDocx,
   parseDocx,
   readBilingualDocx,
@@ -48,10 +45,6 @@ export const derivedScannedFile = (
     source: { type: "derived", from: file.source },
   });
 
-type ApplyDocxXmlPatchProposalArgs = Parameters<
-  typeof applyDocxXmlPatchProposal
->[0];
-
 export const parseScannedDocx = async (
   file: ScannedFile,
   options?: Parameters<typeof parseDocx>[1],
@@ -61,9 +54,6 @@ export const scannedDocxToMarkdown = async (
   file: ScannedFile,
   options?: Parameters<typeof docxToMarkdown>[1],
 ) => await docxToMarkdown(file.bytes, options);
-
-export const extractScannedDocxText = async (file: ScannedFile) =>
-  await extractDocxText(file.bytes);
 
 export const compareScannedDocx = async (
   base: ScannedFile,
@@ -99,17 +89,6 @@ export const applyFolioAIEditsToScannedDocx = async (
   operations: Parameters<typeof applyFolioAIEditsToBuffer>[1],
   options?: Parameters<typeof applyFolioAIEditsToBuffer>[2],
 ) => await applyFolioAIEditsToBuffer(file.bytes, operations, options);
-
-export const inspectScannedDocxPackage = async (
-  file: ScannedFile,
-  options?: Parameters<typeof inspectDocxPackage>[1],
-) => await inspectDocxPackage(file.bytes, options);
-
-export const applyDocxXmlPatchProposalToScanned = async ({
-  file,
-  ...args
-}: Omit<ApplyDocxXmlPatchProposalArgs, "bytes"> & { file: ScannedFile }) =>
-  await applyDocxXmlPatchProposal({ ...args, bytes: file.bytes });
 
 /** A collaborative Yjs state materialized over its scanned source document. */
 export const materializeYjsOverScannedDocx = async ({

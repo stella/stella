@@ -323,11 +323,18 @@ const loadInput = async ({
   });
   if (Result.isError(scanned)) {
     const scanError = scanned.error;
+    // A scanner failure says nothing about the bytes: keep the staged input
+    // so the retry the hint suggests can still find it.
     if (!FileScanRejectedError.is(scanError)) {
-      return await refuse(
-        "One of the files to compare could not be scanned",
-        "Retry the comparison; if it repeats, stage the files again.",
-      );
+      return {
+        status: "error",
+        response: structuredErrorResult({
+          code: "internal_error",
+          message: "One of the files to compare could not be scanned",
+          hint: "Retry the comparison; if it repeats, stage the files again.",
+          retryable: true,
+        }),
+      };
     }
     const { rejection } = scanError;
     await discardInput({

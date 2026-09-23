@@ -46,15 +46,26 @@ export default eslintCompatPlugin({
         // Variables initialized with `new JSZip()`.
         const instanceLocals = new Set<string>();
 
+        // A JSZip instance: `new JSZip()`, a variable holding one, or a
+        // `.folder(...)` of either (folders share the archive's loadAsync).
         const isJszipRef = (node: unknown): boolean => {
           if (isIdentifier(node)) {
             return jszipLocals.has(node.name) || instanceLocals.has(node.name);
           }
+          if (!isAstNode(node)) {
+            return false;
+          }
+          if (node.type === "NewExpression") {
+            return (
+              isIdentifier(node.callee) && jszipLocals.has(node.callee.name)
+            );
+          }
           return (
-            isAstNode(node) &&
-            node.type === "NewExpression" &&
-            isIdentifier(node.callee) &&
-            jszipLocals.has(node.callee.name)
+            node.type === "CallExpression" &&
+            isAstNode(node.callee) &&
+            node.callee.type === "MemberExpression" &&
+            isIdentifier(node.callee.property, "folder") &&
+            isJszipRef(node.callee.object)
           );
         };
 
@@ -100,9 +111,8 @@ export default eslintCompatPlugin({
             if (
               isIdentifier(id) &&
               isAstNode(init) &&
-              init.type === "NewExpression" &&
-              isIdentifier(init.callee) &&
-              jszipLocals.has(init.callee.name)
+              init.type !== "Identifier" &&
+              isJszipRef(init)
             ) {
               instanceLocals.add(id.name);
             }
