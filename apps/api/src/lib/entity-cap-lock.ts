@@ -42,7 +42,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  *     used by `entities/create.ts`, presigned `entity-create.ts`
  *     finalize, `entity-create-tree.ts`, `presign.ts`.
  *   - `copyEntities` (`copy-utils.ts`) — used by `duplicate.ts`
- *     (same-workspace: locks target only) and `copy-to-workspace.ts`
+ *     (same-workspace: locks target only) and `entities/copy.ts`
  *     (cross-workspace: locks {source, target} ascending whenever
  *     `deleteSource` also needs the source row).
  *   - `entities/clip.ts`, `entities/create-from-buffer.ts`,

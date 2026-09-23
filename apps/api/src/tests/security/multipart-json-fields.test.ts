@@ -252,10 +252,10 @@ describe("multipart body string fields", () => {
       expect(handlers.length).toBeGreaterThanOrEqual(MIN_MULTIPART_HANDLERS);
 
       // A handler whose schema lives in a sibling module is exactly the case a
-      // source-text scan misses, so pin one: `entities/upload-version.ts` names
+      // source-text scan misses, so pin one: `entities/versions/upload.ts` names
       // no file field of its own, it imports `uploadVersionBodySchema`.
       expect(handlers.map(({ file }) => file)).toContain(
-        "entities/upload-version.ts",
+        "entities/versions/upload.ts",
       );
 
       const offenders: string[] = [];

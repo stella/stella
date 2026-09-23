@@ -760,8 +760,8 @@ export const internalFailureResult = (
   });
 };
 
-// A name's words in sorted order, so `chat.delete-thread` and
-// `chat.threads.delete` compare as `chat delete thread` / `chat delete threads`.
+// A name's words in sorted order, so `widgets.delete-part` and
+// `widgets.parts.delete` compare as `delete part widgets` / `delete parts widgets`.
 const sortedWords = (name: string): string =>
   name.split(/[._-]/u).toSorted().join(" ");
 
@@ -769,8 +769,8 @@ const sortedWords = (name: string): string =>
  * Up to `limit` known tool names closest to `target` by Levenshtein distance,
  * used to hint an agent that fat-fingered a tool name. The distance is the
  * smaller of the plain comparison and the word-order-insensitive one, so a name
- * whose words were regrouped (`entities.read-versions` against
- * `entities.versions.list`) still finds its match. Only candidates within a
+ * whose words were regrouped (`widgets.delete-part` against
+ * `widgets.parts.delete`) still finds its match. Only candidates within a
  * lenient edit budget (roughly half the longer name) are kept, so an unrelated
  * miss returns nothing rather than a confusing suggestion. No dependency: a tiny
  * DP implementation is enough for the short, small candidate set.

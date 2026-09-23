@@ -150,7 +150,7 @@ entries as recommended. Composes the shipped catalogue package (plan
 
 - No new public endpoints. "Add to Stella" reuses existing authed
   install handlers. `install-skill` gains support for `github`-sourced
-  entries by fetching at the pinned SHA (reuse `skills/import-url.ts`
+  entries by fetching at the pinned SHA (reuse `skills/from-url/import.ts`
   machinery), recording origin appropriately.
 
 ### DB schema

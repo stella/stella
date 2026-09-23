@@ -4,13 +4,13 @@ import nodePath from "node:path";
 
 // Chain-of-custody class guard. A document version is legal evidence: it must
 // never be hard-deleted, and its bytes must stay retained under legal hold.
-// `delete-version.ts` tombstones the row (sets `deletedAt` + actor) instead of
+// `delete.ts` tombstones the row (sets `deletedAt` + actor) instead of
 // issuing a DB delete, and every read/list/restore/download path filters out
 // tombstoned rows. These are source-level invariants so a future edit that
 // reintroduces a destructive delete — or a new version read that forgets the
 // filter — trips CI instead of silently shredding history.
 
-const API_SRC = nodePath.resolve(import.meta.dir, "../..");
+const API_SRC = nodePath.resolve(import.meta.dir, "../../..");
 
 const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
   for (const entry of readdirSync(dir)) {
@@ -43,7 +43,7 @@ describe("delete-version chain-of-custody guard", () => {
 
   test("delete-version tombstones the row instead of deleting it", () => {
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
 
@@ -64,7 +64,7 @@ describe("delete-version chain-of-custody guard", () => {
     // currentVersionId pointing at a tombstone. Locking the entity row first
     // forces them one at a time.
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
 
@@ -86,7 +86,7 @@ describe("delete-version chain-of-custody guard", () => {
 
   test("refuses a tombstone while that version is dispatched to OCR", () => {
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
 
@@ -106,7 +106,7 @@ describe("delete-version chain-of-custody guard", () => {
     // the sessions second (the cancel UPDATE) would invert finalize's order and
     // risk an ABBA deadlock between a concurrent delete and finalize.
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
 
@@ -160,7 +160,7 @@ describe("delete-version chain-of-custody guard", () => {
     expect(sessionTables).toContain("folioCollabRooms");
 
     const deleteVersionSource = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
     const dispositionByTable = new Map([
@@ -358,7 +358,7 @@ describe("delete-version chain-of-custody guard", () => {
     // otherwise resume and re-download the version's bytes. Tombstoning must
     // cancel those sessions inside the same transaction as the version update.
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
 
@@ -398,7 +398,7 @@ describe("delete-version chain-of-custody guard", () => {
     // must lock the entity row (serializing with delete-version) and re-verify
     // the source is still live before cloning.
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "restore-version.ts"),
+      nodePath.join(import.meta.dir, "restore.ts"),
       "utf-8",
     );
 
@@ -420,7 +420,7 @@ describe("delete-version chain-of-custody guard", () => {
 
   test("deleting the current version withdraws and rebuilds its search projection", () => {
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete-version.ts"),
+      nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
     const txStart = source.indexOf("safeDb(async (tx) =>");

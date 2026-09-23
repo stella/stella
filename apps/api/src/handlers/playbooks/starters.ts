@@ -10,7 +10,7 @@ import type {
 // jurisdiction-specific language) — not legal advice.
 //
 // `sourceId` and every tier-rule/fallback-entry `id` below are FIXED
-// placeholders (distinct only within their own playbook): `from-starter.ts`
+// placeholders (distinct only within their own playbook): `from-starter/create.ts`
 // clones this constant and replaces every one of them with a new UUID before
 // the playbook is created, so no instantiated
 // org ever ends up with two playbooks (or two positions) sharing an id.

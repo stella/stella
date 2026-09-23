@@ -195,7 +195,7 @@ export const playbookDefinitions = p.pgTable(
  * Immutable snapshot of a `playbookDefinitions` row taken on each approval
  * (`approve.ts`). Mirrors `clauseVersions`/`templateVersions`: append-only,
  * one row per `(playbookDefinitionId, version)`, never updated in place.
- * `restore-version.ts` reads a row here and copies it back onto the
+ * `entities/versions/restore.ts` reads a row here and copies it back onto the
  * definition as a new draft; it never rewrites this table.
  *
  * Every row names why it was written (`source`). A review run pins "the

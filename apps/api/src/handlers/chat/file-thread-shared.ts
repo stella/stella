@@ -49,7 +49,7 @@ import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-searc
  * with `tx`, the helper's `withScopedTx` never produces an error Result — a
  * failure throws and is caught by this transaction's own `safeDb` catch-all,
  * so an error Result here would mean that invariant broke. Mirrors
- * `get-messages.ts`'s identically-named helper.
+ * `messages/list.ts`'s identically-named helper.
  */
 const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
   Result.isError(result)
@@ -72,9 +72,9 @@ export type ThreadMetadata = {
 
 /**
  * Same shape `GET /chat/threads/:id/messages` returns for its initial page
- * (see `get-messages.ts`), including `webSearchAvailable`: resolved once per
+ * (see `messages/list.ts`), including `webSearchAvailable`: resolved once per
  * transaction by `loadWebSearchAvailable` below (mirroring
- * `get-messages.ts`'s widened `organizationSettings` select) and threaded
+ * `messages/list.ts`'s widened `organizationSettings` select) and threaded
  * into every branch that builds this page, so the frontend's
  * `fileChatThreadOptions` seed never has to guess the org-wide flag.
  */
@@ -112,7 +112,7 @@ export const emptyMessagePage = (
  * Organization-wide web-search availability: an org key (or the platform
  * fallback) resolves to a provider, and the org has not disabled the
  * `web_search` native tool for its practice jurisdictions. Mirrors
- * `get-messages.ts`'s widened `organizationSettings` select and helper
+ * `messages/list.ts`'s widened `organizationSettings` select and helper
  * chain (`getDisabledNativeToolSlugs` +
  * `resolveWebSearchProvidersFromOrgSettingsRow` + `isWebSearchAvailable`)
  * exactly, run once per transaction on the handler's already-open `tx` so
@@ -159,12 +159,12 @@ type LoadResolvedThreadMessagePageArgs = ThreadMetadata & {
 };
 
 /**
- * Loads the same initial message page `get-messages.ts` loads, reusing its
+ * Loads the same initial message page `messages/list.ts` loads, reusing its
  * exact helpers on the handler's already-open `tx` so the reads share one
  * `set_config` instead of paying for a second round-trip GET.
  * `webSearchAvailable` is resolved once per transaction by
  * `loadWebSearchAvailable` and passed in so the context-usage estimate's
- * `webResearch` gate mirrors `get-messages.ts`'s (provider availability AND
+ * `webResearch` gate mirrors `messages/list.ts`'s (provider availability AND
  * the thread's opt-in), not a hardcoded false.
  */
 export const loadResolvedThreadMessagePage = async ({

@@ -76,9 +76,9 @@ const RELATION_TYPE_VALUES = [
 
 /** BOE consolidated-law identifier, e.g. BOE-A-1889-4763. Mirrors the routes. */
 const BOE_LAW_ID = /^BOE-[A-Z]-\d{4}-\d+$/u;
-/** BOE search date filters are YYYYMMDD (mirrors legislation/boe-search.ts). */
+/** BOE search date filters are YYYYMMDD (mirrors legislation/boe/search.ts). */
 const BOE_DATE = /^\d{8}$/u;
-/** BOE search cursor is a numeric offset (mirrors legislation/boe-search.ts). */
+/** BOE search cursor is a numeric offset (mirrors legislation/boe/search.ts). */
 const BOE_OFFSET_CURSOR = /^\d{1,5}$/u;
 
 const isBoeOffsetCursor = (value: string): boolean =>

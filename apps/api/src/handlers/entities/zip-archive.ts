@@ -1,5 +1,5 @@
 // Pure helpers for streaming a folder subtree as a ZIP archive.
-// `download-zip.ts` wires these to the database, S3, and `client-zip`.
+// `zip/download.ts` wires these to the database, S3, and `client-zip`.
 
 import { compareCodeUnit } from "@stll/collation";
 
