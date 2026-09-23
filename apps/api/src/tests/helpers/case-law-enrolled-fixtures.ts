@@ -81,6 +81,8 @@ import {
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
   assemblePlSnDecision,
   normalizePlSnDetail,
@@ -98,7 +100,7 @@ import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /** What a guard has to drive one adapter with. */
@@ -2015,5 +2017,49 @@ export const plTkFixture = (): EnrolledAdapterFixture => ({
         ? panic("pl-tk fixture did not build")
         : built.decision,
     );
+  },
+});
+
+// ── PL NSA fixture ───────────────────────────────────────
+
+/** Rows recorded from the dataset, each with its shard and row. */
+const PL_NSA_ROWS = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-nsa-rows.json",
+  import.meta.url,
+);
+
+/**
+ * A recorded NSA judgment with its thesis, publication and cited provisions,
+ * plus the two columns no recorded row fills — a gloss note and a dissenting
+ * opinion — in the form the dataset prints them, so every column the source
+ * states is stated here.
+ */
+export const plNsaFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const recorded: unknown = await Bun.file(PL_NSA_ROWS).json();
+    const entry = isUnknownArray(recorded)
+      ? recorded.find(
+          (candidate: unknown) =>
+            isRecord(candidate) &&
+            candidate["case"] === "nsa-wyrok-thesis-collection",
+        )
+      : undefined;
+    const values: unknown = isRecord(entry) ? entry["values"] : undefined;
+    if (!isRecord(values)) {
+      return panic("the pl-nsa fixture holds no recorded NSA judgment");
+    }
+    const shard =
+      PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
+    const built = assemblePlNsaDecision({
+      source: {
+        ...values,
+        glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+        dissenting_opinion:
+          "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+      },
+      position: { shard, row: 93 },
+      snapshot: PL_NSA_SNAPSHOT,
+    });
+    return built.decision;
   },
 });

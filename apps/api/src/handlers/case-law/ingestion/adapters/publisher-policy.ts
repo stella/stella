@@ -120,6 +120,14 @@ export const PUBLISHER_GATES = {
   },
   /** www.saos.org.pl. */
   "saos-pl": { publisher: "SAOS", intervalMs: POLITE_INTERVAL_MS },
+  /**
+   * huggingface.co and the CDN it redirects file reads to. Few requests: a
+   * shard is a dozen ranged reads of a pinned file.
+   */
+  "huggingface-datasets": {
+    publisher: "Hugging Face",
+    intervalMs: POLITE_INTERVAL_MS,
+  },
   /** eakta.birosag.hu. */
   "birosag-hu": {
     publisher: "Országos Bírósági Hivatal",
@@ -152,6 +160,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_SN]: "sn-pl",
   [ADAPTER_KEYS.PL_KIO]: "uzp-pl",
   [ADAPTER_KEYS.PL_TK]: "trybunal-pl",
+  [ADAPTER_KEYS.PL_NSA]: "huggingface-datasets",
   [ADAPTER_KEYS.AT_COURTS]: "ris-bka",
   [ADAPTER_KEYS.AT_VFGH]: "ris-bka",
   [ADAPTER_KEYS.AT_VWGH]: "ris-bka",

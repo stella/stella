@@ -1,0 +1,1588 @@
+[
+ {
+  "case": "wsa-thesis-official-collection",
+  "shard": 0,
+  "row": 0,
+  "datasetsServerRow": 0,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/6447E5BA57",
+   "docket_number": "II SA/Op 8/05",
+   "judgment_type": "Wyrok WSA w Opolu",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2005-10-13T00:00:00+02:00",
+   "submission_date": "2005-01-12T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Opolu",
+   "judges": [
+    "Grażyna Jeżewska",
+    "Jerzy Krupiński",
+    "Teresa Cisyk"
+   ],
+   "presiding_judge": "Jerzy Krupiński",
+   "judge_rapporteur": "Teresa Cisyk",
+   "case_type_description": [
+    "6192 Funkcjonariusze Policji"
+   ],
+   "keywords": [
+    "Zatrudnienie",
+    "Organizacje społeczne",
+    "Policja"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Komendant Policji",
+   "decision": [
+    "Uchylono decyzję I i II instancji"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20020070058",
+     "article": "art. 67 ust. 2",
+     "journal": "Dz.U. 2002 nr 7 poz. 58",
+     "law": "Obwieszczenie Marszałka Sejmu Rzeczypospolitej Polskiej z dnia 10 stycznia 2002 r. w sprawie ogłoszenia jednolitego tekstu ustawy o Policji."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20010790854",
+     "article": "art. 32 ust. 1-2",
+     "journal": "Dz.U. 2001 nr 79 poz. 854",
+     "law": "Obwieszczenie Marszałka Sejmu Rzeczypospolitej Polskiej z dnia 31 maja 2001 r. w sprawie ogłoszenia jednolitego tekstu ustawy o związkach zawodowych."
+    }
+   ],
+   "official_collection": [
+    "ONSAiWSA 2006 4 poz. 116"
+   ],
+   "glosa_information": null,
+   "thesis": "Przepisy art. 32 ust. 1 i 2 ustawy z dnia 23 maja 1991 r. o związkach zawodowych /Dz.U. 2001 nr 79 poz. 854 ze zm./ nie pozwalają na pozbawienie funkcjonariusza Policji części pobieranego dodatku służbowego w okresie ochronnym po zakończeniu kadencji w zarządzie organizacji związkowej bez zgody zakładowej organizacji związkowej, nawet jeśli wysokość tego dodatku pozostawiona jest uznaniu organu, a jego obniżenie następuje w celu dostosowania wynagrodzenia do stawek obowiązujących na stanowisku, na które powraca funkcjonariusz po wygaśnięciu mandatu członka zarządu organizacji związkowej.",
+   "sentence": "Wojewódzki Sąd Administracyjny w Opolu w składzie następującym: Przewodniczący Sędzia NSA Jerzy Krupiński Sędziowie: Sędzia WSA Teresa Cisyk – (spr.) Asesor sądowy Grażyna Jeżewska Protokolant : sekretarz sądowy Jolanta Hadała po rozpoznaniu w dniu 13 października 2005 r. na rozprawie sprawy ze skargi R. H. na decyzję [...] Komendanta Wojewódzkiego Policji w O. z dnia [...] nr [...] w przedmiocie funkcjonariusza Policji 1) uchyla zaskarżoną decyzję oraz poprzedzającą ją decyzję Komendanta Miejskiego Policji w O. nr [...] z dnia [...], 2) określa, że zaskarżona decyzja nie może być wykonana w całości, 3) zasądza od [...] Komendanta Wojewódzkiego Policji w O. na rzecz R. H. kwotę 255",
+   "reasons_for_judgment": "Komendant Miejski Policji w O., rozkazem personalnym nr [...], z dnia [...], wydanym na podstawie art. 32 ust. 1 ustawy z dnia 6 kwietnia 1990 r. o Policji (Dz. U. z 2000 r., Nr 7, poz. 58) oraz § 1 i 9 rozporządzenia Ministra Spraw Wewnętrznych i Administracji z 6 grudnia 2001 r. w sprawie szczegółowych zasad otrzymywania i wysokości uposażenia zasadniczego policjantów, dodatków do uposażenia oraz ustalania wysługi lat, od której jest uzależniony wzrost uposażenia zasadniczego (Dz. U. Nr 152, poz. 1732), mianował z dniem 16 września 2004 r. policjanta w służbie stałej – R. H. na stanowisko specjalisty Referatu I Sekcji Dochodzeniowo - Śledczej, w 8 grupie uposażenia zasadniczego z",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nPrzepisy art. 32 ust. 1 i 2 ustawy z dnia 23 maja 1991 r. o związkach zawodowych /Dz.U. 2001 nr 79 poz. 854 ze zm./ nie pozwalają na pozbawienie funkcjonariusza Policji części pobieranego dodatku służbowego w okresie ochronnym po zakończeniu kadencji w zarządzie organizacji związkowej bez zgody zakładowej organizacji związkowej, nawet jeśli wysokość tego dodatku pozostawiona jest uznaniu organu, a jego obniżenie następuje w celu dostosowania wynagrodzenia do stawek obowiązujących na stanowisku, na które powraca funkcjonariusz po wygaśnięciu mandatu członka zarządu organizacji związkowej.\n\n\nSENTENCJA\n\nWojewódzki Sąd Administracyjny w Opolu w składzie następującym: Przewodniczący Sędzia NSA Jerzy Krupiński Sędziowie: Sędzia WSA Teresa Cisyk – (spr.) Asesor sądowy Grażyna Jeżewska Protokolant : sekretarz sądowy Jolanta Hadała po rozpoznaniu w dniu 13 października 2005 r. na rozprawie sprawy ze skargi R. H. na decyzję [...] Komendanta Wojewódzkiego Policji w O. z dnia [...] nr [...] w przedmiocie funkcjonariusza Policji 1) uchyla zaskarżoną decyzję oraz poprzedzającą ją decyzję Komendanta Miejskiego Policji w O. nr [...] z dnia [...], 2) określa, że zaskarżona decyzja nie może być wykonana w całości, 3) zasądza od [...] Komendanta Wojewódzkiego Policji w O. na rzecz R. H. kwotę 255\n\n\nUZASADNIENIE\n\nKomendant Miejski Policji w O., rozkazem personalnym nr [...], z dnia [...], wydanym na podstawie art. 32 ust. 1 ustawy z dnia 6 kwietnia 1990 r. o Policji (Dz. U. z 2000 r., Nr 7, poz. 58) oraz § 1 i 9 rozporządzenia Ministra Spraw Wewnętrznych i Administracji z 6 grudnia 2001 r. w sprawie szczegółowych zasad otrzymywania i wysokości uposażenia zasadniczego policjantów, dodatków do uposażenia oraz ustalania wysługi lat, od której jest uzależniony wzrost uposażenia zasadniczego (Dz. U. Nr 152, poz. 1732), mianował z dniem 16 września 2004 r. policjanta w służbie stałej – R. H. na stanowisko specjalisty Referatu I Sekcji Dochodzeniowo - Śledczej, w 8 grupie uposażenia zasadniczego z"
+  }
+ },
+ {
+  "case": "nsa-uchwala-seven-judges",
+  "shard": 11,
+  "row": 25059,
+  "datasetsServerRow": 175059,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/6B0BB007DC",
+   "docket_number": "FPS 10/00",
+   "judgment_type": "Uchwała Składu Siedmiu Sędziów NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2000-12-04T00:00:00+01:00",
+   "submission_date": null,
+   "court_name": "NSA w Warszawie (przed reformą)",
+   "judges": [
+    "Kabat Andrzej",
+    "Chromicki Jerzy",
+    "Niezgódka-Medek Małgorzata",
+    "Rischka Elżbieta",
+    "Ruszyński Janusz",
+    "Wasilewska Barbara",
+    "Wojtachnio Halina"
+   ],
+   "presiding_judge": "Kabat Andrzej",
+   "judge_rapporteur": "Ruszyński Janusz",
+   "case_type_description": [
+    "630  Obrót towarami z zagranicą, należności celne i ochrona przed nadmiernym  przywozem towaru na polski obszar celny"
+   ],
+   "keywords": [
+    "Celne prawo",
+    "Administracyjne postępowanie"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19940710312",
+     "article": "art. 83 ust. 1",
+     "journal": "Dz.U. 1994 nr 71 poz. 312",
+     "law": "Obwieszczenie Ministra Współpracy Gospodarczej z Zagranicą z dnia 16 maja 1994 r. w sprawie ogłoszenia jednolitego tekstu ustawy - Prawo celne."
+    }
+   ],
+   "official_collection": [
+    "ONSA 2001 2 poz. 56"
+   ],
+   "glosa_information": [
+    "Bartosiewicz Adam i",
+    "Kubacki Ryszard OSP 2002 z. 12 poz. 154 str. 612"
+   ],
+   "thesis": "Pojęcie \"wydanie decyzji\", użyte w art. 83 ust. 1 ustawy z dnia 28 grudnia 1989 r. - Prawo celne /Dz.U. 1994 nr 74 poz. 312 ze zm./ obejmuje doręczenie /ogłoszenie/ decyzji stronie przed upływem 2 lat od dnia, w którym powstał obowiązek uiszczenia należności celnych.",
+   "sentence": "Naczelny Sąd Administracyjny przy udziale Wiesława Czerwińskiego, prokuratora Prokuratury Apelacyjnej delegowanego do Ministerstwa Sprawiedliwości w sprawie ze skargi Stanisława O. i Dariusza O. na decyzję Prezesa Głównego Urzędu Ceł z dnia 27 września 1999 r. (...) w przedmiocie wymiaru cła po rozpoznaniu w dniu 4 grudnia 2000 r. na posiedzeniu jawnym wątpliwości prawnych przekazanych przez skład orzekający Naczelnego Sądu Administracyjnego postanowieniem z dnia 31 maja 2000 r. V SA 2500/99, do wyjaśnienia w trybie art. 49 ust. 2 ustawy z dnia 11 maja 1995 r. o Naczelnym Sądzie Administracyjnym /Dz.U. nr 74 poz. 368 ze zm./:",
+   "reasons_for_judgment": "Przedstawione do rozstrzygnięcia przez skład siedmiu sędziów Naczelnego Sądu Administracyjnego istotne wątpliwości prawne powstały w następującym stanie faktycznym:\n\nDyrektor Urzędu Celnego w P. decyzjami z dnia 27 grudnia 1995 r. zawartymi w zgłoszeniach celnych, dopuścił do obrotu na polskim obszarze celnym, nadwozie do samochodu marki \"Lancia\" sprowadzone z zagranicy przez Stanisława O. oraz silnik, skrzynię biegów, zawieszenie tylne i koła jezdne do tego samochodu sprowadzone przez Dariusza O. Od towarów tych pobrano cło jak od części samochodowych.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nPojęcie \"wydanie decyzji\", użyte w art. 83 ust. 1 ustawy z dnia 28 grudnia 1989 r. - Prawo celne /Dz.U. 1994 nr 74 poz. 312 ze zm./ obejmuje doręczenie /ogłoszenie/ decyzji stronie przed upływem 2 lat od dnia, w którym powstał obowiązek uiszczenia należności celnych.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny przy udziale Wiesława Czerwińskiego, prokuratora Prokuratury Apelacyjnej delegowanego do Ministerstwa Sprawiedliwości w sprawie ze skargi Stanisława O. i Dariusza O. na decyzję Prezesa Głównego Urzędu Ceł z dnia 27 września 1999 r. (...) w przedmiocie wymiaru cła po rozpoznaniu w dniu 4 grudnia 2000 r. na posiedzeniu jawnym wątpliwości prawnych przekazanych przez skład orzekający Naczelnego Sądu Administracyjnego postanowieniem z dnia 31 maja 2000 r. V SA 2500/99, do wyjaśnienia w trybie art. 49 ust. 2 ustawy z dnia 11 maja 1995 r. o Naczelnym Sądzie Administracyjnym /Dz.U. nr 74 poz. 368 ze zm./:\n\n\nUZASADNIENIE\n\nPrzedstawione do rozstrzygnięcia przez skład siedmiu sędziów Naczelnego Sądu Administracyjnego istotne wątpliwości prawne powstały w następującym stanie faktycznym:\n\nDyrektor Urzędu Celnego w P. decyzjami z dnia 27 grudnia 1995 r. zawartymi w zgłoszeniach celnych, dopuścił do obrotu na polskim obszarze celnym, nadwozie do samochodu marki \"Lancia\" sprowadzone z zagranicy przez Stanisława O. oraz silnik, skrzynię biegów, zawieszenie tylne i koła jezdne do tego samochodu sprowadzone przez Dariusza O. Od towarów tych pobrano cło jak od części samochodowych."
+  }
+ },
+ {
+  "case": "nsa-wyrok-thesis-collection",
+  "shard": 0,
+  "row": 93,
+  "datasetsServerRow": 93,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/B51A16D504",
+   "docket_number": "I OSK 1769/12",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2013-04-04T00:00:00+02:00",
+   "submission_date": "2012-07-17T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Janina Antosiewicz",
+    "Janusz Furmanek",
+    "Marek Stojanowski"
+   ],
+   "presiding_judge": "Janina Antosiewicz",
+   "judge_rapporteur": "Janina Antosiewicz",
+   "case_type_description": [
+    "6076 Sprawy objęte dekretem o gruntach warszawskich"
+   ],
+   "keywords": [
+    "Grunty warszawskie"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/8466864ADB",
+     "docket_number": "I SA/Wa 1427/11",
+     "judgment_date": "2012-03-08T00:00:00+01:00",
+     "judgment_type": "Wyrok WSA w Warszawie"
+    }
+   ],
+   "challenged_authority": "Minister Infrastruktury",
+   "decision": [
+    "Oddalono skargę kasacyjną"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19450500279",
+     "article": "art. 7 ust. 1, 2 ,5",
+     "journal": "Dz.U. 1945 nr 50 poz 279",
+     "law": "Dekret z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m. st. Warszawy."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19460570321",
+     "article": "art. XXXVI",
+     "journal": "Dz.U. 1946 nr 57 poz 321",
+     "law": "Dekret z dnia 11 października 1946 r. - Przepisy wprowadzające prawo rzeczowe i prawo o księgach wieczystych."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20000981071",
+     "article": "art. 156 par. 1 i 2",
+     "journal": "Dz.U. 2000 nr 98 poz 1071",
+     "law": "Ustawa z dnia 14 czerwca 1960 r.- Kodeks postępowania administracyjnego - tekst jednolity"
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20000981071",
+     "article": "art. 153, 184",
+     "journal": "Dz.U. 2000 nr 98 poz 1071",
+     "law": "Ustawa z dnia 14 czerwca 1960 r.- Kodeks postępowania administracyjnego - tekst jednolity"
+    }
+   ],
+   "official_collection": [
+    "ONSAiWSAz2015r. nr2 poz.21"
+   ],
+   "glosa_information": null,
+   "thesis": "Przepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu.",
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K.",
+   "reasons_for_judgment": "Wyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji.\n\nWyrok został wydany w następujących okolicznościach sprawy.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nPrzepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K.\n\n\nUZASADNIENIE\n\nWyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji.\n\nWyrok został wydany w następujących okolicznościach sprawy."
+  }
+ },
+ {
+  "case": "nsa-wyrok-fsk-reasons",
+  "shard": 0,
+  "row": 1,
+  "datasetsServerRow": 1,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/B4984CED3A",
+   "docket_number": "II FSK 1938/08",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2010-04-02T00:00:00+02:00",
+   "submission_date": "2008-11-12T00:00:00+01:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Bogusław Woźniak",
+    "Grzegorz Borkowski",
+    "Stefan Babiarz"
+   ],
+   "presiding_judge": "Grzegorz Borkowski",
+   "judge_rapporteur": "Bogusław Woźniak",
+   "case_type_description": [
+    "6119 Inne o symbolu podstawowym 611"
+   ],
+   "keywords": [
+    "Inne"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/0233673148",
+     "docket_number": "I SA/Wr 183/08",
+     "judgment_date": "2008-08-06T00:00:00+02:00",
+     "judgment_type": "Wyrok WSA we Wrocławiu"
+    }
+   ],
+   "challenged_authority": "Dyrektor Izby Skarbowej",
+   "decision": [
+    "Oddalono skargę kasacyjną"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19971230776",
+     "article": "art 33",
+     "journal": "Dz.U. 1997 nr 123 poz 776",
+     "law": "Ustawa z dnia 27 sierpnia 1997 r. o rehabilitacji zawodowej i społecznej oraz zatrudnianiu osób niepełnosprawnych."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący – Sędzia NSA Grzegorz Borkowski, Sędzia NSA Stefan Babiarz, Sędzia del. WSA Bogusław Woźniak (sprawozdawca), Protokolant Dorota Żmijewska, po rozpoznaniu w dniu 2 kwietnia 2010 r. na rozprawie w Izbie Finansowej skargi kasacyjnej Dyrektora Izby Skarbowej w W. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 6 sierpnia 2008 r. sygn. akt I SA/Wr 183/08 w sprawie ze skargi E. S.A. w W. na postanowienie Dyrektora Izby Skarbowej w W. z dnia 11 grudnia 2007 r. nr [...] w przedmiocie wydania zaświadczenia o udzielonej pomocy de minimis 1) oddala skargę kasacyjną, 2) zasądza od Dyrektora Izby Skarbowej w W. na rzecz E. S.A. w",
+   "reasons_for_judgment": "Wojewódzki Sąd Administracyjny we Wrocławiu wyrokiem z dnia 6 sierpnia 2008 r., sygn. akt I SA/Wr 183/08, na podstawie art. 145 § 1 pkt 1 lit. a) ustawy z dnia 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. Nr 153, poz. 1270 ze zm. - zwanej dalej p.p.s.a.), po rozpatrzeniu skargi E. Spółki Akcyjnej z siedzibą we Wrocławiu - dalej jako skarżąca, uchylił postanowienie Dyrektora Izby Skarbowej w W. z dnia 11 grudnia 2007 r. nr (...) oraz poprzedzające je postanowienie Naczelnika Urzędu Skarbowego w W. z dnia 13 września 2007 r. nr (...) w przedmiocie odmowy wydania zaświadczenia o udzieleniu pomocy de minimis.\n\nSąd przyjął następujący stan sprawy :",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący – Sędzia NSA Grzegorz Borkowski, Sędzia NSA Stefan Babiarz, Sędzia del. WSA Bogusław Woźniak (sprawozdawca), Protokolant Dorota Żmijewska, po rozpoznaniu w dniu 2 kwietnia 2010 r. na rozprawie w Izbie Finansowej skargi kasacyjnej Dyrektora Izby Skarbowej w W. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 6 sierpnia 2008 r. sygn. akt I SA/Wr 183/08 w sprawie ze skargi E. S.A. w W. na postanowienie Dyrektora Izby Skarbowej w W. z dnia 11 grudnia 2007 r. nr [...] w przedmiocie wydania zaświadczenia o udzielonej pomocy de minimis 1) oddala skargę kasacyjną, 2) zasądza od Dyrektora Izby Skarbowej w W. na rzecz E. S.A. w\n\n\nUZASADNIENIE\n\nWojewódzki Sąd Administracyjny we Wrocławiu wyrokiem z dnia 6 sierpnia 2008 r., sygn. akt I SA/Wr 183/08, na podstawie art. 145 § 1 pkt 1 lit. a) ustawy z dnia 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. Nr 153, poz. 1270 ze zm. - zwanej dalej p.p.s.a.), po rozpatrzeniu skargi E. Spółki Akcyjnej z siedzibą we Wrocławiu - dalej jako skarżąca, uchylił postanowienie Dyrektora Izby Skarbowej w W. z dnia 11 grudnia 2007 r. nr (...) oraz poprzedzające je postanowienie Naczelnika Urzędu Skarbowego w W. z dnia 13 września 2007 r. nr (...) w przedmiocie odmowy wydania zaświadczenia o udzieleniu pomocy de minimis.\n\nSąd przyjął następujący stan sprawy :"
+  }
+ },
+ {
+  "case": "nsa-wyrok-osk-reasons",
+  "shard": 0,
+  "row": 25,
+  "datasetsServerRow": 25,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/6089557FD6",
+   "docket_number": "I OSK 91/07",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2007-11-07T00:00:00+01:00",
+   "submission_date": "2007-01-22T00:00:00+01:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Anna Lech",
+    "Joanna Banasiewicz",
+    "Leszek Kiermaszek"
+   ],
+   "presiding_judge": "Anna Lech",
+   "judge_rapporteur": "Anna Lech",
+   "case_type_description": [
+    "6320 Zasiłki celowe i okresowe"
+   ],
+   "keywords": [
+    "Pomoc społeczna"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Samorządowe Kolegium Odwoławcze",
+   "decision": [
+    "Oddalono skargę kasacyjną"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 145 par. 1 pkt 1 lit. c, art. 250, art. 184",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie następującym: Przewodniczący Sędzia NSA Anna Lech (spr.), Sędziowie NSA Joanna Banasiewicz, Leszek Kiermaszek, Protokolant Tomasz Zieliński, po rozpoznaniu w dniu 7 listopada 2007 r. na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej R. S. od wyroku Wojewódzkiego Sądu Administracyjnego w Szczecinie z dnia 12 października 2006r. sygn. akt II SA/Sz 1485/03 w sprawie ze skargi R. S. na decyzję Samorządowego Kolegium Odwoławczego w S. z dnia [...] nr [...] w przedmiocie zasiłku celowego 1. oddala skargę kasacyjną; 2. przyznaje adwokatowi B. P. od Skarbu Państwa kwotę 120 (sto dwadzieścia) złotych powiększoną o należną kwotę podatku od towarów i",
+   "reasons_for_judgment": "Wyrokiem z dnia 12 października 2006r., sygn. akt II SA/Sz 1485/03 Wojewódzki Sąd Administracyjny w Szczecinie oddalił skargę R. S. na decyzję Samorządowego Kolegium Odwoławczego w S. z dnia [...], nr [...], w przedmiocie zasiłku celowego.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie następującym: Przewodniczący Sędzia NSA Anna Lech (spr.), Sędziowie NSA Joanna Banasiewicz, Leszek Kiermaszek, Protokolant Tomasz Zieliński, po rozpoznaniu w dniu 7 listopada 2007 r. na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej R. S. od wyroku Wojewódzkiego Sądu Administracyjnego w Szczecinie z dnia 12 października 2006r. sygn. akt II SA/Sz 1485/03 w sprawie ze skargi R. S. na decyzję Samorządowego Kolegium Odwoławczego w S. z dnia [...] nr [...] w przedmiocie zasiłku celowego 1. oddala skargę kasacyjną; 2. przyznaje adwokatowi B. P. od Skarbu Państwa kwotę 120 (sto dwadzieścia) złotych powiększoną o należną kwotę podatku od towarów i\n\n\nUZASADNIENIE\n\nWyrokiem z dnia 12 października 2006r., sygn. akt II SA/Sz 1485/03 Wojewódzki Sąd Administracyjny w Szczecinie oddalił skargę R. S. na decyzję Samorządowego Kolegium Odwoławczego w S. z dnia [...], nr [...], w przedmiocie zasiłku celowego."
+  }
+ },
+ {
+  "case": "nsa-postanowienie-oz",
+  "shard": 0,
+  "row": 20,
+  "datasetsServerRow": 20,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/65C8731F3F",
+   "docket_number": "II OZ 488/09",
+   "judgment_type": "Postanowienie NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2009-06-02T00:00:00+02:00",
+   "submission_date": "2009-05-20T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Roman Hauser"
+   ],
+   "presiding_judge": "Roman Hauser",
+   "judge_rapporteur": "Roman Hauser",
+   "case_type_description": [
+    "6153 Warunki zabudowy  terenu"
+   ],
+   "keywords": [
+    "Zagospodarowanie przestrzenne"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/D20C97B9E0",
+     "docket_number": "II SA/Gl 179/09",
+     "judgment_date": "2009-10-26T00:00:00+01:00",
+     "judgment_type": "Postanowienie WSA w Gliwicach"
+    }
+   ],
+   "challenged_authority": "Samorządowe Kolegium Odwoławcze",
+   "decision": [
+    "Oddalono zażalenie"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 211 i 212 par.  1",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Roman Hauser po rozpoznaniu w dniu 2 czerwca 2009 r. na posiedzeniu niejawnym w Izbie Ogólnoadministracyjnej zażalenia H. W. na zarządzenie Przewodniczącego Wydziału II Wojewódzkiego Sądu Administracyjnego w Gliwicach z dnia 5 marca 2009 r., sygn. akt II SA/Gl 179/09 wzywające H. W. do uiszczenia wpisu sądowego od skargi w sprawie ze skargi H. W. na decyzję Samorządowego Kolegium Odwoławczego w Bielsku-Białej z dnia [...] grudnia 2008 r., nr [...] w przedmiocie warunków zabudowy terenu postanawia oddalić zażalenie",
+   "reasons_for_judgment": "Przewodniczący Wydziału II Wojewódzkiego Sądu Administracyjnego w Gliwicach zarządzeniem z dnia 5 marca 2009 r., sygn. akt II SA/Gl 179/09 wezwał H. W. do uiszczenia wpisu sądowego od skargi w sprawie ze skargi H. W. na decyzję Samorządowego Kolegium Odwoławczego w Bielsku-Białej z dnia [...] grudnia 2008 r., nr [...].",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Roman Hauser po rozpoznaniu w dniu 2 czerwca 2009 r. na posiedzeniu niejawnym w Izbie Ogólnoadministracyjnej zażalenia H. W. na zarządzenie Przewodniczącego Wydziału II Wojewódzkiego Sądu Administracyjnego w Gliwicach z dnia 5 marca 2009 r., sygn. akt II SA/Gl 179/09 wzywające H. W. do uiszczenia wpisu sądowego od skargi w sprawie ze skargi H. W. na decyzję Samorządowego Kolegium Odwoławczego w Bielsku-Białej z dnia [...] grudnia 2008 r., nr [...] w przedmiocie warunków zabudowy terenu postanawia oddalić zażalenie\n\n\nUZASADNIENIE\n\nPrzewodniczący Wydziału II Wojewódzkiego Sądu Administracyjnego w Gliwicach zarządzeniem z dnia 5 marca 2009 r., sygn. akt II SA/Gl 179/09 wezwał H. W. do uiszczenia wpisu sądowego od skargi w sprawie ze skargi H. W. na decyzję Samorządowego Kolegium Odwoławczego w Bielsku-Białej z dnia [...] grudnia 2008 r., nr [...]."
+  }
+ },
+ {
+  "case": "nsa-postanowienie-thesis",
+  "shard": 11,
+  "row": 49980,
+  "datasetsServerRow": 199980,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/49DD6AF34B",
+   "docket_number": "III OZ 695/22",
+   "judgment_type": "Postanowienie NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2022-11-18T00:00:00+01:00",
+   "submission_date": "2022-11-02T00:00:00+01:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Zbigniew Ślusarczyk"
+   ],
+   "presiding_judge": "Zbigniew Ślusarczyk",
+   "judge_rapporteur": "Zbigniew Ślusarczyk",
+   "case_type_description": [
+    "6480"
+   ],
+   "keywords": [
+    "Grzywna w trybie p.p.s.a."
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/07B94549CB",
+     "docket_number": "II SO/Kr 17/21",
+     "judgment_date": "2022-01-11T00:00:00+01:00",
+     "judgment_type": "Postanowienie WSA w Krakowie"
+    }
+   ],
+   "challenged_authority": "Inne",
+   "decision": [
+    "Oddalono zażalenie"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20220000329",
+     "article": "art. 55 § 1, art. 194 § 1 pkt 1a i pkt 10",
+     "journal": "Dz.U. 2022 poz 329",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi  - t.j."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": "Od postanowienia o odrzuceniu wniosku o wymierzenie organowi grzywny przysługuje zażalenie na podstawie art. 194 § 1 pkt 10 p.p.s.a., niezależnie od podstawy prawnej odrzucenia wniosku.",
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Sędzia NSA Zbigniew Ślusarczyk po rozpoznaniu w dniu 18 listopada 2022 r. na posiedzeniu niejawnym w Izbie Ogólnoadministracyjnej zażalenia [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z dnia 21 czerwca 2022 r. sygn. akt II SO/Kr 17/21 odrzucające zażalenie [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z dnia 11 stycznia 2022 r. sygn. akt II SO/Kr 17/21 w sprawie z wniosku [...] Stowarzyszenia [...] z siedzibą w W. o nałożenie na J. Spółkę z ograniczoną odpowiedzialnością z siedzibą w K. grzywny w trybie art. 55 § 1 ustawy z",
+   "reasons_for_judgment": "Wojewódzki Sąd Administracyjny w Krakowie postanowieniem z 21 czerwca 2022 r. sygn. akt II SO/Kr 17/21 wydanym w sprawie z wniosku [...] Stowarzyszenia [...] z siedzibą w W. o nałożenie na J. Spółkę z ograniczoną odpowiedzialnością z siedzibą w K. grzywny w trybie art. 55 § 1 ustawy z 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi, na podstawie art. 178 w zw. z art. 197 § 2 ustawy z 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. z 2022 r., poz. 329 ze zm.) dalej zwanej \"p.p.s.a.\" odrzucił zażalenie [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z 11 stycznia 2022 r.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nOd postanowienia o odrzuceniu wniosku o wymierzenie organowi grzywny przysługuje zażalenie na podstawie art. 194 § 1 pkt 10 p.p.s.a., niezależnie od podstawy prawnej odrzucenia wniosku.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Sędzia NSA Zbigniew Ślusarczyk po rozpoznaniu w dniu 18 listopada 2022 r. na posiedzeniu niejawnym w Izbie Ogólnoadministracyjnej zażalenia [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z dnia 21 czerwca 2022 r. sygn. akt II SO/Kr 17/21 odrzucające zażalenie [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z dnia 11 stycznia 2022 r. sygn. akt II SO/Kr 17/21 w sprawie z wniosku [...] Stowarzyszenia [...] z siedzibą w W. o nałożenie na J. Spółkę z ograniczoną odpowiedzialnością z siedzibą w K. grzywny w trybie art. 55 § 1 ustawy z\n\n\nUZASADNIENIE\n\nWojewódzki Sąd Administracyjny w Krakowie postanowieniem z 21 czerwca 2022 r. sygn. akt II SO/Kr 17/21 wydanym w sprawie z wniosku [...] Stowarzyszenia [...] z siedzibą w W. o nałożenie na J. Spółkę z ograniczoną odpowiedzialnością z siedzibą w K. grzywny w trybie art. 55 § 1 ustawy z 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi, na podstawie art. 178 w zw. z art. 197 § 2 ustawy z 30 sierpnia 2002 r. – Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. z 2022 r., poz. 329 ze zm.) dalej zwanej \"p.p.s.a.\" odrzucił zażalenie [...] Stowarzyszenia [...] z siedzibą w W. na postanowienie Wojewódzkiego Sądu Administracyjnego w Krakowie z 11 stycznia 2022 r."
+  }
+ },
+ {
+  "case": "pre-reform-warsaw",
+  "shard": 10,
+  "row": 25013,
+  "datasetsServerRow": 125013,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/9D717E5FEB",
+   "docket_number": "II SA 2133/93",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "1995-04-12T00:00:00+02:00",
+   "submission_date": null,
+   "court_name": "NSA w Warszawie (przed reformą)",
+   "judges": [
+    "Darmochwał Ireneusz",
+    "Kierejczyk Edward",
+    "Rajewska Jolanta"
+   ],
+   "presiding_judge": "Darmochwał Ireneusz",
+   "judge_rapporteur": "Kierejczyk Edward",
+   "case_type_description": [
+    "612  Sprawy geodezji i kartografii"
+   ],
+   "keywords": [
+    "Geodezja i kartografia",
+    "Nieruchomości",
+    "Lasy",
+    "Ewidencja gruntów"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19911010444",
+     "article": "art. 74 ust. 3",
+     "journal": "Dz.U. 1991 nr 101 poz. 444",
+     "law": "Ustawa z dnia 28 września 1991 r. o lasach."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19890300163",
+     "article": "art. 20 ust. 2 pkt 1",
+     "journal": "Dz.U. 1989 nr 30 poz. 163",
+     "law": "Ustawa z dnia 17 maja 1989 r. Prawo geodezyjne i kartograficzne."
+    }
+   ],
+   "official_collection": [
+    "ONSA 1996 2 poz. 78"
+   ],
+   "glosa_information": null,
+   "thesis": "Artykuł 74 ust. 3 ustawy z dnia 28 września 1991 r. o lasach /Dz.U. nr 101 poz. 444 ze zm./ nie stanowi samodzielnej podstawy do dokonania zmian w ewidencji gruntów, przewidzianych w art. 20 ust. 2 pkt 1 ustawy z dnia 17 maja 1989 r. - Prawo geodezyjne i kartograficzne /Dz.U. nr 30 poz. 163 ze zm./, bez faktycznego przekazania lasów i gruntów przeznaczonych do zalesienia w zarząd Lasów Państwowych. Dopiero po takim przekazaniu następuje zmiana osoby władającej gruntami państwowymi, która jest wykazywana w ewidencji gruntów i budynków.",
+   "sentence": "Naczelny Sąd Administracyjny uznał zasadność skargi Nadleśnictwa Ł. na decyzję Wojewody (...) z dnia 5 sierpnia 1993 r. w przedmiocie zmian w ewidencji gruntów i na podstawie art. 207 par. 1 i 2 pkt 1 Kpa uchylił zaskarżoną decyzję oraz poprzedzającą ją decyzję Kierownika Urzędu Rejonowego w W.",
+   "reasons_for_judgment": "Decyzją z dnia 7 lipca 1993 r. Kierownik Urzędu Rejonowego w W. wprowadził z urzędu zmiany w rejestrze ewidencji gruntów wsi K. Przez wpisanie Nadleśnictwa Ł. na miejsce dotychczasowego władającego Państwowego Funduszu Ziemi.\n\nW odwołaniu Nadleśnictwa Ł. zarzucono, że przekazanie lasów w jego zarząd powinno zakończyć się protokołem zdawczo-odbiorczym na podstawie dowodów stwierdzających własność Skarbu Państwa.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nArtykuł 74 ust. 3 ustawy z dnia 28 września 1991 r. o lasach /Dz.U. nr 101 poz. 444 ze zm./ nie stanowi samodzielnej podstawy do dokonania zmian w ewidencji gruntów, przewidzianych w art. 20 ust. 2 pkt 1 ustawy z dnia 17 maja 1989 r. - Prawo geodezyjne i kartograficzne /Dz.U. nr 30 poz. 163 ze zm./, bez faktycznego przekazania lasów i gruntów przeznaczonych do zalesienia w zarząd Lasów Państwowych. Dopiero po takim przekazaniu następuje zmiana osoby władającej gruntami państwowymi, która jest wykazywana w ewidencji gruntów i budynków.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny uznał zasadność skargi Nadleśnictwa Ł. na decyzję Wojewody (...) z dnia 5 sierpnia 1993 r. w przedmiocie zmian w ewidencji gruntów i na podstawie art. 207 par. 1 i 2 pkt 1 Kpa uchylił zaskarżoną decyzję oraz poprzedzającą ją decyzję Kierownika Urzędu Rejonowego w W.\n\n\nUZASADNIENIE\n\nDecyzją z dnia 7 lipca 1993 r. Kierownik Urzędu Rejonowego w W. wprowadził z urzędu zmiany w rejestrze ewidencji gruntów wsi K. Przez wpisanie Nadleśnictwa Ł. na miejsce dotychczasowego władającego Państwowego Funduszu Ziemi.\n\nW odwołaniu Nadleśnictwa Ł. zarzucono, że przekazanie lasów w jego zarząd powinno zakończyć się protokołem zdawczo-odbiorczym na podstawie dowodów stwierdzających własność Skarbu Państwa."
+  }
+ },
+ {
+  "case": "pre-reform-branch-thesis-only",
+  "shard": 1,
+  "row": 31,
+  "datasetsServerRow": 50031,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/628A801CE4",
+   "docket_number": "SA/Wr 1444/93",
+   "judgment_type": "Wyrok NSA oz. we Wrocławiu",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "1993-10-14T00:00:00+01:00",
+   "submission_date": null,
+   "court_name": "NSA oz. we Wrocławiu",
+   "judges": null,
+   "presiding_judge": null,
+   "judge_rapporteur": null,
+   "case_type_description": [
+    "624  Powszechny obowiązek obrony kraju"
+   ],
+   "keywords": [
+    "Powszechny obowiązek obrony",
+    "Działalność gospodarcza",
+    "Żołnierze zawodowi",
+    "Szkolnictwo wyższe"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19920040016",
+     "article": "art. 39 ust. 1 pkt 3",
+     "journal": "Dz.U. 1992 nr 4 poz. 16",
+     "law": "Obwieszczenie Ministra Obrony Narodowej z dnia 11 grudnia 1991 r. w sprawie ogłoszenia jednolitego tekstu ustawy z dnia 21 listopada 1967 r. o powszechnym obowiązku obrony Rzeczypospolitej Polskiej."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": "Okoliczność budowy domu jednorodzinnego i wynikające z tego zobowiązanie do zapłaty zaliczek na poczet zawartej umowy z wykonawcą budowy, a także okoliczność prowadzenia działalności gospodarczej na własny rachunek nie stanowią przesłanek, które według ustawy z dnia 21 listopada 1967 r. o powszechnym obowiązku obrony Rzeczypospolitej Polskiej /t.j. Dz.U. 1992 nr 4 poz. 16/ mogą stanowić podstawę do odroczenia zasadniczej służby wojskowej.",
+   "sentence": null,
+   "reasons_for_judgment": null,
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nOkoliczność budowy domu jednorodzinnego i wynikające z tego zobowiązanie do zapłaty zaliczek na poczet zawartej umowy z wykonawcą budowy, a także okoliczność prowadzenia działalności gospodarczej na własny rachunek nie stanowią przesłanek, które według ustawy z dnia 21 listopada 1967 r. o powszechnym obowiązku obrony Rzeczypospolitej Polskiej /t.j. Dz.U. 1992 nr 4 poz. 16/ mogą stanowić podstawę do odroczenia zasadniczej służby wojskowej."
+  }
+ },
+ {
+  "case": "pre-reform-branch",
+  "shard": 10,
+  "row": 25034,
+  "datasetsServerRow": 125034,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/25F1BC77EE",
+   "docket_number": "SA/Sz 1966/98",
+   "judgment_type": "Wyrok NSA oz. w Szczecinie",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2000-02-16T00:00:00+01:00",
+   "submission_date": null,
+   "court_name": "NSA oz. w Szczecinie",
+   "judges": [
+    "Strzelecka-Kuligowska Danuta",
+    "Tomaszewska Iwona",
+    "Kłosowski Stefan"
+   ],
+   "presiding_judge": null,
+   "judge_rapporteur": null,
+   "case_type_description": [
+    "601  Budownictwo, nadzór architektoniczno-budowlany i specjalistyczny, ochrona przeciwpożarowa"
+   ],
+   "keywords": null,
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19940890414",
+     "article": "art. 62 ust. 6",
+     "journal": "Dz.U. 1994 nr 89 poz. 414",
+     "law": "Ustawa z dnia 7 lipca 1994 r. - Prawo budowlane."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": "Zgodnie z art. 62 ust. 6 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 ze zm./ kontrolę stanu technicznego przewodów kominowych powinny przeprowadzać osoby posiadające kwalifikacje mistrza w rzemiośle kominiarskim lub osoby posiadające uprawnienia budowlane odpowiedniej specjalności.",
+   "sentence": "Naczelny Sąd Administracyjny po rozpoznaniu sprawy ze skargi Kazimiery P. na decyzję Wojewody Sz. z dnia 30 października 1998 r. (...) w przedmiocie nakazania dokonania oceny stanu technicznego obiektu - oddala skargę.",
+   "reasons_for_judgment": "Prezes Spółdzielni Mieszkaniowej w S. zawiadomił Urząd Rejonowy w S.-Sz., iż Kazimiera P. samowolnie podłączyła instalację CO do przewodów wentylacyjnych, co stanowi zagrożenie dla lokatorów budynku.\n\nKierownik Urzędu Rejonowego w S.-Sz. postanowieniem z dnia 17 czerwca 1998 r., (...), na podstawie art. 50 ust. 1 pkt 2 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 ze zm./ i art. 123 Kpa - wstrzymał użytkowanie pieca samowolnie podłączonego przez Kazimierę P. w mieszkaniu nr 2 A w lokalu mieszkalnym 18b w Sz.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nZgodnie z art. 62 ust. 6 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 ze zm./ kontrolę stanu technicznego przewodów kominowych powinny przeprowadzać osoby posiadające kwalifikacje mistrza w rzemiośle kominiarskim lub osoby posiadające uprawnienia budowlane odpowiedniej specjalności.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny po rozpoznaniu sprawy ze skargi Kazimiery P. na decyzję Wojewody Sz. z dnia 30 października 1998 r. (...) w przedmiocie nakazania dokonania oceny stanu technicznego obiektu - oddala skargę.\n\n\nUZASADNIENIE\n\nPrezes Spółdzielni Mieszkaniowej w S. zawiadomił Urząd Rejonowy w S.-Sz., iż Kazimiera P. samowolnie podłączyła instalację CO do przewodów wentylacyjnych, co stanowi zagrożenie dla lokatorów budynku.\n\nKierownik Urzędu Rejonowego w S.-Sz. postanowieniem z dnia 17 czerwca 1998 r., (...), na podstawie art. 50 ust. 1 pkt 2 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 ze zm./ i art. 123 Kpa - wstrzymał użytkowanie pieca samowolnie podłączonego przez Kazimierę P. w mieszkaniu nr 2 A w lokalu mieszkalnym 18b w Sz."
+  }
+ },
+ {
+  "case": "wsa-warszawa-not-final",
+  "shard": 0,
+  "row": 16,
+  "datasetsServerRow": 16,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/D11640B606",
+   "docket_number": "VI SAB/Wa 64/10",
+   "judgment_type": "Postanowienie WSA w Warszawie",
+   "finality": "orzeczenie nieprawomocne",
+   "judgment_date": "2011-01-19T00:00:00+01:00",
+   "submission_date": "2010-11-09T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Andrzej Czarnecki",
+    "Danuta Szydłowska",
+    "Grażyna Śliwińska"
+   ],
+   "presiding_judge": "Danuta Szydłowska",
+   "judge_rapporteur": "Grażyna Śliwińska",
+   "case_type_description": [
+    "6376 Bankowość, w tym zezwolenia dewizowe i zezwolenia na prowadzenie działalności gospodarczej w zakresie kupna i sprzedaży"
+   ],
+   "keywords": [
+    "Odrzucenie skargi"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/3FB02582DA",
+     "docket_number": "II GSK 1607/11",
+     "judgment_date": "2011-08-31T00:00:00+02:00",
+     "judgment_type": "Postanowienie NSA"
+    }
+   ],
+   "challenged_authority": "Komisja Nadzoru Finansowego",
+   "decision": [
+    "Odrzucono skargę"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 3, art. 149, art. 52 par. 1 i 2, art. 58 par. 1 pkt 6, art. 232 par. 1",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20000981071",
+     "article": "art. 37 par. 1, art. 5 par. 2 pkt 4, art. 127 par. 3, art. 17",
+     "journal": "Dz.U. 2000 nr 98 poz 1071",
+     "law": "Ustawa z dnia 14 czerwca 1960 r.- Kodeks postępowania administracyjnego - tekst jednolity"
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20061571119",
+     "article": "art. 3 ust. 3, art. 11",
+     "journal": "Dz.U. 2006 nr 157 poz 1119",
+     "law": "Ustawa z dnia 21 lipca 2006 r. o nadzorze nad rynkiem finansowym"
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Danuta Szydłowska Sędziowie Sędzia WSA Andrzej Czarnecki Sędzia WSA Grażyna Śliwińska (spr.) Protokolant ref. staż. Katarzyna Smaga po rozpoznaniu na rozprawie w dniu 19 stycznia 2011 r. sprawy ze skargi \"I.\" Sp. z o.o., K., Ukraina na bezczynność Komisji Nadzoru Finansowego w przedmiocie stwierdzenia nieważności uchwały w sprawie zawieszenia działalności banku postanawia 1. odrzucić skargę; 2. zwrócić skarżącej \"I.\" Sp. z o.o., K., Ukraina kwotę 100 (stu) złotych tytułem uiszczonego wpisu sądowego.",
+   "reasons_for_judgment": "I. Sp.z o.o. z siedzibą w K. (Ukraina) wraz z innymi podmiotami (S. z siedzibą w P., K. Sp. z o.o. z siedzibą w C. (Ukraina), W. S.A z siedzibą w L., A. S.A. z siedzibą w L.) - zwany dalej skarżącym, wniósł skargę na bezczynność Komisji Nadzoru Finansowego która, jego zdaniem, dopuściła się rażącego naruszenia przepisów określających terminy załatwienia sprawy w postępowaniu administracyjnym.\n\nW uzasadnieniu wskazywał na następujące okoliczności:",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Danuta Szydłowska Sędziowie Sędzia WSA Andrzej Czarnecki Sędzia WSA Grażyna Śliwińska (spr.) Protokolant ref. staż. Katarzyna Smaga po rozpoznaniu na rozprawie w dniu 19 stycznia 2011 r. sprawy ze skargi \"I.\" Sp. z o.o., K., Ukraina na bezczynność Komisji Nadzoru Finansowego w przedmiocie stwierdzenia nieważności uchwały w sprawie zawieszenia działalności banku postanawia 1. odrzucić skargę; 2. zwrócić skarżącej \"I.\" Sp. z o.o., K., Ukraina kwotę 100 (stu) złotych tytułem uiszczonego wpisu sądowego.\n\n\nUZASADNIENIE\n\nI. Sp.z o.o. z siedzibą w K. (Ukraina) wraz z innymi podmiotami (S. z siedzibą w P., K. Sp. z o.o. z siedzibą w C. (Ukraina), W. S.A z siedzibą w L., A. S.A. z siedzibą w L.) - zwany dalej skarżącym, wniósł skargę na bezczynność Komisji Nadzoru Finansowego która, jego zdaniem, dopuściła się rażącego naruszenia przepisów określających terminy załatwienia sprawy w postępowaniu administracyjnym.\n\nW uzasadnieniu wskazywał na następujące okoliczności:"
+  }
+ },
+ {
+  "case": "wsa-gorzow",
+  "shard": 10,
+  "row": 5,
+  "datasetsServerRow": 100005,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/0D4269EFCB",
+   "docket_number": "I SA/Go 82/21",
+   "judgment_type": "Wyrok WSA w Gorzowie Wlkp.",
+   "finality": "orzeczenie nieprawomocne",
+   "judgment_date": "2021-05-20T00:00:00+02:00",
+   "submission_date": "2021-02-17T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Gorzowie Wlkp.",
+   "judges": [
+    "Anna Juszczyk - Wiśniewska",
+    "Damian Bronowicki",
+    "Dariusz Skupień"
+   ],
+   "presiding_judge": "Dariusz Skupień",
+   "judge_rapporteur": "Damian Bronowicki",
+   "case_type_description": [
+    "6110 Podatek od towarów i usług"
+   ],
+   "keywords": [
+    "Podatek od towarów i usług"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Dyrektor Izby Skarbowej",
+   "decision": [
+    "Oddalono skargę"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20111771054",
+     "article": "art. 8 ust.2a, art. 29a ust.7 pkt 3",
+     "journal": "Dz.U. 2011 nr 177 poz 1054",
+     "law": "Ustawa z dnia 11 marca 2004 r. o podatku od towarów i usług - tekst jednolity"
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20190002325",
+     "article": "art. 151",
+     "journal": "Dz.U. 2019 poz 2325",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi - t.j."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Gorzowie Wielkopolskim w składzie następującym: Przewodniczący Sędzia WSA Dariusz Skupień Sędziowie Sędzia WSA Anna Juszczyk-Wiśniewska Asesor WSA Damian Bronowicki (spr.) Protokolant Starszy sekretarz sądowy Agnieszka Czajkowski po rozpoznaniu na rozprawie w dniu 20 maja 2021 r. sprawy ze skargi A. Spółka z ograniczoną odpowiedzialnością na decyzję Dyrektora Izby Administracji Skarbowej z dnia [...] r. nr [...] w przedmiocie podatku od towarów i usług za sierpień 2015 r. oddala skargę w całości.",
+   "reasons_for_judgment": "Zaskarżoną decyzją z dnia [...] grudnia 2020 r. nr [...], Dyrektor Izby Administracji Skarbowej utrzymał w mocy decyzję Naczelnika Urzędu Skarbowego z [...] września 2020 r. w przedmiocie określenia skarżącej A. sp. o.o. w podatku od towarów i usług za sierpień 2015 r. prawidłowej kwoty zobowiązania w wysokości 624.990 zł.\n\nDecyzję wydano w następującym stanie faktycznym:",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Gorzowie Wielkopolskim w składzie następującym: Przewodniczący Sędzia WSA Dariusz Skupień Sędziowie Sędzia WSA Anna Juszczyk-Wiśniewska Asesor WSA Damian Bronowicki (spr.) Protokolant Starszy sekretarz sądowy Agnieszka Czajkowski po rozpoznaniu na rozprawie w dniu 20 maja 2021 r. sprawy ze skargi A. Spółka z ograniczoną odpowiedzialnością na decyzję Dyrektora Izby Administracji Skarbowej z dnia [...] r. nr [...] w przedmiocie podatku od towarów i usług za sierpień 2015 r. oddala skargę w całości.\n\n\nUZASADNIENIE\n\nZaskarżoną decyzją z dnia [...] grudnia 2020 r. nr [...], Dyrektor Izby Administracji Skarbowej utrzymał w mocy decyzję Naczelnika Urzędu Skarbowego z [...] września 2020 r. w przedmiocie określenia skarżącej A. sp. o.o. w podatku od towarów i usług za sierpień 2015 r. prawidłowej kwoty zobowiązania w wysokości 624.990 zł.\n\nDecyzję wydano w następującym stanie faktycznym:"
+  }
+ },
+ {
+  "case": "wsa-postanowienie-no-finality",
+  "shard": 0,
+  "row": 6,
+  "datasetsServerRow": 6,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/21CBD4642A",
+   "docket_number": "III SA/Wa 469/14",
+   "judgment_type": "Postanowienie WSA w Warszawie",
+   "finality": null,
+   "judgment_date": "2015-05-19T00:00:00+02:00",
+   "submission_date": "2014-02-10T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Maciej Kurasz"
+   ],
+   "presiding_judge": "Maciej Kurasz",
+   "judge_rapporteur": "Maciej Kurasz",
+   "case_type_description": [
+    "6112 Podatek dochodowy od osób fizycznych, w tym zryczałtowane formy opodatkowania"
+   ],
+   "keywords": [
+    "Odrzucenie skargi kasacyjnej"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Dyrektor Izby Skarbowej",
+   "decision": [
+    "Odrzucono skargę kasacyjną"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20120000270",
+     "article": "art. 178 w zw. z art. 177 par. 1, art. 230 par. 1 i 2, art. 220 par. 1 i 3, art. 83 par. 1 i 2",
+     "journal": "Dz.U. 2012 poz 270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi - tekst jednolity."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Dnia 19 maja 2015 r. Wojewódzki Sąd Administracyjny w Warszawie w składzie: , Przewodniczący Sędzia WSA Maciej Kurasz, po rozpoznaniu w dniu 19 maja 2015 r. na posiedzeniu niejawnym skargi kasacyjnej J. K. od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 27 sierpnia 2014 r. sygn. akt III SA/Wa 469/14 w sprawie ze skargi J.K. na decyzję Dyrektora Izby Skarbowej w W. z dnia [...] listopada 2013 r. nr [...] w przedmiocie określenia wysokości zobowiązania podatkowego w podatku dochodowym od osób fizycznych za 2008 r. postanawia odrzucić skargę kasacyjną",
+   "reasons_for_judgment": "Wojewódzki Sąd Administracyjny w Warszawie wyrokiem z dnia 27 sierpnia 2014 r. oddalił skargę J. K. (dalej jako \"Skarżący\") na decyzję Dyrektora Izby Skarbowej w W. z dnia [...] listopada 2013 r. w przedmiocie określenia wysokości zobowiązania podatkowego w podatku dochodowym od osób fizycznych za 2008 r.\n\nOdpis wyroku wraz z uzasadnieniem doręczono pełnomocnikowi Skarżącego w dniu 25 września 2014 r.\n\nPełnomocnik Skarżącego pismem z dnia 23 października 2014 r. wniósł (z zachowaniem terminu) skargę kasacyjną od ww. wyroku, zarzucając naruszenie przepisów prawa materialnego oraz naruszenie przepisów postępowania.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nDnia 19 maja 2015 r. Wojewódzki Sąd Administracyjny w Warszawie w składzie: , Przewodniczący Sędzia WSA Maciej Kurasz, po rozpoznaniu w dniu 19 maja 2015 r. na posiedzeniu niejawnym skargi kasacyjnej J. K. od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 27 sierpnia 2014 r. sygn. akt III SA/Wa 469/14 w sprawie ze skargi J.K. na decyzję Dyrektora Izby Skarbowej w W. z dnia [...] listopada 2013 r. nr [...] w przedmiocie określenia wysokości zobowiązania podatkowego w podatku dochodowym od osób fizycznych za 2008 r. postanawia odrzucić skargę kasacyjną\n\n\nUZASADNIENIE\n\nWojewódzki Sąd Administracyjny w Warszawie wyrokiem z dnia 27 sierpnia 2014 r. oddalił skargę J. K. (dalej jako \"Skarżący\") na decyzję Dyrektora Izby Skarbowej w W. z dnia [...] listopada 2013 r. w przedmiocie określenia wysokości zobowiązania podatkowego w podatku dochodowym od osób fizycznych za 2008 r.\n\nOdpis wyroku wraz z uzasadnieniem doręczono pełnomocnikowi Skarżącego w dniu 25 września 2014 r.\n\nPełnomocnik Skarżącego pismem z dnia 23 października 2014 r. wniósł (z zachowaniem terminu) skargę kasacyjną od ww. wyroku, zarzucając naruszenie przepisów prawa materialnego oraz naruszenie przepisów postępowania."
+  }
+ },
+ {
+  "case": "wsa-wyrok-no-reasons",
+  "shard": 0,
+  "row": 12,
+  "datasetsServerRow": 12,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/40B6D5A47A",
+   "docket_number": "VI SA/Wa 2086/08",
+   "judgment_type": "Wyrok WSA w Warszawie",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2008-12-02T00:00:00+01:00",
+   "submission_date": "2008-09-29T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Andrzej Wieczorek",
+    "Danuta Szydłowska...",
+    "Pamela Kuraś-Dębecka"
+   ],
+   "presiding_judge": "Pamela Kuraś-Dębecka",
+   "judge_rapporteur": "Danuta Szydłowska...",
+   "case_type_description": [
+    "6037 Transport drogowy i przewozy"
+   ],
+   "keywords": null,
+   "related_docket_numbers": null,
+   "challenged_authority": "Inspektor Transportu Drogowego",
+   "decision": [
+    "Oddalono skargę"
+   ],
+   "extracted_legal_bases": null,
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Pamela Kuraś – Dębecka Sędziowie Asesor WSA Danuta Szydłowska (spr.) Sędzia WSA Andrzej Wieczorek Protokolant Monika Bodzan po rozpoznaniu na rozprawie w dniu 2 grudnia 2008 r. sprawy ze skargi L. P. na postanowienie Głównego Inspektora Transportu Drogowego z dnia [...] lipca 2008 r. nr [...] w przedmiocie uchybienia terminu do wniesienia odwołania oddala skargę",
+   "reasons_for_judgment": null,
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Pamela Kuraś – Dębecka Sędziowie Asesor WSA Danuta Szydłowska (spr.) Sędzia WSA Andrzej Wieczorek Protokolant Monika Bodzan po rozpoznaniu na rozprawie w dniu 2 grudnia 2008 r. sprawy ze skargi L. P. na postanowienie Głównego Inspektora Transportu Drogowego z dnia [...] lipca 2008 r. nr [...] w przedmiocie uchybienia terminu do wniesienia odwołania oddala skargę"
+  }
+ },
+ {
+  "case": "no-keywords-no-legal-bases",
+  "shard": 0,
+  "row": 10,
+  "datasetsServerRow": 10,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/4818165334",
+   "docket_number": "III SA/Wa 104/18",
+   "judgment_type": "Postanowienie WSA w Warszawie",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2018-12-06T00:00:00+01:00",
+   "submission_date": "2018-01-11T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Agnieszka Baran"
+   ],
+   "presiding_judge": "Agnieszka Baran",
+   "judge_rapporteur": "Agnieszka Baran",
+   "case_type_description": [
+    "6115 Podatki od nieruchomości"
+   ],
+   "keywords": null,
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/2E16AB1009",
+     "docket_number": "II FZ 388/18",
+     "judgment_date": "2018-06-27T00:00:00+02:00",
+     "judgment_type": "Postanowienie NSA"
+    }
+   ],
+   "challenged_authority": "Samorządowe Kolegium Odwoławcze",
+   "decision": [
+    "Odrzucono skargę"
+   ],
+   "extracted_legal_bases": null,
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Dnia 6 grudnia 2018 r. Wojewódzki Sąd Administracyjny w Warszawie w składzie: , Przewodniczący Sędzia del. SO Agnieszka Baran, po rozpoznaniu w dniu 6 grudnia 2018 r. na posiedzeniu niejawnym sprawy ze skargi W. P. na decyzję Samorządowego Kolegium Odwoławczego w W. z dnia [...] listopada 2017 r. nr [...] w przedmiocie podatku od nieruchomości za 2015 r. postanawia odrzucić skargę.",
+   "reasons_for_judgment": "W. P. (dalej: skarżący, strona) wniósł skargę na decyzję opisaną w komparycji niniejszego postanowienia.\n\nNa podstawie zarządzenia Przewodniczącej Wydziału III z 1 lutego 2018 r. skarżący został wezwany do uiszczenia wpisu sądowego od skargi w kwocie 100 zł. W wezwaniu pouczono, że nieuiszczenie wpisu w terminie siedmiu dni od dnia doręczenia wezwania spowoduje odrzucenie skargi.\n\nNaczelny Sąd Administracyjny postanowieniem z 27 czerwca 2018 r. oddalił zażalenie strony na zarządzenie Przewodniczącej Wydziału III z 1 lutego 2018 r.\n\nZarządzeniem z 18 lipca 2018 r. wezwano skarżącego do wykonania prawomocnego zarządzenia z 1 lutego 2018 r.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nDnia 6 grudnia 2018 r. Wojewódzki Sąd Administracyjny w Warszawie w składzie: , Przewodniczący Sędzia del. SO Agnieszka Baran, po rozpoznaniu w dniu 6 grudnia 2018 r. na posiedzeniu niejawnym sprawy ze skargi W. P. na decyzję Samorządowego Kolegium Odwoławczego w W. z dnia [...] listopada 2017 r. nr [...] w przedmiocie podatku od nieruchomości za 2015 r. postanawia odrzucić skargę.\n\n\nUZASADNIENIE\n\nW. P. (dalej: skarżący, strona) wniósł skargę na decyzję opisaną w komparycji niniejszego postanowienia.\n\nNa podstawie zarządzenia Przewodniczącej Wydziału III z 1 lutego 2018 r. skarżący został wezwany do uiszczenia wpisu sądowego od skargi w kwocie 100 zł. W wezwaniu pouczono, że nieuiszczenie wpisu w terminie siedmiu dni od dnia doręczenia wezwania spowoduje odrzucenie skargi.\n\nNaczelny Sąd Administracyjny postanowieniem z 27 czerwca 2018 r. oddalił zażalenie strony na zarządzenie Przewodniczącej Wydziału III z 1 lutego 2018 r.\n\nZarządzeniem z 18 lipca 2018 r. wezwano skarżącego do wykonania prawomocnego zarządzenia z 1 lutego 2018 r."
+  }
+ },
+ {
+  "case": "legal-base-without-link",
+  "shard": 0,
+  "row": 7,
+  "datasetsServerRow": 7,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/0B08733C97",
+   "docket_number": "I GSK 946/13",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2014-05-29T00:00:00+02:00",
+   "submission_date": "2013-07-10T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Cezary Pryca",
+    "Izabela Najda-Ossowska",
+    "Wojciech Kręcisz"
+   ],
+   "presiding_judge": "Wojciech Kręcisz",
+   "judge_rapporteur": "Wojciech Kręcisz",
+   "case_type_description": [
+    "6111 Podatek akcyzowy"
+   ],
+   "keywords": [
+    "Podatek akcyzowy"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/7302B50F7E",
+     "docket_number": "I SA/Wr 100/13",
+     "judgment_date": "2013-04-03T00:00:00+02:00",
+     "judgment_type": "Wyrok WSA we Wrocławiu"
+    }
+   ],
+   "challenged_authority": "Dyrektor Izby Celnej",
+   "decision": [
+    "Oddalono skargę kasacyjną"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20111080626",
+     "article": "art.2 pkt 1,art.4 ust.1, art.80 ust.1",
+     "journal": "Dz.U. 2011 nr 108 poz 626",
+     "law": "Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym - tekst jednolity."
+    },
+    {
+     "link": null,
+     "article": null,
+     "journal": "Dz.U.UE.L 1992 nr 302 poz 1 art.12 ust.5 lit.a",
+     "law": "Rozporządzenie Rady (EWG) NR 2913/92 z dnia 12 października 1992 r. ustanawiające Wspólnotowy Kodeks Celny."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20050080060",
+     "article": "art.127, art.180, art.200a par.1-4",
+     "journal": "Dz.U. 2005 nr 8 poz 60",
+     "law": "Ustawa z dnia 29 sierpnia 1997 r. - Ordynacja podatkowa - tekst jedn."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Wojciech Kręcisz (spr.) Sędzia NSA Cezary Pryca Sędzia del. WSA Izabela Najda-Ossowska Protokolant Nina Szyller po rozpoznaniu w dniu 29 maja 2014 r. na rozprawie w Izbie Gospodarczej skargi kasacyjnej \"N.\" Spółki z o.o. w D. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 3 kwietnia 2013 r. sygn. akt I SA/Wr 100/13 w sprawie ze skargi \"N.\" Spółki z o.o. w D. na decyzję Dyrektora Izby Celnej we W. z dnia [...] października 2012 r. nr [...] w przedmiocie podatku akcyzowego 1. oddala skargę kasacyjną; 2. zasądza od \"N.\" Spółki z o.o. w D. na rzecz Dyrektora Izby Celnej we W. kwotę 1.800 (tysiąc osiemset)",
+   "reasons_for_judgment": "Wojewódzki Sąd Administracyjny we Wrocławiu wyrokiem z dnia 3 kwietnia 2013 r., sygn. akt I SA/Wr 100/13 oddalił skargę \"N.\" Spółki z o.o. w D. na decyzję Dyrektora Izby Celnej we W. z dnia [...] października 2012 r., nr [...] w przedmiocie podatku akcyzowego.\n\nZ uzasadnienia wyroku wynika, że Sąd I instancji przyjął za podstawę rozstrzygnięcia następujące ustalenia.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Wojciech Kręcisz (spr.) Sędzia NSA Cezary Pryca Sędzia del. WSA Izabela Najda-Ossowska Protokolant Nina Szyller po rozpoznaniu w dniu 29 maja 2014 r. na rozprawie w Izbie Gospodarczej skargi kasacyjnej \"N.\" Spółki z o.o. w D. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 3 kwietnia 2013 r. sygn. akt I SA/Wr 100/13 w sprawie ze skargi \"N.\" Spółki z o.o. w D. na decyzję Dyrektora Izby Celnej we W. z dnia [...] października 2012 r. nr [...] w przedmiocie podatku akcyzowego 1. oddala skargę kasacyjną; 2. zasądza od \"N.\" Spółki z o.o. w D. na rzecz Dyrektora Izby Celnej we W. kwotę 1.800 (tysiąc osiemset)\n\n\nUZASADNIENIE\n\nWojewódzki Sąd Administracyjny we Wrocławiu wyrokiem z dnia 3 kwietnia 2013 r., sygn. akt I SA/Wr 100/13 oddalił skargę \"N.\" Spółki z o.o. w D. na decyzję Dyrektora Izby Celnej we W. z dnia [...] października 2012 r., nr [...] w przedmiocie podatku akcyzowego.\n\nZ uzasadnienia wyroku wynika, że Sąd I instancji przyjął za podstawę rozstrzygnięcia następujące ustalenia."
+  }
+ },
+ {
+  "case": "no-submission-date",
+  "shard": 10,
+  "row": 25049,
+  "datasetsServerRow": 125049,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/93CEAC6F3C",
+   "docket_number": "II SA/Kr 1432/98",
+   "judgment_type": "Wyrok NSA oz. w Krakowie",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2001-07-26T00:00:00+02:00",
+   "submission_date": null,
+   "court_name": "NSA oz. w Krakowie",
+   "judges": [
+    "Tuszyńska Joanna",
+    "Danielec Grażyna",
+    "Niecikowski Andrzej"
+   ],
+   "presiding_judge": "Tuszyńska Joanna",
+   "judge_rapporteur": "Niecikowski Andrzej",
+   "case_type_description": [
+    "601  Budownictwo, nadzór architektoniczno-budowlany i specjalistyczny, ochrona przeciwpożarowa"
+   ],
+   "keywords": [
+    "Budowlane prawo",
+    "Rozgraniczenie nieruchomości"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19940890414",
+     "article": "art. 32 ust. 4 pkt 2",
+     "journal": "Dz.U. 1994 nr 89 poz. 414",
+     "law": "Ustawa z dnia 7 lipca 1994 r. - Prawo budowlane."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20000981071",
+     "article": "art. 97 par. 1 pkt 4",
+     "journal": "Dz.U. 2000 nr 98 poz. 1071",
+     "law": "Obwieszczenie Prezesa Rady Ministrów z dnia 9 października 2000 r. w sprawie ogłoszenia jednolitego tekstu ustawy - Kodeks postępowania administracyjnego."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": "W razie wszczęcia postępowania rozgraniczeniowego dotyczącego nieruchomości na której ma być realizowana inwestycja - mamy do czynienia z zagadnieniem wstępnym w rozumieniu art. 97 par. 1 pkt 4 Kpa.\n\nW takim przypadku obowiązkiem organu jest zawieszenie postępowania do czasu rozstrzygnięcia tego zagadnienia przez inny organ lub sąd. Wynik postępowania rozgraniczeniowego zadecyduje o tym, jak daleko sięga prawo inwestora do dysponowania nieruchomością na cele budowlane.",
+   "sentence": "Naczelny Sąd Administracyjny po rozpoznaniu sprawy ze skargi Adama S. na decyzję Wojewody K. z dnia 28 maja 1998 r. (...) w przedmiocie zatwierdzenia projektu budowlanego i pozwolenia na budowę - uchyla zaskarżoną decyzję, (...).",
+   "reasons_for_judgment": "Decyzją z dnia 12.02.1998 r. (...) Wójt Gminy Z. działając na podstawie art. 28 i art. 87 ust. 1 pkt 2 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 - zwanej dalej Prawem budowlanym z 1994 r./ zatwierdził projekt budowlany i udzielił pozwolenia na budowę budynku zakładu usług blacharstwa samochodowego z częścią mieszkalną na nieruchomości położonej w Z. oznaczonej w ewidencji gruntów jako dz.ewid. 1089/2.",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\nW razie wszczęcia postępowania rozgraniczeniowego dotyczącego nieruchomości na której ma być realizowana inwestycja - mamy do czynienia z zagadnieniem wstępnym w rozumieniu art. 97 par. 1 pkt 4 Kpa.\n\nW takim przypadku obowiązkiem organu jest zawieszenie postępowania do czasu rozstrzygnięcia tego zagadnienia przez inny organ lub sąd. Wynik postępowania rozgraniczeniowego zadecyduje o tym, jak daleko sięga prawo inwestora do dysponowania nieruchomością na cele budowlane.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny po rozpoznaniu sprawy ze skargi Adama S. na decyzję Wojewody K. z dnia 28 maja 1998 r. (...) w przedmiocie zatwierdzenia projektu budowlanego i pozwolenia na budowę - uchyla zaskarżoną decyzję, (...).\n\n\nUZASADNIENIE\n\nDecyzją z dnia 12.02.1998 r. (...) Wójt Gminy Z. działając na podstawie art. 28 i art. 87 ust. 1 pkt 2 ustawy z dnia 7 lipca 1994 r. - Prawo budowlane /Dz.U. nr 89 poz. 414 - zwanej dalej Prawem budowlanym z 1994 r./ zatwierdził projekt budowlany i udzielił pozwolenia na budowę budynku zakładu usług blacharstwa samochodowego z częścią mieszkalną na nieruchomości położonej w Z. oznaczonej w ewidencji gruntów jako dz.ewid. 1089/2."
+  }
+ },
+ {
+  "case": "no-judges",
+  "shard": 11,
+  "row": 49905,
+  "datasetsServerRow": 199905,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/401D0C7609",
+   "docket_number": "III SA 117/94",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "1994-10-10T00:00:00+01:00",
+   "submission_date": null,
+   "court_name": "NSA w Warszawie (przed reformą)",
+   "judges": null,
+   "presiding_judge": null,
+   "judge_rapporteur": null,
+   "case_type_description": [
+    "611  Podatki  i  inne świadczenia pieniężne, do  których   mają zastosowanie przepisy Ordynacji  podatkowej, oraz egzekucja t"
+   ],
+   "keywords": [
+    "Kombatanci",
+    "Podatek dochodowy od osób fizycznych",
+    "Podatkowe postępowanie"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": null,
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19910800350",
+     "article": "ze zm.",
+     "journal": "Dz.U. 1991 nr 80 poz. 350",
+     "law": "Ustawa z dnia 26 lipca 1991 r. o podatku dochodowym od osób fizycznych."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19910170075",
+     "article": "ze zm.",
+     "journal": "Dz.U. 1991 nr 17 poz. 75",
+     "law": "Ustawa z dnia 24 stycznia 1991 r. o kombatantach oraz niektórych osobach będących ofiarami represji wojennych i okresu powojennego."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19931080486",
+     "article": "art. 8",
+     "journal": "Dz.U. 1993 nr 108 poz. 486",
+     "law": "Obwieszczenie Ministra Finansów z dnia 1 września 1993 r. w sprawie ogłoszenia jednolitego tekstu ustawy o zobowiązaniach podatkowych."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": "1. Ustawa z dnia 24 stycznia 1991 r. o kombatantach oraz niektórych osobach będących ofiarami represji wojennych i okresu powojennego /Dz.U. nr 17 poz. 75 ze zm./ przyznaje w uznaniu szczególnych zasług osób, które walczyły o suwerenność ojczyzny określone uprawnienia pracownicze, emerytalne, ulgi taryfowe i zniżki, jednakże nie ma wśród nich zwolnień podatkowych.",
+   "sentence": "Naczelny Sąd Administracyjny po rozpoznaniu w dniu 10 października 1994 r. sprawy ze skargi Wacława P. na decyzję Izby Skarbowej w O. z dnia 14 grudnia 1993 r. (...) w przedmiocie odmowy zaniechania ustalania i poboru podatku dochodowego od osób fizycznych - oddala skargę.",
+   "reasons_for_judgment": "Zaskarżoną decyzją Izba Skarbowa w O. utrzymała w mocy decyzję Urzędu Skarbowego w O. z dnia 3 września 1993 r., którą odmówiono Wacławowi P. zaniechania ustalania i poboru podatku dochodowego od osób fizycznych należnego od pobieranej z zagranicy emerytury. Organy podatkowe wyjaśniły, że stosownie do art. 18 ust. 1 umowy zawartej z Rządem Zjednoczonego Królestwa Wielkiej Brytanii i Północnej Irlandii emerytura Wacława P., z uwagi na jego miejsce zamieszkania, podlega opodatkowaniu w Polsce. Wysokość emerytury - po opodatkowaniu - wynosi ok. 4 mln zł miesięcznie, to jest prawie dwukrotnie więcej niż średnie emerytury krajowe. Po opłaceniu kosztów pobytu w Domu Kombatanta podatnikowi",
+   "dissenting_opinion": null,
+   "full_text": "TEZY\n\n1. Ustawa z dnia 24 stycznia 1991 r. o kombatantach oraz niektórych osobach będących ofiarami represji wojennych i okresu powojennego /Dz.U. nr 17 poz. 75 ze zm./ przyznaje w uznaniu szczególnych zasług osób, które walczyły o suwerenność ojczyzny określone uprawnienia pracownicze, emerytalne, ulgi taryfowe i zniżki, jednakże nie ma wśród nich zwolnień podatkowych.\n\n\nSENTENCJA\n\nNaczelny Sąd Administracyjny po rozpoznaniu w dniu 10 października 1994 r. sprawy ze skargi Wacława P. na decyzję Izby Skarbowej w O. z dnia 14 grudnia 1993 r. (...) w przedmiocie odmowy zaniechania ustalania i poboru podatku dochodowego od osób fizycznych - oddala skargę.\n\n\nUZASADNIENIE\n\nZaskarżoną decyzją Izba Skarbowa w O. utrzymała w mocy decyzję Urzędu Skarbowego w O. z dnia 3 września 1993 r., którą odmówiono Wacławowi P. zaniechania ustalania i poboru podatku dochodowego od osób fizycznych należnego od pobieranej z zagranicy emerytury. Organy podatkowe wyjaśniły, że stosownie do art. 18 ust. 1 umowy zawartej z Rządem Zjednoczonego Królestwa Wielkiej Brytanii i Północnej Irlandii emerytura Wacława P., z uwagi na jego miejsce zamieszkania, podlega opodatkowaniu w Polsce. Wysokość emerytury - po opodatkowaniu - wynosi ok. 4 mln zł miesięcznie, to jest prawie dwukrotnie więcej niż średnie emerytury krajowe. Po opłaceniu kosztów pobytu w Domu Kombatanta podatnikowi"
+  }
+ },
+ {
+  "case": "multiple-related",
+  "shard": 0,
+  "row": 45,
+  "datasetsServerRow": 45,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/4A870034BC",
+   "docket_number": "I SA/Gl 328/07",
+   "judgment_type": "Postanowienie WSA w Gliwicach",
+   "finality": null,
+   "judgment_date": "2008-03-12T00:00:00+01:00",
+   "submission_date": "2007-05-14T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Gliwicach",
+   "judges": [
+    "Piotr Łukasik"
+   ],
+   "presiding_judge": "Piotr Łukasik",
+   "judge_rapporteur": "Piotr Łukasik",
+   "case_type_description": [
+    "6118 Egzekucja świadczeń pieniężnych"
+   ],
+   "keywords": [
+    "Prawo pomocy"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/7F68EBFD55",
+     "docket_number": "II FZ 511/07",
+     "judgment_date": "2008-09-01T00:00:00+02:00",
+     "judgment_type": "Postanowienie NSA"
+    },
+    {
+     "judgment_id": "/doc/F165C8A492",
+     "docket_number": "II FZ 263/08",
+     "judgment_date": "2008-07-15T00:00:00+02:00",
+     "judgment_type": "Postanowienie NSA"
+    }
+   ],
+   "challenged_authority": "Dyrektor Izby Skarbowej",
+   "decision": [
+    "Odmówiono przyznania prawa pomocy"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 199, art. 245 par. 3, art. 246 par. 1 pkt 2, art. 255, art. 258 par. 1 i par. 2 pkt 7",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Referendarz sądowy Wojewódzkiego Sądu Administracyjnego w Gliwicach Piotr Łukasik po rozpoznaniu w dniu 12 marca 2008 r. na posiedzeniu niejawnym w sprawie ze skargi M.B. na postanowienie Dyrektora Izby Skarbowej w K. z dnia [...] nr [...] w przedmiocie egzekucji świadczeń pieniężnych na skutek wniosku skarżącego o przyznanie prawa pomocy w zakresie obejmującym zwolnienie od kosztów sądowych postanawia odmówić przyznania prawa pomocy",
+   "reasons_for_judgment": "Prawomocnym postanowieniem z dnia 29 czerwca 2007 r. referendarz sądowy Wojewódzkiego Sądu Administracyjnego w Gliwicach odmówił skarżącemu przyznania prawa pomocy.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nReferendarz sądowy Wojewódzkiego Sądu Administracyjnego w Gliwicach Piotr Łukasik po rozpoznaniu w dniu 12 marca 2008 r. na posiedzeniu niejawnym w sprawie ze skargi M.B. na postanowienie Dyrektora Izby Skarbowej w K. z dnia [...] nr [...] w przedmiocie egzekucji świadczeń pieniężnych na skutek wniosku skarżącego o przyznanie prawa pomocy w zakresie obejmującym zwolnienie od kosztów sądowych postanawia odmówić przyznania prawa pomocy\n\n\nUZASADNIENIE\n\nPrawomocnym postanowieniem z dnia 29 czerwca 2007 r. referendarz sądowy Wojewódzkiego Sądu Administracyjnego w Gliwicach odmówił skarżącemu przyznania prawa pomocy."
+  }
+ },
+ {
+  "case": "year-2004",
+  "shard": 10,
+  "row": 8,
+  "datasetsServerRow": 100008,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/1D1BACD97A",
+   "docket_number": "SA/Sz 1282/02",
+   "judgment_type": "Wyrok WSA w Szczecinie",
+   "finality": "orzeczenie nieprawomocne",
+   "judgment_date": "2004-03-04T00:00:00+01:00",
+   "submission_date": "2002-06-04T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Szczecinie",
+   "judges": [
+    "Alicja Polańska",
+    "Maria Dożynkiewicz",
+    "Nadzieja Karczmarczyk-Gawęcka"
+   ],
+   "presiding_judge": "Maria Dożynkiewicz",
+   "judge_rapporteur": "Nadzieja Karczmarczyk-Gawęcka",
+   "case_type_description": [
+    "611  Podatki  i  inne świadczenia pieniężne, do  których   mają zastosowanie przepisy Ordynacji  podatkowej, oraz egzekucja t"
+   ],
+   "keywords": [
+    "Podatek od towarów i usług"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/5B9F3B5D70",
+     "docket_number": "FSK 1451/04",
+     "judgment_date": "2005-02-11T00:00:00+01:00",
+     "judgment_type": "Wyrok NSA"
+    }
+   ],
+   "challenged_authority": "Izba Skarbowa",
+   "decision": null,
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19971370926",
+     "article": "art. 72",
+     "journal": "Dz.U. 1997 nr 137 poz 926",
+     "law": "Ustawa z dnia 29 sierpnia 1997 r. - Ordynacja podatkowa."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19930110050",
+     "article": "art. 19; art. 21 ust 2  i 6",
+     "journal": "Dz.U. 1993 nr 11 poz 50",
+     "law": "Ustawa z dnia 8 stycznia 1993 r. o podatku od towarów i usług oraz o podatku akcyzowym."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021691387",
+     "article": "art 73 par 1",
+     "journal": "Dz.U. 2002 nr 169 poz 1387",
+     "law": "Ustawa z dnia 12 września 2002 r. o zmianie ustawy - Ordynacja podatkowa oraz o zmianie niektórych innych ustaw."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Szczecinie w składzie następującym: Przewodniczący Sędzia NSA Maria Dożynkiewicz, Sędziowie Asesor WSA Nadzieja Karczmarczyk (spr.), Sędzia WSA Alicja Polańska, Protokolant Anna Malinowska, po rozpoznaniu na rozprawie w dniu 19 lutego 2004 r. sprawy ze skargi M.J. prowadzącego Przedsiębiorstwo [...] \"P.-B.\" w K. na postanowienie Izby Skarbowej Ośrodka Zamiejscowego z dnia [...] r. Nr [...] w przedmiocie zaliczenia należnego zwrotu w podatku od towarów i usług za [...]r. na poczet zaległości w podatku od towarów i usług za [...] roku o d d a l a skargę",
+   "reasons_for_judgment": "Urząd Skarbowy w K. postanowieniem z [...] r. nr [...] wydanym na podstawie art. 273 § 1 pkt 2 oraz art. 75 § 1 ustawy z 29 sierpnia 1997 r. - Ordynacja podatkowa (Dz. U. Nr 137, poz. 926 ze zm.) zaliczył z urzędu należny podatnikowi M. J. prowadzącemu Przedsiębiorstwo [...] \"P. - B.\" z siedzibą w K. zwrot podatku od towarów i usług za [...] r. w kwocie [...] zł na poczet zaległości w tym podatku za [...] r.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Szczecinie w składzie następującym: Przewodniczący Sędzia NSA Maria Dożynkiewicz, Sędziowie Asesor WSA Nadzieja Karczmarczyk (spr.), Sędzia WSA Alicja Polańska, Protokolant Anna Malinowska, po rozpoznaniu na rozprawie w dniu 19 lutego 2004 r. sprawy ze skargi M.J. prowadzącego Przedsiębiorstwo [...] \"P.-B.\" w K. na postanowienie Izby Skarbowej Ośrodka Zamiejscowego z dnia [...] r. Nr [...] w przedmiocie zaliczenia należnego zwrotu w podatku od towarów i usług za [...]r. na poczet zaległości w podatku od towarów i usług za [...] roku o d d a l a skargę\n\n\nUZASADNIENIE\n\nUrząd Skarbowy w K. postanowieniem z [...] r. nr [...] wydanym na podstawie art. 273 § 1 pkt 2 oraz art. 75 § 1 ustawy z 29 sierpnia 1997 r. - Ordynacja podatkowa (Dz. U. Nr 137, poz. 926 ze zm.) zaliczył z urzędu należny podatnikowi M. J. prowadzącemu Przedsiębiorstwo [...] \"P. - B.\" z siedzibą w K. zwrot podatku od towarów i usług za [...] r. w kwocie [...] zł na poczet zaległości w tym podatku za [...] r."
+  }
+ },
+ {
+  "case": "year-2015",
+  "shard": 0,
+  "row": 8,
+  "datasetsServerRow": 8,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/BB40BD0398",
+   "docket_number": "I SA/Wa 722/15",
+   "judgment_type": "Wyrok WSA w Warszawie",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2015-10-23T00:00:00+02:00",
+   "submission_date": "2015-04-30T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Elżbieta Sobielarska",
+    "Emilia Lewandowska",
+    "Gabriela Nowak"
+   ],
+   "presiding_judge": "Gabriela Nowak",
+   "judge_rapporteur": "Emilia Lewandowska",
+   "case_type_description": [
+    "6100 Nabycie mienia państwowego z mocy prawa przez gminę"
+   ],
+   "keywords": [
+    "Nieruchomości"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/C4581FC643",
+     "docket_number": "I OSK 441/16",
+     "judgment_date": "2018-01-09T00:00:00+01:00",
+     "judgment_type": "Wyrok NSA"
+    }
+   ],
+   "challenged_authority": "Minister Administracji i Cyfryzacji",
+   "decision": [
+    "Oddalono skargę"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU19900320191",
+     "article": "art. 5 ust. 1 pkt 1",
+     "journal": "Dz.U. 1990 nr 32 poz 191",
+     "law": "Ustawa z dnia 10 maja 1990 r. Przepisy wprowadzające ustawę o samorządzie terytorialnym i ustawę o pracownikach samorządowych."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20120000270",
+     "article": "art. 151",
+     "journal": "Dz.U. 2012 poz 270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi - tekst jednolity."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Gabriela Nowak Sędziowie WSA Emilia Lewandowska (spr.) WSA Elżbieta Sobielarska Protokolant specjalista Joanna Pleszczyńska po rozpoznaniu na rozprawie w dniu 23 października 2015 r. sprawy ze skargi Miasta P. na decyzję Ministra Administracji i Cyfryzacji z dnia [...] marca 2015 r. nr [...] [...] w przedmiocie stwierdzenia nieważności decyzji oddala skargę.",
+   "reasons_for_judgment": "Minister Administracji i Cyfryzacji, decyzją z [...] marca 2015 r. nr [...], utrzymał\n\nw mocy własną decyzję z [...] kwietnia 2014 r. nr [...] stwierdzającą nieważność decyzji Wojewody [...] z [...] marca 2012 r nr [...] stwierdzającej nabycie przez Miasto P., z dniem [...] maja 1990 r., z mocy prawa, nieodpłatnie, nieruchomości położonej w P., oznaczonej w ewidencji gruntów\n\nw jednostce ewidencyjnej [...], obręb [...], arkusz mapy [...], działka nr [...], opisanej w karcie inwentaryzacyjnej nieruchomości Nr [...], stanowiącej integralną część tej decyzji.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący Sędzia WSA Gabriela Nowak Sędziowie WSA Emilia Lewandowska (spr.) WSA Elżbieta Sobielarska Protokolant specjalista Joanna Pleszczyńska po rozpoznaniu na rozprawie w dniu 23 października 2015 r. sprawy ze skargi Miasta P. na decyzję Ministra Administracji i Cyfryzacji z dnia [...] marca 2015 r. nr [...] [...] w przedmiocie stwierdzenia nieważności decyzji oddala skargę.\n\n\nUZASADNIENIE\n\nMinister Administracji i Cyfryzacji, decyzją z [...] marca 2015 r. nr [...], utrzymał\n\nw mocy własną decyzję z [...] kwietnia 2014 r. nr [...] stwierdzającą nieważność decyzji Wojewody [...] z [...] marca 2012 r nr [...] stwierdzającej nabycie przez Miasto P., z dniem [...] maja 1990 r., z mocy prawa, nieodpłatnie, nieruchomości położonej w P., oznaczonej w ewidencji gruntów\n\nw jednostce ewidencyjnej [...], obręb [...], arkusz mapy [...], działka nr [...], opisanej w karcie inwentaryzacyjnej nieruchomości Nr [...], stanowiącej integralną część tej decyzji."
+  }
+ },
+ {
+  "case": "starred-outcome",
+  "shard": 0,
+  "row": 37,
+  "datasetsServerRow": 37,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/721E468642",
+   "docket_number": "II SA/Wr 965/11",
+   "judgment_type": "Wyrok WSA we Wrocławiu",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2012-04-19T00:00:00+02:00",
+   "submission_date": "2011-12-22T00:00:00+01:00",
+   "court_name": "Wojewódzki Sąd Administracyjny we Wrocławiu",
+   "judges": [
+    "Alicja Palus",
+    "Anna Siedlecka",
+    "Julia Szczygielska"
+   ],
+   "presiding_judge": "Anna Siedlecka",
+   "judge_rapporteur": "Alicja Palus",
+   "case_type_description": [
+    "6150 Miejscowy plan zagospodarowania przestrzennego",
+    "6391 Skargi na uchwały rady gminy w przedmiocie ... (art. 100 i 101a ustawy o samorządzie gminnym)"
+   ],
+   "keywords": [
+    "Zagospodarowanie przestrzenne",
+    "Prawo miejscowe"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Rada Miasta",
+   "decision": [
+    "*Oddalono skargę"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20011421591",
+     "article": "art. 101 ust. 1",
+     "journal": "Dz.U. 2001 nr 142 poz 1591",
+     "law": "Ustawa z dnia 8 marca 1990 r. o samorządzie gminnym - t. jedn."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 151",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny we Wrocławiu w składzie następującym: Przewodniczący: Sędzia WSA Anna Siedlecka Sędziowie Sędzia WSA Alicja Palus (spr) Sędzia NSA Julia Szczygielska Protokolant Edyta Forysiak po rozpoznaniu w Wydziale II na rozprawie w dniu 5 kwietnia 2012 r. sprawy ze skargi W.Dz. na uchwałę Rady Miejskiej w O. Ś. z dnia [...] r. nr [...] w przedmiocie zmiany miejscowego planu zagospodarowania przestrzennego Gminy O.Ś. dla obrębu W. oddala skargę.",
+   "reasons_for_judgment": "W dniu 25 marca 2010 r. Rada Miejska w Obornikach Śląskich działając na podstawie art. 18 ust. 2 pkt 5 ustawy z dnia 8 marca 1990 r. o samorządzie gminnym (Dz.U. z 2001 r., Nr 142, poz. 1591 ze zm.), art. 20 ust. 1 w zw. z art. 27 ustawy z dnia 27 marca 2003 r. o planowaniu i zagospodarowaniu przestrzenny (Dz.U. Nr 80, poz. 717 ze zm.) oraz w zw. z uchwałą Nr 0150/XXXII/206/08 Rady Miejskiej w Obornikach Śląskich z dnia 30 października 2008 r. po stwierdzeniu zgodności ze \"studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oborniki Śląskie\", zmienionym przez Radę Miejską w Obornikach Śląskich uchwałą Nr 0150/XVIII/84/07 z dnia 4 grudnia 2007 r., podjęła uchwałę Nr",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny we Wrocławiu w składzie następującym: Przewodniczący: Sędzia WSA Anna Siedlecka Sędziowie Sędzia WSA Alicja Palus (spr) Sędzia NSA Julia Szczygielska Protokolant Edyta Forysiak po rozpoznaniu w Wydziale II na rozprawie w dniu 5 kwietnia 2012 r. sprawy ze skargi W.Dz. na uchwałę Rady Miejskiej w O. Ś. z dnia [...] r. nr [...] w przedmiocie zmiany miejscowego planu zagospodarowania przestrzennego Gminy O.Ś. dla obrębu W. oddala skargę.\n\n\nUZASADNIENIE\n\nW dniu 25 marca 2010 r. Rada Miejska w Obornikach Śląskich działając na podstawie art. 18 ust. 2 pkt 5 ustawy z dnia 8 marca 1990 r. o samorządzie gminnym (Dz.U. z 2001 r., Nr 142, poz. 1591 ze zm.), art. 20 ust. 1 w zw. z art. 27 ustawy z dnia 27 marca 2003 r. o planowaniu i zagospodarowaniu przestrzenny (Dz.U. Nr 80, poz. 717 ze zm.) oraz w zw. z uchwałą Nr 0150/XXXII/206/08 Rady Miejskiej w Obornikach Śląskich z dnia 30 października 2008 r. po stwierdzeniu zgodności ze \"studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oborniki Śląskie\", zmienionym przez Radę Miejską w Obornikach Śląskich uchwałą Nr 0150/XVIII/84/07 z dnia 4 grudnia 2007 r., podjęła uchwałę Nr"
+  }
+ },
+ {
+  "case": "reasons-heading-repeated",
+  "shard": 0,
+  "row": 140,
+  "datasetsServerRow": 140,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/E6E4B20961",
+   "docket_number": "I SA/Bd 413/09",
+   "judgment_type": "Postanowienie WSA w Bydgoszczy",
+   "finality": null,
+   "judgment_date": "2009-08-05T00:00:00+02:00",
+   "submission_date": "2009-06-29T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Bydgoszczy",
+   "judges": [
+    "Sarah Sobecka-Kucharczyk"
+   ],
+   "presiding_judge": "Sarah Sobecka-Kucharczyk",
+   "judge_rapporteur": "Sarah Sobecka-Kucharczyk",
+   "case_type_description": [
+    "6309 Inne o symbolu podstawowym 630"
+   ],
+   "keywords": [
+    "Prawo pomocy"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Dyrektor Izby Celnej",
+   "decision": [
+    "zwolniono od kosztów sądowych"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20021531270",
+     "article": "art. 246 par. 1 pkt 2",
+     "journal": "Dz.U. 2002 nr 153 poz 1270",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Referendarz sądowy Wojewódzkiego Sądu Administracyjnego w Bydgoszczy Sarah Sobecka-Kucharczyk po rozpoznaniu w dniu 05 sierpnia 2009 r. na posiedzeniu niejawnym wniosku J. K. o przyznanie prawa pomocy w zakresie zwolnienia od kosztów sądowych w sprawie ze skargi na postanowienie Dyrektora Izby Celnej w T. z dnia [...] nr [...] w przedmiocie odmowy przywrócenia terminu do wniesienia odwołania postanowił zwolnić skarżącego od kosztów sądowych",
+   "reasons_for_judgment": "I SA/Bd 413/09\n\nUZASADNIENIE",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nReferendarz sądowy Wojewódzkiego Sądu Administracyjnego w Bydgoszczy Sarah Sobecka-Kucharczyk po rozpoznaniu w dniu 05 sierpnia 2009 r. na posiedzeniu niejawnym wniosku J. K. o przyznanie prawa pomocy w zakresie zwolnienia od kosztów sądowych w sprawie ze skargi na postanowienie Dyrektora Izby Celnej w T. z dnia [...] nr [...] w przedmiocie odmowy przywrócenia terminu do wniesienia odwołania postanowił zwolnić skarżącego od kosztów sądowych\n\n\nUZASADNIENIE\n\nI SA/Bd 413/09\n\nUZASADNIENIE"
+  }
+ },
+ {
+  "case": "case-symbol-without-description",
+  "shard": 0,
+  "row": 4,
+  "datasetsServerRow": 4,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/C8D885030F",
+   "docket_number": "III SA/Po 595/21",
+   "judgment_type": "Wyrok WSA w Poznaniu",
+   "finality": "orzeczenie nieprawomocne",
+   "judgment_date": "2021-10-14T00:00:00+02:00",
+   "submission_date": "2021-04-02T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Poznaniu",
+   "judges": [
+    "Izabela Paluszyńska",
+    "Piotr Ławrynowicz",
+    "Walentyna Długaszewska"
+   ],
+   "presiding_judge": "Izabela Paluszyńska",
+   "judge_rapporteur": "Izabela Paluszyńska",
+   "case_type_description": [
+    "6550"
+   ],
+   "keywords": [
+    "Administracyjne postępowanie"
+   ],
+   "related_docket_numbers": null,
+   "challenged_authority": "Dyrektor Oddziału Regionalnego Agencji Restrukturyzacji i Modernizacji Rolnictwa",
+   "decision": [
+    "Oddalono skargę"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20190002325",
+     "article": "art. 151",
+     "journal": "Dz.U. 2019 poz 2325",
+     "law": "Ustawa z dnia 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi - t.j."
+    },
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20200000256",
+     "article": "art. 58 § 1",
+     "journal": "Dz.U. 2020 poz 256",
+     "law": "Ustawa z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego - t.j."
+    }
+   ],
+   "official_collection": null,
+   "glosa_information": null,
+   "thesis": null,
+   "sentence": "Dnia 14 października 2021 roku Wojewódzki Sąd Administracyjny w Poznaniu w składzie następującym: Przewodniczący Sędzia WSA Izabela Paluszyńska (spr.) Sędzia WSA Walentyna Długaszewska Asesor WSA Piotr Ławrynowicz po rozpoznaniu w trybie uproszczonym w dniu 14 października 2021 roku sprawy ze skargi R. R. na postanowienie Dyrektora Oddziału Regionalnego Agencji Restrukturyzacji i Modernizacji Rolnictwa w P. z dnia [...] lutego 2021 roku nr [...] w przedmiocie odmowy przywrócenia terminu do wniesienia odwołania od decyzji dotyczącej ustalenia kwoty nienależnie pobranych płatności w ramach systemów wsparcia bezpośredniego oddala skargę",
+   "reasons_for_judgment": "Decyzją z [...] lutego 2020r. Nr [...] Kierownik Biura Powiatowego ARiMR w O. W. ustalił R. R. (dalej: skarżącemu) kwotę nadmiernie pobranych płatności w ramach systemów wsparcia bezpośredniego. Zgodnie ze zwrotnym potwierdzeniem odbioru decyzja ta została skutecznie doręczona skarżącemu[...] lutego 2020 – odebrał \" dorosły domownik\" – córka skarżącego M. B..",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nDnia 14 października 2021 roku Wojewódzki Sąd Administracyjny w Poznaniu w składzie następującym: Przewodniczący Sędzia WSA Izabela Paluszyńska (spr.) Sędzia WSA Walentyna Długaszewska Asesor WSA Piotr Ławrynowicz po rozpoznaniu w trybie uproszczonym w dniu 14 października 2021 roku sprawy ze skargi R. R. na postanowienie Dyrektora Oddziału Regionalnego Agencji Restrukturyzacji i Modernizacji Rolnictwa w P. z dnia [...] lutego 2021 roku nr [...] w przedmiocie odmowy przywrócenia terminu do wniesienia odwołania od decyzji dotyczącej ustalenia kwoty nienależnie pobranych płatności w ramach systemów wsparcia bezpośredniego oddala skargę\n\n\nUZASADNIENIE\n\nDecyzją z [...] lutego 2020r. Nr [...] Kierownik Biura Powiatowego ARiMR w O. W. ustalił R. R. (dalej: skarżącemu) kwotę nadmiernie pobranych płatności w ramach systemów wsparcia bezpośredniego. Zgodnie ze zwrotnym potwierdzeniem odbioru decyzja ta została skutecznie doręczona skarżącemu[...] lutego 2020 – odebrał \" dorosły domownik\" – córka skarżącego M. B.."
+  }
+ },
+ {
+  "case": "wsa-2025-no-reasons",
+  "shard": 45,
+  "row": 11,
+  "datasetsServerRow": null,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/717F39DFD9",
+   "docket_number": "VII SA/Wa 2178/24",
+   "judgment_type": "Wyrok WSA w Warszawie",
+   "finality": "orzeczenie nieprawomocne",
+   "judgment_date": "2025-01-16T00:00:00+01:00",
+   "submission_date": "2024-09-04T00:00:00+02:00",
+   "court_name": "Wojewódzki Sąd Administracyjny w Warszawie",
+   "judges": [
+    "Bogusław Cieśla",
+    "Iwona Ścieszka",
+    "Jolanta Augustyniak-Pęczkowska"
+   ],
+   "presiding_judge": "Bogusław Cieśla",
+   "judge_rapporteur": "Bogusław Cieśla",
+   "case_type_description": [
+    "6150 Miejscowy plan zagospodarowania przestrzennego",
+    "6391 Skargi na uchwały rady gminy w przedmiocie ... (art. 100 i 101a ustawy o samorządzie gminnym)"
+   ],
+   "challenged_authority": "Rada Miasta",
+   "decision": [
+    "Oddalono skargę"
+   ],
+   "thesis": null,
+   "sentence": "Wojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący: sędzia WSA Bogusław Cieśla (spr.), Sędziowie: sędzia WSA Jolanta Augustyniak - Pęczkowska, asesor WSA Iwona Ścieszka, , Protokolant: ref. Tomasz Bilewski, po rozpoznaniu na rozprawie w dniu 16 stycznia 2025 r. sprawy ze skargi T. sp. z o.o. z siedzibą w W. na uchwałę Rady Gminy W. z dnia [...] stycznia 2001 r. nr [...] w sprawie uchwalenia miejscowego planu zagospodarowania przestrzennego rejonu [...] oddala skargę",
+   "reasons_for_judgment": null,
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nWojewódzki Sąd Administracyjny w Warszawie w składzie następującym: Przewodniczący: sędzia WSA Bogusław Cieśla (spr.), Sędziowie: sędzia WSA Jolanta Augustyniak - Pęczkowska, asesor WSA Iwona Ścieszka, , Protokolant: ref. Tomasz Bilewski, po rozpoznaniu na rozprawie w dniu 16 stycznia 2025 r. sprawy ze skargi T. sp. z o.o. z siedzibą w W. na uchwałę Rady Gminy W. z dnia [...] stycznia 2001 r. nr [...] w sprawie uchwalenia miejscowego planu zagospodarowania przestrzennego rejonu [...] oddala skargę",
+   "extracted_legal_bases": null,
+   "glosa_information": null,
+   "keywords": null,
+   "official_collection": null,
+   "related_docket_numbers": null
+  }
+ },
+ {
+  "case": "nsa-2025-reasons",
+  "shard": 45,
+  "row": 215,
+  "datasetsServerRow": null,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/FE17AF3DFF",
+   "docket_number": "II FSK 486/22",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2025-01-14T00:00:00+01:00",
+   "submission_date": "2022-05-10T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Alicja Polańska",
+    "Antoni Hanusz",
+    "Maciej Jaśniewicz"
+   ],
+   "presiding_judge": "Maciej Jaśniewicz",
+   "judge_rapporteur": "Antoni Hanusz",
+   "case_type_description": [
+    "6112 Podatek dochodowy od osób fizycznych, w tym zryczałtowane formy opodatkowania",
+    "6560"
+   ],
+   "keywords": [
+    "Podatek dochodowy od osób fizycznych"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/E963AAE17E",
+     "docket_number": "I SA/Wr 471/20",
+     "judgment_date": "2021-09-09T00:00:00+02:00",
+     "judgment_type": "Wyrok WSA we Wrocławiu"
+    }
+   ],
+   "challenged_authority": "Dyrektor Krajowej Informacji Skarbowej",
+   "decision": [
+    "Oddalono skargę kasacyjną",
+    "Zasądzono zwrot kosztów postępowania"
+   ],
+   "extracted_legal_bases": [
+    {
+     "link": "http://isap.sejm.gov.pl/DetailsServlet?id=WDU20220002647",
+     "article": "art. 22 ust. 6d, 30e ust. 2",
+     "journal": "Dz.U. 2022 poz 2647",
+     "law": "Ustawa z dnia 26 lipca 1991 r. o podatku dochodowym od osób fizycznych - t.j."
+    }
+   ],
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Maciej Jaśniewicz Sędziowie Sędzia NSA Antoni Hanusz (spr.) Sędzia del. WSA Alicja Polańska Protokolant Wojciech Zagórski po rozpoznaniu w dniu 14 stycznia 2025 r. na rozprawie w Izbie Finansowej skargi kasacyjnej M. K. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 9 września 2021 r. sygn. akt I SA/Wr 471/20 w sprawie ze skargi M.K. na interpretację indywidualną Dyrektora Krajowej Informacji Skarbowej z dnia 8 lipca 2020 r. nr 0114-KDWP.4011.57.2020.2.KP w przedmiocie podatku dochodowego od osób fizycznych 1) oddala skargę kasacyjną, 2) zasądza od M. K. na rzecz Dyrektora Krajowej Informacji Skarbowej",
+   "reasons_for_judgment": "1. Wyrokiem z 9 września 2021 r., I SA/Wr 471/20, Wojewódzki Sąd Administracyjny we Wrocławiu oddalił skargę M. Z. na interpretację indywidualną Dyrektora Krajowej Informacji Skarbowej z 8 lipca 2020 r. w przedmiocie podatku dochodowego od osób fizycznych.\n\n2. Skargę kasacyjną wniósł pełnomocnik skarżącego zaskarżając orzeczenie w całości, zarzucił mu w ramach podstawy kasacyjnej z art 174 pkt 2 ustawy z 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. z 2022 r., poz. 329 ze zm., dalej: \"p.p.s.a.\"), naruszenie przepisów postępowania, które mogło mieć istotny wpływ na wynik sprawy:",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący Sędzia NSA Maciej Jaśniewicz Sędziowie Sędzia NSA Antoni Hanusz (spr.) Sędzia del. WSA Alicja Polańska Protokolant Wojciech Zagórski po rozpoznaniu w dniu 14 stycznia 2025 r. na rozprawie w Izbie Finansowej skargi kasacyjnej M. K. od wyroku Wojewódzkiego Sądu Administracyjnego we Wrocławiu z dnia 9 września 2021 r. sygn. akt I SA/Wr 471/20 w sprawie ze skargi M.K. na interpretację indywidualną Dyrektora Krajowej Informacji Skarbowej z dnia 8 lipca 2020 r. nr 0114-KDWP.4011.57.2020.2.KP w przedmiocie podatku dochodowego od osób fizycznych 1) oddala skargę kasacyjną, 2) zasądza od M. K. na rzecz Dyrektora Krajowej Informacji Skarbowej\n\n\nUZASADNIENIE\n\n1. Wyrokiem z 9 września 2021 r., I SA/Wr 471/20, Wojewódzki Sąd Administracyjny we Wrocławiu oddalił skargę M. Z. na interpretację indywidualną Dyrektora Krajowej Informacji Skarbowej z 8 lipca 2020 r. w przedmiocie podatku dochodowego od osób fizycznych.\n\n2. Skargę kasacyjną wniósł pełnomocnik skarżącego zaskarżając orzeczenie w całości, zarzucił mu w ramach podstawy kasacyjnej z art 174 pkt 2 ustawy z 30 sierpnia 2002 r. Prawo o postępowaniu przed sądami administracyjnymi (Dz. U. z 2022 r., poz. 329 ze zm., dalej: \"p.p.s.a.\"), naruszenie przepisów postępowania, które mogło mieć istotny wpływ na wynik sprawy:",
+   "glosa_information": null,
+   "official_collection": null
+  }
+ },
+ {
+  "case": "nsa-2025-no-reasons",
+  "shard": 45,
+  "row": 447,
+  "datasetsServerRow": null,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/F3F32EAF3C",
+   "docket_number": "II FSK 748/22",
+   "judgment_type": "Wyrok NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2025-02-07T00:00:00+01:00",
+   "submission_date": "2022-07-06T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Jerzy Płusa",
+    "Krzysztof Kandut",
+    "Maciej Jaśniewicz"
+   ],
+   "presiding_judge": "Jerzy Płusa",
+   "judge_rapporteur": "Krzysztof Kandut",
+   "case_type_description": [
+    "6113 Podatek dochodowy od osób prawnych"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/B8BE487487",
+     "docket_number": "III SA/Wa 1884/21",
+     "judgment_date": "2022-02-23T00:00:00+01:00",
+     "judgment_type": "Wyrok WSA w Warszawie"
+    }
+   ],
+   "challenged_authority": "Dyrektor Izby Administracji Skarbowej",
+   "decision": [
+    "Oddalono skargę kasacyjną"
+   ],
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący - Sędzia NSA Jerzy Płusa, Sędzia NSA Maciej Jaśniewicz, Sędzia WSA (del.) Krzysztof Kandut (sprawozdawca), , Protokolant Oktawian Nogaj, po rozpoznaniu w dniu 7 lutego 2025 r. na rozprawie w Izbie Finansowej skargi kasacyjnej R. sp. z o.o. z siedzibą w W. od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 23 lutego 2022 r. sygn. akt III SA/Wa 1884/21 w sprawie ze skargi R. sp. z o.o. z siedzibą w W. na decyzję Dyrektora Izby Administracji Skarbowej w Warszawie z dnia 2 czerwca 2021 r. nr 1401-IOD-1.4100.10.2021.3.AS w przedmiocie podatku dochodowego od osób prawnych z 2007 r. 1) oddala skargę kasacyjną, 2) zasądza od R.",
+   "reasons_for_judgment": null,
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący - Sędzia NSA Jerzy Płusa, Sędzia NSA Maciej Jaśniewicz, Sędzia WSA (del.) Krzysztof Kandut (sprawozdawca), , Protokolant Oktawian Nogaj, po rozpoznaniu w dniu 7 lutego 2025 r. na rozprawie w Izbie Finansowej skargi kasacyjnej R. sp. z o.o. z siedzibą w W. od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 23 lutego 2022 r. sygn. akt III SA/Wa 1884/21 w sprawie ze skargi R. sp. z o.o. z siedzibą w W. na decyzję Dyrektora Izby Administracji Skarbowej w Warszawie z dnia 2 czerwca 2021 r. nr 1401-IOD-1.4100.10.2021.3.AS w przedmiocie podatku dochodowego od osób prawnych z 2007 r. 1) oddala skargę kasacyjną, 2) zasądza od R.",
+   "extracted_legal_bases": null,
+   "glosa_information": null,
+   "keywords": null,
+   "official_collection": null
+  }
+ },
+ {
+  "case": "nsa-postanowienie-s-label",
+  "shard": 45,
+  "row": 4292,
+  "datasetsServerRow": null,
+  "values": {
+   "country": "Poland",
+   "court_type": "administrative court",
+   "source": "nsa",
+   "judgment_id": "/doc/39E0983E92",
+   "docket_number": "III FSK 1339/23",
+   "judgment_type": "Postanowienie S NSA",
+   "finality": "orzeczenie prawomocne",
+   "judgment_date": "2025-03-04T00:00:00+01:00",
+   "submission_date": "2023-10-10T00:00:00+02:00",
+   "court_name": "Naczelny Sąd Administracyjny",
+   "judges": [
+    "Beata Cieloch",
+    "Aleksandra Łaskarzewska",
+    "Sylwester Marciniak",
+    "Andrzej Wawrzyniak",
+    "Marek Stojanowski"
+   ],
+   "presiding_judge": "Beata Cieloch",
+   "judge_rapporteur": "Sylwester Marciniak",
+   "case_type_description": [
+    "6117 Odpowiedzialność podatkowa osób trzecich, ulgi płatnicze (umorzenie, odroczenie, rozłożenie na raty itp.)"
+   ],
+   "related_docket_numbers": [
+    {
+     "judgment_id": "/doc/6FB269B4EE",
+     "docket_number": "I SA/Rz 40/23",
+     "judgment_date": "2023-06-13T00:00:00+02:00",
+     "judgment_type": "Wyrok WSA w Rzeszowie"
+    }
+   ],
+   "challenged_authority": "Dyrektor Izby Administracji Skarbowej",
+   "decision": [
+    "Oddalono wniosek o wyłączenie sędziego"
+   ],
+   "thesis": null,
+   "sentence": "Naczelny Sąd Administracyjny w składzie: Przewodniczący: Sędzia NSA Beata Cieloch Sędziowie: Sędzia NSA Sylwester Marciniak (spr.) Sędzia NSA Aleksandra Łaskarzewska Sędzia NSA Andrzej Wawrzyniak Sędzia NSA Marek Stojanowski po rozpoznaniu w dniu 4 marca 2025 r. na posiedzeniu niejawnym w Izbie Finansowej wniosku T. V., o zbadanie spełnienia przez sędziego NSA Jacka Pruszyńskiego wymogów niezawisłości i bezstronności w trybie art. 5a ustawy z dnia 25 lipca 2002 r. Prawo o ustroju sądów administracyjnych w sprawie ze skargi kasacyjnej T. V. od wyroku Wojewódzkiego Sądu Administracyjnego w Rzeszowie z dnia 13 czerwca 2023 r., sygn. akt I SA/Rz 40/23 w sprawie ze skargi T. V. na decyzję",
+   "reasons_for_judgment": "W wyroku z dnia 13 czerwca 2023 r., I SA/Rz 40/23, Wojewódzki Sąd Administracyjny w Rzeszowie oddalił skargę T. V. (dalej: skarżący) na decyzję Dyrektora Izby Administracji Skarbowej w Rzeszowie z dnia 31 października 2022 r. w przedmiocie orzeczenia o odpowiedzialności osób trzecich. Skarżący wniósł skargę kasacyjną od wskazanego orzeczenia.\n\nNa podstawie zarządzenia Przewodniczącego Wydziału rozprawa w sprawie – zarejestrowanej w Naczelnym Sądzie Administracyjnym pod sygn. akt III FSK 1339/23 – została wyznaczona na dzień 26 lutego 2025 r., w składzie s. NSA Krzysztof Winiarski, s. NSA Jacek Pruszyński, s. NSA Anna Sokołowska. Na sędziego zastępcę wyznaczona została s. NSA Anna Dalkowska.",
+   "dissenting_opinion": null,
+   "full_text": "SENTENCJA\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący: Sędzia NSA Beata Cieloch Sędziowie: Sędzia NSA Sylwester Marciniak (spr.) Sędzia NSA Aleksandra Łaskarzewska Sędzia NSA Andrzej Wawrzyniak Sędzia NSA Marek Stojanowski po rozpoznaniu w dniu 4 marca 2025 r. na posiedzeniu niejawnym w Izbie Finansowej wniosku T. V., o zbadanie spełnienia przez sędziego NSA Jacka Pruszyńskiego wymogów niezawisłości i bezstronności w trybie art. 5a ustawy z dnia 25 lipca 2002 r. Prawo o ustroju sądów administracyjnych w sprawie ze skargi kasacyjnej T. V. od wyroku Wojewódzkiego Sądu Administracyjnego w Rzeszowie z dnia 13 czerwca 2023 r., sygn. akt I SA/Rz 40/23 w sprawie ze skargi T. V. na decyzję\n\n\nUZASADNIENIE\n\nW wyroku z dnia 13 czerwca 2023 r., I SA/Rz 40/23, Wojewódzki Sąd Administracyjny w Rzeszowie oddalił skargę T. V. (dalej: skarżący) na decyzję Dyrektora Izby Administracji Skarbowej w Rzeszowie z dnia 31 października 2022 r. w przedmiocie orzeczenia o odpowiedzialności osób trzecich. Skarżący wniósł skargę kasacyjną od wskazanego orzeczenia.\n\nNa podstawie zarządzenia Przewodniczącego Wydziału rozprawa w sprawie – zarejestrowanej w Naczelnym Sądzie Administracyjnym pod sygn. akt III FSK 1339/23 – została wyznaczona na dzień 26 lutego 2025 r., w składzie s. NSA Krzysztof Winiarski, s. NSA Jacek Pruszyński, s. NSA Anna Sokołowska. Na sędziego zastępcę wyznaczona została s. NSA Anna Dalkowska.",
+   "extracted_legal_bases": null,
+   "glosa_information": null,
+   "keywords": null,
+   "official_collection": null
+  }
+ }
+]
