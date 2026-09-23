@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
 import type { FolioReviewChangeKind } from "@stll/folio-core/server";
@@ -76,9 +76,8 @@ const fail = (
   reason: DocxTranslationErrorReason,
   message: string,
   cause?: unknown,
-): never => {
-  throw new DocxTranslationError({ message, reason, cause });
-};
+): Result<never, DocxTranslationError> =>
+  Result.err(new DocxTranslationError({ message, reason, cause }));
 
 const isElement = (node: slimdom.Node): node is slimdom.Element =>
   node.nodeType === node.ELEMENT_NODE;
@@ -89,25 +88,34 @@ const isWordElement = (
 ): node is slimdom.Element =>
   isElement(node) && node.namespaceURI === W_NS && node.localName === localName;
 
-const parseXml = (path: string, xml: string): slimdom.Document => {
-  try {
-    return slimdom.parseXmlDocument(xml);
-  } catch (error) {
-    return fail(
-      "malformed-xml",
-      `Malformed WordprocessingML in ${path}`,
-      error,
-    );
-  }
-};
+const parseXml = (
+  path: string,
+  xml: string,
+): Result<slimdom.Document, DocxTranslationError> =>
+  Result.try({
+    try: () => slimdom.parseXmlDocument(xml),
+    catch: (error) =>
+      new DocxTranslationError({
+        message: `Malformed WordprocessingML in ${path}`,
+        reason: "malformed-xml",
+        cause: error,
+      }),
+  });
 
-const loadTranslationArchive = async (buffer: ArrayBuffer) => {
-  try {
-    return await loadDocxArchive(buffer);
-  } catch (error) {
-    return fail("archive", "Failed to load DOCX translation input", error);
-  }
-};
+type TranslationArchive = Awaited<ReturnType<typeof loadDocxArchive>>;
+
+const loadTranslationArchive = async (
+  buffer: ArrayBuffer,
+): Promise<Result<TranslationArchive, DocxTranslationError>> =>
+  await Result.tryPromise({
+    try: async () => await loadDocxArchive(buffer),
+    catch: (error) =>
+      new DocxTranslationError({
+        message: "Failed to load DOCX translation input",
+        reason: "archive",
+        cause: error,
+      }),
+  });
 
 const hasTrackedChanges = (doc: slimdom.Document): boolean => {
   for (const name of TRACKED_CHANGE_TAGS) {
@@ -129,10 +137,10 @@ const contentPartPaths = (paths: readonly string[]): string[] =>
     .toSorted();
 
 const inspectXmlParts = async (
-  archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+  archive: TranslationArchive,
   paths: readonly string[],
   contentPaths: readonly string[],
-): Promise<Map<string, string>> => {
+): Promise<Result<Map<string, string>, DocxTranslationError>> => {
   const contentXml = new Map<string, string>();
   const contentPathSet = new Set(contentPaths);
   const inspected = await Promise.all(
@@ -144,27 +152,22 @@ const inspectXmlParts = async (
       })),
   );
   for (const { path, xml } of inspected) {
-    if (xml === null) {
+    // Other XML parts are not translation inputs.
+    if (xml === null || !contentPathSet.has(path)) {
       continue;
     }
-    if (contentPathSet.has(path)) {
-      contentXml.set(path, xml);
-    }
-    let doc: slimdom.Document | null = null;
-    try {
-      doc = slimdom.parseXmlDocument(xml);
-    } catch {
-      // Required content parts are parsed again below so they can report the
-      // exact malformed path. Other XML parts are not translation inputs.
-    }
-    if (doc !== null && contentPathSet.has(path) && hasTrackedChanges(doc)) {
+    contentXml.set(path, xml);
+    // A malformed content part is parsed again in `parsePart`, which reports
+    // its exact path, so a parse failure here only skips the review check.
+    const doc = Result.try(() => slimdom.parseXmlDocument(xml));
+    if (doc.isOk() && hasTrackedChanges(doc.value)) {
       return fail(
         "unsupported-review-markup",
         "DOCX archive contains unresolved tracked changes",
       );
     }
   }
-  return contentXml;
+  return Result.ok(contentXml);
 };
 
 const paragraphRuns = (paragraph: slimdom.Element): slimdom.Element[] => {
@@ -225,10 +228,9 @@ const makeSegment = (
   const runs = textNodes.map((node, runIndex) => {
     const textNodeOrdinal = textNodeOrdinals.get(node);
     if (textNodeOrdinal === undefined) {
-      return fail(
-        "malformed-xml",
-        `DOCX part ${partPath} has an unmapped w:t node`,
-      );
+      // Both come from the same document: every w:t a paragraph walk finds is
+      // one of the part's w:t elements the ordinals were numbered from.
+      return panic(`DOCX part ${partPath} has an unmapped w:t node`);
     }
     return {
       markerId: markerIdFor(segmentId, runIndex),
@@ -252,10 +254,17 @@ const makeSegment = (
   });
 };
 
-const parsePart = (path: string, xml: string): DocxTranslationSegment[] => {
-  const doc = parseXml(path, xml);
+const parsePart = (
+  path: string,
+  xml: string,
+): Result<DocxTranslationSegment[], DocxTranslationError> => {
+  const parsed = parseXml(path, xml);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  const doc = parsed.value;
   if (hasTrackedChanges(doc)) {
-    fail(
+    return fail(
       "unsupported-review-markup",
       `DOCX part ${path} contains unresolved tracked changes`,
     );
@@ -278,35 +287,37 @@ const parsePart = (path: string, xml: string): DocxTranslationSegment[] => {
       segments.push(segment);
     }
   }
-  return segments;
+  return Result.ok(segments);
 };
 
 /** Extract deterministic, marker-tagged WordprocessingML text for an LLM. */
 export const extractDocxTranslationSegments = async (
   buffer: ArrayBuffer,
-): Promise<DocxTranslationDocument> => {
-  const archive = await loadTranslationArchive(buffer);
-  if (!archive.zip.file(MAIN_PART)) {
-    fail("missing-document", "DOCX archive is missing word/document.xml");
-  }
-
-  const paths = contentPartPaths(Object.keys(archive.zip.files));
-  const contentXml = await inspectXmlParts(
-    archive,
-    Object.keys(archive.zip.files),
-    paths,
-  );
-
-  const segments: DocxTranslationSegment[] = [];
-  for (const path of paths) {
-    const xml = contentXml.get(path);
-    if (xml === undefined) {
-      continue;
+): Promise<Result<DocxTranslationDocument, DocxTranslationError>> =>
+  await Result.gen(async function* () {
+    const archive = yield* Result.await(loadTranslationArchive(buffer));
+    if (!archive.zip.file(MAIN_PART)) {
+      return fail(
+        "missing-document",
+        "DOCX archive is missing word/document.xml",
+      );
     }
-    segments.push(...parsePart(path, xml));
-  }
-  return Object.freeze({ segments: Object.freeze(segments) });
-};
+
+    const paths = contentPartPaths(Object.keys(archive.zip.files));
+    const contentXml = yield* Result.await(
+      inspectXmlParts(archive, Object.keys(archive.zip.files), paths),
+    );
+
+    const segments: DocxTranslationSegment[] = [];
+    for (const path of paths) {
+      const xml = contentXml.get(path);
+      if (xml === undefined) {
+        continue;
+      }
+      segments.push(...(yield* parsePart(path, xml)));
+    }
+    return Result.ok(Object.freeze({ segments: Object.freeze(segments) }));
+  });
 
 const escapeXml = (value: string): string =>
   value
@@ -321,11 +332,11 @@ const markerToken = /\[\[\/?stella-translation:[^\]]+\]\]/gu;
 const replacementByMarker = (
   segment: DocxTranslationSegment,
   taggedText: string,
-): Map<string, string> => {
+): Result<Map<string, string>, DocxTranslationError> => {
   const expected = segment.runs.map((run) => run.markerId);
   const matches = [...taggedText.matchAll(markerToken)];
   if (matches.length !== expected.length * 2) {
-    fail(
+    return fail(
       "invalid-markers",
       `Translation for ${segment.segmentId} must contain every marker exactly once`,
     );
@@ -336,8 +347,8 @@ const replacementByMarker = (
   for (let index = 0; index < expected.length; index += 1) {
     const markerId = expected.at(index);
     if (!markerId) {
-      return fail(
-        "invalid-markers",
+      // The loop stays within `expected`, whose ids are never empty.
+      return panic(
         `Translation for ${segment.segmentId} has an invalid marker index`,
       );
     }
@@ -350,7 +361,7 @@ const replacementByMarker = (
       close !== expectedClose ||
       matches[cursor]?.index !== lastEnd
     ) {
-      fail(
+      return fail(
         "invalid-markers",
         `Translation for ${segment.segmentId} has missing, duplicate, or reordered markers`,
       );
@@ -359,7 +370,7 @@ const replacementByMarker = (
     const end = matches[cursor + 1]?.index ?? 0;
     const value = taggedText.slice(start, end);
     if (value.match(markerToken) !== null) {
-      fail(
+      return fail(
         "invalid-markers",
         `Translation for ${segment.segmentId} nests a marker`,
       );
@@ -369,12 +380,12 @@ const replacementByMarker = (
     lastEnd = (matches[cursor - 1]?.index ?? 0) + expectedClose.length;
   }
   if (cursor !== matches.length || lastEnd !== taggedText.length) {
-    fail(
+    return fail(
       "invalid-markers",
       `Translation for ${segment.segmentId} has extra markers`,
     );
   }
-  return result;
+  return Result.ok(result);
 };
 
 const wordTextElementName = (xml: string): string => {
@@ -398,7 +409,7 @@ const wordTextElementName = (xml: string): string => {
 const patchTextNodes = (
   xml: string,
   replacements: ReadonlyMap<number, string>,
-): string => {
+): Result<string, DocxTranslationError> => {
   const elementName = wordTextElementName(xml).replace(
     /[.*+?^${}()|[\]\\]/gu,
     "\\$&",
@@ -439,70 +450,80 @@ const patchTextNodes = (
     return `${whole.slice(0, start)}${escapeXml(replacement)}${whole.slice(end)}`;
   });
   if ([...replacements.keys()].some((key) => !applied.has(key))) {
-    fail(
+    return fail(
       "malformed-xml",
       "DOCX translation markers did not map to the original w:t nodes",
     );
   }
-  return patched;
+  return Result.ok(patched);
 };
 
 /** Apply a complete, ordered set of model responses to the original DOCX. */
 export const applyDocxTranslationSegments = async (
   buffer: ArrayBuffer,
   translations: readonly DocxTranslation[],
-): Promise<ArrayBuffer> => {
-  const document = await extractDocxTranslationSegments(buffer);
-  if (translations.length !== document.segments.length) {
-    fail(
-      "invalid-markers",
-      `Expected ${document.segments.length} translation segments, received ${translations.length}`,
+): Promise<Result<ArrayBuffer, DocxTranslationError>> =>
+  await Result.gen(async function* () {
+    const document = yield* Result.await(
+      extractDocxTranslationSegments(buffer),
     );
-  }
-
-  const replacementByPart = new Map<string, Map<number, string>>();
-  for (const [index, segment] of document.segments.entries()) {
-    const translation = translations.at(index);
-    if (!translation || translation.segmentId !== segment.segmentId) {
+    if (translations.length !== document.segments.length) {
       return fail(
         "invalid-markers",
-        `Translation segment ${index + 1} is missing, duplicated, or out of order`,
+        `Expected ${document.segments.length} translation segments, received ${translations.length}`,
       );
     }
-    const byMarker = replacementByMarker(segment, translation.taggedText);
-    const partReplacements =
-      replacementByPart.get(segment.partPath) ?? new Map<number, string>();
-    for (let runIndex = 0; runIndex < segment.runs.length; runIndex += 1) {
-      const run = segment.runs.at(runIndex);
-      if (!run) {
+
+    const replacementByPart = new Map<string, Map<number, string>>();
+    for (const [index, segment] of document.segments.entries()) {
+      const translation = translations.at(index);
+      if (!translation || translation.segmentId !== segment.segmentId) {
         return fail(
           "invalid-markers",
-          `Translation for ${segment.segmentId} has an invalid run index`,
+          `Translation segment ${index + 1} is missing, duplicated, or out of order`,
         );
       }
-      partReplacements.set(
-        run.textNodeOrdinal,
-        byMarker.get(run.markerId) ?? "",
+      const byMarker = yield* replacementByMarker(
+        segment,
+        translation.taggedText,
       );
-    }
-    replacementByPart.set(segment.partPath, partReplacements);
-  }
-
-  const archive = await loadTranslationArchive(buffer);
-  const patchedParts = await Promise.all(
-    [...replacementByPart].map(async ([path, replacements]) => {
-      const xml = await archive.readEntryString(path);
-      if (xml === null) {
-        return fail(
-          "archive",
-          `DOCX translation part ${path} disappeared during patching`,
+      const partReplacements =
+        replacementByPart.get(segment.partPath) ?? new Map<number, string>();
+      for (let runIndex = 0; runIndex < segment.runs.length; runIndex += 1) {
+        const run = segment.runs.at(runIndex);
+        if (!run) {
+          // The loop stays within `segment.runs`.
+          return panic(
+            `Translation for ${segment.segmentId} has an invalid run index`,
+          );
+        }
+        partReplacements.set(
+          run.textNodeOrdinal,
+          byMarker.get(run.markerId) ?? "",
         );
       }
-      return { path, xml: patchTextNodes(xml, replacements) };
-    }),
-  );
-  for (const { path, xml } of patchedParts) {
-    archive.zip.file(path, xml);
-  }
-  return await archive.zip.generateAsync({ type: "arraybuffer" });
-};
+      replacementByPart.set(segment.partPath, partReplacements);
+    }
+
+    const archive = yield* Result.await(loadTranslationArchive(buffer));
+    const patchedParts = await Promise.all(
+      [...replacementByPart].map(async ([path, replacements]) => {
+        const xml = await archive.readEntryString(path);
+        if (xml === null) {
+          return fail(
+            "archive",
+            `DOCX translation part ${path} disappeared during patching`,
+          );
+        }
+        return patchTextNodes(xml, replacements).map((patched) => ({
+          path,
+          xml: patched,
+        }));
+      }),
+    );
+    for (const patchedPart of patchedParts) {
+      const { path, xml } = yield* patchedPart;
+      archive.zip.file(path, xml);
+    }
+    return Result.ok(await archive.zip.generateAsync({ type: "arraybuffer" }));
+  });

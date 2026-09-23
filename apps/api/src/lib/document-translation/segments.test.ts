@@ -1,3 +1,4 @@
+import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -38,29 +39,41 @@ const readEntry = async (
   return await entry.async("string");
 };
 
-const captureRejection = async (promise: Promise<unknown>): Promise<unknown> =>
-  await promise.then(
-    () => null,
-    (error: unknown) => error,
-  );
+const captureRejection = async (
+  pending: Promise<Result<unknown, DocxTranslationError>>,
+): Promise<DocxTranslationError | null> => {
+  const outcome = await pending;
+  return outcome.isErr() ? outcome.error : null;
+};
+
+const okValue = <T>(outcome: Result<T, DocxTranslationError>): T => {
+  if (outcome.isErr()) {
+    throw new Error(
+      `Expected the DOCX translation step to succeed: ${outcome.error.message}`,
+    );
+  }
+  return outcome.value;
+};
 
 const translateAll = async (
   input: ArrayBuffer,
   transform: (text: string, segmentIndex: number) => string = (text) =>
     text.toUpperCase(),
 ): Promise<ArrayBuffer> => {
-  const document = await extractDocxTranslationSegments(input);
-  return await applyDocxTranslationSegments(
-    input,
-    document.segments.map((segment, index) => ({
-      segmentId: segment.segmentId,
-      taggedText: segment.runs
-        .map(
-          (run) =>
-            `[[stella-translation:${run.markerId}]]${transform(run.text, index)}[[/stella-translation:${run.markerId}]]`,
-        )
-        .join(""),
-    })),
+  const document = okValue(await extractDocxTranslationSegments(input));
+  return okValue(
+    await applyDocxTranslationSegments(
+      input,
+      document.segments.map((segment, index) => ({
+        segmentId: segment.segmentId,
+        taggedText: segment.runs
+          .map(
+            (run) =>
+              `[[stella-translation:${run.markerId}]]${transform(run.text, index)}[[/stella-translation:${run.markerId}]]`,
+          )
+          .join(""),
+      })),
+    ),
   );
 };
 
@@ -77,7 +90,7 @@ describe("DOCX translation segments", () => {
       "word/media/image.bin": "unchanged-binary-content",
     });
 
-    const document = await extractDocxTranslationSegments(input);
+    const document = okValue(await extractDocxTranslationSegments(input));
     expect(document.segments.map((segment) => segment.text)).toEqual([
       "A & link",
       "Cell",
@@ -99,7 +112,7 @@ describe("DOCX translation segments", () => {
         "<w:p><w:r><w:instrText>PAGE</w:instrText></w:r><w:r><w:delText>old</w:delText></w:r><w:r><w:t>visible</w:t></w:r></w:p>",
       ),
     });
-    const document = await extractDocxTranslationSegments(input);
+    const document = okValue(await extractDocxTranslationSegments(input));
     expect(document.segments.map((segment) => segment.text)).toEqual([
       "visible",
     ]);
@@ -111,7 +124,7 @@ describe("DOCX translation segments", () => {
         "<w:p><w:r><w:t>outer start</w:t></w:r><w:custom><w:p><w:r><w:t>nested</w:t></w:r></w:p></w:custom><w:r><w:t> outer end</w:t></w:r></w:p>",
       ),
     });
-    const document = await extractDocxTranslationSegments(input);
+    const document = okValue(await extractDocxTranslationSegments(input));
     expect(document.segments.map((segment) => segment.text)).toEqual([
       "outer start outer end",
       "nested",
@@ -176,7 +189,7 @@ describe("DOCX translation segments", () => {
       "word/document.xml": part("<w:p><w:r><w:t>source</w:t></w:r></w:p>"),
       "word/comments.xml": part('<w:comment w:id="1"/>'),
     });
-    const commented = await extractDocxTranslationSegments(comments);
+    const commented = okValue(await extractDocxTranslationSegments(comments));
     expect(commented.segments.map((segment) => segment.text)).toEqual([
       "source",
     ]);
@@ -209,7 +222,7 @@ describe("DOCX translation segments", () => {
         "<w:p><w:r><w:t>one</w:t></w:r><w:r><w:t>two</w:t></w:r></w:p>",
       ),
     });
-    const document = await extractDocxTranslationSegments(input);
+    const document = okValue(await extractDocxTranslationSegments(input));
     const segment = document.segments.at(0);
     if (!segment) {
       throw new Error("Expected one segment");

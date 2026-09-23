@@ -139,10 +139,12 @@ const createDocumentTranslationRun = createSafeHandler<
       const buffer = await readEntityVersionFile(source, organizationId);
       const inspection = Result.isError(buffer)
         ? buffer
-        : await Result.tryPromise({
-            try: async () => await inspectDocxComments(buffer.value),
-            catch: (cause) => cause,
-          });
+        : (
+            await Result.tryPromise({
+              try: async () => await inspectDocxComments(buffer.value),
+              catch: (cause) => cause,
+            })
+          ).andThen((inspected) => inspected);
       if (Result.isError(inspection)) {
         captureError(inspection.error, { entityId: body.entityId });
         return Result.err(

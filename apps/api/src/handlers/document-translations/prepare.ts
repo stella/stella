@@ -40,10 +40,12 @@ const prepareDocumentTranslation = createSafeHandler<
     }),
   );
 
-  const inspection = await Result.tryPromise({
-    try: async () => await inspectDocxComments(loaded.scanned),
-    catch: (cause) => cause,
-  });
+  const inspection = (
+    await Result.tryPromise({
+      try: async () => await inspectDocxComments(loaded.scanned),
+      catch: (cause) => cause,
+    })
+  ).andThen((inspected) => inspected);
   if (Result.isError(inspection)) {
     captureError(inspection.error, { source: "document-translation-prepare" });
     return Result.err(

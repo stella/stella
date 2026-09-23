@@ -34,22 +34,41 @@ export class DocxReviewError extends TaggedError("DocxReviewError")<{
 const runDocxOperation = async <T>(
   message: string,
   operation: () => Promise<T>,
-): Promise<T> => {
-  const result = await Result.tryPromise({
+): Promise<Result<T, DocxReviewError>> =>
+  await Result.tryPromise({
     try: operation,
     catch: () => new DocxReviewError({ message }),
   });
-  if (Result.isError(result)) {
-    throw result.error;
-  }
-  return result.value;
-};
 
-const openReviewer = async (buffer: ArrayBuffer): Promise<FolioDocxReviewer> =>
+const openReviewer = async (
+  buffer: ArrayBuffer,
+): Promise<Result<FolioDocxReviewer, DocxReviewError>> =>
   await runDocxOperation(
     "Could not parse the DOCX review structure",
     async () => await FolioDocxReviewer.fromBuffer(buffer),
   );
+
+type ReviewerPair = {
+  sourceReviewer: FolioDocxReviewer;
+  outputReviewer: FolioDocxReviewer;
+};
+
+// Both documents parse concurrently; a source failure is reported first.
+const openReviewerPair = async (
+  source: ArrayBuffer,
+  output: ArrayBuffer,
+): Promise<Result<ReviewerPair, DocxReviewError>> => {
+  const [sourceReviewer, outputReviewer] = await Promise.all([
+    openReviewer(source),
+    openReviewer(output),
+  ]);
+  return Result.gen(function* () {
+    return Result.ok({
+      sourceReviewer: yield* sourceReviewer,
+      outputReviewer: yield* outputReviewer,
+    });
+  });
+};
 
 const flattenComments = (
   reviewer: FolioDocxReviewer,
@@ -94,98 +113,108 @@ const serializedCommentMetadata = (reviewer: FolioDocxReviewer): string =>
       .map(projectCommentMetadata),
   );
 
-const assertCommentMetadataPreserved = async (
+const checkCommentMetadataPreserved = async (
   source: ArrayBuffer,
   output: ArrayBuffer,
-): Promise<void> => {
-  const [sourceReviewer, outputReviewer] = await Promise.all([
-    openReviewer(source),
-    openReviewer(output),
-  ]);
-  if (
-    serializedCommentMetadata(sourceReviewer) !==
-    serializedCommentMetadata(outputReviewer)
-  ) {
-    throw new DocxReviewError({
-      message: "The translated document changed comment metadata or threading",
-    });
-  }
-};
+): Promise<Result<void, DocxReviewError>> =>
+  (await openReviewerPair(source, output)).andThen(
+    ({ sourceReviewer, outputReviewer }) =>
+      serializedCommentMetadata(sourceReviewer) ===
+      serializedCommentMetadata(outputReviewer)
+        ? Result.ok()
+        : Result.err(
+            new DocxReviewError({
+              message:
+                "The translated document changed comment metadata or threading",
+            }),
+          ),
+  );
 
 export const inspectDocxComments = async (
   file: ScannedFile,
-): Promise<{ hasComments: boolean }> => {
-  const reviewer = await openReviewer(file.bytes);
-  return { hasComments: flattenComments(reviewer).length > 0 };
-};
+): Promise<Result<{ hasComments: boolean }, DocxReviewError>> =>
+  (await openReviewer(file.bytes)).map((reviewer) => ({
+    hasComments: flattenComments(reviewer).length > 0,
+  }));
 
 /** Resolve tracked revisions in every editable Word story to the Final view. */
 export const resolveDocxToFinal = async (
   file: ScannedFile,
-): Promise<ScannedFile> => {
-  const buffer = file.bytes;
-  const reviewer = await openReviewer(buffer);
-  for (const { handle } of reviewer.listStories()) {
-    if (!reviewer.resolveReviewedStory({ story: handle, view: "final" })) {
-      throw new DocxReviewError({
-        message: `Could not resolve ${handle.type} story to its final view`,
-      });
+): Promise<Result<ScannedFile, DocxReviewError>> =>
+  await Result.gen(async function* () {
+    const buffer = file.bytes;
+    const reviewer = yield* Result.await(openReviewer(buffer));
+    for (const { handle } of reviewer.listStories()) {
+      if (!reviewer.resolveReviewedStory({ story: handle, view: "final" })) {
+        return Result.err(
+          new DocxReviewError({
+            message: `Could not resolve ${handle.type} story to its final view`,
+          }),
+        );
+      }
     }
-  }
-  const output = await runDocxOperation(
-    "Could not persist the DOCX Final view",
-    async () => await reviewer.toBuffer(),
-  );
-  await assertCommentAnchorsPreserved(buffer, output);
-  const persisted = await openReviewer(output);
-  for (const { handle } of persisted.listStories()) {
-    const story = persisted.readReviewedStory({
-      story: handle,
-      view: "current-markup",
-    });
-    if (story && story.changes.length > 0) {
-      throw new DocxReviewError({
-        message: `Final view did not persist for ${handle.type} story`,
+    const output = yield* Result.await(
+      runDocxOperation(
+        "Could not persist the DOCX Final view",
+        async () => await reviewer.toBuffer(),
+      ),
+    );
+    yield* Result.await(checkCommentAnchorsPreserved(buffer, output));
+    const persisted = yield* Result.await(openReviewer(output));
+    for (const { handle } of persisted.listStories()) {
+      const story = persisted.readReviewedStory({
+        story: handle,
+        view: "current-markup",
       });
+      if (story && story.changes.length > 0) {
+        return Result.err(
+          new DocxReviewError({
+            message: `Final view did not persist for ${handle.type} story`,
+          }),
+        );
+      }
     }
-  }
-  return derivedScannedFile(file, output);
-};
+    return Result.ok(derivedScannedFile(file, output));
+  });
 
 export const readDocxCommentTranslationUnits = async (
   file: ScannedFile,
-): Promise<DocxCommentTranslationUnit[]> =>
-  flattenComments(await openReviewer(file.bytes));
+): Promise<Result<DocxCommentTranslationUnit[], DocxReviewError>> =>
+  (await openReviewer(file.bytes)).map(flattenComments);
 
 const equalIds = (left: readonly number[], right: readonly number[]): boolean =>
   left.length === right.length &&
   left.every((value, index) => value === right.at(index));
 
-const assertCommentAnchorsPreserved = async (
+const checkCommentAnchorsPreserved = async (
   source: ArrayBuffer,
   output: ArrayBuffer,
-): Promise<void> => {
-  const [sourceReviewer, outputReviewer] = await Promise.all([
-    openReviewer(source),
-    openReviewer(output),
-  ]);
-  const outputById = new Map(
-    outputReviewer.getComments().map((comment) => [comment.id, comment]),
+): Promise<Result<void, DocxReviewError>> =>
+  (await openReviewerPair(source, output)).andThen(
+    ({ sourceReviewer, outputReviewer }) => {
+      const outputById = new Map(
+        outputReviewer.getComments().map((comment) => [comment.id, comment]),
+      );
+      for (const sourceComment of sourceReviewer.getComments()) {
+        const outputComment = outputById.get(sourceComment.id);
+        if (!outputComment) {
+          return Result.err(
+            new DocxReviewError({
+              message: `Output is missing comment ${sourceComment.id}`,
+            }),
+          );
+        }
+        if (sourceComment.blockId !== null && outputComment.blockId === null) {
+          return Result.err(
+            new DocxReviewError({
+              message: `Output lost the anchor for comment ${sourceComment.id}`,
+            }),
+          );
+        }
+      }
+      return Result.ok();
+    },
   );
-  for (const sourceComment of sourceReviewer.getComments()) {
-    const outputComment = outputById.get(sourceComment.id);
-    if (!outputComment) {
-      throw new DocxReviewError({
-        message: `Output is missing comment ${sourceComment.id}`,
-      });
-    }
-    if (sourceComment.blockId !== null && outputComment.blockId === null) {
-      throw new DocxReviewError({
-        message: `Output lost the anchor for comment ${sourceComment.id}`,
-      });
-    }
-  }
-};
 
 type ParsedCommentsPart = {
   commentsById: ReadonlyMap<number, slimdom.Element>;
@@ -194,21 +223,28 @@ type ParsedCommentsPart = {
   prefix: string | null;
 };
 
-const parseCommentsPart = (xml: string): ParsedCommentsPart => {
-  let document: slimdom.Document;
-  try {
-    document = slimdom.parseXmlDocument(xml);
-  } catch {
-    throw new DocxReviewError({
-      message: `Could not parse ${COMMENTS_PART_PATH}`,
-    });
+const parseCommentsPart = (
+  xml: string,
+): Result<ParsedCommentsPart, DocxReviewError> => {
+  const parsed = Result.try({
+    try: () => slimdom.parseXmlDocument(xml),
+    catch: () =>
+      new DocxReviewError({
+        message: `Could not parse ${COMMENTS_PART_PATH}`,
+      }),
+  });
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
   }
+  const document = parsed.value;
   const root = document.documentElement;
   const namespace = root?.namespaceURI;
   if (!root || !namespace || root.localName !== "comments") {
-    throw new DocxReviewError({
-      message: `${COMMENTS_PART_PATH} does not contain a Word comments root`,
-    });
+    return Result.err(
+      new DocxReviewError({
+        message: `${COMMENTS_PART_PATH} does not contain a Word comments root`,
+      }),
+    );
   }
   const commentsById = new Map<number, slimdom.Element>();
   for (const comment of root.getElementsByTagNameNS(namespace, "comment")) {
@@ -216,18 +252,20 @@ const parseCommentsPart = (xml: string): ParsedCommentsPart => {
       comment.getAttributeNS(namespace, "id") ?? comment.getAttribute("w:id");
     const id = rawId === null ? Number.NaN : Number.parseInt(rawId, 10);
     if (!Number.isSafeInteger(id) || commentsById.has(id)) {
-      throw new DocxReviewError({
-        message: `${COMMENTS_PART_PATH} contains a missing or duplicate comment ID`,
-      });
+      return Result.err(
+        new DocxReviewError({
+          message: `${COMMENTS_PART_PATH} contains a missing or duplicate comment ID`,
+        }),
+      );
     }
     commentsById.set(id, comment);
   }
-  return {
+  return Result.ok({
     commentsById,
     document,
     namespace,
     prefix: root.prefix,
-  };
+  });
 };
 
 const qualifiedName = (prefix: string | null, localName: string): string =>
@@ -322,26 +360,30 @@ type ApplyDocxCommentPolicyOptions = {
 
 const inspectCommentsPart = async (
   buffer: ArrayBuffer,
-): Promise<{ sha256: string; text: string }> => {
-  const inspection = await runDocxOperation(
-    "Could not inspect the DOCX comments part",
-    async () =>
-      await inspectDocxPackage(buffer, {
-        xmlParts: [COMMENTS_PART_PATH],
-        limits: {
-          maxXmlPartBytes: DOCX_MAX_ENTRY_BYTES,
-          maxXmlTotalBytes: DOCX_MAX_ENTRY_BYTES,
-        },
-      }),
-  );
-  const part = inspection.xmlParts.at(0);
-  if (!part || part.path !== COMMENTS_PART_PATH) {
-    throw new DocxReviewError({
-      message: `The document is missing ${COMMENTS_PART_PATH}`,
-    });
-  }
-  return part;
-};
+): Promise<Result<{ sha256: string; text: string }, DocxReviewError>> =>
+  (
+    await runDocxOperation(
+      "Could not inspect the DOCX comments part",
+      async () =>
+        await inspectDocxPackage(buffer, {
+          xmlParts: [COMMENTS_PART_PATH],
+          limits: {
+            maxXmlPartBytes: DOCX_MAX_ENTRY_BYTES,
+            maxXmlTotalBytes: DOCX_MAX_ENTRY_BYTES,
+          },
+        }),
+    )
+  ).andThen((inspection) => {
+    const part = inspection.xmlParts.at(0);
+    if (!part || part.path !== COMMENTS_PART_PATH) {
+      return Result.err(
+        new DocxReviewError({
+          message: `The document is missing ${COMMENTS_PART_PATH}`,
+        }),
+      );
+    }
+    return Result.ok(part);
+  });
 
 /** Restore source comment metadata and apply the user's selected text policy. */
 export const applyDocxCommentPolicy = async ({
@@ -349,84 +391,100 @@ export const applyDocxCommentPolicy = async ({
   output: outputFile,
   policy,
   translations,
-}: ApplyDocxCommentPolicyOptions): Promise<ArrayBuffer> => {
-  const source = sourceFile.bytes;
-  const output = outputFile.bytes;
-  await assertCommentAnchorsPreserved(source, output);
-  const [sourcePartInspection, outputPartInspection] = await Promise.all([
-    inspectCommentsPart(source),
-    inspectCommentsPart(output),
-  ]);
-  const sourceXml = sourcePartInspection.text;
-  const outputXml = outputPartInspection.text;
-  const sourcePart = parseCommentsPart(sourceXml);
-  const outputPart = parseCommentsPart(outputXml);
-  const sourceIds = [...sourcePart.commentsById.keys()].toSorted(
-    (left, right) => left - right,
-  );
-  const outputIds = [...outputPart.commentsById.keys()].toSorted(
-    (left, right) => left - right,
-  );
-  if (!equalIds(sourceIds, outputIds)) {
-    throw new DocxReviewError({
-      message: "The translated document changed the comment thread structure",
-    });
-  }
+}: ApplyDocxCommentPolicyOptions): Promise<
+  Result<ArrayBuffer, DocxReviewError>
+> =>
+  await Result.gen(async function* () {
+    const source = sourceFile.bytes;
+    const output = outputFile.bytes;
+    yield* Result.await(checkCommentAnchorsPreserved(source, output));
+    const [sourcePartInspection, outputPartInspection] = await Promise.all([
+      inspectCommentsPart(source),
+      inspectCommentsPart(output),
+    ]);
+    const sourceXml = (yield* sourcePartInspection).text;
+    const outputInspection = yield* outputPartInspection;
+    const outputXml = outputInspection.text;
+    const sourcePart = yield* parseCommentsPart(sourceXml);
+    const outputPart = yield* parseCommentsPart(outputXml);
+    const sourceIds = [...sourcePart.commentsById.keys()].toSorted(
+      (left, right) => left - right,
+    );
+    const outputIds = [...outputPart.commentsById.keys()].toSorted(
+      (left, right) => left - right,
+    );
+    if (!equalIds(sourceIds, outputIds)) {
+      return Result.err(
+        new DocxReviewError({
+          message:
+            "The translated document changed the comment thread structure",
+        }),
+      );
+    }
 
-  for (const [id, comment] of sourcePart.commentsById) {
-    if (policy === "original") {
-      continue;
+    for (const [id, comment] of sourcePart.commentsById) {
+      if (policy === "original") {
+        continue;
+      }
+      const translation = translations.get(id);
+      if (translation === undefined) {
+        return Result.err(
+          new DocxReviewError({
+            message: `Translation is missing for comment ${id}`,
+          }),
+        );
+      }
+      const translatedContent = createCommentParagraphs(
+        sourcePart,
+        translation,
+      );
+      transferLastParagraphIds(sourcePart, comment, translatedContent);
+      if (policy === "translated") {
+        replaceCommentContent(comment, translatedContent);
+        continue;
+      }
+      comment.append(...translatedContent);
     }
-    const translation = translations.get(id);
-    if (translation === undefined) {
-      throw new DocxReviewError({
-        message: `Translation is missing for comment ${id}`,
-      });
-    }
-    const translatedContent = createCommentParagraphs(sourcePart, translation);
-    transferLastParagraphIds(sourcePart, comment, translatedContent);
-    if (policy === "translated") {
-      replaceCommentContent(comment, translatedContent);
-      continue;
-    }
-    comment.append(...translatedContent);
-  }
-  const commentsXml =
-    policy === "original"
-      ? sourceXml
-      : slimdom.serializeToWellFormedString(sourcePart.document);
-  const application = await runDocxOperation(
-    "Could not apply the DOCX comment policy",
-    async () =>
-      await applyDocxXmlPatchProposal({
-        bytes: output,
-        proposal: {
-          version: 1,
-          replacements: [
-            {
-              path: COMMENTS_PART_PATH,
-              baseSha256: outputPartInspection.sha256,
-              replacementXml: commentsXml,
+    const commentsXml =
+      policy === "original"
+        ? sourceXml
+        : slimdom.serializeToWellFormedString(sourcePart.document);
+    const application = yield* Result.await(
+      runDocxOperation(
+        "Could not apply the DOCX comment policy",
+        async () =>
+          await applyDocxXmlPatchProposal({
+            bytes: output,
+            proposal: {
+              version: 1,
+              replacements: [
+                {
+                  path: COMMENTS_PART_PATH,
+                  baseSha256: outputInspection.sha256,
+                  replacementXml: commentsXml,
+                },
+              ],
             },
-          ],
-        },
-        allowedParts: [COMMENTS_PART_PATH],
-        validationProfile: FOLIO_DOCX_CONFORMANCE_PROFILE,
-        limits: {
-          maxPartBytes: DOCX_MAX_ENTRY_BYTES,
-          maxTotalBytes: DOCX_MAX_ENTRY_BYTES,
-        },
-      }),
-  );
-  if (application.status !== "applied") {
-    throw new DocxReviewError({
-      message: `The comment update failed package validation (${application.status})`,
-    });
-  }
-  const patchedBytes = new Uint8Array(application.bytes.byteLength);
-  patchedBytes.set(application.bytes);
-  const patched = patchedBytes.buffer;
-  await assertCommentAnchorsPreserved(source, patched);
-  await assertCommentMetadataPreserved(source, patched);
-  return patched;
-};
+            allowedParts: [COMMENTS_PART_PATH],
+            validationProfile: FOLIO_DOCX_CONFORMANCE_PROFILE,
+            limits: {
+              maxPartBytes: DOCX_MAX_ENTRY_BYTES,
+              maxTotalBytes: DOCX_MAX_ENTRY_BYTES,
+            },
+          }),
+      ),
+    );
+    if (application.status !== "applied") {
+      return Result.err(
+        new DocxReviewError({
+          message: `The comment update failed package validation (${application.status})`,
+        }),
+      );
+    }
+    const patchedBytes = new Uint8Array(application.bytes.byteLength);
+    patchedBytes.set(application.bytes);
+    const patched = patchedBytes.buffer;
+    yield* Result.await(checkCommentAnchorsPreserved(source, patched));
+    yield* Result.await(checkCommentMetadataPreserved(source, patched));
+    return Result.ok(patched);
+  });
