@@ -17,9 +17,16 @@ draft that a person approves in the editor; you never approve it.
 - `list_playbooks` with `playbook_id` reads the stored playbook: each
   position's `sourceId` and the playbook's `updatedAt`.
 - To find and read the user's contracts: `list_matters`, `list_documents`,
-  `search_across_matters`, `read_content_across_matters`. In the stella chat
-  these reads are the `external_*` functions you call inside
-  `execute_typescript`.
+  `search_across_matters`, `read_content_across_matters`.
+  `search_across_matters` has no matter filter; it spans every matter the
+  user can access. A named matter is read with `list_documents`, passing its
+  `matter_id`.
+- In the stella chat these reads are the `external_*` functions inside
+  `execute_typescript`, and only `external_list_matters` is documented up
+  front. Before the first call to any other, call `discover_tools` with its
+  name and write the call from the signature it returns. Return plain JSON
+  from a script. If a call is rejected, re-read the signature and correct the
+  call yourself; do not hand the reads to subagents.
 
 If `save_playbook` is not available to you, say that you cannot save a
 playbook here and stop; do not draft one only in the conversation.
