@@ -9,9 +9,11 @@
 // rationale of `-- xN` (e.g. `-- x2: both forms`) expects N. A comment
 // `expect-clean: <rule>` marks the next line as a case the rule must accept.
 //
-// Any other local-rule hit in a fixture is a failure. An `expect-clean`
-// marker must precede code (the registry check requires one per rule). Only rules from
-// `.oxlint-plugins` are counted; suppressions of built-in rules stay in place.
+// Both the `oxlint-` and `eslint-` spellings count. Any other local-rule hit
+// in a fixture is a failure. An `expect-clean` marker must precede code (the
+// registry check requires one per rule). Only rules from `.oxlint-plugins` are
+// counted; suppressions of built-in rules, and block `oxlint-disable`
+// comments that deliberately silence a rule for a whole fixture, stay in place.
 //
 // The copy keeps repository-relative paths (path-scoped overrides and rules
 // that read the tree resolve the same way): a temporary root mirrors the
@@ -55,7 +57,7 @@ const isCountedRule = (ruleId: string): boolean => {
 };
 
 const DIRECTIVE_PATTERN =
-  /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>oxlint-disable-next-line|oxlint-disable-line)\s(?<rest>.*)$/u;
+  /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>(?:oxlint|eslint)-disable-(?:next-)?line)\s(?<rest>.*)$/u;
 const BLOCK_END_PATTERN = /\*\/\}?$/u;
 const COUNT_PATTERN = /(?:^|\s)x(?<count>\d+)(?:\s|:|$)/u;
 const CLEAN_MARKER_PATTERN = /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:/u;
@@ -117,7 +119,7 @@ export const rewriteFixture = (file: string, source: string): RewriteResult => {
     }
     const count = Number(COUNT_PATTERN.exec(rationale)?.groups?.["count"] ?? 1);
     // 1-based line of the code the directive covers.
-    const targetLine = kind === "oxlint-disable-line" ? index + 1 : index + 2;
+    const targetLine = kind.endsWith("-disable-line") ? index + 1 : index + 2;
     for (const ruleId of counted) {
       const key = expectationKey({ file, line: targetLine, ruleId });
       expected.set(key, (expected.get(key) ?? 0) + count);

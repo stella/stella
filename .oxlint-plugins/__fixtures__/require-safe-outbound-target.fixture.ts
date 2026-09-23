@@ -248,6 +248,9 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: global WebSocket
   void new WebSocket(inputUrl);
+  const Socket = WebSocket;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: aliased global WebSocket
+  void new Socket(inputUrl);
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: default import of ws
   void new SocketClient(inputUrl);

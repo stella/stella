@@ -437,7 +437,10 @@ export default eslintCompatPlugin({
             : sinkKind(initializer, new Set([...visited, variable]));
         };
 
-        const isWebSocketConstructor = (callee: unknown): boolean => {
+        const isWebSocketConstructor = (
+          callee: unknown,
+          visited = new Set<Variable>(),
+        ): boolean => {
           const expression = unwrapExpression(callee);
           if (
             isIdentifierReference(expression) &&
@@ -454,11 +457,25 @@ export default eslintCompatPlugin({
             return true;
           }
           const resolved = resolveImport(context, expression);
+          if (resolved !== null) {
+            return (
+              WEBSOCKET_MODULES.has(resolved.moduleId) &&
+              (resolved.imported === "default" ||
+                resolved.imported === "WebSocket")
+            );
+          }
+          // `const Socket = WebSocket`: follow a never-reassigned alias.
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(context, expression);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          const initializer = constInitializer(variable);
           return (
-            resolved !== null &&
-            WEBSOCKET_MODULES.has(resolved.moduleId) &&
-            (resolved.imported === "default" ||
-              resolved.imported === "WebSocket")
+            initializer !== null &&
+            isWebSocketConstructor(initializer, new Set([...visited, variable]))
           );
         };
 

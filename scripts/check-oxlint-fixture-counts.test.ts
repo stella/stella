@@ -32,6 +32,14 @@ describe("rewriteFixture", () => {
     expect(expected).toEqual(new Map([[`${FILE}:2:${RULE}`, 1]]));
   });
 
+  test("reads the eslint spelling of a directive", () => {
+    const { expected } = rewriteFixture(
+      FILE,
+      `// eslint-disable-next-line ${RULE}\nf();`,
+    );
+    expect(expected).toEqual(new Map([[`${FILE}:2:${RULE}`, 1]]));
+  });
+
   test("keeps suppressions of rules outside the local plugins", () => {
     const { source, expected } = rewriteFixture(
       FILE,
