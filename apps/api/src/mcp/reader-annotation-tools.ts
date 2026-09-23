@@ -384,6 +384,7 @@ const createArgsSchema = nullAsAbsent(
 
 const UUID_HEX_LENGTH = 32;
 const UUID_VARIANT_DIGITS = ["8", "9", "a", "b"] as const;
+const HEX_DIGITS = "0123456789abcdef";
 
 /**
  * The same request always names the same mark, so a retried call replays
@@ -406,7 +407,7 @@ const createRequestIdFor = ({
     .slice(0, UUID_HEX_LENGTH);
   // Version 8 (custom) and the RFC 9562 variant (10xx: 8, 9, a or b).
   const variant =
-    UUID_VARIANT_DIGITS[Number.parseInt(hex.charAt(16), 16) % 4] ?? "8";
+    UUID_VARIANT_DIGITS[HEX_DIGITS.indexOf(hex.charAt(16)) % 4] ?? "8";
   const versioned = `${hex.slice(0, 12)}8${hex.slice(13, 16)}${variant}${hex.slice(17)}`;
   return brandPersistedLegalReaderAnnotationId(
     `${versioned.slice(0, 8)}-${versioned.slice(8, 12)}-${versioned.slice(12, 16)}-${versioned.slice(16, 20)}-${versioned.slice(20)}`,
