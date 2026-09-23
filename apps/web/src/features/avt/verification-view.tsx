@@ -52,6 +52,7 @@ import {
   passageReadingOrder,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type VerdictFilter = "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
@@ -64,6 +65,7 @@ type VerificationViewProps = {
 export const VerificationView = ({ workspaceId, run }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
+  const canReview = usePermissions({ entity: ["update"] });
   const { recordEvent, acceptRoutine } = useClaimReviewActions({
     workspaceId,
     runId: run.id,
@@ -225,6 +227,7 @@ export const VerificationView = ({ workspaceId, run }: VerificationViewProps) =>
         )}
         {routineIds.length > 0 && (
           <Button
+            disabled={!canReview}
             onClick={() => acceptRoutine(routineIds)}
             size="sm"
             variant="outline"

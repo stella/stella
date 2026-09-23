@@ -79,6 +79,7 @@ import {
   isContested,
   isSettled,
 } from "@/features/avt/verdict";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
@@ -104,6 +105,9 @@ export const ClaimDetailPanel = ({
 }: ClaimDetailPanelProps) => {
   const t = useTranslations();
   const saveState = useClaimSaveState({ workspaceId, runId }, claim.id);
+  // Recording a review changes the document's record, so it needs the same
+  // permission the server checks for every review action.
+  const canReview = usePermissions({ entity: ["update"] });
   const { review, verdict } = claim;
   const state = effectiveState(claim, review);
   const supports = claim.refs.filter((ref) => ref.rel === "supports");
@@ -193,6 +197,7 @@ export const ClaimDetailPanel = ({
           {verdict.state === "recordconflict" && (
             <RecordConflictBlock
               conflict={verdict.recordConflict}
+              disabled={!canReview}
               factsById={factsById}
               onResolve={(resolution) =>
                 onReviewEvent({ kind: "record-conflict", resolution })
@@ -254,7 +259,7 @@ export const ClaimDetailPanel = ({
               <DecisionStatus review={review} />
               <ReviewDecisionActions
                 acceptLabel={t(confirmLabel(state))}
-                disabled={isEscalated}
+                disabled={isEscalated || !canReview}
                 onAccept={() => setStatus("reviewed")}
                 onReject={() => setStatus("disputed")}
                 onReopen={() => setStatus(null)}
@@ -266,7 +271,7 @@ export const ClaimDetailPanel = ({
 
             {isScoredState(verdict.state) && (
               <OverrideControl
-                disabled={isEscalated}
+                disabled={isEscalated || !canReview}
                 onOverride={(overrideState) =>
                   onReviewEvent({ kind: "override", state: overrideState })
                 }
@@ -283,7 +288,7 @@ export const ClaimDetailPanel = ({
                   })}
                 </p>
                 <Button
-                  disabled={review?.reopened === true}
+                  disabled={review?.reopened === true || !canReview}
                   onClick={() => onReviewEvent({ kind: "reopen" })}
                   size="sm"
                 >
@@ -301,6 +306,7 @@ export const ClaimDetailPanel = ({
             )}
 
             <NoteSection
+              disabled={!canReview}
               onSave={(note) => onReviewEvent({ kind: "note", note })}
               review={review}
             />
@@ -411,11 +417,12 @@ const DecisionStatus = ({ review }: { review: ClaimReview | null }) => {
 };
 
 type NoteSectionProps = {
+  disabled: boolean;
   review: ClaimReview | null;
   onSave: (note: string) => void;
 };
 
-const NoteSection = ({ review, onSave }: NoteSectionProps) => {
+const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const note = review?.note ?? "";
@@ -436,6 +443,7 @@ const NoteSection = ({ review, onSave }: NoteSectionProps) => {
         />
         <div className="flex gap-1.5">
           <Button
+            disabled={disabled}
             onClick={() => {
               onSave(draft.trim());
               setDraft(null);
@@ -454,7 +462,12 @@ const NoteSection = ({ review, onSave }: NoteSectionProps) => {
 
   if (note === "") {
     return (
-      <Button className="w-full" onClick={() => setDraft("")} variant="outline">
+      <Button
+        className="w-full"
+        disabled={disabled}
+        onClick={() => setDraft("")}
+        variant="outline"
+      >
         <PenIcon /> {t("avt.claimDetail.note.add")}
       </Button>
     );
@@ -478,7 +491,12 @@ const NoteSection = ({ review, onSave }: NoteSectionProps) => {
       <p className="whitespace-pre-wrap" dir="auto">
         {note}
       </p>
-      <Button onClick={() => setDraft(note)} size="sm" variant="ghost">
+      <Button
+        disabled={disabled}
+        onClick={() => setDraft(note)}
+        size="sm"
+        variant="ghost"
+      >
         <PenIcon /> {t("common.edit")}
       </Button>
     </div>
@@ -682,6 +700,7 @@ const FactBody = ({ fact }: { fact: EvidenceFact }) => {
 };
 
 type RecordConflictBlockProps = {
+  disabled: boolean;
   conflict: RecordConflict;
   review: ClaimReview | null;
   factsById: ReadonlyMap<FactId, EvidenceFact>;
@@ -695,6 +714,7 @@ type RecordConflictBlockProps = {
 
 const RecordConflictBlock = ({
   conflict,
+  disabled,
   review,
   factsById,
   onResolve,
@@ -760,6 +780,7 @@ const RecordConflictBlock = ({
             </div>
             {record.fact !== undefined && <FactBody fact={record.fact} />}
             <Button
+              disabled={disabled}
               onClick={() =>
                 onResolve(
                   governingId === record.factEntityId
@@ -784,6 +805,7 @@ const RecordConflictBlock = ({
           {t("avt.claimDetail.recordConflict.reconcile")}
         </h4>
         <Button
+          disabled={disabled}
           onClick={() =>
             onResolve(
               resolution?.kind === "escalated" ? null : { kind: "escalated" },
