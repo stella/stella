@@ -10,6 +10,7 @@ const QUESTION_TOPICS = [
   "contracts",
   "language",
   "law",
+  "matters",
   "side",
   "type",
 ] as const;
@@ -26,13 +27,19 @@ const TOPIC_PATTERNS = [
     "law",
     /\b(governing law|jurisdiction|which law|law (?:should |will )?govern)/iu,
   ],
+  // Before "contracts": the question that asks where to look for them names
+  // the contracts too ("Which matters hold the NDAs I should search?").
+  [
+    "matters",
+    /\b(which|what|whose) (?:\w+ ){0,2}matters?\b|\bwhere (?:should|shall|do you want|would you like) (?:i|me to) (?:look|search)\b|\bmatters? (?:should|do you want|to) (?:i |me to )?(?:search|look)|\b(?:search|look (?:in|through)) (?:all|every|across) (?:of )?(?:the |your )?matters\b|\ball (?:the |your )?matters\b/iu,
+  ],
   [
     "contracts",
     /\b(executed|signed|attach\w*)\b|\b(past|previous|existing|prior|your own)\b.*\b(contracts?|agreements?|documents?|ndas?|dpas?|msas?)\b/iu,
   ],
   [
     "side",
-    /\b(side|which party|perspective|role|represent|are you the|are we the|acting for|on behalf of|as the (customer|buyer|seller|supplier|vendor|discloser|disclosing party|recipient|receiving party|licensor|licensee|controller|processor))\b/iu,
+    /\b(side|which party|perspective|role|represent|are you the|are we the|is your (?:organi[sz]ation|company|firm|client) (?:the|a)|acting for|on behalf of|as the (customer|buyer|seller|supplier|vendor|discloser|disclosing party|recipient|receiving party|licensor|licensee|controller|processor))\b/iu,
   ],
   [
     "type",

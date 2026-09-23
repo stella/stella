@@ -20,26 +20,36 @@
  * active build a playbook the way the skill says? The skill reaches the
  * prompt through the production active-skill path, `ask-user` is the
  * production definition answered from a script (so the interview runs inside
- * one agent loop), and the matter reads are answered from fixtures
+ * one agent loop), a scenario's follow-up messages are later turns over the
+ * conversation so far, and the matter reads are answered from fixtures
  * (`lib/playbook-builder-scenarios.ts`) on each of two surfaces: as direct
  * MCP tools, and as the chat surface, where the fixtures sit behind the
  * production registry runner under the real `execute_typescript` and
- * `discover_tools` tools and the sandbox, so a run meets the same eager and
- * lazy catalog, error envelopes, and refs a chat does.
+ * `discover_tools` tools and the sandbox, and `spawn_subagents` is offered
+ * under chat's delegation instruction, so a run meets the same eager and
+ * lazy catalog, error envelopes, refs, and temptations a chat does.
  *
  *   bun run eval:playbook-authoring -- --models gpt-5.4-nano,gpt-5.6-luna --runs 3
  *   bun run eval:playbook-authoring -- --tier behavior --task discovery --surface chat
  */
 
 import { Value } from "@sinclair/typebox/value";
-import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
-import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
+import {
+  EventType,
+  maxIterations,
+  StreamProcessor,
+  toolDefinition,
+} from "@tanstack/ai";
+import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { DEFAULT_MODELS } from "@stll/ai-catalog";
 
-import { buildActiveSkillSection } from "@/api/handlers/chat/chat-prompt";
+import {
+  buildActiveSkillSection,
+  SUBAGENT_DELEGATION_SECTION,
+} from "@/api/handlers/chat/chat-prompt";
 import {
   CHAT_CODE_MODE_SYSTEM_PROMPT,
   createChatCodeModeSurface,
@@ -48,6 +58,8 @@ import type { ChatCodeModeReadRunner } from "@/api/handlers/chat/tools/execute/c
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import { SPAWN_SUBAGENTS_TOOL_DEFINITION } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -57,6 +69,7 @@ import {
   toolCallEndInputOf,
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   mergeGenerationOptions,
@@ -68,6 +81,7 @@ import { playbookPositionsSchema } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
+import { getStaticMcpToolHandler } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
@@ -92,6 +106,7 @@ import {
   MATTER_TOOL_NAMES,
   answerMatterTool,
   isMatterToolName,
+  scoreScenario,
 } from "./lib/playbook-builder-scenarios";
 import type {
   AskedQuestion,
@@ -107,9 +122,12 @@ import type { PlaybookStore, StoredPlaybook } from "./lib/playbook-store";
 // A bare id resolves through whichever configured provider rates it; Claude
 // ids are pinned to Anthropic so another default provider cannot claim them.
 // The instance default chat model is the one a chat without an organization
-// override runs, so the chat surface is measured on it.
+// override runs, so the chat surface is measured on it; gpt-5.4-mini is the
+// smallest OpenAI model chats run in the field, and the one the skill text
+// was first seen to lose.
 const DEFAULT_EVAL_MODELS = [
   "anthropic::claude-haiku-4-5-20251001",
+  "gpt-5.4-mini",
   "gpt-5.6-luna",
   DEFAULT_MODELS.openai.chat,
 ];
@@ -593,20 +611,23 @@ type ModelTurn = {
 
 type ModelTurnOptions = {
   model: ResolvedTanStackTextModel;
-  prompt: string;
+  messages: ModelMessage[];
   system: string;
   tools: AnyServerTool[];
   iterations: number;
   timeoutMs: number;
+  /** Sees every chunk, so a caller can keep the conversation for a later turn. */
+  onChunk?: (chunk: PublicStreamChunk) => void;
 };
 
 const runModelTurn = async ({
   model,
-  prompt,
+  messages,
   system,
   tools,
   iterations,
   timeoutMs,
+  onChunk,
 }: ModelTurnOptions): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
@@ -622,7 +643,7 @@ const runModelTurn = async ({
       streamChatChunks({
         abortController,
         adapter: model.adapter,
-        messages: [{ role: "user", content: prompt }],
+        messages,
         agentLoopStrategy: maxIterations(iterations),
         ...systemPromptsPatch({ caching, model, system }),
         modelOptions: mergeGenerationOptions({
@@ -635,6 +656,7 @@ const runModelTurn = async ({
         tools,
       }),
     onChunk: (chunk) => {
+      onChunk?.(chunk);
       if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
         finalText += chunk.delta;
         return;
@@ -687,7 +709,7 @@ const runTask = async ({
   const saveCalls: SaveCallRecord[] = [];
   const turn = await runModelTurn({
     model,
-    prompt: task.brief,
+    messages: [{ role: "user", content: task.brief }],
     system: CONTRACT_SYSTEM_PROMPT,
     tools: createTools({ store, task, trace, saveCalls }),
     iterations: MAX_ITERATIONS,
@@ -748,8 +770,9 @@ const BEHAVIOR_SYSTEM_PREAMBLE =
 /**
  * The system prompt a chat with the built-in skill active carries: the skill
  * is resolved and rendered by the production active-skill path, from the
- * shipped `SKILL.md`. On the chat surface the code-mode section precedes it,
- * where `buildPromptParts` (`chat-prompt.ts`) places it.
+ * shipped `SKILL.md`. On the chat surface the code-mode section and the
+ * delegation rule that comes with `spawn_subagents` precede it, where
+ * `buildPromptParts` (`chat-prompt.ts`) places them.
  */
 const behaviorSystemPrompt = async ({
   store,
@@ -773,7 +796,9 @@ const behaviorSystemPrompt = async ({
       );
   return [
     BEHAVIOR_SYSTEM_PREAMBLE,
-    ...(surface === "chat" ? [CHAT_CODE_MODE_SYSTEM_PROMPT] : []),
+    ...(surface === "chat"
+      ? [CHAT_CODE_MODE_SYSTEM_PROMPT, SUBAGENT_DELEGATION_SECTION]
+      : []),
     buildActiveSkillSection(skill),
   ].join("\n\n");
 };
@@ -796,11 +821,60 @@ const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
   });
 };
 
+/**
+ * The OpenAI adapter packs a reasoning item's id into the thinking
+ * signature as JSON; any other signature is its own key.
+ */
+const thinkingKeyOf = (signature: string): string => {
+  const parsed = Result.try(() => JSON.parse(signature) as unknown);
+  const id =
+    Result.isOk(parsed) && isRecord(parsed.value)
+      ? parsed.value["id"]
+      : undefined;
+  return typeof id === "string" ? id : signature;
+};
+
+/**
+ * The SDK's processor files the reasoning step that precedes a run's final
+ * text under both the tool-call message and the text message, and OpenAI
+ * refuses a replay that names one reasoning item twice. Keep each reasoning
+ * item where it first appears.
+ */
+const withoutRepeatedThinking = (
+  messages: readonly ModelMessage[],
+): ModelMessage[] => {
+  const seen = new Set<string>();
+  return messages.map((message) => {
+    if (message.thinking === undefined) {
+      return message;
+    }
+    const thinking = message.thinking.filter(({ signature }) => {
+      if (signature === undefined) {
+        return false;
+      }
+      const key = thinkingKeyOf(signature);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    if (thinking.length > 0) {
+      return { ...message, thinking };
+    }
+    const { thinking: _repeated, ...rest } = message;
+    return rest;
+  });
+};
+
 const allPositions = (store: PlaybookStore): Position[] =>
   store.playbooks().flatMap(({ positions }) => positions.items);
 
 type Recorder = (
-  event: Omit<BuilderEvent, "questions" | "resentUnchanged" | "error"> &
+  event: Omit<
+    BuilderEvent,
+    "questions" | "resentUnchanged" | "error" | "turn"
+  > &
     Partial<BuilderEvent>,
 ) => BuilderEvent;
 
@@ -863,7 +937,8 @@ const mcpMatterTools = (record: Recorder): AnyServerTool[] =>
  * inside `execute_typescript`, documented by `discover_tools`, run through
  * the production registry runner (ref dehydration, boundary normalization,
  * egress, strict projection) with the fixtures standing in for the handlers.
- * A read the fixtures do not answer is unavailable, as a read behind a
+ * The playbook read in a script is the production handler over the store,
+ * as it is in chat. Any other read is unavailable, as a read behind a
  * disabled feature is in chat.
  */
 const chatMatterTools = ({
@@ -874,8 +949,28 @@ const chatMatterTools = ({
   record: Recorder;
 }): AnyServerTool[] => {
   const refRegistry = createChatRefRegistry();
+  const listPlaybooks =
+    getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
+    panic(`The static tool registry has no ${LIST_PLAYBOOKS} handler`);
   const runReadTool: ChatCodeModeReadRunner = async (toolName, args) => {
-    if (!isMatterToolName(toolName)) {
+    // The handler's view of the call: refs already resolved to ids, so the
+    // scenario checks read the same input on both surfaces. A call refused
+    // before the handler keeps the input the script wrote.
+    let handlerArgs: Record<string, unknown> | undefined;
+    const answerMatterRead: McpToolHandler = ({ args: normalized }) => {
+      handlerArgs = normalized;
+      return isMatterToolName(toolName)
+        ? answerMatterTool(toolName, normalized)
+        : panic(`${toolName} is not a matter read`);
+    };
+    const handlerFor = (): McpToolHandler | null => {
+      if (isMatterToolName(toolName)) {
+        return answerMatterRead;
+      }
+      return toolName === LIST_PLAYBOOKS ? listPlaybooks : null;
+    };
+    const handler = handlerFor();
+    if (handler === null) {
       const error = new ChatToolError({
         kind: "unavailable",
         message: `${toolName} has nothing to read in this eval.`,
@@ -883,14 +978,6 @@ const chatMatterTools = ({
       record({ name: toolName, input: args, error: error.message });
       throw error;
     }
-    // The handler's view of the call: refs already resolved to ids, so the
-    // scenario checks read the same input on both surfaces. A call refused
-    // before the handler keeps the input the script wrote.
-    let handlerArgs: Record<string, unknown> | undefined;
-    const handler: McpToolHandler = ({ args: normalized }) => {
-      handlerArgs = normalized;
-      return answerMatterTool(toolName, normalized);
-    };
     const result = await runRegistryReadTool({
       toolName,
       args,
@@ -921,22 +1008,40 @@ const chatMatterTools = ({
   return [
     recordedTool({ tool, record, failureOf: scriptFailureOf }),
     recordedTool({ tool: discovery, record, failureOf: () => null }),
+    recordedTool({ tool: spawnSubagentsStub(), record, failureOf: () => null }),
   ];
 };
+
+/**
+ * `spawn_subagents` as chat registers it, so a run can reach for it; each
+ * subtask comes back failed, so the run has to do the work itself and the
+ * rest of the flow is still scored. The call itself is a defect.
+ */
+const spawnSubagentsStub = (): AnyServerTool =>
+  SPAWN_SUBAGENTS_TOOL_DEFINITION.server(({ subagents }) => ({
+    results: subagents.map((_subagent, index) => ({
+      index,
+      status: "failed" as const,
+      error: "Subagents do not run in this eval; do the work yourself.",
+    })),
+  }));
 
 const createBehaviorTools = ({
   store,
   scenario,
   surface,
   events,
+  currentTurn,
 }: {
   store: PlaybookStore;
   scenario: BuilderScenario;
   surface: BuilderSurface;
   events: BuilderEvent[];
+  currentTurn: () => number;
 }): AnyServerTool[] => {
   const record: Recorder = (event) => {
     const recorded: BuilderEvent = {
+      turn: currentTurn(),
       questions: [],
       resentUnchanged: [],
       error: null,
@@ -1007,9 +1112,12 @@ type BehaviorRun = {
   outcome: "pass" | "fail" | "error";
   defects: string[];
   events: BuilderEvent[];
+  /** The conversation as the last turn replayed it, for `--json`. */
+  transcript: ModelMessage[];
   finalText: string;
+  /** Summed over the scenario's turns. */
   latencyMs: number;
-  tokens: number | null;
+  tokens: number;
 };
 
 const runScenario = async ({
@@ -1027,16 +1135,46 @@ const runScenario = async ({
 }): Promise<BehaviorRun> => {
   const store = createPlaybookStore([]);
   const events: BuilderEvent[] = [];
-  const turn = await runModelTurn({
-    model,
-    prompt: scenario.brief,
-    system: await behaviorSystemPrompt({ store, surface }),
-    tools: createBehaviorTools({ store, scenario, surface, events }),
-    iterations: BEHAVIOR_MAX_ITERATIONS,
-    timeoutMs: BEHAVIOR_TURN_TIMEOUT_MS,
+  const system = await behaviorSystemPrompt({ store, surface });
+  // The SDK's own processor keeps the conversation, so a follow-up turn
+  // carries the assistant's text, tool calls, and tool results the way a
+  // chat client sends them back.
+  const conversation = new StreamProcessor();
+  let turnNumber = 0;
+  const tools = createBehaviorTools({
+    store,
+    scenario,
+    surface,
+    events,
+    currentTurn: () => turnNumber,
   });
+  let error: string | null = null;
+  let finalText = "";
+  let latencyMs = 0;
+  let tokens = 0;
+  for (const message of [scenario.brief, ...scenario.followUps]) {
+    turnNumber += 1;
+    conversation.addUserMessage(message);
+    conversation.prepareAssistantMessage();
+    const turn = await runModelTurn({
+      model,
+      messages: withoutRepeatedThinking(conversation.toModelMessages()),
+      system,
+      tools,
+      iterations: BEHAVIOR_MAX_ITERATIONS,
+      timeoutMs: BEHAVIOR_TURN_TIMEOUT_MS,
+      onChunk: (chunk) => conversation.processChunk(chunk),
+    });
+    finalText = turn.finalText;
+    latencyMs += turn.latencyMs;
+    tokens += turn.usage?.totalTokens ?? 0;
+    if (turn.error !== null) {
+      error = turn.error;
+      break;
+    }
+  }
   const playbooks = store.playbooks();
-  const defects = scenario.check({ surface, events, playbooks });
+  const defects = scoreScenario(scenario, { surface, events, playbooks });
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbooks.some(
@@ -1046,9 +1184,9 @@ const runScenario = async ({
     defects.push("the stored positions do not parse as positionSchema");
   }
   let outcome: BehaviorRun["outcome"] = defects.length === 0 ? "pass" : "fail";
-  if (turn.error !== null) {
+  if (error !== null) {
     outcome = "error";
-    defects.unshift(turn.error);
+    defects.unshift(error);
   }
   return {
     model: modelId,
@@ -1058,9 +1196,10 @@ const runScenario = async ({
     outcome,
     defects,
     events,
-    finalText: turn.finalText,
-    latencyMs: turn.latencyMs,
-    tokens: turn.usage?.totalTokens ?? null,
+    transcript: withoutRepeatedThinking(conversation.toModelMessages()),
+    finalText,
+    latencyMs,
+    tokens,
   };
 };
 
@@ -1070,14 +1209,14 @@ const renderBehaviorReport = (runs: readonly BehaviorRun[]): string => {
     const modelRuns = runs.filter((run) => run.model === modelId);
     lines.push(
       `\n### ${modelId}\n`,
-      "| scenario | surface | run | outcome | questions | scripts | reads | saves | defects | tokens | ms |",
-      "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
+      "| scenario | surface | run | outcome | questions | scripts | reads | spawns | saves | defects | tokens | ms |",
+      "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const count = (predicate: (event: BuilderEvent) => boolean) =>
         String(run.events.filter(predicate).length);
       lines.push(
-        `| ${run.scenario} | ${run.surface} | ${String(run.run)} | ${run.outcome} | ${count(({ name }) => name === ASK_USER_TOOL_NAME)} | ${count(({ name }) => name === EXECUTE_TYPESCRIPT)} | ${count(({ name }) => name === "read_content_across_matters")} | ${count(({ name }) => name === SAVE_PLAYBOOK)} | ${cell(run.defects)} | ${String(run.tokens ?? "-")} | ${String(run.latencyMs)} |`,
+        `| ${run.scenario} | ${run.surface} | ${String(run.run)} | ${run.outcome} | ${count(({ name }) => name === ASK_USER_TOOL_NAME)} | ${count(({ name }) => name === EXECUTE_TYPESCRIPT)} | ${count(({ name }) => name === "read_content_across_matters")} | ${count(({ name }) => name === SPAWN_SUBAGENTS_TOOL_NAME)} | ${count(({ name }) => name === SAVE_PLAYBOOK)} | ${cell(run.defects)} | ${String(run.tokens)} | ${String(run.latencyMs)} |`,
       );
     }
     const passed = modelRuns.filter((run) => run.outcome === "pass");

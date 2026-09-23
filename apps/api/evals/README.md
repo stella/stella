@@ -56,14 +56,18 @@ the default provider chain (see `getTanStackTextModelById`).
   (`--tier behavior`) activates the shipped `playbook-builder` skill and
   answers `ask-user` from a script: does the model ask side, governing law,
   and language before drafting, search only matters the user named, read only
-  the contracts the user confirmed, ask only where the contracts disagree, and
-  never resend an unchanged position? Each scenario runs on two surfaces
+  the contracts the user confirmed, ask only where the contracts disagree,
+  set `scope.perspective` only for a side that maps to one, and never resend
+  an unchanged position? A scenario's follow-up messages run as later turns
+  over the conversation so far, so a user who declines contracts and asks for
+  their matters mid-flow is scored too. Each scenario runs on two surfaces
   (`--surface mcp|chat`): the matter reads as direct MCP tools, and as the
   chat surface, where they are `external_*` functions inside the real
-  `execute_typescript` and `discover_tools` tools and the fixtures sit behind
-  the production registry runner. A read rejected at the boundary, a failed
-  script, or a chat read written before `discover_tools` named it is a
-  defect.
+  `execute_typescript` and `discover_tools` tools, the fixtures sit behind
+  the production registry runner, and `spawn_subagents` is offered under
+  chat's delegation rule. A read rejected at the boundary, a failed script, a
+  chat read written before `discover_tools` named it, or work handed to
+  subagents is a defect.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
