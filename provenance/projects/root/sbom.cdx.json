@@ -66,7 +66,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/react@6.0.5",
+      "bom-ref": "pkg:npm/@astrojs/react@6.0.6",
       "description": "Use React components within Astro",
       "evidence": {
         "identity": [
@@ -592,10 +592,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -2597,10 +2597,10 @@
           "value": "apps/landing/node_modules/@astrojs/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/react@6.0.5",
+      "purl": "pkg:npm/%40astrojs/react@6.0.6",
       "scope": "required",
       "type": "library",
-      "version": "6.0.5"
+      "version": "6.0.6"
     },
     {
       "authors": [
@@ -3185,7 +3185,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1133.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1134.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3241,13 +3241,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1133.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1134.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1133.0"
+      "version": "3.1134.0"
     },
     {
       "authors": [
@@ -3255,7 +3255,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1133.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1134.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3308,13 +3308,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1133.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1134.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1133.0"
+      "version": "3.1134.0"
     },
     {
       "authors": [
@@ -3322,7 +3322,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1133.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1134.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3375,13 +3375,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1133.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1134.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1133.0"
+      "version": "3.1134.0"
     },
     {
       "authors": [
@@ -3389,7 +3389,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1133.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1134.0",
       "evidence": {
         "identity": [
           {
@@ -3441,13 +3441,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1133.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1134.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1133.0"
+      "version": "3.1134.0"
     },
     {
       "authors": [
@@ -3981,10 +3981,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -6004,7 +6004,7 @@
       "version": "1.8.0"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/api-key@1.7.4",
+      "bom-ref": "pkg:npm/@better-auth/api-key@1.7.5",
       "description": "API Key plugin for Better Auth.",
       "evidence": {
         "identity": [
@@ -6057,16 +6057,16 @@
           "value": "apps/api/node_modules/@better-auth/api-key/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/api-key@1.7.4",
+      "purl": "pkg:npm/%40better-auth/api-key@1.7.5",
       "scope": "required",
       "tags": [
         "auth"
       ],
       "type": "library",
-      "version": "1.7.4"
+      "version": "1.7.5"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/cimd@1.7.4",
+      "bom-ref": "pkg:npm/@better-auth/cimd@1.7.5",
       "description": "Client ID Metadata Document plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -6122,13 +6122,13 @@
           "value": "apps/api/node_modules/@better-auth/cimd/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/cimd@1.7.4",
+      "purl": "pkg:npm/%40better-auth/cimd@1.7.5",
       "scope": "required",
       "type": "library",
-      "version": "1.7.4"
+      "version": "1.7.5"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.7.4",
+      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.7.5",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -6194,10 +6194,10 @@
           "value": "apps/api/node_modules/@better-auth/oauth-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.4",
+      "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.5",
       "scope": "required",
       "type": "library",
-      "version": "1.7.4"
+      "version": "1.7.5"
     },
     {
       "authors": [
@@ -6783,7 +6783,7 @@
       "version": "3.5.19"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.22.0",
+      "bom-ref": "pkg:npm/@google/genai@2.23.0",
       "evidence": {
         "identity": [
           {
@@ -6835,10 +6835,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.22.0",
+      "purl": "pkg:npm/%40google/genai@2.23.0",
       "scope": "required",
       "type": "library",
-      "version": "2.22.0"
+      "version": "2.23.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.7.0",
@@ -8397,10 +8397,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -10591,7 +10591,7 @@
           "name": "Yuki Yokotani <silurus.dev@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@silurus/ooxml@0.86.1",
+      "bom-ref": "pkg:npm/@silurus/ooxml@0.87.0",
       "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
       "evidence": {
         "identity": [
@@ -10654,13 +10654,13 @@
           "value": "apps/api/node_modules/@silurus/ooxml/package.json"
         }
       ],
-      "purl": "pkg:npm/%40silurus/ooxml@0.86.1",
+      "purl": "pkg:npm/%40silurus/ooxml@0.87.0",
       "scope": "required",
       "tags": [
         "xml"
       ],
       "type": "library",
-      "version": "0.86.1"
+      "version": "0.87.0"
     },
     {
       "authors": [
@@ -11372,7 +11372,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.18.5",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.18.6",
       "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
       "evidence": {
         "identity": [
@@ -11447,16 +11447,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.18.5",
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.18.6",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.18.5"
+      "version": "0.18.6"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.7",
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.8",
       "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
@@ -11512,13 +11512,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-bedrock/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.3.7",
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.3.8",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.3.7"
+      "version": "0.3.8"
     },
     {
       "authors": [
@@ -11526,7 +11526,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-client@0.31.0",
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.31.1",
       "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
       "evidence": {
         "identity": [
@@ -11616,14 +11616,14 @@
           "value": "apps/api/node_modules/@tanstack/ai-client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-client@0.31.0",
+      "purl": "pkg:npm/%40tanstack/ai-client@0.31.1",
       "scope": "required",
       "tags": [
         "ai",
         "framework"
       ],
       "type": "framework",
-      "version": "0.31.0"
+      "version": "0.31.1"
     },
     {
       "authors": [
@@ -11631,7 +11631,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.8",
+      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.9",
       "description": "Secure TypeScript Code Mode for TanStack AI agents to execute sandboxed tool orchestration programs.",
       "evidence": {
         "identity": [
@@ -11687,16 +11687,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-code-mode/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.8",
+      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.9",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.4.8"
+      "version": "0.4.9"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.4",
+      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.5",
       "description": "Codex harness adapter for TanStack AI — run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
       "evidence": {
         "identity": [
@@ -11745,13 +11745,13 @@
           "value": "node_modules/@tanstack/ai-codex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-codex@0.5.4",
+      "purl": "pkg:npm/%40tanstack/ai-codex@0.5.5",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.5.4"
+      "version": "0.5.5"
     },
     {
       "authors": [
@@ -11759,7 +11759,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.29.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.29.2",
       "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
       "evidence": {
         "identity": [
@@ -11819,13 +11819,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-gemini/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-gemini@0.29.1",
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.29.2",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.29.1"
+      "version": "0.29.2"
     },
     {
       "authors": [
@@ -11833,7 +11833,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.3.9",
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.3.10",
       "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
       "evidence": {
         "identity": [
@@ -11895,13 +11895,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mcp@0.3.9",
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.3.10",
       "scope": "required",
       "type": "library",
-      "version": "0.3.9"
+      "version": "0.3.10"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.6.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.6.2",
       "description": "Mistral adapter for TanStack AI",
       "evidence": {
         "identity": [
@@ -11957,10 +11957,10 @@
           "value": "apps/api/node_modules/@tanstack/ai-mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mistral@0.6.1",
+      "purl": "pkg:npm/%40tanstack/ai-mistral@0.6.2",
       "scope": "required",
       "type": "library",
-      "version": "0.6.1"
+      "version": "0.6.2"
     },
     {
       "authors": [
@@ -11968,7 +11968,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.22.5",
+      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.22.6",
       "description": "OpenAI adapter for TanStack AI chat, tools, images, video, speech, transcription, realtime, and structured outputs.",
       "evidence": {
         "identity": [
@@ -12027,13 +12027,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openai@0.22.5",
+      "purl": "pkg:npm/%40tanstack/ai-openai@0.22.6",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.22.5"
+      "version": "0.22.6"
     },
     {
       "authors": [
@@ -12041,7 +12041,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.19.8",
+      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.19.9",
       "description": "TanStack AI adapter for OpenRouter chat, provider tools, structured outputs, and access to hundreds of LLMs.",
       "evidence": {
         "identity": [
@@ -12104,16 +12104,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-openrouter/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.19.8",
+      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.19.9",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.19.8"
+      "version": "0.19.9"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.6",
+      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.7",
       "description": "Provider-agnostic sandbox layer for TanStack AI — run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
       "evidence": {
         "identity": [
@@ -12171,13 +12171,13 @@
           "value": "node_modules/@tanstack/ai-sandbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.6",
+      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.7",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.5.6"
+      "version": "0.5.7"
     },
     {
       "authors": [
@@ -12185,7 +12185,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai@0.53.0",
+      "bom-ref": "pkg:npm/@tanstack/ai@0.54.0",
       "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
       "evidence": {
         "identity": [
@@ -12503,13 +12503,13 @@
           "value": "apps/api/node_modules/@tanstack/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai@0.53.0",
+      "purl": "pkg:npm/%40tanstack/ai@0.54.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.53.0"
+      "version": "0.54.0"
     },
     {
       "authors": [
@@ -14299,7 +14299,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.167.2",
+      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.167.3",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14352,10 +14352,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router-ssr-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.167.2",
+      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.167.3",
       "scope": "required",
       "type": "library",
-      "version": "1.167.2"
+      "version": "1.167.3"
     },
     {
       "authors": [
@@ -14363,7 +14363,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.36",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.38",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14427,6 +14427,12 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#2"
           },
           {
+            "location": "apps/web/src/hooks/use-unsaved-work.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-unsaved-work.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/workspaces/mutations.ts#6"
           },
           {
@@ -14484,7 +14490,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#4"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#4"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#28"
@@ -14599,9 +14605,6 @@
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/pdf/page-organizer.tsx#16"
           },
           {
             "location": "apps/web/src/components/pdf/pdf-viewer.tsx#2"
@@ -14907,7 +14910,7 @@
             "location": "apps/web/src/routes/_protected.verify.$code.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx#2"
@@ -15145,10 +15148,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.36",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.38",
       "scope": "required",
       "type": "library",
-      "version": "1.170.36"
+      "version": "1.170.38"
     },
     {
       "authors": [
@@ -15156,7 +15159,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.54",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.56",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -15224,10 +15227,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.54",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.56",
       "scope": "required",
       "type": "library",
-      "version": "1.168.54"
+      "version": "1.168.56"
     },
     {
       "authors": [
@@ -17116,10 +17119,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -19571,7 +19574,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.3.2",
+      "bom-ref": "pkg:npm/astro@7.3.3",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -19642,16 +19645,16 @@
           "value": "apps/landing/node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.3.2",
+      "purl": "pkg:npm/astro@7.3.3",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.3.2"
+      "version": "7.3.3"
     },
     {
-      "bom-ref": "pkg:npm/better-auth@1.7.4",
+      "bom-ref": "pkg:npm/better-auth@1.7.5",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -19794,13 +19797,13 @@
           "value": "apps/api/node_modules/better-auth/package.json"
         }
       ],
-      "purl": "pkg:npm/better-auth@1.7.4",
+      "purl": "pkg:npm/better-auth@1.7.5",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.7.4"
+      "version": "1.7.5"
     },
     {
       "authors": [
@@ -20064,6 +20067,9 @@
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#46"
           },
           {
+            "location": "apps/api/src/handlers/case-law/citation-kind.ts#18"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/court-weight-seed.ts#1"
           },
           {
@@ -20184,6 +20190,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#38"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#2"
           },
           {
@@ -20206,6 +20215,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/slice-listing.ts#9"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/source-totals.ts#1"
@@ -23289,6 +23301,9 @@
             "location": "apps/api/src/scripts/backfill-citation-authority.ts#27"
           },
           {
+            "location": "apps/api/src/scripts/backfill-citation-keys.ts#24"
+          },
+          {
             "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
           },
           {
@@ -23413,6 +23428,9 @@
           },
           {
             "location": "apps/api/src/scripts/seed-migration-rehearsal.ts#14"
+          },
+          {
+            "location": "apps/api/src/server.ts#2"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -23803,6 +23821,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
+          },
+          {
+            "location": "apps/web/src/hooks/use-unsaved-work.ts#3"
           },
           {
             "location": "apps/web/src/lib/analytics/error-reference.ts#1"
@@ -24525,7 +24546,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#12"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#5"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#6"
@@ -24699,7 +24720,7 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#7"
           },
           {
-            "location": "apps/web/src/components/pdf/page-organizer.tsx#17"
+            "location": "apps/web/src/components/pdf/page-organizer.tsx#16"
           },
           {
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#4"
@@ -24891,7 +24912,7 @@
             "location": "apps/web/src/routes/_protected.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#8"
@@ -26369,6 +26390,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#39"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
@@ -28519,7 +28543,7 @@
             "location": "apps/api/src/scripts/adapter-health.ts#18"
           },
           {
-            "location": "apps/api/src/scripts/backfill-citation-keys.ts#19"
+            "location": "apps/api/src/scripts/backfill-citation-keys.ts#25"
           },
           {
             "location": "apps/api/src/scripts/backfill-corpus-storage.ts#13"
@@ -30717,10 +30741,10 @@
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#25"
           },
           {
-            "location": "apps/api/src/server.ts#2"
+            "location": "apps/api/src/server.ts#3"
           },
           {
-            "location": "apps/api/src/server.ts#3"
+            "location": "apps/api/src/server.ts#4"
           },
           {
             "location": "packages/api-client/src/index.ts#3"
@@ -31047,7 +31071,7 @@
           "name": "Nicolas DUBIEN <github@dubien.org>"
         }
       ],
-      "bom-ref": "pkg:npm/fast-check@4.9.0",
+      "bom-ref": "pkg:npm/fast-check@4.10.1",
       "description": "Property based testing framework for JavaScript (like QuickCheck)",
       "evidence": {
         "identity": [
@@ -31152,13 +31176,13 @@
           "value": "apps/api/node_modules/fast-check/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-check@4.9.0",
+      "purl": "pkg:npm/fast-check@4.10.1",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.9.0"
+      "version": "4.10.1"
     },
     {
       "authors": [
@@ -31576,7 +31600,7 @@
           "name": "Stuart Knightley <stuart@stuartk.com>"
         }
       ],
-      "bom-ref": "pkg:npm/jszip@3.10.1",
+      "bom-ref": "pkg:npm/jszip@3.10.2",
       "description": "Create, read and edit .zip files with JavaScript http://stuartk.com/jszip",
       "evidence": {
         "identity": [
@@ -31699,10 +31723,10 @@
           "value": "apps/api/node_modules/jszip/package.json"
         }
       ],
-      "purl": "pkg:npm/jszip@3.10.1",
+      "purl": "pkg:npm/jszip@3.10.2",
       "scope": "required",
       "type": "library",
-      "version": "3.10.1"
+      "version": "3.10.2"
     },
     {
       "bom-ref": "pkg:npm/katex@0.18.7",
@@ -31873,9 +31897,6 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#13"
-          },
-          {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#6"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#40"
@@ -32151,7 +32172,7 @@
             "location": "apps/web/src/components/pdf/creating-citations.tsx#1"
           },
           {
-            "location": "apps/web/src/components/pdf/page-organizer.tsx#31"
+            "location": "apps/web/src/components/pdf/page-organizer.tsx#30"
           },
           {
             "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#19"
@@ -32643,7 +32664,7 @@
             "location": "apps/web/src/routes/_protected.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
@@ -33218,7 +33239,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxc-transform-react@0.148.0",
+      "bom-ref": "pkg:npm/oxc-transform-react@0.150.0",
       "description": "Oxc React Compiler Node API",
       "evidence": {
         "identity": [
@@ -33274,10 +33295,10 @@
           "value": "apps/web/node_modules/oxc-transform-react/package.json"
         }
       ],
-      "purl": "pkg:npm/oxc-transform-react@0.148.0",
+      "purl": "pkg:npm/oxc-transform-react@0.150.0",
       "scope": "required",
       "type": "library",
-      "version": "0.148.0"
+      "version": "0.150.0"
     },
     {
       "authors": [
@@ -33285,7 +33306,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxlint@1.82.0",
+      "bom-ref": "pkg:npm/oxlint@1.83.0",
       "description": "Linter for the JavaScript Oxidation Compiler",
       "evidence": {
         "identity": [
@@ -33334,10 +33355,10 @@
           "value": "node_modules/oxlint/package.json"
         }
       ],
-      "purl": "pkg:npm/oxlint@1.82.0",
+      "purl": "pkg:npm/oxlint@1.83.0",
       "scope": "required",
       "type": "library",
-      "version": "1.82.0"
+      "version": "1.83.0"
     },
     {
       "bom-ref": "pkg:npm/pdfjs-dist@6.3.289",
@@ -33487,7 +33508,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.433.6",
+      "bom-ref": "pkg:npm/posthog-js@1.433.9",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -33546,10 +33567,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.433.6",
+      "purl": "pkg:npm/posthog-js@1.433.9",
       "scope": "required",
       "type": "library",
-      "version": "1.433.6"
+      "version": "1.433.9"
     },
     {
       "authors": [
@@ -35128,10 +35149,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -37561,7 +37582,7 @@
           "name": "Adam Shaw <arshaw@users.noreply.github.com> (http://arshaw.com/)"
         }
       ],
-      "bom-ref": "pkg:npm/temporal-polyfill@1.0.4",
+      "bom-ref": "pkg:npm/temporal-polyfill@1.0.5",
       "description": "A lightweight polyfill for Temporal, successor to the JavaScript Date object",
       "evidence": {
         "identity": [
@@ -37791,10 +37812,10 @@
           "value": "node_modules/temporal-polyfill/package.json"
         }
       ],
-      "purl": "pkg:npm/temporal-polyfill@1.0.4",
+      "purl": "pkg:npm/temporal-polyfill@1.0.5",
       "scope": "required",
       "type": "library",
-      "version": "1.0.4"
+      "version": "1.0.5"
     },
     {
       "authors": [
@@ -38374,7 +38395,7 @@
           "name": "Jan Amann <jan@amann.work>"
         }
       ],
-      "bom-ref": "pkg:npm/use-intl@4.14.2",
+      "bom-ref": "pkg:npm/use-intl@4.14.5",
       "description": "Internationalization (i18n) for React",
       "evidence": {
         "identity": [
@@ -38592,9 +38613,6 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-term-row.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#7"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#42"
@@ -38999,7 +39017,7 @@
             "location": "apps/web/src/components/pdf/creating-citations.tsx#2"
           },
           {
-            "location": "apps/web/src/components/pdf/page-organizer.tsx#32"
+            "location": "apps/web/src/components/pdf/page-organizer.tsx#31"
           },
           {
             "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#20"
@@ -39767,7 +39785,7 @@
             "location": "apps/web/src/routes/_protected.verify.$code.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#23"
@@ -40001,9 +40019,6 @@
             "location": "apps/web/src/routes/agent-claim.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#5"
-          },
-          {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#10"
           },
           {
@@ -40196,10 +40211,10 @@
           "value": "apps/desktop/node_modules/use-intl/package.json"
         }
       ],
-      "purl": "pkg:npm/use-intl@4.14.2",
+      "purl": "pkg:npm/use-intl@4.14.5",
       "scope": "required",
       "type": "library",
-      "version": "4.14.2"
+      "version": "4.14.5"
     },
     {
       "bom-ref": "pkg:npm/uuid@14.0.2",
@@ -40286,7 +40301,7 @@
           "name": "Fabian Hiller"
         }
       ],
-      "bom-ref": "pkg:npm/valibot@1.4.2",
+      "bom-ref": "pkg:npm/valibot@1.5.0",
       "description": "The modular and type safe schema library for validating structural data",
       "evidence": {
         "identity": [
@@ -40360,6 +40375,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#40"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-plan.ts#13"
@@ -40995,7 +41013,7 @@
             "location": "scripts/selfhost-contract.ts#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#8"
+            "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#6"
           },
           {
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#9"
@@ -41034,7 +41052,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#10"
@@ -41183,10 +41201,10 @@
           "value": "apps/api/node_modules/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/valibot@1.4.2",
+      "purl": "pkg:npm/valibot@1.5.0",
       "scope": "required",
       "type": "library",
-      "version": "1.4.2"
+      "version": "1.5.0"
     },
     {
       "authors": [
@@ -41397,6 +41415,9 @@
           },
           {
             "location": "apps/web/src/features/guides/guide-drawer-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-unsaved-work.ts#4"
           },
           {
             "location": "apps/web/src/lib/anonymize/use-overlay-rects.ts#3"
