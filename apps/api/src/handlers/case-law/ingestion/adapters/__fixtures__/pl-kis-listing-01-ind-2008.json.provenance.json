@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "083eba9749bb233f349aea3d4814b2046397338bd70fded5be30cd3d228926c7",
+  "sourceUrl": "https://eureka.mf.gov.pl/api/public/v1/wyszukiwarka/informacje/?size=2&page=0&sort=ID_INFORMACJI%2Cdesc (POST {\"filter\": {\"KATEGORIA_INFORMACJI\": [1], \"DT_WYD_start\": \"2008-03-01\", \"DT_WYD_end\": \"2008-03-31\"}, \"columns\": [\"ID_INFORMACJI\", \"KATEGORIA_INFORMACJI\", \"SYG\", \"DT_WYD\", \"TEZA\", \"STATUS_INFORMACJI\", \"DATA_PUBLIKACJI\", \"AUTOR\", \"SLOWA_KLUCZOWE\", \"PRZEPISY\", \"ZAGADNIENIA\", \"INFORMACJA_ZMIENIANA\", \"MIEJ_PUB\", \"INN_ZROD\", \"RODZAJ_DECYZJI\", \"DAT_WAZ_OD\", \"DAT_WAZ_DO\", \"STAN_PRAW\", \"NOMENKLATURA_SCALONA\", \"KLASYFIKACJA_PKWIU\", \"KLASYFIKACJA_PKOB\", \"RODZAJ_WYROBU_AKCYZOWEGO\", \"DATA_REJESTRACJI\", \"KOMENTARZE_BIP\", \"KOM_BIP_OPIS\"], \"searchInFullPhrase\": false, \"searchInContent\": false, \"searchInSynonyms\": false, \"warunkiDodatkowe\": []})",
+  "capturedAt": "2026-09-23T11:11:39.903320Z",
+  "note": "individual interpretations issued in March 2008, from a tax chamber"
+}

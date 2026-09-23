@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "23514413d61cad9d924d3d284c0e79d73e57baafcbb411a2d9b6de9ccc986ab9",
+  "sourceUrl": "https://eureka.mf.gov.pl/api/public/v1/wyszukiwarka/informacje/?size=2&page=0&sort=ID_INFORMACJI%2Cdesc (POST {\"filter\": {\"KATEGORIA_INFORMACJI\": [62914]}, \"columns\": [\"ID_INFORMACJI\", \"KATEGORIA_INFORMACJI\", \"SYG\", \"DT_WYD\", \"TEZA\", \"STATUS_INFORMACJI\", \"DATA_PUBLIKACJI\", \"AUTOR\", \"SLOWA_KLUCZOWE\", \"PRZEPISY\", \"ZAGADNIENIA\", \"INFORMACJA_ZMIENIANA\", \"MIEJ_PUB\", \"INN_ZROD\", \"RODZAJ_DECYZJI\", \"DAT_WAZ_OD\", \"DAT_WAZ_DO\", \"STAN_PRAW\", \"NOMENKLATURA_SCALONA\", \"KLASYFIKACJA_PKWIU\", \"KLASYFIKACJA_PKOB\", \"RODZAJ_WYROBU_AKCYZOWEGO\", \"DATA_REJESTRACJI\", \"KOMENTARZE_BIP\", \"KOM_BIP_OPIS\"], \"searchInFullPhrase\": false, \"searchInContent\": false, \"searchInSynonyms\": false, \"warunkiDodatkowe\": []})",
+  "capturedAt": "2026-09-23T11:08:11.892563Z",
+  "note": "newest two rows of category 62914 and the detail of the first"
+}

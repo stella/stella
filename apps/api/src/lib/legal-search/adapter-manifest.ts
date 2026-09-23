@@ -512,6 +512,22 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_KIS]: {
+    key: ADAPTER_KEYS.PL_KIS,
+    name: "Polish Tax Interpretations and Rulings (EUREKA)",
+    publisher: "System Informacji Skarbowej EUREKA",
+    publicHomeUrl: "https://eureka.mf.gov.pl",
+    ...ADAPTER_JURISDICTIONS.POL,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // One general interpretation of 2004 predates the individual ones, which
+      // open in July 2007.
+      type: "decision-date",
+      fromInclusive: "2004-07-30",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",

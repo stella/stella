@@ -81,6 +81,10 @@ import {
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import {
+  assemblePlKisDecision,
+  plKisRawPartsOf,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { assemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
@@ -2139,5 +2143,106 @@ export const plNsaFixture = (): EnrolledAdapterFixture => ({
       snapshot: PL_NSA_SNAPSHOT,
     });
     return built.decision;
+  },
+});
+
+// ── PL KIS fixture ───────────────────────────────────────
+
+/**
+ * One EUREKA listing row with every column the search states, labels filled:
+ * the union of what the categories state, so a binding rate ruling's validity
+ * and classification sit beside a general interpretation's place of
+ * publication.
+ */
+const PL_KIS_LISTING_ROW = {
+  ID_INFORMACJI: "705415",
+  KATEGORIA_INFORMACJI: ["Zmiana wiążącej informacji stawkowej"],
+  SYG: "0110-KSI2-2.442.25.2026.5.PS",
+  DT_WYD: "2026-08-17",
+  TEZA: "WIS USŁUGA - mezoterapia igłowa.",
+  STATUS_INFORMACJI: ["Aktualna"],
+  DATA_PUBLIKACJI: "2026-08-25",
+  AUTOR: ["Dyrektor Krajowej Informacji Skarbowej"],
+  SLOWA_KLUCZOWE: ["stawka-stawki podatku"],
+  PRZEPISY: [
+    "[VAT][WIS] Ustawa o podatku od towarów i usług-Dział VIII-Rozdział 1-art. 41-ust. 1",
+  ],
+  ZAGADNIENIA: [
+    "Podatek od towarów i usług-Wiążąca informacja stawkowa-Usługi",
+  ],
+  INFORMACJA_ZMIENIANA: "611058",
+  MIEJ_PUB: "Dz. Urz. MF z 1 czerwca 2020 r. poz. 69",
+  INN_ZROD: "https://www.gov.pl/web/finanse",
+  RODZAJ_DECYZJI: ["Zmiana z urzędu"],
+  DAT_WAZ_OD: "2026-08-19",
+  DAT_WAZ_DO: "2031-08-19",
+  STAN_PRAW: "2026-08-17",
+  NOMENKLATURA_SCALONA: ["85439000 Części maszyn"],
+  KLASYFIKACJA_PKWIU: ["86.90.19.0 Pozostałe usługi"],
+  KLASYFIKACJA_PKOB: ["1122 Budynki o trzech i więcej mieszkaniach"],
+  RODZAJ_WYROBU_AKCYZOWEGO: ["Wyroby energetyczne"],
+  DATA_REJESTRACJI: "2026-08-18",
+  KOMENTARZE_BIP: ["Komentarz"],
+  KOM_BIP_OPIS: "Opis komentarza",
+} as const;
+
+const plKisField = (dataType: string, key: string, value: unknown) => ({
+  dataType,
+  key,
+  value,
+});
+
+/** The detail the service serves for that row: dictionary ids, and the HTML. */
+const PL_KIS_DETAIL = JSON.stringify({
+  id: 705_415,
+  versionId: 759_101,
+  nazwa: "Zmiana wiążącej informacji stawkowej",
+  szablonId: 19,
+  wersjaSzablonuId: 88,
+  dokument: {
+    fields: [
+      plKisField("StringType", "ID_INFORMACJI", "705415"),
+      plKisField("StringType", "KATEGORIA_INFORMACJI", "19"),
+      plKisField("StringType", "STATUS_INFORMACJI", "27"),
+      plKisField("StringType", "DATA_PUBLIKACJI", "2026-08-25T08:55:50.555Z"),
+      plKisField("StringType", "TEZA", "WIS USŁUGA - mezoterapia igłowa."),
+      plKisField("ListType", "AUTOR", [70]),
+      plKisField("StringType", "RODZAJ_DECYZJI", "65"),
+      plKisField("StringType", "DT_WYD", "2026-08-17T12:32:46.916Z"),
+      plKisField("StringType", "SYG", "0110-KSI2-2.442.25.2026.5.PS"),
+      plKisField("StringType", "INFORMACJA_ZMIENIANA", "611058"),
+      plKisField("ListType", "SLOWA_KLUCZOWE", ["25071"]),
+      plKisField("ListType", "PRZEPISY", ["34536"]),
+      plKisField("ListType", "ZAGADNIENIA", ["28300"]),
+      plKisField("ListType", "KLASYFIKACJA_PKWIU", [8480]),
+      plKisField("FileType", "ZALACZNIKI", [{ nazwa: "zalacznik.pdf" }]),
+      plKisField("StringType", "DAT_WAZ_OD", "2026-08-19T12:36:27.175Z"),
+      plKisField("StringType", "DAT_WAZ_DO", "2031-08-19T12:36:35.698Z"),
+      plKisField(
+        "StringType",
+        "TRESC_INTERESARIUSZ",
+        '<p class="MsoNormal">Zmiana wiążącej informacji stawkowej</p><p class="MsoNormal">Na podstawie art. 42b ust. 1 ustawy zmieniam z urzędu wiążącą informację stawkową.</p><p class="MsoNormal">Uzasadnienie</p><p class="MsoNormal">Usługa mezoterapii igłowej nie jest usługą medyczną.</p>',
+      ),
+      plKisField("StringType", "WYNIK_ANALIZY", "47"),
+      plKisField("PoziomDostepuType", "POZIOM_DOSTEPU_WYBRANEJ_TRESCI", {
+        listaGrup: ["WYBRANI"],
+        listaRol: [],
+      }),
+    ],
+  },
+  informacjaTytulDto: [],
+});
+
+/** Built through the adapter's own envelope writer from the row and the detail. */
+export const plKisFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const row = { ...PL_KIS_LISTING_ROW };
+    const built = await assemblePlKisDecision({
+      row,
+      rawParts: plKisRawPartsOf(row, PL_KIS_DETAIL),
+    });
+    return built.type === "built"
+      ? built.decision
+      : panic("pl-kis fixture did not build");
   },
 });

@@ -91,16 +91,29 @@ const canonicalDocketArbitraries = {
       )
       .map(([panel, register, year]) => `${panel}.Xy.${register}/${year}.`),
   ),
-  POL: fc
-    .tuple(
-      fc.constantFrom("I", "II", "III", "IV", "V"),
-      fc.integer({ min: 1, max: 999_999 }),
-      fc.integer({ min: 0, max: 99 }),
-    )
-    .map(
-      ([chamber, ordinal, year]) =>
-        `${chamber} XYZ ${ordinal}/${year.toString().padStart(2, "0")}`,
-    ),
+  POL: fc.oneof(
+    fc
+      .tuple(
+        fc.constantFrom("I", "II", "III", "IV", "V"),
+        fc.integer({ min: 1, max: 999_999 }),
+        fc.integer({ min: 0, max: 99 }),
+      )
+      .map(
+        ([chamber, ordinal, year]) =>
+          `${chamber} XYZ ${ordinal}/${year.toString().padStart(2, "0")}`,
+      ),
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 1, max: 99_999 }),
+        fc.integer({ min: 2017, max: 2099 }),
+        fc.integer({ min: 1, max: 99 }),
+      )
+      .map(
+        ([office, ordinal, year, sheet]) =>
+          `${office.toString().padStart(4, "0")}-XYZ9-9.9999.${ordinal}.${year}.${sheet}.XY`,
+      ),
+  ),
   SVK: fc
     .tuple(
       fc.integer({ min: 1, max: 999 }),
@@ -128,6 +141,54 @@ describe("declared decision docket grammars", () => {
       expect(DECISION_DOCKET_GRAMMARS.CZE.parse(fileNumber)).toBeNull();
       expect(parseDecisionDocket(fileNumber)).toBeNull();
     }
+  });
+
+  test("a tax signature and a court docket never claim each other", () => {
+    const signatures = [
+      "0114-KDIP1-2.4012.123.2024.1.AB",
+      "0112-KDIL3.4012.367.2026.2.AK",
+      "0110-KSI2-2.441.43.2025.2.BŁ",
+      "1401-ICW.421.21.2023.13.WCH",
+      "DD4.8201.2.2026",
+      "DOP3.8222.23.2026.EILK",
+      "PT1.050.1.2015.LJU.19",
+      "IPPB3/423-1234/08-2/JG",
+      "IBPBI/2/423-123/08/SD",
+      "IP-PB3-423-655/08-3/MB",
+      "ITPB1/423-39/a/07/AW",
+      "PP10-812-802/04/MR/1556PP",
+      "0114-KDIP3-1.4011.419.2018.1.KS1",
+      "0114-KDIP2-1.4011.257.2021.2.KW/PD",
+      "PT8.8101.47.2015/WCH/179",
+    ];
+    for (const signature of signatures) {
+      const parsed = DECISION_DOCKET_GRAMMARS.POL.parse(signature);
+      expect(parsed, signature).not.toBeNull();
+      // Every trailing number names a document of its own, unlike a court's
+      // sheet number, so none of it is folded away.
+      expect(parsed?.canonical).toBe(signature.toLocaleLowerCase("und"));
+    }
+    for (const docket of [
+      "II FSK 1234/19",
+      "III SA/Wa 1234/19",
+      "I SA/Gd 123/20",
+    ]) {
+      const parsed = DECISION_DOCKET_GRAMMARS.POL.parse(docket);
+      expect(parsed, docket).not.toBeNull();
+      expect(parsed?.canonical).not.toContain(".");
+    }
+    for (const fragment of [
+      "0114-KDIP1",
+      "DD4.8201",
+      "4012.123.2024.1",
+      "0114-KDIP1-2.4012.123.2024",
+      "IPPB3/423",
+      "0114 KDIP1 2.4012.123.2024.1.AB",
+    ]) {
+      expect(parseDecisionDocket(fragment), fragment).toBeNull();
+    }
+    // An Austrian fiscal court's docket shares the slashes, not the shape.
+    expect(DECISION_DOCKET_GRAMMARS.POL.parse("RV/2100968/2026")).toBeNull();
   });
 
   test("every dash spelling of a sheet separator folds to one docket", () => {

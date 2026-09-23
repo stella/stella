@@ -396,6 +396,19 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.PL_KIS]: {
+    disposition: "exercised",
+    // The newest-id probe (one row) sees the one document the service holds;
+    // every month window and the tip list nothing past it.
+    exhaustedSource: ({ url }) =>
+      jsonResponse(
+        url.includes("size=1&")
+          ? { results: [{ ID_INFORMACJI: "1" }], totalHits: 1 }
+          : { results: [], totalHits: 0 },
+      ),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**
