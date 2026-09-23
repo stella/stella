@@ -63,6 +63,7 @@ import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-suppl
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
 
 import {
+  caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
@@ -817,6 +818,7 @@ export const caseLawDecisions = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
   ],
 );
 
@@ -1330,6 +1332,7 @@ export const caseLawCorpusTombstones = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
     ...caseLawAnalysisWriterReadPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
   ],
 );
 
@@ -1725,6 +1728,7 @@ export const caseLawCitations = p.pgTable(
       .where(sql`${t.kind} = 'precedent' AND ${t.citedDecisionId} IS NOT NULL`),
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
   ],
 );
 
@@ -2190,6 +2194,7 @@ export const caseLawPolarityRules = p.pgTable(
       sql`${t.source} IN (${sql.join(RULE_SOURCE_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
   ],
 );
 
@@ -2375,6 +2380,7 @@ export const caseLawCourtWeights = p.pgTable(
       .on(t.country, t.courtPattern),
     p.index("case_law_court_weights_country_idx").on(t.country),
     ...globalCaseLawPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
   ],
 );
 
