@@ -69,8 +69,11 @@ const resolveDecision = async (
   return {
     status: "available",
     // Outside the gate's transaction: the AST lives in object storage.
-    readBlocks: async () =>
-      (await readDecisionAnalysisAst(row, readCorpusTombstones))?.blocks ?? [],
+    readBlocks: async () => {
+      // No usable AST is a decision the reader shows as flat text: no blocks.
+      const ast = await readDecisionAnalysisAst(row, readCorpusTombstones);
+      return ast === null ? [] : ast.blocks;
+    },
   };
 };
 
