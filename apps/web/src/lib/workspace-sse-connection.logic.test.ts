@@ -36,7 +36,7 @@ const createHarness = (
 ) => {
   const sources: FakeSource[] = [];
   const reconnects: ScheduledReconnect[] = [];
-  const calls = { accessEnded: 0, outages: 0, probes: 0 };
+  const calls = { accessEnded: 0, outages: 0, probes: 0, reconnected: 0 };
 
   const dispose = connectWorkspaceStream({
     openSource: (handlers) => {
@@ -74,6 +74,9 @@ const createHarness = (
     },
     onAccessEnded: () => {
       calls.accessEnded += 1;
+    },
+    onReconnected: () => {
+      calls.reconnected += 1;
     },
   });
 
@@ -132,7 +135,12 @@ describe("workspace stream reconnects", () => {
 
     await harness.giveUp();
 
-    expect(harness.calls).toEqual({ accessEnded: 1, outages: 0, probes: 1 });
+    expect(harness.calls).toEqual({
+      accessEnded: 1,
+      outages: 0,
+      probes: 1,
+      reconnected: 0,
+    });
     expect(harness.reconnects).toEqual([]);
     expect(harness.sources).toHaveLength(1);
     expect(harness.current().closedByClient).toBe(true);
@@ -166,6 +174,7 @@ describe("workspace stream reconnects", () => {
       accessEnded: 0,
       outages: 1,
       probes: failures,
+      reconnected: 0,
     });
     expect(harness.reconnects.map(({ delayMs }) => delayMs)).toEqual(
       Array.from({ length: failures }, (_, index) =>
@@ -184,6 +193,35 @@ describe("workspace stream reconnects", () => {
 
     expect(harness.calls.probes).toBe(0);
     expect(harness.reconnects).toEqual([]);
+  });
+
+  test("refreshes the matter on every reopen after the first open", async () => {
+    const harness = createHarness();
+    harness.current().handlers.onOpen();
+    expect(harness.calls.reconnected).toBe(0);
+
+    // The browser's own retry: the source drops while connected and reopens.
+    harness.current().handlers.onError();
+    harness.current().handlers.onOpen();
+    expect(harness.calls.reconnected).toBe(1);
+
+    // The loop's retry: the browser gives up and a new source opens.
+    await harness.giveUp();
+    harness.fireReconnect();
+    harness.current().handlers.onOpen();
+    expect(harness.calls.reconnected).toBe(2);
+    expect(harness.sources).toHaveLength(2);
+  });
+
+  test("does not refresh when the first connection only opens after failed attempts", async () => {
+    // Nothing was delivered before the first open, so there is nothing the
+    // stream could have missed; the route loader fetched the matter already.
+    const harness = createHarness();
+    await harness.giveUp();
+    harness.fireReconnect();
+    harness.current().handlers.onOpen();
+
+    expect(harness.calls.reconnected).toBe(0);
   });
 
   test("does not reconnect or end access once disposed mid-probe", async () => {

@@ -14,10 +14,12 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import {
   getWorkspaceRealtimeQueryActions,
+  getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
+import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
 import {
   connectWorkspaceStream,
   WORKSPACE_STREAM_ACCESS,
@@ -84,32 +86,36 @@ export const useWorkspaceSSE = (
   const navigate = useNavigate();
   const t = useTranslations();
 
+  const applyQueryActions = (actions: WorkspaceRealtimeQueryAction[]) => {
+    for (const action of actions) {
+      switch (action.type) {
+        case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
+          detached(
+            queryClient.invalidateQueries({ queryKey: action.queryKey }),
+            "sse.invalidate",
+          );
+          break;
+        case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
+          queryClient.removeQueries({
+            queryKey: action.queryKey,
+            exact: false,
+          });
+          break;
+        default:
+          action satisfies never;
+          panic(`Unhandled action: ${String(action)}`);
+      }
+    }
+  };
   const handleParsedEvent = useLatestCallback(
     (event: WorkspaceRealtimeEvent) => {
       options.onEvent?.(event);
-
-      const actions = getWorkspaceRealtimeQueryActions(event, workspaceId);
-      for (const action of actions) {
-        switch (action.type) {
-          case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
-            detached(
-              queryClient.invalidateQueries({ queryKey: action.queryKey }),
-              "sse.invalidate",
-            );
-            break;
-          case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
-            queryClient.removeQueries({
-              queryKey: action.queryKey,
-              exact: false,
-            });
-            break;
-          default:
-            action satisfies never;
-            panic(`Unhandled action: ${String(action)}`);
-        }
-      }
+      applyQueryActions(getWorkspaceRealtimeQueryActions(event, workspaceId));
     },
   );
+  const refreshAfterReconnect = useLatestCallback(() => {
+    applyQueryActions(getWorkspaceReconnectQueryActions(workspaceId));
+  });
   const captureConnectionOutage = useLatestCallback(() => {
     analytics.captureError(
       // Stable message: the workspace id adds nothing to grouping and the
@@ -171,7 +177,14 @@ export const useWorkspaceSSE = (
         onAccessEnded: () => {
           detached(leaveEndedMatter(), "workspace-stream.leave-ended-matter");
         },
+        onReconnected: refreshAfterReconnect,
       }),
-    [workspaceId, captureConnectionOutage, handleParsedEvent, leaveEndedMatter],
+    [
+      workspaceId,
+      captureConnectionOutage,
+      handleParsedEvent,
+      leaveEndedMatter,
+      refreshAfterReconnect,
+    ],
   );
 };

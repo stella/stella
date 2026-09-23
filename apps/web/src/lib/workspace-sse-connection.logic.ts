@@ -67,6 +67,12 @@ export type ConnectWorkspaceStreamOptions = {
   onOutage: () => void;
   /** The caller's access to the matter ended; the loop has stopped. */
   onAccessEnded: () => void;
+  /**
+   * The stream opened again after having been open. Events sent while it was
+   * down are gone (the server keeps no replay log), so the caller refreshes
+   * what they could have changed.
+   */
+  onReconnected: () => void;
 };
 
 /**
@@ -85,8 +91,12 @@ export const connectWorkspaceStream = ({
   onMessage,
   onOutage,
   onAccessEnded,
+  onReconnected,
 }: ConnectWorkspaceStreamOptions): (() => void) => {
   let source: WorkspaceStreamSource | null = null;
+  // Before the first open nothing could have been delivered, so nothing could
+  // have been missed; every later open follows a gap.
+  let hasOpened = false;
   let cancelReconnect: (() => void) | null = null;
   let consecutiveFailures = 0;
   // Offline failures back off but never count toward the outage capture:
@@ -128,6 +138,10 @@ export const connectWorkspaceStream = ({
       onOpen: () => {
         consecutiveFailures = 0;
         consecutiveOnlineFailures = 0;
+        if (hasOpened) {
+          onReconnected();
+        }
+        hasOpened = true;
       },
       onMessage,
       onError: () => {

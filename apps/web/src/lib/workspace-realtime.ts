@@ -343,6 +343,27 @@ const deduplicateQueryActions = (
 };
 
 /**
+ * What to refresh after the workspace stream reconnects: every scope any
+ * event could invalidate, since the events missed while disconnected are not
+ * replayed. Derived from the scope list itself, so a scope added for a new
+ * event is refreshed on reconnect without a second list to update.
+ */
+export const getWorkspaceReconnectQueryActions = (
+  workspaceId: string,
+): WorkspaceRealtimeQueryAction[] => {
+  const actions: WorkspaceRealtimeQueryAction[] = [];
+  for (const scope of Object.values(RESOURCE_QUERY_SCOPE)) {
+    for (const queryKey of getResourceQueryScopeKeys(scope, workspaceId)) {
+      actions.push({
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey,
+      });
+    }
+  }
+  return deduplicateQueryActions(actions);
+};
+
+/**
  * Total cache policy for every workspace realtime event kind. Producers emit
  * domain facts; this web-only adapter owns their React Query consequences.
  */

@@ -1,4 +1,4 @@
-import { hashKey, QueryClient } from "@tanstack/react-query";
+import { hashKey, QueryClient, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
@@ -13,6 +13,7 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
 import {
   getWorkspaceRealtimeQueryActions,
+  getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
   WORKSPACE_REALTIME_QUERY_ACTION,
@@ -304,6 +305,61 @@ describe("workspace realtime policy", () => {
       return;
     }
     expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([]);
+  });
+});
+
+describe("matter refresh after a reconnect", () => {
+  // Invalidation matches by key prefix, so a refresh covers a key when one of
+  // its invalidated keys is a prefix of it.
+  const covers = (refreshKeys: readonly QueryKey[], queryKey: QueryKey) =>
+    refreshKeys.some(
+      (refreshKey) =>
+        refreshKey.length <= queryKey.length &&
+        hashKey(queryKey.slice(0, refreshKey.length)) === hashKey(refreshKey),
+    );
+
+  test("covers every query any missed event could have changed", () => {
+    const refreshActions = getWorkspaceReconnectQueryActions(WORKSPACE_ID);
+    expect(
+      refreshActions.every(
+        ({ type }) => type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+      ),
+    ).toBe(true);
+    const refreshKeys = refreshActions.map(({ queryKey }) => queryKey);
+
+    const missedEvents = Object.values(RESOURCE_TYPE).flatMap(
+      (resourceType) => [
+        {
+          type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+          resourceType,
+        },
+        {
+          type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+          resource: { type: resourceType, id: "resource-1" },
+        },
+        {
+          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+          resource: { type: resourceType, id: "resource-1" },
+        },
+      ],
+    );
+    for (const missed of missedEvents) {
+      const event = parseEvent(missed);
+      expect([missed, event]).not.toEqual([missed, null]);
+      if (!event) {
+        continue;
+      }
+      for (const { queryKey } of getWorkspaceRealtimeQueryActions(
+        event,
+        WORKSPACE_ID,
+      )) {
+        expect([missed, queryKey, covers(refreshKeys, queryKey)]).toEqual([
+          missed,
+          queryKey,
+          true,
+        ]);
+      }
+    }
   });
 });
 
