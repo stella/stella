@@ -155,12 +155,12 @@ function formatSkillEntry(skill: SkillEntry): string {
     )
     .join(",\n");
 
+  const resourcesArray = resources.length > 0 ? `[\n${resources}\n    ]` : "[]";
+
   return `  {
     id: ${JSON.stringify(skill.id)},
     source: ${skill.importName},
-    resources: [
-${resources}
-    ],
+    resources: ${resourcesArray},
   }`;
 }
 

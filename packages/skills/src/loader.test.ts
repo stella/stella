@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { getSkillResourceKind, parseSkillFile } from "./loader";
+import {
+  getSkillResourceKind,
+  listSkillMetadata,
+  loadSkill,
+  parseSkillFile,
+} from "./loader";
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 describe("Stella skill loader", () => {
   test("parses standard Agent Skills metadata fields", () => {
@@ -313,5 +320,33 @@ Body.`);
     expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
     expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
     expect(getSkillResourceKind("unknown/file.md")).toBeNull();
+  });
+});
+
+describe("shipped built-in skills", () => {
+  // Chat resolves a built-in by its frontmatter name and loads it by its
+  // directory id, so the two must be the same string.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s is named after its directory and fits the package limits",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(skill.name).toBe(id);
+      expect(skill.name).toMatch(SKILL_NAME_PATTERN);
+      expect(skill.description.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+      );
+      expect(skill.body.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.bodyMaxChars,
+      );
+    },
+  );
+
+  test("the metadata list names every shipped skill", () => {
+    expect(listSkillMetadata().map(({ name }) => name)).toEqual(
+      GENERATED_SKILLS.map(({ id }) => id).toSorted((a, b) =>
+        a.localeCompare(b),
+      ),
+    );
   });
 });
