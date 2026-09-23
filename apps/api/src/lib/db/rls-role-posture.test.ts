@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { applicationRlsRolePostureViolation } from "@/api/lib/db/rls-role-posture";
+import {
+  applicationRlsRolePostureViolation,
+  databaseLoginPostureNotes,
+} from "@/api/lib/db/rls-role-posture";
 
 describe("application RLS role posture", () => {
   test.each([
@@ -67,5 +70,33 @@ describe("application RLS role posture", () => {
     ],
   ])("classifies %#", (posture, expected) => {
     expect(applicationRlsRolePostureViolation(posture)).toBe(expected);
+  });
+});
+
+describe("database login posture notes", () => {
+  const plainLogin = {
+    loginName: "app",
+    bypassesRls: false,
+    isSuperuser: false,
+    ownedPolicyTables: 0,
+  };
+
+  test("a login without notable attributes has no notes", () => {
+    expect(databaseLoginPostureNotes(plainLogin)).toEqual([]);
+  });
+
+  test("lists each notable attribute", () => {
+    expect(
+      databaseLoginPostureNotes({
+        ...plainLogin,
+        bypassesRls: true,
+        isSuperuser: true,
+        ownedPolicyTables: 3,
+      }),
+    ).toEqual([
+      "login is a superuser",
+      "login has elevated role attributes",
+      "login owns 3 tables with row-level policies",
+    ]);
   });
 });

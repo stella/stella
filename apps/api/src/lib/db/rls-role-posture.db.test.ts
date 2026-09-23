@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { assertApplicationRlsRolePosture } from "@/api/lib/db/assert-migrations-applied";
+import {
+  assertApplicationRlsRolePosture,
+  reportDatabaseLoginPosture,
+} from "@/api/lib/db/assert-migrations-applied";
 
 import { APPLICATION_RLS_ROLE_NAME } from "../../db/role-names";
 
@@ -36,6 +39,17 @@ if (!runPostgresTests) {
           sql.raw(`ALTER ROLE ${APPLICATION_RLS_ROLE_NAME} NOBYPASSRLS`),
         );
       }
+    });
+
+    test("reports the connecting login's attributes", async () => {
+      const [current] = await rootDb.execute<{ name: string }>(
+        sql`SELECT CURRENT_USER AS name`,
+      );
+      const posture = await reportDatabaseLoginPosture();
+
+      expect(posture?.loginName).toBe(current?.name);
+      // Tests run as the login that applied the migrations, which owns them.
+      expect(posture?.ownedPolicyTables).toBeGreaterThan(0);
     });
 
     test("rejects SUPERUSER", async () => {

@@ -7,6 +7,8 @@ import { assertMigrationHistory } from "@/api/lib/db/migration-history";
 import {
   type ApplicationRlsRolePosture,
   applicationRlsRolePostureViolation,
+  type DatabaseLoginPosture,
+  databaseLoginPostureNotes,
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -41,6 +43,39 @@ export const assertApplicationRlsRolePosture = async (): Promise<void> => {
   }
 };
 
+/** Reads the connecting login's role attributes and logs the notable ones. */
+export const reportDatabaseLoginPosture = async (): Promise<
+  DatabaseLoginPosture | undefined
+> => {
+  const result = await rootDb.execute<DatabaseLoginPosture>(sql`
+    SELECT
+      login.rolname AS "loginName",
+      login.rolbypassrls AS "bypassesRls",
+      login.rolsuper AS "isSuperuser",
+      (
+        SELECT count(*)::int
+        FROM pg_catalog.pg_class relation
+        WHERE relation.relowner = login.oid
+          AND relation.relkind IN ('r', 'p')
+          AND relation.relrowsecurity
+      ) AS "ownedPolicyTables"
+    FROM pg_catalog.pg_roles login
+    WHERE login.rolname = CURRENT_USER
+  `);
+  const posture = result.at(0);
+  if (posture === undefined) {
+    return undefined;
+  }
+  const notes = databaseLoginPostureNotes(posture);
+  if (notes.length > 0) {
+    logger.warn("startup.database_login_posture", {
+      login: posture.loginName,
+      notes: notes.join("; "),
+    });
+  }
+  return posture;
+};
+
 const queryAppliedHashes = async (): Promise<Set<string>> => {
   // Compare on `hash` (always populated) rather than `name` (NULL
   // on rows applied by older drizzle versions). Hash is the SHA-256
@@ -54,6 +89,7 @@ const queryAppliedHashes = async (): Promise<Set<string>> => {
 
 export const assertMigrationsApplied = async (): Promise<void> => {
   await assertApplicationRlsRolePosture();
+  await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
     logger.warn("startup.migration_check_disabled", {
       escape_hatch_env: ESCAPE_HATCH_ENV,

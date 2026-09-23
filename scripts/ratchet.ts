@@ -690,6 +690,67 @@ const countDirectAuditLogInserts = (content: string): number => {
   );
 };
 
+// Value imports of the root connection handle, static or dynamic, by alias
+// or relative path. Request handlers are covered by lint; this keeps the
+// remaining sites visible. Type-only imports are not counted.
+const ROOT_CONNECTION_MODULE_SUFFIX = "db/root";
+const isRootConnectionModule = (node: ts.Node | undefined): boolean =>
+  node !== undefined &&
+  ts.isStringLiteralLike(node) &&
+  node.text.endsWith(ROOT_CONNECTION_MODULE_SUFFIX);
+const countRootConnectionImportsAs = (
+  content: string,
+  scriptKind: ts.ScriptKind,
+): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      isRootConnectionModule(node.moduleSpecifier) &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
+    ) {
+      const bindingsNode = node.importClause?.namedBindings;
+      if (
+        bindingsNode !== undefined &&
+        ts.isNamedImports(bindingsNode) &&
+        bindingsNode.elements.some(
+          (specifier) =>
+            !specifier.isTypeOnly &&
+            (specifier.propertyName ?? specifier.name).text === "rootDb",
+        )
+      ) {
+        count += 1;
+      }
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      isRootConnectionModule(node.arguments.at(0))
+    ) {
+      count += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+// The counter sees content, not the file name. Parsing a `.ts` generic arrow
+// as TSX misreads what follows it, so both parses run and the larger count
+// is the one that read the file correctly.
+const countDirectRootConnectionImports = (content: string): number =>
+  Math.max(
+    countRootConnectionImportsAs(content, ts.ScriptKind.TS),
+    countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
+  );
+
 const countInlineTimestampCursorSql = (content: string): number =>
   countMatches(
     stripComments(content),
@@ -2111,6 +2172,18 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
     count: countDirectAuditLogInserts,
+  },
+  {
+    scope: "file",
+    id: "direct-root-connection-imports",
+    description:
+      "imports of the root database connection (`rootDb`) outside request handlers, which lint already covers; new code takes a scoped or purpose-named handle",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/db/root.ts" ||
+      file.startsWith("apps/api/src/handlers/"),
+    count: countDirectRootConnectionImports,
   },
   {
     scope: "file",
