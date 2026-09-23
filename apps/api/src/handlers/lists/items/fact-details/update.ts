@@ -22,6 +22,10 @@ import {
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 const literals = <T extends string>(values: readonly T[]) =>
   t.Union(values.map((value) => t.Literal(value)));
@@ -200,8 +204,39 @@ const updateFactDetails = createSafeHandler(
         }),
       );
     }
-    return Result.ok({ itemEntityId, ...values });
+    const projected: FactDetailsProjection = { itemEntityId, ...values };
+    return Result.ok(projected);
   },
 );
+
+type FactDetailsRow = typeof legalListFactDetails.$inferSelect;
+type FactDetailsProjection = Pick<
+  FactDetailsRow,
+  "itemEntityId" | (typeof FACT_DETAIL_FIELDS)[number]
+>;
+
+const UNPROJECTED_FACT_DETAIL_COLUMNS = [
+  // Scope keys the caller sent in the request.
+  "workspaceId",
+  "listId",
+  // Bookkeeping: who last saved and when is in the audit trail.
+  "updatedBy",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof FactDetailsRow)[];
+
+type MissingProjectedFactDetailColumn = UnprojectedColumns<
+  FactDetailsRow,
+  FactDetailsProjection,
+  (typeof UNPROJECTED_FACT_DETAIL_COLUMNS)[number]
+>;
+type UnexpectedProjectedFactDetailColumn = UnbackedProjectionKeys<
+  FactDetailsRow,
+  FactDetailsProjection,
+  (typeof UNPROJECTED_FACT_DETAIL_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedFactDetailColumn extends never ? true : never;
+true satisfies UnexpectedProjectedFactDetailColumn extends never ? true : never;
 
 export default updateFactDetails;
