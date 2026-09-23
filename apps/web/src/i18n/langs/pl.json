@@ -713,7 +713,7 @@
         "showSource": "Pokaż źródło",
         "yes": "Tak"
       },
-      "deleteColumnConfirm": "Usuwa pytanie i wszystkie jego odpowiedzi.",
+      "deleteColumnConfirm": "Pytanie i wszystkie jego odpowiedzi zostaną usunięte dla całej organizacji, ze wszystkich wyszukiwań i u wszystkich członków. Aby usunąć je tylko z tego wyszukiwania, wybierz „Usuń z tego wyszukiwania”.",
       "editQuestionHint": "Zmiana treści, rodzaju odpowiedzi lub jego opcji odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
       "nothingToRun": "Każda komórka ma już odpowiedź",
       "questionPlaceholder": "np. Czy sąd uznał wypowiedzenie za skuteczne?",

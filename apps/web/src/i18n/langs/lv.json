@@ -713,7 +713,7 @@
         "showSource": "Rādīt avotu",
         "yes": "Jā"
       },
-      "deleteColumnConfirm": "Noņem jautājumu un visas tā atbildes.",
+      "deleteColumnConfirm": "Jautājums un visas tā atbildes tiks dzēstas visai jūsu organizācijai – no katras meklēšanas un visiem dalībniekiem. Lai to noņemtu tikai no šīs meklēšanas, izvēlieties “Noņemt no šīs meklēšanas”.",
       "editQuestionHint": "Formulējuma, atbildes veida vai tā iespēju maiņa atmet esošās atbildes; pēc tam palaidiet kolonnu vēlreiz.",
       "nothingToRun": "Katrai šūnai jau ir atbilde",
       "questionPlaceholder": "piem. Vai tiesa atzina uzteikumu par spēkā esošu?",

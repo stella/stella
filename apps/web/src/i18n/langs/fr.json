@@ -713,7 +713,7 @@
         "showSource": "Afficher la source",
         "yes": "Oui"
       },
-      "deleteColumnConfirm": "Cette action supprime la question et toutes ses réponses.",
+      "deleteColumnConfirm": "La question et toutes ses réponses seront supprimées pour toute votre organisation, dans chaque recherche et pour chaque membre. Pour la retirer de cette recherche uniquement, choisissez « Retirer de cette recherche ».",
       "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
       "nothingToRun": "Chaque cellule a déjà une réponse",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",

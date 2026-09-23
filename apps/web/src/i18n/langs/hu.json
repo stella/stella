@@ -713,7 +713,7 @@
         "showSource": "Forrás megjelenítése",
         "yes": "Igen"
       },
-      "deleteColumnConfirm": "Eltávolítja a kérdést és minden válaszát.",
+      "deleteColumnConfirm": "A kérdés és minden válasza törlődik az egész szervezet számára, minden keresésből és minden tagnál. Ha csak ebből a keresésből szeretné eltávolítani, válassza az „Eltávolítás ebből a keresésből” lehetőséget.",
       "editQuestionHint": "A szöveg, a válasz típusának vagy a lehetőségeinek módosítása elveti a jelenlegi válaszokat; utána futtassa újra az oszlopot.",
       "nothingToRun": "Minden cellának van már válasza",
       "questionPlaceholder": "pl. Érvényesnek találta a bíróság a felmondást?",

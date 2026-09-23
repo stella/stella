@@ -713,7 +713,7 @@
         "showSource": "Näita allikat",
         "yes": "Jah"
       },
-      "deleteColumnConfirm": "Eemaldab küsimuse ja kõik selle vastused.",
+      "deleteColumnConfirm": "Küsimus ja kõik selle vastused kustutatakse kogu teie organisatsiooni jaoks, igast otsingust ja kõigilt liikmetelt. Kui soovite selle eemaldada ainult sellest otsingust, valige „Eemalda sellest otsingust“.",
       "editQuestionHint": "Sõnastuse, vastuse tüübi või selle valikute muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
       "nothingToRun": "Igal lahtril on juba vastus",
       "questionPlaceholder": "nt Kas kohus pidas ülesütlemist kehtivaks?",

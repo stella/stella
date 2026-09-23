@@ -713,7 +713,7 @@
         "showSource": "Zobraziť zdroj",
         "yes": "Áno"
       },
-      "deleteColumnConfirm": "Odstráni otázku aj všetky jej odpovede.",
+      "deleteColumnConfirm": "Otázka aj všetky jej odpovede sa odstránia pre celú organizáciu, zo všetkých vyhľadávaní a všetkým členom. Ak ju chcete skryť len v tomto vyhľadávaní, zvoľte „Odstrániť z tohto vyhľadávania“.",
       "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
       "nothingToRun": "Každá bunka už má odpoveď",
       "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",

@@ -713,7 +713,7 @@
         "showSource": "Rodyti šaltinį",
         "yes": "Taip"
       },
-      "deleteColumnConfirm": "Pašalina klausimą ir visus jo atsakymus.",
+      "deleteColumnConfirm": "Klausimas ir visi jo atsakymai bus ištrinti visai jūsų organizacijai – iš visų paieškų ir visiems nariams. Jei norite jį pašalinti tik iš šios paieškos, pasirinkite „Pašalinti iš šios paieškos“.",
       "editQuestionHint": "Pakeitus formuluotę, atsakymo tipą ar jo parinktis, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
       "nothingToRun": "Kiekvienas langelis jau turi atsakymą",
       "questionPlaceholder": "pvz., Ar teismas pripažino atleidimą teisėtu?",

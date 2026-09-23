@@ -713,7 +713,7 @@
         "showSource": "Zobrazit zdroj",
         "yes": "Ano"
       },
-      "deleteColumnConfirm": "Odebere otázku i všechny její odpovědi.",
+      "deleteColumnConfirm": "Otázka i všechny její odpovědi se smažou pro celou organizaci, tedy ze všech vyhledávání a všem členům. Pokud ji chcete skrýt jen v tomto vyhledávání, zvolte „Odebrat z tohoto vyhledávání“.",
       "editQuestionHint": "Změna znění, typu odpovědi nebo jeho možností zahodí stávající odpovědi; sloupec poté spusťte znovu.",
       "nothingToRun": "Každá buňka už má odpověď",
       "questionPlaceholder": "např. Shledal soud výpověď platnou?",
