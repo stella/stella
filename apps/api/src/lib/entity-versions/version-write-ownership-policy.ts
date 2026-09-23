@@ -24,7 +24,6 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   "handlers/entities/clip.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/copy-utils.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
-    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/entities/create.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/delete-version.ts": [
@@ -49,15 +48,11 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   "lib/tasks/create-task-entity.ts": [
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
-  "handlers/uploads/entity-create-tree.ts": [
-    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
-  ],
   "handlers/uploads/entity-version.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
   "handlers/workspaces/duplicate.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
-    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/entities/create-from-buffer.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
@@ -65,6 +60,9 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   ],
   "lib/entity-versions/create-entity-version-from-buffer.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
+  ],
+  "lib/entity-versions/insert-entity-batch.ts": [
+    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/entity-versions/insert-entity-version.ts": [
     VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,

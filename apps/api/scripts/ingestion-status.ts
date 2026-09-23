@@ -9,7 +9,7 @@
  *   bun apps/api/scripts/ingestion-status.ts
  */
 
-import { count, desc, eq, gte, sql } from "drizzle-orm";
+import { count, desc, gte, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -41,84 +41,93 @@ if (sources.length === 0) {
 
 console.log("\n=== Case Law Ingestion Status ===\n");
 
+// Each figure is one grouped query over every source, not one per source.
+const totalBySource = new Map(
+  (
+    await rootDb
+      .select({ sourceId: caseLawDecisions.sourceId, total: count() })
+      .from(caseLawDecisions)
+      .groupBy(caseLawDecisions.sourceId)
+  ).map((row) => [row.sourceId, row.total]),
+);
+
+const insertedBySource = new Map(
+  (
+    await rootDb
+      .select({
+        sourceId: caseLawIngestionEvents.sourceId,
+        lastHour: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}) FILTER (WHERE ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}), 0)`,
+        lastDay: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+      })
+      .from(caseLawIngestionEvents)
+      .where(gte(caseLawIngestionEvents.finishedAt, ONE_DAY_AGO))
+      .groupBy(caseLawIngestionEvents.sourceId)
+  ).map((row) => [row.sourceId, row]),
+);
+
+const failureCountBySource = new Map(
+  (
+    await rootDb
+      .select({ sourceId: caseLawIngestionFailures.sourceId, total: count() })
+      .from(caseLawIngestionFailures)
+      .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
+      .groupBy(caseLawIngestionFailures.sourceId)
+  ).map((row) => [row.sourceId, row.total]),
+);
+
+const lastEventBySource = new Map(
+  (
+    await rootDb
+      .selectDistinctOn([caseLawIngestionEvents.sourceId], {
+        sourceId: caseLawIngestionEvents.sourceId,
+        status: caseLawIngestionEvents.status,
+        inserted: caseLawIngestionEvents.inserted,
+        skipped: caseLawIngestionEvents.skipped,
+        durationMs: caseLawIngestionEvents.durationMs,
+        finishedAt: caseLawIngestionEvents.finishedAt,
+        errorMessage: caseLawIngestionEvents.errorMessage,
+      })
+      .from(caseLawIngestionEvents)
+      .orderBy(
+        caseLawIngestionEvents.sourceId,
+        desc(caseLawIngestionEvents.finishedAt),
+      )
+  ).map((row) => [row.sourceId, row]),
+);
+
+const TOP_FAILURE_TYPES = 3;
+const topFailuresBySource = new Map<
+  (typeof caseLawIngestionFailures.$inferSelect)["sourceId"],
+  { errorType: string; count: number }[]
+>();
+const failureTypeCounts = await rootDb
+  .select({
+    sourceId: caseLawIngestionFailures.sourceId,
+    errorType: caseLawIngestionFailures.errorType,
+    count: count(),
+  })
+  .from(caseLawIngestionFailures)
+  .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
+  .groupBy(
+    caseLawIngestionFailures.sourceId,
+    caseLawIngestionFailures.errorType,
+  )
+  .orderBy(caseLawIngestionFailures.sourceId, desc(count()));
+for (const row of failureTypeCounts) {
+  const top = topFailuresBySource.get(row.sourceId) ?? [];
+  if (top.length < TOP_FAILURE_TYPES) {
+    top.push({ errorType: row.errorType, count: row.count });
+  }
+  topFailuresBySource.set(row.sourceId, top);
+}
+
 for (const source of sources) {
-  // Total decisions for this source
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const [totalRow] = await rootDb
-    .select({ total: count() })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.sourceId, source.id));
-
-  // Decisions inserted in last hour
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const [hourRow] = await rootDb
-    .select({
-      inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
-    })
-    .from(caseLawIngestionEvents)
-    .where(
-      sql`${caseLawIngestionEvents.sourceId} = ${source.id}
-        AND ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}`,
-    );
-
-  // Decisions inserted in last 24h
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const [dayRow] = await rootDb
-    .select({
-      inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
-    })
-    .from(caseLawIngestionEvents)
-    .where(
-      sql`${caseLawIngestionEvents.sourceId} = ${source.id}
-        AND ${caseLawIngestionEvents.finishedAt} >= ${ONE_DAY_AGO}`,
-    );
-
-  // Recent failures count
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const [failRow] = await rootDb
-    .select({ total: count() })
-    .from(caseLawIngestionFailures)
-    .where(
-      sql`${caseLawIngestionFailures.sourceId} = ${source.id}
-        AND ${caseLawIngestionFailures.createdAt} >= ${ONE_DAY_AGO}`,
-    );
-
-  // Last event
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const [lastEvent] = await rootDb
-    .select({
-      status: caseLawIngestionEvents.status,
-      inserted: caseLawIngestionEvents.inserted,
-      skipped: caseLawIngestionEvents.skipped,
-      durationMs: caseLawIngestionEvents.durationMs,
-      finishedAt: caseLawIngestionEvents.finishedAt,
-      errorMessage: caseLawIngestionEvents.errorMessage,
-    })
-    .from(caseLawIngestionEvents)
-    .where(eq(caseLawIngestionEvents.sourceId, source.id))
-    .orderBy(desc(caseLawIngestionEvents.finishedAt))
-    .limit(1);
-
-  // Top failure types (last 24h)
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one report per registered source; the source list is bounded
-  const topFailures = await rootDb
-    .select({
-      errorType: caseLawIngestionFailures.errorType,
-      count: count(),
-    })
-    .from(caseLawIngestionFailures)
-    .where(
-      sql`${caseLawIngestionFailures.sourceId} = ${source.id}
-        AND ${caseLawIngestionFailures.createdAt} >= ${ONE_DAY_AGO}`,
-    )
-    .groupBy(caseLawIngestionFailures.errorType)
-    .orderBy(desc(count()))
-    .limit(3);
-
-  const total = totalRow?.total ?? 0;
-  const lastHour = hourRow?.inserted ?? 0;
-  const last24h = dayRow?.inserted ?? 0;
-  const failCount = failRow?.total ?? 0;
+  const total = totalBySource.get(source.id) ?? 0;
+  const lastHour = insertedBySource.get(source.id)?.lastHour ?? 0;
+  const last24h = insertedBySource.get(source.id)?.lastDay ?? 0;
+  const failCount = failureCountBySource.get(source.id) ?? 0;
+  const lastEvent = lastEventBySource.get(source.id);
+  const topFailures = topFailuresBySource.get(source.id) ?? [];
   const enabledStr = source.enabled ? "" : " [DISABLED]";
 
   const timeSince = lastEvent?.finishedAt

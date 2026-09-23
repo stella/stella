@@ -13,7 +13,7 @@ import { generateVerificationCode } from "@/api/lib/document-reference";
  * construction: this module is the only place that mints one, so no caller can
  * hold a copy of a code the database may not have accepted.
  */
-type EntityVersionValues = Omit<
+export type EntityVersionValues = Omit<
   typeof entityVersions.$inferInsert,
   "verificationCode"
 >;
@@ -58,7 +58,7 @@ const withVerificationCode = (values: EntityVersionValues) => ({
  * re-inserts only the missing rows with fresh codes. The code the caller never
  * saw is the code that is stored; readers take it from the row.
  */
-type StampOrigin = "issued" | "copied";
+export type StampOrigin = "issued" | "copied";
 
 type InsertEntityVersionsOptions = {
   tx: Transaction;

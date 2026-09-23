@@ -31,7 +31,7 @@ import {
   enqueueContactSearchRepairs,
   flushContactSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
@@ -206,19 +206,13 @@ export const createContactHandler = async function* ({
         attorneyIds.push(body.responsibleAttorneyId);
       }
 
-      if (attorneyIds.length > 0) {
-        const uniqueAttorneyIds = [...new Set(attorneyIds)];
-        for (const attorneyId of uniqueAttorneyIds) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded: at most two attorney ids per request, deduplicated
-          const validAttorneyId = await validateOrgUserId(
-            tx,
-            brandPersistedUserId(attorneyId),
-            organizationId,
-          );
-          if (!validAttorneyId) {
-            return { kind: "invalid_attorney" };
-          }
-        }
+      const validAttorneyIds = await validateOrgUserIds(
+        tx,
+        attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
+        organizationId,
+      );
+      if (!validAttorneyIds) {
+        return { kind: "invalid_attorney" };
       }
 
       const row = await insertContactRow({

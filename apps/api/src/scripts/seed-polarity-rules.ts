@@ -30,30 +30,35 @@ const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
-for (const rule of SEED_RULES) {
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- constant seed list
-  await rootDb.transaction(async (tx) => {
-    await tx
-      .insert(caseLawPolarityRules)
-      .values({
+// One statement for the whole list; `(pattern, language)` is unique within
+// `SEED_RULES`, so no row is updated twice.
+await rootDb.transaction(async (tx) => {
+  await tx
+    .insert(caseLawPolarityRules)
+    .values(
+      SEED_RULES.map((rule) => ({
         pattern: rule.pattern,
         polarity: rule.polarity,
         language: rule.language,
-        source: "manual",
+        source: "manual" as const,
         confidence: 1,
-      })
-      .onConflictDoUpdate({
-        target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
-        // `source` is part of the state being seeded, not incidental
-        // metadata: the rule loader reads `manual` and `llm-promoted` only,
-        // so a seed that collided with an `llm-proposed` rule of the same
-        // pattern and language used to leave it excluded — a successful run
-        // that changed nothing a classifier would ever see. The insert and
-        // the update have to establish the same row.
-        set: { polarity: rule.polarity, confidence: 1, source: "manual" },
-      });
-  });
-}
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
+      // `source` is part of the state being seeded, not incidental
+      // metadata: the rule loader reads `manual` and `llm-promoted` only,
+      // so a seed that collided with an `llm-proposed` rule of the same
+      // pattern and language used to leave it excluded — a successful run
+      // that changed nothing a classifier would ever see. The insert and
+      // the update have to establish the same row.
+      set: {
+        polarity: sql`excluded.polarity`,
+        confidence: 1,
+        source: "manual",
+      },
+    });
+});
 
 /** Rows reset per statement; bounded so the lock never spans the table. */
 const RESET_BATCH = 5000;

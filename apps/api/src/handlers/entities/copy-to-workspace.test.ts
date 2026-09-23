@@ -384,8 +384,8 @@ describe("copy-to-workspace", () => {
             return entityVersionInsertResult(value);
           }
 
-          if (table === entities && isInsertedEntity(value)) {
-            insertedEntities.push(value);
+          if (table === entities && Array.isArray(value)) {
+            insertedEntities.push(...value.filter(isInsertedEntity));
           } else if (table === fields) {
             if (Array.isArray(value)) {
               for (const v of value) {
@@ -1453,8 +1453,8 @@ describe("copy-to-workspace", () => {
             };
           }
 
-          if (table === entities && isInsertedEntity(value)) {
-            insertedEntities.push(value);
+          if (table === entities && Array.isArray(value)) {
+            insertedEntities.push(...value.filter(isInsertedEntity));
           }
 
           return undefined;
@@ -1684,8 +1684,8 @@ describe("copy-to-workspace", () => {
           if (table === entityVersions) {
             return entityVersionInsertResult(value);
           }
-          if (table === entities && isInsertedEntity(value)) {
-            insertedEntities.push(value);
+          if (table === entities && Array.isArray(value)) {
+            insertedEntities.push(...value.filter(isInsertedEntity));
           }
           return undefined;
         },

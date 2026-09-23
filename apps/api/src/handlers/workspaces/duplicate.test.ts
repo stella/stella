@@ -784,8 +784,10 @@ describe("duplicateWorkspace", () => {
             };
           }
 
-          if (table === entities && isInsertedEntity(value)) {
-            insertedEntityIdsByName.set(value.name, value.id);
+          if (table === entities && Array.isArray(value)) {
+            for (const row of value.filter(isInsertedEntity)) {
+              insertedEntityIdsByName.set(row.name, row.id);
+            }
             return undefined;
           }
 

@@ -82,6 +82,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
@@ -515,26 +516,28 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       ]),
     );
 
-    // SAFETY: one deleted user's active task reassignments, bounded by
-    // the enforced LIMITS.accountDeletionTaskAssignmentsMax check above
-    // (throws before reaching here if exceeded), not unbounded tenant
-    // data.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: one deleted user's reassignments, capped by LIMITS.accountDeletionTaskAssignmentsMax
-    await Promise.all(
-      updates.map((item) =>
-        tx
-          .update(taskAssignees)
-          .set({
-            userId: item.reassignedUserId,
-          })
-          .where(
-            and(
-              eq(taskAssignees.entityId, item.entityId),
-              eq(taskAssignees.userId, currentUserId),
+    if (updates.length > 0) {
+      await tx
+        .update(taskAssignees)
+        .set({
+          userId: sqlCaseFragment({
+            branches: updates.map(
+              (item) =>
+                sql`WHEN ${eq(taskAssignees.entityId, item.entityId)} THEN ${item.reassignedUserId}::text`,
             ),
+            fallback: sql`${taskAssignees.userId}`,
+          }),
+        })
+        .where(
+          and(
+            inArray(
+              taskAssignees.entityId,
+              updates.map((item) => item.entityId),
+            ),
+            eq(taskAssignees.userId, currentUserId),
           ),
-      ),
-    );
+        );
+    }
     await recordAccountDeletionAuditEvents(
       tx,
       brandPersistedUserId(currentUserId),
@@ -607,38 +610,56 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
 
   if (ownedMutableWork.length > 0) {
     const now = new Date();
-    // SAFETY: one deleted user's mutable obligations, bounded by the enforced
-    // accountDeletionTaskAssignmentsMax check immediately above.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: one deleted user's obligations, capped by LIMITS.accountDeletionTaskAssignmentsMax; each row takes a different owner
-    await Promise.all(
-      ownedMutableWork.map((work) => {
-        const nextOwnerUserId =
-          obligationOwnerByEntityId.get(work.entityId) ?? null;
-        return tx
-          .update(workObligations)
-          .set({
-            ownerUserId: nextOwnerUserId,
-            status:
-              nextOwnerUserId === null
-                ? WORK_OBLIGATION_STATUS.UNASSIGNED
-                : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-            acknowledgedAt: null,
-            acknowledgedByUserId: null,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(workObligations.entityId, work.entityId),
-              eq(workObligations.workspaceId, work.workspaceId),
-              eq(workObligations.ownerUserId, currentUserId),
-              inArray(workObligations.status, [
-                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-                WORK_OBLIGATION_STATUS.ACTIVE,
-              ]),
-            ),
-          );
-      }),
-    );
+    const transitions = ownedMutableWork.map((work) => {
+      const nextOwnerUserId =
+        obligationOwnerByEntityId.get(work.entityId) ?? null;
+      return {
+        entityId: work.entityId,
+        nextOwnerUserId,
+        nextStatus:
+          nextOwnerUserId === null
+            ? WORK_OBLIGATION_STATUS.UNASSIGNED
+            : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      };
+    });
+    await tx
+      .update(workObligations)
+      .set({
+        ownerUserId: sqlCaseFragment({
+          branches: transitions.map(
+            ({ entityId, nextOwnerUserId }) =>
+              sql`WHEN ${eq(workObligations.entityId, entityId)} THEN ${nextOwnerUserId}::text`,
+          ),
+          fallback: sql`${workObligations.ownerUserId}`,
+        }),
+        status: sqlCaseFragment({
+          branches: transitions.map(
+            ({ entityId, nextStatus }) =>
+              sql`WHEN ${eq(workObligations.entityId, entityId)} THEN ${nextStatus}::text`,
+          ),
+          fallback: sql`${workObligations.status}`,
+        }),
+        acknowledgedAt: null,
+        acknowledgedByUserId: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          inArray(
+            workObligations.entityId,
+            ownedMutableWork.map((work) => work.entityId),
+          ),
+          inArray(
+            workObligations.workspaceId,
+            ownedMutableWork.map((work) => work.workspaceId),
+          ),
+          eq(workObligations.ownerUserId, currentUserId),
+          inArray(workObligations.status, [
+            WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+            WORK_OBLIGATION_STATUS.ACTIVE,
+          ]),
+        ),
+      );
 
     await tx.insert(workObligationEvents).values(
       ownedMutableWork.map((work) => ({

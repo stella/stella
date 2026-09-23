@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
@@ -51,4 +51,33 @@ export const validateOrgUserId = async (
   }
 
   return v.parse(validatedOrgUserIdSchema, row.userId);
+};
+
+/**
+ * Verify every id in `userIds` is a member of `organizationId` in one read.
+ * Returns the branded ids in input order, or `null` when any is not a member.
+ */
+export const validateOrgUserIds = async (
+  tx: Transaction,
+  userIds: readonly SafeId<"user">[],
+  organizationId: SafeId<"organization">,
+): Promise<ValidatedOrgUserId[] | null> => {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) {
+    return [];
+  }
+  const rows = await tx
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, uniqueUserIds),
+      ),
+    );
+  const memberIds = new Set(rows.map((row) => row.userId));
+  if (uniqueUserIds.some((candidate) => !memberIds.has(candidate))) {
+    return null;
+  }
+  return userIds.map((id) => v.parse(validatedOrgUserIdSchema, id));
 };
