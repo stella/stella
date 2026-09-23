@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
-import { fetchWithTimeout } from "@/api/lib/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { JURISDICTION_ALLOWLIST_DOMAINS } from "@/api/lib/web-search/allowlists";
 import type {
   WebSearchProvider,

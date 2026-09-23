@@ -9,12 +9,12 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createS3CredentialGuard,

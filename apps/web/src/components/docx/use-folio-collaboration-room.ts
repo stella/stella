@@ -15,6 +15,7 @@ import {
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import { fetchWithTimeout } from "@stll/fetch";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
 
@@ -29,7 +30,6 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
 

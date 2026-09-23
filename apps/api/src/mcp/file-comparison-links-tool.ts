@@ -9,8 +9,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,

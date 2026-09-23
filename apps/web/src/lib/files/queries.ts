@@ -6,11 +6,11 @@ import type {
   EmailTextAttachmentCharset,
 } from "@stll/api-contract";
 import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { shareFileData } from "@/lib/files/array-buffer-utils";
 import type {
   EmailCitationBlock,

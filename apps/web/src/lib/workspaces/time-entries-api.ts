@@ -20,6 +20,7 @@ import type {
   TimeEntrySuggestionsResponse,
   TimeEntrySummary,
 } from "@stll/api-contract/time-entries";
+import { fetchWithTimeout } from "@stll/fetch";
 import { cents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 
@@ -29,7 +30,6 @@ import {
 } from "@/lib/api-request-context";
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 const TIME_ENTRY_REQUEST_TIMEOUT_MS = 30_000;
 

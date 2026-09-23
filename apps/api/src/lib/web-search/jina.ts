@@ -1,4 +1,5 @@
-import { fetchWithTimeout } from "@/api/lib/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+
 import type {
   FetchUrlOutput,
   UrlFetcher,

@@ -11,8 +11,7 @@
 import { Result, TaggedError } from "better-result";
 
 import type { FeedbackKind } from "@stll/api-contract/feedback";
-
-import { fetchWithTimeout } from "@/api/lib/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";

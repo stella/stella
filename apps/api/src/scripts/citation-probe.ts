@@ -14,9 +14,10 @@
  */
 import { TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { zstdDecompressToString } from "@/api/lib/compression";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 const JURISDICTIONS = ["CZE", "SVK", "POL"] as const;

@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic, TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { api } from "@/lib/api";
 import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
 import {
@@ -9,7 +11,6 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
   agentSkillsQueryRoot,

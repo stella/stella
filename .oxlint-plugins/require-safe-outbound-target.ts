@@ -39,7 +39,6 @@ import {
 import type { AstNode } from "./utils.ts";
 
 const FETCH_MODULES = new Map([
-  ["apps/api/src/lib/fetch", new Set(["fetchWithTimeout"])],
   ["@stll/fetch", new Set(["fetchWithTimeout"])],
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/retry",
@@ -948,7 +947,7 @@ export default eslintCompatPlugin({
           }
           source = normalizePath(path.resolve(path.dirname(filename), source));
           const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
-          return apiSourceIndex >= 0
+          return apiSourceIndex !== -1
             ? source.slice(apiSourceIndex + 1)
             : source;
         };

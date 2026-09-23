@@ -5,12 +5,13 @@ import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { hasUnsavedWork } from "@/hooks/use-unsaved-work";
 import { browserApiRootUrl } from "@/lib/api-url";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
 
 import {

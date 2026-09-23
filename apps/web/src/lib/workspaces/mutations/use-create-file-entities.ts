@@ -6,6 +6,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -17,7 +18,6 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,

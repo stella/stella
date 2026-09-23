@@ -29,6 +29,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -123,7 +124,6 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { getExtension } from "@/lib/files/file-extension";
 import { toSafeId } from "@/lib/safe-id";
 import type {

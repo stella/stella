@@ -3,17 +3,19 @@
 
 import { fetchWithTimeout as unrelatedFetch } from "unrelated-fetch";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import {
+  fetchWithTimeout,
+  fetchWithTimeout as aliasedFetch,
+} from "@stll/fetch";
+import * as http from "@stll/fetch";
 
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
-import * as http from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
-import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
+import { fetchWithRetry as relativeFetch } from "../../apps/api/src/handlers/case-law/ingestion/adapters/retry.ts";
 
 const STATIC_BASE = "https://api.example.com";
 const STATIC_ALIAS = STATIC_BASE;
@@ -50,7 +52,7 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   await fetchWithRetry(inputUrl, undefined, { signal });
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: relative extension-bearing imports remain recognized network sinks
-  await relativeFetch(inputUrl, { timeoutMs: 1000 });
+  await relativeFetch(inputUrl, undefined, { signal });
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: genuine global fetch is also an outbound sink
   await globalThis.fetch(inputUrl, { signal });

@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { browserApiRootUrl } from "@/lib/api-url";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 const devOtpSchema = v.object({ otp: v.string() });
 

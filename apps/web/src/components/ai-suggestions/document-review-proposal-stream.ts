@@ -18,6 +18,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { parseApiErrorValue } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
   ReviewParty,
@@ -26,7 +27,6 @@ import type {
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import { apiUrl } from "@/lib/api-url";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import type { Position } from "@/lib/knowledge/playbook-types";
 import { readSSEEvents } from "@/lib/sse-events";
 

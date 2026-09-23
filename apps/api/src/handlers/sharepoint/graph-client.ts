@@ -17,6 +17,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -33,7 +34,6 @@ import {
 } from "@/api/handlers/sharepoint/graph-oauth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 

@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { DownloadIcon, SendIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import {
@@ -25,7 +26,6 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 import { getExportFileName } from "@/lib/export-download";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { downloadFile } from "@/lib/utils";
 
 /**

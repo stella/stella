@@ -25,6 +25,7 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -33,7 +34,6 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;

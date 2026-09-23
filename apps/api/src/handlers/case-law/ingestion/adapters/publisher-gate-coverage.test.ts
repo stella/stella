@@ -63,8 +63,8 @@ const UNGATED_CALL_PATTERNS = [
   { name: "fetch(", pattern: /(?<![\w$.])fetch\(/u },
   { name: "globalThis.fetch", pattern: /\bglobalThis\.fetch\b/u },
   {
-    name: 'import "@/api/lib/fetch"',
-    pattern: /from "(?:@\/api\/lib\/fetch|@stll\/fetch)"/u,
+    name: 'import "@stll/fetch"',
+    pattern: /from "@stll\/fetch"/u,
   },
 ] as const;
 

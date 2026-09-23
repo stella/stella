@@ -3,6 +3,7 @@ import { useLayoutEffect } from "react";
 import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   appendAutocompleteToken,
   autocompleteSuggestionKey,
@@ -15,7 +16,6 @@ import {
 
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { readSSEEvents } from "@/lib/sse-events";
 
 import { requestAutocompleteStream } from "./use-autocomplete-stream.logic";

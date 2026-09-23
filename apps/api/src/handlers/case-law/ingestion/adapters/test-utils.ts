@@ -26,11 +26,12 @@
  * ```
  */
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import type {
   SourceAdapter,
   SourceReconciliation,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

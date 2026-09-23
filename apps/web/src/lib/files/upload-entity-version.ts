@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
 import {

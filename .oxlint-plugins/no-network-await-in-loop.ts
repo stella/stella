@@ -89,8 +89,6 @@ const FUNCTION_TYPES = new Set([
 // ships rather than when someone remembers to list its name.
 const FETCH_MODULES = new Set([
   "@stll/fetch",
-  "@/lib/fetch",
-  "@/api/lib/fetch",
   "@/api/lib/safe-outbound-fetch",
   "@/api/lib/redirect-fetch",
 ]);

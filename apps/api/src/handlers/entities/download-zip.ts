@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 import { streamWithConcurrency } from "@stll/concurrency";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -28,7 +29,6 @@ import {
   FetchBoundaryError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";

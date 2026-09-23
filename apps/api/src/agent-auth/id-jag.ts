@@ -4,6 +4,7 @@ import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { FetchImplementation, JWTPayload, JWTVerifyGetKey } from "jose";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import {
@@ -21,7 +22,6 @@ import {
 } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 
 /**
  * The error vocabulary the ID-JAG path maps onto HTTP. `issuer_not_enabled`

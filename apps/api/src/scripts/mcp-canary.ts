@@ -25,9 +25,9 @@ import {
  */
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
   MCP_DISCOVERY_PATH,
   MCP_HTTP_PATH,

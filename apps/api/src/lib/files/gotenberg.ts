@@ -1,7 +1,8 @@
 import { Result, TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { env } from "@/api/env";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
