@@ -6,7 +6,10 @@ import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import {
+  attachTerminalTurnOutcome,
+  cancelPendingChatToolCalls,
   createChatAttachmentPart,
+  getAwaitingUserInteractions,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentPlaceholder,
@@ -176,6 +179,33 @@ const remapChatAttachmentPart = (
 };
 
 /**
+ * Settle every interaction the copied message still awaits. A fork copies
+ * history, not turn ownership: the source's `awaiting-user` chat turn stays
+ * with the source, so an approval or client-tool call copied verbatim would
+ * render as answerable on a thread with no turn able to own its answer. The
+ * copy takes the same terminal shape a superseded pending turn gets
+ * (`cancelPendingChatToolCalls` plus a `superseded` outcome), so it reads as
+ * history and the continuation check rejects it like any settled call.
+ */
+const settleForkedPendingInteractions = (
+  message: PersistableChatMessage,
+): PersistableChatMessage => {
+  // Parts, not the stored outcome, decide: a pre-outcome message carries no
+  // `turnOutcome` and can still hold an unanswered call.
+  const pending = getAwaitingUserInteractions({
+    parts: message.parts,
+    role: message.role,
+  });
+  if (pending.length === 0) {
+    return message;
+  }
+  return attachTerminalTurnOutcome({
+    message: cancelPendingChatToolCalls(message),
+    turnOutcome: { reason: "superseded", type: "cancelled" },
+  });
+};
+
+/**
  * What copying one attachment's storage produced. A source object the store
  * confirms is gone is not a failure of the fork: the source thread already
  * lacks those bytes, so the fork skips the file (or, for a thumbnail alone,
@@ -317,7 +347,8 @@ const rollbackCopiedS3Keys = async (copiedS3Keys: string[]): Promise<void> => {
 
 // Forks a chat thread at one of its assistant messages. The prefix, its
 // attachments and the thread's settings are copied; turns, compaction state
-// and the file / template thread mappings are not. The fork's id comes from
+// and the file / template thread mappings are not, so interactions the prefix
+// still awaits are settled in the copy. The fork's id comes from
 // the caller, so a retry converges on one copy instead of duplicating it.
 export const createForkThread = ({
   indexChatThread = upsertChatThreadSearchDocument,
@@ -441,7 +472,9 @@ export const createForkThread = ({
             return { kind: "boundary-not-assistant" as const };
           }
           const prefix: PrefixMessage[] = prefixRows.map((row) => ({
-            message: chatMessageFromPersisted(row),
+            message: settleForkedPendingInteractions(
+              chatMessageFromPersisted(row),
+            ),
             row,
           }));
 
