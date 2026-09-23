@@ -659,10 +659,9 @@ export const createS3ObjectIfAbsent = async (
       if (!Result.isError(written)) {
         return;
       }
+      const failure = written.error;
       const code =
-        written.error instanceof Error
-          ? safeErrorCode(written.error)
-          : undefined;
+        failure instanceof Error ? safeErrorCode(failure) : undefined;
       if (code === "PreconditionFailed") {
         return;
       }
@@ -674,7 +673,7 @@ export const createS3ObjectIfAbsent = async (
       // `ConditionalRequestConflict` (a concurrent conditional write to the
       // key) is retried like any transient failure; the next attempt then
       // sees the winner's object and answers 412.
-      throw written.error;
+      throw failure;
     },
   );
 };

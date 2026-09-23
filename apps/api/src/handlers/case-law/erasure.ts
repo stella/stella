@@ -153,23 +153,34 @@ const eraseSourceRawPayload = async ({
   deleteSourceRaw,
   eraseSourceFiles,
 }: EraseSourceRawPayloadOptions): Promise<CorpusObjectErasure> => {
-  const erased = await Result.tryPromise({
-    try: async () => {
-      const signal = AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS);
+  const files = await Result.tryPromise({
+    try: async () =>
       await eraseSourceFiles({
         family: RAW_SOURCE_FAMILY.CASE_LAW,
         sourceId,
         documentId: decisionId,
         signal,
-      });
-      if (sourceRawS3Key !== null) {
-        await deleteSourceRaw(sourceRawS3Key, signal);
-      }
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(files)) {
+    return { type: "incomplete", error: files.error };
+  }
+  if (Result.isError(files.value)) {
+    return { type: "incomplete", error: files.value.error };
+  }
+  if (sourceRawS3Key === null) {
+    return { type: "deleted" };
+  }
+  const envelope = await Result.tryPromise({
+    try: async () => {
+      await deleteSourceRaw(sourceRawS3Key, signal);
     },
     catch: (cause) => cause,
   });
-  return Result.isError(erased)
-    ? { type: "incomplete", error: erased.error }
+  return Result.isError(envelope)
+    ? { type: "incomplete", error: envelope.error }
     : { type: "deleted" };
 };
 

@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import {
@@ -199,16 +199,20 @@ const SOURCE_BINARY_ERASE_MAX_ROUNDS = 10;
  * Delete every publisher file one document owns, including those an earlier
  * envelope named and a later one replaced.
  *
- * Throws when a listing or a delete fails, or when the prefix outlasts the
- * round bound, so the caller keeps the erasure as a retry target rather than
- * recording one it did not finish.
+ * A prefix that outlasts the round bound is an error, and a failed listing
+ * or delete throws, so the caller keeps the erasure as a retry target rather
+ * than recording one it did not finish.
  */
 export const eraseSourceBinaries = async ({
   signal,
   ...owner
-}: SourceBinaryOwner & { signal: AbortSignal }): Promise<void> => {
+}: SourceBinaryOwner & { signal: AbortSignal }): Promise<
+  Result<void, SourceBinaryErasureIncompleteError>
+> => {
   const prefix = sourceBinaryPrefix(owner);
-  const eraseRound = async (round: number): Promise<void> => {
+  const eraseRound = async (
+    round: number,
+  ): Promise<Result<void, SourceBinaryErasureIncompleteError>> => {
     const keys = await listS3ObjectKeys({
       bucket: envBase.S3_BUCKET,
       prefix,
@@ -217,15 +221,17 @@ export const eraseSourceBinaries = async ({
     });
     await deleteKeys(keys, signal);
     if (keys.length <= SOURCE_BINARY_ERASE_PAGE) {
-      return;
+      return Result.ok(undefined);
     }
     if (round >= SOURCE_BINARY_ERASE_MAX_ROUNDS) {
-      throw new SourceBinaryErasureIncompleteError({
-        message: `Source files remain under ${prefix}`,
-        prefix,
-      });
+      return Result.err(
+        new SourceBinaryErasureIncompleteError({
+          message: `Source files remain under ${prefix}`,
+          prefix,
+        }),
+      );
     }
-    await eraseRound(round + 1);
+    return await eraseRound(round + 1);
   };
-  await eraseRound(1);
+  return await eraseRound(1);
 };
