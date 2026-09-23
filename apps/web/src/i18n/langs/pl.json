@@ -136,43 +136,30 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Dodaj fakt",
       "addInterpretationNote": "Dodaj uwagę do interpretacji",
-      "addUnavailable": "Niedostępne w tym środowisku testowym — dodawanie faktów wymaga trwałego zapisu, który nie został jeszcze podłączony.",
-      "confirmedByReviewer": "Potwierdzone przez osobę weryfikującą",
       "description": "Bezpośrednie dowody — wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne — wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
-      "editFact": "Edytuj fakt",
       "editInterpretationNote": "Edytuj uwagę do interpretacji",
-      "editOrRetype": "Edytuj / przepisz",
       "empty": "Oznacz pozycje tej listy jako fakty, względem których będą weryfikowane dokumenty.",
       "extractionAndReview": "Wyodrębnianie i weryfikacja",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
-      "factText": "Treść faktu referencyjnego",
       "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
-      "importSource": "Importuj źródło",
-      "importUnavailable": "Niedostępne w tym środowisku testowym — import źródła wymaga obsługi pobierania i przechowywania danych, która nie została jeszcze podłączona.",
       "includeInScoring": "Uwzględnij w ocenie",
-      "interpretation": "Interpretacja",
       "interpretationNote": "Uwaga do interpretacji",
       "interpretationNotePlaceholder": "Jeśli znaczenie tego dowodu jest sporne, opisz jak. Jeśli nie jest, zostaw pole puste.",
       "interpretiveConfidence": "Pewność interpretacji",
       "openList": "Otwórz listę",
       "record": "Rejestr faktów referencyjnych",
       "setConfidence": "Ustaw pewność",
-      "sourceAndProvenance": "Źródło i pochodzenie",
-      "timePeriod": "Okres",
       "title": "Fakty referencyjne"
     },
     "claimDetail": {
       "escalatedReview": "Przekazano zespołowi ds. dowodów — dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
-      "factId": "Fakt {id}",
       "flagDispute": "Oznacz spór",
       "humanReview": "Weryfikacja przez człowieka",
       "interpretationCaveat": "Jeden z uwzględnionych faktów jest obarczony istotnym zastrzeżeniem interpretacyjnym — niepewne jest znaczenie dowodu, a nie nośnik, z którego pochodzi.",
       "notVerifiable": {
-        "pending": "W tej wersji nie podłączono działającego modelu — wynik to <strong>Brak pokrycia, oczekuje na sprawdzenie</strong>.",
         "reopen": "Otwórz ponownie → porównaj z rejestrem",
         "reopenExplanation": "<strong>Odłożono jako niemożliwe do zweryfikowania.</strong> Jeśli to twierdzenie można jednak sprawdzić, otwórz je ponownie: AVT zachowa zmianę klasyfikacji i wykona tylko pominięte wcześniej porównanie z rejestrem.",
         "reopenedPending": "Otwarto ponownie jako możliwe do sprawdzenia twierdzenie. Do czasu ponownej weryfikacji dokumentu wyświetla się jako <strong>Brak pokrycia</strong>."
@@ -189,19 +176,12 @@
       "overrideTooltip": "Osoba weryfikująca zapisała inne rozstrzygnięcie. Poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideVerdict": "Zmień rozstrzygnięcie",
       "recordConflict": {
-        "dateDecides": "Dlaczego data decyduje o rozstrzygnięciu",
         "description": "Dwa fakty referencyjne dotyczą tej samej kwestii — <strong>{subject}</strong> — ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania — narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
-        "escalated": "Oznaczono lokalnie do sprawdzenia przez zespół ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego źródła.",
         "escalatedNotice": "Oznaczono dla zespołu ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego wpisu.",
         "flagForEvidenceTeam": "Oznacz dla zespołu ds. dowodów",
         "governed": "<strong>{value}</strong> jest nadrzędny: twierdzenie ocenia się względem tego wpisu. Drugi wpis pozostaje zarejestrowany.",
-        "governingPreview": "Ten lokalny podgląd uznaje <strong>{factId}</strong> za nadrzędny i ocenia twierdzenie względem wartości <strong>{value}</strong>. Oba rekordy testowe pozostają bez zmian.",
-        "governingPreviewWithVerdict": "Ten lokalny podgląd uznaje <strong>{factId}</strong> za nadrzędny i ocenia twierdzenie względem wartości <strong>{value}</strong> — wynik to <strong>{verdict}</strong>. Oba rekordy testowe pozostają bez zmian.",
-        "oppositeSides": "Te dwie daty przypadają po <emphasis>przeciwnych stronach</emphasis> zdarzenia granicznego. Wynik zależy od tego, który wpis zostanie uznany za nadrzędny — rozstrzygnięcie sprzeczności w tym miejscu bezpośrednio ustala więc wynik.",
         "reconcile": "Rozstrzygnij sprzeczność w rejestrze",
-        "resultAsAt": "Na dzień <strong>{date}</strong> {note}",
         "title": "Sprzeczne dowody w rejestrze",
-        "treatAsGoverning": "Uznaj {id} za nadrzędny",
         "treatAsGoverningRecord": "Uznaj za nadrzędny"
       },
       "relation": {
@@ -210,7 +190,6 @@
       },
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
-      "revisedLater": "Zmienione w późniejszym oświadczeniu",
       "score": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
         "conflictCount": "{count, plural, one {# sprzeczność} few {# sprzeczności} many {# sprzeczności} other {# sprzeczności}}",
@@ -221,11 +200,6 @@
         "verdictWithheld": "Wstrzymano rozstrzygnięcie"
       },
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "timeline": {
-        "asAt": "Na dzień <strong>{date}</strong>",
-        "asAtDate": "Data odniesienia",
-        "preview": "Podgląd porównuje twierdzenie z rejestrem testowym <emphasis>na</emphasis> wybrany dzień. Wstępne rozstrzygnięcie: <strong>{verdict}</strong>."
-      },
       "whyScore": "Uzasadnienie oceny — fakty referencyjne"
     },
     "claimTypes": {
@@ -257,11 +231,6 @@
       "recordConflict": "Potwierdź rozstrzygnięcie",
       "supported": "Potwierdź — gotowe",
       "verdict": "Potwierdź wynik"
-    },
-    "devHarness": {
-      "localSessionNotice": "Tylko sesja lokalna — nic nie jest zapisywane. Wszystkie weryfikacje, uwagi i zmiany faktów referencyjnych istnieją wyłącznie w tej karcie przeglądarki i zostaną utracone po odświeżeniu.",
-      "title": "Narzędzie weryfikacji względem faktów referencyjnych — środowisko testowe",
-      "verifyDocument": "Zweryfikuj dokument"
     },
     "disposition": {
       "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna — warto ją sprawdzić przed zatwierdzeniem.",
@@ -363,7 +332,6 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
-      "claimStatus": " ({state}{contested, select, true {, sporne} other {}}{superseded, select, true {, zastąpione} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
       "page": "Strona {page}",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",

@@ -136,43 +136,30 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Lisa fakt",
       "addInterpretationNote": "Lisa tõlgendusmärkus",
-      "addUnavailable": "Selles testkeskkonnas pole see saadaval: fakti lisamiseks on vaja püsisalvestust, mida pole veel ühendatud.",
-      "confirmedByReviewer": "Kontrollija kinnitatud",
       "description": "Kindlad tõendid, nagu e-kirjad, sõnumid, pangadokumendid ja kokkulepitud asjaolud, mis on eraldatud ankurfaktide registrisse, mille põhjal väiteid kontrollitakse. Vaadake fakte üle, muutke neid või lisage käsitsi.",
-      "editFact": "Muuda fakti",
       "editInterpretationNote": "Muuda tõlgendusmärkust",
-      "editOrRetype": "Muuda või sisesta uuesti",
       "empty": "Märkige selle loendi üksused faktideks, mille alusel dokumente kontrollitakse.",
       "extractionAndReview": "Eraldamine ja kontroll",
       "factCount": "{count, plural, one {# fakt} other {# fakti}}",
-      "factText": "Ankurfakti tekst",
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
       "heldForReview": "Kontrolli ootel",
       "holdOutOfScoring": "Jäta hindamisest välja",
-      "importSource": "Impordi allikas",
-      "importUnavailable": "Selles testkeskkonnas pole see saadaval: allika importimiseks on vaja andmete vastuvõttu ja salvestust, mida pole veel ühendatud.",
       "includeInScoring": "Kaasa hindamisse",
-      "interpretation": "Tõlgendus",
       "interpretationNote": "Tõlgendusmärkus",
       "interpretationNotePlaceholder": "Kui selle tõendi tähendus on vaidlustatud, kirjeldage, kuidas. Kui ei ole, jätke väli tühjaks.",
       "interpretiveConfidence": "Tõlgenduse kindlus",
       "openList": "Ava loend",
       "record": "Ankurfaktide register",
       "setConfidence": "Määra kindlus",
-      "sourceAndProvenance": "Allikas ja päritolu",
-      "timePeriod": "Ajavahemik",
       "title": "Ankurfaktid"
     },
     "claimDetail": {
       "escalatedReview": "Edastatud tõendite töörühmale: siin pole otsust, mida kinnitada või vaidlustada, enne kui aluseks olev vastuolu on lahendatud.",
-      "factId": "Fakt {id}",
       "flagDispute": "Märgi vaidlus",
       "humanReview": "Inimkontroll",
       "interpretationCaveat": "Ühe aluseks oleva fakti sisulise tõlgenduse suhtes on reservatsioon: ebaselge on tõendi tähendus, mitte selle kandja.",
       "notVerifiable": {
-        "pending": "Selles versioonis pole reaalajas mudelit ühendatud: tulemuseks on <strong>Katvus puudub, kontroll ootel</strong>.",
         "reopen": "Ava uuesti → kontrolli registri põhjal",
         "reopenExplanation": "<strong>Kõrvale jäetud kui kontrollimatu.</strong> Kui väidet saab tegelikult kontrollida, avage see uuesti: AVT säilitab teie ümberliigituse ja teeb ainult varem vahele jäetud registrikontrolli.",
         "reopenedPending": "Uuesti avatud kontrollitava väitena. See kuvatakse kui <strong>Katvus puudub</strong>, kuni dokument uuesti kontrollitakse."
@@ -189,19 +176,12 @@
       "overrideTooltip": "Kontrollija on salvestanud teistsuguse otsuse. Allpool kuvatakse tööriista enda muutmata analüüs.",
       "overrideVerdict": "Asenda otsus",
       "recordConflict": {
-        "dateDecides": "Miks määrab kuupäev otsuse",
         "description": "Kaks ankurfakti käsitlevad sama asjaolu, <strong>{subject}</strong>, kuid on omavahel vastuolus. Mõlemad pärinevad <strong>suure kindlusega</strong> allikatest, seega pole küsimus usaldusväärsuses: register ise on vastuoluline. AVT jätab otsuse tegemata ega hinda väidet, sest ühe kande eelistamine teisele on otsustus, mille peate ise tegema ja dokumenteerima; tööriist ei tohi seda teha vaikimisi.",
-        "escalated": "Märgitud kohalikult tõendite töörühmale järelkontrolliks. Registri vastuolu jääb avatuks ja arvestusse, kuni määratakse aluseks olev allikas.",
         "escalatedNotice": "Edastatud tõendite töörühmale. Registri vastuolu jääb avatuks ja arvestusse, kuni valitakse aluseks olev kanne.",
         "flagForEvidenceTeam": "Edasta tõendite töörühmale",
         "governed": "<strong>{value}</strong> on aluseks: väidet hinnatakse selle kande põhjal. Teine kanne jääb registrisse alles.",
-        "governingPreview": "Selles kohalikus eelvaates käsitatakse fakti <strong>{factId}</strong> aluseks olevana ja väidet hinnatakse väärtuse <strong>{value}</strong> põhjal. Mõlemad näidisregistri kanded jäävad muutmata.",
-        "governingPreviewWithVerdict": "Selles kohalikus eelvaates käsitatakse fakti <strong>{factId}</strong> aluseks olevana ja väidet hinnatakse väärtuse <strong>{value}</strong> põhjal; tulemuseks on <strong>{verdict}</strong>. Mõlemad näidisregistri kanded jäävad muutmata.",
-        "oppositeSides": "Need kaks kuupäeva jäävad piiritlevast sündmusest <emphasis>eri poolele</emphasis>. Tulemus sõltub sellest, kumb kanne on aluseks, seega määrab vastuolu lahendamine siin otseselt otsuse.",
         "reconcile": "Kooskõlasta register",
-        "resultAsAt": "Seisuga <strong>{date}</strong> {note}",
         "title": "Vastuolulised tõendid registris",
-        "treatAsGoverning": "Käsita fakti {id} aluseks olevana",
         "treatAsGoverningRecord": "Käsita aluseks olevana"
       },
       "relation": {
@@ -210,7 +190,6 @@
       },
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
-      "revisedLater": "Hilisemas ütluses muudetud",
       "score": {
         "anchorFactsDisagree": "Ankurfaktid on vastuolus",
         "conflictCount": "{count, plural, one {# vastuolu} other {# vastuolu}}",
@@ -221,11 +200,6 @@
         "verdictWithheld": "Otsus tegemata"
       },
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
-      "timeline": {
-        "asAt": "Seisuga <strong>{date}</strong>",
-        "asAtDate": "Seisuga kuupäev",
-        "preview": "Vaadake näidisregistri põhjal väite eelvaadet valitud kuupäeva <emphasis>seisuga</emphasis>. Eelvaate otsus: <strong>{verdict}</strong>."
-      },
       "whyScore": "Hinde põhjendus: ankurfaktid"
     },
     "claimTypes": {
@@ -257,11 +231,6 @@
       "recordConflict": "Kinnita lahendus",
       "supported": "Kinnita: valmis",
       "verdict": "Kinnita otsus"
-    },
-    "devHarness": {
-      "localSessionNotice": "Ainult kohalik seanss: midagi ei salvestata. Kõik kontrollid, märkused ja ankurfaktide muudatused asuvad selles brauseri vahekaardis ning lähevad värskendamisel kaotsi.",
-      "title": "Ankurfaktide kontrollimise tööriista testkeskkond",
-      "verifyDocument": "Kontrolli dokumenti"
     },
     "disposition": {
       "contested": "Otsus on selge, kuid ühe aluseks oleva fakti tõlgendus on vaidlustatud; vaadake see enne kinnitamist üle.",
@@ -363,7 +332,6 @@
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
-      "claimStatus": " ({state}{contested, select, true {, vaidlustatud} other {}}{superseded, select, true {, asendatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
       "page": "Lehekülg {page}",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",

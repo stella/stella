@@ -136,43 +136,30 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Tény hozzáadása",
       "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
-      "addUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy tény hozzáadásához még nincs bekötve a tartós tárolás.",
-      "confirmedByReviewer": "Ellenőr által megerősítve",
       "description": "Közvetlen bizonyítékok — e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények — olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
-      "editFact": "Tény szerkesztése",
       "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
-      "editOrRetype": "Szerkesztés / újragépelés",
       "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
       "extractionAndReview": "Kinyerés és ellenőrzés",
       "factCount": "{count, plural, one {# tény} other {# tény}}",
-      "factText": "A referenciatény szövege",
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
-      "importSource": "Forrás importálása",
-      "importUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy forrás importálásához még nincs bekötve az adatbevitel és a tárolás.",
       "includeInScoring": "Bevonás a pontozásba",
-      "interpretation": "Értelmezés",
       "interpretationNote": "Értelmezési megjegyzés",
       "interpretationNotePlaceholder": "Ha e bizonyíték jelentése vitatott, írja le, miben. Ha nem, hagyja üresen.",
       "interpretiveConfidence": "Értelmezési bizonyosság",
       "openList": "Lista megnyitása",
       "record": "Referenciatény-nyilvántartás",
       "setConfidence": "Bizonyosság beállítása",
-      "sourceAndProvenance": "Forrás és eredet",
-      "timePeriod": "Időszak",
       "title": "Referenciatények"
     },
     "claimDetail": {
       "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak — az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
-      "factId": "{id}. tény",
       "flagDispute": "Vita megjelölése",
       "humanReview": "Emberi ellenőrzés",
       "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik — a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
       "notVerifiable": {
-        "pending": "Ebben a verzióban nincs bekötve működő modell — az eredmény: <strong>Nincs lefedettség, ellenőrzésre vár</strong>.",
         "reopen": "Újranyitás → összevetés a nyilvántartással",
         "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le.",
         "reopenedPending": "Ellenőrizhető állításként újranyitva. Addig <strong>Nincs lefedettség</strong> jelöléssel jelenik meg, amíg az irat ismételt ellenőrzése meg nem történik."
@@ -189,19 +176,12 @@
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
-        "dateDecides": "Miért a dátum dönti el a következtetést",
         "description": "Két referenciatény ugyanarra a kérdésre vonatkozik — <strong>{subject}</strong> —, de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli — az eszköz nem dönthet erről észrevétlenül.",
-        "escalated": "Helyben megjelölve a bizonyítékkezelő csapat általi nyomon követésre. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó forrás.",
         "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
         "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
-        "governingPreview": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást. Mindkét tesztadat változatlan marad.",
-        "governingPreviewWithVerdict": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást — a következtetés: <strong>{verdict}</strong>. Mindkét tesztadat változatlan marad.",
-        "oppositeSides": "A két dátum a határesemény <emphasis>ellentétes oldalára</emphasis> esik. Az eredményt az dönti el, melyik nyilvántartás az irányadó — az ellentmondás itteni feloldása ezért közvetlenül meghatározza a következtetést.",
         "reconcile": "Nyilvántartási ellentmondás feloldása",
-        "resultAsAt": "<strong>{date}</strong> napján: {note}",
         "title": "Ellentmondó bizonyítékok a nyilvántartásban",
-        "treatAsGoverning": "A(z) {id} legyen irányadó",
         "treatAsGoverningRecord": "Legyen irányadó"
       },
       "relation": {
@@ -210,7 +190,6 @@
       },
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
-      "revisedLater": "Egy későbbi nyilatkozatban módosítva",
       "score": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
         "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
@@ -221,11 +200,6 @@
         "verdictWithheld": "Következtetés visszatartva"
       },
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "timeline": {
-        "asAt": "<strong>{date}</strong> napján",
-        "asAtDate": "Vonatkozási dátum",
-        "preview": "Az állítás összevetése a tesztadatokkal egy kiválasztott időpontra <emphasis>vonatkozóan</emphasis>. Előzetes következtetés: <strong>{verdict}</strong>."
-      },
       "whyScore": "A pontszám indoka — referenciatények"
     },
     "claimTypes": {
@@ -257,11 +231,6 @@
       "recordConflict": "Feloldás megerősítése",
       "supported": "Megerősítés — kész",
       "verdict": "Következtetés megerősítése"
-    },
-    "devHarness": {
-      "localSessionNotice": "Csak helyi munkamenet — semmi nem kerül mentésre. Minden ellenőrzés, megjegyzés és referenciatény-módosítás csak ezen a böngészőlapon él, és frissítéskor elveszik.",
-      "title": "Referenciatény-ellenőrző eszköz — tesztkörnyezet",
-      "verifyDocument": "Irat ellenőrzése"
     },
     "disposition": {
       "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott — jóváhagyás előtt érdemes átnézni.",
@@ -363,7 +332,6 @@
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
-      "claimStatus": " ({state}{contested, select, true {, vitatott} other {}}{superseded, select, true {, felváltott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
       "page": "{page}. oldal",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",

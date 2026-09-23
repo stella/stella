@@ -136,43 +136,30 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Pridať fakt",
       "addInterpretationNote": "Pridať poznámku k výkladu",
-      "addUnavailable": "V tomto testovacom prostredí nie je k dispozícii — pridanie faktu vyžaduje doposiaľ nezapojené trvalé úložisko.",
-      "confirmedByReviewer": "Potvrdené kontrolujúcou osobou",
       "description": "Priame dôkazy — e-maily, správy, bankové záznamy, nesporné skutočnosti — spracované do súboru referenčných faktov, s ktorými sa porovnávajú tvrdenia. Fakty môžete kontrolovať, upravovať alebo ručne pridávať.",
-      "editFact": "Upraviť fakt",
       "editInterpretationNote": "Upraviť poznámku k výkladu",
-      "editOrRetype": "Upraviť / prepísať",
       "empty": "Označte položky tohto zoznamu ako fakty, voči ktorým sa budú kontrolovať dokumenty.",
       "extractionAndReview": "Extrakcia a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktov} other {# faktu}}",
-      "factText": "Text referenčného faktu",
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
-      "importSource": "Importovať zdroj",
-      "importUnavailable": "V tomto testovacom prostredí nie je k dispozícii — import zdroja vyžaduje doposiaľ nezapojené spracovanie a úložisko.",
       "includeInScoring": "Zahrnúť do hodnotenia",
-      "interpretation": "Výklad",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",
       "interpretiveConfidence": "Istota výkladu",
       "openList": "Otvoriť zoznam",
       "record": "Súbor referenčných faktov",
       "setConfidence": "Nastaviť istotu",
-      "sourceAndProvenance": "Zdroj a pôvod",
-      "timePeriod": "Časové obdobie",
       "title": "Referenčné fakty"
     },
     "claimDetail": {
       "escalatedReview": "Postúpené tímu pre dôkazy — kým sa nevyrieši súvisiaci rozpor, nemožno tu potvrdiť ani spochybniť žiadny záver.",
-      "factId": "Fakt {id}",
       "flagDispute": "Označiť spor",
       "humanReview": "Ľudská kontrola",
       "interpretationCaveat": "Jeden z použitých faktov obsahuje závažnú výkladovú výhradu — neistý je význam dôkazu, nie médium, z ktorého pochádza.",
       "notVerifiable": {
-        "pending": "V tejto verzii nie je zapojený žiadny živý model — výsledok je <strong>Bez pokrytia, čaká na kontrolu</strong>.",
         "reopen": "Znovu otvoriť → porovnať so záznamami",
         "reopenExplanation": "<strong>Odložené ako neoveriteľné.</strong> Ak sa toto tvrdenie v skutočnosti dá overiť, znovu ho otvorte: AVT zachová vašu zmenu klasifikácie a vykoná iba predtým preskočené porovnanie so záznamami.",
         "reopenedPending": "Znovu otvorené ako overiteľné tvrdenie. Kým sa dokument znovu neoverí, zobrazuje sa ako <strong>Bez pokrytia</strong>."
@@ -189,19 +176,12 @@
       "overrideTooltip": "Kontrolujúca osoba zaznamenala iný záver. Nižšie je bez zmeny zobrazená vlastná analýza nástroja.",
       "overrideVerdict": "Zmeniť záver",
       "recordConflict": {
-        "dateDecides": "Prečo o závere rozhoduje dátum",
         "description": "Dva referenčné fakty sa týkajú rovnakej otázky — <strong>{subject}</strong> — ale odporujú si. Oba pochádzajú zo zdrojov s <strong>vysokou mierou istoty</strong>, nejde teda o problém spoľahlivosti: vnútorne rozporné sú samotné záznamy. AVT nevydá záver ani tvrdenie neohodnotí, pretože výber rozhodujúceho záznamu vyžaduje váš úsudok a jeho zaznamenanie — nástroj ho nesmie vykonať bez upozornenia.",
-        "escalated": "Miestne označené na preverenie tímom pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci zdroj.",
         "escalatedNotice": "Označené pre tím pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci záznam.",
         "flagForEvidenceTeam": "Označiť pre tím pre dôkazy",
         "governed": "<strong>{value}</strong> je rozhodujúci: tvrdenie sa posudzuje podľa tohto záznamu. Druhý záznam zostáva evidovaný.",
-        "governingPreview": "Tento miestny náhľad považuje <strong>{factId}</strong> za rozhodujúci a posudzuje tvrdenie podľa hodnoty <strong>{value}</strong>. Oba testovacie záznamy zostávajú bez zmeny.",
-        "governingPreviewWithVerdict": "Tento miestny náhľad považuje <strong>{factId}</strong> za rozhodujúci a posudzuje tvrdenie podľa hodnoty <strong>{value}</strong> — výsledkom je <strong>{verdict}</strong>. Oba testovacie záznamy zostávajú bez zmeny.",
-        "oppositeSides": "Tieto dva dátumy ležia na <emphasis>opačných stranách</emphasis> rozhodnej udalosti. Výsledok určí záznam, ktorý bude rozhodujúci — vyriešenie rozporu na tomto mieste preto priamo stanoví záver.",
         "reconcile": "Vyriešiť rozpor v záznamoch",
-        "resultAsAt": "Ku dňu <strong>{date}</strong> {note}",
         "title": "Rozporné dôkazy v záznamoch",
-        "treatAsGoverning": "Považovať {id} za rozhodujúci",
         "treatAsGoverningRecord": "Považovať za rozhodujúci"
       },
       "relation": {
@@ -210,7 +190,6 @@
       },
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
-      "revisedLater": "Neskôr upravené v ďalšom vyhlásení",
       "score": {
         "anchorFactsDisagree": "Referenčné fakty si odporujú",
         "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} many {# rozporov} other {# rozporu}}",
@@ -221,11 +200,6 @@
         "verdictWithheld": "Záver nevydaný"
       },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
-      "timeline": {
-        "asAt": "Ku dňu <strong>{date}</strong>",
-        "asAtDate": "Rozhodný dátum",
-        "preview": "Náhľad porovnáva tvrdenie s testovacími záznamami <emphasis>ku</emphasis> zvolenému dňu. Predbežný záver: <strong>{verdict}</strong>."
-      },
       "whyScore": "Odôvodnenie hodnotenia — referenčné fakty"
     },
     "claimTypes": {
@@ -257,11 +231,6 @@
       "recordConflict": "Potvrdiť riešenie",
       "supported": "Potvrdiť — pripravené",
       "verdict": "Potvrdiť záver"
-    },
-    "devHarness": {
-      "localSessionNotice": "Iba miestna relácia — nič sa neukladá. Všetky kontroly, poznámky a úpravy referenčných faktov existujú len na tejto karte prehliadača a po obnovení stránky sa stratia.",
-      "title": "Nástroj na overovanie podľa referenčných faktov — testovacie prostredie",
-      "verifyDocument": "Overiť dokument"
     },
     "disposition": {
       "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný — pred schválením si zaslúži vašu pozornosť.",
@@ -363,7 +332,6 @@
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
-      "claimStatus": " ({state}{contested, select, true {, sporné} other {}}{superseded, select, true {, nahradené} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
       "page": "Stránka {page}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",

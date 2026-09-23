@@ -136,43 +136,30 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Fakt hinzufügen",
       "addInterpretationNote": "Notiz zur Auslegung hinzufügen",
-      "addUnavailable": "In dieser Testumgebung nicht verfügbar – das Hinzufügen eines Fakts erfordert eine noch nicht angebundene Persistenz.",
-      "confirmedByReviewer": "Durch Prüfer bestätigt",
       "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
-      "editFact": "Fakt bearbeiten",
       "editInterpretationNote": "Notiz zur Auslegung bearbeiten",
-      "editOrRetype": "Bearbeiten / neu eingeben",
       "empty": "Markieren Sie Einträge dieser Liste als Fakten, mit denen Dokumente abgeglichen werden.",
       "extractionAndReview": "Extraktion und Prüfung",
       "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
-      "factText": "Text des Ankerfakts",
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
       "heldForReview": "Zur Prüfung zurückgestellt",
       "holdOutOfScoring": "Aus der Bewertung ausschließen",
-      "importSource": "Quelle importieren",
-      "importUnavailable": "In dieser Testumgebung nicht verfügbar – das Importieren einer Quelle erfordert eine noch nicht angebundene Datenaufnahme und Speicherung.",
       "includeInScoring": "In die Bewertung einbeziehen",
-      "interpretation": "Auslegung",
       "interpretationNote": "Notiz zur Auslegung",
       "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",
       "interpretiveConfidence": "Auslegungssicherheit",
       "openList": "Liste öffnen",
       "record": "Ankerfaktenbestand",
       "setConfidence": "Sicherheit festlegen",
-      "sourceAndProvenance": "Quelle und Herkunft",
-      "timePeriod": "Zeitraum",
       "title": "Ankerfakten"
     },
     "claimDetail": {
       "escalatedReview": "An das Belegteam eskaliert – hier kann kein Ergebnis bestätigt oder beanstandet werden, bis der zugrunde liegende Widerspruch geklärt ist.",
-      "factId": "Fakt {id}",
       "flagDispute": "Beanstandung markieren",
       "humanReview": "Menschliche Prüfung",
       "interpretationCaveat": "Ein beitragender Fakt ist mit einem wesentlichen Auslegungsvorbehalt versehen – unsicher ist die Bedeutung des Belegs, nicht das Medium, aus dem er stammt.",
       "notVerifiable": {
-        "pending": "In diesem Build ist kein Live-Modell angebunden – Ergebnis: <strong>Keine Abdeckung, Prüfung ausstehend</strong>.",
         "reopen": "Erneut öffnen → mit Bestand abgleichen",
         "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus.",
         "reopenedPending": "Als überprüfbare Behauptung erneut geöffnet. Sie wird als <strong>Keine Abdeckung</strong> angezeigt, bis das Dokument erneut geprüft wird."
@@ -189,19 +176,12 @@
       "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
       "overrideVerdict": "Ergebnis ändern",
       "recordConflict": {
-        "dateDecides": "Warum das Datum über das Ergebnis entscheidet",
         "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
-        "escalated": "Lokal zur Nachverfolgung durch das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis eine maßgebliche Quelle ausgewählt ist.",
         "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
         "flagForEvidenceTeam": "Für das Belegteam markieren",
         "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
-        "governingPreview": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab. Beide Testeinträge bleiben unverändert.",
-        "governingPreviewWithVerdict": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab – Ergebnis: <strong>{verdict}</strong>. Beide Testeinträge bleiben unverändert.",
-        "oppositeSides": "Die beiden Daten liegen auf <emphasis>entgegengesetzten Seiten</emphasis> des maßgeblichen Ereignisses. Welcher Eintrag gilt, entscheidet das Ergebnis – die Klärung des Widerspruchs legt das Ergebnis daher unmittelbar fest.",
         "reconcile": "Bestand abgleichen",
-        "resultAsAt": "Zum <strong>{date}</strong> {note}",
         "title": "Widersprüchliche Belege im Bestand",
-        "treatAsGoverning": "{id} als maßgeblich behandeln",
         "treatAsGoverningRecord": "Als maßgeblich behandeln"
       },
       "relation": {
@@ -210,7 +190,6 @@
       },
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
-      "revisedLater": "In einer späteren Erklärung geändert",
       "score": {
         "anchorFactsDisagree": "Ankerfakten widersprechen sich",
         "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
@@ -221,11 +200,6 @@
         "verdictWithheld": "Ergebnis zurückgehalten"
       },
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
-      "timeline": {
-        "asAt": "Zum <strong>{date}</strong>",
-        "asAtDate": "Stichtag",
-        "preview": "Vorschau der Behauptung im Abgleich mit dem Testbestand <emphasis>zu</emphasis> einem gewählten Datum. Vorschauergebnis: <strong>{verdict}</strong>."
-      },
       "whyScore": "Begründung der Bewertung – Ankerfakten"
     },
     "claimTypes": {
@@ -257,11 +231,6 @@
       "recordConflict": "Lösung bestätigen",
       "supported": "Bestätigen – bereit",
       "verdict": "Ergebnis bestätigen"
-    },
-    "devHarness": {
-      "localSessionNotice": "Nur lokale Sitzung – nichts wird gespeichert. Jede Prüfung, Notiz und Bearbeitung eines Ankerfakts bleibt in diesem Browser-Tab und geht beim Neuladen verloren.",
-      "title": "Tool zur Ankerprüfung – Testumgebung",
-      "verifyDocument": "Dokument prüfen"
     },
     "disposition": {
       "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
@@ -363,7 +332,6 @@
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
-      "claimStatus": " ({state}{contested, select, true {, strittig} other {}}{superseded, select, true {, überholt} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
       "page": "Seite {page}",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
