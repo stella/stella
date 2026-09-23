@@ -22,7 +22,7 @@
 // from a third module is not resolved; `typescript/no-unsafe-type-assertion`
 // still reports that cast.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import {
   filenameForContext,
@@ -65,7 +65,7 @@ const RESTRICTED_IMPORTS = new Map([
   ],
 ]);
 
-type PendingCast = { node: { typeAnnotation: unknown } };
+type PendingCast = { node: Node; typeAnnotation: unknown };
 
 export default eslintCompatPlugin({
   meta: { name: "scanned-file-boundary" },
@@ -206,10 +206,10 @@ export default eslintCompatPlugin({
           // Aliases may be declared after the cast, so casts are resolved
           // once the whole file has been read.
           TSAsExpression(node) {
-            pendingCasts.push({ node });
+            pendingCasts.push({ node, typeAnnotation: node.typeAnnotation });
           },
           TSTypeAssertion(node) {
-            pendingCasts.push({ node });
+            pendingCasts.push({ node, typeAnnotation: node.typeAnnotation });
           },
           MemberExpression(node) {
             if (
@@ -221,8 +221,8 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
-            for (const { node } of pendingCasts) {
-              const name = brandOf(node.typeAnnotation, new Set());
+            for (const { node, typeAnnotation } of pendingCasts) {
+              const name = brandOf(typeAnnotation, new Set());
               if (name !== null) {
                 context.report({
                   node,
