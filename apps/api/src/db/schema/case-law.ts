@@ -2094,11 +2094,6 @@ const CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES =
 const CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES =
   CASE_LAW_RESEARCH_ANSWER_STATES.map((state) => sql.raw(`'${state}'`));
 
-const CASE_LAW_RESEARCH_ANSWER_FAILURE_REASON_SQL_VALUES =
-  CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS.map((reason) =>
-    sql.raw(`'${reason}'`),
-  );
-
 /**
  * One question the organization asks of every decision it looks at.
  *
@@ -2201,13 +2196,6 @@ export const caseLawResearchAnswers = p.pgTable(
     p.check(
       "case_law_research_answers_state_check",
       sql`${t.state} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES, sql`, `)})`,
-    ),
-    // A failed cell names its reason and no other cell carries one. The client
-    // maps every reason to its own wording, so a reason outside the contract's
-    // list is a cell no reader can explain.
-    p.check(
-      "case_law_research_answers_failure_reason_check",
-      sql`((${t.state} = 'failed') = (${t.failureReason} IS NOT NULL) AND (${t.failureReason} IS NULL OR ${t.failureReason} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_FAILURE_REASON_SQL_VALUES, sql`, `)}))) IS TRUE`,
     ),
     // Field content of an answerable kind. The exact shape is validated on read
     // against `fieldContentSchema`; this keeps a row that is not field content

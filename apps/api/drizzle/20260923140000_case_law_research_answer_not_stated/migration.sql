@@ -10,8 +10,8 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- it has none to keep; an answered cell keeps its run, so the rationale the
 -- model gave stays readable beside the cell. `not_stated` then leaves the
 -- failure reasons, as does `ai_unavailable`, which no code path ever wrote.
--- The reasons get a CHECK from that list, which also ties a reason to the
--- failed state: every writer already sets one exactly there.
+-- The failure reasons get no CHECK here: an API task still running the old
+-- code writes `not_stated` as a reason until the rollout finishes.
 
 -- stella-migration-safety: reviewed drop-constraint - replaces the state CHECK with a strictly wider set in the same transaction; rollback restores the prior CHECK once no row holds 'not_stated'
 ALTER TABLE "case_law_research_answers"
@@ -47,17 +47,3 @@ WHERE "state" = 'answered'
 
 -- squawk-ignore constraint-missing-not-valid -- the statement above added the constraint NOT VALID; the validating scan reads the research answers, bounded by the column cap times the decisions members have looked at, and the widened set rejects no row the prior one accepted
 ALTER TABLE "case_law_research_answers" VALIDATE CONSTRAINT "case_law_research_answers_state_check";
---> statement-breakpoint
-
-ALTER TABLE "case_law_research_answers"
-  ADD CONSTRAINT "case_law_research_answers_failure_reason_check"
-  CHECK (
-    (("state" = 'failed') = ("failure_reason" IS NOT NULL)
-      AND ("failure_reason" IS NULL
-        OR "failure_reason" IN ('decision_unavailable', 'no_text', 'model_error', 'missing_answer', 'wrong_type', 'run_error'))
-    ) IS TRUE
-  ) NOT VALID;
---> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid -- the statement above added the constraint NOT VALID; the scan is bounded as above; every reason ever written is in the list once the first update has rewritten 'not_stated', and every writer sets a reason exactly on a failed cell
-ALTER TABLE "case_law_research_answers" VALIDATE CONSTRAINT "case_law_research_answers_failure_reason_check";
