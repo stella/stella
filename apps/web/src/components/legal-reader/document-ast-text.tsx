@@ -628,7 +628,7 @@ export const InlineContent = ({
     sourceLinks,
   );
   const context: HighlightContext = {
-    anchors: [...anchors, ...automaticLinks].sort(
+    anchors: [...anchors, ...automaticLinks].toSorted(
       (left, right) => left.start - right.start,
     ),
     pieceId,

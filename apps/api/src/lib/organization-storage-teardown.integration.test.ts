@@ -643,7 +643,7 @@ const recordedKeys = async (
     .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
     .from(entityDeletionCleanupRequests)
     .where(eq(entityDeletionCleanupRequests.organizationId, organizationId));
-  return rows.flatMap(({ s3Keys }) => s3Keys).sort();
+  return rows.flatMap(({ s3Keys }) => s3Keys).toSorted();
 };
 
 describe("organization deletion storage teardown", () => {
@@ -673,7 +673,7 @@ describe("organization deletion storage teardown", () => {
         ...fixture.styleSetKeys,
         ...fixture.templateKeys,
         fixture.thumbnailKey,
-      ].sort(),
+      ].toSorted(),
     );
   });
 

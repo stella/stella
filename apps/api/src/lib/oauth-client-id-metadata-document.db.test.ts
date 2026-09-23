@@ -105,8 +105,9 @@ const refusalFrom = async (response: Response): Promise<string> => {
   expect(location.startsWith(getAuthIssuerUrl())).toBe(true);
   expect(location).not.toContain("attacker.example.net");
   const { searchParams } = new URL(location);
-  expect(searchParams.get("error")).toEqual(expect.any(String));
-  return `${searchParams.get("error")} ${searchParams.get("error_description")}`;
+  const error = searchParams.get("error");
+  expect(error).toEqual(expect.any(String));
+  return `${error ?? ""} ${searchParams.get("error_description") ?? ""}`;
 };
 
 describe("OAuth client ID metadata documents", () => {

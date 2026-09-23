@@ -358,7 +358,7 @@ const LEAF_EMIT_RANK = {
   keywords: 2,
 } as const satisfies Record<LeafGroup, number>;
 
-const LEAF_EMIT_ORDER = [...LEAF_BUDGET_PASSES].sort(
+const LEAF_EMIT_ORDER = [...LEAF_BUDGET_PASSES].toSorted(
   (left, right) => LEAF_EMIT_RANK[left] - LEAF_EMIT_RANK[right],
 );
 

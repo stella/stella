@@ -162,7 +162,7 @@ const readCliChangesets = (root: string): readonly string[] =>
     .filter((entry) =>
       changesetNamesCli(readCommittedFile(root, "HEAD", entry)),
     )
-    .sort();
+    .toSorted();
 
 export const generatedContractPaths = (
   root: string,

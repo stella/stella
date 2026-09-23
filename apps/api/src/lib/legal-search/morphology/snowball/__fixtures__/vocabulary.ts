@@ -27,7 +27,7 @@ export const conformanceAlgorithms = (): readonly string[] =>
   readdirSync(import.meta.dir)
     .filter((entry) => entry.endsWith(FIXTURE_SUFFIX))
     .map((entry) => entry.slice(0, -FIXTURE_SUFFIX.length))
-    .sort();
+    .toSorted();
 
 export const readConformanceVocabulary = (
   algorithm: string,

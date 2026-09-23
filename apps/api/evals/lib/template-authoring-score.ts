@@ -393,7 +393,7 @@ export const comparePaths = (
   const actualSet = new Set(actual);
   return {
     missing: expected.filter((path) => !actualSet.has(path)),
-    extra: [...actualSet].filter((path) => !expectedSet.has(path)).sort(),
+    extra: [...actualSet].filter((path) => !expectedSet.has(path)).toSorted(),
   };
 };
 

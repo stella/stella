@@ -170,7 +170,9 @@ const missingCelex = rows.filter((row) => row.celex === null);
 const withCelex = rows.filter(
   (row): row is CensusRow & { celex: string } => row.celex !== null,
 );
-const distinctCelex = [...new Set(withCelex.map((row) => row.celex))].sort();
+const distinctCelex = [
+  ...new Set(withCelex.map((row) => row.celex)),
+].toSorted();
 console.error(`distinct CELEX: ${distinctCelex.length}`);
 
 /** `celex:LANG` pairs Cellar lists as existing XHTML manifestations. */
@@ -215,7 +217,9 @@ const report = {
     celexUnlisted: celexUnlisted.length,
     missingCelex: missingCelex.length,
   },
-  refetchableCelex: [...new Set(refetchable.map((row) => row.celex))].sort(),
+  refetchableCelex: [
+    ...new Set(refetchable.map((row) => row.celex)),
+  ].toSorted(),
   phantoms,
   celexUnlisted,
   missingCelex: missingCelex.map(({ id, language }) => ({ id, language })),

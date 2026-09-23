@@ -571,7 +571,7 @@ export const AnonymizationFacet = ({
     for (const list of groups.values()) {
       list.sort((a, b) => compareText(a.canonical, b.canonical));
     }
-    return [...groups.entries()].sort(([a], [b]) => compareText(a, b));
+    return [...groups.entries()].toSorted(([a], [b]) => compareText(a, b));
   })();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),

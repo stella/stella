@@ -1772,10 +1772,10 @@ describe("registry projection contract", () => {
       const lists = deriveRefMediationEntry(
         READ_TOOL_REF_FIELD_MAP[toolName].projection,
       );
-      const declared = lists.outputRefs.map((field) => field.path).sort();
+      const declared = lists.outputRefs.map((field) => field.path).toSorted();
       const exercised = [
         ...new Set(calls.flatMap((call) => call.expectRefPaths)),
-      ].sort();
+      ].toSorted();
       expect(
         exercised,
         `${toolName}: the corpus' expectRefPaths must equal the map's ` +

@@ -307,7 +307,7 @@ const rewritePlaceholders = (
   }
   const pattern = new RegExp(
     [...replacements.keys()]
-      .sort((a, b) => b.length - a.length)
+      .toSorted((a, b) => b.length - a.length)
       .map(escapeRegex)
       .join("|"),
     "gu",

@@ -76,7 +76,7 @@ describe("snowball conformance", () => {
     expect<readonly string[]>(conformanceAlgorithms()).toEqual(
       Object.values(STEMMERS)
         .map(({ algorithm }) => algorithm)
-        .sort(),
+        .toSorted(),
     );
   });
 

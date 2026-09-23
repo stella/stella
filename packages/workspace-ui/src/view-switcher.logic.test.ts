@@ -21,7 +21,7 @@ describe("workspace view reordering", () => {
           });
           const order = reordered ?? [...IDS];
 
-          expect([...order].sort()).toEqual([...IDS].sort());
+          expect([...order].toSorted()).toEqual([...IDS].toSorted());
 
           if (draggedId === targetId) {
             expect(reordered).toBeNull();

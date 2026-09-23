@@ -59,7 +59,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
 
     try {
       const result = await fetchToolsListRaw({
-        serverUrl: `http://localhost:${server.port}`,
+        serverUrl: server.url.origin,
         token: "test-token",
       });
 
@@ -115,7 +115,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
 
     try {
       const result = await fetchToolsListRaw({
-        serverUrl: `http://localhost:${server.port}`,
+        serverUrl: server.url.origin,
         token: "test-token",
       });
 
@@ -168,7 +168,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
     try {
       const result = await Promise.race([
         fetchToolsListRaw({
-          serverUrl: `http://localhost:${server.port}`,
+          serverUrl: server.url.origin,
           token: "test-token",
           timeoutMs: 100,
         }),
@@ -224,7 +224,7 @@ describe("resources/read content policy", () => {
 
     try {
       const result = await readResource({
-        serverUrl: `http://localhost:${server.port}`,
+        serverUrl: server.url.origin,
         token: "test-token",
         uri: "stella://binary",
       });
@@ -263,7 +263,7 @@ describe("tools/call timeout policy", () => {
       },
     });
     const input = {
-      serverUrl: `http://localhost:${server.port}`,
+      serverUrl: server.url.origin,
       token: "test-token",
       name: "save_filled_template",
       args: {},
@@ -319,7 +319,7 @@ describe("metadata operation timeout policy", () => {
       },
     });
     const connection = {
-      serverUrl: `http://localhost:${server.port}`,
+      serverUrl: server.url.origin,
       token: "test-token",
     };
     try {

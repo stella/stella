@@ -265,7 +265,7 @@ describe("loadWindowedThreadMessages", () => {
       })),
     );
     // Order by (createdAt, id); since createdAt ties, id breaks the tie.
-    const ascending = [...messages].sort(byId);
+    const ascending = [...messages].toSorted(byId);
     const firstKept = ascending[3];
     if (!firstKept || !ascending[0] || !ascending[2]) {
       throw new Error("seed precondition failed");

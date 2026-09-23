@@ -82,7 +82,7 @@ const startIdentityServer = ({
     },
   });
   return {
-    url: `http://localhost:${server.port}`,
+    url: server.url.origin,
     requests: () => requests,
     stop: () => {
       void server.stop(true);

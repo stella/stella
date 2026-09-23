@@ -44,7 +44,7 @@ describe("committed ledger", () => {
   // the real committed artifacts rather than a fixture.
   test("is exactly the set of capabilities without a description", () => {
     const undescribed = findUndescribedIds(entries);
-    expect([...ledgerIds].sort()).toEqual(undescribed);
+    expect([...ledgerIds].toSorted()).toEqual(undescribed);
   });
 
   test("is sorted, duplicate-free, and free of unknown or paid entries", () => {
@@ -76,12 +76,12 @@ describe("computeLedgerDiff", () => {
         expect(malformed).toEqual([]);
         expect(unknown).toEqual([]);
         // Symmetric difference of the two sets, and nothing else.
-        const flagged = [...unledgered, ...described].sort();
+        const flagged = [...unledgered, ...described].toSorted();
         const undescribedSet = new Set(undescribed);
         const ledgeredSet = new Set(ledgered);
         const expected = catalogIds
           .filter((id) => undescribedSet.has(id) !== ledgeredSet.has(id))
-          .sort();
+          .toSorted();
         expect(flagged).toEqual(expected);
         expect(new Set(flagged).size).toBe(flagged.length);
       }

@@ -7,7 +7,7 @@ import { cn, cn as mergeClasses } from "@stll/ui/utils";
 
 type MatterRowProps = {
   active: boolean;
-  className?: string;
+  className: string;
   status: "open" | "closed";
 };
 

@@ -733,9 +733,11 @@ const runSelfTest = (): number => {
   }
 
   const tightest = tightestHeadroom(measured, baseline);
-  if (tightest?.id !== "web" || tightest.field !== "instantiations") {
+  if (tightest === null) {
+    failures.push("tightestHeadroom picked nothing, want web.instantiations");
+  } else if (tightest.id !== "web" || tightest.field !== "instantiations") {
     failures.push(
-      `tightestHeadroom picked ${tightest?.id}.${tightest?.field}, want web.instantiations`,
+      `tightestHeadroom picked ${tightest.id}.${tightest.field}, want web.instantiations`,
     );
   }
   const driftLine = formatDriftLine(

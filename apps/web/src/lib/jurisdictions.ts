@@ -79,7 +79,7 @@ export const createCountryOptions = (
   return COUNTRY_CODES.map((code) => ({
     code,
     name: countryName(code, formatDisplayName),
-  })).sort((a, b) => compareName(a.name, b.name));
+  })).toSorted((a, b) => compareName(a.name, b.name));
 };
 
 export const countryName = (

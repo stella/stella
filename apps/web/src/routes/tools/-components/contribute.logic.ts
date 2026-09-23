@@ -102,8 +102,8 @@ export const normalizeGithubRepo = (input: string): string | null => {
     withoutHost = withoutHost.slice(0, -1);
   }
   withoutHost = withoutHost.replace(/\.git$/u, "");
-  const groups = GITHUB_REPO_PATTERN.exec(withoutHost)?.groups;
-  return groups ? `${groups["owner"]}/${groups["name"]}` : null;
+  // The pattern is anchored, so the whole match is the `owner/name` pair.
+  return GITHUB_REPO_PATTERN.exec(withoutHost)?.[0] ?? null;
 };
 
 /** Unauthenticated, CORS-enabled latest-commit lookup for a repo. */

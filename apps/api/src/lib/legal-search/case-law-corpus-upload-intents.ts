@@ -190,7 +190,7 @@ export const reserveCaseLawCorpusUploadIntents = async ({
     reservations.map((reservation) => [reservation.decisionId, reservation]),
   );
   // Decision ids, not words: this fixes the order the rows are locked in.
-  const decisionIds = [...byDecision.keys()].sort((left, right) =>
+  const decisionIds = [...byDecision.keys()].toSorted((left, right) =>
     left < right ? -1 : 1,
   );
 

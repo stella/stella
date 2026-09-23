@@ -335,7 +335,7 @@ const scanDirectives = (
   visit(source);
 
   const directives: LintDirective[] = [];
-  for (const { pos, end } of [...comments.values()].sort(
+  for (const { pos, end } of [...comments.values()].toSorted(
     (left, right) => left.pos - right.pos,
   )) {
     const text = content.slice(pos, end);

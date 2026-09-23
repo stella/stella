@@ -36,7 +36,7 @@ const collectTokenHandlerFiles = (dir: string): string[] => {
       files.push(entryPath);
     }
   }
-  return files.sort();
+  return files.toSorted();
 };
 
 const tokenHandlerFiles = collectTokenHandlerFiles(handlersDir);

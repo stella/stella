@@ -470,9 +470,9 @@ describe("Turbo cache input contract", () => {
     ]
       .map((match) => match.at(1))
       .filter((input) => input !== undefined)
-      .sort();
+      .toSorted();
     expect(rootInputs).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),
+      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].toSorted(),
     );
   });
 
@@ -523,10 +523,10 @@ describe("Turbo cache input contract", () => {
       [...taskConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu)]
         .map((match) => match.at(1))
         .filter((input) => input !== undefined)
-        .sort();
+        .toSorted();
 
     expect(rootInputs(typecheckConfig)).toEqual(
-      [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].sort(),
+      [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
     expect(rootInputs(rootTypecheckConfig)).toEqual(
       [
@@ -543,10 +543,10 @@ describe("Turbo cache input contract", () => {
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/types/**",
-      ].sort(),
+      ].toSorted(),
     );
     expect(rootInputs(lintConfig)).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),
+      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].toSorted(),
     );
   });
 });

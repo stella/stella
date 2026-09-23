@@ -37,5 +37,5 @@ export function ChromeFixture() {
 
   return `${user}${match.id}${safeMatch?.id ?? ""}${String(
     safeParams === undefined,
-  )}${routeUser.user.id}${String(navigate)}`;
+  )}${String(routeUser.user.id)}${String(navigate)}`;
 }

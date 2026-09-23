@@ -114,7 +114,7 @@ const lintSources = async ({
   return diagnostics
     .map(reportedLine)
     .filter((line): line is number => line !== null)
-    .sort((left, right) => left - right);
+    .toSorted((left, right) => left - right);
 };
 
 const lint = async ({

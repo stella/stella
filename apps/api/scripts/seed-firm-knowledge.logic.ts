@@ -18,7 +18,7 @@ export const selectMatterNames = ({
   matterNames,
   selectionSeed,
 }: SelectMatterNamesOptions): string[] => {
-  const uniqueNames = [...new Set(matterNames)].sort((a, b) =>
+  const uniqueNames = [...new Set(matterNames)].toSorted((a, b) =>
     a.localeCompare(b),
   );
   if (selectionSeed === undefined) {
@@ -34,7 +34,7 @@ export const selectMatterNames = ({
         .update(name)
         .digest("hex"),
     }))
-    .sort(
+    .toSorted(
       (a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name),
     )
     .slice(0, matterCount)

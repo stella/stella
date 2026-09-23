@@ -114,9 +114,11 @@ const parseDominoDate = (raw: string): string | null => {
   if (!match) {
     return null;
   }
-  // SAFETY: regex guarantees the month/day/year groups
   const { month, day, year } = match.groups ?? {};
-  return `${year}-${month?.padStart(2, "0") ?? ""}-${day?.padStart(2, "0") ?? ""}`;
+  if (month === undefined || day === undefined || year === undefined) {
+    return null;
+  }
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
 
 type MetadataResult = {

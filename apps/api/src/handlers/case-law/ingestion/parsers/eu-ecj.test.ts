@@ -75,7 +75,9 @@ const readFixture = async (name: string): Promise<string | undefined> => {
 
 const fixtureStems = await Array.fromAsync(
   new Glob("*.html.gz").scan(FIXTURES_DIR.pathname),
-).then((names) => names.map((name) => name.replace(/\.html\.gz$/u, "")).sort());
+).then((names) =>
+  names.map((name) => name.replace(/\.html\.gz$/u, "")).toSorted(),
+);
 
 if (fixtureStems.length === 0) {
   throw new Error(
@@ -225,7 +227,9 @@ describe("parseEcjDecisionHtml", () => {
     // anchored on the publisher's own `pointN` ids so deep links match
     // the fragments EUR-Lex and the Court's cross-references use.
     const numbered = blocks.flatMap((block) =>
-      block.type === "paragraph" && block.number !== undefined ? [block] : [],
+      block.type === "paragraph" && block.number !== undefined
+        ? [{ number: block.number, anchorId: block.anchorId }]
+        : [],
     );
     expect(numbered.map((block) => block.number)).toEqual(
       Array.from({ length: numbered.length }, (_, i) => i + 1),
@@ -326,7 +330,7 @@ describe("parseEcjDecisionHtml", () => {
 
     // Dropping a document kind from the corpus would silently narrow
     // every assertion above, so the corpus itself is asserted.
-    expect([...kinds].sort()).toEqual(["CONCLUSION", "JUDGMENT", "ORDER"]);
+    expect([...kinds].toSorted()).toEqual(["CONCLUSION", "JUDGMENT", "ORDER"]);
   });
 
   test("keeps both converter spellings in the corpus", async () => {
@@ -345,7 +349,7 @@ describe("parseEcjDecisionHtml", () => {
     // pipeline spell the class vocabulary without the `coj-` prefix.
     // They are most of the pre-2019 corpus, and they parsed to a
     // structureless wall of text until the parser accepted both.
-    expect([...spellings].sort()).toEqual(["coj-prefixed", "unprefixed"]);
+    expect([...spellings].toSorted()).toEqual(["coj-prefixed", "unprefixed"]);
   });
 
   /**
@@ -500,7 +504,7 @@ describe("parseEcjDecisionHtml", () => {
     // decision corpus's assertions, which is the opposite of coverage.
     const recorded = fixtureStems
       .filter((stem) => stem.endsWith(SHELL_STEM_SUFFIX))
-      .sort();
+      .toSorted();
 
     expect(recorded).toEqual([SHELL_STEM]);
   });
@@ -511,9 +515,9 @@ describe("parseEcjDecisionHtml", () => {
     // sit there reading as coverage.
     const recorded = fixtureStems
       .filter((stem) => stem.endsWith(PORTAL_STEM_SUFFIX))
-      .sort();
+      .toSorted();
 
-    expect(recorded).toEqual(PORTAL_CORPUS.map(portalStem).sort());
+    expect(recorded).toEqual(PORTAL_CORPUS.map(portalStem).toSorted());
   });
 
   /**

@@ -61,9 +61,9 @@ const startMockProvider = (
   });
 
   const metadata: AuthorizationServerMetadata = {
-    authorization_endpoint: `http://127.0.0.1:${server.port}/oauth2/authorize`,
-    issuer: `http://127.0.0.1:${server.port}`,
-    token_endpoint: `http://127.0.0.1:${server.port}/oauth2/token`,
+    authorization_endpoint: `${server.url.origin}/oauth2/authorize`,
+    issuer: server.url.origin,
+    token_endpoint: `${server.url.origin}/oauth2/token`,
   };
 
   return {

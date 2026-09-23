@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
@@ -115,7 +116,7 @@ describe("db query counter HTTP header", () => {
     const signal = { done: false };
     runBackgroundQueries(signal);
     const app = buildCountingApp().listen({ port: 0 });
-    const origin = `http://localhost:${app.server?.port}`;
+    const origin = `http://localhost:${app.server?.port ?? panic("test server bound no port")}`;
 
     const counts: (string | null)[] = [];
     for (let round = 0; round < REQUEST_ROUNDS; round += 1) {

@@ -26,7 +26,9 @@ const RECENT_FILINGS_LIMIT = 5;
 // older than this, the entity needs caller review. EDGAR keeps every
 // issuer it has ever known forever, so an old filing history is not
 // enough to infer a lifecycle event such as delisting.
-const STALE_FILING_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+const STALE_FILING_AGE_MS = Temporal.Duration.from({
+  hours: 365 * 24,
+}).total("milliseconds");
 
 export const parseAddress = (raw: EdgarRawAddress): EdgarAddress => {
   const street = [trimToNull(raw.street1), trimToNull(raw.street2)]

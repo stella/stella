@@ -89,7 +89,7 @@ export const toReviewSignalFindings = (
         },
       ];
     })
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+    .toSorted((a, b) => severityRank(b.severity) - severityRank(a.severity));
 
 export const reviewVerdict = (
   findings: readonly ReviewSignalFinding[],

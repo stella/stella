@@ -1932,9 +1932,9 @@ const fetchResultPage = async ({
     return Result.err(
       new AdapterFetchError({
         message: `NSS pagination for ${date} answered no rows for page ${page}, which ${
-          requiredRows === null
+          statedCount === null
             ? "the day's unstated record count cannot show is past its last record"
-            : `its stated count of ${statedCount} requires ${requiredRows} of`
+            : `its stated count of ${statedCount} requires ${czNssExpectedRows({ page, statedCount })} of`
         }`,
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         cursor: `${date}:${page}`,

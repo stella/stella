@@ -77,10 +77,10 @@ describe("composeRefs", () => {
       // Ordered so a ref that supplies its own cleanup sits between two that
       // do not: whichever branch the loop takes, it must keep going.
       (node: string | null) => {
-        attached.push(`first:${node}`);
+        attached.push(`first:${node ?? "null"}`);
       },
       (node: string | null) => {
-        attached.push(`second:${node}`);
+        attached.push(`second:${node ?? "null"}`);
         return () => {
           detached.push("second");
         };

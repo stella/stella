@@ -237,7 +237,7 @@ const graphql = async (
 const normalizeTemplateValue = (value: string) =>
   value.replaceAll(/\$\{\{\s*/gu, "${{").replaceAll(/(?<!\s)\s*\}\}/gu, "}}");
 
-const sorted = (items: string[]) => [...items].sort();
+const sorted = (items: string[]) => [...items].toSorted();
 
 const sameStringSet = (left: string[], right: string[]) =>
   JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));

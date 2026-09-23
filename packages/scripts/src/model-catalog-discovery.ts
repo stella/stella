@@ -115,7 +115,7 @@ export const findUnreviewedModels = ({
     failures.push(model);
   }
 
-  return failures.sort((left, right) => {
+  return failures.toSorted((left, right) => {
     const providerOrder = left.provider.localeCompare(right.provider);
     return providerOrder === 0
       ? left.modelId.localeCompare(right.modelId)

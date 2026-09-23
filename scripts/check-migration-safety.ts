@@ -1389,7 +1389,7 @@ const collectMigrationFiles = (directory: string): string[] => {
     }
   }
 
-  return files.sort();
+  return files.toSorted();
 };
 
 const normalizeInputFiles = (args: string[]): string[] => {

@@ -477,7 +477,7 @@ const splitAroundLinks = (
 ): TextAnchor[] => {
   const cuts = links
     .filter((link) => mark.start < link.end && link.start < mark.end)
-    .sort((a, b) => a.start - b.start);
+    .toSorted((a, b) => a.start - b.start);
   const pieces: TextAnchor[] = [];
   let cursor = mark.start;
   for (const cut of cuts) {
@@ -739,7 +739,7 @@ const renderBlocksWithHoldingZone = ({
   type Group = {
     cssVar: string | null;
     headingId: string | null;
-    blocks: Block[];
+    blocks: [Block, ...Block[]];
   };
 
   const groups: Group[] = [];
@@ -773,7 +773,7 @@ const renderBlocksWithHoldingZone = ({
           !group.cssVar && "border-s-transparent",
           hasPreviousGroup && "mt-1.5",
         )}
-        key={`section-${group.blocks.at(0)?.id}`}
+        key={`section-${group.blocks[0].id}`}
         style={borderStyle}
       >
         {groupApparatusWrap(

@@ -55,7 +55,7 @@ const leafPaths = (node: RouteNode): string[] => {
     }
   };
   walk(node, []);
-  return out.sort();
+  return out.toSorted();
 };
 
 const leafEntries = (
@@ -175,12 +175,12 @@ describe("generateRouteMap: discriminator split (S2)", () => {
   });
 
   test("per-subcommand flag sets and required sets match the table", () => {
-    expect(add?.flags.map((f) => f.flag).sort()).toEqual([
+    expect(add?.flags.map((f) => f.flag).toSorted()).toEqual([
       "--matter-id",
       "--user-id",
     ]);
     expect(add?.flags.every((f) => f.required)).toBe(true);
-    expect(settings?.flags.map((f) => f.flag).sort()).toEqual([
+    expect(settings?.flags.map((f) => f.flag).toSorted()).toEqual([
       "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",

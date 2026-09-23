@@ -219,7 +219,7 @@ const contentFingerprint = (value: unknown): string => {
     // Code-unit order, not collation: these are field names, not words.
     const fields = [...entries.keys()]
       .filter((key) => entries.get(key) !== undefined)
-      .sort()
+      .toSorted()
       .map(
         (key) =>
           `${JSON.stringify(key)}:${contentFingerprint(entries.get(key))}`,

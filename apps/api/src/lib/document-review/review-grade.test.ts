@@ -341,7 +341,9 @@ describe("document review grading", () => {
     expect(gradedBatches).toHaveLength(3);
     // The hand-off order tracked completion, not launch order.
     expect(gradedBatches.flat()).not.toEqual(expectedOrder);
-    expect(gradedBatches.flat().toSorted()).toEqual([...expectedOrder].sort());
+    expect(gradedBatches.flat().toSorted()).toEqual(
+      [...expectedOrder].toSorted(),
+    );
     // The final findings are still in the positions' original order.
     expect(findings.map(({ positionId }) => positionId)).toEqual(expectedOrder);
   });

@@ -286,13 +286,15 @@ describe("importing the roster", () => {
       relinked: RELINKED,
       failures: [],
     });
-    const row = store.rows.get(judgeNameKey("Josef Baxa"));
-    expect(row?.fullName).toBe("Josef Baxa");
-    expect(row?.termStart).toBe("2023-06-05");
-    expect(row?.termEnd).toBeNull();
-    expect(row?.externalRefs.sourceUrl).toBe(SITTING_JUSTICE_URL);
+    const row =
+      store.rows.get(judgeNameKey("Josef Baxa")) ??
+      panic("Josef Baxa was not stored");
+    expect(row.fullName).toBe("Josef Baxa");
+    expect(row.termStart).toBe("2023-06-05");
+    expect(row.termEnd).toBeNull();
+    expect(row.externalRefs.sourceUrl).toBe(SITTING_JUSTICE_URL);
     expect(site.puts).toHaveLength(1);
-    expect(site.puts.at(0)?.key).toBe(`case-law/judges/${row?.id}.jpg`);
+    expect(site.puts.at(0)?.key).toBe(`case-law/judges/${row.id}.jpg`);
     expect(site.puts.at(0)?.contentType).toBe("image/jpeg");
     expect(store.relinkCalls()).toBe(1);
   });

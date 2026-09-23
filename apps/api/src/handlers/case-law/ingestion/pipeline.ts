@@ -701,7 +701,7 @@ const settleCitationPolarity = async (
   if (matches.size === 0) {
     return [...rows];
   }
-  const tally = [...matches].sort(([a], [b]) => (a < b ? -1 : 1));
+  const tally = [...matches].toSorted(([a], [b]) => (a < b ? -1 : 1));
   const confirmed: unknown = await tx.execute(sql`
     UPDATE ${caseLawPolarityRules} AS r
        SET match_count = r.match_count + m.matches,
@@ -999,7 +999,7 @@ const processDecisionAttempt = async ({
     if (result.sourceDocumentIdAliases !== undefined) {
       identities.push(...result.sourceDocumentIdAliases);
     }
-    return [...new Set(identities)].sort();
+    return [...new Set(identities)].toSorted();
   })();
   const repairSourceIdentityCandidates =
     result.sourceDocumentId &&
@@ -1010,12 +1010,12 @@ const processDecisionAttempt = async ({
               (identity) => !exactSourceIdentityCandidates.includes(identity),
             ),
           ),
-        ].sort()
+        ].toSorted()
       : [];
   const sourceIdentityCandidates = [
     ...exactSourceIdentityCandidates,
     ...repairSourceIdentityCandidates,
-  ].sort();
+  ].toSorted();
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }

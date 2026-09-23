@@ -223,7 +223,7 @@ const typecheckProjects = (): string[] => {
     addProject(project, "typecheck:repo");
   }
 
-  return [...projects].sort();
+  return [...projects].toSorted();
 };
 
 const projectAccountingErrors = (
@@ -465,7 +465,7 @@ const findSourcesWithoutDiscoverableConfig = (
           configExists,
         ),
     )
-    .sort();
+    .toSorted();
 
 const assertOxcProjectDiscovery = (projects: string[]): void => {
   const errors = projectAccountingErrors(
@@ -593,7 +593,7 @@ const findUncovered = (
   [...repositoryFiles]
     .filter((file) => !isExempt(file))
     .filter((file) => !covered.has(file))
-    .sort();
+    .toSorted();
 
 const findOxcFilesWithoutProject = (
   repositoryFiles: Set<string>,
@@ -605,7 +605,7 @@ const findOxcFilesWithoutProject = (
     )
     .filter((file) => !isOxcDiscoveryExempt(file))
     .filter((file) => !covered.has(file))
-    .sort();
+    .toSorted();
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) {

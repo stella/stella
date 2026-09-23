@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -559,7 +559,12 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return String(year);
     }
     if (mode === "week") {
-      return `${days[0]?.date} – ${days[6]?.date}`;
+      const first = days.at(0);
+      const last = days.at(-1);
+      if (!first || !last) {
+        return panic("Week view has no days to label");
+      }
+      return `${first.date} – ${last.date}`;
     }
     return monthLabel;
   })();

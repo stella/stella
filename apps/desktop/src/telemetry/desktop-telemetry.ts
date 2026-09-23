@@ -158,7 +158,7 @@ const frameFromStackLine = (line: string) => {
     at: line.indexOf(suffix),
     suffix,
   })).filter(({ at }) => at !== -1);
-  const marker = suffixes.sort((left, right) => left.at - right.at).at(0);
+  const marker = suffixes.toSorted((left, right) => left.at - right.at).at(0);
   if (!marker) {
     return null;
   }

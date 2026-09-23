@@ -101,7 +101,7 @@ export const outlineFromHeadings = (
   const headings = blocks.filter((block) => block.type === "heading");
   const depthByLevel = new Map(
     [...new Set(headings.map((heading) => heading.level))]
-      .sort((a, b) => a - b)
+      .toSorted((a, b) => a - b)
       .map((level, depth) => [level, depth]),
   );
   const items: OutlineItem[] = [];

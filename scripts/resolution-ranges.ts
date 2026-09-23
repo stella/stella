@@ -261,7 +261,7 @@ export const analyzeResolutionRanges = ({
       }
       // Highest floor first, first-seen winning a tie, so the representative
       // requirement is both the binding one and stable across runs.
-      const [binding, ...rest] = [...requiredBy].sort((left, right) =>
+      const [binding, ...rest] = [...requiredBy].toSorted((left, right) =>
         Bun.semver.order(right.floor, left.floor),
       );
       if (binding === undefined) {

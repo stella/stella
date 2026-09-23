@@ -435,7 +435,7 @@ export const selectReconciliationWorkUnit = ({
       checkedAtMs:
         tipCheckedAt.get(slice)?.getTime() ?? Number.NEGATIVE_INFINITY,
     }))
-    .sort(
+    .toSorted(
       (left, right) =>
         left.checkedAtMs - right.checkedAtMs ||
         compareSlicesDescending(left.slice, right.slice),

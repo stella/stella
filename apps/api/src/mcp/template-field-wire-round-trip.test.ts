@@ -135,7 +135,7 @@ describe("describe -> configure round trip", () => {
       aiPrompt: "Draft it.",
       aiSeesDocument: true,
     });
-    expect(Object.keys(wire).sort()).toEqual(["path", "source"]);
+    expect(Object.keys(wire).toSorted()).toEqual(["path", "source"]);
     expect(wire.source).toEqual({
       type: "ai",
       prompt: "Draft it.",

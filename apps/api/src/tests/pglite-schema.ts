@@ -137,7 +137,7 @@ const latestMigrationStatementContaining = (fragment: string): string => {
   const statements = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort()
+    .toSorted()
     .flatMap((dirName) => {
       const migrationPath = nodePath.join(
         DRIZZLE_DIR,

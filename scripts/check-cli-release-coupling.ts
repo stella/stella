@@ -337,7 +337,7 @@ export const canonicalJson = (value: unknown): string => {
   }
   if (typeof value === "object" && value !== null) {
     const entries = Object.entries(value)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .toSorted(([a], [b]) => a.localeCompare(b))
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
     return `{${entries.join(",")}}`;
   }
@@ -475,7 +475,7 @@ const readPendingCliChangesets = (root: string): readonly string[] =>
     .filter((entry) =>
       changesetNamesCli(readFileSync(path.join(root, entry), "utf-8")),
     )
-    .sort();
+    .toSorted();
 
 const readCliVersion = (root: string): string => {
   const manifest: unknown = JSON.parse(
@@ -568,9 +568,9 @@ type Args = { readonly version: string | null; readonly base: string | null };
 const parseArgs = (args: readonly string[]): Args => {
   let version: string | null = null;
   let base: string | null = null;
-  for (let index = 0; index < args.length; index += 1) {
-    const flag = args[index];
-    const value = args.at(index + 1);
+  const argv = args.values();
+  for (const flag of argv) {
+    const value = argv.next().value;
     if (value === undefined) {
       return panic(`${flag} requires a value`);
     }
@@ -581,7 +581,6 @@ const parseArgs = (args: readonly string[]): Args => {
     } else {
       return panic(`Unknown argument: ${flag}`);
     }
-    index += 1;
   }
   return { version, base };
 };

@@ -585,7 +585,9 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
     });
     return reparsed?.type === "parsed"
       ? reparsed.result
-      : panic(`cz-regional fixture did not re-parse: ${reparsed?.type}`);
+      : panic(
+          `cz-regional fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+        );
   },
 });
 
@@ -1078,7 +1080,9 @@ export const euEcjFixture = (): EnrolledAdapterFixture => ({
     });
     return reparsed?.type === "parsed"
       ? reparsed.result
-      : panic(`eu-ecj fixture did not re-parse: ${reparsed?.type}`);
+      : panic(
+          `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+        );
   },
 });
 

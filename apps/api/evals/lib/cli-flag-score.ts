@@ -26,7 +26,7 @@ const withSortedArrays = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value
       .map(withSortedArrays)
-      .sort((left, right) =>
+      .toSorted((left, right) =>
         JSON.stringify(left).localeCompare(JSON.stringify(right)),
       );
   }

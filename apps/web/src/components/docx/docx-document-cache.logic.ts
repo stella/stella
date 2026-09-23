@@ -119,7 +119,7 @@ export const writeDocxDocumentCache = (
   const evictCount = next.length - limit;
   const evicted = new Set(
     [...next]
-      .sort((left, right) => left.usedAt - right.usedAt)
+      .toSorted((left, right) => left.usedAt - right.usedAt)
       .slice(0, evictCount)
       .map((entry) => entry.key),
   );

@@ -21,7 +21,7 @@ describe("auth.md conformance (pinned spec version)", () => {
   test("agent_auth block has every v0.6.0 required field", () => {
     const block = getAgentAuthMetadataBlock();
 
-    expect(Object.keys(block).sort()).toEqual(
+    expect(Object.keys(block).toSorted()).toEqual(
       [
         "claim_endpoint",
         "events_endpoint",
@@ -30,7 +30,7 @@ describe("auth.md conformance (pinned spec version)", () => {
         "identity_endpoint",
         "identity_types_supported",
         "skill",
-      ].sort(),
+      ].toSorted(),
     );
 
     // No event schema is advertised until the SET-verification/enforcement

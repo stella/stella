@@ -98,24 +98,32 @@ const queryFailed = (cause: unknown) =>
     message: "Database census query failed",
   });
 
+/** Bun SQL types every result as `any`; rows are `unknown` until checked. */
+const resultRows = (result: unknown): unknown[] | null =>
+  Array.isArray(result) ? result : null;
+
 const readCensus = async (
   sql: SQL,
 ): Promise<Result<Census, DatabaseCensusError>> => {
   const tablesQueried = await Result.tryPromise({
     try: async () => {
       await sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, false)`;
-      return await sql`
+      const rows: unknown = await sql`
         SELECT c.relname AS "name", c.reltuples::bigint AS "estimate"
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = 'public' AND c.relkind = 'r'
          ORDER BY c.relname
       `;
+      return resultRows(rows);
     },
     catch: queryFailed,
   });
   if (Result.isError(tablesQueried)) {
     return tablesQueried;
+  }
+  if (tablesQueried.value === null) {
+    return Result.err(queryFailed(undefined));
   }
   // One connection, one table at a time: the digest scans are the heavy part
   // and must not contend with each other on the clone.
@@ -176,8 +184,8 @@ const readCensus = async (
   }
 
   const foreignKeysQueried = await Result.tryPromise({
-    try: async () =>
-      await sql`
+    try: async () => {
+      const rows: unknown = await sql`
       SELECT con.conname AS "name",
              child.relname AS "childTable",
              parent.relname AS "parentTable",
@@ -193,11 +201,16 @@ const readCensus = async (
        WHERE con.contype = 'f' AND n.nspname = 'public'
        GROUP BY con.conname, child.relname, parent.relname
        ORDER BY con.conname
-    `,
+    `;
+      return resultRows(rows);
+    },
     catch: queryFailed,
   });
   if (Result.isError(foreignKeysQueried)) {
     return foreignKeysQueried;
+  }
+  if (foreignKeysQueried.value === null) {
+    return Result.err(queryFailed(undefined));
   }
   const foreignKeyOrphans: Census["foreignKeyOrphans"] = {};
   const foreignKeyRows = foreignKeysQueried.value.values();
@@ -243,16 +256,17 @@ const readCensus = async (
               `p.${quoteIdentifier(parent)} = c.${quoteIdentifier(child)}`,
           )
           .join(" AND ");
-        return await sql.unsafe(
+        const rows: unknown = await sql.unsafe(
           `SELECT count(*)::text AS "orphans" FROM ${quoteIdentifier(childTable)} c WHERE ${notNull} AND NOT EXISTS (SELECT 1 FROM ${quoteIdentifier(parentTable)} p WHERE ${join})`,
         );
+        return resultRows(rows);
       },
       catch: queryFailed,
     });
     if (Result.isError(orphans)) {
       return orphans;
     }
-    const first = orphans.value.at(0);
+    const first = orphans.value?.at(0);
     if (!isRecord(first) || typeof first["orphans"] !== "string") {
       return Result.err(queryFailed(undefined));
     }

@@ -49,7 +49,7 @@ export const DECISION_JUDGE_ROLE_LABELS = {
 export const orderDecisionJudges = (
   judges: readonly DecisionJudge[],
 ): readonly DecisionJudge[] =>
-  [...judges].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+  [...judges].toSorted((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
 /** Who wrote separately, for the byline above their opinion. */
 export const dissentingJudges = (

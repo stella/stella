@@ -203,14 +203,14 @@ const getThreads = createSafeRootHandler(
       });
     }
 
-    const workspaceGroups = Array.from(groupedWorkspaceThreads.values()).sort(
-      (left, right) => {
-        const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
-        const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
+    const workspaceGroups = Array.from(
+      groupedWorkspaceThreads.values(),
+    ).toSorted((left, right) => {
+      const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
+      const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
 
-        return rightUpdatedAt - leftUpdatedAt;
-      },
-    );
+      return rightUpdatedAt - leftUpdatedAt;
+    });
 
     return Result.ok({
       global,

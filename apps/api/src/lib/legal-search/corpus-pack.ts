@@ -150,7 +150,7 @@ const MEMBER_KIND_ORDER: Record<PackMemberKind, number> = {
 const inLayoutOrder = (
   members: readonly PackMemberInput[],
 ): PackMemberInput[] =>
-  [...members].sort((left, right) => {
+  [...members].toSorted((left, right) => {
     if (left.documentId !== right.documentId) {
       // Document ids, not words: the layout must be the same wherever this
       // runs, which a locale-aware comparison would not guarantee.

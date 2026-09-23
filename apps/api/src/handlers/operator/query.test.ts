@@ -209,7 +209,7 @@ describe("queryRegistrationsPage", () => {
       ]);
       expect(firstPage.nextCursor).not.toBeNull();
       for (const item of firstPage.items) {
-        expect(Object.keys(item).sort()).toEqual([
+        expect(Object.keys(item).toSorted()).toEqual([
           "createdAt",
           "detectedCountry",
           "email",

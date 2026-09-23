@@ -413,7 +413,7 @@ describe("public case-law route boundary", () => {
 
     expect(ungoverned).toEqual([]);
     expect(
-      declared.map((route) => `${route.method} ${route.path}`).sort(),
+      declared.map((route) => `${route.method} ${route.path}`).toSorted(),
     ).toEqual([...PUBLIC_CASE_LAW_ROUTES]);
   });
 

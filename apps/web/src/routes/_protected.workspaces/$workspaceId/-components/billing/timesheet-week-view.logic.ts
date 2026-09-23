@@ -20,7 +20,7 @@ const sortedCurrencyAmounts = (
   [...byCurrency.entries()]
     .map(([currency, amount]) => ({ currency, amount }))
     // oxlint-disable-next-line require-cached-collator/require-cached-collator -- ISO 4217 currency codes are fixed ASCII codes, not locale-sensitive display text
-    .sort((a, b) => a.currency.localeCompare(b.currency));
+    .toSorted((a, b) => a.currency.localeCompare(b.currency));
 
 /**
  * Billable amount summed per currency. There is no FX conversion, so a week

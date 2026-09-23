@@ -52,7 +52,9 @@ describe("FileInput", () => {
     const triggerId = /aria-labelledby="source-label ([^"]+)"/u.exec(
       markup,
     )?.[1];
-    expect(triggerId).toBeDefined();
+    if (triggerId === undefined) {
+      throw new Error("trigger id missing from aria-labelledby");
+    }
     expect(markup).toContain(`id="${triggerId}"`);
   });
 

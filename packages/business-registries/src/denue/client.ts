@@ -273,10 +273,11 @@ export const searchByName = async (
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
   const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
-  const stateCode = normalizeStateCode(options?.stateCode ?? ALL_STATES_CODE);
+  const requestedStateCode = options?.stateCode ?? ALL_STATES_CODE;
+  const stateCode = normalizeStateCode(requestedStateCode);
   if (!validateStateCode(stateCode)) {
     throw new DenueValidationError(
-      `Invalid Mexican state code for DENUE search: ${options?.stateCode}`,
+      `Invalid Mexican state code for DENUE search: ${requestedStateCode}`,
     );
   }
 

@@ -255,7 +255,7 @@ const listImageContainers = async (): Promise<string[]> => {
     .split("\n")
     .map((value) => value.trim())
     .filter((value) => value !== "")
-    .sort();
+    .toSorted();
 };
 
 const readCanaryState = async (containerName: string): Promise<unknown> => {

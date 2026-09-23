@@ -47,7 +47,7 @@ describe("unified registry search boundary", () => {
       }
       owners.push(capability.identifier);
       expect(capability.windows).toEqual(["clipboard"]);
-      expect(granted.sort()).toEqual(permissions.toSorted());
+      expect(granted.toSorted()).toEqual(permissions.toSorted());
       expect(capability.permissions).not.toContain("core:default");
       expect(capability.permissions.join(" ")).not.toMatch(
         /http:|opener:|shell:|fs:|clipboard-manager:/u,

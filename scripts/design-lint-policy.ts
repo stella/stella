@@ -263,6 +263,6 @@ export const designLintBacklogOverrides = (
   backlog: DesignLintBacklog,
 ): OxlintOverride[] =>
   DESIGN_LINT_BACKLOG_RULES.flatMap((rule) => {
-    const files = Object.keys(backlog[rule]).sort();
+    const files = Object.keys(backlog[rule]).toSorted();
     return files.length === 0 ? [] : [{ files, rules: { [rule]: "off" } }];
   });

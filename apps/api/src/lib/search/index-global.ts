@@ -373,7 +373,7 @@ const facetBuckets = (
       return bucket;
     })
     // facet value is a raw filter key (id/enum), a count tiebreak, not display text
-    .sort((a, b) => b.count - a.count || compareCodeUnit(a.value, b.value));
+    .toSorted((a, b) => b.count - a.count || compareCodeUnit(a.value, b.value));
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
@@ -1221,7 +1221,7 @@ export const searchGlobal = async (
     ...caseLawRows.map(mapCaseLawHit),
     ...chatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
-  ].sort(compareScoredSearchHits);
+  ].toSorted(compareScoredSearchHits);
 
   const page = paginateScoredSearchHits({
     scoredHits:

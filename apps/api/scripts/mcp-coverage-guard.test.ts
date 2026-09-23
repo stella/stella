@@ -168,7 +168,7 @@ describe("enumerateModuleEndpoints", () => {
       },
       "m.ts",
     );
-    expect(enumerated.map(({ id }) => id).sort()).toEqual([
+    expect(enumerated.map(({ id }) => id).toSorted()).toEqual([
       "m.ts",
       "m.ts#other",
     ]);

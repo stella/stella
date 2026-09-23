@@ -151,7 +151,7 @@ const heldAdvisoryLockKeys = async (tx: Transaction): Promise<string[]> => {
       ),
     );
 
-  return [...new Set(rows.map((row) => row.key))].sort();
+  return [...new Set(rows.map((row) => row.key))].toSorted();
 };
 
 describe("anonymization write-cap helpers", () => {
@@ -175,7 +175,7 @@ describe("anonymization write-cap helpers", () => {
         tx,
         workspaceId,
       );
-      return rows.map((row) => row.canonical).sort();
+      return rows.map((row) => row.canonical).toSorted();
     });
 
     expect(canonicals).toEqual([
@@ -205,7 +205,7 @@ describe("anonymization write-cap helpers", () => {
         tx,
         organizationId,
       );
-      return rows.map((row) => row.canonical).sort();
+      return rows.map((row) => row.canonical).toSorted();
     });
 
     expect(canonicals).toEqual(["Firm Term 0000", "Firm Term 0001"]);

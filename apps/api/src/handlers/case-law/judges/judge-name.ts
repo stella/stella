@@ -85,5 +85,5 @@ export const judgeNameKey = (printed: string): string =>
     .trim()
     .split(WHITESPACE_PATTERN)
     .filter((part) => part.length > 0)
-    .sort()
+    .toSorted()
     .join("-");

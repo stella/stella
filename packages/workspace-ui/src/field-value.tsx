@@ -118,22 +118,26 @@ export const IntFieldValue = ({
   const format = useFormatter();
   const resolvedVariant = variant ?? "default";
   const className = getIntClassName(resolvedVariant);
-  const fallback = `${format.number(content.value)} ${content.currency}`;
+  const { currency } = content;
 
-  if (!content.currency) {
+  if (!currency) {
     return <span className={className}>{format.number(content.value)}</span>;
   }
 
   const formattedResult = Result.try(() =>
     format.number(content.value, {
       style: "currency",
-      currency: content.currency ?? undefined,
+      currency,
       minimumFractionDigits: 0,
     }),
   );
 
   if (formattedResult.isErr()) {
-    return <span className={className}>{fallback}</span>;
+    return (
+      <span className={className}>
+        {`${format.number(content.value)} ${currency}`}
+      </span>
+    );
   }
 
   return <span className={className}>{formattedResult.value}</span>;

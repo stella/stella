@@ -215,7 +215,7 @@ describe("pl-courts reads what SAOS serves", () => {
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
     const parts = storedParts(decision);
-    expect(Object.keys(parts).sort()).toEqual(["detail", "listing-dump"]);
+    expect(Object.keys(parts).toSorted()).toEqual(["detail", "listing-dump"]);
     // The part is the publisher's row, not this adapter's reading of it.
     expect(JSON.parse(parts["listing-dump"] ?? "")).toEqual(dumpRow);
   });
@@ -307,7 +307,7 @@ describe("pl-courts replays a stored row", () => {
       "Piotr Rajczakowski",
     ]);
     expect(outcome.result.decisionDate).toBe("2018-03-22");
-    expect(Object.keys(storedParts(outcome.result)).sort()).toEqual([
+    expect(Object.keys(storedParts(outcome.result)).toSorted()).toEqual([
       "detail",
       "listing-dump",
     ]);

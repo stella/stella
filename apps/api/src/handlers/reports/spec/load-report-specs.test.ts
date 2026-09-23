@@ -85,7 +85,10 @@ describe("loadReportSpecs", () => {
     if (Result.isError(loaded)) {
       return;
     }
-    expect([...loaded.value.keys()].sort()).toEqual(["extra", "table-report"]);
+    expect([...loaded.value.keys()].toSorted()).toEqual([
+      "extra",
+      "table-report",
+    ]);
     expect(loaded.value.get("table-report")?.spec.name).toBe("Overridden");
     expect(loaded.value.get("table-report")?.prompts.get("intro")).toBe(
       "Intro prompt.",
@@ -177,7 +180,7 @@ const memoryStore = (
       return await Promise.resolve(
         [...encoded.keys()]
           .filter((key) => key.startsWith(prefix))
-          .sort()
+          .toSorted()
           .slice(0, maxKeys + 1),
       );
     },
@@ -237,7 +240,7 @@ describe("readReportSpecSourcesFromS3", () => {
     if (Result.isError(loaded)) {
       return;
     }
-    expect([...loaded.value.keys()].sort()).toEqual([
+    expect([...loaded.value.keys()].toSorted()).toEqual([
       "dd-lite",
       "plain",
       "table-report",
@@ -245,7 +248,7 @@ describe("readReportSpecSourcesFromS3", () => {
     expect(loaded.value.get("dd-lite")?.prompts.get("intro")).toBe(
       "Intro prompt.",
     );
-    expect(store.reads.sort()).toEqual([
+    expect(store.reads.toSorted()).toEqual([
       `${PREFIX}dd-lite/prompts/intro.md`,
       `${PREFIX}dd-lite/prompts/unused.md`,
       `${PREFIX}dd-lite/spec.json`,

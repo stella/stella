@@ -123,7 +123,7 @@ describe("agent-auth service_auth flow", () => {
       new Date(String(body["claim_token_expires"])).getTime(),
     ).toBeGreaterThan(Date.now());
     expect(
-      v.parse(v.array(v.string()), body["post_claim_scopes"]).sort(),
+      v.parse(v.array(v.string()), body["post_claim_scopes"]).toSorted(),
     ).toEqual(["stella:read", "stella:search"]);
     // Ceremony fields nest under `claim`.
     const claim = asJson(body["claim"]);
@@ -153,8 +153,8 @@ describe("agent-auth service_auth flow", () => {
     const unknownBody = await readJson(unknownHintRes);
 
     // Identical response shape (same keys) regardless of account existence.
-    expect(Object.keys(realBody).sort()).toEqual(
-      Object.keys(unknownBody).sort(),
+    expect(Object.keys(realBody).toSorted()).toEqual(
+      Object.keys(unknownBody).toSorted(),
     );
     expect(realBody["registration_type"]).toBe("service_auth");
     expect(unknownBody["registration_type"]).toBe("service_auth");
@@ -245,7 +245,7 @@ describe("agent-auth service_auth flow", () => {
     const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);
-    expect(String(tokenBody["scope"]).split(" ").sort()).toEqual([
+    expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
       "stella:read",
       "stella:search",
     ]);
@@ -256,7 +256,7 @@ describe("agent-auth service_auth flow", () => {
     expect(payload["sub"]).toBe(human.userId);
     expect(payload["org_id"]).toBe(human.organizationId);
     expect(payload["aud"]).toBe(getMcpResourceUrl("default"));
-    expect(String(payload["scope"]).split(" ").sort()).toEqual([
+    expect(String(payload["scope"]).split(" ").toSorted()).toEqual([
       "stella:read",
       "stella:search",
     ]);
@@ -370,8 +370,8 @@ describe("agent-auth anonymous flow", () => {
     // Anonymous agents receive exactly the canonical anonymized resource
     // scopes (AGENT_AUTH_ANONYMOUS_SCOPES aliases this set); assert against it
     // so a scope added to the set does not silently drift from this check.
-    const scopes = String(body["scope"]).split(" ").sort();
-    expect(scopes).toEqual([...MCP_ANONYMIZED_RESOURCE_SCOPES].sort());
+    const scopes = String(body["scope"]).split(" ").toSorted();
+    expect(scopes).toEqual([...MCP_ANONYMIZED_RESOURCE_SCOPES].toSorted());
 
     const accessToken = String(body["access_token"]);
     expect(accessToken.split(".")).toHaveLength(3);

@@ -336,7 +336,10 @@ describe("case-law adapter nullish optionals", () => {
       dissentingOpinions: [],
     });
     const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
-    expect(Object.keys(parts ?? {}).sort()).toEqual(["detail", "listing-dump"]);
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual([
+      "detail",
+      "listing-dump",
+    ]);
   });
 
   test("PL Courts localizes fallback court names when detail court is missing", async () => {

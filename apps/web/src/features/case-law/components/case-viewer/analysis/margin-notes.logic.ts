@@ -106,7 +106,7 @@ export const placeGutterNotes = <TNote>({
   // Reading order, whatever order the caller handed them in: otherwise a late
   // arrival (a comment being written) lands below every earlier note instead
   // of beside its own paragraph.
-  const ordered = [...notes].sort((a, b) => a.anchorTop - b.anchorTop);
+  const ordered = [...notes].toSorted((a, b) => a.anchorTop - b.anchorTop);
   const placed: PlacedNote<TNote>[] = [];
   // Starts at the region's own top: the space above it belongs to the layers.
   let lastBottom = 0;

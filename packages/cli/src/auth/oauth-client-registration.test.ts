@@ -25,7 +25,7 @@ const startRegistrationServer = (
     hostname: "127.0.0.1",
     port: 0,
   });
-  const origin = `http://127.0.0.1:${server.port}`;
+  const origin = server.url.origin;
   const metadata: AuthorizationServerMetadata = {
     authorization_endpoint: `${origin}/authorize`,
     issuer: origin,

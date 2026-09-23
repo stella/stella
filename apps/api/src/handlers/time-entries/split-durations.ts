@@ -20,7 +20,7 @@ export const apportionSplitDurations = (
   const bumped = new Set(
     ideal
       .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
-      .sort((left, right) => right.fraction - left.fraction)
+      .toSorted((left, right) => right.fraction - left.fraction)
       .slice(0, remainder)
       .map((entry) => entry.index),
   );

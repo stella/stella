@@ -222,7 +222,10 @@ const isCzRegionalItemArray = (value: unknown): value is CzRegionalApiItem[] =>
 // Read and validated here, before the lease: a malformed entry deep in the
 // file would otherwise burn the consecutive-failure budget mid-run and could
 // halt a valid recovery.
-const suppliedItems = await (async (): Promise<CzRegionalApiItem[] | null> => {
+const supplied = await (async (): Promise<{
+  path: string;
+  items: CzRegionalApiItem[];
+} | null> => {
   if (itemsFilePath === null) {
     return null;
   }
@@ -234,8 +237,9 @@ const suppliedItems = await (async (): Promise<CzRegionalApiItem[] | null> => {
   // Not truncated to --limit: the run halts on the cap and a re-run with the
   // same file picks up where it stopped, because everything already written
   // is now held and skipped.
-  return parsed;
+  return { path: itemsFilePath, items: parsed };
 })();
+const suppliedItems = supplied?.items ?? null;
 
 const days =
   suppliedItems === null
@@ -246,13 +250,13 @@ const days =
 
 console.log("=== CZ-REGIONAL LISTING RECONCILIATION ===");
 console.log(`mode:        ${apply ? "apply" : "plan only"}`);
-if (suppliedItems === null) {
+if (supplied === null) {
   console.log(`range:       ${from} … ${to}`);
   console.log(
     `days:        ${days.length}${after === null ? "" : ` (after ${after})`}`,
   );
 } else {
-  console.log(`items file:  ${itemsFilePath} (${suppliedItems.length} items)`);
+  console.log(`items file:  ${supplied.path} (${supplied.items.length} items)`);
 }
 
 // A plan run only reads, so it takes no lane and cannot block a writer; the

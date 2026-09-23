@@ -36,7 +36,7 @@ describe("runDevQuickStart", () => {
         return ORGANIZATION_ID;
       },
       onAttemptUpdated: ({ completedPhase }) => {
-        calls.push(`completed:${completedPhase}`);
+        calls.push(`completed:${completedPhase ?? "none"}`);
       },
       onPhase: (phase) => {
         calls.push(`phase:${phase}`);

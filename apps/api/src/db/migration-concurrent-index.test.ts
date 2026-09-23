@@ -784,7 +784,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
   }
 
-  return violations.sort();
+  return violations.toSorted();
 };
 
 type TypeChangeTimeoutState = {
@@ -1112,7 +1112,7 @@ const collectUnsafeTypeChanges = async () => {
     );
   }
 
-  return violations.sort();
+  return violations.toSorted();
 };
 
 describe("concurrent index migration safety", () => {

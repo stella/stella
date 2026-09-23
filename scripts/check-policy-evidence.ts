@@ -220,7 +220,7 @@ export const checkPolicyEvidence = ({
     policyFiles = readdirSync(policiesDir)
       .filter((name) => name.endsWith(".md"))
       .map((name) => `docs/policies/${name}`)
-      .sort();
+      .toSorted();
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return { errors: [...errors, "missing docs/policies directory"] };

@@ -38,7 +38,6 @@ export const ClipboardGroupFields = ({
         <Input
           autoFocus={autoFocus}
           className="mt-2 h-11 rounded-2xl text-base sm:text-base **:[input]:h-full **:[input]:px-4"
-          dir="auto"
           onChange={(event) => {
             if (
               Array.from(event.target.value).length > MAX_GROUP_NAME_CHARACTERS

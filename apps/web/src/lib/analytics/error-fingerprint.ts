@@ -1,7 +1,8 @@
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 
+const ASSET_PATH_PREFIX = "/assets/";
 const FIRST_PARTY_ASSET_FRAME =
-  /\/assets\/([A-Za-z0-9._-]{1,160}\.(?:js|mjs)):(\d{1,7}):(\d{1,7})/u;
+  /\/assets\/[A-Za-z0-9._-]{1,160}\.(?:js|mjs):\d{1,7}:\d{1,7}/u;
 
 const stableHash = (value: string): string => {
   let hash = 0;
@@ -16,7 +17,7 @@ export const fingerprintTelemetryError = (error: unknown): string => {
   const stack = error instanceof Error ? error.stack : undefined;
   const frame = stack?.slice(0, 20_000).match(FIRST_PARTY_ASSET_FRAME);
   const safeFrame = frame
-    ? `${frame[1]}:${frame[2]}:${frame[3]}`
+    ? frame[0].slice(ASSET_PATH_PREFIX.length)
     : "no-first-party-frame";
   return `ERRFP-${stableHash(`${telemetryErrorType(error)}|${safeFrame}`)}`;
 };

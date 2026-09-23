@@ -87,8 +87,8 @@ test("the yielding parse agrees with the synchronous one", async () => {
   expect(offLoop.collidedKeys).toBe(sync.collidedKeys);
   const byKey = (left: [string, string], right: [string, string]): number =>
     left[0] < right[0] ? -1 : 1;
-  expect([...offLoop.entries].sort(byKey)).toEqual(
-    [...sync.entries].sort(byKey),
+  expect([...offLoop.entries].toSorted(byKey)).toEqual(
+    [...sync.entries].toSorted(byKey),
   );
   // Non-vacuity: the fixture must actually reach the interesting branches.
   expect(sync.skippedLines).toBeGreaterThan(0);
@@ -205,8 +205,8 @@ test("collision handling does not depend on serialization order", () => {
   const second = "řad\třada,řady,řadě\t800";
   const forward = parseExpansionDictionary([first, second].join("\n"));
   const reverse = parseExpansionDictionary([second, first].join("\n"));
-  expect([...forward.entries.keys()].sort()).toEqual(
-    [...reverse.entries.keys()].sort(),
+  expect([...forward.entries.keys()].toSorted()).toEqual(
+    [...reverse.entries.keys()].toSorted(),
   );
   expect(forward.collidedKeys).toBe(reverse.collidedKeys);
 });

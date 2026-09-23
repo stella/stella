@@ -294,7 +294,7 @@ const clipboardQueryTerms = (query: string) => {
   const normalizedTerms = foldSearchMatchText(query)
     .split(/\s+/u)
     .filter(Boolean);
-  return Array.from(new Set(normalizedTerms)).sort(
+  return Array.from(new Set(normalizedTerms)).toSorted(
     (left, right) => right.length - left.length,
   );
 };
@@ -593,7 +593,7 @@ export const filterClipboardItems = (
   const groupedItems = groupId
     ? items
         .filter((item) => item.groupId === groupId)
-        .sort((left, right) =>
+        .toSorted((left, right) =>
           (right.groupedAt ?? right.copiedAt).localeCompare(
             left.groupedAt ?? left.copiedAt,
           ),

@@ -5,14 +5,17 @@ import { startLoopbackListener } from "./loopback-listener.js";
 describe("startLoopbackListener", () => {
   test("binds an ephemeral 127.0.0.1 port and reports it in redirectUri", async () => {
     const listener = await startLoopbackListener();
+    if (!listener) {
+      throw new Error("listener failed to bind");
+    }
+
     try {
-      expect(listener).toBeDefined();
-      expect(listener?.port).toBeGreaterThan(0);
-      expect(listener?.redirectUri).toBe(
-        `http://127.0.0.1:${listener?.port}/callback`,
+      expect(listener.port).toBeGreaterThan(0);
+      expect(listener.redirectUri).toBe(
+        `http://127.0.0.1:${listener.port}/callback`,
       );
     } finally {
-      listener?.close();
+      listener.close();
     }
   });
 

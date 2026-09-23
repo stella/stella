@@ -24,10 +24,10 @@ const _r1 = a.name.localeCompare(b.name);
 // oxlint-disable-next-line require-cached-collator/require-cached-collator
 const _r2 = a.name.localeCompare(b.name, locale);
 // oxlint-disable-next-line require-cached-collator/require-cached-collator
-const _r3 = [a, b].sort((x, y) => x.name.localeCompare(y.name));
+const _r3 = [a, b].toSorted((x, y) => x.name.localeCompare(y.name));
 
 // --- Allowed: routed through the shared collation helper (must NOT be flagged) ---
 const _ok1 = compareByLocale(locale)(a.name, b.name);
-const _ok2 = [a, b].sort((x, y) => compareByLocale(locale)(x.name, y.name));
+const _ok2 = [a, b].toSorted((x, y) => compareByLocale(locale)(x.name, y.name));
 
 export const __requireCachedCollatorFixture = { _r1, _r2, _r3, _ok1, _ok2 };

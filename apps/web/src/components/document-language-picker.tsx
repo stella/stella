@@ -54,7 +54,7 @@ const LanguagePicker = ({
       label: t(`common.languages.${lang.code}`),
     }));
     const compareLabel = compareByLocale(locale);
-    return items.sort((a, b) => compareLabel(a.label, b.label));
+    return items.toSorted((a, b) => compareLabel(a.label, b.label));
   })();
 
   const selected = options.find((option) => option.code === value) ?? null;

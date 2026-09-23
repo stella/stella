@@ -93,7 +93,7 @@ const modulesUnder = (tree: string): readonly string[] =>
         .replaceAll(nodePath.sep, "/"),
     );
 
-const scannedModules = SCANNED_TREES.flatMap(modulesUnder).sort();
+const scannedModules = SCANNED_TREES.flatMap(modulesUnder).toSorted();
 
 const gatedModules = scannedModules.filter(
   (entry) => !(entry in DIRECT_FETCH_MODULES),

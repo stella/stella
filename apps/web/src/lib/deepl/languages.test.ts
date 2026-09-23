@@ -10,6 +10,8 @@ describe("DeepL target language picker data", () => {
       (language) => language.englishName,
     );
 
-    expect(displayNames).toEqual([...displayNames].sort(compareByLocale("en")));
+    expect(displayNames).toEqual(
+      [...displayNames].toSorted(compareByLocale("en")),
+    );
   });
 });

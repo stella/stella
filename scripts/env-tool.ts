@@ -905,7 +905,8 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
 
   const nodeEnv = configured["NODE_ENV"];
   const nodeEnvKind = classifyNodeEnv(nodeEnv);
-  if (nodeEnvKind === NODE_ENV_KIND.unknown) {
+  // `unknown` is only ever a set, non-empty value.
+  if (nodeEnvKind === NODE_ENV_KIND.unknown && nodeEnv !== undefined) {
     return {
       status: "invalid",
       issues: [

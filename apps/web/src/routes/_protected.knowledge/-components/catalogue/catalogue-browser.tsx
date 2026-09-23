@@ -205,7 +205,7 @@ export const CatalogueBrowser = ({
       );
     });
     const compareName = compareByLocale(locale);
-    return [...subset].sort((left, right) => {
+    return [...subset].toSorted((left, right) => {
       if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
         return left.isRecommendedForOrg ? -1 : 1;
       }

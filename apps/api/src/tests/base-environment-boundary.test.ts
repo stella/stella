@@ -46,7 +46,7 @@ const gatedAdapterEntrypoints = async (): Promise<string[]> => {
       return modules.has(gateModule) ? `${ADAPTER_DIRECTORY}/${entry}` : null;
     }),
   );
-  return gated.filter((entry): entry is string => entry !== null).sort();
+  return gated.filter((entry): entry is string => entry !== null).toSorted();
 };
 
 const GATED_ADAPTER_ENTRYPOINTS = await gatedAdapterEntrypoints();

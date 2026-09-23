@@ -1175,7 +1175,7 @@ export const createAtFindokAdapter = (
           const state = decodeCursor(cursor, dependencies.now());
           if (state === undefined) {
             throw new AdapterFetchError({
-              message: `Invalid Findok cursor: ${cursor}`,
+              message: `Invalid Findok cursor: ${cursor ?? "(none)"}`,
               adapterKey: ADAPTER_KEYS.AT_FINDOK,
               cursor,
             });

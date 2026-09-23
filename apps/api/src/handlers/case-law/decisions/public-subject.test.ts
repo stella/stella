@@ -90,7 +90,7 @@ describe("public decision routes are gated by construction", () => {
     const gated = routes
       .filter((route) => isSubjectGatedHandler(route.handler))
       .map(routeId)
-      .sort();
+      .toSorted();
     expect(gated).toEqual([
       "GET /case/decisions/:decisionId",
       "GET /case/decisions/:decisionId/citations",

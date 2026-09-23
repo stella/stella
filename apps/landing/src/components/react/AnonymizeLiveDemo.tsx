@@ -152,7 +152,7 @@ const buildSegments = (
       bucketByOriginal.set(pair.original, bucketOf(pair.label));
     }
   }
-  const originals = [...bucketByOriginal.keys()].sort(
+  const originals = [...bucketByOriginal.keys()].toSorted(
     (a, b) => b.length - a.length,
   );
   const pattern = new RegExp(originals.map(escapeRegExp).join("|"), "gu");

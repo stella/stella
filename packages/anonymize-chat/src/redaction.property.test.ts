@@ -183,7 +183,9 @@ const buildOffsetRuntime = (spans: readonly Span[]): ChatAnonRuntime => ({
 
 /** Longest-first greedy non-overlap sweep; models resolved entities. */
 const resolveSpans = (spans: readonly Span[]): Span[] => {
-  const sorted = [...spans].sort((a, b) => a.start - b.start || b.end - a.end);
+  const sorted = [...spans].toSorted(
+    (a, b) => a.start - b.start || b.end - a.end,
+  );
   const resolved: Span[] = [];
   let lastEnd = 0;
   for (const span of sorted) {

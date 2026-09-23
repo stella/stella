@@ -196,9 +196,7 @@ const formatDispositionRows = (
 ): string =>
   units
     .map((unit) => {
-      const marker = decided.has(unit.ordinal)
-        ? decided.get(unit.ordinal)
-        : "DECIDE";
+      const marker = decided.get(unit.ordinal) ?? "DECIDE";
       const place = unit.inTable ? "TABLE" : unit.kind;
       return `#${unit.ordinal} [${place}] (${marker}) ${preview(unit.sourceText.replaceAll("\n", " "))}`;
     })

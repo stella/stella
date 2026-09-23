@@ -173,7 +173,7 @@ type BlogPagesResult = { pages: PageMeta[]; violations: string[] };
 const publishedBlogPages = (): BlogPagesResult => {
   const pages: PageMeta[] = [];
   const violations: string[] = [];
-  for (const file of markdownFiles(BLOG_ROOT).sort()) {
+  for (const file of markdownFiles(BLOG_ROOT).toSorted()) {
     const relativePath = path
       .relative(BLOG_ROOT, file)
       .split(path.sep)

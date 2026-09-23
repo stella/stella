@@ -14,7 +14,7 @@ import {
 export const GET: APIRoute = async () => {
   const posts = (await getCollection("blog"))
     .filter((post) => !post.data.draft)
-    .sort(
+    .toSorted(
       (a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime(),
     );
 

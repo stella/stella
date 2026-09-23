@@ -441,10 +441,10 @@ describe("bidi", () => {
       }
     }
 
-    expect([...renderedSlots].sort()).toEqual(
+    expect([...renderedSlots].toSorted()).toEqual(
       Object.values(SLOT_BY_EXPORT).toSorted(),
     );
-    expect([...isolatedSlots].sort()).toEqual([...RECORD_DATA_SLOTS]);
+    expect([...isolatedSlots].toSorted()).toEqual([...RECORD_DATA_SLOTS]);
   });
 
   test("lets callers force a direction on a record-data slot", () => {

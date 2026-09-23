@@ -239,7 +239,7 @@ export const ChatMatterPicker = ({
       group.matters.push(m);
     }
     const compareLabel = compareByLocale(locale);
-    return [...map.values()].sort((a, b) => {
+    return [...map.values()].toSorted((a, b) => {
       // "Direct" sinks to the bottom; everything else alphabetical
       // by client name so the order is stable across renders.
       if (a.key === NO_CLIENT_KEY) {

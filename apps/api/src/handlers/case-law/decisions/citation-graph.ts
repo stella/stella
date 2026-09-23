@@ -444,7 +444,7 @@ export const summarizeDecisionCitationsHandler = async ({
   return {
     incoming: totals.incoming,
     outgoing: totals.outgoing,
-    incomingByYear: [...byYear.values()].sort((a, b) => a.year - b.year),
+    incomingByYear: [...byYear.values()].toSorted((a, b) => a.year - b.year),
   };
 };
 

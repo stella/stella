@@ -346,7 +346,7 @@ export const orderSuggestionsByDocumentPosition = (
       storeIndex,
       position: documentPositionOf(suggestion, index),
     }))
-    .sort((a, b) =>
+    .toSorted((a, b) =>
       a.position === b.position
         ? a.storeIndex - b.storeIndex
         : a.position - b.position,

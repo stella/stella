@@ -173,7 +173,7 @@ describe("mergeManifestWithDiscovery", () => {
       loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(null, discovery);
-    expect(resolved.map((f) => f.path).sort()).toEqual([
+    expect(resolved.map((f) => f.path).toSorted()).toEqual([
       "rent",
       "tenant.krs",
       "tenant.name",

@@ -436,16 +436,17 @@ for (const [index, range] of ranges.entries()) {
         .limit(Math.min(BATCH_SIZE, remaining)),
     );
 
-    if (rows.length === 0) {
+    const lastRow = rows.at(-1);
+    if (lastRow === undefined) {
       break;
     }
 
     await trimInChunks(rows);
 
     scanned += rows.length;
-    lastId = rows.at(-1)?.id ?? lastId;
+    lastId = lastRow.id;
     console.log(
-      `  ${position} trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastId}`,
+      `  ${position} trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastRow.id}`,
     );
   }
 

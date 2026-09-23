@@ -183,6 +183,8 @@ function SourceLink({ fact }: { fact: AnchorFact }) {
   );
 }
 
+type GovernedResult = { day: number; note: string; verdict: ClaimState };
+
 function RecordConflictBlock({
   claim,
   review,
@@ -208,12 +210,15 @@ function RecordConflictBlock({
   const governingIndex = governingId ? rc.factIds.indexOf(governingId) : -1;
   const governingValue =
     governingIndex >= 0 ? rc.values[governingIndex] : undefined;
+  // Select by index, not by day value: `dates` may legitimately hold two
+  // equal days, and matching on the value marks both records as governing.
   const governingDay =
     governingIndex >= 0 && rc.dates ? rc.dates[governingIndex] : undefined;
-  let governedResult: { verdict: ClaimState; note: string } | null = null;
+  let governedResult: GovernedResult | null = null;
   if (rc.boundary && governingDay !== undefined) {
-    governedResult =
+    const { note, verdict } =
       governingDay < rc.boundary.day ? rc.boundary.before : rc.boundary.after;
+    governedResult = { day: governingDay, note, verdict };
   }
 
   return (
@@ -394,14 +399,10 @@ function ConflictDateline({
   values: readonly [string, string];
   /** Index of the governing record in `dates`/`values`/`factIds`, or -1. */
   governingIndex: number;
-  result: { verdict: ClaimState; note: string } | null;
+  result: GovernedResult | null;
   month: string | undefined;
 }) {
   const t = useTranslations();
-  // Select by index, not by day value: `dates` may legitimately hold two
-  // equal days, and matching on the value then marks both records as
-  // governing and picks the wrong one for the sentence below.
-  const governingDate = dates[governingIndex];
   const lo = Math.min(dates[0], dates[1], boundary.day) - 4;
   const hi = Math.max(dates[0], dates[1], boundary.day) + 4;
   const pct = (day: number) => ((day - lo) / (hi - lo)) * 100;
@@ -465,7 +466,7 @@ function ConflictDateline({
           <StateChip state={result.verdict} />
           <span>
             {t.rich("avt.claimDetail.recordConflict.resultAsAt", {
-              date: `${governingDate} ${month ?? ""}`.trim(),
+              date: `${result.day} ${month ?? ""}`.trim(),
               note: result.note,
               strong: (chunks) => <b>{chunks}</b>,
             })}

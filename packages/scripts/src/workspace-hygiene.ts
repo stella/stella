@@ -24,8 +24,7 @@ const SKIPPED_SCAN_DIRS = new Set([
 const CSS_IMPORT_PATTERN =
   /@import\s+(?:url\(\s*)?["'](?<specifier>[^"']+)["']/gu;
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
-const TURBO_INSTALL_PATTERN =
-  /\bbun\s+install\s+-g\s+turbo@(?<version>\d+\.\d+\.\d+)\b/gu;
+const TURBO_INSTALL_PATTERN = /\bbun\s+install\s+-g\s+turbo@\d+\.\d+\.\d+\b/gu;
 const TURBO_VERSION_PATTERN = /^(?<version>\d+\.\d+\.\d+)$/u;
 const BABEL_CORE_DEPENDENCY = "@babel/core";
 const BUN_TYPES_DEPENDENCY = "bun-types";
@@ -658,7 +657,8 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
   for (const filePath of findTurboInstallPinFiles(rootDir)) {
     const content = readFileSync(filePath, "utf-8");
     for (const match of content.matchAll(TURBO_INSTALL_PATTERN)) {
-      const installVersion = match.groups?.["version"];
+      // The pattern ends at the version, and `turbo@` is its only `@`.
+      const installVersion = match[0].slice(match[0].lastIndexOf("@") + 1);
       issues.push({
         message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
         path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,

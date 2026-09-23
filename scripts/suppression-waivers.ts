@@ -244,10 +244,10 @@ export const observeSecurityDirectives = (
   }
 
   return {
-    observed: [...counts.values()].sort((left, right) =>
+    observed: [...counts.values()].toSorted((left, right) =>
       identityKey(left).localeCompare(identityKey(right)),
     ),
-    bare: [...new Set(bare)].sort(),
+    bare: [...new Set(bare)].toSorted(),
   };
 };
 

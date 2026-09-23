@@ -349,7 +349,7 @@ describe("MoneyTotals", () => {
 
       // entries() itself is always sorted, independent of insertion order.
       const currenciesOut = totals.entries().map((e) => e.currency);
-      expect(currenciesOut).toEqual([...currenciesOut].sort());
+      expect(currenciesOut).toEqual([...currenciesOut].toSorted());
     }
   });
 });

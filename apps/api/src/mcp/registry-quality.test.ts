@@ -482,8 +482,9 @@ describe.each([...SURFACES])(
         ).toBeLessThanOrEqual(TOOL_TITLE_MAX_CHARS);
         const holder = seen.get(title);
         expect(
-          holder,
-          `Tools ${holder} and ${tool.name} share the title "${title}"`,
+          holder === undefined
+            ? undefined
+            : `Tools ${holder} and ${tool.name} share the title "${title}"`,
         ).toBeUndefined();
         seen.set(title, tool.name);
       }
@@ -723,7 +724,9 @@ describe("MCP registry input naming", () => {
     for (const tool of defaultTools) {
       collectNonSnakeCaseProperties(tool.inputSchema, tool.name, issues);
     }
-    expect([...new Set(issues)].sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
+    expect([...new Set(issues)].toSorted()).toEqual(
+      CAMEL_CASE_INPUT_PROPERTY_DEBT,
+    );
   });
 
   // The other half of the same convention: inputs are snake_case, payloads are
@@ -746,8 +749,8 @@ describe("MCP static tool-set coherence", () => {
       const handlerNames = Object.keys(toolSet.handlers);
       const outputNames = Object.keys(toolSet.outputs);
 
-      expect(handlerNames.sort()).toEqual(definitionNames.sort());
-      expect(outputNames.sort()).toEqual(definitionNames.sort());
+      expect(handlerNames.toSorted()).toEqual(definitionNames.toSorted());
+      expect(outputNames.toSorted()).toEqual(definitionNames.toSorted());
     }
   });
 
@@ -1018,8 +1021,8 @@ describe("MCP dynamic tool-family coherence", () => {
   const namespaces = Object.keys(DYNAMIC_TOOL_NAMESPACES);
 
   test("every namespaced family has a policy and every policy names a family", () => {
-    expect(Object.keys(DYNAMIC_TOOL_FAMILY_POLICIES).sort()).toEqual(
-      namespaces.sort(),
+    expect(Object.keys(DYNAMIC_TOOL_FAMILY_POLICIES).toSorted()).toEqual(
+      namespaces.toSorted(),
     );
   });
 

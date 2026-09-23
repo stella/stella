@@ -476,11 +476,11 @@ const diffVariables = ({
   const set = Object.entries(desired)
     .filter(([key, value]) => current[key] !== value)
     .map(([key]) => key)
-    .sort();
+    .toSorted();
   const remove = prune
     ? Object.keys(current)
         .filter((key) => !(key in desired))
-        .sort()
+        .toSorted()
     : [];
 
   return { remove, set };

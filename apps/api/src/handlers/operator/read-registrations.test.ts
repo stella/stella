@@ -193,7 +193,7 @@ describe("GET /operator/registrations", () => {
       "op-route-b",
     ]);
     for (const item of page.items) {
-      expect(Object.keys(item).sort()).toEqual([
+      expect(Object.keys(item).toSorted()).toEqual([
         "createdAt",
         "detectedCountry",
         "email",

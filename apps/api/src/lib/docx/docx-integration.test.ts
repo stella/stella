@@ -440,7 +440,8 @@ describe("header and footer placeholders", () => {
     expect(headerXml).toContain("Alice");
     expect(footerXml).toContain("urgent");
     expect(footerXml).toContain("signed");
-    expect(`${headerXml}${footerXml}`).not.toContain("{%");
+    expect(headerXml).not.toContain("{%");
+    expect(footerXml).not.toContain("{%");
     expect(result.structureErrors).toEqual([]);
   });
 

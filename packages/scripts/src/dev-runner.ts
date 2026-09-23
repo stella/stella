@@ -726,7 +726,7 @@ export const projectsForDeletedWorktrees = ({
         [...worktreePaths].every((worktreePath) => !pathExists(worktreePath)),
     )
     .map(([name]) => name)
-    .sort();
+    .toSorted();
 };
 
 type DockerProjectOwnership = {

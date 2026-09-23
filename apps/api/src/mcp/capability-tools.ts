@@ -810,7 +810,7 @@ export const featureOmittedCapabilityIds = (
 ): readonly string[] =>
   CATALOG.filter((entry) => !isFeatureEnabled(entry.feature))
     .map((entry) => entry.id)
-    .sort();
+    .toSorted();
 
 const listCapabilitiesHandler: McpToolHandler<
   v.InferInput<typeof LIST_CAPABILITIES_OUTPUT_SCHEMA>

@@ -935,7 +935,7 @@ const readRtfInto = (
     blocks,
     footnotes,
     warnings: [...unknownWords]
-      .sort()
+      .toSorted()
       .map((word) => `rtf: unhandled control word \\${word}`),
   };
 };

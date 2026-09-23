@@ -256,8 +256,10 @@ const CellFlagProvenanceRow = ({
     return null;
   }
   const Icon = flag.icon;
-  const relativeTime = provenance
-    ? formatRelativeTime(provenance.addedAt)
+  const provenanceLabel = provenance
+    ? [provenance.addedByName, formatRelativeTime(provenance.addedAt)]
+        .filter(Boolean)
+        .join(" · ")
     : null;
 
   return (
@@ -272,11 +274,7 @@ const CellFlagProvenanceRow = ({
             image={provenance.addedByImage}
             name={provenance.addedByName}
           />
-          <span className="truncate">
-            {provenance.addedByName
-              ? `${provenance.addedByName} · ${relativeTime}`
-              : relativeTime}
-          </span>
+          <span className="truncate">{provenanceLabel}</span>
         </span>
       )}
     </span>

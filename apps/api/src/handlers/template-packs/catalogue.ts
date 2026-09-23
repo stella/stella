@@ -156,7 +156,7 @@ export const rankTemplatePacks = (
   );
   return packs
     .map((pack) => toTemplatePackView(pack, context))
-    .sort((a, b) => {
+    .toSorted((a, b) => {
       const byJurisdiction = jurisdictionRank(a) - jurisdictionRank(b);
       if (byJurisdiction !== 0) {
         return byJurisdiction;

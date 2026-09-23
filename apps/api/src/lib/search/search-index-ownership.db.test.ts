@@ -194,8 +194,8 @@ test("every copy is owned exactly once, by extraction or by a mark", () => {
     [
       ...owned[SEARCH_INDEX_OWNER.durableExtraction],
       ...owned[SEARCH_INDEX_OWNER.searchMark],
-    ].sort(),
-  ).toEqual(duplicatedCopies.map((copy) => copy.entityId).sort());
+    ].toSorted(),
+  ).toEqual(duplicatedCopies.map((copy) => copy.entityId).toSorted());
   expect(owned[SEARCH_INDEX_OWNER.durableExtraction]).toEqual([entityId(10)]);
   expect(owned[SEARCH_INDEX_OWNER.searchMark]).toEqual([
     entityId(11),
@@ -226,7 +226,7 @@ test("the copies' marks share the fate of the duplicate transaction", async () =
     await enqueueEntitySearchRepairs(asTestRaw<Transaction>(tx), marked);
   });
 
-  expect(await queuedSourceIds()).toEqual([...marked].sort());
+  expect(await queuedSourceIds()).toEqual([...marked].toSorted());
 });
 
 test("a drain rebuilds each marked copy once and never the extracted one", async () => {
@@ -239,7 +239,7 @@ test("a drain rebuilds each marked copy once and never the extracted one", async
   });
 
   expect(outcome).toEqual({ failed: 0, repaired: marked.length });
-  expect([...repaired].sort()).toEqual([...marked].sort());
+  expect([...repaired].toSorted()).toEqual([...marked].toSorted());
   for (const extracted of copiesOwnedBy(SEARCH_INDEX_OWNER.durableExtraction)) {
     expect(repaired).not.toContain(extracted);
   }

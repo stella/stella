@@ -225,7 +225,7 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
     ),
   ]
     .filter((migration) => !migration.includes("projection_revision"))
-    .sort();
+    .toSorted();
   const migrations = await Promise.all(
     projectionMigrations.map(
       async (migration) =>

@@ -677,7 +677,7 @@ const instructionFiles = (): string[] => {
       }
     }
   }
-  return [...files].sort();
+  return [...files].toSorted();
 };
 
 const isAllowlistEntry = (value: unknown): value is AllowlistEntry =>

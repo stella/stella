@@ -26,7 +26,7 @@ export const readTemplatePackOrganizationContext = async (
     });
     const jurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
     const countries = [...jurisdictions]
-      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
+      .toSorted((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
       .map((jurisdiction) => jurisdiction.countryCode)
       .filter(isCountryCode);
     return { countries, hidden: row?.templatePacksHidden ?? false };

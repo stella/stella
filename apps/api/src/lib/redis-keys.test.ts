@@ -73,7 +73,7 @@ describe("coordination key layout", () => {
       expect(occurrences(key, "}")).toBe(1);
     }
     // Declared set equals exercised set, in both directions.
-    expect([...built].sort()).toEqual([...SCOPES].sort());
+    expect([...built].toSorted()).toEqual([...SCOPES].toSorted());
   });
 
   test("keys sharing a slot colocate and keys with distinct slots do not", () => {

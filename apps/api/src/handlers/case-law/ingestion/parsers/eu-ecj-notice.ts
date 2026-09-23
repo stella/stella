@@ -210,7 +210,7 @@ const conceptChain = (
     }
   }
   return [...deepest.entries()]
-    .sort(([left], [right]) => left - right)
+    .toSorted(([left], [right]) => left - right)
     .map(([, value]) => value);
 };
 

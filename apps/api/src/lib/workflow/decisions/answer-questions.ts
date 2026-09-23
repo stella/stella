@@ -548,7 +548,7 @@ const runnerUp = (
 ): string => {
   const next = Object.entries(answer.probabilities)
     .filter(([key]) => key !== answer.choice)
-    .sort(([, a], [, b]) => b - a)
+    .toSorted(([, a], [, b]) => b - a)
     .at(0);
   if (next === undefined || next[1] < RUNNER_UP_MIN_PROBABILITY) {
     return "";

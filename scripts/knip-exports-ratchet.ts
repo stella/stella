@@ -118,11 +118,11 @@ const parseKnipReport = (report: unknown): readonly KnipFileReport[] => {
 
 const sortedSummary = (summary: Summary): Summary => {
   const sorted: Summary = {};
-  for (const workspace of Object.keys(summary).sort()) {
+  for (const workspace of Object.keys(summary).toSorted()) {
     const snapshot =
       summary[workspace] ?? panic(`workspace ${workspace} vanished`);
     const files: Record<string, number> = {};
-    for (const file of Object.keys(snapshot.files).sort()) {
+    for (const file of Object.keys(snapshot.files).toSorted()) {
       files[file] = snapshot.files[file] ?? panic(`file ${file} vanished`);
     }
     sorted[workspace] = { count: snapshot.count, files };
@@ -201,7 +201,7 @@ export const diffSummaries = (
 ): readonly WorkspaceDiff[] => {
   const workspaces = [
     ...new Set([...Object.keys(current), ...Object.keys(baseline)]),
-  ].sort();
+  ].toSorted();
 
   return workspaces.map((workspace) => {
     const now = current[workspace] ?? { count: 0, files: {} };
@@ -211,7 +211,7 @@ export const diffSummaries = (
         const from = before.files[file] ?? 0;
         return to > from ? [{ file, from, to }] : [];
       })
-      .sort((a, b) => a.file.localeCompare(b.file));
+      .toSorted((a, b) => a.file.localeCompare(b.file));
 
     return {
       workspace,

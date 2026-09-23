@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -1377,9 +1378,8 @@ describe("copy-to-workspace", () => {
     // The move succeeded, so the copy stays: a failed source-cleanup lookup
     // must not take the object the target workspace now owns.
     expect(requestKeys("DELETE")).toEqual([]);
-    expect(fake.objects.has(`${envBase.S3_BUCKET}/${movedKeys.at(0)}`)).toBe(
-      true,
-    );
+    const movedKey = movedKeys.at(0) ?? panic("no COPY reached the store");
+    expect(fake.objects.has(`${envBase.S3_BUCKET}/${movedKey}`)).toBe(true);
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([

@@ -123,7 +123,7 @@ const recognize = async (
   const ratios = boxes.map((box) => (box.x1 - box.x0) / (box.y1 - box.y0));
   const order = ratios
     .map((_, index) => index)
-    .sort((a, b) => (ratios[a] ?? 0) - (ratios[b] ?? 0));
+    .toSorted((a, b) => (ratios[a] ?? 0) - (ratios[b] ?? 0));
   const lines: (DocumentOcrLine | null)[] = boxes.map(() => null);
 
   const recognizeBatch = async (start: number): Promise<void> => {

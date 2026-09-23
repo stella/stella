@@ -66,7 +66,7 @@ const registryResolvedStllPackages = (source: unknown): string[] => {
       names.add(name);
     }
   }
-  return [...names].sort();
+  return [...names].toSorted();
 };
 
 describe("@stll dependency resolutions", () => {

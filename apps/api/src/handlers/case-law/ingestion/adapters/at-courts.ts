@@ -1492,7 +1492,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           const state = decodeCursor(cursor, dependencies.now(), source);
           if (state === undefined) {
             throw new AdapterFetchError({
-              message: `Invalid RIS cursor: ${cursor}`,
+              message: `Invalid RIS cursor: ${cursor ?? "(none)"}`,
               adapterKey: source.key,
               cursor,
             });

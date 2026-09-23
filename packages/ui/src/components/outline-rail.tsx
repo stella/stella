@@ -200,7 +200,9 @@ export const OutlineRail = ({
   panelWidth = 300,
   ariaLabel = "Outline",
 }: OutlineRailProps) => {
-  const [pctById, setPctById] = useState<Record<string, number>>({});
+  const [pctById, setPctById] = useState<ReadonlyMap<string, number>>(
+    new Map(),
+  );
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   // Held open by keyboard. The pointer path reveals the panel on hover, which
@@ -281,11 +283,11 @@ export const OutlineRail = ({
     if (!container) {
       return;
     }
-    const next: Record<string, number> = {};
+    const next = new Map<string, number>();
     for (const item of items) {
       const pct = resolvePct(item.id, container);
       if (pct !== null) {
-        next[item.id] = pct;
+        next.set(item.id, pct);
       }
     }
     setPctById(next);
@@ -597,9 +599,12 @@ export const OutlineRail = ({
     );
   };
 
-  const visibleTicks = items.filter(
-    (item) => item.id in pctById && item.level <= railLevelCap,
-  );
+  const visibleTicks = items.flatMap((item) => {
+    const pct = pctById.get(item.id);
+    return pct !== undefined && item.level <= railLevelCap
+      ? [{ item, pct }]
+      : [];
+  });
 
   // Gate on the panel content (every heading), not the pruned tick count. An
   // outline with one shallow heading and many deeper ones leaves <2 ticks but
@@ -612,11 +617,15 @@ export const OutlineRail = ({
 
   // A pruned sub-topic (no persistent tick) gets an ephemeral "ghost" tick
   // while its panel row is hovered, then drops when the hover moves on.
-  const visibleTickIds = new Set(visibleTicks.map((item) => item.id));
+  const visibleTickIds = new Set(visibleTicks.map(({ item }) => item.id));
+  const ghostPct =
+    hoveredId !== null && !visibleTickIds.has(hoveredId)
+      ? pctById.get(hoveredId)
+      : undefined;
   const ghostItem =
-    hoveredId !== null && !visibleTickIds.has(hoveredId) && hoveredId in pctById
-      ? (items.find((item) => item.id === hoveredId) ?? null)
-      : null;
+    ghostPct === undefined
+      ? undefined
+      : items.find((item) => item.id === hoveredId);
 
   return (
     <div
@@ -654,7 +663,7 @@ export const OutlineRail = ({
           scrollContainerRef.current?.scrollBy(0, event.deltaY);
         }}
       >
-        {visibleTicks.map((item) => {
+        {visibleTicks.map(({ item, pct }) => {
           const isActive = active === item.id;
           const isHovered = hoveredId === item.id;
           return (
@@ -674,7 +683,7 @@ export const OutlineRail = ({
                     onMouseEnter={() => setHoveredId(item.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     style={{
-                      top: `${pctById[item.id]}%`,
+                      top: `${pct}%`,
                       transform: "translateY(-50%)",
                       width: isHovered
                         ? tickWidth(item.level) + 8
@@ -690,12 +699,12 @@ export const OutlineRail = ({
             </Tooltip>
           );
         })}
-        {ghostItem && (
+        {ghostItem && ghostPct !== undefined && (
           <span
             aria-hidden
             className="absolute end-0 rounded-full opacity-100"
             style={{
-              top: `${pctById[ghostItem.id]}%`,
+              top: `${ghostPct}%`,
               transform: "translateY(-50%)",
               width: tickWidth(ghostItem.level) + 8,
               height: 4,

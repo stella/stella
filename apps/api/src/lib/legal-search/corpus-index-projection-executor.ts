@@ -430,7 +430,7 @@ export const advanceCorpusProjectionAppendTails = <
     }
     group.push(entry);
   }
-  for (const indexId of [...byIndex.keys()].sort()) {
+  for (const indexId of [...byIndex.keys()].toSorted()) {
     const group = byIndex.get(indexId) ?? panic("Lost projection entry group");
     for (const entry of group) {
       let tail = nextTails.get(indexId);

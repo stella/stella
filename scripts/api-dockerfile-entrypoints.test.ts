@@ -62,7 +62,7 @@ test("every bundled /app entrypoint reaches the runner stage", () => {
     ...stage("builder").matchAll(/--outfile \/app\/([\w.-]+\.js)/gu),
   ]
     .map((match) => match[1] ?? "")
-    .sort();
+    .toSorted();
   expect(built.length).toBeGreaterThan(0);
   const copied = new Set(
     [

@@ -198,7 +198,7 @@ test("a docket stored only as a parallel identifier resolves to its decision", a
     rows
       .at(0)
       ?.identifiers.map(({ value }) => value)
-      .sort(),
+      .toSorted(),
   ).toEqual(["30 Cdo 400/2012", "Rc 55/2013"]);
 });
 

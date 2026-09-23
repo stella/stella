@@ -13,7 +13,7 @@ const TYPEBOX_UNSAFE_RULE_ID =
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)
   .filter((file) => file.endsWith(".ts") && !NON_PLUGIN_MODULES.has(file))
-  .sort();
+  .toSorted();
 const fixtureFiles = readdirSync(FIXTURE_DIRECTORY).filter((file) =>
   file.includes(".fixture."),
 );

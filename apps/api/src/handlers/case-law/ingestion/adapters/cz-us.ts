@@ -1554,9 +1554,9 @@ const parseResultPage = ({
       aliases: undefined,
     };
     const fallbackCaseNumber =
-      exactPublisherIdentity !== null
-        ? `NALUS record ${nalusRecordId ?? sz ?? ecli}`
-        : `NALUS listing ${quarantineId}`;
+      exactPublisherIdentity === null
+        ? `NALUS listing ${quarantineId}`
+        : `NALUS record ${nalusRecordId ?? sz ?? ecli ?? exactPublisherIdentity.sourceDocumentId}`;
     const caseNumber = listedCaseNumber || fallbackCaseNumber;
     const sourceDocumentId = publisherIdentity.sourceDocumentId;
 

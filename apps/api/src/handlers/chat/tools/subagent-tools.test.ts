@@ -60,7 +60,7 @@ describe("projectToolMapForSubagent", () => {
 
     const projected = projectToolMapForSubagent(tools, sink());
 
-    expect(Object.keys(projected).sort()).toEqual(["list_matters"]);
+    expect(Object.keys(projected).toSorted()).toEqual(["list_matters"]);
   });
 
   test("no surviving tool both requires approval and can run a real write; writes become non-executing proposals", async () => {
@@ -94,7 +94,7 @@ describe("projectToolMapForSubagent", () => {
     const projected = projectToolMapForSubagent(tools, buffer.sink);
 
     // Every tool survives the projection (reads live, writes as wrappers).
-    expect(Object.keys(projected).sort()).toEqual([
+    expect(Object.keys(projected).toSorted()).toEqual([
       "delete_matter",
       "lookup_company_registry",
       "read_document",
@@ -118,7 +118,7 @@ describe("projectToolMapForSubagent", () => {
       buffer
         .list()
         .map((proposal) => proposal.toolName)
-        .sort(),
+        .toSorted(),
     ).toEqual(["delete_matter", "save_matter", "web_search"]);
   });
 

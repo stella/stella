@@ -362,7 +362,7 @@ const startConfirmGateServer = () => {
   });
   return {
     calls,
-    url: `http://localhost:${server.port}`,
+    url: server.url.origin,
     stop: () => {
       void server.stop(true);
     },

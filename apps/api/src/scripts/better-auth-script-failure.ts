@@ -25,7 +25,7 @@ type BetterAuthScriptFailureCause = {
 };
 
 const readToken = (error: Error, key: string, pattern: RegExp) => {
-  const value = Reflect.get(error, key);
+  const value: unknown = Reflect.get(error, key);
   return typeof value === "string" && pattern.test(value) ? value : undefined;
 };
 

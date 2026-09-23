@@ -79,8 +79,8 @@ describe("readWorkspaceHandler", () => {
   test("returns the matter row, its client card, and the stamped count", async () => {
     const result = await readWorkspace(workspaceRow);
 
-    expect(Object.keys(result).sort()).toEqual(
-      Object.keys(workspaceRow).sort(),
+    expect(Object.keys(result).toSorted()).toEqual(
+      Object.keys(workspaceRow).toSorted(),
     );
     expect(result).toEqual(workspaceRow);
   });

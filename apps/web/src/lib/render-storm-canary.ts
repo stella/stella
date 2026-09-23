@@ -143,7 +143,7 @@ export const createRenderStormMonitor = (
       emitStorm({
         commitsPerSecond,
         phaseCounts: phaseCountsInWindow,
-        regionCounts: [...regionCountsInWindow.entries()].sort(
+        regionCounts: [...regionCountsInWindow.entries()].toSorted(
           ([, left], [, right]) => right - left,
         ),
       });

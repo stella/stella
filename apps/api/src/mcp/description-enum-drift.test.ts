@@ -223,7 +223,7 @@ describe("MCP tool descriptions only name values their own contract declares", (
             continue;
           }
           drifted.push(
-            `${definition.name}: description quotes '${token}', which is neither a value its picklists admit (${[...admitted.literals].sort().join(", ") || "none"}) nor a property its schemas declare`,
+            `${definition.name}: description quotes '${token}', which is neither a value its picklists admit (${[...admitted.literals].toSorted().join(", ") || "none"}) nor a property its schemas declare`,
           );
         }
       }

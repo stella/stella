@@ -86,7 +86,7 @@ const startServer = (response: ServerResponse) => {
   });
   return {
     calls,
-    url: `http://localhost:${server.port}`,
+    url: server.url.origin,
     stop: () => {
       void server.stop(true);
     },

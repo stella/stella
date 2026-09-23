@@ -128,7 +128,7 @@ const seedTemplatesSharingOneTimestamp = async (
 const expectedDescendingIds = (rows: SeededTemplate[]): string[] =>
   [...rows]
     .map(({ id }) => id)
-    .sort()
+    .toSorted()
     .toReversed();
 
 const readPage = async (db: SafeDb, cursor: string | undefined) =>

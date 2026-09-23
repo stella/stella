@@ -336,12 +336,12 @@ describe("every adapter accounts for the surfaces its publisher serves", () => {
       surfacesOf(key).flatMap(([surface, disposition]) =>
         disposition.disposition === "backlog" ? [`${key}/${surface}`] : [],
       ),
-    ).sort();
+    ).toSorted();
     const listed = Object.entries(BACKLOG_BASELINE)
       .flatMap(([key, surfaces]) =>
         surfaces.map((surface) => `${key}/${surface}`),
       )
-      .sort();
+      .toSorted();
 
     // A ratchet only tightens: recording a surface deletes its line, and a
     // surface left unrecorded has to be written into the baseline in the same

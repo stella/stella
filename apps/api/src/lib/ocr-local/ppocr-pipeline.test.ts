@@ -89,7 +89,7 @@ describe("compareReadingOrder", () => {
     const right = { x0: 60, y0: 103, x1: 110, y1: 123, score: 1 };
     const below = { x0: 0, y0: 200, x1: 50, y1: 220, score: 1 };
 
-    expect([below, right, left].sort(compareReadingOrder)).toEqual([
+    expect([below, right, left].toSorted(compareReadingOrder)).toEqual([
       left,
       right,
       below,

@@ -96,7 +96,7 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
             (issue) =>
               `${(issue.path ?? []).map(({ key }) => String(key)).join(".")}: ${issue.message}`,
           )
-          .sort()
+          .toSorted()
           .join(" | ");
   };
 

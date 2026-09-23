@@ -87,6 +87,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const checkedVersionPart = (value: string | undefined): number => {
+  if (value === undefined) {
+    throw new MaintenanceReleaseError("Missing stable version part");
+  }
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) {
     throw new MaintenanceReleaseError(`Invalid stable version part: ${value}`);
@@ -155,7 +158,7 @@ export const readPendingChangesets = (
   }
   return readdirSync(directory)
     .filter((file) => file.endsWith(".md") && file !== CHANGESET_README)
-    .sort()
+    .toSorted()
     .map((file) => {
       const { packages, summary } = parseChangesetEntry(
         readFileSync(nodePath.join(directory, file), "utf-8"),

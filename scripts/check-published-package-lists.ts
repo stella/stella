@@ -48,7 +48,7 @@ export const publishedPackageNames = (
       names.add(name);
     }
   }
-  return [...names].sort();
+  return [...names].toSorted();
 };
 
 export const renderPublishedPackageBlock = (

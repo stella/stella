@@ -285,7 +285,7 @@ const parseFacetBuckets = (
     }
     buckets.push({ value: key, label: null, count });
   }
-  return buckets.sort(compareFacetBuckets).slice(0, display);
+  return buckets.toSorted(compareFacetBuckets).slice(0, display);
 };
 
 /**
@@ -320,7 +320,7 @@ const parseYearBuckets = (
       buckets.push({ value: key, label: null, count });
     }
   }
-  return buckets.sort(compareYearBuckets);
+  return buckets.toSorted(compareYearBuckets);
 };
 
 /** The buckets a facet's own aggregation kind reads out of the answer. */

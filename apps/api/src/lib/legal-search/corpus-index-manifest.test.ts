@@ -90,7 +90,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
 >;
 
 test("the final-generation registry is exact and fails closed", () => {
-  expect(Object.keys(CORPUS_INDEX_MANIFESTS).sort()).toEqual([
+  expect(Object.keys(CORPUS_INDEX_MANIFESTS).toSorted()).toEqual([
     "case_law_v5",
     "case_law_v6",
     "case_law_v7",
@@ -209,19 +209,19 @@ test("physical index ids are deployment state, not manifest identity", () => {
 });
 
 test("every declared jurisdiction routes into every case-law generation", () => {
-  expect(Object.keys(EXPECTED_CASE_LAW_ROUTES).sort()).toEqual(
+  expect(Object.keys(EXPECTED_CASE_LAW_ROUTES).toSorted()).toEqual(
     Object.values(CORPUS_INDEX_MANIFESTS)
       .filter((manifest) => manifest.family === "case_law")
       .map((manifest) => manifest.generation)
-      .sort(),
+      .toSorted(),
   );
 
   for (const [generation, routes] of Object.entries(EXPECTED_CASE_LAW_ROUTES)) {
     const manifest = requireCorpusIndexManifest("case_law", generation);
     // The baseline answers for the whole declared union, so declaring a
     // jurisdiction is not finished until its line is here.
-    expect(Object.keys(routes).sort()).toEqual(
-      [...CASE_LAW_JURISDICTIONS].sort(),
+    expect(Object.keys(routes).toSorted()).toEqual(
+      [...CASE_LAW_JURISDICTIONS].toSorted(),
     );
     for (const [jurisdiction, group] of Object.entries(routes)) {
       const indexId = `${generation}_${group}`;

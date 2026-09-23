@@ -49,10 +49,12 @@ export const groupDuplicateRasterAssets = (
     if (first === undefined || group.length < 2) {
       continue;
     }
-    const paths = group.map(({ path }) => path).sort();
+    const paths = group.map(({ path }) => path).toSorted();
     duplicates.push({ ...first, path: paths[0] ?? first.path, paths });
   }
-  return duplicates.sort((left, right) => left.path.localeCompare(right.path));
+  return duplicates.toSorted((left, right) =>
+    left.path.localeCompare(right.path),
+  );
 };
 
 const hashRaster = async (

@@ -60,8 +60,8 @@ describe("the bench of a decision", () => {
   });
 
   test("names every role, so a new one cannot be drawn unlabelled", () => {
-    expect(Object.keys(DECISION_JUDGE_ROLE_LABELS).sort()).toEqual(
-      [...DECISION_JUDGE_ROLES].sort(),
+    expect(Object.keys(DECISION_JUDGE_ROLE_LABELS).toSorted()).toEqual(
+      [...DECISION_JUDGE_ROLES].toSorted(),
     );
   });
 

@@ -104,7 +104,7 @@ describe("WorkspaceViewSwitcher", () => {
         direction="ltr"
         editing={{
           viewId: "table",
-          renderLabel: () => <input aria-label="Rename view" />,
+          renderLabel: () => <input aria-label="Rename view" dir="ltr" />,
         }}
         onViewChange={() => undefined}
         reorder={null}

@@ -188,7 +188,7 @@ describe("lockWorkspacesForEntityCap against a real workspace row", () => {
     const result = await runRolledBack(async (tx) => {
       const first = await seedTestWorkspace(tx);
       const second = await seedTestWorkspace(tx);
-      const [wsLow, wsHigh] = [first, second].sort();
+      const [wsLow, wsHigh] = [first, second].toSorted();
       if (!wsLow || !wsHigh) {
         throw new Error("Expected two seeded workspace ids");
       }

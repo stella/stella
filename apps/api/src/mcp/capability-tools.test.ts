@@ -482,7 +482,7 @@ describe("invoke_capability gates", () => {
     // No token/public capability exists in the catalog today; assert the guard
     // by confirming the catalog holds only workspace/root kinds (defensive).
     const kinds = new Set(capabilityCatalog.map((e) => e.handlerKind));
-    expect([...kinds].sort()).toEqual(["root", "workspace"]);
+    expect([...kinds].toSorted()).toEqual(["root", "workspace"]);
   });
 
   test("waived capability -> feature_disabled", async () => {
@@ -1779,7 +1779,9 @@ describe("invoke_capability file-input gate", () => {
         .filter((e) => JSON.stringify(e).includes('"format":"binary"'))
         .map((e) => e.id),
     );
-    expect([...declaredFileInput].sort()).toEqual([...schemaBinary].sort());
+    expect([...declaredFileInput].toSorted()).toEqual(
+      [...schemaBinary].toSorted(),
+    );
     for (const id of [
       "entities.upload",
       "clauses.import",
@@ -1929,7 +1931,10 @@ describe("invoke_capability argument shape validation", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
     const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
-    expect(issues.map((i) => i.path).sort()).toEqual(["body", "validateOnly"]);
+    expect(issues.map((i) => i.path).toSorted()).toEqual([
+      "body",
+      "validateOnly",
+    ]);
     expect(issues.find((i) => i.path === "validateOnly")?.message).toContain(
       "validate_only",
     );
@@ -2186,7 +2191,7 @@ describe("invoke_capability deployment feature gate", () => {
     const hidden = capabilityCatalog
       .map((entry) => entry.id)
       .filter((id) => !listed.has(id))
-      .sort();
+      .toSorted();
     expect(hidden).toContain("usage.get-entitlement");
     expect(
       featureOmittedCapabilityIds(

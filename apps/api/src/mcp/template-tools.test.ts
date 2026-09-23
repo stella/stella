@@ -568,7 +568,7 @@ describe("MCP template tools", () => {
     }
     // The two exceptions are the documented path-to-value maps, whose keys are
     // the template's own field paths.
-    expect(openPaths.sort()).toEqual([
+    expect(openPaths.toSorted()).toEqual([
       "fill_template.values",
       "save_filled_template.values",
     ]);
@@ -2263,7 +2263,7 @@ describe("MCP template tools", () => {
     expect(
       Object.keys(args)
         .filter((key) => key !== "idempotency_key")
-        .sort()
+        .toSorted()
         .every((key) => key in fingerprinted),
     ).toBe(true);
     expect("idempotency_key" in fingerprinted).toBe(false);

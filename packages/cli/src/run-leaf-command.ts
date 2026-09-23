@@ -783,8 +783,8 @@ export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
 
 type AllOutcome = {
   payload: unknown;
-  truncated: boolean;
-  lastCursor: string | null;
+  /** Where a ceiling stopped the walk short of the last page; null when complete. */
+  resumeCursor: string | null;
   count: number;
 };
 
@@ -793,7 +793,7 @@ type AllOutcome = {
  * With a `stream` callback (JSONL mode, spec 049 §3) each item is emitted as it
  * is fetched and NOT accumulated, so memory stays bounded independent of page
  * count; the ceilings and truncation semantics are unchanged. Callers that
- * stream ignore `payload` and read `count`/`truncated`/`lastCursor`.
+ * stream ignore `payload` and read `count`/`resumeCursor`.
  */
 const followAll = async ({
   textPath,
@@ -829,7 +829,6 @@ const followAll = async ({
   let pages = 0;
   let bytes = 0;
   let streamedCount = 0;
-  let truncated = false;
 
   do {
     const args = cursor === null ? baseArgs : cursorInto(baseArgs, cursor);
@@ -876,7 +875,6 @@ const followAll = async ({
       collected >= MAX_ALL_ITEMS ||
       bytes >= MAX_ALL_BYTES
     ) {
-      truncated = cursor !== null;
       break;
     }
   } while (cursor !== null);
@@ -892,8 +890,7 @@ const followAll = async ({
   const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
   return Result.ok({
     payload: mergedPayload,
-    truncated,
-    lastCursor: cursor,
+    resumeCursor: cursor,
     count,
   });
 };
@@ -973,9 +970,10 @@ export const streamOrRenderAllPages = async ({
       width: terminalWidth(context),
     });
   }
-  if (outcome.value.truncated) {
+  const { count, resumeCursor } = outcome.value;
+  if (resumeCursor !== null) {
     writers.stderr(
-      `--all truncated at ${outcome.value.count} items/pages; resume with --cursor ${outcome.value.lastCursor}\n`,
+      `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
     );
   }
 };

@@ -31,7 +31,7 @@ const testFiles = (
 )
   .filter(({ isPostgresTest }) => isPostgresTest)
   .map(({ testFile }) => testFile)
-  .sort();
+  .toSorted();
 
 if (testFiles.length === 0) {
   console.error(

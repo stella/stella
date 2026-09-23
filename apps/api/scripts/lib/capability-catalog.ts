@@ -106,7 +106,7 @@ export const isWellFormedCapabilityId = (id: string): boolean => {
 
 /** Ids failing `isWellFormedCapabilityId`, sorted (empty when all are well-formed). */
 export const findMalformedCapabilityIds = (ids: readonly string[]): string[] =>
-  ids.filter((id) => !isWellFormedCapabilityId(id)).sort();
+  ids.filter((id) => !isWellFormedCapabilityId(id)).toSorted();
 
 /** The domain of a capability id: its first `.`-separated segment. */
 export const deriveDomain = (id: string): string => {
@@ -322,7 +322,7 @@ export const isAllowedActionVerb = (id: string): boolean => {
 /** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
 export const findNonConformingActionVerbs = (
   ids: readonly string[],
-): string[] => ids.filter((id) => !isAllowedActionVerb(id)).sort();
+): string[] => ids.filter((id) => !isAllowedActionVerb(id)).toSorted();
 
 export type AccessClassification = {
   access: "read" | "write";
@@ -350,7 +350,7 @@ export const classifyVerbs = (verbs: readonly string[]): VerbClassification => {
     ...new Set(
       verbs.filter((verb) => !READ_VERBS.has(verb) && !WRITE_VERBS.has(verb)),
     ),
-  ].sort();
+  ].toSorted();
   if (unknown.length > 0) {
     return { ok: false, unknownVerbs: unknown };
   }
@@ -481,7 +481,7 @@ export const findStaleAccessOverrides = ({
   const used = new Set(usedIds);
   return Object.keys(overrides)
     .filter((id) => !used.has(id))
-    .sort();
+    .toSorted();
 };
 
 export type HandlerKindResolution =
@@ -602,7 +602,7 @@ export const findInlineCapabilityMismatches = ({
       mismatches.push({ id, inlineCount, allowed });
     }
   }
-  return mismatches.sort((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
 };
 
 /** Module-alias import specifier for a handler file: `apps/api/src/handlers/time-entries/create.ts` -> `@/api/handlers/time-entries/create`. */
@@ -672,7 +672,7 @@ const matchSafeSegment = ({
   const match = pattern.exec(segment);
   if (match === null) {
     return panic(
-      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe ${kind} segment ${JSON.stringify(segment)} (must match ${pattern})`,
+      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe ${kind} segment ${JSON.stringify(segment)} (must match /${pattern.source}/${pattern.flags})`,
     );
   }
   return match[0];
@@ -875,7 +875,9 @@ export const scanContextFidelity = ({
       violations.push({ id, features });
     }
   }
-  const staleWaivers = [...waivedIds].filter((id) => !tripped.has(id)).sort();
+  const staleWaivers = [...waivedIds]
+    .filter((id) => !tripped.has(id))
+    .toSorted();
   violations.sort((a, b) => a.id.localeCompare(b.id));
   return { violations, staleWaivers };
 };
@@ -1271,8 +1273,8 @@ export const scanFileResponseReturns = ({
     }
   }
   return {
-    violations: violations.sort(),
-    staleFlags: staleFlags.sort(),
+    violations: violations.toSorted(),
+    staleFlags: staleFlags.toSorted(),
   };
 };
 
@@ -1415,7 +1417,9 @@ export const scanRouteHookGuards = ({
       }
     }
   }
-  const staleWaivers = [...waivedIds].filter((id) => !detected.has(id)).sort();
+  const staleWaivers = [...waivedIds]
+    .filter((id) => !detected.has(id))
+    .toSorted();
   violations.sort(
     (a, b) =>
       a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
@@ -1666,16 +1670,11 @@ ${rows.join("\n")}
 const renderWaivedInternalSection = (
   internalWaiverCounts: Readonly<Record<string, number>>,
 ): string => {
-  const reasons = Object.keys(internalWaiverCounts).sort((a, b) =>
+  const counts = Object.entries(internalWaiverCounts).toSorted(([a], [b]) =>
     a.localeCompare(b),
   );
-  const total = reasons.reduce(
-    (sum, reason) => sum + (internalWaiverCounts[reason] ?? 0),
-    0,
-  );
-  const rows = reasons.map(
-    (reason) => `| ${reason} | ${internalWaiverCounts[reason]} |`,
-  );
+  const total = counts.reduce((sum, [, count]) => sum + count, 0);
+  const rows = counts.map(([reason, count]) => `| ${reason} | ${count} |`);
   return `## Waived internal handlers
 
 Permanent \`internal\` MCP dispositions: handlers reviewed and deliberately
@@ -1718,7 +1717,7 @@ export const serializeCoverageDoc = ({
     byDomain.set(domain, bucket);
   }
   const domainSections = [...byDomain.keys()]
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
     .map((domain) =>
       renderDomainSection({
         domain,

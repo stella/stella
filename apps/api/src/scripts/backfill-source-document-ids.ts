@@ -103,7 +103,7 @@ const adapters = Object.entries(ID_EXPRESSION_BY_ADAPTER).filter(
 
 if (adapters.length === 0) {
   console.error(
-    `No id derivation known for "${ADAPTER_FILTER}". Known: ${Object.keys(ID_EXPRESSION_BY_ADAPTER).join(", ")}`,
+    `No id derivation known for "${ADAPTER_FILTER ?? "any adapter"}". Known: ${Object.keys(ID_EXPRESSION_BY_ADAPTER).join(", ")}`,
   );
   process.exit(1);
 }

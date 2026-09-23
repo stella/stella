@@ -38,7 +38,7 @@ export const createMemoryDedupIdentity = ({
 }: CreateMemoryDedupIdentityOptions): MemoryDedupIdentity => {
   const canonicalSourceWorkspaceIds = Array.from(
     new Set(sourceDataWorkspaceIds),
-  ).sort();
+  ).toSorted();
   const canonicalIdentity = JSON.stringify({
     version: 1,
     scope,

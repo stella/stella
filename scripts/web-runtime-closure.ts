@@ -137,5 +137,5 @@ export const findExternalRuntimeWorkspacePaths = (
     }
   }
 
-  return [...runtimeWorkspaces].sort();
+  return [...runtimeWorkspaces].toSorted();
 };

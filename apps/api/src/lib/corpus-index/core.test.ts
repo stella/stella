@@ -85,8 +85,8 @@ describe("splitIngestRequests", () => {
       );
       // A row split across requests could be marked indexed while half its
       // passages were still missing from the index.
-      expect([...documentIds].sort()).toEqual(
-        entries.map(({ row }) => row.id).sort(),
+      expect([...documentIds].toSorted()).toEqual(
+        entries.map(({ row }) => row.id).toSorted(),
       );
     }
   });

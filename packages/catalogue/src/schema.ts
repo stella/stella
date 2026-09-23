@@ -109,9 +109,9 @@ const slug = v.pipe(
  * GitHub `owner/name`. Owner: 1–39 chars, alphanumeric or hyphen, no
  * leading hyphen. Name: 1–100 chars from GitHub's allowed set. Storing
  * the bare identifier (not a URL) makes "GitHub only" structural — the
- * URL builders in the loader are the sole way it becomes a URL. Named
- * `owner`/`name` groups let the contribute form's normalizer reuse this
- * one pattern instead of re-declaring its own copy.
+ * URL builders in the loader are the sole way it becomes a URL. The
+ * contribute form's normalizer reuses this one pattern instead of
+ * re-declaring its own copy.
  */
 export const GITHUB_REPO_PATTERN =
   /^(?<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})\/(?<name>[A-Za-z0-9._-]{1,100})$/u;

@@ -277,7 +277,7 @@ const orderMemoryRows = ({
 }): MemoryRow[] =>
   // Stable sort preserves the SQL ordering (pinned -> recent) within
   // each scope group.
-  [...rows].sort(
+  [...rows].toSorted(
     (a, b) =>
       memoryGroupRank({ matterSet, row: a }) -
       memoryGroupRank({ matterSet, row: b }),

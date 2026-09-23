@@ -192,7 +192,7 @@ export const topCitingDecisions = <T extends CitingDecisionOrder>(
   limit: number,
 ): T[] =>
   [...rows]
-    .sort((a, b) => {
+    .toSorted((a, b) => {
       const byAuthority =
         b.decision.citationAuthority - a.decision.citationAuthority;
       if (byAuthority !== 0) {

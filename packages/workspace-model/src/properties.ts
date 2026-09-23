@@ -209,7 +209,7 @@ export const resolveWorkspacePropertyOptionGroups = <
   const issues: WorkspacePropertyOptionGroupIssue[] = [];
   const spans: WorkspacePropertyOptionGroupSpan<OptionId, Color>[] = [];
   const closed = new Set<OptionId>();
-  const sorted = [...options].sort(
+  const sorted = [...options].toSorted(
     (left, right) => left.sortOrder - right.sortOrder,
   );
 

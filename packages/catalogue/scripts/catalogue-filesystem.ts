@@ -81,7 +81,9 @@ const inspectDirectory = ({
   rootRealPath,
 }: InspectDirectoryOptions): void => {
   const entries: InspectedCatalogueEntry[] = [];
-  const names = readdirSync(directoryPath).sort((a, b) => a.localeCompare(b));
+  const names = readdirSync(directoryPath).toSorted((a, b) =>
+    a.localeCompare(b),
+  );
 
   for (const name of names) {
     const entryPath = path.join(directoryPath, name);

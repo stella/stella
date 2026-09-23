@@ -213,7 +213,7 @@ describe("euEcjAdapter.fetchPage", () => {
       const langs = page.decisions
         .filter((d) => d.caseNumber === "C-128/21")
         .map((d) => d.language)
-        .sort();
+        .toSorted();
       expect(langs).toEqual(["en", "fr"]);
 
       const first = page.decisions[0];
@@ -356,7 +356,7 @@ describe("euEcjAdapter.fetchPage", () => {
 
       // Only EN and FR variants
       expect(page.decisions).toHaveLength(2);
-      const langs = page.decisions.map((d) => d.language).sort();
+      const langs = page.decisions.map((d) => d.language).toSorted();
       expect(langs).toEqual(["en", "fr"]);
     },
     PARSE_TEST_TIMEOUT,

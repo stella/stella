@@ -153,15 +153,17 @@ try {
   const embeddedDependencyFiles = [...packed].filter((file) =>
     file.startsWith("dist/node_modules/"),
   );
-  if (embeddedDependencyFiles.length > 0) {
+  const [firstEmbeddedDependencyFile] = embeddedDependencyFiles;
+  if (firstEmbeddedDependencyFile !== undefined) {
     failures.push(
-      `tarball embeds ${embeddedDependencyFiles.length} dependency file(s) under dist/node_modules; declare the dependency in runtime or peer metadata (first: ${embeddedDependencyFiles.at(0)})`,
+      `tarball embeds ${embeddedDependencyFiles.length} dependency file(s) under dist/node_modules; declare the dependency in runtime or peer metadata (first: ${firstEmbeddedDependencyFile})`,
     );
   }
   const testArtifacts = [...packed].filter(isPublishedTestArtifact);
-  if (testArtifacts.length > 0) {
+  const [firstTestArtifact] = testArtifacts;
+  if (firstTestArtifact !== undefined) {
     failures.push(
-      `tarball includes ${testArtifacts.length} test or fixture artifact(s) (first: ${testArtifacts.at(0)})`,
+      `tarball includes ${testArtifacts.length} test or fixture artifact(s) (first: ${firstTestArtifact})`,
     );
   }
 
@@ -179,9 +181,10 @@ try {
       /from\s*["'](?:node:|@playwright\/test|playwright)["']/u.test(contents),
     )
     .map(({ file }) => file);
-  if (bundledTestRuntimes.length > 0) {
+  const [firstBundledTestRuntime] = bundledTestRuntimes;
+  if (firstBundledTestRuntime !== undefined) {
     failures.push(
-      `tarball bundles Node or Playwright imports (first: ${bundledTestRuntimes.at(0)})`,
+      `tarball bundles Node or Playwright imports (first: ${firstBundledTestRuntime})`,
     );
   }
 
@@ -286,6 +289,10 @@ try {
     const primary = resolvedBySubpath.get(flat);
     if (primary === undefined) {
       failures.push(`${subpath}: no flat subpath "${flat}" to alias`);
+      continue;
+    }
+    // An alias that did not resolve already recorded its own failure above.
+    if (aliased === undefined) {
       continue;
     }
     if (aliased !== primary) {

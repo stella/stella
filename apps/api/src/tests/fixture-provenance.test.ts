@@ -70,7 +70,7 @@ const scanRoots = async (): Promise<string[]> => {
     }),
   );
   // Plain code-unit ordering: these are file paths, not display text.
-  return perRoot.flat().sort();
+  return perRoot.flat().toSorted();
 };
 
 const readFixture = async (relativePath: string): Promise<CapturedFixture> => {
@@ -167,8 +167,8 @@ describe("captured fixture provenance", () => {
     const legacy = fixtures
       .filter(({ provenance }) => provenance?.capture === "legacy")
       .map(({ relativePath }) => relativePath)
-      .sort();
+      .toSorted();
 
-    expect(legacy).toEqual([...LEGACY_CAPTURES].sort());
+    expect(legacy).toEqual([...LEGACY_CAPTURES].toSorted());
   });
 });

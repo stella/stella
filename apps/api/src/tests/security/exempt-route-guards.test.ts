@@ -56,7 +56,7 @@ const EXPECTED_EXEMPT_ROUTE_FILES = [
   "apps/api/src/handlers/verify/routes.ts",
   "apps/api/src/handlers/well-known/routes.ts",
   "apps/api/src/handlers/workspaces/events.ts",
-].sort();
+].toSorted();
 
 /**
  * Reviewed mutation endpoints inside the exempt files above. Each entry
@@ -173,7 +173,7 @@ describe("route-boundary exemptions (require-safe-route-handlers off)", () => {
       }
     }
 
-    expect([...exemptFiles].sort()).toEqual(EXPECTED_EXEMPT_ROUTE_FILES);
+    expect([...exemptFiles].toSorted()).toEqual(EXPECTED_EXEMPT_ROUTE_FILES);
   });
 
   test("every mutation endpoint in an exempt file is a reviewed, still-real allowlist entry", () => {

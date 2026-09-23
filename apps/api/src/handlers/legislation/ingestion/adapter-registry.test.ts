@@ -14,7 +14,9 @@ import type { LegislationAdapterRegistry } from "@/api/handlers/legislation/inge
 
 /** Byte order, never a collator: adapter keys are opaque identifiers. */
 const sortedKeys = (keys: readonly string[]): string[] =>
-  [...keys].sort((left, right) => (left < right ? -1 : Number(left > right)));
+  [...keys].toSorted((left, right) =>
+    left < right ? -1 : Number(left > right),
+  );
 
 test("declared keys and registered adapters are the same set", () => {
   expect(sortedKeys(listRegisteredLegislationAdapterKeys())).toEqual(

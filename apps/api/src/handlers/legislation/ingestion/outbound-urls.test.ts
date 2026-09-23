@@ -50,7 +50,7 @@ type EveryUrlFieldIsChecked = Assert<
 test("every URL-bearing field of the document input is checked", () => {
   const everyUrlFieldIsChecked: EveryUrlFieldIsChecked = true;
   expect(everyUrlFieldIsChecked).toBe(true);
-  expect([...LEGISLATION_URL_FIELDS].sort()).toEqual([
+  expect([...LEGISLATION_URL_FIELDS].toSorted()).toEqual([
     "documentUrl",
     "sourceUrl",
   ]);

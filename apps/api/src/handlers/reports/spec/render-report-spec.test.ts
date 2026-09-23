@@ -418,8 +418,8 @@ describe("renderReportSpec", () => {
       ReportSection["kind"],
       { kind: ReportSection["kind"]; [key: string]: unknown }
     >;
-    expect(Object.keys(oneOfEach).sort()).toEqual(
-      [...REPORT_SECTION_KINDS].sort(),
+    expect(Object.keys(oneOfEach).toSorted()).toEqual(
+      [...REPORT_SECTION_KINDS].toSorted(),
     );
 
     const parsed = await render(Object.values(oneOfEach), {

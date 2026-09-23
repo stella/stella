@@ -754,7 +754,7 @@ const runOneCycle = async (
         `(inserted: ${result?.inserted ?? 0}, pages: ${result?.pagesProcessed ?? 0})`,
     );
   } else {
-    logError(`[${adapterKey}] Failed: ${errorMessage}`);
+    logError(`[${adapterKey}] Failed: ${errorMessage ?? "no error recorded"}`);
   }
 
   return {

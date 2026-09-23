@@ -199,7 +199,7 @@ const getStringFrameProperty = (
     return null;
   }
 
-  const value = Reflect.get(frame, property);
+  const value: unknown = Reflect.get(frame, property);
   return typeof value === "string" ? value : null;
 };
 

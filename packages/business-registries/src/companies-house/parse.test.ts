@@ -351,7 +351,7 @@ describe("parseOfficersResponse", () => {
     // narrow type at runtime, not just at compile time.
     for (const officer of out) {
       if (officer.dateOfBirth) {
-        expect(Object.keys(officer.dateOfBirth).sort()).toEqual([
+        expect(Object.keys(officer.dateOfBirth).toSorted()).toEqual([
           "month",
           "year",
         ]);

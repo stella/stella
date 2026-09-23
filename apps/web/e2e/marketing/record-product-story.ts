@@ -809,10 +809,12 @@ const main = async () => {
       // instead of hiding behind a green run.
       await recordCapture({ browser, capture, cookies, theme, views }).catch(
         async (error: unknown) => {
+          const reason =
+            error instanceof Error
+              ? error.message.split("\n").at(0)
+              : undefined;
           process.stdout.write(
-            `retrying ${capture.captureId} (${theme}) after: ${
-              error instanceof Error ? error.message.split("\n")[0] : "unknown"
-            }\n`,
+            `retrying ${capture.captureId} (${theme}) after: ${reason ?? "unknown"}\n`,
           );
           return await recordCapture({
             browser,
@@ -867,7 +869,7 @@ const updateRecordingsManifest = async (
   for (const entry of recordedEntries) {
     entriesByKey.set(manifestKey(entry), entry);
   }
-  const entries = [...entriesByKey.values()].sort(
+  const entries = [...entriesByKey.values()].toSorted(
     (a, b) =>
       a.captureId.localeCompare(b.captureId) || a.theme.localeCompare(b.theme),
   );

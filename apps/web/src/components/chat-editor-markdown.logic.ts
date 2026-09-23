@@ -94,7 +94,7 @@ const parseInlineStrong = (source: string): InlineNode[] => {
   const matches = [
     ...collectStrongMatches(source, starPasteRegex),
     ...collectStrongMatches(source, underscorePasteRegex),
-  ].sort((left, right) => left.from - right.from);
+  ].toSorted((left, right) => left.from - right.from);
   let cursor = 0;
 
   for (const match of matches) {

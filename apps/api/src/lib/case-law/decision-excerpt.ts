@@ -314,7 +314,7 @@ const locateAnchor = (
     .split(CORPUS_FRAGMENT_JOIN)
     .map((fragment) => fragment.trim())
     .filter((fragment) => fragment.length > 0)
-    .sort((a, b) => b.length - a.length);
+    .toSorted((a, b) => b.length - a.length);
 
   for (const fragment of fragments) {
     const at = locateSnippet(passage, stripSearchHighlightMarkup(fragment));

@@ -102,7 +102,7 @@ describe("chat attachment hydration", () => {
         dataWorkspaceIds: [otherWorkspaceId, workspaceId, otherWorkspaceId],
         workspaceId,
       }),
-    ).toEqual([otherWorkspaceId, workspaceId].sort());
+    ).toEqual([otherWorkspaceId, workspaceId].toSorted());
   });
 
   test("coerces text-like attachments to a text content part (universal, never modality-gated)", async () => {
@@ -585,7 +585,9 @@ describe("chat attachment hydration", () => {
     expect(Result.isOk(result)).toBe(true);
     // The bytes reached the store under the key the row names, typed with the
     // declared MIME type so the object is served as text, not as a download.
-    const stored = fake.objects.get(`${bucket}/${requestKeys("PUT").at(0)}`);
+    const putKey =
+      requestKeys("PUT").at(0) ?? panic("no PUT reached the store");
+    const stored = fake.objects.get(`${bucket}/${putKey}`);
     expect(stored?.bytes).toEqual(
       new TextEncoder().encode("confidential text"),
     );
