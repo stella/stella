@@ -57,7 +57,9 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isMemberAccess,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -89,11 +91,6 @@ const SDK_BODY_READS: ReadonlySet<string> = new Set([
   "transformToByteArray",
   "transformToString",
 ]);
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference =>
-  isIdentifier(node) && Array.isArray(node.range);
 
 const memberName = (member: AstNode): string | null => {
   if (member.computed === true) {
@@ -190,19 +187,6 @@ export default eslintCompatPlugin({
         // Local names of the unbounded S3 readers imported in this file.
         let s3ReaderLocals = new Map<string, string>();
 
-        const resolveVariable = (identifier: ESTree.IdentifierReference) => {
-          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
-            context.sourceCode.getScope(identifier);
-          while (scope) {
-            const variable = scope.set.get(identifier.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         // `const [a, b] = await Promise.all([x, y])` binds `b` to `y`.
         const promiseAllElement = (def, name: string): unknown => {
           if (
@@ -239,7 +223,7 @@ export default eslintCompatPlugin({
 
         // The initializer of a binding that still denotes it: `const`, or a
         // `let`/`var` that scope analysis proves is never written after init.
-        const stableInitializer = (variable): unknown => {
+        const stableBindingInitializer = (variable): unknown => {
           const reassigned = variable.references.some(
             (reference) =>
               typeof reference.isWrite === "function" &&
@@ -277,7 +261,7 @@ export default eslintCompatPlugin({
 
         // A same-file function whose declared return type is a Response.
         const returnsResponse = (callee: ESTree.IdentifierReference) => {
-          const variable = resolveVariable(callee);
+          const variable = resolveVariable(context, callee);
           if (variable === null) {
             return false;
           }
@@ -354,14 +338,14 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(current)) {
             return false;
           }
-          const variable = resolveVariable(current);
+          const variable = resolveVariable(context, current);
           if (variable === null) {
             return false;
           }
           if (isDeclaredResponse(variable)) {
             return true;
           }
-          return isFetchResponse(stableInitializer(variable), visited);
+          return isFetchResponse(stableBindingInitializer(variable), visited);
         };
 
         return {
@@ -393,7 +377,9 @@ export default eslintCompatPlugin({
               const imported = s3ReaderLocals.get(callee.name);
               // Scope check: a local that shadows the import is not the reader.
               const variable =
-                imported === undefined ? null : resolveVariable(callee);
+                imported === undefined
+                  ? null
+                  : resolveVariable(context, callee);
               if (
                 imported !== undefined &&
                 variable?.defs.some((def) => def.type === "ImportBinding")

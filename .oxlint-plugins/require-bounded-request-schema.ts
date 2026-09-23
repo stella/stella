@@ -55,13 +55,13 @@
 // above and that are imported from another file.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
 
 import {
   type AstNode,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -199,11 +199,6 @@ const isPaginationRuleCursor = (value: unknown): boolean => {
   }
   return typeboxBuilderName(schema) === "String";
 };
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference =>
-  isIdentifier(node) && Array.isArray(node.range);
 
 const isModuleLevelDeclarator = (node: unknown): boolean => {
   if (!isAstNode(node)) {

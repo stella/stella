@@ -72,6 +72,7 @@ const bounded = await readS3ObjectBounded({
   maxBytes: 1024,
   signal,
 });
+// expect-clean: no-unbounded-response-body/no-unbounded-response-body
 const status = first.status;
 
 // Request bodies and uploads are bounded by the route schema.
