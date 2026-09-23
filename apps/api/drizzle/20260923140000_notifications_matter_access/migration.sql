@@ -1,6 +1,7 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
+-- stella-migration-safety: reviewed alter-policy - adds a condition to the existing recipient and organization check, so it only narrows visibility; rollback restores the previous USING expression
 ALTER POLICY "user_select"
   ON "notifications"
   USING ((
@@ -21,6 +22,7 @@ ALTER POLICY "user_select"
   END))
 ));--> statement-breakpoint
 
+-- stella-migration-safety: reviewed alter-policy - adds the same condition to USING and keeps WITH CHECK unchanged, so it only narrows which rows can be updated; rollback restores the previous USING expression
 ALTER POLICY "user_update"
   ON "notifications"
   USING ((
