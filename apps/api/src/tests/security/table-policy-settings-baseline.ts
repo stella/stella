@@ -26,6 +26,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "billing_codes",
   "buffer_object_cleanup_intents",
   "business_registry_credentials",
+  "case_law_citation_authority_sweep",
   "case_law_citation_resolution_census",
   "case_law_citation_resolution_census_runs",
   "case_law_citation_resolution_progress",
