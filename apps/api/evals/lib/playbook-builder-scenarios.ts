@@ -8,10 +8,14 @@
  */
 
 import type { RegistryReadToolDataByName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { attachmentText } from "@/api/handlers/chat/upload-files";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { Position } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookScope,
+  Position,
+} from "@/api/lib/workflow/playbook-positions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
@@ -61,6 +65,9 @@ export type AskedQuestion = {
 export type BuilderEvent = {
   name: string;
   input: unknown;
+  /** Which user message the call answered: 1 for the brief, then one per
+   *  follow-up. */
+  turn: number;
   questions: readonly AskedQuestion[];
   /** Issues a save named by `source_id` and left unchanged. */
   resentUnchanged: readonly string[];
@@ -74,9 +81,17 @@ type BuilderEvidence = {
   playbooks: readonly StoredPlaybook[];
 };
 
+type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
+
 export type BuilderScenario = {
   id: string;
   brief: string;
+  /** User messages sent one per later turn, each once the turn before ended,
+   *  with the whole conversation so far as history. */
+  followUps: readonly string[];
+  /** The `scope.perspective` values the user's side maps to; `undefined`
+   *  is the omission the skill asks for when the side maps to none. */
+  perspectives: readonly (PlaybookPerspective | undefined)[];
   answer: (question: AskedQuestion) => string;
   check: (evidence: BuilderEvidence) => string[];
 };
@@ -330,6 +345,30 @@ const missingTopics = (
 const matterCalls = (events: readonly BuilderEvent[]) =>
   events.filter(({ name }) => isMatterToolName(name));
 
+const eventsOfTurn = (events: readonly BuilderEvent[], turn: number) =>
+  events.filter((event) => event.turn === turn);
+
+/** A named matter is read with `list_documents`, never with a search. */
+const namedMatterDefects = (events: readonly BuilderEvent[]): string[] => {
+  const defects: string[] = [];
+  if (events.some(({ name }) => name === "search_across_matters")) {
+    defects.push("searched across every matter although the user named one");
+  }
+  // A refused call listed nothing, and its input still holds the ref the
+  // script wrote rather than the matter id; it is charged as a failure by
+  // `commonDefects`, not here.
+  const otherMatters = events.filter(
+    ({ name, input, error }) =>
+      name === "list_documents" &&
+      error === null &&
+      stringArg(input, "matter_id") !== SUPPLY_MATTER.id,
+  );
+  if (otherMatters.length > 0) {
+    defects.push("listed documents outside the named matter");
+  }
+  return defects;
+};
+
 const discoveredNames = (input: unknown): string[] => {
   const names =
     typeof input === "object" && input !== null && "toolNames" in input
@@ -388,8 +427,8 @@ const tierTexts = (position: Position): string[] => {
 
 /**
  * Defects every scenario shares: one playbook, enough positions, no resends,
- * no matter read or script refused, and on the chat surface no read written
- * before its signature was discovered.
+ * no matter read or script refused, no work handed to subagents, and on the
+ * chat surface no read written before its signature was discovered.
  */
 const commonDefects = ({
   events,
@@ -408,6 +447,12 @@ const commonDefects = ({
   if (surface === "chat") {
     defects.push(...readsBeforeDiscovery(events));
   }
+  const spawned = events.filter(
+    ({ name }) => name === SPAWN_SUBAGENTS_TOOL_NAME,
+  ).length;
+  if (spawned > 0) {
+    defects.push(`handed work to subagents ${String(spawned)} time(s)`);
+  }
   if (playbooks.length !== 1) {
     defects.push(`${String(playbooks.length)} playbooks stored; expected one`);
   }
@@ -422,28 +467,54 @@ const commonDefects = ({
   return defects;
 };
 
+/**
+ * `scope.perspective` is set only when the side maps to a value it has; a
+ * recipient saved as `neutral` is a wrong reading, not a default.
+ */
+const perspectiveDefects = (
+  playbooks: readonly StoredPlaybook[],
+  perspectives: readonly (PlaybookPerspective | undefined)[],
+): string[] =>
+  playbooks
+    .map(({ scope }) => scope?.perspective)
+    .filter((perspective) => !perspectives.includes(perspective))
+    .map(
+      (perspective) =>
+        `saved scope.perspective ${String(perspective)}; the side maps to ${perspectives.map(String).join(" or ")}`,
+    );
+
+/** Every defect of a run: the shared checks, then the scenario's own. */
+export const scoreScenario = (
+  scenario: BuilderScenario,
+  evidence: BuilderEvidence,
+): string[] => [
+  ...commonDefects(evidence),
+  ...perspectiveDefects(evidence.playbooks, scenario.perspectives),
+  ...scenario.check(evidence),
+];
+
 // --- scenarios ------------------------------------------------------------
 
 const noDocuments: BuilderScenario = {
   id: "no-documents",
   brief: "Help me build a playbook for reviewing NDAs.",
+  followUps: [],
+  perspectives: [undefined],
   answer: answerByTopic({
     contracts: "No, I have none to share. Start without them.",
     language: "Czech.",
     law: "Czech law.",
+    matters: "None. Start without contracts.",
     side: "We are the receiving party.",
     type: "Mutual and one-way NDAs we receive from business partners.",
   }),
   check: (evidence) => {
-    const defects = [
-      ...commonDefects(evidence),
-      ...missingTopics(evidence.events, [
-        "contracts",
-        "side",
-        "law",
-        "language",
-      ]),
-    ];
+    const defects = missingTopics(evidence.events, [
+      "contracts",
+      "side",
+      "law",
+      "language",
+    ]);
     const searched = matterCalls(evidence.events);
     if (searched.length > 0) {
       defects.push(
@@ -467,10 +538,68 @@ const CONFIRMED_DOCUMENTS = [KELLER, BRANDT];
 const CONFIRMED_MARKERS = ["Keller", "Brandt"];
 const CANDIDATE_MARKERS = [...CONFIRMED_MARKERS, "Vogel", "Harbour"];
 
+const isCandidatesQuestion = (question: AskedQuestion) =>
+  CANDIDATE_MARKERS.some((marker) => questionText(question).includes(marker));
+
+/** Picks the two executed agreements from the candidates offered. */
+const pickConfirmedCandidates = (question: AskedQuestion): string => {
+  const picked = question.options.filter((option) =>
+    CONFIRMED_MARKERS.some((marker) => option.includes(marker)),
+  );
+  return picked.length > 0
+    ? picked.join(", ")
+    : "Use the Keller GmbH and Brandt AG agreements; the Vogel one is only a draft.";
+};
+
+/**
+ * The candidates were offered before any read, only the picked documents
+ * were read, and all of them were.
+ */
+const confirmedReadDefects = (events: readonly BuilderEvent[]): string[] => {
+  const defects: string[] = [];
+  const firstRead = indexOfFirst(
+    events,
+    ({ name }) => name === "read_content_across_matters",
+  );
+  const firstCandidates = indexOfFirst(events, ({ questions }) =>
+    questions.some(isCandidatesQuestion),
+  );
+  if (firstCandidates > firstRead) {
+    defects.push("read a contract before the user confirmed the candidates");
+  }
+  const read = readDocumentIds(events);
+  const unconfirmed = DOCUMENTS.filter(
+    ({ id }) =>
+      read.has(id) && !CONFIRMED_DOCUMENTS.some((doc) => doc.id === id),
+  );
+  if (unconfirmed.length > 0) {
+    defects.push(
+      `read unconfirmed documents: ${unconfirmed.map(({ name }) => name).join(", ")}`,
+    );
+  }
+  if (!CONFIRMED_DOCUMENTS.every(({ id }) => read.has(id))) {
+    defects.push("did not read every confirmed contract");
+  }
+  return defects;
+};
+
+/** Both executed agreements cap liability at 12 months of fees. */
+const liabilityGroundingDefects = (
+  playbooks: readonly StoredPlaybook[],
+): string[] => {
+  const positions = playbooks.at(0)?.positions.items ?? [];
+  const liability = positions.find(({ issue }) => /liabilit/iu.test(issue));
+  return liability !== undefined &&
+    tierTexts(liability).some((text) => text.includes("12"))
+    ? []
+    : ["no liability position grounded in the contracts' 12-month cap"];
+};
+
 const answerDiscoveryTopic = answerByTopic({
   contracts: `Yes, please look for them in the "${SUPPLY_MATTER.name}" matter.`,
   language: "English.",
   law: "German law.",
+  matters: `The "${SUPPLY_MATTER.name}" matter.`,
   side: "We are the customer.",
   type: "IT services agreements with software suppliers.",
 });
@@ -479,27 +608,14 @@ const discovery: BuilderScenario = {
   id: "discovery",
   brief:
     "I want a playbook for the IT services agreements we sign with our suppliers.",
-  answer: (question) => {
-    if (
-      !CANDIDATE_MARKERS.some((marker) =>
-        questionText(question).includes(marker),
-      )
-    ) {
-      return answerDiscoveryTopic(question);
-    }
-    const picked = question.options.filter((option) =>
-      CONFIRMED_MARKERS.some((marker) => option.includes(marker)),
-    );
-    return picked.length > 0
-      ? picked.join(", ")
-      : "Use the Keller GmbH and Brandt AG agreements; the Vogel one is only a draft.";
-  },
-  check: (evidence) => {
-    const { events } = evidence;
-    const defects = [
-      ...commonDefects(evidence),
-      ...missingTopics(events, ["contracts", "side", "law"]),
-    ];
+  followUps: [],
+  perspectives: [undefined, "buyer"],
+  answer: (question) =>
+    isCandidatesQuestion(question)
+      ? pickConfirmedCandidates(question)
+      : answerDiscoveryTopic(question),
+  check: ({ events, playbooks }) => {
+    const defects = missingTopics(events, ["contracts", "side", "law"]);
     const firstMatterCall = indexOfFirst(
       events,
       (event) => matterCalls([event]).length > 0,
@@ -512,58 +628,74 @@ const discovery: BuilderScenario = {
     if (firstMatterCall < firstContractsQuestion) {
       defects.push("searched matters before the user agreed");
     }
-    if (events.some(({ name }) => name === "search_across_matters")) {
-      defects.push("searched across every matter although the user named one");
-    }
-    // A refused call listed nothing, and its input still holds the ref the
-    // script wrote rather than the matter id; it is charged above as a
-    // failure, not here.
-    const otherMatters = events.filter(
-      ({ name, input, error }) =>
-        name === "list_documents" &&
-        error === null &&
-        stringArg(input, "matter_id") !== SUPPLY_MATTER.id,
+    defects.push(
+      ...namedMatterDefects(events),
+      ...confirmedReadDefects(events),
+      ...liabilityGroundingDefects(playbooks),
     );
-    if (otherMatters.length > 0) {
-      defects.push("listed documents outside the named matter");
+    return defects;
+  },
+};
+
+const answerContractsLaterTopic = answerByTopic({
+  contracts: "Not now. Start from defaults and the interview.",
+  language: "English.",
+  law: "German law.",
+  matters: `The "${SUPPLY_MATTER.name}" matter.`,
+  side: "We are the customer.",
+  type: "IT services agreements with software suppliers.",
+});
+
+/**
+ * The user declines contracts, lets the first positions land, then asks for
+ * their matters mid-flow. The switch re-enters "Look for them" at its first
+ * step: ask which matters, list the named one, offer the candidates, read
+ * only the picks; never a search across every matter, never subagents.
+ */
+const contractsLater: BuilderScenario = {
+  id: "contracts-later",
+  brief:
+    "I want a playbook for the IT services agreements we sign with our suppliers.",
+  followUps: [
+    "Use the existing contracts in my matters to inform the remaining positions.",
+  ],
+  perspectives: [undefined, "buyer"],
+  answer: (question) =>
+    isCandidatesQuestion(question)
+      ? pickConfirmedCandidates(question)
+      : answerContractsLaterTopic(question),
+  check: ({ events, playbooks }) => {
+    const defects = missingTopics(events, ["contracts", "side", "law"]);
+    const opening = eventsOfTurn(events, 1);
+    if (matterCalls(opening).length > 0) {
+      defects.push("looked for contracts after the user declined them");
     }
-    const firstRead = indexOfFirst(
-      events,
-      ({ name }) => name === "read_content_across_matters",
-    );
-    const firstCandidates = indexOfFirst(events, ({ questions }) =>
-      questions.some((question) =>
-        CANDIDATE_MARKERS.some((marker) =>
-          questionText(question).includes(marker),
-        ),
+    if (!opening.some(isSave)) {
+      defects.push("saved nothing before the user asked for contracts");
+    }
+    const later = eventsOfTurn(events, 2);
+    const firstMattersQuestion = indexOfFirst(later, ({ questions }) =>
+      questions.some(
+        ({ question }) => classifyQuestion(question) === "matters",
       ),
     );
-    if (firstCandidates > firstRead) {
-      defects.push("read a contract before the user confirmed the candidates");
-    }
-    const read = readDocumentIds(events);
-    const unconfirmed = DOCUMENTS.filter(
-      ({ id }) =>
-        read.has(id) && !CONFIRMED_DOCUMENTS.some((doc) => doc.id === id),
+    const firstLookup = indexOfFirst(
+      later,
+      ({ name }) => isMatterToolName(name) && name !== "list_matters",
     );
-    if (unconfirmed.length > 0) {
-      defects.push(
-        `read unconfirmed documents: ${unconfirmed.map(({ name }) => name).join(", ")}`,
-      );
+    if (firstMattersQuestion === Number.POSITIVE_INFINITY) {
+      defects.push("did not ask which matters to search");
+    } else if (firstLookup < firstMattersQuestion) {
+      defects.push("looked in matters before asking which ones");
     }
-    if (!CONFIRMED_DOCUMENTS.every(({ id }) => read.has(id))) {
-      defects.push("did not read every confirmed contract");
+    if (!later.some(isSave)) {
+      defects.push("saved nothing after the user asked for contracts");
     }
-    const positions = evidence.playbooks.at(0)?.positions.items ?? [];
-    const liability = positions.find(({ issue }) => /liabilit/iu.test(issue));
-    if (
-      liability === undefined ||
-      !tierTexts(liability).some((text) => text.includes("12"))
-    ) {
-      defects.push(
-        "no liability position grounded in the contracts' 12-month cap",
-      );
-    }
+    defects.push(
+      ...namedMatterDefects(later),
+      ...confirmedReadDefects(later),
+      ...liabilityGroundingDefects(playbooks),
+    );
     return defects;
   },
 };
@@ -589,6 +721,7 @@ const answerDpaTopic = answerByTopic({
   contracts: "Only the two I attached.",
   language: "English.",
   law: "Dutch law.",
+  matters: "None. Use only the two I attached.",
   side: "We are the controller.",
   type: "Data processing agreements under Article 28 GDPR.",
 });
@@ -617,13 +750,14 @@ const withDocuments: BuilderScenario = {
       }),
     }),
   ].join("\n"),
+  followUps: [],
+  perspectives: [undefined],
   answer: (question) =>
     /liabilit/iu.test(questionText(question))
       ? "The processor's liability for its own data protection breaches may be unlimited; everything else falls under the main agreement's cap."
       : answerDpaTopic(question),
-  check: (evidence) => {
-    const { events } = evidence;
-    const defects = [...commonDefects(evidence)];
+  check: ({ events, playbooks }) => {
+    const defects: string[] = [];
     const searched = matterCalls(events);
     if (searched.length > 0) {
       defects.push(
@@ -644,7 +778,7 @@ const withDocuments: BuilderScenario = {
         `asked where the DPAs agree: ${agreed.map((text) => text.slice(0, 80)).join(" | ")}`,
       );
     }
-    const positions = evidence.playbooks.at(0)?.positions.items ?? [];
+    const positions = playbooks.at(0)?.positions.items ?? [];
     const breach = positions.find(({ issue }) => /breach/iu.test(issue));
     const escalation =
       breach?.mode === "graded" ? (breach.negotiation?.escalation ?? "") : "";
@@ -667,5 +801,6 @@ const withDocuments: BuilderScenario = {
 export const BUILDER_SCENARIOS: readonly BuilderScenario[] = [
   noDocuments,
   discovery,
+  contractsLater,
   withDocuments,
 ];

@@ -273,7 +273,11 @@ const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
   legislationCountries: PUBLIC_LEGISLATION_COUNTRIES,
 });
 
-const SUBAGENT_DELEGATION_SECTION =
+/**
+ * Exported for the playbook-authoring eval, whose chat surface offers
+ * `spawn_subagents` under the same instruction a chat turn carries.
+ */
+export const SUBAGENT_DELEGATION_SECTION =
   "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
 
 const ASK_USER_BOUNDARY =

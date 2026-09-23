@@ -370,139 +370,152 @@ const defaultSpawnSubagentsDependencies = {
   runSubagent,
 } satisfies SpawnSubagentsDependencies;
 
+/**
+ * The tool as the model sees it, without its executor: the playbook-authoring
+ * eval offers this definition with a recording stub so a run that hands its
+ * work to subagents is scored on the same name, description, and schema chat
+ * registers.
+ */
+export const SPAWN_SUBAGENTS_TOOL_DEFINITION = toolDefinition({
+  name: SPAWN_SUBAGENTS_TOOL_NAME,
+  description:
+    "Delegate independent subtasks to parallel subagents. Use this when a " +
+    "task splits into pieces that do not depend on each other's results — " +
+    "each subagent runs its own read/write tool loop concurrently and " +
+    "reports back a short result or an error. Prefer this over doing " +
+    "independent work serially yourself; it is cheaper and faster. Do not " +
+    "use it for a single sequential task, or when later steps depend on " +
+    "an earlier subagent's output.",
+  inputSchema: toTanStackToolSchema(spawnSubagentsInputSchema),
+  outputSchema: toTanStackToolSchema(spawnSubagentsOutputSchema),
+});
+
 export const createSpawnSubagentsTool = (
   props: CreateSpawnSubagentsToolProps,
 ) => {
   const dependencies = props.dependencies ?? defaultSpawnSubagentsDependencies;
   return {
-    [SPAWN_SUBAGENTS_TOOL_NAME]: toolDefinition({
-      name: SPAWN_SUBAGENTS_TOOL_NAME,
-      description:
-        "Delegate independent subtasks to parallel subagents. Use this when a " +
-        "task splits into pieces that do not depend on each other's results — " +
-        "each subagent runs its own read/write tool loop concurrently and " +
-        "reports back a short result or an error. Prefer this over doing " +
-        "independent work serially yourself; it is cheaper and faster. Do not " +
-        "use it for a single sequential task, or when later steps depend on " +
-        "an earlier subagent's output.",
-      inputSchema: toTanStackToolSchema(spawnSubagentsInputSchema),
-      outputSchema: toTanStackToolSchema(spawnSubagentsOutputSchema),
-    }).server(async ({ subagents }, ctx) => {
-      // Resolve the fast role's model info once for the whole batch; each
-      // per-subagent `model` override is validated against it.
-      const fastModelInfo = getTanStackTextModelInfoForRole(
-        "fast",
-        props.orgAIConfig,
-        { organizationId: props.organizationId },
-      );
+    [SPAWN_SUBAGENTS_TOOL_NAME]: SPAWN_SUBAGENTS_TOOL_DEFINITION.server(
+      async ({ subagents }, ctx) => {
+        // Resolve the fast role's model info once for the whole batch; each
+        // per-subagent `model` override is validated against it.
+        const fastModelInfo = getTanStackTextModelInfoForRole(
+          "fast",
+          props.orgAIConfig,
+          { organizationId: props.organizationId },
+        );
 
-      // Whole-batch pre-flight: dispatches nothing (no provider calls, no
-      // usage events) when the org cannot afford every subtask in this call.
-      const batchPreflight = await preflightSubagentBatchUsage({
-        fastModelInfo,
-        organizationId: props.organizationId,
-        safeDb: props.safeDb,
-        subtaskCount: subagents.length,
-        assertUsageAvailable: dependencies.assertUsageAvailable,
-      });
-      if (!batchPreflight.ok) {
-        return {
-          results: subagents.map((_sub, index) => ({
-            index,
-            status: "failed" as const,
-            error: batchPreflight.message,
-          })),
-        };
-      }
-
-      const runOneSubagent = async (sub: SubagentSpec, index: number) => {
-        // Fresh per-run buffer: the toolset's proposal wrappers record into it,
-        // so this subagent's result carries only its own proposed writes.
-        const proposalBuffer = createSubagentProposalBuffer();
-        const tools = props.buildSubagentToolset(proposalBuffer.sink);
-        try {
-          const run = await dependencies.runSubagent({
-            organizationId: props.organizationId,
-            orgAIConfig: props.orgAIConfig,
-            role: "fast",
-            modelId: resolveValidatedSubagentModelId({
-              subModel: sub.model,
-              modelInfo: fastModelInfo,
-            }),
-            ...buildSubagentSystemPrompt({
-              expectedOutput: sub.expectedOutput,
-              tools,
-            }),
-            tenantWorkspaceIds: props.workspaceId ? [props.workspaceId] : [],
-            messages: [
-              buildSubagentUserMessage({
-                task: sub.task,
-                context: sub.context,
-              }),
-            ],
-            tools,
-            abortSignal:
-              ctx?.abortSignal ??
-              AbortSignal.timeout(SUBAGENT_FALLBACK_TIMEOUT_MS),
-            maxSteps: SUBAGENT_MAX_STEPS,
-            delegationDepth: props.delegationDepth + 1,
-            metering: {
-              safeDb: props.safeDb,
-              userId: props.userId,
-              workspaceId: props.workspaceId,
-              serviceTier: "standard",
-              feature: "subagent",
-              sessionId: props.threadId,
-              traceId: Bun.randomUUIDv7(),
-            },
-            thirdPartyBoundary: props.thirdPartyBoundary,
-          });
-          switch (run.outcome) {
-            case "completed":
-              return {
-                index,
-                status: "completed" as const,
-                result: appendProposedWrites(run.text, proposalBuffer.list()),
-              };
-            case "failed":
-              return {
-                index,
-                status: "failed" as const,
-                error: appendProposedWrites(run.message, proposalBuffer.list()),
-              };
-            default:
-              run satisfies never;
-              return panic(`Unhandled subagent outcome: ${String(run)}`);
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name === "AbortError") {
-            throw error;
-          }
+        // Whole-batch pre-flight: dispatches nothing (no provider calls, no
+        // usage events) when the org cannot afford every subtask in this call.
+        const batchPreflight = await preflightSubagentBatchUsage({
+          fastModelInfo,
+          organizationId: props.organizationId,
+          safeDb: props.safeDb,
+          subtaskCount: subagents.length,
+          assertUsageAvailable: dependencies.assertUsageAvailable,
+        });
+        if (!batchPreflight.ok) {
           return {
-            index,
-            status: "failed" as const,
-            error: error instanceof Error ? error.message : String(error),
+            results: subagents.map((_sub, index) => ({
+              index,
+              status: "failed" as const,
+              error: batchPreflight.message,
+            })),
           };
         }
-      };
 
-      // The boundary holds cumulative mutable anonymization state
-      // (`redactionMap`, `placeholderOffsets`), so concurrent subagents
-      // sharing it would race on those maps. Run sequentially in
-      // anonymized mode; parallelism is safe (and preserved) otherwise.
-      if (props.thirdPartyBoundary.type === "anonymized") {
-        const results: Awaited<ReturnType<typeof runOneSubagent>>[] = [];
-        for (const [index, sub] of subagents.entries()) {
-          // db-await-in-loop: anonymized subagents share the boundary's mutable redaction state, so they run one at a time; MAX_SUBAGENTS_PER_CALL bounds them
-          results.push(await runOneSubagent(sub, index));
+        const runOneSubagent = async (sub: SubagentSpec, index: number) => {
+          // Fresh per-run buffer: the toolset's proposal wrappers record into it,
+          // so this subagent's result carries only its own proposed writes.
+          const proposalBuffer = createSubagentProposalBuffer();
+          const tools = props.buildSubagentToolset(proposalBuffer.sink);
+          try {
+            const run = await dependencies.runSubagent({
+              organizationId: props.organizationId,
+              orgAIConfig: props.orgAIConfig,
+              role: "fast",
+              modelId: resolveValidatedSubagentModelId({
+                subModel: sub.model,
+                modelInfo: fastModelInfo,
+              }),
+              ...buildSubagentSystemPrompt({
+                expectedOutput: sub.expectedOutput,
+                tools,
+              }),
+              tenantWorkspaceIds: props.workspaceId ? [props.workspaceId] : [],
+              messages: [
+                buildSubagentUserMessage({
+                  task: sub.task,
+                  context: sub.context,
+                }),
+              ],
+              tools,
+              abortSignal:
+                ctx?.abortSignal ??
+                AbortSignal.timeout(SUBAGENT_FALLBACK_TIMEOUT_MS),
+              maxSteps: SUBAGENT_MAX_STEPS,
+              delegationDepth: props.delegationDepth + 1,
+              metering: {
+                safeDb: props.safeDb,
+                userId: props.userId,
+                workspaceId: props.workspaceId,
+                serviceTier: "standard",
+                feature: "subagent",
+                sessionId: props.threadId,
+                traceId: Bun.randomUUIDv7(),
+              },
+              thirdPartyBoundary: props.thirdPartyBoundary,
+            });
+            switch (run.outcome) {
+              case "completed":
+                return {
+                  index,
+                  status: "completed" as const,
+                  result: appendProposedWrites(run.text, proposalBuffer.list()),
+                };
+              case "failed":
+                return {
+                  index,
+                  status: "failed" as const,
+                  error: appendProposedWrites(
+                    run.message,
+                    proposalBuffer.list(),
+                  ),
+                };
+              default:
+                run satisfies never;
+                return panic(`Unhandled subagent outcome: ${String(run)}`);
+            }
+          } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") {
+              throw error;
+            }
+            return {
+              index,
+              status: "failed" as const,
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
+        };
+
+        // The boundary holds cumulative mutable anonymization state
+        // (`redactionMap`, `placeholderOffsets`), so concurrent subagents
+        // sharing it would race on those maps. Run sequentially in
+        // anonymized mode; parallelism is safe (and preserved) otherwise.
+        if (props.thirdPartyBoundary.type === "anonymized") {
+          const results: Awaited<ReturnType<typeof runOneSubagent>>[] = [];
+          for (const [index, sub] of subagents.entries()) {
+            // db-await-in-loop: anonymized subagents share the boundary's mutable redaction state, so they run one at a time; MAX_SUBAGENTS_PER_CALL bounds them
+            results.push(await runOneSubagent(sub, index));
+          }
+          return { results };
         }
+
+        // db-await-in-loop: bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
+        const results = await Promise.all(subagents.map(runOneSubagent));
+
         return { results };
-      }
-
-      // db-await-in-loop: bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
-      const results = await Promise.all(subagents.map(runOneSubagent));
-
-      return { results };
-    }),
+      },
+    ),
   };
 };
