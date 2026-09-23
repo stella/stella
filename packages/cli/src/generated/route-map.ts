@@ -26956,6 +26956,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "medium",
                   },
                   {
+                    kind: "enum",
+                    enum: ["high", "medium", "low"],
+                    repeatable: false,
+                    flag: "--confidence",
+                    prop: "confidence",
+                    required: true,
+                    part: "body",
+                    partPath: "confidence",
+                  },
+                  {
                     kind: "nullable-string",
                     repeatable: false,
                     flag: "--interpretation-note",
@@ -26964,12 +26974,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "interpretationNote",
                   },
+                  {
+                    kind: "enum",
+                    enum: ["included", "held"],
+                    repeatable: false,
+                    flag: "--scoring",
+                    prop: "scoring",
+                    required: true,
+                    part: "body",
+                    partPath: "scoring",
+                  },
                 ],
-                inputOnly: [
-                  "body.occurredOn",
-                  "body.confidence",
-                  "body.scoring",
-                ],
+                inputOnly: ["body.occurredOn"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -27016,20 +27032,9 @@ export const generatedRouteMap: RouteNode = {
                                   type: "string",
                                 },
                                 precision: {
-                                  anyOf: [
-                                    {
-                                      const: "day",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "month",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "year",
-                                      type: "string",
-                                    },
-                                  ],
+                                  default: "day",
+                                  type: "string",
+                                  enum: ["day", "month", "year"],
                                 },
                               },
                             },
@@ -27065,20 +27070,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         confidence: {
-                          anyOf: [
-                            {
-                              const: "high",
-                              type: "string",
-                            },
-                            {
-                              const: "medium",
-                              type: "string",
-                            },
-                            {
-                              const: "low",
-                              type: "string",
-                            },
-                          ],
+                          default: "high",
+                          type: "string",
+                          enum: ["high", "medium", "low"],
                         },
                         interpretationNote: {
                           nullable: true,
@@ -27094,16 +27088,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         scoring: {
-                          anyOf: [
-                            {
-                              const: "included",
-                              type: "string",
-                            },
-                            {
-                              const: "held",
-                              type: "string",
-                            },
-                          ],
+                          default: "included",
+                          type: "string",
+                          enum: ["included", "held"],
                         },
                       },
                     },
@@ -28277,16 +28264,9 @@ export const generatedRouteMap: RouteNode = {
                                   nullable: true,
                                   anyOf: [
                                     {
-                                      anyOf: [
-                                        {
-                                          const: "reviewed",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "disputed",
-                                          type: "string",
-                                        },
-                                      ],
+                                      default: "reviewed",
+                                      type: "string",
+                                      enum: ["reviewed", "disputed"],
                                     },
                                     {
                                       type: "null",
@@ -28308,27 +28288,14 @@ export const generatedRouteMap: RouteNode = {
                                   nullable: true,
                                   anyOf: [
                                     {
-                                      anyOf: [
-                                        {
-                                          const: "supported",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "tension",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "contradicted",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "nocover",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "notverifiable",
-                                          type: "string",
-                                        },
+                                      default: "supported",
+                                      type: "string",
+                                      enum: [
+                                        "supported",
+                                        "tension",
+                                        "contradicted",
+                                        "nocover",
+                                        "notverifiable",
                                       ],
                                     },
                                     {

@@ -27,8 +27,10 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
+// `t.UnionEnum` keeps the literal union in the inferred body type, which
+// the web client reads its event and detail types from.
 const literals = <T extends string>(values: readonly T[]) =>
-  t.Union(values.map((value) => t.Literal(value)));
+  t.UnionEnum([...values]);
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),

@@ -30,8 +30,10 @@ import {
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
 
+// `t.UnionEnum` keeps the literal union in the inferred body type, which
+// the web client reads its event and detail types from.
 const literals = <T extends string>(values: readonly T[]) =>
-  t.Union(values.map((value) => t.Literal(value)));
+  t.UnionEnum([...values]);
 
 /** Events are stored as sent and never rewritten, so a key the schema does
  *  not name is refused rather than kept. */
