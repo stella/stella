@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.34.4
+
+### Patch Changes
+
+- [#3744](https://github.com/stella/stella/pull/3744) [`de044f5`](https://github.com/stella/stella/commit/de044f5f0c926a7b7b722fd588e24c845a48c64d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the inspector layout tokens as `@stll/ui/layout-tokens`, and export the shared field-value parts (`formatIntFieldValue`, `PersonAvatar`, `PendingSkeleton`, the empty, error, unsupported and clip renderers, and the select and int styling helpers) from `@stll/workspace-ui/field-value`.
+
 ## 0.34.3
 
 ### Patch Changes
