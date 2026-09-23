@@ -4,6 +4,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { listGatewayMcpToolDefinitions } from "@/api/mcp/gateway/list-tools";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { confirmationUnavailableResult } from "@/api/mcp/tool-utils";
@@ -121,5 +122,27 @@ describe("tool confirmation by session", () => {
       status: "error",
       error: { code: "permission_denied" },
     });
+  });
+
+  test("tools that always need confirmation are not listed when no person can confirm", async () => {
+    const listed = async (
+      toolConfirmation?: McpRequestContext["toolConfirmation"],
+    ) =>
+      (
+        await listGatewayMcpToolDefinitions({
+          context: createContext(toolConfirmation).context,
+          mode: "default",
+          scopes: MCP_OAUTH_SCOPES,
+        })
+      ).map(({ name }) => name);
+
+    const agentRun = await listed(TOOL_CONFIRMATION.unavailable);
+    const caller = await listed();
+
+    expect(caller).toContain("delete_document");
+    expect(agentRun).not.toContain("delete_document");
+    expect(agentRun).not.toContain("submit_feedback");
+    // Tools without a confirmation requirement are listed for both.
+    expect(agentRun).toContain("list_documents");
   });
 });

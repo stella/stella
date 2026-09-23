@@ -7,6 +7,7 @@ import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -651,6 +652,35 @@ describe("invoke_capability gates", () => {
           code: "permission_denied",
         });
       }
+    });
+
+    test("destructive capabilities are not listed", async () => {
+      const listed: { id: string; destructive: boolean }[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = parseToolPayload<{
+          items: { id: string; destructive: boolean }[];
+          nextCursor: string | null;
+        }>(
+          // eslint-disable-next-line no-await-in-loop -- pages depend on the previous cursor
+          await handleMcpToolCall({
+            args: {
+              limit: MAX_LIST_LIMIT,
+              ...(cursor === null ? {} : { cursor }),
+            },
+            context: createContext({
+              grantedScopes: MCP_OAUTH_SCOPES,
+              toolConfirmation: TOOL_CONFIRMATION.unavailable,
+            }),
+            toolName: "list_capabilities",
+          }),
+        );
+        listed.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+
+      expect(listed.length).toBeGreaterThan(0);
+      expect(listed.filter(({ destructive }) => destructive)).toEqual([]);
     });
 
     test("a capability that needs no confirmation is unaffected", async () => {

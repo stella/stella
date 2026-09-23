@@ -49,6 +49,7 @@ import {
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
 } from "@/api/mcp/public-field-names";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -867,9 +868,14 @@ const listCapabilitiesHandler: McpToolHandler<
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
   // them, closing the guess-the-id bypass).
+  // A session that cannot confirm is not offered destructive capabilities;
+  // invoke refuses them for it as well.
+  const confirmable =
+    context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
   const filtered = CATALOG.filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
+      (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),

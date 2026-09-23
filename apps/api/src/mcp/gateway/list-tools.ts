@@ -25,6 +25,7 @@ import {
   getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
@@ -103,6 +104,22 @@ const externalMcpToolAccess = ({
       };
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
+
+/**
+ * A session that cannot confirm is not offered tools that always need
+ * confirmation. Discriminator tools stay listed: their other actions run
+ * without it, and dispatch refuses only the confirmation-gated ones.
+ */
+const isStaticToolAvailableToConfirmation = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+): boolean => {
+  if (context.toolConfirmation !== TOOL_CONFIRMATION.unavailable) {
+    return true;
+  }
+  const behavior = definition.destructiveBehavior?.type;
+  return behavior !== "always" && behavior !== "outbound";
+};
 
 const isStaticToolVisibleToRole = (
   context: McpRequestContext,
@@ -183,7 +200,8 @@ export const listGatewayMcpToolDefinitions = async ({
     (definition) =>
       hasGrantedScope(scopes, definition.scope) &&
       isMcpToolFeatureEnabled(definition.feature) &&
-      isStaticToolVisibleToRole(context, definition),
+      isStaticToolVisibleToRole(context, definition) &&
+      isStaticToolAvailableToConfirmation(context, definition),
   );
   // Every restricted surface is a pure static projection. Per-org registry
   // narrowing and dynamic connector/skill discovery run only on the default
