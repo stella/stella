@@ -480,6 +480,10 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/lists/items/comments/create"),
   },
+  "lists.items.fact-details.update": {
+    load: async () =>
+      await import("@/api/handlers/lists/items/fact-details/update"),
+  },
   "lists.items.list": {
     load: async () => await import("@/api/handlers/lists/items/list"),
   },
@@ -505,6 +509,17 @@ export const CAPABILITY_DISPATCH = {
   },
   "lists.update": {
     load: async () => await import("@/api/handlers/lists/update"),
+  },
+  "lists.verifications.claim-reviews.bulk.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/verifications/claim-reviews/bulk/create"),
+  },
+  "lists.verifications.claim-reviews.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/verifications/claim-reviews/create"),
+  },
+  "lists.verifications.get": {
+    load: async () => await import("@/api/handlers/lists/verifications/get"),
   },
   "matters.anonymization-allowlist.create": {
     load: async () =>

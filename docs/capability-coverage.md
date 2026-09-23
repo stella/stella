@@ -260,6 +260,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.get`                                     | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists get`                                     |
 | `lists.items.activity.list`                     | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-activity-list`                     |
 | `lists.items.comments.create`                   | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-comments-create`                   |
+| `lists.items.fact-details.update`               | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-fact-details-update`               |
 | `lists.items.list`                              | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-list`                              |
 | `lists.items.reviews.update`                    | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-reviews-update`                    |
 | `lists.items.sources.create`                    | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-sources-create`                    |
@@ -269,6 +270,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.list`                                    | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list`                                    |
 | `lists.sections.create`                         | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create`                         |
 | `lists.update`                                  | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update`                                  |
+| `lists.verifications.claim-reviews.bulk.create` | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
+| `lists.verifications.claim-reviews.create`      | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create`      |
+| `lists.verifications.get`                       | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get`                       |
 
 ## matters
 

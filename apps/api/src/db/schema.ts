@@ -21,6 +21,7 @@ export * from "./schema/document-processing";
 export * from "./schema/bilingual";
 export * from "./schema/document-translations";
 export * from "./schema/document-reviews";
+export * from "./schema/lists-verification";
 export * from "./schema/office-evidence";
 export * from "./schema/flows";
 export * from "./schema/mcp";

@@ -230,6 +230,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   bilingual_translation_run: "automation",
   document_translation_run: "automation",
   document_review_run: "documents",
+  legal_list_verification: "documents",
   flow_run: "automation",
   playbook: playbookActivityCategory,
   workspace: workspaceActivityCategory,
