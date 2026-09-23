@@ -3196,7 +3196,7 @@ const workspaceLastActivityAt = (reference: string, index: number): Date => {
 // ─── Entity timestamp pinning ───────────────────────────
 // The files views show per-document Created/Last-updated columns, the list
 // endpoints sort by asc(entities.createdAt) (see
-// apps/api/src/handlers/entities/list-files.ts), and the marketing stills
+// apps/api/src/handlers/entities/files/list.ts), and the marketing stills
 // film that ordering. With the columns' defaultNow(), every fresh seed
 // produced "N min ago" values that varied with seed wall-clock time, so
 // re-seeded screenshots drifted. Entities therefore get deterministic

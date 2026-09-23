@@ -107,7 +107,7 @@ describe("removedCommandError", () => {
 
   test("a capability leaf goes missing with invoke_capability", () => {
     const message = removedCommandError({
-      argv: ["capability", "usage", "get-entitlement"],
+      argv: ["capability", "usage", "entitlement-get"],
       baked: generatedRouteMap,
       delta: delta({ removed: ["invoke_capability"] }),
     });

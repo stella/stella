@@ -1257,18 +1257,22 @@ const countReadCapabilitiesWithWriteScope = (content: string): number => {
 };
 
 /**
- * Entries in the reviewed `DOMAIN_ACTION_VERBS` allowlist: capability action
- * verbs outside the canonical `list/get/create/update/delete` set. Each one is a
- * public command verb a caller has to learn, so the list may only shrink —
- * typically by splitting a compound verb into a nested resource directory
- * (`clauses/categories/create.ts` over `clauses/categories-create.ts`).
+ * Compound (hyphenated) entries in the closed `DOMAIN_ACTION_VERBS` list. A
+ * compound action is a resource plus a verb and belongs in a nested resource
+ * directory (`clauses/categories/create.ts` over `clauses/categories-create.ts`),
+ * so this holds at 0. A missing list is a moved definition, not a clean count.
  */
 const countDomainActionVerbs = (content: string): number => {
   const block =
-    /export const DOMAIN_ACTION_VERBS = new Set\(\[([\s\S]*?)\]\);/u.exec(
+    /export const DOMAIN_ACTION_VERBS = \[([\s\S]*?)\] as const;/u.exec(
       content,
     )?.[1];
-  return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
+  if (block === undefined) {
+    return panic(
+      "capability-domain-action-verbs: DOMAIN_ACTION_VERBS not found",
+    );
+  }
+  return (block.match(/^[ \t]*"[a-z0-9]+-[a-z0-9-]*"/gmu) ?? []).length;
 };
 
 /**
@@ -2192,7 +2196,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "capability-domain-action-verbs",
     description:
-      "reviewed non-canonical capability action verbs (DOMAIN_ACTION_VERBS); each is a public command verb outside list/get/create/update/delete",
+      "compound (hyphenated) capability action verbs in DOMAIN_ACTION_VERBS; a compound action is a nested resource (`categories.create`, not `categories-create`); at 0, keep it there",
     include: ["apps/api/scripts/lib/capability-catalog.ts"],
     exclude: () => false,
     count: countDomainActionVerbs,

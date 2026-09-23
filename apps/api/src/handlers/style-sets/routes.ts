@@ -1,16 +1,16 @@
 import Elysia from "elysia";
 
 import createStyleSet from "@/api/handlers/style-sets/create";
-import createStyleSetFromEditor from "@/api/handlers/style-sets/create-from-editor";
 import deleteStyleSet from "@/api/handlers/style-sets/delete";
 import downloadStyleSet from "@/api/handlers/style-sets/download";
+import readStyleSetEditor from "@/api/handlers/style-sets/editor/get";
+import createStyleSetFromEditor from "@/api/handlers/style-sets/from-editor/create";
+import updateStyleSetFromEditor from "@/api/handlers/style-sets/from-editor/update";
 import listStyleSets from "@/api/handlers/style-sets/list";
 import previewStyleSetFromEditor from "@/api/handlers/style-sets/preview-from-editor";
-import readStyleSetEditor from "@/api/handlers/style-sets/read-editor";
-import readStellaStyleEditor from "@/api/handlers/style-sets/read-stella-editor";
 import replaceStyleSet from "@/api/handlers/style-sets/replace";
+import readStellaStyleEditor from "@/api/handlers/style-sets/stella-editor/get";
 import updateStyleSet from "@/api/handlers/style-sets/update";
-import updateStyleSetFromEditor from "@/api/handlers/style-sets/update-from-editor";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";

@@ -52,12 +52,12 @@ export const DOCUMENT_BYTE_WRITE_DISPOSITION = {
   "handlers/entities/clip.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/copy-utils.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/create.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
-  "handlers/entities/delete-version.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
+  "handlers/entities/versions/delete.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/finalize-desktop-edit-session.ts":
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
   "handlers/entities/publish-folio-collab-version.ts":
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
-  "handlers/entities/restore-version.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
+  "handlers/entities/versions/restore.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/upload.ts": STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
   "handlers/uploads/entity-version.ts":
     STORED_BYTE_DISPOSITION.STRIPPED_UPSTREAM,

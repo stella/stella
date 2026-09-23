@@ -468,7 +468,7 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
   test("maps compound catalog scopes into the capability preflight", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
-        id: "templates.fill-to-matter",
+        id: "templates.fills.create",
         scope: "stella:documents_write",
         additionalScopes: ["stella:templates"],
       }),
@@ -599,17 +599,16 @@ describe("insertCapabilities: namespaced merge", () => {
     const { tree } = insertCapabilities({
       tree: { kind: "route", children: {} },
       entries: [
-        entry({ id: "entities.read-summaries" }),
-        entry({ id: "entities.read-summaries.count" }),
+        entry({ id: "widgets.parts" }),
+        entry({ id: "widgets.parts.count" }),
       ],
     });
+    expect(leafAt(tree, ["capability", "widgets", "parts"])?.capabilityId).toBe(
+      "widgets.parts",
+    );
     expect(
-      leafAt(tree, ["capability", "entities", "read-summaries"])?.capabilityId,
-    ).toBe("entities.read-summaries");
-    expect(
-      leafAt(tree, ["capability", "entities", "read-summaries-count"])
-        ?.capabilityId,
-    ).toBe("entities.read-summaries.count");
+      leafAt(tree, ["capability", "widgets", "parts-count"])?.capabilityId,
+    ).toBe("widgets.parts.count");
   });
 });
 

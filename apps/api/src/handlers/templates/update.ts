@@ -180,7 +180,7 @@ const config = {
     "Change a template's record: name, category, tags, languages, whenToUse " +
     "and whenNotToUse guidance. Only the fields you pass are written. The " +
     "fields a template asks for live in its document, so change those by " +
-    "storing a new body with templates.save-document or by calling " +
+    "storing a new body with templates.document.update or by calling " +
     "configure_template_fields.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },

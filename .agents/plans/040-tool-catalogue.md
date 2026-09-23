@@ -200,7 +200,7 @@ individual items below.
 
 ### Backend
 
-- `apps/api/src/handlers/catalogue/list-catalogue.ts` — new
+- `apps/api/src/handlers/catalogue/list.ts` — new
   `GET /catalogue`. Loads manifest via `@stll/catalogue`, reads
   org's `practiceJurisdictions` + already-installed sets, returns
   merged entries with `isRecommendedForOrg` and `installState`.

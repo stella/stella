@@ -1,27 +1,27 @@
 import Elysia from "elysia";
 
+import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
+import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
+import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/update";
 import {
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
   deleteBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
+import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-availability/get";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
+import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
-import readAIAvailability from "@/api/handlers/organization-settings/read-ai-availability";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
-import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
-import readDeepLAvailability from "@/api/handlers/organization-settings/read-deepl-availability";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
-import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/update-anonymization-blacklist";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
-import updatePracticeJurisdictions from "@/api/handlers/organization-settings/update-practice-jurisdictions";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 

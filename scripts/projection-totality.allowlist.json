@@ -36,15 +36,15 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/catalogue/list-catalogue.ts",
+    "file": "apps/api/src/handlers/catalogue/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/chat/get-messages.ts",
+    "file": "apps/api/src/handlers/chat/messages/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/chat/get-older-messages.ts",
+    "file": "apps/api/src/handlers/chat/older-messages/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -60,7 +60,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/chat/get-threads.ts",
+    "file": "apps/api/src/handlers/chat/threads/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -112,11 +112,11 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/list-files.ts",
+    "file": "apps/api/src/handlers/entities/files/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/list-folders.ts",
+    "file": "apps/api/src/handlers/entities/folders/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -124,7 +124,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/read-filesystem-tree.ts",
+    "file": "apps/api/src/handlers/entities/filesystem-tree/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -136,19 +136,19 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/read-summaries-count.ts",
+    "file": "apps/api/src/handlers/entities/summaries/count.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/read-summaries.ts",
+    "file": "apps/api/src/handlers/entities/summaries/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/read-version-by-id.ts",
+    "file": "apps/api/src/handlers/entities/versions/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/read-versions.ts",
+    "file": "apps/api/src/handlers/entities/versions/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -240,11 +240,11 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts",
+    "file": "apps/api/src/handlers/organization-settings/anonymization-blacklist/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/organization-settings/read-deepl-availability.ts",
+    "file": "apps/api/src/handlers/organization-settings/deepl-availability/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -256,7 +256,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/playbooks/list-versions.ts",
+    "file": "apps/api/src/handlers/playbooks/versions/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -264,7 +264,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/rates/entries-read.ts",
+    "file": "apps/api/src/handlers/rates/entries/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -276,11 +276,11 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/reports/list-templates.ts",
+    "file": "apps/api/src/handlers/reports/templates/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/reports/read-export.ts",
+    "file": "apps/api/src/handlers/reports/exports/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -296,7 +296,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/skills/list-commands.ts",
+    "file": "apps/api/src/handlers/skills/commands/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -324,7 +324,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/tasks/entity-links-read.ts",
+    "file": "apps/api/src/handlers/tasks/entity-links/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -352,7 +352,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/usage/get-entitlement.ts",
+    "file": "apps/api/src/handlers/usage/entitlement/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -408,7 +408,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/workspaces/read-justifications.ts",
+    "file": "apps/api/src/handlers/workspaces/justifications/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -424,7 +424,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/workspaces/read-workflow-status.ts",
+    "file": "apps/api/src/handlers/workspaces/workflow/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {

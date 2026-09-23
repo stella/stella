@@ -1599,7 +1599,7 @@ describe("destructive confirm injection (S4)", () => {
         "capability",
         "invoke",
         "--capability",
-        "clauses.categories-delete",
+        "clauses.categories.delete",
         "--yes",
       ],
       url: server.url,
@@ -1609,7 +1609,7 @@ describe("destructive confirm injection (S4)", () => {
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      capability: "clauses.categories-delete",
+      capability: "clauses.categories.delete",
       confirm: true,
     });
   });
@@ -1629,7 +1629,7 @@ describe("destructive confirm injection (S4)", () => {
         "capability",
         "invoke",
         "--capability",
-        "clauses.categories-delete",
+        "clauses.categories.delete",
       ],
       url: server.url,
       token: READ,
@@ -1639,7 +1639,7 @@ describe("destructive confirm injection (S4)", () => {
     // No prompt and no retry off a TTY: exactly one server call, without confirm.
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      capability: "clauses.categories-delete",
+      capability: "clauses.categories.delete",
     });
   });
 });

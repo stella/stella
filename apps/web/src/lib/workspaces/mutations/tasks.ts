@@ -88,7 +88,7 @@ export const invalidateTaskQueries = async ({
   ]);
 };
 
-/** Assign one member to a task, in the role tasks.assignees-add defaults to. */
+/** Assign one member to a task, in the role tasks.assignees.add defaults to. */
 export const useAddTaskAssignee = (workspaceId: string) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();

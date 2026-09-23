@@ -50,7 +50,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
               "x-stella-feature-omitted-tools":
                 "list_time_entries search_case_law",
               "x-stella-feature-omitted-capabilities":
-                "time-entries.export-csv usage.get-entitlement",
+                "time-entries.csv.export usage.entitlement.get",
             },
           })
         );
@@ -77,8 +77,8 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
           "search_case_law",
         ]);
         expect(result.value.featureOmittedCapabilities).toEqual([
-          "time-entries.export-csv",
-          "usage.get-entitlement",
+          "time-entries.csv.export",
+          "usage.entitlement.get",
         ]);
         expect(methods).toEqual([
           "initialize",

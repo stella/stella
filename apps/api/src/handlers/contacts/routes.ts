@@ -1,6 +1,6 @@
 import Elysia from "elysia";
 
-import businessRegistriesLookup from "@/api/handlers/contacts/business-registries-lookup";
+import businessRegistriesLookup from "@/api/handlers/contacts/business-registries/lookup";
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete";
 import exportContacts from "@/api/handlers/contacts/export";

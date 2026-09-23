@@ -1,24 +1,24 @@
 import Elysia from "elysia";
 
-import deleteThread from "@/api/handlers/chat/delete-thread";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
-import getMessages from "@/api/handlers/chat/get-messages";
 import getModelOptions from "@/api/handlers/chat/get-model-options";
-import getOlderMessages from "@/api/handlers/chat/get-older-messages";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
-import getThreads from "@/api/handlers/chat/get-threads";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import getMessages from "@/api/handlers/chat/messages/list";
+import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
-import renameThread from "@/api/handlers/chat/rename-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
-import updateThread from "@/api/handlers/chat/update-thread";
+import deleteThread from "@/api/handlers/chat/threads/delete";
+import getThreads from "@/api/handlers/chat/threads/list";
+import renameThread from "@/api/handlers/chat/threads/rename";
+import updateThread from "@/api/handlers/chat/threads/update";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 

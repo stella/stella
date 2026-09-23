@@ -1370,15 +1370,15 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "start-workflow-extraction",
-    request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow-start capability.`,
+    request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow.start capability.`,
     mcp: {
       toolName: "invoke_capability",
       exampleArgs: {
-        capability: "matters.workflow-start",
+        capability: "matters.workflow.start",
         input: { params: { matterId: ACME_MATTER_ID } },
       },
       checkArgs: (args) => [
-        ...field(args, "capability", "matters.workflow-start"),
+        ...field(args, "capability", "matters.workflow.start"),
         ...nestedField(args, ["input", "params", "matterId"], ACME_MATTER_ID),
       ],
     },

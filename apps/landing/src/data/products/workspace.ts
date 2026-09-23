@@ -39,7 +39,7 @@ export const workspace = {
     { type: "capability", id: "entities.list" },
     { type: "capability", id: "entities.upload" },
     { type: "capability", id: "views.list" },
-    { type: "capability", id: "entities.read-versions" },
+    { type: "capability", id: "entities.versions.list" },
     {
       type: "source",
       path: "apps/desktop/src/mainview/App.tsx",

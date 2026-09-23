@@ -8,7 +8,7 @@ import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 describe("template persistence capability scope parity", () => {
   test("fill-to-workspace requires the same document-write consent as its covering tool", () => {
     const fillToWorkspace = capabilityCatalog.find(
-      ({ id }) => id === "templates.fill-to-matter",
+      ({ id }) => id === "templates.fills.create",
     );
 
     expect(fillToWorkspace?.scope).toBe("stella:documents_write");

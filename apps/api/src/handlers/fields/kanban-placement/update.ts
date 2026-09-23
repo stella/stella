@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   upsertFieldContentSchema,
   upsertFieldHandler,
-} from "@/api/handlers/fields/upsert-by-id";
+} from "@/api/handlers/fields/upsert";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";

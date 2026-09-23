@@ -43,7 +43,7 @@ whether a contract change helped.
    has more than one job.
 5. **Few optionals, one discriminator.** Replace a set of mutually exclusive
    optional keys with one discriminated union (`source: { type: "ai" | "lookup"
-   | ... }`). A model that fills every property cannot produce a contradictory
+| ... }`). A model that fills every property cannot produce a contradictory
    union member; it can produce six contradictory optionals.
 6. **Best effort over all-or-nothing for collections.** When a call carries a
    list of entries, validate each entry independently, apply the valid ones, and
@@ -67,7 +67,7 @@ whether a contract change helped.
 ## Every Error Is A Next Step
 
 10. **Structured envelope, closed codes.** Failures return `{ code, message, hint,
-    issues[] }` with codes from a closed set. `hint` names the corrective action,
+issues[] }` with codes from a closed set. `hint` names the corrective action,
     the tool to call, and where to go (a deep link when the fix is in the UI).
     "Disabled" without "enable it here" is a dead end.
 11. **Never leak the substrate.** A malformed id is a validation issue at the
@@ -115,12 +115,26 @@ whether a contract change helped.
     form or make the reference unambiguous, then re-measure. Do not do both at
     once.
 
+## Name Capabilities By Resource
+
+A capability id is its handler path under `apps/api/src/handlers/`:
+`<domain>[.<resource>…].<action>`. The action is ONE word, either a canonical
+verb (`list`, `get`, `create`, `update`, `delete`) or an entry in the closed
+`DOMAIN_ACTION_VERBS` list (`apps/api/scripts/lib/capability-catalog.ts`;
+`docs/capability-coverage.md` renders the current list). A compound action is a
+nested resource directory: `clauses/categories/create.ts`, not
+`clauses/categories-create.ts`; `entities/versions/list.ts`, not
+`entities/read-versions.ts`. A new domain verb is a reviewed addition to that
+list; the exporter fails on an unlisted verb and on a listed verb no capability
+uses, and the `capability-domain-action-verbs` ratchet holds hyphenated entries
+at 0.
+
 ## Guards Make It Stick
 
 - Registry-wide tests over every tool definition: id schemas, null-optional
   tolerance, description and reference drift, and a zero-diff capability export.
 - Total companion maps keyed by tool name (`as const satisfies Record<ToolName,
-  ...>`) for policy, consent, projection, and CLI disposition, so a new tool cannot
+...>`) for policy, consent, projection, and CLI disposition, so a new tool cannot
   land without each decision.
 - Compile-time gates in the tool factory (a schema that is not wrapped, an id that
   is not the shared schema) rather than review discipline.

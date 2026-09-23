@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import listSkillCommands from "@/api/handlers/skills/commands/list";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import deleteSkillComment from "@/api/handlers/skills/comments/delete";
 import listSkillComments from "@/api/handlers/skills/comments/list";
@@ -9,13 +10,12 @@ import updateSkillComment from "@/api/handlers/skills/comments/update";
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
 import discoverSkillUrl from "@/api/handlers/skills/discover";
-import fromBlueprint from "@/api/handlers/skills/from-blueprint";
-import generateSkillDraft from "@/api/handlers/skills/generate-draft";
+import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
+import fromBlueprint from "@/api/handlers/skills/from-blueprint/create";
+import importSkillFromUrl from "@/api/handlers/skills/from-url/import";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillsFromUrls from "@/api/handlers/skills/import";
-import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
-import listSkillCommands from "@/api/handlers/skills/list-commands";
 import createSkillProposal from "@/api/handlers/skills/proposals/create";
 import deleteSkillProposal from "@/api/handlers/skills/proposals/delete";
 import createSkillProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";

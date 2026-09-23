@@ -2,12 +2,12 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import createPropertiesBatch from "@/api/handlers/properties/batch/create";
 import createProperty from "@/api/handlers/properties/create";
-import createPropertiesBatch from "@/api/handlers/properties/create-batch";
 import deleteProperty from "@/api/handlers/properties/delete";
 import readProperties from "@/api/handlers/properties/list";
 import previewProperty from "@/api/handlers/properties/preview";
-import suggestPromptProperty from "@/api/handlers/properties/suggest-prompt";
+import suggestPromptProperty from "@/api/handlers/properties/prompt/suggest";
 import updateProperty from "@/api/handlers/properties/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {

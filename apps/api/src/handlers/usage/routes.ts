@@ -3,7 +3,7 @@ import Elysia from "elysia";
 import assignSeat from "@/api/handlers/usage/assign-seat";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
-import getEntitlement from "@/api/handlers/usage/get-entitlement";
+import getEntitlement from "@/api/handlers/usage/entitlement/get";
 import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";

@@ -33,8 +33,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import getMessages from "../get-messages";
-import getThreads from "../get-threads";
+import getMessages from "../messages/list";
+import getThreads from "../threads/list";
 import { createForkThread } from "./create";
 
 // Search indexing writes through the root (unscoped) database, which this

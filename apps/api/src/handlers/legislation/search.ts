@@ -517,7 +517,7 @@ const config = {
     "document type, status, source, language, and effective-date range; " +
     `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +
     "are searched. Read a hit in full with legislation.read; use " +
-    "legislation.boe-search to query the Spanish BOE service directly " +
+    "legislation.boe.search to query the Spanish BOE service directly " +
     "instead.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "search_legislation" },

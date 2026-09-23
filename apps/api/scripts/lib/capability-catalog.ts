@@ -36,11 +36,9 @@ export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
  * id. The client-engagement container is a `matter` to every user and agent and
  * a `workspace` only inside the code (the handler directory, the DB schema, the
  * HTTP routes), and a capability id is public: it is the CLI command path and
- * the `invoke_capability` argument. Substitution is per WORD, so it covers the
- * domain segment (`workspaces.*` -> `matters.*`), the doubly-named actions
- * (`workspaces.workspace-members-add` -> `matters.matter-members-add`) and the
- * cross-domain verbs (`entities.copy-to-workspace` -> `entities.copy-to-matter`)
- * from one table.
+ * the `invoke_capability` argument. Substitution is per WORD, so one table
+ * covers the domain segment (`workspaces.*` -> `matters.*`) and any nested
+ * resource or action word (`workspace-members` -> `matter-members`).
  *
  * This runs inside `deriveCapabilityId`, the sole id chokepoint, so the catalog,
  * the generated dispatch table, the coverage doc and the CLI route tree all
@@ -123,190 +121,82 @@ export const deriveDomain = (id: string): string => {
  * the surface can never repeat the old ambiguous `read`, which meant "list many"
  * in some domains and "fetch one" in others.
  */
-export const CANONICAL_ACTION_VERBS = new Set([
+export const CANONICAL_ACTION_VERBS = [
   "list",
   "get",
   "create",
   "update",
   "delete",
-]);
+] as const;
 
 /**
- * Reviewed domain-specific action verbs: operations that are genuinely not CRUD
- * (`search`, `run`, `export-csv`, …). This list is an explicit review gate, not
- * a free-for-all: a capability whose action verb is in neither
- * `CANONICAL_ACTION_VERBS` nor this set fails the export, so a new
- * non-conforming verb cannot land silently. It is ratcheted (see
- * `capability-domain-action-verbs` in `scripts/ratchet.ts`) and may only shrink
- * as compound verbs are restructured into nested resources — e.g.
- * `clauses.categories-create` should become `clauses.categories.create`, which
- * needs no allowlist entry at all.
+ * Reviewed domain action verbs: operations that are genuinely not CRUD
+ * (`search`, `run`, `export`, …). The list is closed: a capability whose action
+ * verb is in neither list fails the export, so a new verb is a reviewed
+ * addition here, never a silent one.
+ *
+ * Every entry is ONE word. A compound action (`categories-create`,
+ * `read-versions`, `run-start`) is a resource plus a verb, and becomes a nested
+ * resource directory instead (`clauses/categories/create.ts`,
+ * `entities/versions/list.ts`, `flows/runs/start.ts`). The
+ * `capability-domain-action-verbs` ratchet in `scripts/ratchet.ts` counts
+ * hyphenated entries and holds at 0.
  */
-export const DOMAIN_ACTION_VERBS = new Set([
-  "add-entries",
+export const DOMAIN_ACTION_VERBS = [
+  "add",
   "approve",
   "archive",
-  "assignees-add",
-  "assignees-remove",
-  "auto-run",
-  "batch-delete",
-  "batch-update",
-  "binding-catalog",
-  "boe-get-law",
-  "boe-law-structure",
-  "boe-related-laws",
-  "boe-search",
-  "boe-text-block",
-  "borme-summary",
-  "business-registries-lookup",
-  "calendar",
-  "categories-create",
-  "categories-delete",
-  "categories-list",
-  "categories-update",
-  "cell-retry",
+  "cancel",
   "check",
-  "check-stamp",
-  "clause-slots",
-  "clauses-link",
-  "clauses-list",
-  "clauses-slot-update",
-  "clauses-sync",
-  "clauses-sync-all",
-  "clauses-unlink",
   "clip",
-  "clone-builtin",
+  "clone",
   "compare",
   "convert",
-  "copy-to-matter",
-  "create-batch",
-  "create-blank",
-  "create-blank-document",
-  "create-from-editor",
-  "create-from-legal-source",
-  "create-from-style-set",
-  "create-from-styles",
-  "delete-thread",
-  "delete-version",
+  "copy",
+  "count",
+  "diff",
   "discover",
   "download",
-  "download-zip",
   "duplicate",
-  "entity-links-create",
-  "entity-links-delete",
-  "entity-links-read",
-  "entries-create",
-  "entries-delete",
-  "entries-read",
-  "entries-update",
   "export",
-  "export-csv",
-  "export-ledes",
-  "export-pdf",
-  "export-view",
   "fill",
-  "fill-by-id",
-  "fill-preview",
-  "fill-to-matter",
-  "from-blueprint",
-  "from-run",
-  "from-starter",
   "generate",
-  "generate-draft",
-  "get-entitlement",
-  "get-messages",
-  "get-older-messages",
-  "get-threads",
   "import",
-  "import-url",
-  "install-skill",
-  "list-catalogue",
-  "list-commands",
-  "list-exports",
-  "list-files",
-  "list-folders",
-  "list-starters",
-  "list-templates",
-  "list-versions",
-  "lookup-preview",
-  "manifest",
-  "mark-column-flag",
-  "matter-contacts-create",
-  "matter-contacts-delete",
-  "matter-members-add",
-  "matter-members-remove",
+  "install",
+  "link",
+  "lookup",
   "move",
-  "organize-suggestions",
   "prefill",
   "prepare",
   "preview",
-  "read-ai-availability",
-  "read-anonymization-blacklist",
-  "read-deepl-availability",
-  "read-editor",
-  "read-export",
-  "read-filesystem-tree",
-  "read-justifications",
-  "read-stella-editor",
-  "read-summaries",
-  "read-summaries-count",
-  "read-version",
-  "read-version-by-id",
-  "read-versions",
-  "read-window",
-  "read-workflow-status",
-  "read-workflow-target-count",
-  "remove-entries",
+  "remove",
   "rename",
-  "rename-thread",
   "reorder",
   "replace",
   "resolve",
-  "restore-version",
+  "restore",
+  "retry",
   "review",
   "rewrite",
   "run",
-  "run-cancel",
-  "run-detail",
-  "run-list",
-  "run-review",
-  "run-start",
-  "save-document",
   "search",
   "seed",
   "split",
-  "status",
-  "suggest-fields",
-  "suggest-prompt",
-  "table-export",
-  "template-slot-preview",
-  "timer-start",
-  "timer-stop",
+  "start",
+  "stop",
+  "suggest",
+  "summarize",
+  "sync",
   "transition",
-  "translate",
   "unarchive",
-  "update-anonymization-blacklist",
-  "update-cell-metadata",
-  "update-from-editor",
-  "update-practice-jurisdictions",
-  "update-thread",
-  "update-version-description",
-  "update-version-label",
+  "unlink",
   "upload",
-  "upload-version",
-  "upsert-by-id",
-  "variants-create",
-  "variants-delete",
-  "variants-list",
-  "variants-update",
-  "version-diff",
-  "version-summarize",
-  "versions-diff",
-  "versions-get",
-  "versions-list",
-  "versions-restore",
-  "versions-summarize",
-  "workflow-start",
+  "upsert",
+] as const;
+
+const ALLOWED_ACTION_VERBS: ReadonlySet<string> = new Set([
+  ...CANONICAL_ACTION_VERBS,
+  ...DOMAIN_ACTION_VERBS,
 ]);
 
 /** The action a capability id names: its final `.`-separated segment. */
@@ -316,7 +206,7 @@ export const deriveActionVerb = (id: string): string =>
 /** Whether a capability id's action verb is canonical or a reviewed domain verb. */
 export const isAllowedActionVerb = (id: string): boolean => {
   const verb = deriveActionVerb(id);
-  return CANONICAL_ACTION_VERBS.has(verb) || DOMAIN_ACTION_VERBS.has(verb);
+  return ALLOWED_ACTION_VERBS.has(verb);
 };
 
 /** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
@@ -403,7 +293,7 @@ export type AccessResolution =
  *    heuristic: it is a reviewed decision, needed both for unclassifiable
  *    verbs AND for re-pinning a read that the verb derivation misclassifies as
  *    write (a read gated by its resource's write/update verb because no read
- *    verb exists, e.g. `usage.get-entitlement` under
+ *    verb exists, e.g. `usage.entitlement.get` under
  *    `organizationSettings:["update"]`);
  *  - otherwise handlers with permissions derive from their verbs; an
  *    unclassifiable verb fails, requiring an override;
@@ -1575,6 +1465,15 @@ covered by one, or only through the generic \`invoke_capability\` path (shown
 here as its CLI form). Projected from the same handler enumeration that builds
 \`packages/cli/capability-catalog.json\`; see
 \`apps/api/scripts/export-capability-catalog.ts\`.
+
+## Naming
+
+A capability id is its handler path under \`apps/api/src/handlers/\`, joined
+with \`.\`: \`<domain>[.<resource>…].<action>\`. The action is one word:
+a canonical verb (${CANONICAL_ACTION_VERBS.map((verb) => `\`${verb}\``).join(", ")})
+or a domain verb (${DOMAIN_ACTION_VERBS.map((verb) => `\`${verb}\``).join(", ")}).
+A compound action is a nested resource: \`clauses.categories.create\`, not
+\`clauses.categories-create\`.
 `;
 
 /** Access column text: `read`, `write`, or `write, destructive`. */

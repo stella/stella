@@ -57,7 +57,7 @@ const config = {
     "pagination. fieldMode and fieldIds choose which column values come " +
     "back, excludedKinds drops kinds you do not want, and previewableForAi " +
     "keeps only documents whose content a model can read. Use " +
-    "entities.read-filesystem-tree for the same query shaped as a folder " +
+    "entities.filesystem-tree.get for the same query shaped as a folder " +
     "tree, and entities.get to read one row in full.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_documents" },

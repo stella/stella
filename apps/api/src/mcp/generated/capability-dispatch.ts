@@ -33,8 +33,8 @@ export const CAPABILITY_DISPATCH = {
   "case-law.analysis.generate": {
     load: async () => await import("@/api/handlers/case-law/analysis/generate"),
   },
-  "case-law.ingestion.status": {
-    load: async () => await import("@/api/handlers/case-law/ingestion/status"),
+  "case-law.ingestion.get": {
+    load: async () => await import("@/api/handlers/case-law/ingestion/get"),
   },
   "case-law.matter-links.batch.create": {
     load: async () =>
@@ -51,14 +51,11 @@ export const CAPABILITY_DISPATCH = {
   "case-law.matter-links.list": {
     load: async () => await import("@/api/handlers/case-law/matter-links/list"),
   },
-  "catalogue.install-skill": {
-    load: async () => await import("@/api/handlers/catalogue/install-skill"),
+  "catalogue.install": {
+    load: async () => await import("@/api/handlers/catalogue/install"),
   },
-  "catalogue.list-catalogue": {
-    load: async () => await import("@/api/handlers/catalogue/list-catalogue"),
-  },
-  "chat.delete-thread": {
-    load: async () => await import("@/api/handlers/chat/delete-thread"),
+  "catalogue.list": {
+    load: async () => await import("@/api/handlers/catalogue/list"),
   },
   "chat.export.create": {
     load: async () => await import("@/api/handlers/chat/export/create"),
@@ -66,32 +63,35 @@ export const CAPABILITY_DISPATCH = {
   "chat.fork.create": {
     load: async () => await import("@/api/handlers/chat/fork/create"),
   },
-  "chat.get-messages": {
-    load: async () => await import("@/api/handlers/chat/get-messages"),
+  "chat.messages.list": {
+    load: async () => await import("@/api/handlers/chat/messages/list"),
   },
-  "chat.get-older-messages": {
-    load: async () => await import("@/api/handlers/chat/get-older-messages"),
+  "chat.older-messages.list": {
+    load: async () => await import("@/api/handlers/chat/older-messages/list"),
   },
-  "chat.get-threads": {
-    load: async () => await import("@/api/handlers/chat/get-threads"),
+  "chat.threads.delete": {
+    load: async () => await import("@/api/handlers/chat/threads/delete"),
   },
-  "chat.rename-thread": {
-    load: async () => await import("@/api/handlers/chat/rename-thread"),
+  "chat.threads.list": {
+    load: async () => await import("@/api/handlers/chat/threads/list"),
   },
-  "chat.update-thread": {
-    load: async () => await import("@/api/handlers/chat/update-thread"),
+  "chat.threads.rename": {
+    load: async () => await import("@/api/handlers/chat/threads/rename"),
   },
-  "clauses.categories-create": {
-    load: async () => await import("@/api/handlers/clauses/categories-create"),
+  "chat.threads.update": {
+    load: async () => await import("@/api/handlers/chat/threads/update"),
   },
-  "clauses.categories-delete": {
-    load: async () => await import("@/api/handlers/clauses/categories-delete"),
+  "clauses.categories.create": {
+    load: async () => await import("@/api/handlers/clauses/categories/create"),
   },
-  "clauses.categories-list": {
-    load: async () => await import("@/api/handlers/clauses/categories-list"),
+  "clauses.categories.delete": {
+    load: async () => await import("@/api/handlers/clauses/categories/delete"),
   },
-  "clauses.categories-update": {
-    load: async () => await import("@/api/handlers/clauses/categories-update"),
+  "clauses.categories.list": {
+    load: async () => await import("@/api/handlers/clauses/categories/list"),
+  },
+  "clauses.categories.update": {
+    load: async () => await import("@/api/handlers/clauses/categories/update"),
   },
   "clauses.create": {
     load: async () => await import("@/api/handlers/clauses/create"),
@@ -111,43 +111,43 @@ export const CAPABILITY_DISPATCH = {
   "clauses.list": {
     load: async () => await import("@/api/handlers/clauses/list"),
   },
-  "clauses.read-version": {
-    load: async () => await import("@/api/handlers/clauses/read-version"),
-  },
   "clauses.rewrite": {
     load: async () => await import("@/api/handlers/clauses/rewrite"),
   },
-  "clauses.template-slot-preview": {
+  "clauses.template-slots.preview": {
     load: async () =>
-      await import("@/api/handlers/clauses/template-slot-preview"),
+      await import("@/api/handlers/clauses/template-slots/preview"),
   },
   "clauses.update": {
     load: async () => await import("@/api/handlers/clauses/update"),
   },
-  "clauses.variants-create": {
-    load: async () => await import("@/api/handlers/clauses/variants-create"),
+  "clauses.variants.create": {
+    load: async () => await import("@/api/handlers/clauses/variants/create"),
   },
-  "clauses.variants-delete": {
-    load: async () => await import("@/api/handlers/clauses/variants-delete"),
+  "clauses.variants.delete": {
+    load: async () => await import("@/api/handlers/clauses/variants/delete"),
   },
-  "clauses.variants-list": {
-    load: async () => await import("@/api/handlers/clauses/variants-list"),
+  "clauses.variants.list": {
+    load: async () => await import("@/api/handlers/clauses/variants/list"),
   },
-  "clauses.variants-update": {
-    load: async () => await import("@/api/handlers/clauses/variants-update"),
+  "clauses.variants.update": {
+    load: async () => await import("@/api/handlers/clauses/variants/update"),
   },
-  "clauses.versions-diff": {
-    load: async () => await import("@/api/handlers/clauses/versions-diff"),
+  "clauses.versions.diff": {
+    load: async () => await import("@/api/handlers/clauses/versions/diff"),
   },
-  "clauses.versions-restore": {
-    load: async () => await import("@/api/handlers/clauses/versions-restore"),
+  "clauses.versions.get": {
+    load: async () => await import("@/api/handlers/clauses/versions/get"),
   },
-  "clauses.versions-summarize": {
-    load: async () => await import("@/api/handlers/clauses/versions-summarize"),
+  "clauses.versions.restore": {
+    load: async () => await import("@/api/handlers/clauses/versions/restore"),
   },
-  "contacts.business-registries-lookup": {
+  "clauses.versions.summarize": {
+    load: async () => await import("@/api/handlers/clauses/versions/summarize"),
+  },
+  "contacts.business-registries.lookup": {
     load: async () =>
-      await import("@/api/handlers/contacts/business-registries-lookup"),
+      await import("@/api/handlers/contacts/business-registries/lookup"),
   },
   "contacts.create": {
     load: async () => await import("@/api/handlers/contacts/create"),
@@ -206,37 +206,38 @@ export const CAPABILITY_DISPATCH = {
   "entities.bilingual.create": {
     load: async () => await import("@/api/handlers/entities/bilingual/create"),
   },
-  "entities.check-stamp": {
-    load: async () => await import("@/api/handlers/entities/check-stamp"),
+  "entities.blank-document.create": {
+    load: async () =>
+      await import("@/api/handlers/entities/blank-document/create"),
   },
   "entities.clip": {
     load: async () => await import("@/api/handlers/entities/clip"),
   },
-  "entities.copy-to-matter": {
-    load: async () => await import("@/api/handlers/entities/copy-to-workspace"),
+  "entities.copy": {
+    load: async () => await import("@/api/handlers/entities/copy"),
   },
   "entities.create": {
     load: async () => await import("@/api/handlers/entities/create"),
   },
-  "entities.create-blank-document": {
-    load: async () =>
-      await import("@/api/handlers/entities/create-blank-document"),
-  },
-  "entities.create-from-legal-source": {
-    load: async () =>
-      await import("@/api/handlers/entities/create-from-legal-source"),
-  },
   "entities.delete": {
     load: async () => await import("@/api/handlers/entities/delete"),
   },
-  "entities.delete-version": {
-    load: async () => await import("@/api/handlers/entities/delete-version"),
-  },
-  "entities.download-zip": {
-    load: async () => await import("@/api/handlers/entities/download-zip"),
-  },
   "entities.duplicate": {
     load: async () => await import("@/api/handlers/entities/duplicate"),
+  },
+  "entities.files.list": {
+    load: async () => await import("@/api/handlers/entities/files/list"),
+  },
+  "entities.filesystem-tree.get": {
+    load: async () =>
+      await import("@/api/handlers/entities/filesystem-tree/get"),
+  },
+  "entities.folders.list": {
+    load: async () => await import("@/api/handlers/entities/folders/list"),
+  },
+  "entities.from-legal-source.create": {
+    load: async () =>
+      await import("@/api/handlers/entities/from-legal-source/create"),
   },
   "entities.get": {
     load: async () => await import("@/api/handlers/entities/get"),
@@ -244,68 +245,66 @@ export const CAPABILITY_DISPATCH = {
   "entities.list": {
     load: async () => await import("@/api/handlers/entities/list"),
   },
-  "entities.list-files": {
-    load: async () => await import("@/api/handlers/entities/list-files"),
-  },
-  "entities.list-folders": {
-    load: async () => await import("@/api/handlers/entities/list-folders"),
-  },
   "entities.move": {
     load: async () => await import("@/api/handlers/entities/move"),
   },
   "entities.ocr.create": {
     load: async () => await import("@/api/handlers/entities/ocr/create"),
   },
-  "entities.organize-suggestions": {
+  "entities.placements.suggest": {
     load: async () =>
-      await import("@/api/handlers/entities/organize-suggestions"),
-  },
-  "entities.read-filesystem-tree": {
-    load: async () =>
-      await import("@/api/handlers/entities/read-filesystem-tree"),
-  },
-  "entities.read-summaries": {
-    load: async () => await import("@/api/handlers/entities/read-summaries"),
-  },
-  "entities.read-summaries-count": {
-    load: async () =>
-      await import("@/api/handlers/entities/read-summaries-count"),
-  },
-  "entities.read-version-by-id": {
-    load: async () =>
-      await import("@/api/handlers/entities/read-version-by-id"),
-  },
-  "entities.read-versions": {
-    load: async () => await import("@/api/handlers/entities/read-versions"),
-  },
-  "entities.read-window": {
-    load: async () => await import("@/api/handlers/entities/read-window"),
+      await import("@/api/handlers/entities/placements/suggest"),
   },
   "entities.rename": {
     load: async () => await import("@/api/handlers/entities/rename"),
   },
-  "entities.restore-version": {
-    load: async () => await import("@/api/handlers/entities/restore-version"),
+  "entities.stamps.check": {
+    load: async () => await import("@/api/handlers/entities/stamps/check"),
   },
-  "entities.update-version-description": {
-    load: async () =>
-      await import("@/api/handlers/entities/update-version-description"),
+  "entities.summaries.count": {
+    load: async () => await import("@/api/handlers/entities/summaries/count"),
   },
-  "entities.update-version-label": {
-    load: async () =>
-      await import("@/api/handlers/entities/update-version-label"),
+  "entities.summaries.list": {
+    load: async () => await import("@/api/handlers/entities/summaries/list"),
   },
   "entities.upload": {
     load: async () => await import("@/api/handlers/entities/upload"),
   },
-  "entities.upload-version": {
-    load: async () => await import("@/api/handlers/entities/upload-version"),
+  "entities.versions.delete": {
+    load: async () => await import("@/api/handlers/entities/versions/delete"),
   },
-  "entities.version-diff": {
-    load: async () => await import("@/api/handlers/entities/version-diff"),
+  "entities.versions.description.update": {
+    load: async () =>
+      await import("@/api/handlers/entities/versions/description/update"),
   },
-  "entities.version-summarize": {
-    load: async () => await import("@/api/handlers/entities/version-summarize"),
+  "entities.versions.diff": {
+    load: async () => await import("@/api/handlers/entities/versions/diff"),
+  },
+  "entities.versions.get": {
+    load: async () => await import("@/api/handlers/entities/versions/get"),
+  },
+  "entities.versions.label.update": {
+    load: async () =>
+      await import("@/api/handlers/entities/versions/label/update"),
+  },
+  "entities.versions.list": {
+    load: async () => await import("@/api/handlers/entities/versions/list"),
+  },
+  "entities.versions.restore": {
+    load: async () => await import("@/api/handlers/entities/versions/restore"),
+  },
+  "entities.versions.summarize": {
+    load: async () =>
+      await import("@/api/handlers/entities/versions/summarize"),
+  },
+  "entities.versions.upload": {
+    load: async () => await import("@/api/handlers/entities/versions/upload"),
+  },
+  "entities.window.list": {
+    load: async () => await import("@/api/handlers/entities/window/list"),
+  },
+  "entities.zip.download": {
+    load: async () => await import("@/api/handlers/entities/zip/download"),
   },
   "entity-views.create": {
     load: async () => await import("@/api/handlers/entity-views/create"),
@@ -337,19 +336,19 @@ export const CAPABILITY_DISPATCH = {
   "expenses.update": {
     load: async () => await import("@/api/handlers/expenses/update"),
   },
+  "fields.cell-metadata.update": {
+    load: async () =>
+      await import("@/api/handlers/fields/cell-metadata/update"),
+  },
+  "fields.column-flag.update": {
+    load: async () => await import("@/api/handlers/fields/column-flag/update"),
+  },
   "fields.kanban-placement.update": {
     load: async () =>
       await import("@/api/handlers/fields/kanban-placement/update"),
   },
-  "fields.mark-column-flag": {
-    load: async () => await import("@/api/handlers/fields/mark-column-flag"),
-  },
-  "fields.update-cell-metadata": {
-    load: async () =>
-      await import("@/api/handlers/fields/update-cell-metadata"),
-  },
-  "fields.upsert-by-id": {
-    load: async () => await import("@/api/handlers/fields/upsert-by-id"),
+  "fields.upsert": {
+    load: async () => await import("@/api/handlers/fields/upsert"),
   },
   "flows.create": {
     load: async () => await import("@/api/handlers/flows/create"),
@@ -359,26 +358,23 @@ export const CAPABILITY_DISPATCH = {
   },
   "flows.get": { load: async () => await import("@/api/handlers/flows/get") },
   "flows.list": { load: async () => await import("@/api/handlers/flows/list") },
-  "flows.run-cancel": {
-    load: async () => await import("@/api/handlers/flows/run-cancel"),
+  "flows.runs.cancel": {
+    load: async () => await import("@/api/handlers/flows/runs/cancel"),
   },
-  "flows.run-detail": {
-    load: async () => await import("@/api/handlers/flows/run-detail"),
+  "flows.runs.get": {
+    load: async () => await import("@/api/handlers/flows/runs/get"),
   },
-  "flows.run-list": {
-    load: async () => await import("@/api/handlers/flows/run-list"),
+  "flows.runs.list": {
+    load: async () => await import("@/api/handlers/flows/runs/list"),
   },
-  "flows.run-review": {
-    load: async () => await import("@/api/handlers/flows/run-review"),
+  "flows.runs.review": {
+    load: async () => await import("@/api/handlers/flows/runs/review"),
   },
-  "flows.run-start": {
-    load: async () => await import("@/api/handlers/flows/run-start"),
+  "flows.runs.start": {
+    load: async () => await import("@/api/handlers/flows/runs/start"),
   },
   "flows.update": {
     load: async () => await import("@/api/handlers/flows/update"),
-  },
-  "invoices.add-entries": {
-    load: async () => await import("@/api/handlers/invoices/add-entries"),
   },
   "invoices.create": {
     load: async () => await import("@/api/handlers/invoices/create"),
@@ -386,14 +382,17 @@ export const CAPABILITY_DISPATCH = {
   "invoices.delete": {
     load: async () => await import("@/api/handlers/invoices/delete"),
   },
+  "invoices.entries.add": {
+    load: async () => await import("@/api/handlers/invoices/entries/add"),
+  },
+  "invoices.entries.remove": {
+    load: async () => await import("@/api/handlers/invoices/entries/remove"),
+  },
   "invoices.get": {
     load: async () => await import("@/api/handlers/invoices/get"),
   },
   "invoices.list": {
     load: async () => await import("@/api/handlers/invoices/list"),
-  },
-  "invoices.remove-entries": {
-    load: async () => await import("@/api/handlers/invoices/remove-entries"),
   },
   "invoices.transition": {
     load: async () => await import("@/api/handlers/invoices/transition"),
@@ -417,25 +416,27 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/legal-reader/annotations/update"),
   },
-  "legislation.boe-get-law": {
-    load: async () => await import("@/api/handlers/legislation/boe-get-law"),
-  },
-  "legislation.boe-law-structure": {
+  "legislation.boe.law-structure.get": {
     load: async () =>
-      await import("@/api/handlers/legislation/boe-law-structure"),
+      await import("@/api/handlers/legislation/boe/law-structure/get"),
   },
-  "legislation.boe-related-laws": {
+  "legislation.boe.laws.get": {
+    load: async () => await import("@/api/handlers/legislation/boe/laws/get"),
+  },
+  "legislation.boe.related-laws.list": {
     load: async () =>
-      await import("@/api/handlers/legislation/boe-related-laws"),
+      await import("@/api/handlers/legislation/boe/related-laws/list"),
   },
-  "legislation.boe-search": {
-    load: async () => await import("@/api/handlers/legislation/boe-search"),
+  "legislation.boe.search": {
+    load: async () => await import("@/api/handlers/legislation/boe/search"),
   },
-  "legislation.boe-text-block": {
-    load: async () => await import("@/api/handlers/legislation/boe-text-block"),
+  "legislation.boe.text-block.get": {
+    load: async () =>
+      await import("@/api/handlers/legislation/boe/text-block/get"),
   },
-  "legislation.borme-summary": {
-    load: async () => await import("@/api/handlers/legislation/borme-summary"),
+  "legislation.borme.summary.get": {
+    load: async () =>
+      await import("@/api/handlers/legislation/borme/summary/get"),
   },
   "legislation.get": {
     load: async () => await import("@/api/handlers/legislation/get"),
@@ -532,8 +533,14 @@ export const CAPABILITY_DISPATCH = {
   "matters.archive": {
     load: async () => await import("@/api/handlers/workspaces/archive"),
   },
-  "matters.cell-retry": {
-    load: async () => await import("@/api/handlers/workspaces/cell-retry"),
+  "matters.cells.retry": {
+    load: async () => await import("@/api/handlers/workspaces/cells/retry"),
+  },
+  "matters.contacts.create": {
+    load: async () => await import("@/api/handlers/workspaces/contacts/create"),
+  },
+  "matters.contacts.delete": {
+    load: async () => await import("@/api/handlers/workspaces/contacts/delete"),
   },
   "matters.create": {
     load: async () => await import("@/api/handlers/workspaces/create"),
@@ -544,36 +551,18 @@ export const CAPABILITY_DISPATCH = {
   "matters.duplicate": {
     load: async () => await import("@/api/handlers/workspaces/duplicate"),
   },
+  "matters.justifications.list": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/justifications/list"),
+  },
   "matters.list": {
     load: async () => await import("@/api/handlers/workspaces/list"),
   },
-  "matters.matter-contacts-create": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-contacts-create"),
+  "matters.members.add": {
+    load: async () => await import("@/api/handlers/workspaces/members/add"),
   },
-  "matters.matter-contacts-delete": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-contacts-delete"),
-  },
-  "matters.matter-members-add": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-members-add"),
-  },
-  "matters.matter-members-remove": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-members-remove"),
-  },
-  "matters.read-justifications": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-justifications"),
-  },
-  "matters.read-workflow-status": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-workflow-status"),
-  },
-  "matters.read-workflow-target-count": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-workflow-target-count"),
+  "matters.members.remove": {
+    load: async () => await import("@/api/handlers/workspaces/members/remove"),
   },
   "matters.search-preview.get": {
     load: async () =>
@@ -585,8 +574,31 @@ export const CAPABILITY_DISPATCH = {
   "matters.update": {
     load: async () => await import("@/api/handlers/workspaces/update"),
   },
-  "matters.workflow-start": {
-    load: async () => await import("@/api/handlers/workspaces/workflow-start"),
+  "matters.workflow.get": {
+    load: async () => await import("@/api/handlers/workspaces/workflow/get"),
+  },
+  "matters.workflow.start": {
+    load: async () => await import("@/api/handlers/workspaces/workflow/start"),
+  },
+  "matters.workflow.targets.count": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/workflow/targets/count"),
+  },
+  "organization-settings.ai-availability.get": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/ai-availability/get"),
+  },
+  "organization-settings.anonymization-blacklist.get": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/anonymization-blacklist/get"),
+  },
+  "organization-settings.anonymization-blacklist.update": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/anonymization-blacklist/update"),
+  },
+  "organization-settings.deepl-availability.get": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/deepl-availability/get"),
   },
   "organization-settings.document-ocr-availability.get": {
     load: async () =>
@@ -595,39 +607,23 @@ export const CAPABILITY_DISPATCH = {
   "organization-settings.get": {
     load: async () => await import("@/api/handlers/organization-settings/get"),
   },
+  "organization-settings.practice-jurisdictions.update": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/practice-jurisdictions/update"),
+  },
   "organization-settings.preview": {
     load: async () =>
       await import("@/api/handlers/organization-settings/preview"),
-  },
-  "organization-settings.read-ai-availability": {
-    load: async () =>
-      await import("@/api/handlers/organization-settings/read-ai-availability"),
-  },
-  "organization-settings.read-anonymization-blacklist": {
-    load: async () =>
-      await import("@/api/handlers/organization-settings/read-anonymization-blacklist"),
-  },
-  "organization-settings.read-deepl-availability": {
-    load: async () =>
-      await import("@/api/handlers/organization-settings/read-deepl-availability"),
   },
   "organization-settings.update": {
     load: async () =>
       await import("@/api/handlers/organization-settings/update"),
   },
-  "organization-settings.update-anonymization-blacklist": {
-    load: async () =>
-      await import("@/api/handlers/organization-settings/update-anonymization-blacklist"),
-  },
-  "organization-settings.update-practice-jurisdictions": {
-    load: async () =>
-      await import("@/api/handlers/organization-settings/update-practice-jurisdictions"),
+  "playbooks.applicable.run": {
+    load: async () => await import("@/api/handlers/playbooks/applicable/run"),
   },
   "playbooks.approve": {
     load: async () => await import("@/api/handlers/playbooks/approve"),
-  },
-  "playbooks.auto-run": {
-    load: async () => await import("@/api/handlers/playbooks/auto-run"),
   },
   "playbooks.create": {
     load: async () => await import("@/api/handlers/playbooks/create"),
@@ -635,11 +631,12 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.delete": {
     load: async () => await import("@/api/handlers/playbooks/delete"),
   },
-  "playbooks.from-run": {
-    load: async () => await import("@/api/handlers/playbooks/from-run"),
+  "playbooks.from-run.create": {
+    load: async () => await import("@/api/handlers/playbooks/from-run/create"),
   },
-  "playbooks.from-starter": {
-    load: async () => await import("@/api/handlers/playbooks/from-starter"),
+  "playbooks.from-starter.create": {
+    load: async () =>
+      await import("@/api/handlers/playbooks/from-starter/create"),
   },
   "playbooks.get": {
     load: async () => await import("@/api/handlers/playbooks/get"),
@@ -647,29 +644,29 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.list": {
     load: async () => await import("@/api/handlers/playbooks/list"),
   },
-  "playbooks.list-starters": {
-    load: async () => await import("@/api/handlers/playbooks/list-starters"),
-  },
-  "playbooks.list-versions": {
-    load: async () => await import("@/api/handlers/playbooks/list-versions"),
-  },
   "playbooks.recent.list": {
     load: async () => await import("@/api/handlers/playbooks/recent/list"),
-  },
-  "playbooks.restore-version": {
-    load: async () => await import("@/api/handlers/playbooks/restore-version"),
   },
   "playbooks.run": {
     load: async () => await import("@/api/handlers/playbooks/run"),
   },
+  "playbooks.starters.list": {
+    load: async () => await import("@/api/handlers/playbooks/starters/list"),
+  },
   "playbooks.update": {
     load: async () => await import("@/api/handlers/playbooks/update"),
   },
+  "playbooks.versions.list": {
+    load: async () => await import("@/api/handlers/playbooks/versions/list"),
+  },
+  "playbooks.versions.restore": {
+    load: async () => await import("@/api/handlers/playbooks/versions/restore"),
+  },
+  "properties.batch.create": {
+    load: async () => await import("@/api/handlers/properties/batch/create"),
+  },
   "properties.create": {
     load: async () => await import("@/api/handlers/properties/create"),
-  },
-  "properties.create-batch": {
-    load: async () => await import("@/api/handlers/properties/create-batch"),
   },
   "properties.delete": {
     load: async () => await import("@/api/handlers/properties/delete"),
@@ -680,8 +677,8 @@ export const CAPABILITY_DISPATCH = {
   "properties.preview": {
     load: async () => await import("@/api/handlers/properties/preview"),
   },
-  "properties.suggest-prompt": {
-    load: async () => await import("@/api/handlers/properties/suggest-prompt"),
+  "properties.prompt.suggest": {
+    load: async () => await import("@/api/handlers/properties/prompt/suggest"),
   },
   "properties.update": {
     load: async () => await import("@/api/handlers/properties/update"),
@@ -692,17 +689,17 @@ export const CAPABILITY_DISPATCH = {
   "rates.delete": {
     load: async () => await import("@/api/handlers/rates/delete"),
   },
-  "rates.entries-create": {
-    load: async () => await import("@/api/handlers/rates/entries-create"),
+  "rates.entries.create": {
+    load: async () => await import("@/api/handlers/rates/entries/create"),
   },
-  "rates.entries-delete": {
-    load: async () => await import("@/api/handlers/rates/entries-delete"),
+  "rates.entries.delete": {
+    load: async () => await import("@/api/handlers/rates/entries/delete"),
   },
-  "rates.entries-read": {
-    load: async () => await import("@/api/handlers/rates/entries-read"),
+  "rates.entries.list": {
+    load: async () => await import("@/api/handlers/rates/entries/list"),
   },
-  "rates.entries-update": {
-    load: async () => await import("@/api/handlers/rates/entries-update"),
+  "rates.entries.update": {
+    load: async () => await import("@/api/handlers/rates/entries/update"),
   },
   "rates.list": { load: async () => await import("@/api/handlers/rates/list") },
   "rates.resolve": {
@@ -711,20 +708,20 @@ export const CAPABILITY_DISPATCH = {
   "rates.update": {
     load: async () => await import("@/api/handlers/rates/update"),
   },
-  "reports.clone-builtin": {
-    load: async () => await import("@/api/handlers/reports/clone-builtin"),
+  "reports.builtins.clone": {
+    load: async () => await import("@/api/handlers/reports/builtins/clone"),
   },
-  "reports.export-view": {
-    load: async () => await import("@/api/handlers/reports/export-view"),
+  "reports.exports.get": {
+    load: async () => await import("@/api/handlers/reports/exports/get"),
   },
-  "reports.list-exports": {
-    load: async () => await import("@/api/handlers/reports/list-exports"),
+  "reports.exports.list": {
+    load: async () => await import("@/api/handlers/reports/exports/list"),
   },
-  "reports.list-templates": {
-    load: async () => await import("@/api/handlers/reports/list-templates"),
+  "reports.templates.list": {
+    load: async () => await import("@/api/handlers/reports/templates/list"),
   },
-  "reports.read-export": {
-    load: async () => await import("@/api/handlers/reports/read-export"),
+  "reports.views.export": {
+    load: async () => await import("@/api/handlers/reports/views/export"),
   },
   "signals.acceptances.create": {
     load: async () => await import("@/api/handlers/signals/acceptances/create"),
@@ -747,6 +744,9 @@ export const CAPABILITY_DISPATCH = {
   "signals.snoozes.create": {
     load: async () => await import("@/api/handlers/signals/snoozes/create"),
   },
+  "skills.commands.list": {
+    load: async () => await import("@/api/handlers/skills/commands/list"),
+  },
   "skills.comments.create": {
     load: async () => await import("@/api/handlers/skills/comments/create"),
   },
@@ -768,24 +768,22 @@ export const CAPABILITY_DISPATCH = {
   "skills.discover": {
     load: async () => await import("@/api/handlers/skills/discover"),
   },
-  "skills.from-blueprint": {
-    load: async () => await import("@/api/handlers/skills/from-blueprint"),
+  "skills.drafts.generate": {
+    load: async () => await import("@/api/handlers/skills/drafts/generate"),
   },
-  "skills.generate-draft": {
-    load: async () => await import("@/api/handlers/skills/generate-draft"),
+  "skills.from-blueprint.create": {
+    load: async () =>
+      await import("@/api/handlers/skills/from-blueprint/create"),
+  },
+  "skills.from-url.import": {
+    load: async () => await import("@/api/handlers/skills/from-url/import"),
   },
   "skills.get": { load: async () => await import("@/api/handlers/skills/get") },
   "skills.import": {
     load: async () => await import("@/api/handlers/skills/import"),
   },
-  "skills.import-url": {
-    load: async () => await import("@/api/handlers/skills/import-url"),
-  },
   "skills.list": {
     load: async () => await import("@/api/handlers/skills/list"),
-  },
-  "skills.list-commands": {
-    load: async () => await import("@/api/handlers/skills/list-commands"),
   },
   "skills.proposals.create": {
     load: async () => await import("@/api/handlers/skills/proposals/create"),
@@ -845,59 +843,59 @@ export const CAPABILITY_DISPATCH = {
   "style-sets.create": {
     load: async () => await import("@/api/handlers/style-sets/create"),
   },
-  "style-sets.create-from-editor": {
-    load: async () =>
-      await import("@/api/handlers/style-sets/create-from-editor"),
-  },
   "style-sets.delete": {
     load: async () => await import("@/api/handlers/style-sets/delete"),
   },
   "style-sets.download": {
     load: async () => await import("@/api/handlers/style-sets/download"),
   },
+  "style-sets.editor.get": {
+    load: async () => await import("@/api/handlers/style-sets/editor/get"),
+  },
+  "style-sets.from-editor.create": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/from-editor/create"),
+  },
+  "style-sets.from-editor.update": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/from-editor/update"),
+  },
   "style-sets.list": {
     load: async () => await import("@/api/handlers/style-sets/list"),
-  },
-  "style-sets.read-editor": {
-    load: async () => await import("@/api/handlers/style-sets/read-editor"),
-  },
-  "style-sets.read-stella-editor": {
-    load: async () =>
-      await import("@/api/handlers/style-sets/read-stella-editor"),
   },
   "style-sets.replace": {
     load: async () => await import("@/api/handlers/style-sets/replace"),
   },
+  "style-sets.stella-editor.get": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/stella-editor/get"),
+  },
   "style-sets.update": {
     load: async () => await import("@/api/handlers/style-sets/update"),
   },
-  "style-sets.update-from-editor": {
-    load: async () =>
-      await import("@/api/handlers/style-sets/update-from-editor"),
-  },
-  "tasks.assignees-add": {
-    load: async () => await import("@/api/handlers/tasks/assignees-add"),
-  },
-  "tasks.assignees-remove": {
-    load: async () => await import("@/api/handlers/tasks/assignees-remove"),
+  "tasks.assignees.add": {
+    load: async () => await import("@/api/handlers/tasks/assignees/add"),
   },
   "tasks.assignees.move": {
     load: async () => await import("@/api/handlers/tasks/assignees/move"),
   },
-  "tasks.calendar": {
-    load: async () => await import("@/api/handlers/tasks/calendar"),
+  "tasks.assignees.remove": {
+    load: async () => await import("@/api/handlers/tasks/assignees/remove"),
+  },
+  "tasks.calendar.list": {
+    load: async () => await import("@/api/handlers/tasks/calendar/list"),
   },
   "tasks.create": {
     load: async () => await import("@/api/handlers/tasks/create"),
   },
-  "tasks.entity-links-create": {
-    load: async () => await import("@/api/handlers/tasks/entity-links-create"),
+  "tasks.entity-links.create": {
+    load: async () => await import("@/api/handlers/tasks/entity-links/create"),
   },
-  "tasks.entity-links-delete": {
-    load: async () => await import("@/api/handlers/tasks/entity-links-delete"),
+  "tasks.entity-links.delete": {
+    load: async () => await import("@/api/handlers/tasks/entity-links/delete"),
   },
-  "tasks.entity-links-read": {
-    load: async () => await import("@/api/handlers/tasks/entity-links-read"),
+  "tasks.entity-links.list": {
+    load: async () => await import("@/api/handlers/tasks/entity-links/list"),
   },
   "tasks.get": { load: async () => await import("@/api/handlers/tasks/get") },
   "tasks.update": {
@@ -926,48 +924,49 @@ export const CAPABILITY_DISPATCH = {
   "template-recipes.list": {
     load: async () => await import("@/api/handlers/template-recipes/list"),
   },
-  "templates.binding-catalog": {
-    load: async () => await import("@/api/handlers/templates/binding-catalog"),
+  "templates.bindings.list": {
+    load: async () => await import("@/api/handlers/templates/bindings/list"),
   },
-  "templates.categories-create": {
+  "templates.blank.create": {
+    load: async () => await import("@/api/handlers/templates/blank/create"),
+  },
+  "templates.categories.create": {
     load: async () =>
-      await import("@/api/handlers/templates/categories-create"),
+      await import("@/api/handlers/templates/categories/create"),
   },
-  "templates.categories-delete": {
+  "templates.categories.delete": {
     load: async () =>
-      await import("@/api/handlers/templates/categories-delete"),
+      await import("@/api/handlers/templates/categories/delete"),
   },
-  "templates.categories-list": {
-    load: async () => await import("@/api/handlers/templates/categories-list"),
+  "templates.categories.list": {
+    load: async () => await import("@/api/handlers/templates/categories/list"),
   },
-  "templates.categories-update": {
+  "templates.categories.update": {
     load: async () =>
-      await import("@/api/handlers/templates/categories-update"),
+      await import("@/api/handlers/templates/categories/update"),
   },
   "templates.check": {
     load: async () => await import("@/api/handlers/templates/check"),
   },
-  "templates.clause-slots": {
-    load: async () => await import("@/api/handlers/templates/clause-slots"),
-  },
-  "templates.clauses-link": {
-    load: async () => await import("@/api/handlers/templates/clauses-link"),
-  },
-  "templates.clauses-list": {
-    load: async () => await import("@/api/handlers/templates/clauses-list"),
-  },
-  "templates.clauses-slot-update": {
+  "templates.clause-slots.list": {
     load: async () =>
-      await import("@/api/handlers/templates/clauses-slot-update"),
+      await import("@/api/handlers/templates/clause-slots/list"),
   },
-  "templates.clauses-sync": {
-    load: async () => await import("@/api/handlers/templates/clauses-sync"),
+  "templates.clause-slots.update": {
+    load: async () =>
+      await import("@/api/handlers/templates/clause-slots/update"),
   },
-  "templates.clauses-sync-all": {
-    load: async () => await import("@/api/handlers/templates/clauses-sync-all"),
+  "templates.clauses.link": {
+    load: async () => await import("@/api/handlers/templates/clauses/link"),
   },
-  "templates.clauses-unlink": {
-    load: async () => await import("@/api/handlers/templates/clauses-unlink"),
+  "templates.clauses.list": {
+    load: async () => await import("@/api/handlers/templates/clauses/list"),
+  },
+  "templates.clauses.sync": {
+    load: async () => await import("@/api/handlers/templates/clauses/sync"),
+  },
+  "templates.clauses.unlink": {
+    load: async () => await import("@/api/handlers/templates/clauses/unlink"),
   },
   "templates.condition-decisions.get": {
     load: async () =>
@@ -976,35 +975,37 @@ export const CAPABILITY_DISPATCH = {
   "templates.create": {
     load: async () => await import("@/api/handlers/templates/create"),
   },
-  "templates.create-blank": {
-    load: async () => await import("@/api/handlers/templates/create-blank"),
-  },
-  "templates.create-from-style-set": {
-    load: async () =>
-      await import("@/api/handlers/templates/create-from-style-set"),
-  },
-  "templates.create-from-styles": {
-    load: async () =>
-      await import("@/api/handlers/templates/create-from-styles"),
-  },
   "templates.delete": {
     load: async () => await import("@/api/handlers/templates/delete"),
   },
   "templates.discover": {
     load: async () => await import("@/api/handlers/templates/discover"),
   },
+  "templates.document.update": {
+    load: async () => await import("@/api/handlers/templates/document/update"),
+  },
+  "templates.fields.suggest": {
+    load: async () => await import("@/api/handlers/templates/fields/suggest"),
+  },
   "templates.fill": {
     load: async () => await import("@/api/handlers/templates/fill"),
   },
-  "templates.fill-by-id": {
-    load: async () => await import("@/api/handlers/templates/fill-by-id"),
+  "templates.fills.create": {
+    load: async () => await import("@/api/handlers/templates/fills/create"),
   },
-  "templates.fill-preview": {
-    load: async () => await import("@/api/handlers/templates/fill-preview"),
+  "templates.fills.download": {
+    load: async () => await import("@/api/handlers/templates/fills/download"),
   },
-  "templates.fill-to-matter": {
+  "templates.fills.preview": {
+    load: async () => await import("@/api/handlers/templates/fills/preview"),
+  },
+  "templates.from-style-set.create": {
     load: async () =>
-      await import("@/api/handlers/templates/fill-to-workspace"),
+      await import("@/api/handlers/templates/from-style-set/create"),
+  },
+  "templates.from-styles.create": {
+    load: async () =>
+      await import("@/api/handlers/templates/from-styles/create"),
   },
   "templates.get": {
     load: async () => await import("@/api/handlers/templates/get"),
@@ -1032,8 +1033,12 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/templates/lookup-formats/my-default/update"),
   },
-  "templates.lookup-preview": {
-    load: async () => await import("@/api/handlers/templates/lookup-preview"),
+  "templates.lookups.preview": {
+    load: async () => await import("@/api/handlers/templates/lookups/preview"),
+  },
+  "templates.outdated-clauses.sync": {
+    load: async () =>
+      await import("@/api/handlers/templates/outdated-clauses/sync"),
   },
   "templates.prefill": {
     load: async () => await import("@/api/handlers/templates/prefill"),
@@ -1044,54 +1049,48 @@ export const CAPABILITY_DISPATCH = {
   "templates.preview": {
     load: async () => await import("@/api/handlers/templates/preview"),
   },
-  "templates.save-document": {
-    load: async () => await import("@/api/handlers/templates/save-document"),
-  },
-  "templates.suggest-fields": {
-    load: async () => await import("@/api/handlers/templates/suggest-fields"),
-  },
   "templates.update": {
     load: async () => await import("@/api/handlers/templates/update"),
   },
-  "templates.versions-diff": {
-    load: async () => await import("@/api/handlers/templates/versions-diff"),
+  "templates.versions.diff": {
+    load: async () => await import("@/api/handlers/templates/versions/diff"),
   },
-  "templates.versions-get": {
-    load: async () => await import("@/api/handlers/templates/versions-get"),
+  "templates.versions.get": {
+    load: async () => await import("@/api/handlers/templates/versions/get"),
   },
-  "templates.versions-list": {
-    load: async () => await import("@/api/handlers/templates/versions-list"),
+  "templates.versions.list": {
+    load: async () => await import("@/api/handlers/templates/versions/list"),
   },
-  "templates.versions-summarize": {
+  "templates.versions.summarize": {
     load: async () =>
-      await import("@/api/handlers/templates/versions-summarize"),
+      await import("@/api/handlers/templates/versions/summarize"),
   },
-  "time-entries.batch-delete": {
-    load: async () => await import("@/api/handlers/time-entries/batch-delete"),
+  "time-entries.batch.delete": {
+    load: async () => await import("@/api/handlers/time-entries/batch/delete"),
   },
-  "time-entries.batch-update": {
-    load: async () => await import("@/api/handlers/time-entries/batch-update"),
+  "time-entries.batch.update": {
+    load: async () => await import("@/api/handlers/time-entries/batch/update"),
   },
   "time-entries.create": {
     load: async () => await import("@/api/handlers/time-entries/create"),
   },
+  "time-entries.csv.export": {
+    load: async () => await import("@/api/handlers/time-entries/csv/export"),
+  },
   "time-entries.delete": {
     load: async () => await import("@/api/handlers/time-entries/delete"),
-  },
-  "time-entries.export-csv": {
-    load: async () => await import("@/api/handlers/time-entries/export-csv"),
-  },
-  "time-entries.export-ledes": {
-    load: async () => await import("@/api/handlers/time-entries/export-ledes"),
-  },
-  "time-entries.export-pdf": {
-    load: async () => await import("@/api/handlers/time-entries/export-pdf"),
   },
   "time-entries.get": {
     load: async () => await import("@/api/handlers/time-entries/get"),
   },
+  "time-entries.ledes.export": {
+    load: async () => await import("@/api/handlers/time-entries/ledes/export"),
+  },
   "time-entries.list": {
     load: async () => await import("@/api/handlers/time-entries/list"),
+  },
+  "time-entries.pdf.export": {
+    load: async () => await import("@/api/handlers/time-entries/pdf/export"),
   },
   "time-entries.split": {
     load: async () => await import("@/api/handlers/time-entries/split"),
@@ -1107,11 +1106,11 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.summary.get": {
     load: async () => await import("@/api/handlers/time-entries/summary/get"),
   },
-  "time-entries.timer-start": {
-    load: async () => await import("@/api/handlers/time-entries/timer-start"),
+  "time-entries.timer.start": {
+    load: async () => await import("@/api/handlers/time-entries/timer/start"),
   },
-  "time-entries.timer-stop": {
-    load: async () => await import("@/api/handlers/time-entries/timer-stop"),
+  "time-entries.timer.stop": {
+    load: async () => await import("@/api/handlers/time-entries/timer/stop"),
   },
   "time-entries.update": {
     load: async () => await import("@/api/handlers/time-entries/update"),
@@ -1125,8 +1124,8 @@ export const CAPABILITY_DISPATCH = {
   "uploads.update": {
     load: async () => await import("@/api/handlers/uploads/update"),
   },
-  "usage.get-entitlement": {
-    load: async () => await import("@/api/handlers/usage/get-entitlement"),
+  "usage.entitlement.get": {
+    load: async () => await import("@/api/handlers/usage/entitlement/get"),
   },
   "view-templates.create": {
     load: async () => await import("@/api/handlers/view-templates/create"),
@@ -1150,8 +1149,8 @@ export const CAPABILITY_DISPATCH = {
   "views.reorder": {
     load: async () => await import("@/api/handlers/views/reorder"),
   },
-  "views.table-export": {
-    load: async () => await import("@/api/handlers/views/table-export"),
+  "views.table.export": {
+    load: async () => await import("@/api/handlers/views/table/export"),
   },
   "views.update": {
     load: async () => await import("@/api/handlers/views/update"),

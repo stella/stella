@@ -46,7 +46,7 @@ const createInvoice = createSafeHandler(
       "their billed minutes and recorded rates. Every entry must already " +
       "carry the invoice currency, since nothing is converted, and the " +
       "invoice number must not already be in use. Expenses are added " +
-      "afterwards with invoices.add-entries.",
+      "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: createInvoiceBodySchema,

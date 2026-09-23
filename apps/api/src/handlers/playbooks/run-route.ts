@@ -2,7 +2,7 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import autoRunPlaybooks from "@/api/handlers/playbooks/auto-run";
+import autoRunPlaybooks from "@/api/handlers/playbooks/applicable/run";
 import runPlaybook from "@/api/handlers/playbooks/run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {

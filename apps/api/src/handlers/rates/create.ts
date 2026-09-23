@@ -23,7 +23,7 @@ const createRateTable = createSafeHandler(
       "currency, in a matter. Pass isDefault to make it the matter's " +
       "default, which clears the flag on the previous default; matters have " +
       "a fixed cap on how many rate tables they may hold. Add the rates " +
-      "themselves with rates.entries-create.",
+      "themselves with rates.entries.create.",
     permissions: { rate: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: createRateTableBodySchema,

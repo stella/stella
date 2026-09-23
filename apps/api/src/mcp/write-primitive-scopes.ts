@@ -15,7 +15,7 @@
  */
 export const WRITE_PRIMITIVE_SCOPES = [
   {
-    module: "@/api/handlers/fields/upsert-by-id",
+    module: "@/api/handlers/fields/upsert",
     name: "upsertFieldHandler",
     scope: "stella:documents_write",
   },

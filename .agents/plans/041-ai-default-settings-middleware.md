@@ -103,12 +103,12 @@ orgId: SafeId<"organization"> | null): Settings` helper.
   - `handlers/chat/stream-chat.ts`
   - `handlers/chat/generate-thread-title.ts`
   - `handlers/search/ai.ts` (refine + summarise)
-  - `handlers/entities/organize-suggestions.ts` (both queries)
+  - `handlers/entities/placements/suggest.ts` (both queries)
   - `handlers/case-law/analysis/generate.ts`
   - `handlers/case-law/polarity/llm-classifier.ts`
   - `handlers/properties/preview.ts`
-  - `handlers/properties/suggest-prompt.ts`
-  - `handlers/skills/generate-draft.ts`
+  - `handlers/properties/prompt/suggest.ts`
+  - `handlers/skills/drafts/generate.ts`
   - `handlers/skills/resources/rewrite.ts`
     Each drops the boilerplate args that now come from the middleware;
     keeps any genuine per-call overrides.

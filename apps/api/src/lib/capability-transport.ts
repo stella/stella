@@ -72,7 +72,7 @@ export type CapabilityFileInput = {
 export type CapabilityFileResponse = {
   /**
    * Every media type the success path can produce. A list, not a single value:
-   * one endpoint legitimately serves several (`views.table-export` renders csv,
+   * one endpoint legitimately serves several (`views.table.export` renders csv,
    * xlsx, or docx from the same `format` query).
    */
   mediaTypes: readonly string[];

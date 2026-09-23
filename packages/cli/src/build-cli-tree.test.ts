@@ -182,9 +182,9 @@ describe("buildApp: disabled commands", () => {
   test("a gated-off capability is marked by id, independent of a same-named tool", () => {
     const marked = briefsFor({
       tools: [],
-      capabilities: ["usage.get-entitlement"],
+      capabilities: ["usage.entitlement.get"],
     });
-    expect(marked.get("capability usage get-entitlement")).toContain(
+    expect(marked.get("capability usage entitlement-get")).toContain(
       DISABLED_MARKER,
     );
     expect(marked.get("usage get")).not.toContain(DISABLED_MARKER);
@@ -193,11 +193,11 @@ describe("buildApp: disabled commands", () => {
   test("a partly gated group names the gated-off children in its brief", () => {
     const marked = briefsFor({
       tools: ["list_matters"],
-      capabilities: ["time-entries.export-csv"],
+      capabilities: ["time-entries.csv.export"],
     });
     expect(marked.get("matter")).toEndWith("[disabled on this server: list]");
     expect(marked.get("capability time-entries")).toEndWith(
-      "[disabled on this server: export-csv]",
+      "[disabled on this server: csv-export]",
     );
   });
 

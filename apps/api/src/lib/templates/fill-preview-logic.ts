@@ -1,6 +1,6 @@
 /**
- * `templates.fill-preview`'s fill logic, factored out of the endpoint module
- * (`handlers/templates/fill-preview.ts`) so that module can keep to one
+ * `templates.fills.preview`'s fill logic, factored out of the endpoint module
+ * (`handlers/templates/fills/preview.ts`) so that module can keep to one
  * default `{ config, handler }` export while this stays directly testable.
  */
 
@@ -49,7 +49,7 @@ type FillPreviewResult = {
   conditionDecisions: ResolvedAiCondition[];
 };
 
-/** `templates.fill-preview`'s fill logic: the shared fill pipeline in its
+/** `templates.fills.preview`'s fill logic: the shared fill pipeline in its
  *  `"allow-partial"` mode, returning the rendered paragraphs and diagnostics
  *  for a live preview instead of a downloadable file. The error status is
  *  annotated because the branches below would otherwise infer as a union of

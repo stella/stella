@@ -2,8 +2,8 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import installBundledSkill from "@/api/handlers/catalogue/install-skill";
-import listCatalogue from "@/api/handlers/catalogue/list-catalogue";
+import installBundledSkill from "@/api/handlers/catalogue/install";
+import listCatalogue from "@/api/handlers/catalogue/list";
 import nativeToolDeployAvailability from "@/api/handlers/catalogue/native-tool-deploy-availability";
 import { authMacro, permissionMacro, sessionAuthMacro } from "@/api/lib/auth";
 import {

@@ -2,14 +2,14 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import addAssignee from "@/api/handlers/tasks/assignees-add";
-import removeAssignee from "@/api/handlers/tasks/assignees-remove";
+import addAssignee from "@/api/handlers/tasks/assignees/add";
 import moveAssignee from "@/api/handlers/tasks/assignees/move";
-import calendarTasks from "@/api/handlers/tasks/calendar";
+import removeAssignee from "@/api/handlers/tasks/assignees/remove";
+import calendarTasks from "@/api/handlers/tasks/calendar/list";
 import createTask from "@/api/handlers/tasks/create";
-import createEntityLink from "@/api/handlers/tasks/entity-links-create";
-import deleteEntityLink from "@/api/handlers/tasks/entity-links-delete";
-import listEntityLinks from "@/api/handlers/tasks/entity-links-read";
+import createEntityLink from "@/api/handlers/tasks/entity-links/create";
+import deleteEntityLink from "@/api/handlers/tasks/entity-links/delete";
+import listEntityLinks from "@/api/handlers/tasks/entity-links/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import updateTask from "@/api/handlers/tasks/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";

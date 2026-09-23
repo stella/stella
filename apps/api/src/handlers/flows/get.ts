@@ -7,7 +7,7 @@ const config = {
   description:
     "Read one flow definition: its name, description, steps, trigger, and " +
     "enabled flag. Use flows.list to browse the organization's flows and " +
-    "flows.run-detail to read a run of one.",
+    "flows.runs.get to read a run of one.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",

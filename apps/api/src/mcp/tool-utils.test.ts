@@ -715,6 +715,16 @@ describe("closestToolNames", () => {
     );
   });
 
+  test("matches a name whose words were regrouped", () => {
+    expect(
+      closestToolNames("widgets.delete-part", [
+        "widgets.bolts.delete",
+        "widgets.parts.get",
+        "widgets.parts.delete",
+      ]).at(0),
+    ).toBe("widgets.parts.delete");
+  });
+
   test("returns nothing for an unrelated miss", () => {
     expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
   });

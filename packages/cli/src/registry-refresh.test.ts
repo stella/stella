@@ -139,7 +139,7 @@ describe("resolveCommandTree (S5.3)", () => {
     const env = await makeCacheEnv();
     await writeCache(env, {
       featureOmittedTools: ["search_case_law", "get_usage"],
-      featureOmittedCapabilities: ["usage.get-entitlement"],
+      featureOmittedCapabilities: ["usage.entitlement.get"],
     });
     const { tree, disabled } = await resolveCommandTree({
       serverOrigin: ORIGIN,
@@ -148,7 +148,7 @@ describe("resolveCommandTree (S5.3)", () => {
     expect(tree).toBe(generatedRouteMap);
     expect(disabled).toEqual({
       tools: ["search_case_law", "get_usage"],
-      capabilities: ["usage.get-entitlement"],
+      capabilities: ["usage.entitlement.get"],
     });
   });
 
@@ -446,7 +446,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: [],
         featureOmittedTools: ["list_time_entries", "search_case_law"],
-        featureOmittedCapabilities: ["time-entries.export-csv"],
+        featureOmittedCapabilities: ["time-entries.csv.export"],
       }),
       bakedListings: [
         listing("list_matters"),
@@ -463,7 +463,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       "search_case_law",
     ]);
     expect(written?.featureOmittedCapabilities).toEqual([
-      "time-entries.export-csv",
+      "time-entries.csv.export",
     ]);
     const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,

@@ -46,7 +46,7 @@ describe("resolveInvokeRateLimit", () => {
     for (const capabilityId of [
       "skills.discover",
       "skills.import",
-      "skills.import-url",
+      "skills.from-url.import",
     ]) {
       expect(resolveInvokeRateLimit(capabilityId)).toEqual({
         windowMs: 60_000,
@@ -141,7 +141,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     expect(
       (
         await consumeInvokeCapabilityRateLimit({
-          capabilityId: "skills.import-url",
+          capabilityId: "skills.from-url.import",
           clientIp: "192.0.2.1",
           consumeSkillSource,
           organizationId: org("org_a"),

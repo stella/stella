@@ -55,10 +55,10 @@ describe("deriveCapabilityId", () => {
   test("preserves hyphens in directory and file names", () => {
     expect(
       deriveCapabilityId({
-        file: "apps/api/src/handlers/contacts/business-registries-lookup.ts",
+        file: "apps/api/src/handlers/contacts/business-registries/lookup.ts",
         exportName: undefined,
       }),
-    ).toBe("contacts.business-registries-lookup");
+    ).toBe("contacts.business-registries.lookup");
   });
 
   test("maps internal words onto the public vocabulary", () => {
@@ -72,16 +72,16 @@ describe("deriveCapabilityId", () => {
     ).toBe("matters.archive");
     expect(
       deriveCapabilityId({
-        file: "apps/api/src/handlers/workspaces/workspace-members-add.ts",
+        file: "apps/api/src/handlers/workspaces/workspace-members/add.ts",
         exportName: undefined,
       }),
-    ).toBe("matters.matter-members-add");
+    ).toBe("matters.matter-members.add");
     expect(
       deriveCapabilityId({
-        file: "apps/api/src/handlers/entities/copy-to-workspace.ts",
+        file: "apps/api/src/handlers/entities/workspace-copies/create.ts",
         exportName: undefined,
       }),
-    ).toBe("entities.copy-to-matter");
+    ).toBe("entities.matter-copies.create");
   });
 
   test("throws for a path outside the handler tree", () => {
@@ -100,9 +100,7 @@ describe("isWellFormedCapabilityId", () => {
     expect(isWellFormedCapabilityId("matters.anonymization-terms.delete")).toBe(
       true,
     );
-    expect(isWellFormedCapabilityId("entities.read-summaries-count")).toBe(
-      true,
-    );
+    expect(isWellFormedCapabilityId("entities.summaries.count")).toBe(true);
   });
 
   test("rejects a camelCase segment: the shape a named export's identifier produces", () => {
@@ -173,7 +171,7 @@ describe("findMalformedCapabilityIds", () => {
 describe("deriveDomain", () => {
   test("is the first dot-separated segment", () => {
     expect(deriveDomain("time-entries.create")).toBe("time-entries");
-    expect(deriveDomain("templates.fill-by-id")).toBe("templates");
+    expect(deriveDomain("templates.fills.download")).toBe("templates");
   });
 
   test("handles a named-export id", () => {
@@ -237,11 +235,11 @@ describe("resolveAccess", () => {
   test("an explicit override wins over classifiable verbs (read re-pin)", () => {
     expect(
       resolveAccess({
-        id: "usage.get-entitlement",
+        id: "usage.entitlement.get",
         verbs: ["update"],
         hasPermissions: true,
         overrides: {
-          "usage.get-entitlement": { access: "read", destructive: false },
+          "usage.entitlement.get": { access: "read", destructive: false },
         },
       }),
     ).toEqual({ status: "resolved", access: "read", destructive: false });
@@ -341,7 +339,7 @@ describe("resolveAccess", () => {
 describe("isDestructiveName", () => {
   test("matches delete/remove-prefixed final segments, including camelCase named exports", () => {
     expect(isDestructiveName("document-types.delete-by-id")).toBe(true);
-    expect(isDestructiveName("invoices.remove-entries")).toBe(true);
+    expect(isDestructiveName("invoices.entries.remove")).toBe(true);
     expect(
       // A named-export id shape: no longer possible for a CATALOG id (see
       // isWellFormedCapabilityId), but the route-hook scan still derives ids
@@ -351,10 +349,10 @@ describe("isDestructiveName", () => {
   });
 
   test("matches delete/remove-suffixed final segments", () => {
-    expect(isDestructiveName("matters.matter-members-remove")).toBe(true);
-    expect(isDestructiveName("matters.matter-contacts-delete")).toBe(true);
-    expect(isDestructiveName("tasks.entity-links-delete")).toBe(true);
-    expect(isDestructiveName("tasks.assignees-remove")).toBe(true);
+    expect(isDestructiveName("matters.members.remove")).toBe(true);
+    expect(isDestructiveName("matters.contacts.delete")).toBe(true);
+    expect(isDestructiveName("tasks.entity-links.delete")).toBe(true);
+    expect(isDestructiveName("tasks.assignees.remove")).toBe(true);
   });
 
   test("matches camelCase suffix forms", () => {
@@ -369,7 +367,7 @@ describe("isDestructiveName", () => {
 
   test("does not match soft operations or delete elsewhere in the id", () => {
     expect(isDestructiveName("matters.archive")).toBe(false);
-    expect(isDestructiveName("entities.restore-version")).toBe(false);
+    expect(isDestructiveName("entities.versions.restore")).toBe(false);
     expect(isDestructiveName("entities.delete.read-status")).toBe(false);
   });
 });
@@ -378,7 +376,7 @@ describe("resolveAccess destructive-name escalation", () => {
   test("escalates a suffix-named delete authorized via update", () => {
     expect(
       resolveAccess({
-        id: "matters.matter-members-remove",
+        id: "matters.members.remove",
         verbs: ["update"],
         hasPermissions: true,
         overrides: {},
@@ -386,16 +384,16 @@ describe("resolveAccess destructive-name escalation", () => {
     ).toEqual({ status: "resolved", access: "write", destructive: true });
   });
 
-  test("the opt-out still suppresses a first-token remove whose last token is not delete-like", () => {
-    // `remove-entries` matches on its FIRST token under the tokenized rule,
-    // so the reviewed opt-out is still required (and still consulted).
+  test("the opt-out suppresses a delete-like action name", () => {
+    // `remove` is delete-like under the tokenized rule, so the reviewed
+    // opt-out is still required (and still consulted).
     expect(
       resolveAccess({
-        id: "invoices.remove-entries",
+        id: "invoices.entries.remove",
         verbs: ["update"],
         hasPermissions: true,
         overrides: {},
-        destructiveNameOptOuts: new Set(["invoices.remove-entries"]),
+        destructiveNameOptOuts: new Set(["invoices.entries.remove"]),
       }),
     ).toEqual({ status: "resolved", access: "write", destructive: false });
   });
@@ -425,11 +423,11 @@ describe("resolveAccess destructive-name escalation", () => {
   test("respects an explicit opt-out for a non-destructive unlink", () => {
     expect(
       resolveAccess({
-        id: "invoices.remove-entries",
+        id: "invoices.entries.remove",
         verbs: ["update"],
         hasPermissions: true,
         overrides: {},
-        destructiveNameOptOuts: new Set(["invoices.remove-entries"]),
+        destructiveNameOptOuts: new Set(["invoices.entries.remove"]),
       }),
     ).toEqual({ status: "resolved", access: "write", destructive: false });
   });
@@ -867,7 +865,7 @@ describe("serializeDispatchModule", () => {
       serializeDispatchModule([
         {
           id: "entities.read-summaries.readEntitySummariesCount",
-          importPath: "@/api/handlers/entities/read-summaries",
+          importPath: "@/api/handlers/entities/summaries/list",
           exportName: "readEntitySummariesCount",
         },
       ]),
@@ -928,13 +926,13 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
     // input, so the sanitized flow does not change the committed artifact.
     const out = serializeDispatchModule([
       {
-        id: "case-law.ingestion.status",
-        importPath: "@/api/handlers/case-law/ingestion/status",
+        id: "case-law.ingestion.get",
+        importPath: "@/api/handlers/case-law/ingestion/get",
         exportName: undefined,
       },
     ]);
     expect(out).toContain(
-      '"case-law.ingestion.status": { load: async () => await import("@/api/handlers/case-law/ingestion/status") },',
+      '"case-law.ingestion.get": { load: async () => await import("@/api/handlers/case-law/ingestion/get") },',
     );
   });
 
@@ -1422,12 +1420,12 @@ describe("scanFileResponseReturns", () => {
     const scan = scanFileResponseReturns({
       entries: [
         {
-          id: "time-entries.export-pdf",
+          id: "time-entries.pdf.export",
           source:
             "const buildMinimalPdf = (lines: readonly string[]): Uint8Array => enc.encode(pdf);\nreturn Result.ok(response);",
         },
       ],
-      flaggedIds: new Set(["time-entries.export-pdf"]),
+      flaggedIds: new Set(["time-entries.pdf.export"]),
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleFlags).toEqual([]);
@@ -1453,7 +1451,7 @@ describe("scanFileResponseReturns", () => {
 
 describe("scanRouteHookGuards", () => {
   const hookedRoute = `
-import getStatus from "@/api/handlers/case-law/ingestion/status";
+import getStatus from "@/api/handlers/case-law/ingestion/get";
 import listLinks from "@/api/handlers/case-law/matter-links/list";
 const adminRoute = new Elysia({ prefix: "/case/admin" })
   .use(authMacro)
@@ -1473,13 +1471,13 @@ const openRoute = new Elysia({ prefix: "/case" })
     const scan = scanRouteHookGuards({
       routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
       capabilityIds: new Set([
-        "case-law.ingestion.status",
+        "case-law.ingestion.get",
         "case-law.matter-links.list",
       ]),
       waivedIds: new Set(),
     });
     expect(scan.violations).toEqual([
-      { routeFile: "case-law/routes.ts", id: "case-law.ingestion.status" },
+      { routeFile: "case-law/routes.ts", id: "case-law.ingestion.get" },
     ]);
     expect(scan.staleWaivers).toEqual([]);
   });
@@ -1487,8 +1485,8 @@ const openRoute = new Elysia({ prefix: "/case" })
   test("a waived hook-guarded capability is not a violation", () => {
     const scan = scanRouteHookGuards({
       routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set(["case-law.ingestion.status"]),
-      waivedIds: new Set(["case-law.ingestion.status"]),
+      capabilityIds: new Set(["case-law.ingestion.get"]),
+      waivedIds: new Set(["case-law.ingestion.get"]),
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleWaivers).toEqual([]);
@@ -1528,8 +1526,8 @@ const r = new Elysia()
   test("reports a stale waiver no longer mounted under any hook", () => {
     const scan = scanRouteHookGuards({
       routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set(["case-law.ingestion.status"]),
-      waivedIds: new Set(["case-law.ingestion.status", "gone.capability"]),
+      capabilityIds: new Set(["case-law.ingestion.get"]),
+      waivedIds: new Set(["case-law.ingestion.get", "gone.capability"]),
     });
     expect(scan.staleWaivers).toEqual(["gone.capability"]);
   });
@@ -1557,7 +1555,7 @@ describe("serializeCoverageDoc", () => {
       mcp: { type: "covered" as const, by: "save_time_entry" },
     },
     {
-      id: "time-entries.export-pdf",
+      id: "time-entries.pdf.export",
       access: "read" as const,
       destructive: false,
       scope: "stella:billing_write",
@@ -1567,14 +1565,14 @@ describe("serializeCoverageDoc", () => {
         response: { mediaTypes: ["application/pdf"] },
         alternative: {
           type: "partial" as const,
-          via: ["time-entries.export-csv"],
+          via: ["time-entries.csv.export"],
           limitation: "the rendered PDF is not produced",
         },
       },
       mcp: { type: "capability" as const, reason: "billing_admin" },
     },
     {
-      id: "entities.read-summaries-count",
+      id: "entities.summaries.count",
       access: "read" as const,
       destructive: false,
       scope: "stella:matters_write",
@@ -1597,7 +1595,7 @@ describe("serializeCoverageDoc", () => {
       mcp: { type: "capability" as const, reason: "template_authoring_ui" },
     },
     {
-      id: "templates.fill-to-matter",
+      id: "templates.fills.create",
       access: "write" as const,
       destructive: false,
       scope: "stella:documents_write",
@@ -1613,14 +1611,11 @@ describe("serializeCoverageDoc", () => {
   };
 
   // The REAL generated command path per capability id, as buildCliRouteTree
-  // would produce it. `entities.read-summaries-count` is deliberately given a
+  // would produce it. `entities.summaries.count` is deliberately given a
   // collision-fallback path (relocated under `capability …`) to prove the doc
   // renders the map's path, never an id-derived guess.
   const cliCommandPathById = new Map<string, readonly string[]>([
-    [
-      "entities.read-summaries-count",
-      ["capability", "entities", "read-summaries-count"],
-    ],
+    ["entities.summaries.count", ["capability", "entities", "summaries-count"]],
     ["templates.prefill", ["capability", "templates", "prefill"]],
   ]);
 
@@ -1644,7 +1639,7 @@ describe("serializeCoverageDoc", () => {
 
     const createIndex = doc.indexOf("`time-entries.create`");
     const deleteIndex = doc.indexOf("`time-entries.delete`");
-    const exportIndex = doc.indexOf("`time-entries.export-pdf`");
+    const exportIndex = doc.indexOf("`time-entries.pdf.export`");
     expect(createIndex).toBeLessThan(deleteIndex);
     expect(deleteIndex).toBeLessThan(exportIndex);
   });
@@ -1658,17 +1653,17 @@ describe("serializeCoverageDoc", () => {
       "| `time-entries.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry` |",
     );
     expect(doc).toContain(
-      "| `templates.fill-to-matter` | write | stella:documents_write, stella:templates | — | covered by `save_filled_template` |",
+      "| `templates.fills.create` | write | stella:documents_write, stella:templates | — | covered by `save_filled_template` |",
     );
   });
 
   test("renders the generated (collision-aware) command path, not an id-derived one", () => {
     const doc = render();
     expect(doc).toContain(
-      "| `entities.read-summaries-count` | read | stella:matters_write | — | generic invoke → `stella capability entities read-summaries-count` |",
+      "| `entities.summaries.count` | read | stella:matters_write | — | generic invoke → `stella capability entities summaries-count` |",
     );
     // The naive id-derived path must not appear anywhere.
-    expect(doc).not.toContain("`stella entities read-summaries-count`");
+    expect(doc).not.toContain("`stella entities summaries-count`");
   });
 
   test("panics when a non-file capability entry has no generated command path", () => {
@@ -1684,7 +1679,7 @@ describe("serializeCoverageDoc", () => {
   test("a suppressed file capability states why it is excluded and names the alternative", () => {
     const doc = render();
     expect(doc).toContain(
-      "| `time-entries.export-pdf` | read | stella:billing_write | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.export-csv covers part of this: the rendered PDF is not produced |",
+      "| `time-entries.pdf.export` | read | stella:billing_write | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: the rendered PDF is not produced |",
     );
   });
 

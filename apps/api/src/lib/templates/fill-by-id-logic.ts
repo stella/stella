@@ -1,6 +1,6 @@
 /**
- * `templates.fill-by-id`'s fill logic, factored out of the endpoint module
- * (`handlers/templates/fill-by-id.ts`) so that module can keep to one default
+ * `templates.fills.download`'s fill logic, factored out of the endpoint module
+ * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
 
@@ -40,7 +40,7 @@ export type FillByIdLogicProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-/** `templates.fill-by-id`'s fill logic: the shared fill pipeline plus this
+/** `templates.fills.download`'s fill logic: the shared fill pipeline plus this
  *  route's download shaping (PDF conversion, diagnostic headers) and its
  *  use/fill/audit bookkeeping, written in one transaction.
  *

@@ -286,14 +286,14 @@ describe("invoke_capability reads explicit null on plain optional fields as omis
     omitted: Record<string, unknown>;
   }[] = [
     {
-      label: "time-entries.export-csv query.status",
-      capability: "time-entries.export-csv",
+      label: "time-entries.csv.export query.status",
+      capability: "time-entries.csv.export",
       withNull: { params: { matterId: "ws_1" }, query: { status: null } },
       omitted: { params: { matterId: "ws_1" }, query: {} },
     },
     {
-      label: "clauses.categories-create body.parentId",
-      capability: "clauses.categories-create",
+      label: "clauses.categories.create body.parentId",
+      capability: "clauses.categories.create",
       withNull: { body: { name: "X", parentId: null } },
       omitted: { body: { name: "X" } },
     },
@@ -354,9 +354,9 @@ describe("invoke_capability reads explicit null on plain optional fields as omis
 
   // A required property is not optional, so its null is still a value the
   // schema rejects, with a dot-path issue an agent can place.
-  test("tasks.calendar body.datePropertyIds: null on a required field still fails", async () => {
+  test("tasks.calendar.list body.datePropertyIds: null on a required field still fails", async () => {
     const error = errorEnvelope(
-      await invokeValidateOnly("tasks.calendar", {
+      await invokeValidateOnly("tasks.calendar.list", {
         params: { matterId: "ws_1" },
         body: {
           dateFrom: "2026-01-01T00:00:00.000Z",

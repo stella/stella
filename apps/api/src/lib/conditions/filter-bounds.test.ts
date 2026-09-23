@@ -20,14 +20,14 @@ import * as v from "valibot";
 import { VIEW_FILTERS_MAX } from "@stll/api-contract";
 import type { ConditionNode, GroupNode } from "@stll/conditions";
 
+import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
-import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readGroupCounts from "@/api/handlers/entities/read-group-counts";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readPropertyFacets from "@/api/handlers/entities/read-property-facets";
-import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
+import markColumnFlag from "@/api/handlers/fields/column-flag/update";
 import updateProperty from "@/api/handlers/properties/update";
-import calendarTasks from "@/api/handlers/tasks/calendar";
+import calendarTasks from "@/api/handlers/tasks/calendar/list";
 import { tCondition, tConditionNode } from "@/api/lib/conditions/contract";
 import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -77,7 +77,7 @@ const filters = (
 /** Keyed by module path relative to `apps/api/src`, without extension. */
 const PROBES: Record<string, Probe[]> = {
   "handlers/entities/list": [filters(readEntities.config.body)],
-  "handlers/entities/read-filesystem-tree": [
+  "handlers/entities/filesystem-tree/get": [
     filters(readFilesystemTree.config.body),
   ],
   "handlers/entities/read-kanban-group": [
@@ -92,13 +92,13 @@ const PROBES: Record<string, Probe[]> = {
   "handlers/entities/read-group-counts": [
     filters(readGroupCounts.config.body, { groupByPropertyId: "_status" }),
   ],
-  "handlers/fields/mark-column-flag": [
+  "handlers/fields/column-flag/update": [
     filters(markColumnFlag.config.body, {
       propertyId: PROPERTY_ID,
       flag: "verified",
     }),
   ],
-  "handlers/tasks/calendar": [
+  "handlers/tasks/calendar/list": [
     filters(calendarTasks.config.body, {
       dateFrom: "2026-01-01T00:00:00.000Z",
       dateTo: "2026-01-31T00:00:00.000Z",
