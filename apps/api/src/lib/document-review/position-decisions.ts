@@ -26,7 +26,10 @@ export type PositionDecisionSummary = {
   /**
    * The text the most recently accepted fix for this position carried — a
    * replacement term for a parameter fix, a whole block otherwise. Null when no
-   * accepted finding proposed an edit.
+   * accepted finding proposed an edit. Only fixes graded against the
+   * playbook's own terms count: a reference-graded fix restates its
+   * reference document and is read with its run, through
+   * `reference-visibility.ts`.
    */
   latestAcceptedFixText: string | null;
 };
@@ -56,10 +59,13 @@ export const readPositionDecisionOverlay = async ({
 
   // A fix is one of three shapes; two of them name their text `text` and the
   // parameter one names it `replace`. Exactly one is ever present.
-  const fixText = sql`coalesce(
-    ${documentReviewFindings.payload}->'finding'->'fix'->>'replace',
-    ${documentReviewFindings.payload}->'finding'->'fix'->>'text'
-  )`;
+  const fixText = sql`CASE
+    WHEN ${documentReviewFindings.payload}->'finding'->>'standardSource' IS DISTINCT FROM 'reference'
+    THEN coalesce(
+      ${documentReviewFindings.payload}->'finding'->'fix'->>'replace',
+      ${documentReviewFindings.payload}->'finding'->'fix'->>'text'
+    )
+  END`;
   const accepted = sql`${documentReviewFindings.decision} = ${DOCUMENT_REVIEW_DECISION.ACCEPTED}`;
 
   const rows = await tx

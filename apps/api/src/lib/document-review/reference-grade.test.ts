@@ -357,6 +357,16 @@ describe("normalizeReferenceGrading", () => {
       replace: "6 (six) months",
     });
     expect(TARGET_BLOCK).toContain("12 (twelve) months");
+    // The stored standard side keeps its term and its passage's block id; the
+    // block's words resolve by id, as `referenceCitations` do.
+    expect(
+      grading.delta.kind === "parameter" ? grading.delta.standard : null,
+    ).toEqual({
+      text: "6 (six) months",
+      value: 6,
+      unit: "months",
+      citation: { blockId: "r-9", text: "" },
+    });
     expect(grading.referenceCitations).toEqual([
       {
         fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),

@@ -420,6 +420,26 @@ const referenceFix = ({
 };
 
 /**
+ * The delta as stored: the standard side keeps its term and its passage's
+ * block id, and the passage text resolves by id through the passages
+ * endpoint, like `referenceCitations`. The full block is only needed while
+ * grading, to build the fix.
+ */
+const storedReferenceDelta = (delta: ReviewDelta): ReviewDelta =>
+  delta.kind === "parameter" && delta.standard !== null
+    ? {
+        kind: "parameter",
+        target: delta.target,
+        standard: {
+          text: delta.standard.text,
+          value: delta.standard.value,
+          unit: delta.standard.unit,
+          citation: { blockId: delta.standard.citation.blockId, text: "" },
+        },
+      }
+    : delta;
+
+/**
  * Whether the conclusion rests on something the documents actually say. A
  * position's passages are pinned and verified when it is created, so only the
  * target side has to be proven here; `not-comparable` asserts by name that it
@@ -587,10 +607,18 @@ export const normalizeReferenceGrading = ({
   const impact = referenceImpact({ delta, raw, perspective });
   const recommendation = recommendationProse.text;
   const verdict = ASSESSMENT_VERDICTS[raw.assessment];
+  const fix = referenceFix({
+    delta,
+    termKind: position.termKind,
+    verdict,
+    raw,
+    citations,
+    targetLanguage,
+  });
 
   return {
     verdict,
-    delta,
+    delta: storedReferenceDelta(delta),
     consensus: normalizeConsensus(
       raw.consensus,
       new Set(position.passages.map((passage) => passage.fileFieldId)).size,
@@ -600,14 +628,7 @@ export const normalizeReferenceGrading = ({
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
     referenceCitations: passageCitations(position.passages),
-    fix: referenceFix({
-      delta,
-      termKind: position.termKind,
-      verdict,
-      raw,
-      citations,
-      targetLanguage,
-    }),
+    fix,
   };
 };
 

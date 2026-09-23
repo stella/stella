@@ -61,12 +61,15 @@ const basis: DocumentReviewRunBasis = {
   references: [],
 };
 
-const payloadWith = (fix: ReviewFix | null): DocumentReviewFindingPayload => ({
+const payloadWith = (
+  fix: ReviewFix | null,
+  standardSource: "tiers" | "reference",
+): DocumentReviewFindingPayload => ({
   finding: {
     positionId: DECIDED_POSITION_ID,
     issue: "Leakage time bar",
     severity: "high",
-    standardSource: "reference",
+    standardSource,
     verdict: "deviation",
     delta: { kind: "language" },
     extracted: null,
@@ -105,6 +108,7 @@ type SeedFindingArgs = {
   decision: DocumentReviewDecision;
   decidedAt: Date | null;
   fix: ReviewFix | null;
+  standardSource?: "tiers" | "reference";
 };
 
 const seedFinding = async ({
@@ -114,6 +118,7 @@ const seedFinding = async ({
   decision,
   decidedAt,
   fix,
+  standardSource = "tiers",
 }: SeedFindingArgs): Promise<void> => {
   await testDb.insert(documentReviewFindings).values({
     id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
@@ -126,7 +131,7 @@ const seedFinding = async ({
     positionId: DECIDED_POSITION_ID,
     positionTitle: "Leakage time bar",
     outcome: "deviation",
-    payload: payloadWith(fix),
+    payload: payloadWith(fix, standardSource),
     decision,
     ...(decidedAt === null ? {} : { decidedBy: null, decidedAt }),
   });
@@ -224,6 +229,27 @@ describe("position decision overlay", () => {
     });
   });
 
+  test("a fix graded against a reference is counted but not surfaced as the latest text", async () => {
+    const runId = await seedRun(ids.orgA, ids.wsA1);
+    await seedFinding({
+      runId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      decision: "accepted",
+      decidedAt: new Date("2026-08-30T10:00:00.000Z"),
+      fix: {
+        kind: "replaceBlock",
+        blockId: "para-4",
+        text: "Wording taken from a reference document",
+      },
+      standardSource: "reference",
+    });
+
+    const summary = (await overlay())[DECIDED_POSITION_ID];
+    expect(summary?.accepted).toBe(3);
+    expect(summary?.latestAcceptedFixText).toBe("6 months");
+  });
+
   test("an undecided finding still counts as a run that graded the position", async () => {
     const runId = await seedRun(ids.orgA, ids.wsA1);
     await seedFinding({
@@ -236,8 +262,8 @@ describe("position decision overlay", () => {
     });
 
     const summary = (await overlay())[DECIDED_POSITION_ID];
-    expect(summary?.runs).toBe(4);
-    expect(summary?.accepted).toBe(2);
+    expect(summary?.runs).toBe(5);
+    expect(summary?.accepted).toBe(3);
     expect(summary?.dismissed).toBe(1);
   });
 
