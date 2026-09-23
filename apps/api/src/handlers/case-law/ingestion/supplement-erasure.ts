@@ -123,7 +123,7 @@ const selectHolders = async (
           eq(caseLawDecisions.caseNumber, erased.caseNumber),
           ne(caseLawDecisions.id, decisionId),
           isNull(caseLawDecisions.redactedAt),
-          sql`${caseLawDecisions.metadata} -> ${DOCUMENT_SUPPLEMENTS_METADATA_KEY} @> ${composed}::jsonb`,
+          sql`${caseLawDecisions.metadata} -> ${DOCUMENT_SUPPLEMENTS_METADATA_KEY} @> ${composed}::text::jsonb`,
         ),
       );
   });

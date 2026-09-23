@@ -1162,11 +1162,12 @@ const absorbComposedSupplementRows = async ({
           }),
         catch: (cause) => cause,
       });
-      const rehomeError = Result.isError(rehomed)
-        ? rehomed.error
-        : Result.isError(rehomed.value)
-          ? rehomed.value.error
-          : null;
+      const rehomeError = ((): unknown => {
+        if (Result.isError(rehomed)) {
+          return rehomed.error;
+        }
+        return Result.isError(rehomed.value) ? rehomed.value.error : null;
+      })();
       if (rehomeError !== null) {
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
@@ -3524,12 +3525,13 @@ export const processSupplement = async ({
     if (Result.isError(written.value)) {
       return rawWriteFailed(written.value.error);
     }
-    const key = written.value.value;
-    if (key === undefined) {
+    const writtenKey = written.value.value;
+    if (writtenKey === undefined) {
       return null;
     }
     const pointed = await Result.tryPromise({
-      try: async () => await pointRawAt({ key, contentType: rawContentType }),
+      try: async () =>
+        await pointRawAt({ key: writtenKey, contentType: rawContentType }),
       catch: (cause) => cause,
     });
     return Result.isError(pointed) ? rawWriteFailed(pointed.error) : null;

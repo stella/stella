@@ -182,7 +182,8 @@ export const rehomeSupplementRaw = async ({
   const head = SHA256_HEX.test(digest)
     ? await headS3ObjectWithSignal(from, signal)
     : null;
-  if (head === null || head.contentLength === null) {
+  const byteLength = head?.contentLength ?? null;
+  if (byteLength === null) {
     await movePointer(null);
     return Result.ok(undefined);
   }
@@ -195,9 +196,9 @@ export const rehomeSupplementRaw = async ({
         sha256: digest,
         contentType:
           read.pointer?.contentType ??
-          head.contentType ??
+          head?.contentType ??
           "application/octet-stream",
-        byteLength: head.contentLength,
+        byteLength,
       },
     },
     window,
@@ -332,11 +333,12 @@ export const absorbStandaloneSupplementRow = async ({
       }),
     catch: (cause) => cause,
   });
-  const rawError = Result.isError(rawErased)
-    ? rawErased.error
-    : Result.isError(rawErased.value)
-      ? rawErased.value.error
-      : null;
+  const rawError = ((): unknown => {
+    if (Result.isError(rawErased)) {
+      return rawErased.error;
+    }
+    return Result.isError(rawErased.value) ? rawErased.value.error : null;
+  })();
   if (rawError !== null) {
     return Result.ok({
       type: "raw-incomplete",
