@@ -261,8 +261,11 @@ const downloadZipHandler = async function* ({
     if (Result.isError(response) || !response.value.ok) {
       return failed;
     }
+    // Annotated so the unbounded-body read below stays visible to
+    // no-unbounded-response-body.
+    const storageResponse: Response = response.value;
     const data = await Result.tryPromise(
-      async () => new Uint8Array(await response.value.arrayBuffer()),
+      async () => new Uint8Array(await storageResponse.arrayBuffer()),
     );
     if (Result.isError(data)) {
       return failed;
