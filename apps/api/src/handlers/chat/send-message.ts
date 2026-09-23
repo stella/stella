@@ -1965,18 +1965,14 @@ export const createSendMessage = (
         // names never reach this point.
         const toolReadScope = createToolReadScopeRecorder({
           accessibleWorkspaceIds: accessibleSet,
-          persist: async (newWorkspaceIds) => {
-            const expanded = await expandThreadDataScope({
+          persist: async (newWorkspaceIds) =>
+            await expandThreadDataScope({
               newWorkspaceIds,
               recordAuditEvent,
               safeDb,
               threadId: body.threadId,
               threadWorkspaceId: workspaceId,
-            });
-            if (Result.isError(expanded)) {
-              throw expanded.error;
-            }
-          },
+            }),
           refRegistry,
         });
         const streamingTools = recordToolReadScope({

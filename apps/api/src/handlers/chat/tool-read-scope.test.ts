@@ -1,4 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -33,6 +34,7 @@ const setup = (accessible: readonly SafeId<"workspace">[]) => {
     accessibleWorkspaceIds: new Set(accessible),
     persist: async (workspaceIds) => {
       persisted.push([...workspaceIds]);
+      return Result.ok(undefined);
     },
     refRegistry,
   });
@@ -105,9 +107,7 @@ describe("tool read scope", () => {
     const refRegistry = createChatRefRegistry();
     const recorder = createToolReadScopeRecorder({
       accessibleWorkspaceIds: new Set([workspaceA]),
-      persist: async () => {
-        throw new Error("scope write failed");
-      },
+      persist: async () => Result.err(new Error("scope write failed")),
       refRegistry,
     });
     const read = toolDefinition({
@@ -119,8 +119,29 @@ describe("tool read scope", () => {
     const tools = recordToolReadScope({ recorder, tools: { read } });
     recorder.startTurn();
 
-    expect(tools["read"]?.execute?.({}, undefined)).rejects.toThrow(
+    await expect(tools["read"]?.execute?.({}, undefined)).rejects.toThrow(
       "scope write failed",
     );
+  });
+
+  test("a mutation keeps its committed result when the scope write fails", async () => {
+    const refRegistry = createChatRefRegistry();
+    const recorder = createToolReadScopeRecorder({
+      accessibleWorkspaceIds: new Set([workspaceA]),
+      persist: async () => Result.err(new Error("scope write failed")),
+      refRegistry,
+    });
+    const save = toolDefinition({
+      name: "save-document",
+      description: "Save a document.",
+      inputSchema: toTanStackToolSchema(v.strictObject({})),
+    }).server(() => ({ matterRef: refRegistry.toMatterRef(workspaceA) }));
+    applyChatToolPolicy(save, CHAT_TOOL_POLICY_KIND.mutation);
+    const tools = recordToolReadScope({ recorder, tools: { save } });
+    recorder.startTurn();
+
+    const output: unknown = await tools["save"]?.execute?.({}, undefined);
+
+    expect(output).toEqual({ matterRef: refRegistry.toMatterRef(workspaceA) });
   });
 });

@@ -1,17 +1,28 @@
-import { copyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+// Records a thread's data scope while its turn runs.
+//
+// Every tool result is followed, before it is returned, by a write that folds
+// the workspaces the ref registry observed since the turn started into
+// `chat_threads.data_workspace_ids`. Anything derived from a tool result during
+// the turn (a suggestion saved while the stream is still open, a subagent
+// summary, the persisted assistant message) is therefore written after the
+// thread's scope already covers the data behind it. The end-of-turn computation
+// in `send-message.ts` re-derives everything observed since the turn started,
+// in the same transaction as the message, so a scope write that failed
+// mid-turn is retried there.
+//
+// A failed scope write fails a read tool: retrying a read is harmless. A
+// mutation has already committed by then, so it keeps its result and the
+// failure is captured instead of reported as a retryable tool error.
+
+import { Result } from "better-result";
+
+import {
+  CHAT_TOOL_POLICY_KIND,
+  copyChatToolPolicy,
+  getChatToolPolicy,
+} from "@/api/handlers/chat/tools/tool-policy";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-/**
- * Records a thread's data scope while its turn runs.
- *
- * Every tool result is followed, before it is returned, by a write that folds
- * the workspaces the ref registry observed since the turn started into
- * `chat_threads.data_workspace_ids`. Anything derived from a tool result
- * during the turn (a suggestion saved while the stream is still open, a
- * subagent summary, the persisted assistant message) is therefore written
- * after the thread's scope already covers the data behind it. The end-of-turn
- * computation in `send-message.ts` still adds what only the final message
- * carries (resolved text refs, structural ids in response parts).
- */
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 
@@ -24,13 +35,15 @@ export type ToolReadScopeRecorder = {
    */
   startTurn: () => ReadonlySet<WorkspaceId>;
   /** Persist workspaces observed since `startTurn` and not yet recorded. */
-  recordObservedReads: () => Promise<void>;
+  recordObservedReads: () => Promise<Result<void, unknown>>;
 };
 
 type CreateToolReadScopeRecorderOptions = {
   accessibleWorkspaceIds: ReadonlySet<string>;
-  /** Widens the thread's scope; a failure fails the tool call. */
-  persist: (workspaceIds: readonly WorkspaceId[]) => Promise<void>;
+  /** Widens the thread's scope. */
+  persist: (
+    workspaceIds: readonly WorkspaceId[],
+  ) => Promise<Result<unknown, unknown>>;
   refRegistry: Pick<ChatRefRegistry, "getObservedWorkspaceIds">;
 };
 
@@ -50,7 +63,7 @@ export const createToolReadScopeRecorder = ({
     },
     recordObservedReads: async () => {
       if (baseline === null) {
-        return;
+        return Result.ok(undefined);
       }
       const turnBaseline = baseline;
       const additions = refRegistry
@@ -62,12 +75,16 @@ export const createToolReadScopeRecorder = ({
             accessibleWorkspaceIds.has(observed),
         );
       if (additions.length === 0) {
-        return;
+        return Result.ok(undefined);
       }
-      await persist(additions);
-      for (const workspaceId of additions) {
-        recorded.add(workspaceId);
+      const persisted = await persist(additions);
+      if (Result.isError(persisted)) {
+        return Result.err(persisted.error);
       }
+      for (const added of additions) {
+        recorded.add(added);
+      }
+      return Result.ok(undefined);
     },
   };
 };
@@ -90,11 +107,20 @@ export const recordToolReadScope = ({
       wrapped[name] = current;
       continue;
     }
+    const committedBeforeScope =
+      getChatToolPolicy(current).kind === CHAT_TOOL_POLICY_KIND.mutation;
     const recordingTool = {
       ...current,
       execute: async (input: unknown, context: unknown) => {
         const output: unknown = await execute(input, context);
-        await recorder.recordObservedReads();
+        const recorded = await recorder.recordObservedReads();
+        if (Result.isError(recorded)) {
+          const failure = recorded.error;
+          if (!committedBeforeScope) {
+            throw failure;
+          }
+          captureError(failure, { source: "chat-tool-read-scope", tool: name });
+        }
         return output;
       },
     };
