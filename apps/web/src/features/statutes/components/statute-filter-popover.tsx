@@ -8,11 +8,7 @@ import {
   PublicLawFilterPopover,
 } from "@/components/public-law-table/public-law-filter-popover";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
-
-/** What the statute list may be narrowed by, as the URL names it. */
-export const STATUTE_FILTER_KEYS = ["type", "validity"] as const;
-
-export type StatuteFilterKey = (typeof STATUTE_FILTER_KEYS)[number];
+import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 
 type StatuteFilterPopoverProps = {
   /** How many filters are on; drawn on the button, so a short list is explained. */

@@ -36,11 +36,7 @@ import {
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
-import {
-  STATUTE_FILTER_KEYS,
-  StatuteFilterPopover,
-} from "@/features/statutes/components/statute-filter-popover";
-import type { StatuteFilterKey } from "@/features/statutes/components/statute-filter-popover";
+import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import {
   StatuteTable,
@@ -59,6 +55,8 @@ import type {
   StatuteListItem,
 } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
+import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
+import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import type { StatuteQueryIntent } from "@/features/statutes/statute-query-intent";
 import {
   useStatuteColumnPreferences,
