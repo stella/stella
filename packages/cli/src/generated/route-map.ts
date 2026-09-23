@@ -6894,6 +6894,15 @@ export const generatedRouteMap: RouteNode = {
                   "Error code from the envelope, if the call returned one.",
                 required: false,
               },
+              {
+                flag: "--approval-token",
+                prop: "approval_token",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour.",
+                required: true,
+              },
             ],
             inputOnly: [],
             paginated: false,
@@ -6904,7 +6913,13 @@ export const generatedRouteMap: RouteNode = {
             scope: "feedback",
             inputSchema: {
               type: "object",
-              required: ["kind", "area", "title", "what_happened"],
+              required: [
+                "kind",
+                "area",
+                "title",
+                "what_happened",
+                "approval_token",
+              ],
               additionalProperties: false,
               properties: {
                 kind: {
@@ -6998,6 +7013,12 @@ export const generatedRouteMap: RouteNode = {
                   additionalProperties: false,
                   description:
                     "Where the problem appeared, so a maintainer can find the call.",
+                },
+                approval_token: {
+                  type: "string",
+                  maxLength: 128,
+                  description:
+                    "The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour.",
                 },
                 confirm: {
                   type: "boolean",

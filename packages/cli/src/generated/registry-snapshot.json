@@ -4195,7 +4195,7 @@
       "scope": "feedback"
     },
     "name": "prepare_feedback",
-    "description": "Draft a bug, idea, missing-capability or docs report for the stella maintainers and get it back sanitized. Sends nothing: emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side, and the result is the report for you to show the human verbatim. Once they approve it, call submit_feedback with that same report and confirm: true. Describe the problem, then what you expected against what happened, then the steps. Refer to people by role, never by name. Never paste document text, matter or client names, or ids. Put the requestId of a failed call in context.request_id. The reporter's identity is stored privately and is never published.",
+    "description": "Draft a bug, idea, missing-capability or docs report for the stella maintainers and get it back sanitized. Sends nothing: emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side, and the result is the report for you to show the human verbatim. Once they approve it, call submit_feedback with that same report, its approval_token, and confirm: true. Describe the problem, then what you expected against what happened, then the steps. Refer to people by role, never by name. Never paste document text, matter or client names, or ids. Put the requestId of a failed call in context.request_id. The reporter's identity is stored privately and is never published.",
     "inputSchema": {
       "type": "object",
       "required": ["kind", "area", "title", "what_happened"],
@@ -4301,10 +4301,10 @@
       "confirmPassthrough": true
     },
     "name": "submit_feedback",
-    "description": "File the report prepared by prepare_feedback with the stella maintainers. This sends the content out of the workspace: it is stored, emailed to the maintainers, and may be posted as a public issue, so it is refused without confirm: true. emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side again here, and the reporter's identity is stored privately and never published. Returns a receipt to give the human. Re-sending identical content within a day returns the original receipt and sends nothing.",
+    "description": "File the report prepared by prepare_feedback with the stella maintainers. This sends the content out of the workspace: it is stored, emailed to the maintainers, and may be posted as a public issue, so it is refused without confirm: true and without the approval_token prepare_feedback returned for exactly this report. emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side again here, and the reporter's identity is stored privately and never published. Returns a receipt to give the human. Re-sending identical content within a day returns the original receipt and sends nothing.",
     "inputSchema": {
       "type": "object",
-      "required": ["kind", "area", "title", "what_happened"],
+      "required": ["kind", "area", "title", "what_happened", "approval_token"],
       "additionalProperties": false,
       "properties": {
         "kind": {
@@ -4390,6 +4390,11 @@
           "required": [],
           "additionalProperties": false,
           "description": "Where the problem appeared, so a maintainer can find the call."
+        },
+        "approval_token": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour."
         },
         "confirm": {
           "type": "boolean",

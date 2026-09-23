@@ -133,6 +133,8 @@ describe("prepare_feedback and submit_feedback agree on one shape", () => {
     if (typeof prepared !== "object" || prepared === null) {
       throw new TypeError("Expected a prepared report object");
     }
+    const approvalToken =
+      "approval_token" in payload ? payload.approval_token : undefined;
 
     // Parsed through the same schema object the handler parses with, not a
     // restatement of it: a schema-shaped copy would agree until one of them
@@ -145,6 +147,7 @@ describe("prepare_feedback and submit_feedback agree on one shape", () => {
     }
     const reparsed = v.safeParse(submitTool.inputSchemaSource, {
       ...prepared,
+      approval_token: approvalToken,
       confirm: true,
     });
 
@@ -168,11 +171,78 @@ describe("prepare_feedback and submit_feedback agree on one shape", () => {
     if (typeof report !== "object" || report === null) {
       throw new TypeError("Expected the prepared report to be an object");
     }
+    const approvalToken =
+      "approval_token" in payload ? payload.approval_token : undefined;
 
     expect(
-      v.safeParse(submitTool.inputSchemaSource, { ...report, confirm: true })
-        .success,
+      v.safeParse(submitTool.inputSchemaSource, {
+        ...report,
+        approval_token: approvalToken,
+        confirm: true,
+      }).success,
     ).toBe(true);
+  });
+});
+
+describe("submit_feedback approval binding", () => {
+  const preparedSubmission = async () => {
+    const { payload } = await prepare(MINIMAL_ARGS);
+    if (
+      payload === null ||
+      !("report" in payload) ||
+      !("approval_token" in payload) ||
+      typeof payload.report !== "object" ||
+      payload.report === null
+    ) {
+      throw new TypeError("Expected a prepared report and approval token");
+    }
+    return { report: payload.report, approvalToken: payload.approval_token };
+  };
+
+  const submitError = async (args: Record<string, unknown>) => {
+    const result = await FEEDBACK_TOOL_HANDLERS.submit_feedback({
+      args: { ...args, confirm: true },
+      context,
+    });
+    if (isMcpEgressPlan(result)) {
+      throw new TypeError("Expected a finished result");
+    }
+    return result.status === "error" ? result.error : null;
+  };
+
+  test("a report edited after preparation is refused", async () => {
+    const { report, approvalToken } = await preparedSubmission();
+
+    const error = await submitError({
+      ...report,
+      what_happened: "Different text the human never saw.",
+      approval_token: approvalToken,
+    });
+
+    expect(error).toMatchObject({ code: "confirmation_required" });
+  });
+
+  test("a report prepared for another user is refused", async () => {
+    const { report, approvalToken } = await preparedSubmission();
+
+    const result = await FEEDBACK_TOOL_HANDLERS.submit_feedback({
+      args: { ...report, approval_token: approvalToken, confirm: true },
+      context: { ...context, userId: toSafeId<"user">("user_2") },
+    });
+    if (isMcpEgressPlan(result)) {
+      throw new TypeError("Expected a finished result");
+    }
+
+    expect(result.status).toBe("error");
+    expect(result.status === "error" ? result.error : null).toMatchObject({
+      code: "confirmation_required",
+    });
+  });
+
+  test("a report without an approval token is refused", async () => {
+    const error = await submitError({ ...MINIMAL_ARGS });
+
+    expect(error).toMatchObject({ code: "validation_error" });
   });
 });
 
