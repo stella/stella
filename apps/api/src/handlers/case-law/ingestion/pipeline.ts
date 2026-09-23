@@ -17,7 +17,7 @@ import {
   caseLawPolarityRules,
   caseLawSources,
 } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
+import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
   CITATION_KIND,
   classifyCitation,
@@ -175,13 +175,14 @@ import type {
   WriteRawSourcePayload,
   WriteRawSourcePayloadOptions,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isPgConstraintError,
   PG_ERROR,
   pgErrorFields,
 } from "@/api/lib/pg-error";
-import { readS3ObjectIfPresent } from "@/api/lib/s3";
+import { isMissingS3ObjectError, readS3ObjectBounded } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
@@ -3607,11 +3608,23 @@ const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
  * judgment had no payload.
  */
 export const readStoredRawFromS3: StoredRawReader = async (key) => {
-  const bytes = await readS3ObjectIfPresent(
-    key,
-    AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
-  );
-  return bytes === null ? null : new Uint8Array(bytes);
+  const read = await Result.tryPromise({
+    try: async () =>
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key,
+        maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
+        signal: AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(read)) {
+    return read.value;
+  }
+  if (isMissingS3ObjectError(read.error)) {
+    return null;
+  }
+  throw read.error;
 };
 
 /**
