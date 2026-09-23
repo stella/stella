@@ -25,6 +25,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawIndexJobs,
   caseLawRawSweeps,
   caseLawSources,
   relations,
@@ -478,6 +479,12 @@ describe("erasing one decision's raw objects", () => {
         (await namedBy(b.decisionId)).filter((key) => !stored(key)),
       ).toEqual([]);
       expect(await openSweeps()).toEqual([a.decisionId]);
+      expect(
+        await db
+          .select({ detail: caseLawIndexJobs.detail })
+          .from(caseLawIndexJobs)
+          .where(eq(caseLawIndexJobs.decisionId, a.decisionId)),
+      ).toEqual([{ detail: "legacy raw pending" }]);
 
       // B moves into its own prefix; A's entry still waits for the sweep.
       expect((await migrateSource(sourceId)).counts.migrated).toBe(1);
@@ -968,7 +975,9 @@ describe("a decision whose older-layout file is not what its envelope says", () 
       listing: "{}",
       file: "%PDF as named",
     });
-    fake.put(envBase.S3_BUCKET, a.fileKey, "%PDF truncated", "application/pdf");
+    // Same length, different bytes: only the digest tells them apart.
+    expect("%PDF as nameX".length).toBe("%PDF as named".length);
+    fake.put(envBase.S3_BUCKET, a.fileKey, "%PDF as nameX", "application/pdf");
 
     const page = await migrateSource(sourceId);
 

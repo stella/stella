@@ -96,6 +96,14 @@ type RawLayoutRow = {
 
 const RAW_LAYOUT_IO_TIMEOUT_MS = 60_000;
 
+const RAW_LAYOUT_ROW_COLUMNS = {
+  id: caseLawDecisions.id,
+  sourceId: caseLawDecisions.sourceId,
+  sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+  sourceRawContentType: caseLawDecisions.sourceRawContentType,
+  redactedAt: caseLawDecisions.redactedAt,
+};
+
 /**
  * A payload's bytes as the text an envelope is, or as bytes when they are
  * not text. Only read for the files it names: a payload that names none is
@@ -117,9 +125,8 @@ const RAW_ENVELOPE_READ_MAX_BYTES = 64 * 1024 * 1024;
 
 type ReconcileRawRowOptions = {
   scopedDb: ScopedDb;
-  row: RawLayoutRow;
+  decisionId: SafeId<"caseLawDecision">;
   mode: RawLayoutMode;
-  window: RawSourceWriteWindow;
   /**
    * Read every payload for the files it names, not only those recorded as
    * envelopes. What the legacy sweep's census asks; the recurring walk reads
@@ -133,12 +140,27 @@ type RawRowReconciliation = { outcome: RawLayoutRowOutcome; copies: number };
 /** Reconcile one decision's raw pointer with the per-decision layout. */
 const reconcileRawRow = async ({
   scopedDb,
-  row,
+  decisionId,
   mode,
-  window,
   readEveryPayload,
 }: ReconcileRawRowOptions): Promise<RawRowReconciliation> => {
-  if (row.redactedAt !== null || row.sourceRawS3Key === null) {
+  // Opened before the read that proves the decision live, per decision, so
+  // a slow page never starts a write outside the window of its own read:
+  // see `RAW_SOURCE_WRITE_WINDOW_MS`.
+  const window = openRawSourceWriteWindow();
+  const row: RawLayoutRow | undefined = await scopedDb(async (tx) =>
+    (
+      await tx
+        .select(RAW_LAYOUT_ROW_COLUMNS)
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId))
+    ).at(0),
+  );
+  if (
+    row === undefined ||
+    row.redactedAt !== null ||
+    row.sourceRawS3Key === null
+  ) {
     return { outcome: RAW_LAYOUT_ROW_OUTCOME.CURRENT, copies: 0 };
   }
   const storedKey = row.sourceRawS3Key;
@@ -185,12 +207,9 @@ const reconcileRawRow = async ({
         });
   }
   if (!readable) {
-    return {
-      outcome: own
-        ? RAW_LAYOUT_ROW_OUTCOME.DANGLING
-        : RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE,
-      copies: 0,
-    };
+    // An envelope too large to read may name anything; the census cannot
+    // vouch for it, so it blocks the legacy sweep like any unmoved row.
+    return { outcome: RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE, copies: 0 };
   }
 
   const read = await readS3ObjectIfPresent(storedKey, signal);
@@ -448,20 +467,10 @@ export const reconcileCaseLawRawLayoutPage = async ({
   sourceId,
   readEveryPayload = false,
 }: ReconcileRawLayoutPageOptions): Promise<RawLayoutPageResult> => {
-  // Opened before the read that proves each decision live: see
-  // `RAW_SOURCE_WRITE_WINDOW_MS`. A page that outlasts it stops at the
-  // first write it refuses and resumes there.
-  const window = openRawSourceWriteWindow();
   const rows = await scopedDb(
     async (tx) =>
       await tx
-        .select({
-          id: caseLawDecisions.id,
-          sourceId: caseLawDecisions.sourceId,
-          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
-          sourceRawContentType: caseLawDecisions.sourceRawContentType,
-          redactedAt: caseLawDecisions.redactedAt,
-        })
+        .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
         .where(
           and(
@@ -484,14 +493,13 @@ export const reconcileCaseLawRawLayoutPage = async ({
     copies: 0,
   };
   const reported: RawLayoutPageResult["reported"] = [];
-  const reconcile = async (row: RawLayoutRow) =>
+  const reconcile = async (row: { id: SafeId<"caseLawDecision"> }) =>
     await Result.tryPromise({
       try: async () =>
         await reconcileRawRow({
           scopedDb,
-          row,
+          decisionId: row.id,
           mode,
-          window,
           readEveryPayload,
         }),
       catch: (cause) => cause,

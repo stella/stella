@@ -20,6 +20,7 @@ import {
   deleteS3ObjectWithSignal,
   listS3ObjectKeys,
   headS3ObjectWithSignal,
+  readS3ObjectIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
@@ -400,15 +401,19 @@ export const isUnmovableRawObjectError = (error: unknown): boolean =>
   error instanceof RawSourceObjectCopyError ||
   error instanceof RawSourceObjectUnhomeableError;
 
+/** Largest object a copy reads to check its bytes against its digest. */
+const RAW_COPY_VERIFY_MAX_BYTES = 64 * 1024 * 1024;
+
 /**
- * Copy one object into its document, server-side: nothing passes through
- * this process, whatever its size.
+ * Copy one object into its document.
  *
- * The source is addressed by its own digest, so the name is the check: a
- * source whose name is not the digest the reference states, whose length is
- * not the one it states, or that is not stored at all cannot be copied, on
- * this attempt or any later one. An object already at the destination holds
- * the same bytes, since that key is the same digest, and is not copied again.
+ * The source is addressed by its own digest. A source whose name is not the
+ * digest the reference states, whose length or bytes are not the ones it
+ * states, or that is not stored at all cannot be copied, on this attempt or
+ * any later one. The bytes are checked by reading them, up to a bound; a
+ * larger object is copied server-side and trusted by its name. An object
+ * already at the destination holds the same bytes, since that key is the
+ * same digest, and is not copied again.
  */
 export const copyRawObject = async ({
   copy: { fromKey, ref },
@@ -439,11 +444,33 @@ export const copyRawObject = async ({
   if ((await headS3ObjectWithSignal(location.key, signal)) !== null) {
     return;
   }
-  assertWriteWindowOpen(window);
-  const copied = await copyObject(fromKey, location.key);
-  if (Result.isError(copied)) {
-    throw copied.error;
+  if (ref.byteLength > RAW_COPY_VERIFY_MAX_BYTES) {
+    // Too large to hold here: copied server-side, trusted by its name.
+    assertWriteWindowOpen(window);
+    const copied = await copyObject(fromKey, location.key);
+    if (Result.isError(copied)) {
+      throw copied.error;
+    }
+    return;
   }
+  const read = await readS3ObjectIfPresent(fromKey, signal);
+  const bytes = read === null ? null : new Uint8Array(read);
+  if (
+    bytes === null ||
+    bytes.byteLength !== ref.byteLength ||
+    sha256Of(bytes) !== ref.sha256
+  ) {
+    throw new RawSourceObjectCopyError({
+      message: `A copy source does not hold the bytes its name states: ${fromKey}`,
+      fromKey,
+    });
+  }
+  assertWriteWindowOpen(window);
+  await createS3ObjectIfAbsent({
+    contentType: ref.contentType,
+    data: bytes,
+    key: location.key,
+  });
 };
 
 class RawDocumentErasureIncompleteError extends TaggedError(

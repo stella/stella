@@ -533,9 +533,17 @@ export const redactCaseLawDecision = async ({
   }
 
   const detail =
-    corpusErasure.type === "tombstoned"
-      ? `tombstoned: ${corpusErasure.tombstoned.join(", ")}`.slice(0, 2048)
-      : null;
+    [
+      corpusErasure.type === "tombstoned"
+        ? `tombstoned: ${corpusErasure.tombstoned.join(", ")}`
+        : null,
+      // Recorded so the audit trail does not read as finished while the
+      // source's older raw objects are still stored; see `LegacyRawErasure`.
+      rawErasure.legacyRaw === "pending" ? "legacy raw pending" : null,
+    ]
+      .filter((part) => part !== null)
+      .join("; ")
+      .slice(0, 2048) || null;
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — this insert IS the append-only erasure audit row
