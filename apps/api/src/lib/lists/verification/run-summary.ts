@@ -70,3 +70,25 @@ export const serializeRunSummary = (run: RunSummaryRow) => ({
     recordconflict: run.recordconflict,
   } satisfies Record<ClaimState, number>,
 });
+
+/** The run columns a summary sends as they are; `listId` and `claimCounts`
+ *  are derived and sit outside the column check. */
+export type RunSummaryColumnProjection = Omit<
+  ReturnType<typeof serializeRunSummary>,
+  "listId" | "claimCounts"
+>;
+
+export type RunRow = typeof legalListVerificationRuns.$inferSelect;
+
+export const UNPROJECTED_RUN_SUMMARY_COLUMNS = [
+  // Scope keys the caller already holds.
+  "organizationId",
+  "workspaceId",
+  // Pin and provenance, read in full with lists.verifications.get.
+  "contentSha256",
+  "evidence",
+  "requestedBy",
+  "pipelineVersion",
+  "modelRef",
+  "startedAt",
+] as const satisfies readonly (keyof RunRow)[];

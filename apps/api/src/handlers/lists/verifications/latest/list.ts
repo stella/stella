@@ -16,8 +16,17 @@ import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import {
   CLAIM_COUNT_COLUMNS,
   RUN_SUMMARY_COLUMNS,
-  serializeRunSummary,
+  serializeRunSummary
 } from "@/api/lib/lists/verification/run-summary";
+import type {
+  RunRow,
+  RunSummaryColumnProjection,
+
+  UNPROJECTED_RUN_SUMMARY_COLUMNS} from "@/api/lib/lists/verification/run-summary";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 const config = {
   description:
@@ -121,5 +130,19 @@ const readLatestVerifications = createSafeHandler(
     return Result.ok({ runs });
   },
 );
+
+type MissingProjectedRunColumn = UnprojectedColumns<
+  RunRow,
+  RunSummaryColumnProjection,
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+>;
+type UnexpectedProjectedRunColumn = UnbackedProjectionKeys<
+  RunRow,
+  RunSummaryColumnProjection,
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedRunColumn extends never ? true : never;
+true satisfies UnexpectedProjectedRunColumn extends never ? true : never;
 
 export default readLatestVerifications;

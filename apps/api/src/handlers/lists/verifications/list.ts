@@ -30,9 +30,18 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   CLAIM_COUNT_COLUMNS,
   RUN_SUMMARY_COLUMNS,
-  serializeRunSummary,
+  serializeRunSummary
 } from "@/api/lib/lists/verification/run-summary";
+import type {
+  RunRow,
+  RunSummaryColumnProjection,
+
+  UNPROJECTED_RUN_SUMMARY_COLUMNS} from "@/api/lib/lists/verification/run-summary";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
 const runCursor = createTimestampIdCursorCodec({
@@ -152,5 +161,19 @@ const readVerifications = createSafeHandler(
     return Result.ok({ ...page, items: page.items.map(serializeRunSummary) });
   },
 );
+
+type MissingProjectedRunColumn = UnprojectedColumns<
+  RunRow,
+  RunSummaryColumnProjection,
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+>;
+type UnexpectedProjectedRunColumn = UnbackedProjectionKeys<
+  RunRow,
+  RunSummaryColumnProjection,
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedRunColumn extends never ? true : never;
+true satisfies UnexpectedProjectedRunColumn extends never ? true : never;
 
 export default readVerifications;
