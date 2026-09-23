@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 1.19.3
+
+### Patch Changes
+
+- [#3728](https://github.com/stella/stella/pull/3728) [`0d6bd5a`](https://github.com/stella/stella/commit/0d6bd5abf19cf86f71a6dd71ad9c39b3435fd8f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Narrow optional values before they reach rendered text and messages. The outline rail no longer draws a tick for a heading whose id matches an object prototype key.
+- Updated dependencies [[`0d6bd5a`](https://github.com/stella/stella/commit/0d6bd5abf19cf86f71a6dd71ad9c39b3435fd8f1)]:
+  - @stll/stable-stringify@0.2.1
+
 ## 1.19.2
 
 ### Patch Changes
