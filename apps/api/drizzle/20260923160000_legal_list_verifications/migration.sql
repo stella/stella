@@ -106,68 +106,182 @@ CREATE TABLE "legal_list_claim_review_events" (
 );--> statement-breakpoint
 CREATE INDEX "legal_list_claim_review_events_run_created_idx" ON "legal_list_claim_review_events" ("workspace_id", "run_id", "created_at", "id");--> statement-breakpoint
 
-DO $$
-DECLARE
-	table_name text;
-	workspace_access text := $predicate$
-		CASE
-			WHEN workspace_id = ANY(
-				COALESCE(
-					NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[],
-					ARRAY[]::uuid[]
-				)
-			)
-			THEN true
-			ELSE workspace_id IN (
-				SELECT aw.authorized_workspace_id
-				FROM public.stella_authorized_workspaces aw
-			)
-		END
-	$predicate$;
-BEGIN
-	FOREACH table_name IN ARRAY ARRAY[
-		'legal_list_fact_details',
-		'legal_list_claims',
-		'legal_list_claim_review_events'
-	]
-	LOOP
-		EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);
-		EXECUTE format('CREATE POLICY workspace_select ON %I AS PERMISSIVE FOR SELECT TO stella USING (%s)', table_name, workspace_access);
-		EXECUTE format('CREATE POLICY workspace_insert ON %I AS PERMISSIVE FOR INSERT TO stella WITH CHECK (%s)', table_name, workspace_access);
-		IF table_name = 'legal_list_claim_review_events' THEN
-			EXECUTE format('GRANT SELECT, INSERT ON TABLE %I TO stella', table_name);
-		ELSE
-			EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name);
-			EXECUTE format('CREATE POLICY workspace_update ON %I AS PERMISSIVE FOR UPDATE TO stella USING (%s)', table_name, workspace_access);
-			EXECUTE format('CREATE POLICY workspace_delete ON %I AS PERMISSIVE FOR DELETE TO stella USING (%s)', table_name, workspace_access);
-		END IF;
-	END LOOP;
-END
-$$;--> statement-breakpoint
+-- Row security, spelled out per table: every table is scoped to the
+-- caller's workspaces, and a run, which carries its organization too, to both.
 
--- A run carries both scopes, and the worker rebuilds its tenant from the row,
--- so every command requires the workspace and the organization together.
-DO $$
-DECLARE
-	scope text := $predicate$
-		(CASE
-			WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-			THEN true
-			ELSE workspace_id IN (
-				SELECT aw.authorized_workspace_id
-				FROM public.stella_authorized_workspaces aw
-			)
-		END) AND organization_id = (SELECT current_setting('app.organization_id', true))
-	$predicate$;
-BEGIN
-	ALTER TABLE "legal_list_verification_runs" ENABLE ROW LEVEL SECURITY;
-	GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_verification_runs" TO stella;
-	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_select ON "legal_list_verification_runs" AS PERMISSIVE FOR SELECT TO stella USING (%s)', scope);
-	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_insert ON "legal_list_verification_runs" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (%s)', scope);
-	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_update ON "legal_list_verification_runs" AS PERMISSIVE FOR UPDATE TO stella USING (%s)', scope);
-	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_delete ON "legal_list_verification_runs" AS PERMISSIVE FOR DELETE TO stella USING (%s)', scope);
-END
-$$;--> statement-breakpoint
+ALTER TABLE "legal_list_fact_details" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_fact_details" TO "stella";--> statement-breakpoint
+CREATE POLICY "workspace_select"
+  ON "legal_list_fact_details" AS PERMISSIVE FOR SELECT TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_insert"
+  ON "legal_list_fact_details" AS PERMISSIVE FOR INSERT TO stella
+  WITH CHECK ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_update"
+  ON "legal_list_fact_details" AS PERMISSIVE FOR UPDATE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_delete"
+  ON "legal_list_fact_details" AS PERMISSIVE FOR DELETE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+
+ALTER TABLE "legal_list_claims" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_claims" TO "stella";--> statement-breakpoint
+CREATE POLICY "workspace_select"
+  ON "legal_list_claims" AS PERMISSIVE FOR SELECT TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_insert"
+  ON "legal_list_claims" AS PERMISSIVE FOR INSERT TO stella
+  WITH CHECK ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_update"
+  ON "legal_list_claims" AS PERMISSIVE FOR UPDATE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_delete"
+  ON "legal_list_claims" AS PERMISSIVE FOR DELETE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+
+ALTER TABLE "legal_list_claim_review_events" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE "legal_list_claim_review_events" TO "stella";--> statement-breakpoint
+CREATE POLICY "workspace_select"
+  ON "legal_list_claim_review_events" AS PERMISSIVE FOR SELECT TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+CREATE POLICY "workspace_insert"
+  ON "legal_list_claim_review_events" AS PERMISSIVE FOR INSERT TO stella
+  WITH CHECK ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END));--> statement-breakpoint
+
+ALTER TABLE "legal_list_verification_runs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_verification_runs" TO "stella";--> statement-breakpoint
+CREATE POLICY "legal_list_verification_runs_workspace_select"
+  ON "legal_list_verification_runs" AS PERMISSIVE FOR SELECT TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END) AND organization_id = (SELECT current_setting(
+    'app.organization_id', true
+  )));--> statement-breakpoint
+CREATE POLICY "legal_list_verification_runs_workspace_insert"
+  ON "legal_list_verification_runs" AS PERMISSIVE FOR INSERT TO stella
+  WITH CHECK ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END) AND organization_id = (SELECT current_setting(
+    'app.organization_id', true
+  )));--> statement-breakpoint
+CREATE POLICY "legal_list_verification_runs_workspace_update"
+  ON "legal_list_verification_runs" AS PERMISSIVE FOR UPDATE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END) AND organization_id = (SELECT current_setting(
+    'app.organization_id', true
+  )));--> statement-breakpoint
+CREATE POLICY "legal_list_verification_runs_workspace_delete"
+  ON "legal_list_verification_runs" AS PERMISSIVE FOR DELETE TO stella
+  USING ((CASE
+    WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
+      'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+    THEN true
+    ELSE workspace_id IN (
+      SELECT aw.authorized_workspace_id
+      FROM public.stella_authorized_workspaces aw
+    )
+  END) AND organization_id = (SELECT current_setting(
+    'app.organization_id', true
+  )));--> statement-breakpoint
 
 -- Review history is append-only: a reviewer's action is never rewritten.
 CREATE POLICY legal_list_claim_review_events_no_update ON "legal_list_claim_review_events" AS RESTRICTIVE FOR UPDATE TO stella USING (false);--> statement-breakpoint

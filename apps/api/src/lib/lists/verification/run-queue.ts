@@ -428,10 +428,12 @@ const executeRun = async (
   if (Result.isError(file)) {
     return file.error;
   }
+  const abortSignal = AbortSignal.timeout(RUN_TIMEOUT_MS);
   const document = await readVerificationDocument({
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     file: file.value,
+    signal: abortSignal,
   });
   if (document.type === "unsupported-format") {
     return "unsupported_format";
@@ -493,7 +495,7 @@ const executeRun = async (
       userId: actor.userId,
       workspaceId: actor.workspaceId,
     },
-    abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+    abortSignal,
   };
 
   const extracted = await extractClaims({ blocks: document.blocks, deps });

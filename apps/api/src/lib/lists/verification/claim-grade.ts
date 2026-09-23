@@ -10,13 +10,13 @@
  * "no coverage" would read as a finding nobody made.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   CLAIM_FACT_RELATIONS,
   SCORED_CLAIM_STATES,
@@ -153,8 +153,7 @@ const normalizeGrade = (
       const [valueA, valueB] = conflict?.values ?? [];
       const [ifA, ifB] = conflict?.verdictIfGoverning ?? [];
       if (
-        conflict === null ||
-        conflict.factIds.length !== 2 ||
+        conflict?.factIds.length !== 2 ||
         a === undefined ||
         b === undefined ||
         a === b ||
@@ -181,7 +180,7 @@ const normalizeGrade = (
     }
     default: {
       raw.verdict satisfies never;
-      return Result.err("has an unknown verdict");
+      return panic(`Unhandled verdict: ${String(raw.verdict)}`);
     }
   }
 };
@@ -287,7 +286,10 @@ export const gradeClaims = async ({
               !graded.has(promptId) &&
               !violations.some((violation) => violation.claimId === promptId)
             ) {
-              violations.push({ claimId: promptId, reason: "was not answered" });
+              violations.push({
+                claimId: promptId,
+                reason: "was not answered",
+              });
             }
           }
           if (violations.length > 0) {

@@ -9,11 +9,13 @@
 
 import { PDF } from "@libpdf/core";
 
+import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { readS3ObjectBounded } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** Where a block sits in the source, which a claim's anchor extends. */
@@ -39,6 +41,7 @@ type ReadVerificationDocumentArgs = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   file: VerificationFile;
+  signal: AbortSignal;
 };
 
 export type VerificationDocument =
@@ -48,8 +51,10 @@ export type VerificationDocument =
 
 const pdfPageId = (pageNumber: number): string => `P${String(pageNumber)}`;
 
-const readPdfBlocks = async (bytes: ArrayBuffer): Promise<VerificationBlock[]> => {
-  const pdf = await PDF.load(new Uint8Array(bytes));
+const readPdfBlocks = async (
+  bytes: Uint8Array,
+): Promise<VerificationBlock[]> => {
+  const pdf = await PDF.load(bytes);
   const blocks: VerificationBlock[] = [];
   for (const page of pdf.extractText()) {
     // Offsets index into this exact string, so it is kept as extracted rather
@@ -71,6 +76,7 @@ export const readVerificationDocument = async ({
   organizationId,
   workspaceId,
   file,
+  signal,
 }: ReadVerificationDocumentArgs): Promise<VerificationDocument> => {
   if (file.mimeType === DOCX_MIME_TYPE) {
     const key = createFileKey({
@@ -85,13 +91,11 @@ export const readVerificationDocument = async ({
     const blocks = reviewer
       .getContent()
       .filter((block) => block.text.trim().length > 0)
-      .map(
-        (block): VerificationBlock => ({
-          id: block.id,
-          text: block.text,
-          source: { type: "docx-block", blockId: block.id },
-        }),
-      );
+      .map((block): VerificationBlock => ({
+        id: block.id,
+        text: block.text,
+        source: { type: "docx-block", blockId: block.id },
+      }));
     return blocks.length === 0 ? { type: "no-text" } : { type: "read", blocks };
   }
 
@@ -106,7 +110,16 @@ export const readVerificationDocument = async ({
     fileId: pdfFileId,
     mimeType: PDF_MIME_TYPE,
   });
-  const blocks = await readPdfBlocks(await readS3ArrayBuffer(key));
+  // A rendition is never larger than an upload may be; a bigger object is
+  // refused before its body is read.
+  const blocks = await readPdfBlocks(
+    await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key,
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      signal,
+    }),
+  );
   // A scan without a text layer reads as nothing; saying so beats verifying
   // an empty document and reporting that no claims were found.
   return blocks.length === 0 ? { type: "no-text" } : { type: "read", blocks };

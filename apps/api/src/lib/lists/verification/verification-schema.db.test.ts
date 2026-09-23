@@ -117,23 +117,21 @@ describe("verification claims", () => {
     } as const;
     await rejects(claim({ state: "recordconflict", score: null }));
     await rejects(claim({ recordConflict: conflict }));
-    await testDb
-      .insert(legalListClaims)
-      .values(
-        claim({
-          state: "recordconflict",
-          score: null,
-          recordConflict: conflict,
-        }),
-      );
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "recordconflict",
+        score: null,
+        recordConflict: conflict,
+      }),
+    );
   });
 });
 
 describe("claim review events", () => {
   const seedClaim = async (): Promise<SafeId<"legalListClaim">> => {
-    const values = claim({});
-    await testDb.insert(legalListClaims).values(values);
-    return toSafeId<"legalListClaim">(values.id);
+    const id = createSafeId<"legalListClaim">();
+    await testDb.insert(legalListClaims).values(claim({ id }));
+    return id;
   };
 
   test("the payload names the same event as its kind", async () => {
