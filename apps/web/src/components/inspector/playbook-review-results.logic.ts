@@ -220,7 +220,12 @@ export const buildRunSummarySentence = ({
     );
   }
   if (references.length > 0) {
-    parts.push(references.map((reference) => reference.name).join(", "));
+    const names = references.flatMap(({ name }) =>
+      name.length > 0 ? [name] : [],
+    );
+    if (names.length > 0) {
+      parts.push(names.join(", "));
+    }
   }
   parts.push(
     playbookProposed || playbookName.length === 0

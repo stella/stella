@@ -223,10 +223,12 @@ const pinnedReferenceFiles = (
     workspaceName: reference.workspaceName,
     entityId: reference.entityId,
     fileFieldId: reference.fileFieldId,
-    name: reference.name,
+    // Null when the run's reader cannot open the reference's matter; the
+    // reference is then listed without a name.
+    name: reference.name ?? "",
     // A run pins a reference by version, not by file name; the pinned display
     // name is the only name a restored run can honestly show.
-    fileName: reference.name,
+    fileName: reference.name ?? "",
   }));
 
 export const restoreReviewBasis = ({

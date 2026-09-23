@@ -16,6 +16,7 @@ import type {
   ReferenceImpact,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
+import type { ReaderReference } from "@/api/lib/document-review/reference-visibility";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
   DocumentReviewDecision,
@@ -302,8 +303,13 @@ const findingRow = ({
   };
 };
 
+/** The run basis as one reader sees it (`referencesForReader`). */
+type ReaderBasis = Omit<DocumentReviewRunBasis, "references"> & {
+  references: readonly ReaderReference[];
+};
+
 type BuildIssuesTableRowsArgs = {
-  basis: DocumentReviewRunBasis;
+  basis: ReaderBasis;
   passageTextById: ReadonlyMap<string, string>;
   findings: readonly IssuesTableFinding[];
 };
@@ -317,7 +323,9 @@ export const buildIssuesTableRows = ({
 }: BuildIssuesTableRowsArgs): IssuesTableRow[] => {
   const { references, perspective } = basis;
   const referenceNameByFieldId = new Map(
-    references.map((reference) => [reference.fileFieldId, reference.name]),
+    references.flatMap((reference) =>
+      reference.name === null ? [] : [[reference.fileFieldId, reference.name]],
+    ),
   );
   const playbookName = basis.playbook.definitionSnapshot.name;
   const ranked = findings.map(({ positionTitle, payload, decision }) =>
@@ -350,9 +358,7 @@ export const buildIssuesTableRows = ({
 };
 
 /** One line naming what the draft was measured against. */
-export const describeIssuesTableBasis = (
-  basis: DocumentReviewRunBasis,
-): string => {
+export const describeIssuesTableBasis = (basis: ReaderBasis): string => {
   const { playbook, references, perspective } = basis;
   const parts: string[] = [];
   // An ephemeral pin has no saved playbook to name; the references it was
@@ -361,9 +367,18 @@ export const describeIssuesTableBasis = (
     parts.push(`Playbook: ${playbook.definitionSnapshot.name}`);
   }
   if (references.length > 0) {
-    parts.push(
-      `Precedent: ${references.map((reference) => reference.name).join(", ")}`,
+    const named = references.flatMap(({ name }) =>
+      name === null ? [] : [name],
     );
+    const unnamed = references.length - named.length;
+    const labels =
+      unnamed === 0
+        ? named
+        : [
+            ...named,
+            `${String(unnamed)} ${unnamed === 1 ? "document" : "documents"}`,
+          ];
+    parts.push(`Precedent: ${labels.join(", ")}`);
   }
   parts.push(perspectiveLabel(perspective));
   return parts.join(" · ");
