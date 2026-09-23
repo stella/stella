@@ -1020,20 +1020,21 @@ export const BlockRenderer = ({
                 />
               </span>
             )}
-            {/* The designation stays on the column's axis; the details
-                action and the permalink hang right after it, out of flow,
-                so a wide accessory never nudges "§ 120" off centre. */}
-            <span className="flex justify-center">
-              <span className="text-foreground relative text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
+            {/* Two equal side tracks keep the designation on the column's
+                axis however wide the accessory is; the accessory stays in
+                flow and wraps, so a narrow pane never clips its actions. */}
+            <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+              <span aria-hidden="true" />
+              <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
                 <InlineContent
                   {...sharedInlineProps}
                   initialOffset={provision.designation.initialOffset}
                   inlines={provision.designation.inlines}
                 />
-                <span className="absolute start-full top-1/2 ms-3 flex -translate-y-1/2 items-center gap-2 text-base whitespace-nowrap">
-                  {provision.accessory}
-                  {headingPermalink}
-                </span>
+              </span>
+              <span className="flex min-w-0 flex-wrap items-center gap-2 justify-self-start text-base">
+                {provision.accessory}
+                {headingPermalink}
               </span>
             </span>
             {provision.below.inlines.length > 0 && (
