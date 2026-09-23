@@ -11,7 +11,10 @@ import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
-import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import type {
+  AnchorPresentation,
+  TextAnchor,
+} from "@/components/legal-reader/document-ast-text";
 import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
@@ -192,8 +195,8 @@ export const StatuteText = ({
 };
 
 type StatuteBlockProps = {
-  /** An excerpt (a comparison cell) must not repeat the document's DOM ids. */
-  anchorPresentation: "document" | "embedded";
+  /** A comparison cell is an excerpt: `embedded`. */
+  anchorPresentation: AnchorPresentation;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
   /** What a provision heading offers beside its designation. */

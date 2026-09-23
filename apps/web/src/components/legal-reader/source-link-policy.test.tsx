@@ -131,6 +131,30 @@ describe("hyperlinks a source document carries", () => {
     expect(html).toContain("§ 46 s. ř. s.");
   });
 
+  test("an excerpt keeps a footnote reference's words without its jump", () => {
+    const footnoteRef: Inline = {
+      children: [{ text: "2)", type: "text" }],
+      href: "#ppc_2",
+      type: "link",
+    };
+    const render = (anchorPresentation: "document" | "embedded") =>
+      renderToStaticMarkup(
+        <InlineContent
+          activeMatchIndex={-1}
+          anchorPresentation={anchorPresentation}
+          inlines={[footnoteRef]}
+          pieceId="p"
+          ranges={[]}
+        />,
+      );
+
+    expect(render("document")).toContain('href="#ppc_2"');
+    // An excerpt carries no `ppc_2`, and the page around it may.
+    const embedded = render("embedded");
+    expect(embedded).not.toContain("<a");
+    expect(embedded).toContain("2)");
+  });
+
   test("a bare vendor URL printed in the text is not auto-linked", () => {
     // `bareUrlAnchors` manufactures a link the source never marked up, so it
     // answers to the same policy.

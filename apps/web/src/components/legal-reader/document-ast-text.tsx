@@ -75,8 +75,16 @@ export const anchorsForPiece = (
     ? []
     : normalizeOptionalArray(anchorsByPieceId[pieceId]);
 
+/**
+ * Whether blocks are the document itself (they carry its DOM ids and its
+ * in-document navigation) or an excerpt set inside another page, which must
+ * not repeat those ids and has no targets for a fragment link to reach.
+ */
+export type AnchorPresentation = "document" | "embedded";
+
 type HighlightContext = {
   activeMatchIndex: number;
+  anchorPresentation: AnchorPresentation;
   anchors: TextAnchor[];
   pieceId: string;
   ranges: ReaderMarkRange[];
@@ -500,6 +508,12 @@ const renderInline = ({
   // superscript marks, the way the published decision prints them, and
   // preview the note's text on hover.
   if (safeHref.startsWith("#")) {
+    // An excerpt carries none of the ids a fragment points at, and the page
+    // around it may carry the same id for something else: the reference
+    // keeps its words and loses the jump.
+    if (context.anchorPresentation === "embedded") {
+      return <Fragment key={key}>{children}</Fragment>;
+    }
     return (
       <NoteRefLink key={key} targetId={safeHref.slice(1)}>
         {children}
@@ -683,6 +697,7 @@ const bareUrlAnchors = (
 
 export const InlineContent = ({
   activeMatchIndex,
+  anchorPresentation = "document",
   anchors = NO_ANCHORS,
   initialOffset = 0,
   inlines,
@@ -690,6 +705,7 @@ export const InlineContent = ({
   ranges,
 }: {
   activeMatchIndex: number;
+  anchorPresentation?: AnchorPresentation | undefined;
   anchors?: TextAnchor[] | undefined;
   /** Offset of this inline slice within the complete search piece. */
   initialOffset?: number | undefined;
@@ -706,6 +722,7 @@ export const InlineContent = ({
     sourceLinks,
   );
   const context: HighlightContext = {
+    anchorPresentation,
     anchors: [...anchors, ...automaticLinks].toSorted(
       (left, right) => left.start - right.start,
     ),
@@ -995,8 +1012,7 @@ export const BlockRenderer = ({
   variant,
 }: {
   activeMatchIndex: number;
-  /** Embedded excerpts must not duplicate the document's global DOM ids. */
-  anchorPresentation?: "document" | "embedded" | undefined;
+  anchorPresentation?: AnchorPresentation | undefined;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
   /**
@@ -1061,6 +1077,7 @@ export const BlockRenderer = ({
         : null;
     const sharedInlineProps = {
       activeMatchIndex,
+      anchorPresentation,
       anchors: anchorsForPiece(anchorsByPieceId, block.id),
       pieceId: block.id,
       ranges: rangesForPiece(rangesByPieceId, block.id),
@@ -1196,7 +1213,13 @@ export const BlockRenderer = ({
         data-note={block.note?.type}
       >
         {permalink}
-        {showNoteLabel && (
+        {showNoteLabel && !isAddressable && (
+          // The reference the label jumps back to is not in an excerpt.
+          <span className="reader-note-label" data-reader-chrome="">
+            {noteLabel}
+          </span>
+        )}
+        {showNoteLabel && isAddressable && (
           <button
             className="reader-note-label"
             data-reader-chrome=""
@@ -1221,6 +1244,7 @@ export const BlockRenderer = ({
         )}
         <InlineContent
           activeMatchIndex={activeMatchIndex}
+          anchorPresentation={anchorPresentation}
           anchors={anchorsForPiece(anchorsByPieceId, block.id)}
           inlines={block.inlines}
           pieceId={block.id}
@@ -1301,6 +1325,7 @@ export const BlockRenderer = ({
                   >
                     <InlineContent
                       activeMatchIndex={activeMatchIndex}
+                      anchorPresentation={anchorPresentation}
                       anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
                       inlines={cell.inlines}
                       pieceId={pieceId}
