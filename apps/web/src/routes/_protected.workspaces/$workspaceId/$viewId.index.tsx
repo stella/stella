@@ -205,8 +205,8 @@ function RouteComponent() {
         </Suspense>
       );
     default: {
-      activeView.layout.type satisfies never;
-      return panic(`Unhandled view layout: ${String(activeView.layout.type)}`);
+      activeView.layout satisfies never;
+      return panic(`Unhandled view layout: ${String(activeView.layout)}`);
     }
   }
 }

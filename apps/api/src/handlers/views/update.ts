@@ -113,17 +113,17 @@ const updateView = createSafeHandler(
       return Result.ok({});
     }
 
-    yield* Result.await(
+    const avtRejection = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         if (parsedLayout !== undefined) {
-          const avtRejection = await rejectAvtLayout({
+          const rejection = await rejectAvtLayout({
             tx,
             workspaceId,
             layout: parsedLayout,
             legalListsEnabled: legalListsDeployed(),
           });
-          if (avtRejection !== null) {
-            throw new HandlerError(avtLayoutErrorDetail(avtRejection));
+          if (rejection !== null) {
+            return rejection;
           }
 
           const resolvedTemplateProperties = await resolveTemplateProperties({
@@ -176,8 +176,12 @@ const updateView = createSafeHandler(
           resourceId: viewId,
           changes,
         });
+        return null;
       }),
     );
+    if (avtRejection !== null) {
+      return Result.err(new HandlerError(avtLayoutErrorDetail(avtRejection)));
+    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,

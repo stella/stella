@@ -43,9 +43,11 @@ export const VerificationDetail = ({
   onOpenRun,
 }: VerificationDetailProps) => {
   const t = useTranslations();
-  const { data: run, isPending, isError } = useQuery(
-    verificationRunOptions(workspaceId, runId),
-  );
+  const {
+    data: run,
+    isPending,
+    isError,
+  } = useQuery(verificationRunOptions(workspaceId, runId));
   const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
   const documentName =
     run === undefined
@@ -60,7 +62,10 @@ export const VerificationDetail = ({
           {t("avt.runs.back")}
         </Button>
         {documentName !== null && (
-          <h2 className="min-w-0 flex-1 truncate text-base font-semibold" dir="auto">
+          <h2
+            className="min-w-0 flex-1 truncate text-base font-semibold"
+            dir="auto"
+          >
             {documentName}
           </h2>
         )}
@@ -99,7 +104,7 @@ const RunBody = ({ workspaceId, run, listId, onOpenRun }: RunBodyProps) => {
     case "running": {
       return (
         <div className="text-muted-foreground flex items-center gap-2 rounded-lg border p-4 text-sm">
-          <Loader />
+          <Loader label={t("avt.runs.inProgress")} />
           {t("avt.runs.inProgress")}
         </div>
       );
@@ -200,7 +205,10 @@ const VerifyAgain = ({
             return;
           }
           detached(
-            verification.start(confirmation.target, confirmation.estimatedUnits),
+            verification.start(
+              confirmation.target,
+              confirmation.estimatedUnits,
+            ),
             "avt.confirm-verification-size",
           );
         }}

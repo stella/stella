@@ -91,16 +91,16 @@ const convertView = createSafeHandler(
 
     const newLayout = convertLayout(existingLayout, targetType);
 
-    yield* Result.await(
+    const avtRejection = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        const avtRejection = await rejectAvtLayout({
+        const rejection = await rejectAvtLayout({
           tx,
           workspaceId,
           layout: newLayout,
           legalListsEnabled: legalListsDeployed(),
         });
-        if (avtRejection !== null) {
-          throw new HandlerError(avtLayoutErrorDetail(avtRejection));
+        if (rejection !== null) {
+          return rejection;
         }
 
         await tx
@@ -122,8 +122,12 @@ const convertView = createSafeHandler(
           },
           metadata: { reason: "convert" },
         });
+        return null;
       }),
     );
+    if (avtRejection !== null) {
+      return Result.err(new HandlerError(avtLayoutErrorDetail(avtRejection)));
+    }
 
     const view = {
       version: 1 as const,
