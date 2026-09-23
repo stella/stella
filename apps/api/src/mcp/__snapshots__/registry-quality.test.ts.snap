@@ -3513,7 +3513,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "neutral"
               ],
               "type": "string",
-              "description": "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+              "description": "Side the review takes. Set only for a buyer, seller, or neutral side; a recipient, controller, or customer has none, so omit it. Use an advertised value; case and surrounding whitespace are normalized.",
               "x-stella-agent-input": {
                 "kind": "enum"
               }

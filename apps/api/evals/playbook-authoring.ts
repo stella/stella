@@ -244,11 +244,14 @@ const SEEDED_POSITIONS: Position[] = [
   },
 ];
 
+/** The seeded playbook's side; a task that edits it must leave it stored. */
+const SEEDED_PERSPECTIVE = "buyer";
+
 const seededPlaybook = (): StoredPlaybook => ({
   id: SEEDED_PLAYBOOK_ID,
   name: "Supplier MSA",
   description: "Inbound supplier master services agreements",
-  scope: { perspective: "buyer" },
+  scope: { perspective: SEEDED_PERSPECTIVE },
   positions: { version: 3, items: structuredClone(SEEDED_POSITIONS) },
   status: "draft",
   approvedAt: null,
@@ -308,6 +311,8 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [],
       plantedRefusals: [],
       maxPositionsPerCall: 3,
+      // The receiving party of an NDA maps to no perspective value.
+      perspectives: [undefined],
       check: (positions) => {
         const defects: string[] = [];
         const period = gradedTiers(positions, "Confidentiality period");
@@ -379,6 +384,7 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [LIABILITY_ID, GOVERNING_LAW_ID, TERM_ID],
       plantedRefusals: [],
       maxPositionsPerCall: 1,
+      perspectives: [SEEDED_PERSPECTIVE],
       check: (positions) =>
         gradedTiers(positions, "Payment terms")?.position.severity === "medium"
           ? []
@@ -401,6 +407,7 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [GOVERNING_LAW_ID, TERM_ID],
       plantedRefusals: [],
       maxPositionsPerCall: 1,
+      perspectives: [SEEDED_PERSPECTIVE],
       check: (positions) => {
         const cap = gradedTiers(positions, "Liability cap");
         if (cap === null) {
@@ -450,6 +457,7 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [LIABILITY_ID, TERM_ID],
       plantedRefusals: ["validation_error"],
       maxPositionsPerCall: 1,
+      perspectives: [SEEDED_PERSPECTIVE],
       check: (positions) => {
         const law = gradedTiers(positions, "Governing law");
         if (law === null) {
@@ -482,6 +490,7 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [LIABILITY_ID, GOVERNING_LAW_ID, TERM_ID],
       plantedRefusals: ["conflict"],
       maxPositionsPerCall: 1,
+      perspectives: [SEEDED_PERSPECTIVE],
       check: () => [],
     },
   },
@@ -499,6 +508,7 @@ const TASKS: EvalTask[] = [
       untouchedSourceIds: [LIABILITY_ID, GOVERNING_LAW_ID],
       plantedRefusals: [],
       maxPositionsPerCall: 0,
+      perspectives: [SEEDED_PERSPECTIVE],
       check: () => [],
     },
   },
@@ -729,6 +739,7 @@ const runTask = async ({
   const score = scorePlaybookRun({
     calls: saveCalls,
     expectation: task.expectation,
+    finalPerspective: playbook?.scope?.perspective,
     finalPositions,
     seededPositions: task.seed.at(0)?.positions.items ?? [],
     turnError: turn.error,
