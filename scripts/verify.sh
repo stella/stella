@@ -360,8 +360,7 @@ run_step "Projection totality" run_projection_totality_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
-run_step "Documentation source policy rule self-test" bun test \
-  ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
+run_step "Oxlint plugin self-tests" bun test ./.oxlint-plugins/__tests__
 run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "Instruction references" run_instruction_reference_guard
 run_step "exactMirror route guard" run_exact_mirror_guard

@@ -40,12 +40,12 @@ bun test ./scripts/oxlint-safe-fixers.test.ts
 bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
 bun test ./scripts/check-oxlint-plugin-registry.test.ts
-bun test ./.oxlint-plugins/__tests__/no-literal-decision-court.test.ts
-bun test ./.oxlint-plugins/__tests__/no-raw-decision-text-fields.test.ts
-bun test ./.oxlint-plugins/__tests__/design-system-ownership.test.ts
-bun test ./.oxlint-plugins/__tests__/no-layout-motion-classes.test.ts
-bun test ./.oxlint-plugins/__tests__/require-bounded-request-schema.test.ts
-bun test ./.oxlint-plugins/__tests__/no-unbounded-response-body.test.ts
+bun test ./scripts/check-oxlint-fixture-counts.test.ts
+bun test ./.oxlint-plugins/__tests__
+
+# Directive usage proves each expected hit fires at least once; the count
+# check then proves each fires exactly as often as its fixture line claims.
+bun scripts/check-oxlint-fixture-counts.ts
 
 exec bun --bun oxlint -c oxlint.config.ts \
   --report-unused-disable-directives-severity=error \

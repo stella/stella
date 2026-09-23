@@ -164,9 +164,51 @@ const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
     return rules.split(",").some((rule) => rule.trim() === ruleId);
   });
 
+// Names exported by the shared helper module. A plugin declaring one of them
+// keeps a private copy that drifts from the shared behaviour.
+export const sharedHelperNames = (utilsSource: string): string[] =>
+  Array.from(
+    utilsSource.matchAll(
+      /^export (?:const|function|type) (?<name>[A-Za-z_$][\w$]*)/gmu,
+    ),
+    (match) => match.groups?.["name"],
+  ).filter((name): name is string => name !== undefined);
+
+export const redeclaredSharedHelpers = (
+  source: string,
+  helperNames: readonly string[],
+): string[] =>
+  helperNames.filter((name) =>
+    new RegExp(
+      `(?:^|[\\s;])(?:const|let|function|type)\\s+${name.replaceAll("$", "\\$")}\\b`,
+      "u",
+    ).test(source),
+  );
+
+const helperNames = sharedHelperNames(
+  readFileSync(path.join(PLUGIN_DIRECTORY, "utils.ts"), "utf-8"),
+);
+
+// A case the rule must accept, checked line by line by
+// scripts/check-oxlint-fixture-counts.ts.
+export const fixtureHasCleanCase = (source: string, ruleId: string): boolean =>
+  source.split("\n").some((line) => {
+    const marker = /(?:\/\/|\/\*)\s*expect-clean:\s*(?<rules>[^*]+)/u.exec(line)
+      ?.groups?.["rules"];
+    return (
+      marker !== undefined &&
+      marker.split(",").some((rule) => rule.trim() === ruleId)
+    );
+  });
+
 for (const file of pluginFiles) {
   const pluginName = path.basename(file, ".ts");
   const source = readFileSync(path.join(PLUGIN_DIRECTORY, file), "utf-8");
+  for (const name of redeclaredSharedHelpers(source, helperNames)) {
+    errors.push(
+      `${file}: redeclares \`${name}\`; import it from ./utils.ts instead`,
+    );
+  }
   const specifier = `./${PLUGIN_DIRECTORY}/${file}`;
   const ruleNames = ruleNamesFromSource(source);
   const fixtureSources = fixtureFiles
@@ -226,6 +268,15 @@ for (const file of pluginFiles) {
       )
     ) {
       errors.push(`${file}: fixture does not disable ${fullRuleId}`);
+    }
+    if (
+      !fixtureSources.some((fixture) =>
+        fixtureHasCleanCase(fixture, fullRuleId),
+      )
+    ) {
+      errors.push(
+        `${file}: fixture has no \`expect-clean: ${fullRuleId}\` case`,
+      );
     }
     if (!readme.includes(`\`${ruleName}\``)) {
       errors.push(`${file}: README does not name rule \`${ruleName}\``);

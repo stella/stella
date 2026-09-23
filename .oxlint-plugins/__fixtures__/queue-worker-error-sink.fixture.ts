@@ -19,7 +19,7 @@ declare const createQueueWorkerErrorLogger: (
 declare const connectionErrorFields: (error: unknown) => Record<string, string>;
 
 worker.on("error", (error) => {
-  // oxlint-disable-next-line queue-worker-error-sink/queue-worker-error-sink -- fixture proves a direct log inside the handler is rejected
+  // oxlint-disable-next-line queue-worker-error-sink/queue-worker-error-sink -- x2: fixture proves a direct log inside the handler is rejected
   logger.error("file_derivative.worker_error", connectionErrorFields(error));
 });
 
@@ -27,7 +27,7 @@ const WORKER_ERROR_EVENT = "document_review_run.worker_error";
 
 // The evasion a source regex cannot see: the name is a binding, not a literal.
 worker.on("error", (error) => {
-  // oxlint-disable-next-line queue-worker-error-sink/queue-worker-error-sink -- fixture proves an event name held in a constant is still rejected
+  // oxlint-disable-next-line queue-worker-error-sink/queue-worker-error-sink -- x2: fixture proves an event name held in a constant is still rejected
   logger.error(WORKER_ERROR_EVENT, connectionErrorFields(error));
 });
 

@@ -6,7 +6,7 @@
 // regresses, the disable directive below goes unused and
 // `--report-unused-disable-directives-severity=error` fails CI.
 
-// oxlint-disable-next-line no-direct-matter-glyph/no-direct-matter-glyph
+// oxlint-disable-next-line no-direct-matter-glyph/no-direct-matter-glyph -- x2: one per imported glyph
 import { Layers2Icon, LayersIcon } from "lucide-react";
 
 export const DirectMatterGlyphFixture = () => (

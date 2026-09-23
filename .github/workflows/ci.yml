@@ -938,7 +938,7 @@ jobs:
         # Every direct dependency must have an exact llms.txt source or a
         # time-bounded, explained quarantine.
         run: |
-          bun test ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
+          bun test ./.oxlint-plugins/__tests__
           bun run check:docs-sources
 
       - name: Instruction references

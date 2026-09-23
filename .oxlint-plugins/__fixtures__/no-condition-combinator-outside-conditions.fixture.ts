@@ -19,7 +19,7 @@ const _computed = node[combinatorKey];
 
 // Destructuring reads the same fields through an ObjectPattern instead of a
 // MemberExpression, and is banned the same way.
-// oxlint-disable-next-line no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions
+// oxlint-disable-next-line no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions -- x2: both destructured fields
 const { combinator: _destructuredCombinator, negated: _destructuredNegated } =
   node;
 

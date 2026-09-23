@@ -7,7 +7,7 @@
 // regresses, the disable directive below goes unused and
 // `--report-unused-disable-directives-severity=error` fails CI.
 
-// oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph
+// oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph -- x3: one per imported glyph
 import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";
 
 export const DirectEntityGlyphFixture = () => (

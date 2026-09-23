@@ -4,7 +4,7 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-import type { Ranged } from "@oxlint/plugins";
+import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
 export type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
@@ -100,20 +100,27 @@ export const getCalleeName = (callee: unknown): string | null => {
   return objectName === null ? propertyName : `${objectName}.${propertyName}`;
 };
 
-// Peel TS-only wrapping nodes so a shape check sees the underlying
+// Nodes that wrap an expression without changing its runtime value:
+// `x as T`, `x satisfies T`, `<T>x`, `x!`, `f<T>`, `(x)`, and the optional
+// chain container around `a?.b`.
+const TRANSPARENT_WRAPPERS: ReadonlySet<string> = new Set([
+  "ChainExpression",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSInstantiationExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+]);
+
+// Peel value-preserving wrappers so a shape check sees the underlying
 // expression. Returns the original node when no wrapping is present.
 export const unwrapExpression = (node: unknown): AstNode | null => {
-  if (!isAstNode(node)) {
-    return null;
+  let current = node;
+  while (isAstNode(current) && TRANSPARENT_WRAPPERS.has(current.type)) {
+    current = current.expression;
   }
-  if (
-    node.type === "TSAsExpression" ||
-    node.type === "TSSatisfiesExpression" ||
-    node.type === "ChainExpression"
-  ) {
-    return unwrapExpression(node.expression);
-  }
-  return node;
+  return isAstNode(current) ? current : null;
 };
 
 // Resolve an ImportSpecifier's imported binding name (Identifier.name or
@@ -322,4 +329,378 @@ export const everyNode = (root: AstNode): AstNode[] => {
     }
   }
   return out;
+};
+
+// --- Files -------------------------------------------------------------------
+
+// The linted file as a repository-relative, forward-slash path. Oxlint runs
+// from the repository root, so the working directory anchors the relative
+// form; a path outside it stays absolute.
+export const repoRelativeFilename = (context: FilenameContext): string => {
+  const filename = filenameForContext(context);
+  const root = `${process.cwd().replaceAll("\\", "/")}/`;
+  return filename.startsWith(root) ? filename.slice(root.length) : filename;
+};
+
+// Whether the linted file is one of `files`, each a repository-relative path
+// or path suffix (`lib/s3.ts` names every file ending in it).
+export const isFileIn = (
+  context: FilenameContext,
+  files: readonly string[],
+): boolean => {
+  const filename = filenameForContext(context);
+  return files.some((file) => filename.endsWith(file));
+};
+
+const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+const TEST_DIRECTORY_PATTERN = /(?:^|\/)(?:tests?|__tests__)\//u;
+
+// Test sources: `*.test.*` / `*.spec.*` files and anything under a `test/`,
+// `tests/` or `__tests__/` directory.
+export const isTestFile = (filename: string): boolean =>
+  TEST_FILE_PATTERN.test(filename) || TEST_DIRECTORY_PATTERN.test(filename);
+
+// --- Identifiers and scope ---------------------------------------------------
+
+// An Identifier the parser emitted as a value reference (it carries a range,
+// which synthetic name nodes do not).
+export const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference =>
+  isIdentifier(node) && Array.isArray(node.range);
+
+export type ScopeContext = {
+  sourceCode: { getScope: (node: ESTree.Node) => Scope };
+};
+
+// The variable an identifier binds to, found by walking the scope chain from
+// the identifier outwards. Null for an unresolved (global) name.
+export const resolveVariable = (
+  context: ScopeContext,
+  identifier: ESTree.IdentifierReference,
+): Variable | null => {
+  let scope: Scope | null = context.sourceCode.getScope(identifier);
+  while (scope !== null) {
+    const variable = scope.set.get(identifier.name);
+    if (variable !== undefined) {
+      return variable;
+    }
+    scope = scope.upper;
+  }
+  return null;
+};
+
+// Whether a variable is never reassigned after its declaration, so its
+// initializer is the only value it can hold.
+export const isSingleAssignment = (variable: Variable): boolean =>
+  variable.references.every(
+    (reference) => !reference.isWrite() || reference.init,
+  );
+
+// The initializer of a variable declared exactly once and never reassigned.
+export const stableInitializer = (variable: Variable): AstNode | null => {
+  const [definition] = variable.defs;
+  if (
+    variable.defs.length !== 1 ||
+    definition?.type !== "Variable" ||
+    !isAstNode(definition.node) ||
+    definition.node.type !== "VariableDeclarator" ||
+    !isSingleAssignment(variable)
+  ) {
+    return null;
+  }
+  return isAstNode(definition.node.init) ? definition.node.init : null;
+};
+
+// --- Import resolution ------------------------------------------------------
+//
+// Rules that guard a helper or a primitive must know what a name is bound to,
+// not how it is spelled: `import { x as y }`, `import * as ns` with `ns.x`,
+// `const { x } = ns`, `const y = x`, `require("m").x` and `await import("m")`
+// all reach the same export. The resolver answers "which export of which
+// module is this expression?"; a local, a parameter, or a call result
+// answers null.
+
+// `imported` is the export name, "default" for a default import, and "*" for
+// the module namespace object itself.
+export type ImportedBinding = { source: string; imported: string };
+
+export const NAMESPACE_IMPORT = "*";
+
+// The module a `require("m")`, `import("m")` or `await import("m")` loads.
+export const dynamicModuleSource = (node: unknown): string | null => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return null;
+  }
+  if (expression.type === "AwaitExpression") {
+    return dynamicModuleSource(expression.argument);
+  }
+  if (expression.type === "ImportExpression") {
+    return isStringLiteral(expression.source) ? expression.source.value : null;
+  }
+  if (
+    expression.type === "CallExpression" &&
+    isIdentifier(expression.callee, "require") &&
+    Array.isArray(expression.arguments) &&
+    expression.arguments.length === 1 &&
+    isStringLiteral(expression.arguments[0])
+  ) {
+    return expression.arguments[0].value;
+  }
+  return null;
+};
+
+// The static key of a member expression: `a.b`, `a["b"]`, `` a[`b`] ``.
+export const memberPropertyName = (member: AstNode): string | null => {
+  if (member.computed !== true) {
+    return getPropertyName(member.property);
+  }
+  if (isStringLiteral(member.property)) {
+    return member.property.value;
+  }
+  const property = member.property;
+  if (
+    !isAstNode(property) ||
+    property.type !== "TemplateLiteral" ||
+    !Array.isArray(property.expressions) ||
+    property.expressions.length > 0 ||
+    !Array.isArray(property.quasis)
+  ) {
+    return null;
+  }
+  const quasi: unknown = property.quasis[0];
+  return isAstNode(quasi) &&
+    isAstNode(quasi.value) &&
+    typeof quasi.value.cooked === "string"
+    ? quasi.value.cooked
+    : null;
+};
+
+// The export read by `namespace.property` when `base` is a module namespace.
+const memberOfNamespace = (
+  base: ImportedBinding | null,
+  property: string | null,
+): ImportedBinding | null =>
+  base !== null && base.imported === NAMESPACE_IMPORT && property !== null
+    ? { source: base.source, imported: property }
+    : null;
+
+// The key a destructuring pattern reads for `binding`: `{ x }`, `{ x: y }`,
+// `{ x = d }`, `{ "x": y }`.
+export const patternKeyFor = (
+  pattern: AstNode,
+  binding: unknown,
+): string | null => {
+  if (!Array.isArray(pattern.properties)) {
+    return null;
+  }
+  for (const property of pattern.properties) {
+    if (!isAstNode(property) || property.type !== "Property") {
+      continue;
+    }
+    const value = isAstNode(property.value) ? property.value : null;
+    const target =
+      value?.type === "AssignmentPattern" ? value.left : (value ?? null);
+    if (target !== binding) {
+      continue;
+    }
+    if (property.computed === true && !isStringLiteral(property.key)) {
+      return null;
+    }
+    return getPropertyName(property.key);
+  }
+  return null;
+};
+
+const bindingFromVariable = (
+  context: ScopeContext,
+  variable: Variable,
+  seen: Set<unknown>,
+): ImportedBinding | null => {
+  const [definition] = variable.defs;
+  if (variable.defs.length !== 1 || definition === undefined) {
+    return null;
+  }
+  const node: unknown = definition.node;
+  if (definition.type === "ImportBinding") {
+    const declaration: unknown = definition.parent;
+    if (
+      !isAstNode(node) ||
+      node.importKind === "type" ||
+      !isAstNode(declaration) ||
+      declaration.type !== "ImportDeclaration" ||
+      declaration.importKind === "type" ||
+      !isStringLiteral(declaration.source)
+    ) {
+      return null;
+    }
+    const source = declaration.source.value;
+    if (node.type === "ImportNamespaceSpecifier") {
+      return { source, imported: NAMESPACE_IMPORT };
+    }
+    if (node.type === "ImportDefaultSpecifier") {
+      return { source, imported: "default" };
+    }
+    const imported = getImportedName(node);
+    return imported === null ? null : { source, imported };
+  }
+  if (
+    definition.type !== "Variable" ||
+    !isAstNode(node) ||
+    node.type !== "VariableDeclarator" ||
+    !isSingleAssignment(variable)
+  ) {
+    return null;
+  }
+  const loaded = dynamicModuleSource(node.init);
+  const init =
+    loaded === null
+      ? resolveImportedExpression(context, node.init, seen)
+      : { source: loaded, imported: NAMESPACE_IMPORT };
+  if (init === null) {
+    return null;
+  }
+  if (isIdentifier(node.id)) {
+    return init;
+  }
+  if (isAstNode(node.id) && node.id.type === "ObjectPattern") {
+    return memberOfNamespace(init, patternKeyFor(node.id, definition.name));
+  }
+  return null;
+};
+
+// The module export an expression evaluates to, or null when it is anything
+// else: a local, a parameter, a call result, an unresolved global.
+export const resolveImportedExpression = (
+  context: ScopeContext,
+  node: unknown,
+  seen = new Set<unknown>(),
+): ImportedBinding | null => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression) || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  if (isIdentifierReference(expression)) {
+    const variable = resolveVariable(context, expression);
+    return variable === null
+      ? null
+      : bindingFromVariable(context, variable, seen);
+  }
+  if (expression.type === "MemberExpression") {
+    const loaded = dynamicModuleSource(expression.object);
+    const base =
+      loaded === null
+        ? resolveImportedExpression(context, expression.object, seen)
+        : { source: loaded, imported: NAMESPACE_IMPORT };
+    return memberOfNamespace(base, memberPropertyName(expression));
+  }
+  return null;
+};
+
+// Canonical module identity, so `./escape-like`, `../lib/escape-like.ts` and
+// `@/api/lib/escape-like` compare equal: relative specifiers resolve against
+// the importing file, the app path aliases expand to their source roots, and
+// extensions and a trailing `/index` drop. Bare package specifiers pass
+// through unchanged.
+export const canonicalModuleId = (
+  specifier: string,
+  importerRepoPath: string,
+): string => {
+  let resolved = specifier;
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    const segments = importerRepoPath.split("/").slice(0, -1);
+    for (const segment of specifier.split("/")) {
+      if (segment === "..") {
+        segments.pop();
+      } else if (segment !== ".") {
+        segments.push(segment);
+      }
+    }
+    resolved = segments.join("/");
+  } else if (specifier.startsWith("@/api/")) {
+    resolved = `apps/api/src/${specifier.slice("@/api/".length)}`;
+  } else if (specifier.startsWith("@/")) {
+    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.[
+      "app"
+    ];
+    if (app !== undefined) {
+      resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
+    }
+  }
+  return resolved.replace(/\.[cm]?[jt]sx?$/u, "").replace(/\/index$/u, "");
+};
+
+// A module an import may come from: a bare package specifier or a repository
+// path without extension (`apps/api/src/lib/escape-like`), or a predicate over
+// the canonical id.
+export type ModuleMatcher = string | ((moduleId: string) => boolean);
+
+export const moduleMatches = (
+  matcher: ModuleMatcher,
+  moduleId: string,
+): boolean =>
+  typeof matcher === "function" ? matcher(moduleId) : matcher === moduleId;
+
+// The resolved import behind `node` with its module in canonical form.
+export type ResolvedImport = { moduleId: string; imported: string };
+
+export const resolveImport = (
+  context: ScopeContext & FilenameContext,
+  node: unknown,
+): ResolvedImport | null => {
+  const binding = resolveImportedExpression(context, node);
+  if (binding === null) {
+    return null;
+  }
+  return {
+    moduleId: canonicalModuleId(binding.source, repoRelativeFilename(context)),
+    imported: binding.imported,
+  };
+};
+
+// Whether `node` evaluates to one of `names` exported by a module accepted by
+// `modules`. Use NAMESPACE_IMPORT as a name to accept the namespace object.
+export type ImportedFromOptions = {
+  context: ScopeContext & FilenameContext;
+  node: unknown;
+  modules: readonly ModuleMatcher[];
+  names: ReadonlySet<string>;
+};
+
+export const isImportedFrom = ({
+  context,
+  node,
+  modules,
+  names,
+}: ImportedFromOptions): boolean => {
+  const resolved = resolveImport(context, node);
+  return (
+    resolved !== null &&
+    names.has(resolved.imported) &&
+    modules.some((matcher) => moduleMatches(matcher, resolved.moduleId))
+  );
+};
+
+// The function a call invokes, seen through the forms that call it
+// indirectly: `(0, f)()`, `f.call(...)`, `f.apply(...)`.
+export const invokedCallee = (call: AstNode): AstNode | null => {
+  const callee = unwrapExpression(call.callee);
+  if (!isAstNode(callee)) {
+    return null;
+  }
+  if (
+    callee.type === "SequenceExpression" &&
+    Array.isArray(callee.expressions)
+  ) {
+    return unwrapExpression(callee.expressions.at(-1));
+  }
+  if (callee.type === "MemberExpression") {
+    const method = memberPropertyName(callee);
+    if (method === "call" || method === "apply") {
+      return unwrapExpression(callee.object);
+    }
+  }
+  return callee;
 };
