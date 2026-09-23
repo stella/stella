@@ -321,13 +321,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // report the human approved and the one that is sent cannot diverge. Both
 // descriptions were shortened to pay for part of it; feedback tools are not on
 // the anonymized or law surfaces.
-// The four reader-annotation tools add their schemas on top
-// (measured below) (the list alone reaches the anonymized surface). Most of it is
+// The four reader-annotation tools then measure 172_122 default and 75_306
+// anonymized (the list alone reaches the anonymized surface). Most of it is
 // create's input: the discriminated mark and the anchored passages the server
 // places the mark by.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 999_999,
-  anonymized: 999_999,
+  default: 172_200,
+  anonymized: 75_400,
   law: 28_250,
 };
 
@@ -406,11 +406,11 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // prepare_feedback returns the approval_token submit_feedback requires:
 // measured 53_509 default. The anonymized and law surfaces are unchanged.
 // The reader-annotation tools add the listed marks with their passages, the
-// created mark's stored passages, and two receipts: measured 55_033 default and
+// created mark's stored passages, and two receipts: measured 55_085 default and
 // 33_799 anonymized, where the list is the only one of them.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 999_999,
-  anonymized: 999_999,
+  default: 55_150,
+  anonymized: 33_850,
   law: 10_050,
 };
 
