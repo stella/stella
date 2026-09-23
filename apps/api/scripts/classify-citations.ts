@@ -49,13 +49,12 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { rootDb, rlsDb } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
   classifyCitation,
@@ -80,6 +79,7 @@ import type {
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 
 type Args = {
   limit: number;
@@ -183,14 +183,9 @@ const seedRules = async () => {
   console.log("Seed rules applied.");
 };
 
-const scriptUserId = toSafeId<"user">("script_case_law");
-// SAFETY: CLI script operates on global case law data (no tenant).
-const scopedDb = createScopedDb(
-  rlsDb,
-  [],
-  toSafeId<"organization">(""),
-  scriptUserId,
-);
+// The corpus writer role: the request role may read citations but not write
+// them, and neither the rule counters nor the verdicts would land.
+const scopedDb = getCaseLawIngestionDb();
 
 /** Rows read per statement on a recheck walk. */
 const RECHECK_BATCH = 1000;
