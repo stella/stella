@@ -214,6 +214,15 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `invoices.transition`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition`     |
 | `invoices.update`         | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update`         |
 
+## legal-reader
+
+| Capability                        | Access             | Scope                  | Feature | Reachable via                           |
+| --------------------------------- | ------------------ | ---------------------- | ------- | --------------------------------------- |
+| `legal-reader.annotations.create` | write              | stella:knowledge_write | —       | curated tool `create_reader_annotation` |
+| `legal-reader.annotations.delete` | write, destructive | stella:knowledge_write | —       | curated tool `delete_reader_annotation` |
+| `legal-reader.annotations.list`   | read               | stella:read            | —       | curated tool `list_reader_annotations`  |
+| `legal-reader.annotations.update` | write              | stella:knowledge_write | —       | curated tool `update_reader_annotation` |
+
 ## legislation
 
 | Capability                      | Access | Scope       | Feature            | Reachable via                                                  |
@@ -578,7 +587,6 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui         | 9     |
 | provider_secret        | 24    |
 | public_indexing        | 7     |
-| reader_annotations     | 4     |
 | realtime_stream        | 3     |
 | search_ui              | 15    |
 | session_token_exchange | 13    |
@@ -586,4 +594,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 175
+Total: 171
