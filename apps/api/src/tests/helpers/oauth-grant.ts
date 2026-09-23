@@ -103,14 +103,31 @@ const readCode = (redirectUrl: string): string =>
   panic(`consent redirect carried no code: ${redirectUrl}`);
 
 /**
- * Authorize and consent as the signed-in browser, then exchange the code.
- * The consent is scoped to the browser's active organization.
+ * The web page the provider sends a browser to when consent is needed. The
+ * helpers here drive users who belong to exactly one organization; anyone in
+ * more is first sent to the organization picker instead.
  */
-export const grantOAuthClient = async (
+export const OAUTH_CONSENT_PAGE_PATH = "/consent";
+
+/**
+ * The signed copy of the authorization request the provider hands a web page
+ * in the fragment; the page posts it back unchanged to continue.
+ */
+const readSignedQuery = (page: URL): string =>
+  new URLSearchParams(page.hash.slice(1)).get("oauth_query") ??
+  panic(`${page.pathname} redirect carried no signed query`);
+
+type AuthorizationStart = {
+  codeVerifier: string;
+  /** Where the provider sends the browser next. */
+  redirect: URL;
+};
+
+/** Start an authorization request as the signed-in browser. */
+export const authorizeOAuthClient = async (
   browser: HumanBrowser,
   client: RegisteredOAuthClient,
-): Promise<OAuthGrant> => {
-  const auth = getAuth();
+): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
   authorizeUrl.search = new URLSearchParams({
@@ -125,23 +142,33 @@ export const grantOAuthClient = async (
   }).toString();
 
   const authorized = await readJson(
-    await auth.handler(
+    await getAuth().handler(
       new Request(authorizeUrl.href, {
         headers: { accept: "application/json", cookie: browser.cookieHeader() },
       }),
     ),
     redirectSchema,
   );
-  // The provider hands the browser to the consent page with a signed copy of
-  // the authorization request in the fragment; the page posts that copy back
-  // on approval.
-  const consentPage = new URL(authorized.url);
-  if (consentPage.pathname !== "/consent") {
+  return { codeVerifier, redirect: new URL(authorized.url) };
+};
+
+/**
+ * Authorize and consent as the signed-in browser, then exchange the code.
+ * The consent is scoped to the browser's active organization.
+ */
+export const grantOAuthClient = async (
+  browser: HumanBrowser,
+  client: RegisteredOAuthClient,
+): Promise<OAuthGrant> => {
+  const auth = getAuth();
+  const { codeVerifier, redirect: consentPage } = await authorizeOAuthClient(
+    browser,
+    client,
+  );
+  if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
     panic(`authorize did not lead to consent: ${consentPage.pathname}`);
   }
-  const signedQuery =
-    new URLSearchParams(consentPage.hash.slice(1)).get("oauth_query") ??
-    panic("consent redirect carried no signed query");
+  const signedQuery = readSignedQuery(consentPage);
   const consented = await readJson(
     await auth.handler(
       new Request(getAuthEndpointUrl("oauth2/consent"), {
