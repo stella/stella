@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 const invokeMock = mock();
 const emitMock = mock(async () => undefined);
 
-await mock.module("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
-// The module registry is shared across test files, so the replacement has to
-// carry every export the event module is imported for, not only `emit`.
+// The module registry is shared across test files, so each replacement keeps
+// every real export and overrides only what this file asserts on.
+const actualCore = { ...(await import("@tauri-apps/api/core")) };
+const actualEvent = { ...(await import("@tauri-apps/api/event")) };
+await mock.module("@tauri-apps/api/core", () => ({
+  ...actualCore,
+  invoke: invokeMock,
+}));
 await mock.module("@tauri-apps/api/event", () => ({
+  ...actualEvent,
   emit: emitMock,
   listen: mock(async () => () => undefined),
 }));

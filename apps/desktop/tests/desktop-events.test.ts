@@ -2,7 +2,13 @@ import { describe, expect, mock, test } from "bun:test";
 
 const listenMock = mock();
 
-await mock.module("@tauri-apps/api/event", () => ({ listen: listenMock }));
+// The module registry is shared across test files, so the replacement keeps
+// every real export and overrides only what this file asserts on.
+const actualEvent = { ...(await import("@tauri-apps/api/event")) };
+await mock.module("@tauri-apps/api/event", () => ({
+  ...actualEvent,
+  listen: listenMock,
+}));
 
 const { subscribeDesktopEvent } = await import("../src/shared/desktop-events");
 
