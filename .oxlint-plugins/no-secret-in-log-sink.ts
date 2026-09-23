@@ -1,255 +1,330 @@
-import { eslintCompatPlugin } from "@oxlint/plugins";
-// Disallow secret-named identifiers or properties inside log / serialize sinks.
+// Disallow secret-looking values inside log, telemetry and serialization sinks.
+//
 // The TypeScript ecosystem cannot prove a string isn't a secret. Stella handles
-// privileged legal data; an accidental `console.error(err, { apiKey })`,
-// `JSON.stringify({ refreshToken })`, or `new Error(`probe failed: ${apiKey}`)`
-// drops the secret into Sentry, logs, or response payloads. `no-console` and
-// `no-raw-error-logging` already cover console + logger; this rule covers the
-// remaining sinks (JSON.stringify, analytics helpers, Sentry, `new <…>Error`).
+// privileged legal data; an accidental `logger.warn(`probe failed: ${apiKey}`)`,
+// `JSON.stringify({ refreshToken })`, `span.setAttribute("auth", header)` or
+// `Error(`bad key ${key}`)` drops the secret into logs, traces, Sentry or a
+// response body.
 //
-// Strategy: identifier-name driven. Forbid a fixed set of secret-suggestive
-// names from appearing as ObjectExpression keys, MemberExpression properties,
-// Identifier values, or TemplateLiteral expressions inside known sink calls.
-// The walk descends through call wrappers too (`String(apiKey)`), skipping
-// only masking helpers whose job is to render the value safe to serialize.
-// The rule is intentionally crude — it cannot follow type information, so an
-// aliased secret (`const k = apiKey; JSON.stringify({ k })`) still slips
-// past. Accept that gap; pair the rule with named brands for the type-level
-// mix-up class of bug.
+// Strategy: name driven, with binding resolution where a name alone is weak.
+// A value is secret-looking when its identifier, member property or object key
+// names a credential (case-insensitive words: token, secret, password,
+// passwd, api key, private key, signing key, authorization, cookie,
+// credential, bearer, jwt), when it reads `process.env` / `Bun.env` under a
+// name containing KEY, SECRET, TOKEN or PASSWORD, or when it is a stable local
+// alias of such a value. Qualified names that describe a secret without
+// holding it pass: `tokenCount`, `inputTokens`, `cookieName`, `hasApiKey`,
+// `accessTokenExpiresAt`.
 //
-// Safe patterns (current codebase, all unchanged):
+// Sinks: `JSON.stringify`; Error constructors with or without `new`
+// (`new HandlerError(...)`, `TypeError(...)`); console methods, including
+// destructured and computed ones; logger methods; Sentry
+// (`captureException`, `captureMessage`, `setContext`, `setExtra(s)`,
+// `setTag(s)`, `addBreadcrumb`); span attributes and events
+// (`setAttribute(s)`, `addEvent`, `recordException`); analytics `capture`.
+// The walk descends through call wrappers (`String(apiKey)`), skipping only
+// masking helpers resolved to the module that owns them.
+//
+// Safe patterns:
 //   createOpenRouter({ apiKey: key })          // SDK init, not a sink
-//   body.set("client_secret", clientSecret)    // URL body, not a sink
-//   JSON.stringify(config)                     // variable, no forbidden name
-//   { apiKey: maskApiKey(raw) }                // masked, returned to client
-//   JSON.stringify(maskApiKey(apiKey))         // masking helper, not recursed
+//   logger.info("usage", { inputTokens })      // a count, not a credential
+//   { apiKey: maskApiKey(raw) }                // masked by its owning module
 //
 // Flagged:
 //   JSON.stringify({ apiKey })
-//   JSON.stringify({ providerKey: apiKey })
-//   JSON.stringify({ token: session.refreshToken })   // member access
-//   JSON.stringify(String(apiKey))                    // call wrapper
-//   captureError(err, { refreshToken })
-//   captureError(err, creds.clientSecret)              // member access
-//   new Error(`probe failed: ${apiKey}`)
-//   new APIError({ message: "x", cause: { clientSecret } })
+//   logger.error(`refresh failed: ${session.refreshToken}`)
+//   const { warn } = console; warn(process.env.STRIPE_SECRET_KEY)
+//   Error(`bad key ${credentials.clientSecret}`)
+
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
-  getCalleeName,
   getPropertyName,
+  invokedCallee,
+  isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  memberPropertyName,
+  patternKeyFor,
+  resolveImport,
+  resolveVariable,
+  stableInitializer,
+  unwrapExpression,
+  type AstNode,
 } from "./utils.ts";
 
-const SECRET_NAMES = new Set([
-  "apiKey",
-  "accessToken",
-  "authToken",
-  "bearerToken",
-  "clientSecret",
+// Words that name a credential on their own.
+const SECRET_WORDS: ReadonlySet<string> = new Set([
+  "apikey",
+  "authorization",
+  "bearer",
+  "cookie",
+  "cookies",
+  "credential",
+  "credentials",
+  "jwt",
+  "passwd",
   "password",
-  "privateKey",
-  "refreshToken",
-  "staticToken",
+  "passwords",
+  "privatekey",
+  "secret",
+  "secrets",
 ]);
 
-// Exact-name sink callees. Matched against the dotted callee path
-// resolved by getCalleeName (Identifier or non-computed MemberExpression).
-const SINK_CALLEES = new Set([
-  "JSON.stringify",
-  "Sentry.captureException",
-  "Sentry.captureMessage",
+// `<qualifier> key` names key material: `apiKey`, `signing_key`.
+const KEY_QUALIFIERS: ReadonlySet<string> = new Set([
+  "api",
+  "encryption",
+  "hmac",
+  "master",
+  "private",
+  "signing",
+]);
+
+// Words before `token` that make it a unit of text, not a credential: a
+// model token count or a parser token.
+const TOKEN_COUNT_QUALIFIERS: ReadonlySet<string> = new Set([
+  "cache",
+  "cached",
+  "completion",
+  "estimated",
+  "input",
+  "max",
+  "min",
+  "num",
+  "output",
+  "per",
+  "prompt",
+  "reasoning",
+  "remaining",
+  "total",
+  "unexpected",
+  "unrecognized",
+  "used",
+]);
+
+// Words before plural `tokens` that keep it a collection of credentials.
+const CREDENTIAL_TOKEN_QUALIFIERS: ReadonlySet<string> = new Set([
+  "access",
+  "api",
+  "auth",
+  "bearer",
+  "id",
+  "refresh",
+  "session",
+]);
+
+// A final word that describes a secret without holding it: `tokenCount`,
+// `cookieName`, `secretArn`, `accessTokenExpiresAt`.
+const DESCRIPTIVE_SUFFIXES: ReadonlySet<string> = new Set([
+  "age",
+  "arn",
+  "at",
+  "budget",
+  "configured",
+  "count",
+  "counts",
+  "domain",
+  "enabled",
+  "endpoint",
+  "env",
+  "estimate",
+  "expiration",
+  "expires",
+  "expiry",
+  "field",
+  "fingerprint",
+  "format",
+  "hash",
+  "id",
+  "ids",
+  "index",
+  "kind",
+  "label",
+  "length",
+  "limit",
+  "limits",
+  "metadata",
+  "method",
+  "methods",
+  "mode",
+  "name",
+  "names",
+  "path",
+  "paths",
+  "policy",
+  "prefix",
+  "present",
+  "provider",
+  "required",
+  "schema",
+  "schemas",
+  "server",
+  "source",
+  "status",
+  "ttl",
+  "type",
+  "types",
+  "uri",
+  "url",
+  "usage",
+  "version",
+]);
+
+// A first word that turns the name into a predicate: `hasApiKey`.
+const PREDICATE_PREFIXES: ReadonlySet<string> = new Set([
+  "can",
+  "has",
+  "is",
+  "missing",
+  "needs",
+  "no",
+  "requires",
+  "should",
+  "with",
+  "without",
+]);
+
+const nameWords = (name: string): string[] =>
+  name
+    .replaceAll(/([a-z\d])([A-Z])/gu, "$1 $2")
+    .replaceAll(/([A-Z])(?=[A-Z][a-z])/gu, "$1 ")
+    .split(/[\s_\-$]+/u)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+
+const isSecretName = (name: string): boolean => {
+  const words = nameWords(name);
+  if (words.length === 0) {
+    return false;
+  }
+  if (
+    words.length > 1 &&
+    (DESCRIPTIVE_SUFFIXES.has(words.at(-1) ?? "") ||
+      PREDICATE_PREFIXES.has(words[0] ?? ""))
+  ) {
+    return false;
+  }
+  return words.some((word, index) => {
+    const previous = index > 0 ? (words[index - 1] ?? "") : "";
+    if (SECRET_WORDS.has(word)) {
+      return true;
+    }
+    if (word === "key" || word === "keys") {
+      return KEY_QUALIFIERS.has(previous);
+    }
+    if (word === "token") {
+      return !TOKEN_COUNT_QUALIFIERS.has(previous);
+    }
+    if (word === "tokens") {
+      return CREDENTIAL_TOKEN_QUALIFIERS.has(previous);
+    }
+    return false;
+  });
+};
+
+// Environment variables that hold key material by naming convention.
+const SECRET_ENV_NAME = /KEY|SECRET|TOKEN|PASSWORD/iu;
+
+// Masking helpers keyed by export name, each with the module that owns it.
+// A call resolved to one of these renders its argument safe to serialize.
+const MASKING_HELPERS: ReadonlyMap<string, string> = new Map([
+  ["maskApiKey", "apps/api/src/lib/ai-config-crypto"],
+  ["maskDeepLKey", "apps/api/src/lib/deepl/client"],
+  ["maskWebSearchKey", "apps/api/src/lib/web-search/keys"],
+]);
+
+const CONSOLE_METHODS: ReadonlySet<string> = new Set([
+  "debug",
+  "dir",
+  "error",
+  "info",
+  "log",
+  "table",
+  "trace",
+  "warn",
+]);
+
+const LOGGER_METHODS: ReadonlySet<string> = new Set([
+  "debug",
+  "error",
+  "fatal",
+  "info",
+  "log",
+  "request",
+  "trace",
+  "warn",
+]);
+
+const LOGGER_NAME = /^(?:log|logger|\w+Logger)$/u;
+
+// Telemetry methods that serialize their arguments whatever object they are
+// called on: Sentry and its scopes, OpenTelemetry spans, analytics clients.
+const TELEMETRY_METHODS: ReadonlySet<string> = new Set([
+  "addBreadcrumb",
+  "addEvent",
+  "capture",
   "captureError",
+  "captureEvent",
+  "captureException",
   "captureMessage",
-  "posthog.capture",
+  "captureRequestError",
+  "recordException",
+  "setAttribute",
+  "setAttributes",
+  "setContext",
+  "setExtra",
+  "setExtras",
+  "setTag",
+  "setTags",
 ]);
 
-// Callees whose entire purpose is to render a secret safe to serialize
-// (mask / redact). When one of these wraps a sink argument the walk does
-// not descend into it. Add new redaction helpers here as they appear.
-const MASKING_CALLEES = new Set(["maskApiKey"]);
+// The same telemetry entry points imported or declared as bare functions.
+const TELEMETRY_FUNCTIONS: ReadonlySet<string> = new Set([
+  "addBreadcrumb",
+  "captureError",
+  "captureEvent",
+  "captureException",
+  "captureMessage",
+  "captureRequestError",
+  "setContext",
+  "setExtra",
+  "setExtras",
+  "setTag",
+  "setTags",
+]);
 
-const isErrorConstructor = (node) => {
-  if (node.type !== "NewExpression") {
-    return false;
-  }
-  const name = getCalleeName(node.callee);
-  if (name === null) {
-    return false;
-  }
-  // Builtin and project-tagged error classes share the ...Error suffix.
-  // The trailing-Error heuristic intentionally catches NewExpression on
-  // any subclass (HandlerError, APIError, TaggedError, etc.).
-  return name === "Error" || name.endsWith("Error");
-};
+// Properties whose value says nothing about the secret it is read from.
+const OPAQUE_PROPERTIES: ReadonlySet<string> = new Set(["length", "size"]);
 
-const isSinkCall = (node) => {
-  if (node.type !== "CallExpression") {
-    return false;
-  }
-  const name = getCalleeName(node.callee);
-  return name !== null && SINK_CALLEES.has(name);
-};
+const COMPARISON_OPERATORS: ReadonlySet<string> = new Set([
+  "!=",
+  "!==",
+  "<",
+  "<=",
+  "==",
+  "===",
+  ">",
+  ">=",
+  "in",
+  "instanceof",
+]);
 
-const reportIfSecretIdentifier = (context, node, contextLabel) => {
-  if (isIdentifier(node) && SECRET_NAMES.has(node.name)) {
-    context.report({
-      node,
-      messageId: "secretInSink",
-      data: { name: node.name, sink: contextLabel },
-    });
-    return true;
-  }
-  return false;
-};
+const ERROR_CONSTRUCTOR_NAME = /^(?:[A-Z]\w*)?Error$/u;
 
-const isMaskedSecretValue = (node) => {
-  if (!node) {
-    return false;
-  }
-  switch (node.type) {
-    case "TSAsExpression":
-    case "TSSatisfiesExpression":
-    case "TSNonNullExpression":
-    case "ChainExpression":
-      return isMaskedSecretValue(node.expression);
-    case "CallExpression": {
-      const calleeName = getCalleeName(node.callee);
-      return calleeName !== null && MASKING_CALLEES.has(calleeName);
-    }
-    default:
-      return false;
-  }
-};
+// Initializers whose value a local alias passes on unchanged or composed.
+const ALIAS_INITIALIZER_TYPES: ReadonlySet<string> = new Set([
+  "BinaryExpression",
+  "CallExpression",
+  "ConditionalExpression",
+  "Identifier",
+  "LogicalExpression",
+  "MemberExpression",
+  "TemplateLiteral",
+]);
 
-const checkObjectExpression = (context, objectNode, contextLabel) => {
-  for (const prop of objectNode.properties) {
-    if (prop.type === "SpreadElement") {
-      // Spread of an Identifier with a secret-suggestive name (`...apiKey`
-      // is unusual but possible; `...token` is not). Recurse on the
-      // argument to catch nested ObjectExpression spreads.
-      checkExpression(context, prop.argument, contextLabel);
-      continue;
-    }
-    if (prop.type !== "Property") {
-      continue;
-    }
-
-    const hasDynamicComputedKey =
-      prop.computed === true && !isStringLiteral(prop.key);
-    if (hasDynamicComputedKey) {
-      checkExpression(context, prop.key, contextLabel);
-      checkExpression(context, prop.value, contextLabel);
-      continue;
-    }
-
-    const keyName = getPropertyName(prop.key);
-    if (keyName !== null && SECRET_NAMES.has(keyName)) {
-      if (isMaskedSecretValue(prop.value)) {
-        continue;
-      }
-      context.report({
-        node: prop,
-        messageId: "secretInSink",
-        data: { name: keyName, sink: contextLabel },
-      });
-      continue;
-    }
-
-    // Non-secret key but a secret-named identifier as value:
-    // `JSON.stringify({ providerKey: apiKey })`.
-    checkExpression(context, prop.value, contextLabel);
-  }
-};
-
-const checkExpression = (context, node, contextLabel) => {
-  if (!node) {
-    return;
-  }
-
-  if (reportIfSecretIdentifier(context, node, contextLabel)) {
-    return;
-  }
-
-  switch (node.type) {
-    case "ObjectExpression":
-      checkObjectExpression(context, node, contextLabel);
-      break;
-    case "TemplateLiteral":
-      for (const expr of node.expressions) {
-        checkExpression(context, expr, contextLabel);
-      }
-      break;
-    case "BinaryExpression":
-    case "LogicalExpression":
-      checkExpression(context, node.left, contextLabel);
-      checkExpression(context, node.right, contextLabel);
-      break;
-    case "ConditionalExpression":
-      checkExpression(context, node.consequent, contextLabel);
-      checkExpression(context, node.alternate, contextLabel);
-      break;
-    case "TSAsExpression":
-    case "TSSatisfiesExpression":
-    case "TSNonNullExpression":
-    case "ChainExpression":
-      checkExpression(context, node.expression, contextLabel);
-      break;
-    case "MemberExpression": {
-      // `creds.clientSecret`, `session["refreshToken"]` — the accessed
-      // property name is visible in the AST even when the value's type
-      // is not. Mirrors the ObjectExpression key check. Member access
-      // is the dominant real-world leak path, so it must be covered.
-      const propertyName = getPropertyName(node.property);
-      if (propertyName !== null && SECRET_NAMES.has(propertyName)) {
-        context.report({
-          node,
-          messageId: "secretInSink",
-          data: { name: propertyName, sink: contextLabel },
-        });
-        break;
-      }
-      // Non-secret leaf: keep walking the object chain so a secret read
-      // deeper in the access (`getCreds().clientSecret`) is still caught.
-      checkExpression(context, node.object, contextLabel);
-      break;
-    }
-    case "AwaitExpression":
-      checkExpression(context, node.argument, contextLabel);
-      break;
-    case "AssignmentExpression":
-      checkExpression(context, node.right, contextLabel);
-      break;
-    case "SpreadElement":
-      checkExpression(context, node.argument, contextLabel);
-      break;
-    case "CallExpression":
-    case "NewExpression": {
-      // A call wrapping a secret-named argument still leaks it into the
-      // sink (`JSON.stringify(String(apiKey))`). Recurse into arguments,
-      // and into method receivers (`apiKey.trim()`), except for masking
-      // helpers whose result is the safe form.
-      const calleeName = getCalleeName(node.callee);
-      if (calleeName !== null && MASKING_CALLEES.has(calleeName)) {
-        break;
-      }
-      if (node.callee?.type === "MemberExpression") {
-        checkExpression(context, node.callee, contextLabel);
-      }
-      for (const arg of node.arguments) {
-        checkExpression(context, arg, contextLabel);
-      }
-      break;
-    }
-    case "ArrayExpression":
-      for (const element of node.elements) {
-        checkExpression(context, element, contextLabel);
-      }
-      break;
-    default:
-      break;
-  }
-};
+type SecretHit = { node: AstNode; name: string };
 
 export default eslintCompatPlugin({
   meta: { name: "no-secret-in-log-sink" },
@@ -259,28 +334,359 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           secretInSink:
-            "Do not pass '{{name}}' to {{sink}}. Sinks (JSON.stringify, analytics, Sentry, Error constructors) may serialize the value into logs, telemetry, or response bodies. Strip the field, mask it (maskApiKey), or use a structural error tag.",
+            "Do not pass '{{name}}' to {{sink}}. Logs, telemetry, Error messages and JSON.stringify output may carry the value into logs, traces, or response bodies. Strip the field, mask it (maskApiKey), or use a structural error tag.",
         },
       },
       createOnce(context) {
+        // A global binding: unresolved, or a built-in the scope manager
+        // declares without a definition.
+        const isGlobal = (node: unknown, name: string): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression) || expression.name !== name) {
+            return false;
+          }
+          const variable = resolveVariable(context, expression);
+          return variable === null || variable.defs.length === 0;
+        };
+
+        const isMaskingCall = (call: AstNode): boolean => {
+          const resolved = resolveImport(context, invokedCallee(call));
+          return (
+            resolved !== null &&
+            MASKING_HELPERS.get(resolved.imported) === resolved.moduleId
+          );
+        };
+
+        // `process.env` or `Bun.env`.
+        const isEnvironmentObject = (node: unknown): boolean => {
+          const expression = unwrapExpression(node);
+          return (
+            expression?.type === "MemberExpression" &&
+            memberPropertyName(expression) === "env" &&
+            (isGlobal(expression.object, "process") ||
+              isGlobal(expression.object, "Bun"))
+          );
+        };
+
+        const findIdentifierSecret = (
+          expression: AstNode,
+          hits: SecretHit[],
+          seen: Set<Variable>,
+        ): void => {
+          if (!isIdentifierReference(expression)) {
+            return;
+          }
+          if (isSecretName(expression.name)) {
+            hits.push({ node: expression, name: expression.name });
+            return;
+          }
+          // A stable local alias carries the value it was given. A call
+          // result is followed only as a method of a value
+          // (`apiKey.trim()`): a request made with a secret returns a
+          // response, not the secret.
+          const variable = resolveVariable(context, expression);
+          const initializer =
+            variable === null || seen.has(variable)
+              ? null
+              : stableInitializer(variable);
+          if (
+            variable === null ||
+            initializer === null ||
+            !ALIAS_INITIALIZER_TYPES.has(initializer.type)
+          ) {
+            return;
+          }
+          const aliasedValue =
+            initializer.type === "CallExpression"
+              ? unwrapExpression(initializer.callee)
+              : initializer;
+          if (
+            initializer.type === "CallExpression" &&
+            aliasedValue?.type !== "MemberExpression"
+          ) {
+            return;
+          }
+          const aliased: SecretHit[] = [];
+          findSecrets(aliasedValue, aliased, new Set([...seen, variable]));
+          const first = aliased.at(0);
+          if (first !== undefined) {
+            hits.push({ node: expression, name: first.name });
+          }
+        };
+
+        const findMemberSecret = (
+          expression: AstNode,
+          hits: SecretHit[],
+          seen: Set<Variable>,
+        ): void => {
+          const property = memberPropertyName(expression);
+          if (
+            property !== null &&
+            (isSecretName(property) ||
+              (isEnvironmentObject(expression.object) &&
+                SECRET_ENV_NAME.test(property)))
+          ) {
+            hits.push({ node: expression, name: property });
+            return;
+          }
+          // A method of a secret still returns it (`apiKey.trim()`), so a
+          // callee walks its receiver. A field read returns only that
+          // field: `tokenResult.error` is the error, not the token.
+          const parent = expression.parent;
+          if (
+            isAstNode(parent) &&
+            parent.type === "CallExpression" &&
+            unwrapExpression(parent.callee) === expression &&
+            !(property !== null && OPAQUE_PROPERTIES.has(property))
+          ) {
+            findSecrets(expression.object, hits, seen);
+          }
+        };
+
+        const findObjectSecrets = (
+          expression: AstNode,
+          hits: SecretHit[],
+          seen: Set<Variable>,
+        ): void => {
+          if (!Array.isArray(expression.properties)) {
+            return;
+          }
+          for (const property of expression.properties) {
+            if (!isAstNode(property)) {
+              continue;
+            }
+            if (property.type === "SpreadElement") {
+              findSecrets(property.argument, hits, seen);
+              continue;
+            }
+            if (property.computed === true && !isStringLiteral(property.key)) {
+              findSecrets(property.key, hits, seen);
+              findSecrets(property.value, hits, seen);
+              continue;
+            }
+            const key = getPropertyName(property.key);
+            const value = unwrapExpression(property.value);
+            if (key !== null && isSecretName(key)) {
+              if (!(value?.type === "CallExpression" && isMaskingCall(value))) {
+                hits.push({ node: property, name: key });
+              }
+              continue;
+            }
+            findSecrets(property.value, hits, seen);
+          }
+        };
+
+        // Every secret-looking value in `node`, in source order.
+        const findSecrets = (
+          node: unknown,
+          hits: SecretHit[],
+          seen: Set<Variable>,
+        ): void => {
+          const expression = unwrapExpression(node);
+          if (!isAstNode(expression)) {
+            return;
+          }
+          switch (expression.type) {
+            case "Identifier":
+              findIdentifierSecret(expression, hits, seen);
+              return;
+            case "MemberExpression":
+              findMemberSecret(expression, hits, seen);
+              return;
+            case "ObjectExpression":
+              findObjectSecrets(expression, hits, seen);
+              return;
+            case "TemplateLiteral":
+              if (Array.isArray(expression.expressions)) {
+                for (const part of expression.expressions) {
+                  findSecrets(part, hits, seen);
+                }
+              }
+              return;
+            case "BinaryExpression":
+              // A comparison yields a boolean, not the value.
+              if (
+                typeof expression.operator === "string" &&
+                COMPARISON_OPERATORS.has(expression.operator)
+              ) {
+                return;
+              }
+              findSecrets(expression.left, hits, seen);
+              findSecrets(expression.right, hits, seen);
+              return;
+            case "LogicalExpression":
+              findSecrets(expression.left, hits, seen);
+              findSecrets(expression.right, hits, seen);
+              return;
+            case "ConditionalExpression":
+              findSecrets(expression.consequent, hits, seen);
+              findSecrets(expression.alternate, hits, seen);
+              return;
+            case "AwaitExpression":
+            case "SpreadElement":
+              findSecrets(expression.argument, hits, seen);
+              return;
+            case "AssignmentExpression":
+              findSecrets(expression.right, hits, seen);
+              return;
+            case "ArrayExpression":
+              if (Array.isArray(expression.elements)) {
+                for (const element of expression.elements) {
+                  findSecrets(element, hits, seen);
+                }
+              }
+              return;
+            case "CallExpression":
+            case "NewExpression": {
+              // A call wrapping a secret still hands it to the sink
+              // (`String(apiKey)`, `apiKey.trim()`), except a masking helper
+              // or `Boolean(x)`, whose result does not carry the value.
+              if (
+                isMaskingCall(expression) ||
+                isGlobal(expression.callee, "Boolean")
+              ) {
+                return;
+              }
+              const callee = unwrapExpression(expression.callee);
+              if (callee?.type === "MemberExpression") {
+                findSecrets(callee, hits, seen);
+              }
+              if (Array.isArray(expression.arguments)) {
+                for (const argument of expression.arguments) {
+                  findSecrets(argument, hits, seen);
+                }
+              }
+              return;
+            }
+            default:
+              return;
+          }
+        };
+
+        // The console method a bare identifier is bound to:
+        // `const { warn } = console`, `const log = console.log`.
+        const consoleMethodOf = (identifier: AstNode): string | null => {
+          if (!isIdentifierReference(identifier)) {
+            return null;
+          }
+          const variable = resolveVariable(context, identifier);
+          const definition = variable?.defs.at(0);
+          const declarator = definition?.node;
+          if (
+            variable === null ||
+            definition?.type !== "Variable" ||
+            !isAstNode(declarator) ||
+            declarator.type !== "VariableDeclarator"
+          ) {
+            return null;
+          }
+          if (
+            isAstNode(declarator.id) &&
+            declarator.id.type === "ObjectPattern" &&
+            isGlobal(declarator.init, "console")
+          ) {
+            return patternKeyFor(declarator.id, definition.name);
+          }
+          const initializer = stableInitializer(variable);
+          return initializer?.type === "MemberExpression" &&
+            isGlobal(initializer.object, "console")
+            ? memberPropertyName(initializer)
+            : null;
+        };
+
+        const isLoggerReceiver = (node: unknown): boolean => {
+          const receiver = unwrapExpression(node);
+          if (isIdentifier(receiver) && LOGGER_NAME.test(receiver.name)) {
+            return true;
+          }
+          const resolved = resolveImport(context, receiver);
+          return resolved !== null && LOGGER_NAME.test(resolved.imported);
+        };
+
+        // The label of the sink a call writes to, or null when it is none.
+        const sinkLabel = (call: AstNode): string | null => {
+          const callee = invokedCallee(call);
+          if (!isAstNode(callee)) {
+            return null;
+          }
+          if (callee.type === "MemberExpression") {
+            const method = memberPropertyName(callee);
+            if (method === null) {
+              return null;
+            }
+            if (method === "stringify" && isGlobal(callee.object, "JSON")) {
+              return "JSON.stringify";
+            }
+            if (isGlobal(callee.object, "console")) {
+              return CONSOLE_METHODS.has(method) ? `console.${method}` : null;
+            }
+            if (LOGGER_METHODS.has(method) && isLoggerReceiver(callee.object)) {
+              return `logger.${method}`;
+            }
+            if (TELEMETRY_METHODS.has(method)) {
+              return method;
+            }
+            return ERROR_CONSTRUCTOR_NAME.test(method)
+              ? `${method} constructor`
+              : null;
+          }
+          if (!isIdentifierReference(callee)) {
+            return null;
+          }
+          if (ERROR_CONSTRUCTOR_NAME.test(callee.name)) {
+            return `${callee.name} constructor`;
+          }
+          const consoleMethod = consoleMethodOf(callee);
+          if (consoleMethod !== null && CONSOLE_METHODS.has(consoleMethod)) {
+            return `console.${consoleMethod}`;
+          }
+          const imported = resolveImport(context, callee)?.imported;
+          if (
+            TELEMETRY_FUNCTIONS.has(callee.name) ||
+            (imported !== undefined && TELEMETRY_FUNCTIONS.has(imported))
+          ) {
+            return callee.name;
+          }
+          return null;
+        };
+
+        const checkCall = (call: unknown): void => {
+          if (!isAstNode(call)) {
+            return;
+          }
+          const sink = sinkLabel(call);
+          if (sink === null || !Array.isArray(call.arguments)) {
+            return;
+          }
+          // `f.call(thisArg, ...)` shifts the arguments by one.
+          const callee = unwrapExpression(call.callee);
+          const invocation =
+            callee?.type === "MemberExpression"
+              ? memberPropertyName(callee)
+              : null;
+          const argumentsToCheck =
+            invocation === "call" && invokedCallee(call) !== callee
+              ? call.arguments.slice(1)
+              : call.arguments;
+          for (const argument of argumentsToCheck) {
+            const hits: SecretHit[] = [];
+            findSecrets(argument, hits, new Set());
+            for (const hit of hits) {
+              context.report({
+                node: hit.node,
+                messageId: "secretInSink",
+                data: { name: hit.name, sink },
+              });
+            }
+          }
+        };
+
         return {
           CallExpression(node) {
-            if (!isSinkCall(node)) {
-              return;
-            }
-            const sinkLabel = getCalleeName(node.callee) ?? "sink";
-            for (const arg of node.arguments) {
-              checkExpression(context, arg, sinkLabel);
-            }
+            checkCall(node);
           },
           NewExpression(node) {
-            if (!isErrorConstructor(node)) {
-              return;
-            }
-            const sinkLabel = `new ${getCalleeName(node.callee) ?? "Error"}`;
-            for (const arg of node.arguments) {
-              checkExpression(context, arg, sinkLabel);
-            }
+            checkCall(node);
           },
         };
       },

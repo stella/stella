@@ -32,6 +32,7 @@ export const inline = createSafeHandler(
 // --- Cases the rule MUST NOT flag ---
 
 // The required spelling for a workspace-scoped route.
+// expect-clean: require-workspace-handler-config/require-workspace-handler-config
 const workspaceConfig = {
   permissions: { workspace: ["read"] },
 } satisfies WorkspaceHandlerConfig;

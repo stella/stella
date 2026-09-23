@@ -11,6 +11,7 @@ const directOffsetSchema = { offset: t.Integer() };
 // oxlint-disable-next-line no-offset-pagination/no-offset-pagination -- fixture proves nested schema wrappers cannot hide an offset
 const wrappedOffsetSchema = { offset: t.Optional(t.Number()) };
 
+// expect-clean: no-offset-pagination/no-offset-pagination
 const cursorSchema = { cursor: t.Optional(t.Number()), limit: t.Integer() };
 const runtimeOffset = { offset: 20 };
 

@@ -16,5 +16,6 @@ const aliased = store;
 export const beginAliased = (): void => aliased.enterWith({ count: 0 });
 
 // Allowed: `run` restores the previous frame when the callback returns.
+// expect-clean: no-async-context-enter-with/no-async-context-enter-with
 export const withStore = <TResult>(fn: () => TResult): TResult =>
   store.run({ count: 0 }, fn);

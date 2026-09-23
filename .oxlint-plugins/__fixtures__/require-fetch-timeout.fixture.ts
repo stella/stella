@@ -9,6 +9,7 @@ export const missingOptions = fetch(endpoint);
 // oxlint-disable-next-line require-fetch-timeout/require-fetch-timeout -- fixture: object options omit cancellation signal
 export const missingSignal = globalThis.fetch(endpoint, { method: "POST" });
 
+// expect-clean: require-fetch-timeout/require-fetch-timeout
 export const timedFetch = fetch(endpoint, {
   signal: AbortSignal.timeout(10_000),
 });

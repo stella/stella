@@ -29,6 +29,7 @@ export const useFixture = () => {
 
   // --- Cases the rule MUST NOT flag ---
   window.addEventListener("pagehide", onUnload);
+  // expect-clean: no-direct-unsaved-work-guard/no-direct-unsaved-work-guard
   window.removeEventListener("beforeunload", onUnload);
   return [Link, Router.useRouter];
 };

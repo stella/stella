@@ -58,6 +58,7 @@ export const constructedDateClock = new Date().getTime();
 // Approved database, protocol, and third-party boundary shapes.
 export const currentDatabaseDate = new Date();
 export const currentHttpDate = new Date().toUTCString();
+// expect-clean: prefer-temporal/prefer-temporal
 export const databaseDate = new Date(epochMilliseconds);
 export const timestampEpoch = new Date(isoTimestamp).getTime();
 export const isoSerialization = new Date(epochMilliseconds).toISOString();

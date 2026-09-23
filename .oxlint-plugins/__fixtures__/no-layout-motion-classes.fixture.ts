@@ -14,6 +14,7 @@ const viewportTemplate = `flex min-h-screen`;
 const composed = cn("transition-all", "min-h-screen");
 
 const namedTransitions =
+  // expect-clean: no-layout-motion-classes/no-layout-motion-classes
   "transition-opacity transition-transform transition-none";
 const dynamicViewport = "min-h-dvh h-dvh max-h-dvh w-dvw";
 const compositableAnimation = "animate-[pulse_700ms_ease-in-out_3]";

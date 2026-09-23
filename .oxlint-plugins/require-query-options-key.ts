@@ -16,7 +16,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isStringLiteral } from "./utils.ts";
+import { getPropertyName, isStringLiteral, resolveVariable } from "./utils.ts";
 
 const CACHE_METHODS = new Set(["getQueryData", "setQueryData"]);
 const TANSTACK_MODULES = new Set([
@@ -28,18 +28,6 @@ const staticPropertyName = (node) =>
   node.computed && !isStringLiteral(node.property ?? node.key)
     ? null
     : getPropertyName(node.property ?? node.key);
-
-const resolveVariable = (identifier, context) => {
-  let scope = context.sourceCode.getScope(identifier);
-  while (scope) {
-    const variable = scope.set.get(identifier.name);
-    if (variable) {
-      return variable;
-    }
-    scope = scope.upper;
-  }
-  return null;
-};
 
 const resolveLocalType = ({
   annotation,
@@ -53,7 +41,7 @@ const resolveLocalType = ({
   if (type?.type !== "TSTypeReference" || type.typeName.type !== "Identifier") {
     return type;
   }
-  const variable = resolveVariable(type.typeName, context);
+  const variable = resolveVariable(context, type.typeName);
   const definition = variable?.defs.at(0);
   if (
     definition?.node.type !== "TSTypeAliasDeclaration" ||
@@ -74,11 +62,12 @@ const isDataTagType = (annotation, context): boolean => {
   if (type?.type !== "TSTypeReference" || type.typeName.type !== "Identifier") {
     return false;
   }
-  const definition = resolveVariable(type.typeName, context)?.defs.at(0);
+  const definition = resolveVariable(context, type.typeName)?.defs.at(0);
   return (
     definition?.type === "ImportBinding" &&
     definition.node.type === "ImportSpecifier" &&
     getPropertyName(definition.node.imported) === "DataTag" &&
+    definition.parent?.type === "ImportDeclaration" &&
     TANSTACK_MODULES.has(definition.parent.source.value)
   );
 };
@@ -111,11 +100,12 @@ const isReactCallback = (callee, context): boolean => {
   if (callee.type !== "Identifier") {
     return false;
   }
-  const definition = resolveVariable(callee, context)?.defs.at(0);
+  const definition = resolveVariable(context, callee)?.defs.at(0);
   return (
     definition?.type === "ImportBinding" &&
     definition.node.type === "ImportSpecifier" &&
     getPropertyName(definition.node.imported) === "useCallback" &&
+    definition.parent?.type === "ImportDeclaration" &&
     definition.parent.source.value === "react"
   );
 };
@@ -136,12 +126,15 @@ const resolveOptionsValue = ({ node, context, seen }) => {
     return resolveOptionsValue({ node: node.arguments.at(0), context, seen });
   }
   if (node.type === "Identifier") {
-    const variable = resolveVariable(node, context);
+    const variable = resolveVariable(context, node);
     if (!variable || seen.has(variable) || variable.defs.length !== 1) {
       return null;
     }
     seen.add(variable);
     const definition = variable.defs.at(0);
+    if (definition === undefined) {
+      return null;
+    }
     if (definition.type === "ImportBinding") {
       return { type: "boundary" } as const;
     }
@@ -150,7 +143,8 @@ const resolveOptionsValue = ({ node, context, seen }) => {
     }
     if (
       definition.node.type !== "VariableDeclarator" ||
-      definition.parent?.kind !== "const" ||
+      definition.parent?.type !== "VariableDeclaration" ||
+      definition.parent.kind !== "const" ||
       definition.node.id.typeAnnotation
     ) {
       return null;
@@ -295,12 +289,15 @@ const isOptionsKey = ({
   if (node.type !== "Identifier") {
     return false;
   }
-  const variable = resolveVariable(node, context);
+  const variable = resolveVariable(context, node);
   if (!variable || seen.has(variable) || variable.defs.length !== 1) {
     return false;
   }
   seen.add(variable);
   const definition = variable.defs.at(0);
+  if (definition === undefined) {
+    return false;
+  }
   if (definition.type === "Parameter") {
     return isDataTagType(
       parameterAnnotation(definition.name, context),
@@ -309,7 +306,8 @@ const isOptionsKey = ({
   }
   if (
     definition.node.type !== "VariableDeclarator" ||
-    definition.parent?.kind !== "const"
+    definition.parent?.type !== "VariableDeclaration" ||
+    definition.parent.kind !== "const"
   ) {
     return false;
   }

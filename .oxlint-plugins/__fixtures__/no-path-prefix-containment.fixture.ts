@@ -13,6 +13,7 @@ import path, {
   resolve as resolvePath,
   win32,
 } from "node:path";
+import { resolve as resolvePosix } from "node:path/posix";
 
 declare const candidate: string;
 declare const domain: string;
@@ -76,7 +77,24 @@ const _rawWindowsDirname = win32.dirname(candidate).startsWith(windowsRoot);
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, typescript/dot-notation -- fixture proves computed startsWith access is covered
 const _computed = resolvePath(root, candidate)["startsWith"](root);
 
+// An index comparison with zero is the same bare prefix check.
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, typescript/prefer-string-starts-ends-with -- fixture proves indexOf === 0 is a prefix check
+const _indexOfZero = resolvedCandidate.indexOf(resolvedRoot) === 0;
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, typescript/prefer-string-starts-ends-with -- fixture proves the negated comparison is covered
+const _indexOfNotZero = resolvedCandidate.indexOf(resolvedRoot) !== 0;
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, eslint/yoda -- fixture proves the mirrored comparison is covered
+const _zeroIndexOf = 0 === resolvedCandidate.indexOf(resolvedRoot);
+
+// A platform entry point of the path module carries the same provenance.
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves node:path/posix imports are tracked
+const _posixEntryPoint = resolvePosix(root, candidate).startsWith(root);
+
 // --- Allowed: boundary-aware containment checks. ---
+
+// expect-clean: no-path-prefix-containment/no-path-prefix-containment
+const _indexOfSeparatorBoundary =
+  // oxlint-disable-next-line typescript/prefer-string-starts-ends-with -- fixture: the indexOf form is the syntax under test
+  resolvedCandidate.indexOf(`${resolvedRoot}${path.sep}`) === 0;
 
 const rootWithSeparator = resolvedRoot.endsWith(path.sep)
   ? resolvedRoot
@@ -107,6 +125,7 @@ const _boundaryHelper = isPathInside(resolvedRoot, resolvedCandidate);
 
 // Generic string and URL prefix checks have no Node path provenance.
 declare const dynamicPosition: number;
+// expect-clean: no-path-prefix-containment/no-path-prefix-containment
 const _domainPrefix = domain.startsWith("docs.");
 const _urlPrefix = url.startsWith("https://");
 const _nonzeroPosition = resolvedCandidate.startsWith(resolvedRoot, 1);
@@ -119,6 +138,7 @@ const _dynamicPosition = resolvedCandidate.startsWith(
 declare const normalize: (value: string) => string;
 declare const resolve: (...parts: string[]) => string;
 const _fakeNormalize = normalize(candidate).startsWith(normalize(root));
+// expect-clean: no-path-prefix-containment/no-path-prefix-containment
 const _fakeResolve = resolve(root, candidate).startsWith(root);
 
 // A local binding shadowing the genuine named import loses its provenance.
@@ -138,6 +158,11 @@ export const noPathPrefixContainmentFixture = {
   _explicitZeroPosition,
   _fakeNormalize,
   _fakeResolve,
+  _indexOfNotZero,
+  _indexOfSeparatorBoundary,
+  _indexOfZero,
+  _posixEntryPoint,
+  _zeroIndexOf,
   _inlineSeparatorBoundary,
   _negativeZeroPosition,
   _nonzeroPosition,

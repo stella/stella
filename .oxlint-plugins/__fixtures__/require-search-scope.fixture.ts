@@ -296,6 +296,7 @@ const unsafeAliasedLocalHelperPrivateRead = sql`
 const scopedFromHelper = (scope: unknown) =>
   sql`FROM search_documents sd WHERE true ${scope}`;
 const scopedFromHelperAlias = scopedFromHelper;
+// expect-clean: require-search-scope/require-search-scope
 const scopedAliasedLocalHelperRead = sql`
   SELECT * ${scopedFromHelperAlias(entityWorkspaceFilter)}
 `;

@@ -17,6 +17,7 @@ export const inlineHandler = createSafeHandler(config);
 export const inlineRootHandler = createSafeRootHandler(config);
 
 // Allowed: member calls are not local endpoint factory definitions.
+// expect-clean: no-inline-endpoint-in-routes/no-inline-endpoint-in-routes
 export const delegatedFactoryCall = endpointFactory.createSafeHandler(config);
 
 // Allowed: mounting an already-created endpoint is outside this rule.

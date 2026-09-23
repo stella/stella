@@ -28,6 +28,7 @@ export const _ok1 = () => (
 );
 // Allowed: popover/menu positions itself and scrolls its own max-w box.
 export const _ok2 = () => (
+  // expect-clean: no-centered-scroll-column/no-centered-scroll-column
   <div className="absolute z-50 mx-auto max-w-[30rem] overflow-y-auto" />
 );
 // Allowed: self-contained scroll box (bounded height) e.g. dialog/dropdown.

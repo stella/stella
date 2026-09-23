@@ -23,11 +23,13 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  elementName,
   getImportLocalName,
   getImportedName,
   isAstNode,
-  type AstNode,
+  jsxName,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const UI_MODULE_PREFIX = "@stll/ui";
 const LUCIDE_MODULE = "lucide-react";
@@ -41,31 +43,12 @@ const SEARCH_ICON_IMPORTS = new Set(["Search", "SearchIcon"]);
 // prefix (sm:, rtl:, group-hover:) stripped.
 const LEADING_PADDING = /^(?:[^:\s]+:)*p[sl]-/u;
 
-const jsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return jsxName(node.property);
-  }
-  if (node.type === "JSXNamespacedName") {
-    return jsxName(node.name);
-  }
-  return null;
-};
-
 const openingElementOf = (element: unknown): AstNode | null => {
   if (!isAstNode(element) || element.type !== "JSXElement") {
     return null;
   }
   return isAstNode(element.openingElement) ? element.openingElement : null;
 };
-
-const elementName = (element: unknown): string | null =>
-  jsxName(openingElementOf(element)?.name);
 
 const attributeNamed = (element: unknown, name: string): AstNode | null => {
   const attributes = openingElementOf(element)?.attributes;

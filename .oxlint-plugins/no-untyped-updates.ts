@@ -11,7 +11,6 @@ import {
   eslintCompatPlugin,
   type Definition,
   type ESTree,
-  type Scope,
   type Variable,
 } from "@oxlint/plugins";
 
@@ -19,13 +18,11 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference => isIdentifier(node);
 
 const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
   isAstNode(node) && node.type === "ObjectExpression";
@@ -101,20 +98,10 @@ export default eslintCompatPlugin({
         const setCalls: ESTree.CallExpression[] = [];
         const reported = new Set<Variable>();
 
-        const resolveVariable = (identifier: unknown): Variable | null => {
-          if (!isIdentifierReference(identifier)) {
-            return null;
-          }
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        // Accepts any node: a qualified type name or other non-identifier
+        // resolves to no variable.
+        const variableOf = (node: unknown): Variable | null =>
+          isIdentifierReference(node) ? resolveVariable(context, node) : null;
 
         const isBroadRecordType = (
           node: unknown,
@@ -154,7 +141,7 @@ export default eslintCompatPlugin({
             );
           }
 
-          const variable = resolveVariable(annotation.typeName);
+          const variable = variableOf(annotation.typeName);
           if (variable === null || seen.has(variable)) {
             return false;
           }
@@ -196,7 +183,7 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
-          const variable = resolveVariable(annotation.typeName);
+          const variable = variableOf(annotation.typeName);
           if (variable === null || seen.has(variable)) {
             return false;
           }
@@ -245,7 +232,7 @@ export default eslintCompatPlugin({
             annotation.type === "TSTypeReference" &&
             isIdentifierReference(annotation.typeName)
           ) {
-            const variable = resolveVariable(annotation.typeName);
+            const variable = variableOf(annotation.typeName);
             if (variable === null || seen.has(variable)) {
               return null;
             }
@@ -378,7 +365,7 @@ export default eslintCompatPlugin({
           identifier: ESTree.IdentifierReference,
         ): ESTree.VariableDeclarator | null => {
           const definition =
-            resolveVariable(identifier)?.defs.find(isVariableDefinition);
+            variableOf(identifier)?.defs.find(isVariableDefinition);
           return definition?.node ?? null;
         };
 
@@ -418,7 +405,7 @@ export default eslintCompatPlugin({
               isStableAlias(declaration) &&
               isIdentifierReference(initializer)
             ) {
-              const source = resolveVariable(initializer);
+              const source = variableOf(initializer);
               if (source !== null) {
                 const returnType = localFunctionReturnType(source, nextSeen);
                 if (returnType !== null) {
@@ -438,7 +425,7 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(expression)) {
             return false;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableOf(expression);
           if (variable === null || seen.has(variable)) {
             return false;
           }
@@ -462,7 +449,7 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(expression)) {
             return false;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableOf(expression);
           if (variable === null || seen.has(variable)) {
             return false;
           }
@@ -488,7 +475,7 @@ export default eslintCompatPlugin({
               return null;
             }
             if (isIdentifierReference(expression)) {
-              const variable = resolveVariable(expression);
+              const variable = variableOf(expression);
               if (variable === null || seen.has(variable)) {
                 return null;
               }
@@ -530,7 +517,7 @@ export default eslintCompatPlugin({
           }
 
           if (isIdentifierReference(expression)) {
-            const variable = resolveVariable(expression);
+            const variable = variableOf(expression);
             if (variable === null || seen.has(variable)) {
               return null;
             }
@@ -555,7 +542,7 @@ export default eslintCompatPlugin({
             if (!isIdentifierReference(callee)) {
               return null;
             }
-            const variable = resolveVariable(callee);
+            const variable = variableOf(callee);
             return variable !== null &&
               isBroadRecordType(localFunctionReturnType(variable))
               ? variable
@@ -587,7 +574,7 @@ export default eslintCompatPlugin({
           },
           TSTypeAliasDeclaration(node) {
             if (isIdentifierReference(node.id)) {
-              const variable = resolveVariable(node.id);
+              const variable = variableOf(node.id);
               if (variable !== null) {
                 namedTypeAnnotations.set(variable, node);
               }
@@ -603,7 +590,7 @@ export default eslintCompatPlugin({
                 ) {
                   continue;
                 }
-                const variable = resolveVariable(specifier.local);
+                const variable = variableOf(specifier.local);
                 if (variable !== null) {
                   drizzleSchemaTables.add(variable);
                 }
@@ -617,7 +604,7 @@ export default eslintCompatPlugin({
                 ) {
                   continue;
                 }
-                const variable = resolveVariable(specifier.local);
+                const variable = variableOf(specifier.local);
                 if (variable !== null) {
                   drizzleTransactionTypes.add(variable);
                 }

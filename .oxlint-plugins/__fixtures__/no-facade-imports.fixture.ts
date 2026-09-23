@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db";
 // oxlint-disable-next-line no-facade-imports/no-facade-imports -- fixture proves renamed facades outside the leaf allowlist are rejected
 import type { UnsafeDbFacade } from "@/api/db/convenience";
 // Leaf imports remain valid.
+// expect-clean: no-facade-imports/no-facade-imports
 import type { SafeDb } from "@/api/db/safe-db";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { toAPIError } from "@/lib/errors/api";

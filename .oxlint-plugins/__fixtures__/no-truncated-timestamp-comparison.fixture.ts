@@ -185,6 +185,7 @@ const _columnToColumn = gt(decisions.updatedAt, searchDocuments.updatedAt);
 
 // Two timestamp members owned by the same schema object are database-native
 // operands when interpolated into one SQL template.
+// expect-clean: no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _sameOwnerColumnToColumn = sql`${decisions.updatedAt} >= ${decisions.createdAt}`;
 const _sameOwnerColumnTuple = sql`(${decisions.updatedAt}, ${decisions.id}) >= (${decisions.createdAt}, ${decisions.sourceId})`;
 const _sameOwnerColumnCall = gte(decisions.updatedAt, decisions.createdAt);

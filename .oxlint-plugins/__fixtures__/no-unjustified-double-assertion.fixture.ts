@@ -36,6 +36,7 @@ export const trailingCommentBoundary =
   // oxlint-disable-next-line no-unjustified-double-assertion/no-unjustified-double-assertion -- fixture: a trailing comment on an earlier statement cannot justify this cast
   externalValue as unknown as MatterSummary;
 
+// expect-clean: no-unjustified-double-assertion/no-unjustified-double-assertion
 export const directAssertion = externalValue as MatterSummary;
 
 declare const identified: { matterId: string };

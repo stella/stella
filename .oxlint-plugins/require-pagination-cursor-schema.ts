@@ -15,17 +15,9 @@
 // its own syntax `pattern` — is named in `allowedFiles` in oxlint.config.ts,
 // with the reason next to it.
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext } from "./utils.ts";
-
-type AstNode = Ranged & { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 const getStaticName = (node: unknown): string | null => {
   if (!isAstNode(node)) {

@@ -205,6 +205,7 @@ export const labeledContinueBypassesCleanup = () => {
 };
 
 // Allowed: direct local pairing with the same binding.
+// expect-clean: no-object-url-leak/no-object-url-leak
 export const downloadUrl = () => {
   const url = URL.createObjectURL(blob);
   URL.revokeObjectURL(url);

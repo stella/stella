@@ -294,6 +294,7 @@ export const responseBuilderCall = () =>
 
 // Closed and open schemas both validate before producing a domain value.
 export const parsedResponse = async () =>
+  // expect-clean: no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   v.parse(schema, await response.json());
 export const looselyParsedResponse = async () =>
   v.safeParse(schema, await response.json());

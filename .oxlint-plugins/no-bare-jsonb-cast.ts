@@ -45,12 +45,7 @@
 
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  typeof (node as { type?: unknown }).type === "string";
+import { isAstNode } from "./utils.ts";
 
 // Postgres treats comments as whitespace wherever they appear, so they are
 // replaced with a space before any matching; otherwise a comment could hide

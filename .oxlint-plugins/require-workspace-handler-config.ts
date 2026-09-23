@@ -29,15 +29,10 @@ import type { ESTree } from "@oxlint/plugins";
 // config types and are not flagged.
 
 import type { AstNode } from "./utils.ts";
-import { isAstNode, isIdentifier } from "./utils.ts";
+import { isAstNode, isIdentifier, isIdentifierReference } from "./utils.ts";
 
 const FACTORY = "createSafeHandler";
 const WIDE_CONFIG_TYPE = "HandlerConfig";
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference =>
-  isIdentifier(node) && Array.isArray(node.range);
 
 /** The expression itself when it reads `<value> satisfies HandlerConfig`. */
 const wideConfigSatisfies = (node: unknown): AstNode | null => {

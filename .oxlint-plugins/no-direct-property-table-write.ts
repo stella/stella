@@ -47,7 +47,9 @@ import {
   getImportedName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
 } from "./utils.ts";
 
 const OWNER_DIRECTORY_PREFIXES = [
@@ -65,19 +67,6 @@ const OWNER_FILES = new Set([
 const FIXTURE_FILE_SUFFIX =
   ".oxlint-plugins/__fixtures__/no-direct-property-table-write.fixture.ts";
 
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
-
-type ScopeVariable = {
-  defs: {
-    node: unknown;
-    parent: unknown;
-    type: string;
-  }[];
-};
-
 const isOwnerFile = (filename: string): boolean =>
   OWNER_DIRECTORY_PREFIXES.some((prefix) => filename.includes(prefix)) ||
   [...OWNER_FILES].some((owner) => filename.endsWith(owner));
@@ -85,7 +74,7 @@ const isOwnerFile = (filename: string): boolean =>
 // `*.test.ts` also matches `*.integration.test.ts` / `*.db.test.ts`: both
 // still end in `.test.ts`, and the glob-style suffix check is intentionally
 // permissive rather than enumerating every test-file naming convention.
-const isTestFile = (filename: string): boolean =>
+const isApiTestSupportFile = (filename: string): boolean =>
   /\.test\.tsx?$/u.test(filename) ||
   filename.includes("apps/api/src/tests/") ||
   filename.includes("apps/api/src/test/") ||
@@ -106,18 +95,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         // Resolve the argument identifier to its actual declaration via the
         // scope chain, rather than matching on spelling. A nested
         // declaration that reuses the imported alias's name binds its own
@@ -125,10 +102,10 @@ export default eslintCompatPlugin({
         // matches here — the identifier only reports when it truly resolves
         // back to the `properties` value import.
         const isPropertiesSchemaImportReference = (node: unknown): boolean => {
-          if (!isIdentifier(node)) {
+          if (!isIdentifierReference(node)) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveVariable(context, node);
           if (variable === null) {
             return false;
           }
@@ -160,7 +137,7 @@ export default eslintCompatPlugin({
             }
             return (
               filename.includes("apps/api/src/") &&
-              !isTestFile(filename) &&
+              !isApiTestSupportFile(filename) &&
               !isOwnerFile(filename)
             );
           },

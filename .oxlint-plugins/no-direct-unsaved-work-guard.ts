@@ -22,10 +22,10 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  filenameForContext,
   getImportedName,
   getPropertyName,
   isAstNode,
+  isFileIn,
   isIdentifier,
   isStringLiteral,
 } from "./utils.ts";
@@ -70,7 +70,9 @@ const staticStringValue = (node: unknown): string | null => {
   return typeof quasi.value.cooked === "string" ? quasi.value.cooked : null;
 };
 
-const memberPropertyName = (node: unknown): string | null => {
+// Unlike the shared memberPropertyName, accepts any node (null for a
+// non-member) and reads an interpolation-free template key.
+const staticMemberKey = (node: unknown): string | null => {
   if (!isAstNode(node) || node.type !== "MemberExpression") {
     return null;
   }
@@ -107,10 +109,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             routerNamespaces.clear();
-            const filename = filenameForContext(context);
-            return !allowedFilesFromOptions(context.options).some(
-              (allowedFile) => filename.endsWith(allowedFile),
-            );
+            return !isFileIn(context, allowedFilesFromOptions(context.options));
           },
           ImportDeclaration(node) {
             if (node.source.value !== ROUTER_MODULE) {
@@ -138,7 +137,7 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const name = memberPropertyName(node);
+            const name = staticMemberKey(node);
             if (name !== null && BLOCKER_EXPORTS.has(name)) {
               context.report({
                 node,
@@ -148,7 +147,7 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
-            if (memberPropertyName(node.callee) !== "addEventListener") {
+            if (staticMemberKey(node.callee) !== "addEventListener") {
               return;
             }
             if (staticStringValue(node.arguments.at(0)) === UNLOAD_EVENT) {

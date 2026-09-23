@@ -81,6 +81,109 @@ export const UnsafeShadowedSanitizer = () => (
   />
 );
 
+export const UnsafeComputedInnerHtml = () => {
+  const element = document.createElement("div");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, typescript/dot-notation -- computed member
+  element["innerHTML"] = rawHtml;
+  return element;
+};
+
+export const UnsafeOuterHtml = () => {
+  const element = document.createElement("div");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  element.outerHTML = rawHtml;
+};
+
+export const UnsafeInsertAdjacentHtml = () => {
+  const element = document.createElement("div");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  element.insertAdjacentHTML("beforeend", rawHtml);
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, eslint/no-useless-call -- call form
+  element.insertAdjacentHTML.call(element, "beforeend", rawHtml);
+};
+
+export const UnsafeDocumentWrite = () => {
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, typescript/no-deprecated
+  document.write(rawHtml);
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, typescript/no-deprecated
+  document.writeln("<p>", rawHtml);
+  const frame = document.createElement("iframe");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, typescript/no-deprecated -- member document
+  frame.contentDocument?.write(rawHtml);
+};
+
+export const UnsafeSrcdocProperty = () => {
+  const frame = document.createElement("iframe");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  frame.srcdoc = rawHtml;
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  frame.setAttribute("srcdoc", rawHtml);
+  return frame;
+};
+
+export const UnsafeSrcdocAttribute = () => (
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  <iframe sandbox="" srcDoc={rawHtml} title="preview" />
+);
+
+declare const shadowRoot: ShadowRoot;
+
+export const UnsafeSetHtmlUnsafe = () => {
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  shadowRoot.setHTMLUnsafe(rawHtml);
+};
+
+export const UnsafeContextualFragment = () =>
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  document.createRange().createContextualFragment(rawHtml);
+
+export const UnsafeObjectAssign = () =>
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  Object.assign(document.createElement("div"), { innerHTML: rawHtml });
+
+declare const React: {
+  createElement: (type: string, props: object | null) => unknown;
+};
+declare const jsx: (type: string, props: object) => unknown;
+declare const createElement: (type: string, props: object) => unknown;
+
+export const UnsafeReactCreateElement = () =>
+  React.createElement("div", {
+    // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html -- createElement props
+    dangerouslySetInnerHTML: { __html: rawHtml },
+  });
+
+export const UnsafeJsxRuntimeCall = () =>
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html -- jsx() props
+  jsx("div", { dangerouslySetInnerHTML: { __html: rawHtml } });
+
+export const UnsafeImportedCreateElementShorthand = () => {
+  const dangerouslySetInnerHTML = { __html: rawHtml };
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html -- shorthand property
+  return createElement("div", { dangerouslySetInnerHTML });
+};
+
+export const UnsafeSpreadProps = () => {
+  const props = {
+    // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html -- props object spread into JSX
+    dangerouslySetInnerHTML: { __html: rawHtml },
+  };
+  return <div {...props} />;
+};
+
+export const UnsafeEmptyWaiver = () => {
+  const element = document.createElement("div");
+  // safe-html:
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html -- a marker without provenance text
+  element.innerHTML = rawHtml;
+  return element;
+};
+
+export const UnsafeSecondSinkOnWaivedLine = (frame: HTMLIFrameElement) => {
+  // safe-html: fixture value stands in for server-side escaped markup
+  Object.assign(frame, { innerHTML: rawHtml, srcdoc: rawHtml }); // oxlint-disable-line no-unsafe-inner-html/no-unsafe-inner-html -- one marker covers one sink
+};
+
 // --- Cases the rule MUST NOT flag ---
 
 export const SafeSanitizedCallWithProvenance = () => (
@@ -110,10 +213,31 @@ export const SafeTemplateInterpolation = () => {
 
 export const safeStaticMarkup = () => {
   const element = document.createElement("div");
+  // expect-clean: no-unsafe-inner-html/no-unsafe-inner-html
   element.innerHTML = "<span>Static</span>";
   return element;
 };
 
+export const SafeStaticSrcdoc = () => (
+  // expect-clean: no-unsafe-inner-html/no-unsafe-inner-html
+  <iframe sandbox="" srcDoc="<p>Static</p>" title="preview" />
+);
+
+export const SafeAnnotatedWrite = () => {
+  const frame = document.createElement("iframe");
+  // safe-html: fixture value stands in for server-side escaped markup
+  frame.srcdoc = rawHtml;
+};
+
+export const SafeTextContentAssign = () =>
+  // expect-clean: no-unsafe-inner-html/no-unsafe-inner-html
+  Object.assign(document.createElement("div"), { textContent: rawHtml });
+
+declare const stream: { write: (chunk: string) => void };
+// expect-clean: no-unsafe-inner-html/no-unsafe-inner-html
+stream.write(rawHtml);
+
 // A plain object with a `__html` property is data, not a DOM sink until it is
 // passed to `dangerouslySetInnerHTML`.
+// expect-clean: no-unsafe-inner-html/no-unsafe-inner-html
 export const htmlPayload = { __html: rawHtml };

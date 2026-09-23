@@ -11,6 +11,7 @@ const _negated = node.negated;
 
 // Building a new node with these keys is an object literal, not a member
 // read, and stays valid.
+// expect-clean: no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions
 const _built = { combinator: "and" as const, negated: false };
 
 // Computed access is out of scope for this syntactic rule.

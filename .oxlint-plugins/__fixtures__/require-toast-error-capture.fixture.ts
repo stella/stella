@@ -91,6 +91,7 @@ const capturedCatch = async () => {
     await risky();
   } catch (error) {
     analytics.captureError(error);
+    // expect-clean: require-toast-error-capture/require-toast-error-capture
     stellaToast.error("Something went wrong");
   }
 };

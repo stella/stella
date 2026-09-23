@@ -64,6 +64,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  filenameForContext,
   getPropertyName,
   isIdentifier,
   isStringLiteral,
@@ -154,17 +155,31 @@ const resolveColocatedImportBase = (filename, source) => {
 
 // Bounded, one-hop read: try the two extensions a colocated TS/TSX import can
 // resolve to. No further imports of the child file are followed.
-const readColocatedFile = (basePath) => {
+//
+// Several routes import the same colocated file, so each read (including a
+// miss) is cached per absolute path for the lifetime of the lint process; a
+// run is short-lived, so nothing is invalidated.
+const colocatedFileCache = new Map<string, string | null>();
+
+const readColocatedFile = (basePath: string): string | null => {
+  const key = path.resolve(basePath);
+  const cached = colocatedFileCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let source: string | null = null;
   for (const extension of [".tsx", ".ts"]) {
     try {
-      return readFileSync(`${basePath}${extension}`, "utf-8");
+      source = readFileSync(`${key}${extension}`, "utf-8");
+      break;
     } catch {
       // Try the next extension; if neither exists this is a shape the
       // simplified alias resolution can't handle (e.g. a directory index) —
       // acceptable since this is a best-effort bounded check, not a resolver.
     }
   }
-  return null;
+  colocatedFileCache.set(key, source);
+  return source;
 };
 
 // Regex counterpart of `suspenseFactoryName`, scanning raw source text for
@@ -177,7 +192,7 @@ const CHILD_SUSPENSE_RE = /useSuspenseQuery\(\s*([A-Za-z_$][\w$]*)\s*([(),])/g;
 const suspenseFactoriesInSource = (sourceText: string): Set<string> => {
   const factories = new Set<string>();
   for (const match of sourceText.matchAll(CHILD_SUSPENSE_RE)) {
-    const factory = match[1];
+    const factory = match.at(1);
     if (factory !== undefined) {
       factories.add(factory);
     }
@@ -254,7 +269,7 @@ export default eslintCompatPlugin({
 
             if (isCreateFileRouteOptionsCall(callee)) {
               isRouteFile = true;
-              const optionsArg = node.arguments?.[0];
+              const optionsArg = node.arguments.at(0);
               if (
                 routeOptions === null &&
                 optionsArg?.type === "ObjectExpression"
@@ -323,10 +338,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const filename = context.filename ?? context.getFilename?.();
-            if (typeof filename !== "string") {
-              return;
-            }
+            const filename = filenameForContext(context);
 
             for (const { node, source } of colocatedImports) {
               const basePath = resolveColocatedImportBase(filename, source);

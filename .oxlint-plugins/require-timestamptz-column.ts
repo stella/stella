@@ -21,16 +21,16 @@
 //   at: timestamptz("at")
 //   apps/api/src/db/columns.ts                        // defines the helper
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
-
-type AstNode = Ranged & { type: string } & Record<string, unknown>;
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-};
+import type { AstNode } from "./utils.ts";
+import {
+  getImportedName,
+  isAstNode,
+  isFileIn,
+  isIdentifier,
+  isStringLiteral,
+} from "./utils.ts";
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
 
@@ -44,18 +44,6 @@ const ALLOWLISTED_FILE = "apps/api/src/db/columns.ts";
 // of the spelled-out type, so those must not bypass the rule.
 const NAIVE_TIMESTAMP_TYPE =
   /^timestamp(\s*\(\s*\d+\s*\))?(\s+without\s+time\s+zone)?$/iu;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
-
-const filenameForContext = (context: RuleContext): string =>
-  (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
-
-const isAllowlistedFile = (filename: string): boolean =>
-  filename.endsWith(ALLOWLISTED_FILE);
 
 // The static text of a string literal or a zero-expression template
 // literal: `` `timestamp` `` and `"timestamp"` name the same SQL type, so a
@@ -206,7 +194,7 @@ export default eslintCompatPlugin({
             pgCoreNamespaceAliases.clear();
             pgCoreTimestampAliases.clear();
             customTypeAliases.clear();
-            return !isAllowlistedFile(filenameForContext(context));
+            return !isFileIn(context, [ALLOWLISTED_FILE]);
           },
           ImportDeclaration(node) {
             if (

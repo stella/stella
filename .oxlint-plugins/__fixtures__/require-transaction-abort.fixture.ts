@@ -72,6 +72,7 @@ export const returnsBeforeAnyWrite = async () =>
       return { ok: false as const, status: 404 as const, message: "missing" };
     }
     await tx.insert({ id: "five" });
+    // expect-clean: require-transaction-abort/require-transaction-abort
     return { ok: true as const };
   });
 

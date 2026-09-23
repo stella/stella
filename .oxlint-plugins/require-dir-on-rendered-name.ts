@@ -83,9 +83,9 @@ export default eslintCompatPlugin({
             // Compound components (`<Foo.Label>`) have a member-expression name
             // with no string identifier; they can still wrap a tracked name, so
             // keep inspecting their children instead of bailing out.
-            const elementName =
+            const tagName =
               opening.name.type === "JSXIdentifier" ? opening.name.name : null;
-            if (elementName !== null && SELF_ISOLATING.has(elementName)) {
+            if (tagName !== null && SELF_ISOLATING.has(tagName)) {
               return;
             }
             const kids = meaningfulChildren(node.children);
@@ -101,7 +101,7 @@ export default eslintCompatPlugin({
             if (kids.length === 1) {
               if (
                 hasDirAttr(opening) ||
-                (elementName !== null && RAW_ISOLATING.has(elementName))
+                (tagName !== null && RAW_ISOLATING.has(tagName))
               ) {
                 context.report({ node: opening, messageId: "preferComponent" });
                 return;

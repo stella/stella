@@ -1,5 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isFileIn } from "./utils.ts";
+
 // Keep the Tools route as a lightweight shell.
 //
 // The catalogue browser owns heavy UI and route-local query subscriptions. The
@@ -13,20 +15,13 @@ const isCatalogueBrowserModule = (source) =>
   source === CATALOGUE_BROWSER_MODULE ||
   source.endsWith("/catalogue/catalogue-browser");
 
-const filenameForContext = (context) =>
-  context.filename ?? context.getFilename?.() ?? "";
-
 const configuredRouteFiles = (context) => {
   const options = context.options?.[0] ?? {};
   return Array.isArray(options.routeFiles) ? options.routeFiles : [];
 };
 
-const isGuardedRouteFile = (context) => {
-  const filename = filenameForContext(context).replaceAll("\\", "/");
-  return configuredRouteFiles(context).some((routeFile) =>
-    filename.endsWith(routeFile),
-  );
-};
+const isGuardedRouteFile = (context) =>
+  isFileIn(context, configuredRouteFiles(context));
 
 const isTypeOnlyImport = (node) => {
   if (node.importKind === "type") {

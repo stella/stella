@@ -28,6 +28,7 @@ const _d2 = someDate.toLocaleString(undefined, { dateStyle: "full" });
 const _n1 = (123).toLocaleString(lang);
 
 // --- Allowed: full formatting locale (must NOT be flagged) ---
+// expect-clean: no-raw-locale-format/no-raw-locale-format
 const _ok1 = new Intl.NumberFormat(getFormattingLocale());
 const _ok2 = someDate.toLocaleDateString(locale);
 

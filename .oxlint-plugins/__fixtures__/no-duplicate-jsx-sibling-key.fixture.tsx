@@ -26,6 +26,7 @@ export const _duplicateLiteral = () => (
 export const _distinctKeys = () => (
   <main>
     <Panel key={`case-law:${workspaceId}`} />
+    {/* expect-clean: no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key */}
     <Panel key={`activity:${workspaceId}`} />
   </main>
 );

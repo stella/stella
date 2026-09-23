@@ -27,6 +27,7 @@ const _r2 = a.name.localeCompare(b.name, locale);
 const _r3 = [a, b].toSorted((x, y) => x.name.localeCompare(y.name));
 
 // --- Allowed: routed through the shared collation helper (must NOT be flagged) ---
+// expect-clean: require-cached-collator/require-cached-collator
 const _ok1 = compareByLocale(locale)(a.name, b.name);
 const _ok2 = [a, b].toSorted((x, y) => compareByLocale(locale)(x.name, y.name));
 

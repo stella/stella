@@ -9,7 +9,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode, type AstNode } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { isAstNode, unwrapExpression } from "./utils.ts";
 
 const jsxAttributeName = (node: unknown): string | null =>
   isAstNode(node) &&
@@ -38,23 +39,6 @@ const keyAttributeOf = (node: unknown): AstNode | null => {
         jsxAttributeName(attribute.name) === "key",
     ) ?? null
   );
-};
-
-const unwrapExpression = (node: unknown): AstNode | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (
-    node.type === "ChainExpression" ||
-    node.type === "ParenthesizedExpression" ||
-    node.type === "TSAsExpression" ||
-    node.type === "TSNonNullExpression" ||
-    node.type === "TSSatisfiesExpression" ||
-    node.type === "TSTypeAssertion"
-  ) {
-    return unwrapExpression(node.expression);
-  }
-  return node;
 };
 
 const keySignature = (attribute: AstNode, sourceCode): string | null => {

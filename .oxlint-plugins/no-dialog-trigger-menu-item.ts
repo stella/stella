@@ -15,7 +15,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode, type AstNode } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { isAstNode } from "./utils.ts";
 
 const TRIGGER_NAMES = new Set([
   "AlertDialogTrigger",

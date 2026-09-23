@@ -1,5 +1,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isAstNode, resolveVariable } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+
 // Require an exact-precision form when comparing against a timestamp column.
 //
 // Postgres stores `timestamptz` at microsecond precision; a JavaScript `Date`
@@ -77,14 +80,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // clock read and stays flagged. Everything else that is genuinely fine takes a
 // one-line disable comment stating why, or a named `allowedOperandCalls` entry
 // for a helper that emits its own cast.
-
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
 
 // ── Timestamp column naming ──────────────────────────────────────────────
 //
@@ -479,21 +474,14 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const allowedOperandCalls = new Set<string>();
 
-        // Resolve the `Variable` an Identifier binds to by walking the scope
-        // chain outward from its use site (this plugin API has no ready-made
-        // `findVariable`; mirrors require-function-replacer.ts).
-        const resolveVariable = (identifier) => {
-          const findVariable = (scope) =>
-            scope?.set.get(identifier.name) ??
-            (scope?.upper ? findVariable(scope.upper) : null);
-          return findVariable(context.sourceCode.getScope(identifier));
-        };
+        const resolveInScope = (identifier) =>
+          resolveVariable(context, identifier);
 
         const isImportedTemporal = (node: unknown): boolean => {
           if (!isAstNode(node) || node.type !== "Identifier") {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveInScope(node);
           if (variable === null) {
             return false;
           }
@@ -565,7 +553,7 @@ export default eslintCompatPlugin({
         // Accept the exemption only when that owner resolves to a pgTable
         // binding or to the table parameter of pgTable's checks callback.
         const isPgTableOwner = (owner: AstNode): boolean => {
-          const variable = resolveVariable(owner);
+          const variable = resolveInScope(owner);
           return (
             variable !== null &&
             variable.defs.some((def) => {
@@ -610,7 +598,7 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveInScope(node);
           if (variable === null) {
             return false;
           }
@@ -684,7 +672,7 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveInScope(node);
           if (variable === null) {
             return false;
           }

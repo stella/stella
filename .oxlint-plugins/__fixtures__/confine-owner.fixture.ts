@@ -5,6 +5,12 @@
 // suppresses a case the rule MUST flag: if the rule regresses, the directive
 // goes unused and `--report-unused-disable-directives-severity=error` fails.
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a subpath of an owned package is the same package
+import { chat as runChat } from "@tanstack/ai/chat";
+// Accepted: an unrelated export of the owned package's subpath.
+// expect-clean: confine-owner/confine-owner
+import { toolDefinition } from "@tanstack/ai/tools";
+
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves an aliased import of an owned binding is rejected
 import { compileLegalSourceToDocx as compile } from "@stll/docx-core";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named import of an owned binding is rejected
@@ -12,12 +18,16 @@ import { createDocx } from "@stll/folio-core";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a namespace import reaches every owned binding and is rejected
 import * as folio from "@stll/folio-core/server";
 // Accepted: a sibling export of the same entry point is not an owned binding.
+// expect-clean: confine-owner/confine-owner
 import { paragraph } from "@stll/folio-core/server";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a static import of an owned module is rejected
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
 import type { createBullMqConnection } from "@/api/lib/redis-client";
+
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a relative specifier resolves to the owned module
+import { createRedisClient as relativeClient } from "../../apps/api/src/lib/redis-client.ts";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
 export { createDocx as serialize } from "@stll/folio-core/server";
@@ -26,6 +36,7 @@ export * from "@stll/docx-core";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a re-export of a whole owned module is rejected
 export { createRedisClient as client } from "@/api/lib/redis-client";
 // Accepted: a facade over a sibling export does not hand out the capability.
+// expect-clean: confine-owner/confine-owner
 export { heading } from "@stll/folio-core/server";
 
 declare const navigator: {
@@ -70,4 +81,7 @@ void createDocx;
 void compile;
 void folio;
 void paragraph;
+void runChat;
+void toolDefinition;
+void relativeClient;
 type _Connection = typeof createBullMqConnection;

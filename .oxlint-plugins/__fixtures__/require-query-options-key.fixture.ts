@@ -35,6 +35,7 @@ export const accepted = async () => {
   const alias = key;
   const { queryKey: destructured } = options;
   client.getQueryData(detailOptions("one").queryKey);
+  // expect-clean: require-query-options-key/require-query-options-key
   client.setQueryData(alias, { title: "updated" });
   client.getQueryData(destructured);
   client.getQueryData(listOptions.queryKey);

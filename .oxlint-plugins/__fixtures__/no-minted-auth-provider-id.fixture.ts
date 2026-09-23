@@ -47,8 +47,12 @@ const _branded = brandPersistedUserId(Bun.randomUUIDv7());
 
 // Allowed: a stored value, a minted id type, a binding that is not always a
 // UUID, and a generic call that is not a branding call.
+// expect-clean: no-minted-auth-provider-id/no-minted-auth-provider-id
 const _stored = toSafeId<"user">(row.userId);
+// expect-clean: no-minted-auth-provider-id/no-minted-auth-provider-id
 const _entity = toSafeId<"entity">(Bun.randomUUIDv7());
+// expect-clean: no-minted-auth-provider-id/no-minted-auth-provider-id
 const _notBranding = fetchFixture<"user">(Bun.randomUUIDv7());
 const ambiguous = row.userId;
+// expect-clean: no-minted-auth-provider-id/no-minted-auth-provider-id
 const _fromAmbiguous = toSafeId<"user">(ambiguous);

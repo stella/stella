@@ -43,13 +43,13 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
   getCalleeName,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isStringLiteral,
-  type AstNode,
 } from "./utils.ts";
 
 const TOAST_RECEIVER = "stellaToast";

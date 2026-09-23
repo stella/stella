@@ -11,6 +11,7 @@ const rawRequest = new Request("/v1/resources");
 // oxlint-disable-next-line no-raw-api-url/no-direct-api-env, no-raw-api-url/no-raw-api-url -- fixture proves a hand-built configured API base is guarded
 const rawUrl = new URL(`${env.VITE_API_URL}/v1/resources`);
 
+// expect-clean: no-raw-api-url/no-direct-api-env, no-raw-api-url/no-raw-api-url
 const safeRequest = new Request(apiUrl(`/resources/${resourceId}`));
 // oxlint-disable-next-line no-raw-api-url/no-direct-api-env -- fixture proves even an unversioned direct external-origin read is guarded
 const healthUrl = new URL(`${env.VITE_API_URL}/health`);

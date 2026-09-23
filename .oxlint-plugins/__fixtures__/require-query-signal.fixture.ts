@@ -6,9 +6,8 @@
 // clean calls at the end carry no disable, so the rule over-firing on them
 // also fails CI.
 
-import * as api from "node:http";
-
 import { queryOptions as importedQueryFn } from "@tanstack/react-query";
+import * as api from "node:http";
 
 import { api as edenApi } from "@/lib/api";
 
@@ -174,6 +173,7 @@ export const aliasedMissingSignalReferenceOptions = {
 export const signalDestructuredFetchOptions = {
   queryKey: ["thing", "safe"],
   queryFn: async ({ signal }: { signal: AbortSignal }) =>
+    // expect-clean: require-query-signal/require-query-signal
     await fetch(url, { signal }),
 };
 
@@ -224,11 +224,7 @@ export const helperReferenceOptions = {
   queryFn: fetchThing,
 };
 
-async function declaredSafeEdenQueryFn({
-  signal,
-}: {
-  signal: AbortSignal;
-}) {
+async function declaredSafeEdenQueryFn({ signal }: { signal: AbortSignal }) {
   return await edenApi.tasks.get({ fetch: { signal } });
 }
 
@@ -283,9 +279,8 @@ export const inlineUnrelatedImportedApiOptions = {
 
 // Identifier-valued queryFns retain the binding identities of local fetch,
 // browser-host, and API-shaped parameters.
-const localFetchQueryFn = async (
-  fetch: (input: string) => Promise<unknown>,
-) => await fetch(url);
+const localFetchQueryFn = async (fetch: (input: string) => Promise<unknown>) =>
+  await fetch(url);
 export const localFetchReferenceOptions = {
   queryKey: ["thing", "local-fetch-helper"],
   queryFn: localFetchQueryFn,
@@ -317,9 +312,7 @@ export const unrelatedImportedApiReferenceOptions = {
 // Mutable and reassigned bindings are deliberately opaque, even if one
 // possible initializer contains a direct network call.
 let mutableQueryFn = async () => await fetch(url);
-export const replaceMutableQueryFn = (
-  replacement: () => Promise<Response>,
-) => {
+export const replaceMutableQueryFn = (replacement: () => Promise<Response>) => {
   mutableQueryFn = replacement;
 };
 

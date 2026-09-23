@@ -313,6 +313,7 @@ export const singleScopedDbOutsideLoop = async () => {
 
 // A single DB await outside any loop.
 export const singleAwaitOutsideLoop = async () => {
+  // expect-clean: no-db-await-in-loop/no-db-await-in-loop
   await db.select().from(itemsTable).where(items[0]?.id);
 };
 

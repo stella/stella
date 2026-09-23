@@ -14,6 +14,7 @@ declare const detailOptions: (id: string) => {
 
 export function NonRouteComponent() {
   // No createFileRoute in this file — NOT flagged.
+  // expect-clean: require-loader-prefetch/require-loader-prefetch
   const detail = useSuspenseQuery(detailOptions("id"));
   return detail.data;
 }

@@ -34,6 +34,7 @@ export const _d = () => (
   <p className="reader-chrome text-muted-foreground text-xs">reference</p>
 );
 export const _e = () => <span className="reader-body text-sm">wording</span>;
+// expect-clean: no-font-utility-in-reader/no-font-utility-in-reader
 export const _f = () => <h1 className="text-xl font-semibold">title</h1>;
 export const _g = () => (
   <span className={cn("font-medium tracking-wide", extra)}>designation</span>

@@ -11,7 +11,10 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  isTestFile,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -29,24 +32,6 @@ const isSchemaModule = (specifier: string): boolean =>
   specifier === "@/api/db/schema" ||
   /(?:^|\/)db\/schema(?:\/templates)?(?:\.ts)?$/u.test(specifier);
 
-const isTestFile = (filename: string): boolean =>
-  filename.includes("/tests/") ||
-  filename.includes("/__tests__/") ||
-  /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filename);
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
-
-type ScopeVariable = {
-  defs: {
-    node: unknown;
-    parent: unknown;
-    type: string;
-  }[];
-};
-
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
@@ -60,26 +45,14 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
-        const resolveVariable = (identifier): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const isSchemaImport = (
           identifier: unknown,
           importKind: "named" | "namespace",
         ): boolean => {
-          if (!isIdentifier(identifier)) {
+          if (!isIdentifierReference(identifier)) {
             return false;
           }
-          const variable = resolveVariable(identifier);
+          const variable = resolveVariable(context, identifier);
           if (variable === null) {
             return false;
           }

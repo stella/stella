@@ -7,7 +7,11 @@ const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
-const NON_PLUGIN_MODULES = new Set(["physical-properties.ts", "utils.ts"]);
+const NON_PLUGIN_MODULES = new Set([
+  "physical-properties.ts",
+  "restricted-import.ts",
+  "utils.ts",
+]);
 const TYPEBOX_UNSAFE_RULE_ID =
   "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
 
@@ -180,7 +184,7 @@ export const redeclaredSharedHelpers = (
 ): string[] =>
   helperNames.filter((name) =>
     new RegExp(
-      `(?:^|[\\s;])(?:const|let|function|type)\\s+${name.replaceAll("$", "\\$")}\\b`,
+      `(?:^|[\\s;])(?:const|let|function|type)\\s+${name.replaceAll("$", "\\$")}\\s*[=<(:]`,
       "u",
     ).test(source),
   );

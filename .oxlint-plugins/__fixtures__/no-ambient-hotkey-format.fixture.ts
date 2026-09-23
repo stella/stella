@@ -9,6 +9,7 @@ import {
   detectPlatform as rawPlatform,
   // oxlint-disable-next-line no-ambient-hotkey-format/no-ambient-hotkey-format -- fixture: aliased ambient formatting must be rejected
   formatForDisplay as raw,
+  // expect-clean: no-ambient-hotkey-format/no-ambient-hotkey-format
   useHotkey,
 } from "@tanstack/react-hotkeys";
 

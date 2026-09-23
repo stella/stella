@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { canonicalModuleId, isTestFile, moduleMatches } from "../utils.ts";
+import {
+  canonicalModuleId,
+  isTestFile,
+  memberPropertyName,
+  moduleMatches,
+} from "../utils.ts";
 
 const IMPORTER = "apps/api/src/lib/entities/query-entities.ts";
 
@@ -55,5 +60,39 @@ describe("isTestFile", () => {
     expect(isTestFile("apps/api/src/tests/helpers.ts")).toBe(true);
     expect(isTestFile("packages/x/__tests__/a.ts")).toBe(true);
     expect(isTestFile("apps/api/src/latest/a.ts")).toBe(false);
+  });
+});
+
+describe("memberPropertyName", () => {
+  const range: [number, number] = [0, 0];
+  const member = (property: object, computed: boolean) => ({
+    type: "MemberExpression",
+    range,
+    computed,
+    object: { type: "Identifier", name: "el", range },
+    property: { ...property, range },
+  });
+
+  test("reads dotted, string and plain template keys", () => {
+    expect(
+      memberPropertyName(member({ type: "Identifier", name: "a" }, false)),
+    ).toBe("a");
+    expect(
+      memberPropertyName(member({ type: "Literal", value: "b" }, true)),
+    ).toBe("b");
+    const template = {
+      type: "TemplateLiteral",
+      expressions: [],
+      quasis: [
+        { type: "TemplateElement", range, value: { cooked: "c", raw: "c" } },
+      ],
+    };
+    expect(memberPropertyName(member(template, true))).toBe("c");
+  });
+
+  test("returns null for a dynamic key", () => {
+    expect(
+      memberPropertyName(member({ type: "Identifier", name: "key" }, true)),
+    ).toBeNull();
   });
 });

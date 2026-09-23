@@ -85,6 +85,7 @@ export const pipeWrapped = () =>
 export const proseOnly = async () =>
   await generateTanStackObjectForRole({
     role: "fixture",
+    // expect-clean: decision-shaped-output-schema/decision-shaped-output-schema
     outputSchema: v.strictObject({ summary: v.string() }),
   });
 

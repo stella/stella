@@ -69,7 +69,9 @@ const isBareStringAnnotation = (typeAnnotation) => {
   return containsBareString(inner);
 };
 
-const getCalleeName = (callee) => {
+// The last segment of the callee (`factory` for both `factory()` and
+// `lib.factory()`), unlike the shared dotted-chain getCalleeName.
+const calleeTerminalName = (callee) => {
   if (!callee) {
     return null;
   }
@@ -90,7 +92,7 @@ const isKnownValidatedContextParam = (functionNode) => {
 
   if (
     parent.type === "CallExpression" &&
-    SAFE_HANDLER_FACTORIES.has(getCalleeName(parent.callee))
+    SAFE_HANDLER_FACTORIES.has(calleeTerminalName(parent.callee))
   ) {
     return true;
   }

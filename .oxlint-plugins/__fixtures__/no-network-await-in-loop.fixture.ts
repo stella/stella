@@ -180,6 +180,7 @@ export const streamConsumption = async () => {
 export const definedNotAwaited = () => {
   const loaders: (() => Promise<unknown>)[] = [];
   for (const url of urls) {
+    // expect-clean: no-network-await-in-loop/no-network-await-in-loop
     loaders.push(async () => await fetch(url));
   }
   return loaders;

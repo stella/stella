@@ -1,14 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isStringLiteral } from "./utils.ts";
-
-type AstNode = Record<string, unknown> & { type: string };
-
-const isAstNode = (value: unknown): value is AstNode =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof (value as { type: unknown }).type === "string";
+import { isAstNode, isStringLiteral } from "./utils.ts";
 
 const isRawSeoToken = (value: string): boolean =>
   value === "canonical" ||

@@ -101,6 +101,7 @@ export const _ok2 = () => (
 export const _ok3 = () => (
   <SheetContent>
     <SheetFooter>
+      {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
       <div className="flex gap-2">
         <Button variant="ghost">{t("common.cancel")}</Button>
         <Button type="submit">{t("common.save")}</Button>
@@ -113,6 +114,7 @@ export const _ok4 = () => (
   <DialogContent>
     <Field>
       <FieldControl render={<Input />} />
+      {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
       <div className="flex gap-2">
         <Button variant="ghost">{t("common.browse")}</Button>
         <Button variant="ghost">{t("common.clear")}</Button>
@@ -123,6 +125,7 @@ export const _ok4 = () => (
 // Allowed: a single action needs no footer band.
 export const _ok5 = () => (
   <DialogContent>
+    {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
     <div className="flex justify-end">
       <Button type="submit">{t("common.save")}</Button>
     </div>
@@ -161,6 +164,7 @@ export const _ok8 = () => (
 // action row.
 export const _ok9 = () => (
   <DialogContent>
+    {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
     <div className="flex gap-2">
       <Button variant="outline">{t("common.copy")}</Button>
       <Button variant="outline">{t("common.move")}</Button>
@@ -193,6 +197,7 @@ export const _ok11 = () => (
   </DialogContent>
 );
 const SegmentedBody = () => (
+  // expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions
   <div className="flex gap-2">
     <Button variant="outline">{t("common.copy")}</Button>
     <Button variant="outline">{t("common.move")}</Button>
@@ -224,6 +229,7 @@ export const _ok13 = () => (
 const CardFormBody = () => (
   <div className="rounded-md border p-3">
     <Input />
+    {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
     <div className="flex justify-end gap-2">
       <Button variant="outline">{t("common.cancel")}</Button>
       <Button type="submit">{t("common.save")}</Button>
@@ -233,6 +239,7 @@ const CardFormBody = () => (
 // Allowed: the same container shape written inline in the popup.
 export const _ok14 = () => (
   <DialogContent>
+    {/* expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions */}
     <div className="flex flex-col gap-4">
       <h3>{t("billing.rates.rateEntries")}</h3>
       <Button variant="ghost">{t("common.back")}</Button>
@@ -242,6 +249,7 @@ export const _ok14 = () => (
 );
 // Allowed: the same row outside any dialog popup.
 export const _ok7 = () => (
+  // expect-clean: dialog-footer-owns-actions/dialog-footer-owns-actions
   <div className="flex justify-end gap-2">
     <Button variant="ghost">{t("common.cancel")}</Button>
     <Button type="submit">{t("common.save")}</Button>

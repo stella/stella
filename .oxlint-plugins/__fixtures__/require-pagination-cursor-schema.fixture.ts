@@ -20,6 +20,7 @@ const _required = { cursor: t.String({ maxLength: 512 }) };
 
 // The shared helper owns both the default and provider-specific bounds.
 const tPaginationCursor = (maxLength = 512) => t.String({ maxLength });
+// expect-clean: require-pagination-cursor-schema/require-pagination-cursor-schema
 const _shared = { cursor: t.Optional(tPaginationCursor()) };
 const _providerCursor = { cursor: t.Optional(tPaginationCursor(4096)) };
 

@@ -30,6 +30,7 @@ class NonStringMessageError extends TaggedError("NonStringMessageError")<{
 // --- Cases the rule MUST NOT flag ---
 
 // Non-optional `message: string`.
+// expect-clean: tagged-error-requires-message/tagged-error-requires-message
 class ValidError extends TaggedError("ValidError")<{
   message: string;
 }> {}

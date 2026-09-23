@@ -162,7 +162,8 @@ export const checkResultBoundaryEnrolment = ({
       `${unit}: ${total - covered} of ${total} source file(s) are outside the ` +
         `better-result boundary convention. Add the directory to ` +
         `RESULT_CONVENTION_ENABLED_GLOBS once it reports no ` +
-        `no-throw-outside-boundary / no-try-catch-outside-boundary ` +
+        `result-boundary/no-throw-outside-boundary or ` +
+        `result-boundary/no-try-catch-outside-boundary ` +
         `violations, or record it in RESULT_CONVENTION_OPT_OUTS with a reason.`,
     );
   }

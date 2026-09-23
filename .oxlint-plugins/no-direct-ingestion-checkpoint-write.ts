@@ -28,6 +28,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import {
   getPropertyName,
   isAstNode,
+  isFileIn,
   isIdentifier,
   unwrapExpression,
 } from "./utils.ts";
@@ -35,9 +36,6 @@ import {
 const CHECKPOINT_HELPERS = new Set(["commitReplaySafeIngestionBatch"]);
 
 const CHECKPOINT_MODULE = "apps/api/src/lib/corpus-ingestion-checkpoint.ts";
-
-const filenameForContext = (context) =>
-  (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
 
 const isNonComputedMember = (node: unknown): boolean =>
   isAstNode(node) &&
@@ -148,7 +146,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            return !filenameForContext(context).endsWith(CHECKPOINT_MODULE);
+            return !isFileIn(context, [CHECKPOINT_MODULE]);
           },
           CallExpression(node) {
             const object = getDrizzleSetObject(node);

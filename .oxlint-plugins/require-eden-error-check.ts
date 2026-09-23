@@ -81,6 +81,7 @@ import {
   isAstNode,
   isIdentifier,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -190,24 +191,13 @@ export default eslintCompatPlugin({
           node: Ranged;
         }[] = [];
 
-        // Resolve the `Variable` an Identifier reference binds to by
-        // walking the scope chain outward from its use site — the same
-        // nearest-enclosing-declaration search ESLint's `findVariable`
-        // utility does, built on oxlint's `getScope`/`Scope.set` since this
-        // plugin API has no ready-made `findVariable` helper of its own.
-        const resolveVariable = (identifierNode) => {
-          const findVariable = (scope) =>
-            scope?.set.get(identifierNode.name) ??
-            (scope?.upper ? findVariable(scope.upper) : null);
-          return findVariable(context.sourceCode.getScope(identifierNode));
-        };
+        const resolveInScope = (identifierNode) =>
+          resolveVariable(context, identifierNode);
 
         // True when `variable` is the binding introduced by `import { api }
         // from "@/lib/api"` (or an aliased form of it) — i.e. the actual
         // import, not a same-named local that shadows it.
-        const isApiImportVariable = (
-          variable: ReturnType<typeof resolveVariable>,
-        ) =>
+        const isApiImportVariable = (variable: Variable | null) =>
           variable !== null &&
           variable.defs.some((def) => {
             if (def.type !== "ImportBinding" || !isAstNode(def.node)) {
@@ -237,7 +227,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
             return false;
           }
-          return isApiImportVariable(resolveVariable(root));
+          return isApiImportVariable(resolveInScope(root));
         };
 
         // Alias-chain hop cap: comfortably covers realistic
@@ -261,7 +251,7 @@ export default eslintCompatPlugin({
           if (depth >= MAX_ALIAS_DEPTH || !isIdentifier(root)) {
             return false;
           }
-          const variable = resolveVariable(root);
+          const variable = resolveInScope(root);
           if (variable === null || visited.has(variable)) {
             return false;
           }
@@ -320,7 +310,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(operand)) {
             return null;
           }
-          const binding = resolveVariable(operand);
+          const binding = resolveInScope(operand);
           return binding !== null && pendingEdenBindings.has(binding)
             ? awaited
             : null;
@@ -361,7 +351,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(callee)) {
             return false;
           }
-          const variable = resolveVariable(callee);
+          const variable = resolveInScope(callee);
           return (
             variable !== null &&
             variable.defs.some((definition) => {
@@ -393,7 +383,7 @@ export default eslintCompatPlugin({
         ): boolean => {
           const expression = unwrapExpression(node);
           return (
-            isIdentifier(expression) && resolveVariable(expression) === binding
+            isIdentifier(expression) && resolveInScope(expression) === binding
           );
         };
 
@@ -1178,7 +1168,7 @@ export default eslintCompatPlugin({
               node.parent.type === "VariableDeclaration" &&
               node.parent.kind === "const"
             ) {
-              const binding = resolveVariable(node.id);
+              const binding = resolveInScope(node.id);
               if (binding !== null) {
                 pendingEdenBindings.set(binding, node);
               }
@@ -1188,7 +1178,7 @@ export default eslintCompatPlugin({
               return;
             }
             if (isIdentifier(node.id)) {
-              const binding = resolveVariable(node.id);
+              const binding = resolveInScope(node.id);
               if (binding !== null) {
                 assignedResults.push({
                   binding,
@@ -1208,7 +1198,7 @@ export default eslintCompatPlugin({
               return;
             }
             if (isIdentifier(node.left)) {
-              const binding = resolveVariable(node.left);
+              const binding = resolveInScope(node.left);
               if (binding !== null) {
                 assignedResults.push({
                   binding,
@@ -1230,7 +1220,7 @@ export default eslintCompatPlugin({
 
             const operand = unwrapExpression(node.argument);
             if (isIdentifier(operand)) {
-              const pendingBinding = resolveVariable(operand);
+              const pendingBinding = resolveInScope(operand);
               if (pendingBinding !== null) {
                 pendingEdenBindings.delete(pendingBinding);
               }

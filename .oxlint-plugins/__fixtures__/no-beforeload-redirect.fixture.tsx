@@ -93,6 +93,7 @@ export const SafeRedirectRoute = createFileRoute("/__fixture/safe-redirect")({
 
 // Safe: a bare guard that falls through to render when authorized.
 export const SafeGuardRoute = createFileRoute("/__fixture/safe-guard")({
+  // expect-clean: no-beforeload-redirect/no-beforeload-redirect
   beforeLoad: ({ context }) => {
     if (!context.session) {
       throw redirect({ to: "/auth" });

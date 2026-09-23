@@ -38,13 +38,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import {
-  isAstNode,
-  isIdentifier,
-  isStringLiteral,
-  jsxName,
-  type AstNode,
-} from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { isAstNode, isIdentifier, isStringLiteral, jsxName } from "./utils.ts";
 
 const UI_MODULE = "@stll/ui";
 

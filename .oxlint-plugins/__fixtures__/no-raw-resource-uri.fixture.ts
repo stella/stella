@@ -44,4 +44,5 @@ export const rawResourceName =
 export const parsedPrefixCheck = "candidate".startsWith(
   CHAT_RESOURCE_HREF_PREFIX.entity,
 );
+// expect-clean: no-raw-resource-uri/no-raw-resource-uri, no-raw-resource-uri/require-rfc3986-resource-encoding
 export const serializedHref = toChatResourceHref({ id: entityId });

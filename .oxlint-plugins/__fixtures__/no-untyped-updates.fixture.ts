@@ -133,6 +133,7 @@ export const destructuredTypedParameterUpdate = ({
 }) => db.update(table).set(updates);
 
 // Allowed: the update bag retains its schema-derived field set.
+// expect-clean: no-untyped-updates/no-untyped-updates
 export const updateMatter = () => db.update(table).set(typedUpdate);
 
 // Allowed: a typed helper return retains its closed field set.

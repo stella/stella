@@ -46,6 +46,7 @@ const knownString = "known";
 isString(knownString);
 
 // Explicit closed contracts are useful and do not discard key-space evidence.
+// expect-clean: no-known-value-widening/no-known-value-widening
 const closedValue: { readonly id: string } = { id: "known" };
 
 export {

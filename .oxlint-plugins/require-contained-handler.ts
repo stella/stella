@@ -262,11 +262,11 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const checkOpening = (opening) => {
-          const elementName =
+          const plainTagName =
             opening.name?.type === "JSXIdentifier" ? opening.name.name : null;
           if (
-            typeof elementName === "string" &&
-            LEAF_ELEMENTS.has(elementName)
+            typeof plainTagName === "string" &&
+            LEAF_ELEMENTS.has(plainTagName)
           ) {
             return;
           }

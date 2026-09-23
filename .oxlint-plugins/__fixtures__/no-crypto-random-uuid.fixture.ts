@@ -14,4 +14,5 @@ export const importedUuid = makeRandomUuid();
 export const browserStyleUuid = crypto.randomUUID();
 
 // Allowed: Bun's time-ordered UUID generator is the sanctioned primitive.
+// expect-clean: no-crypto-random-uuid/no-crypto-random-uuid
 export const orderedUuid = Bun.randomUUIDv7();

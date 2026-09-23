@@ -1,4 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
+
+import { elementName, isAstNode } from "./utils.ts";
 
 // Disallow untranslated user-facing JSX text in product UI.
 // Stella uses use-intl for runtime translations. Raw JSX text children
@@ -15,13 +18,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   <code>workspaceId</code>
 //   <span>•</span>
 //   <span>PDF</span>
-
-type AstNode = { type: string } & Record<string, unknown>;
-
-type SourceTextContext = {
-  getSourceCode?: () => { text?: unknown };
-  sourceCode?: { text?: unknown };
-};
 
 const DEFAULT_IGNORED_ELEMENT_NAMES = [
   "code",
@@ -63,12 +59,6 @@ const HTML_ENTITY = /&(?:[a-zA-Z][a-zA-Z0-9]+|#\d+|#x[\dA-Fa-f]+);/gu;
 const CONSTANT_LIKE_TEXT = /^(?=.*[0-9_./+-])[A-Z0-9_./+-]{2,}$/u;
 const PACKAGE_IDENTIFIER = /^@[\w.-]+\/[\w.-]+$/u;
 const PAGE_ABBREVIATION = /^p{1,2}\.$/iu;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -115,34 +105,6 @@ const getStringLiteralValue = (node: unknown): string | null => {
   return typeof raw === "string" ? raw : null;
 };
 
-const getJsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    const propertyName = getJsxName(node.property);
-    return propertyName;
-  }
-  if (node.type === "JSXNamespacedName") {
-    return getJsxName(node.name);
-  }
-  return null;
-};
-
-const getElementName = (element: unknown): string | null => {
-  if (!isAstNode(element) || element.type !== "JSXElement") {
-    return null;
-  }
-  const openingElement = element.openingElement;
-  if (!isAstNode(openingElement)) {
-    return null;
-  }
-  return getJsxName(openingElement.name);
-};
-
 const hasIgnoredAncestor = (
   node: unknown,
   ignoredElementNames: ReadonlySet<string>,
@@ -150,7 +112,7 @@ const hasIgnoredAncestor = (
   let current = isAstNode(node) ? node.parent : null;
   while (isAstNode(current)) {
     if (current.type === "JSXElement") {
-      const name = getElementName(current);
+      const name = elementName(current);
       if (name !== null && ignoredElementNames.has(name)) {
         return true;
       }
@@ -182,21 +144,18 @@ const regexArrayOption = (
   options: Record<string, unknown>,
   key: string,
 ): RegExp[] =>
-  stringArrayOption(options, key).flatMap((pattern) => {
+  // A pattern that does not compile is a config mistake: dropping it would
+  // silently flag every text it was meant to allow, so fail the run instead.
+  stringArrayOption(options, key).map((pattern) => {
     try {
-      return [new RegExp(pattern, "u")];
-    } catch {
-      return [];
+      return new RegExp(pattern, "u");
+    } catch (error) {
+      return panic(
+        `no-untranslated-jsx-literal: ${key} entry ${JSON.stringify(pattern)} is not a valid regular expression`,
+        error,
+      );
     }
   });
-
-const sourceTextForContext = (context: SourceTextContext): string => {
-  if (typeof context.sourceCode?.text === "string") {
-    return context.sourceCode.text;
-  }
-  const fallback = context.getSourceCode?.();
-  return typeof fallback?.text === "string" ? fallback.text : "";
-};
 
 export default eslintCompatPlugin({
   meta: { name: "no-untranslated-jsx-literal" },
@@ -275,7 +234,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const options = isRecord(context.options?.[0])
+            const options = isRecord(context.options[0])
               ? context.options[0]
               : {};
             const configuredMarkers = stringArrayOption(
@@ -290,7 +249,7 @@ export default eslintCompatPlugin({
             if (
               options.requireTranslationUsage === true &&
               !translationMarkers.some((marker) =>
-                sourceTextForContext(context).includes(marker),
+                context.sourceCode.text.includes(marker),
               )
             ) {
               return false;

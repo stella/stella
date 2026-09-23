@@ -137,6 +137,7 @@ export const narrowScopedAliasFixture = () => {
 };
 
 // Allowed: a narrow feature-specific key union keeps assignability bounded.
+// expect-clean: no-broad-translation-callable/no-broad-translation-callable
 export type NarrowCallable = (key: FeatureKey) => string;
 
 // Allowed: TranslationKey remains useful for validating data and return values.

@@ -60,6 +60,7 @@ export const Route = createFileRoute("/__fixture")({
     // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
     await queryClient.fetchQuery(options);
 
+    // expect-clean: no-raw-route-query-client/no-raw-route-query-client
     await ensureRouteQueryData(queryClient, options);
     await ensureRouteInfiniteQueryData(queryClient, infiniteOptions);
     await fetchRouteQuery(queryClient, options);

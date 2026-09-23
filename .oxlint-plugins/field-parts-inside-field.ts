@@ -32,13 +32,13 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
   elementName,
   everyNode,
   getImportLocalName,
   getImportedName,
   isAstNode,
-  type AstNode,
 } from "./utils.ts";
 
 const FIELD_MODULE = "@stll/ui/field";

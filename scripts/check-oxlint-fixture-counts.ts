@@ -55,7 +55,8 @@ const isCountedRule = (ruleId: string): boolean => {
 };
 
 const DIRECTIVE_PATTERN =
-  /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>oxlint-disable-next-line|oxlint-disable-line)\s+(?<body>.*?)\s*(?<suffix>\*\/\}?)?$/u;
+  /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>oxlint-disable-next-line|oxlint-disable-line)\s(?<rest>.*)$/u;
+const BLOCK_END_PATTERN = /\*\/\}?$/u;
 const COUNT_PATTERN = /(?:^|\s)x(?<count>\d+)(?:\s|:|$)/u;
 const CLEAN_MARKER_PATTERN = /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:/u;
 const NON_CODE_LINE_PATTERN = /^\s*(?:$|\/\/|\/\*|\*|\{\/\*)/u;
@@ -92,10 +93,15 @@ export const rewriteFixture = (file: string, source: string): RewriteResult => {
     if (match?.groups === undefined) {
       return text;
     }
-    const { prefix, kind, body, suffix } = match.groups;
-    if (prefix === undefined || kind === undefined || body === undefined) {
+    const { prefix, kind, rest } = match.groups;
+    if (prefix === undefined || kind === undefined || rest === undefined) {
       return text;
     }
+    const trimmed = rest.trimEnd();
+    const suffix = BLOCK_END_PATTERN.exec(trimmed)?.[0];
+    const body = (
+      suffix === undefined ? trimmed : trimmed.slice(0, -suffix.length)
+    ).trim();
     const rationaleStart = body.indexOf(" --");
     const ruleList =
       rationaleStart === -1 ? body : body.slice(0, rationaleStart);

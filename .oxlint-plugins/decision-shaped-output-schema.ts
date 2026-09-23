@@ -38,8 +38,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
-  type AstNode,
   getCalleeName,
   getPropertyName,
   isAstNode,

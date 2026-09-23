@@ -17,9 +17,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     // instant with a stated zone is deliberate time-zone handling, which
 //     // is exactly what this rule exists to force.
 
-import { isStringLiteral } from "./utils.ts";
-
-type AstNode = { type: string } & Record<string, unknown>;
+import { isAstNode, isStringLiteral } from "./utils.ts";
 
 // A naive timestamp cast in either PostgreSQL shorthand (`::timestamp`) or
 // ANSI form (`CAST(x AS timestamp)`), with optional precision and the
@@ -45,12 +43,6 @@ const AWARE_ZONE_SUFFIX = /^\s+with\s+time\s+zone$/iu;
 // ZONE '...'`), so allow any run of closing parentheses before the anchor;
 // a parenthesized shorthand cast is equally deliberate.
 const RE_ANCHOR = /^(?:\s*\))*\s*at\s+time\s+zone\b/iu;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
 
 const hasNaiveCast = (text: string): boolean => {
   for (const pattern of NAIVE_CASTS) {

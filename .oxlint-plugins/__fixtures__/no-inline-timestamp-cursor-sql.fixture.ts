@@ -9,6 +9,7 @@ const _legacyFormat = 'YYYY-MM-DD"T"HH24:MI:SS.US';
 const _inlineBoundary = `${cursor}::timestamp AT TIME ZONE 'UTC'`;
 
 // The canonical projection includes its UTC marker.
+// expect-clean: no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql
 const _canonicalFormat = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
 
 // Timezone-aware casts and unrelated date formats are not cursor re-anchors.

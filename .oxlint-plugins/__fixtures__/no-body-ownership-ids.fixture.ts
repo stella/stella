@@ -18,6 +18,7 @@ export const queryOrganizationId = query.organizationId;
 export const { workspaceId: destructuredWorkspaceId } = body;
 
 // Allowed: non-ownership request fields remain ordinary input.
+// expect-clean: no-body-ownership-ids/no-body-ownership-ids
 export const requestTitle = body.title;
 export const requestSearch = query.search;
 

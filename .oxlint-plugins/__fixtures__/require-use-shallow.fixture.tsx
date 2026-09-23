@@ -63,6 +63,7 @@ const FixtureComponent = () => {
   // --- Cases the rule MUST NOT flag ---
 
   // Selecting a primitive field.
+  // expect-clean: require-use-shallow/require-use-shallow
   const primitiveSelector = useFixtureStore((s) => s.a);
 
   // Selecting via a member/call expression, not an object/array literal.

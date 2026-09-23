@@ -25,6 +25,7 @@ export const rawDevInstance = process.env["STELLA_DEV_INSTANCE"];
 const { STELLA_PORT_OFFSET: destructuredPortOffset } = process.env;
 
 // Allowed: unrelated ambient environment values are forwarded by the runner.
+// expect-clean: forbid-dev-runner-config-reads/forbid-dev-runner-config-reads
 export const ambientEnvironment = process.env;
 
 void destructuredArguments;

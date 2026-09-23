@@ -18,6 +18,7 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -64,10 +65,6 @@ const IMMEDIATE_DATE_BOUNDARY_METHODS = new Set([
   "toJSON",
   "toUTCString",
 ]);
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference => isIdentifier(node);
 
 const bindingFromScope = (
   initialScope: Scope | null,

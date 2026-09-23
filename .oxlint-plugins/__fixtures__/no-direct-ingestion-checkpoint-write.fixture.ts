@@ -53,6 +53,7 @@ await commitReplaySafeIngestionBatch({
   runInTransaction: db,
 });
 
+// expect-clean: no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write
 await db.update(sources).set({ lastSyncAt: new Date() }).where(whereSource);
 await db.insert(sources).values({ syncCursor: null, sourceId });
 

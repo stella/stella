@@ -11,9 +11,10 @@ declare const endpointWithConfig: {
   handler: unknown;
 };
 
-// oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- fixture: raw handler bypasses the safe endpoint boundary
+// oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- fixture: raw handler skips the safe endpoint boundary
 export const rawRoute = app.get("/raw", rawHandler);
 
+// expect-clean: require-safe-route-handlers/require-safe-route-handlers
 export const safeRoute = app.post("/safe", endpoint.handler);
 
 export const mutableConfigRoute = app.post(
@@ -26,6 +27,7 @@ export const mutableConfigRoute = app.post(
 export const projectedConfigRoute = app.post(
   "/projected-config",
   endpointWithConfig.handler,
+  // expect-clean: require-safe-route-handlers/no-direct-handler-config
   {
     body: endpointWithConfig.config.body,
     permissions: endpointWithConfig.config.permissions,

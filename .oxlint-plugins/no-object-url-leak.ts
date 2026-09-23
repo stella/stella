@@ -13,6 +13,7 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -43,11 +44,6 @@ const CONDITIONAL_EXECUTION_TYPES = new Set([
   "SwitchCase",
   "WhileStatement",
 ]);
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
 
 type ScopeVariable = {
   defs: {
@@ -549,23 +545,14 @@ export default eslintCompatPlugin({
         const assignments = new Map<ScopeVariable, number[]>();
         const callbackRegistrations = new Map<ScopeVariable, AstNode[]>();
 
-        const resolveVariable = (identifier): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        const resolveInScope = (identifier): ScopeVariable | null =>
+          resolveVariable(context, identifier);
 
         const isGlobalReference = (node: unknown, name: string): boolean => {
           if (!isIdentifier(node, name)) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveInScope(node);
           return variable === null || variable.defs.length === 0;
         };
 
@@ -616,7 +603,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(expression)) {
             return null;
           }
-          const variable = resolveVariable(expression);
+          const variable = resolveInScope(expression);
           if (variable === null) {
             return null;
           }
@@ -677,7 +664,7 @@ export default eslintCompatPlugin({
           ) {
             return null;
           }
-          return resolveVariable(parent.id);
+          return resolveInScope(parent.id);
         };
 
         const recordTimerCallbackRegistration = (node): void => {
@@ -710,7 +697,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(node.left)) {
             return;
           }
-          const variable = resolveVariable(node.left);
+          const variable = resolveInScope(node.left);
           if (variable === null) {
             return;
           }
@@ -746,7 +733,7 @@ export default eslintCompatPlugin({
               const owner = creationOwner(node);
               creations.push({
                 binding:
-                  owner === null ? null : resolveVariable(owner.identifier),
+                  owner === null ? null : resolveInScope(owner.identifier),
                 node,
                 owner: owner?.owner ?? null,
                 position: nodePosition(node),
@@ -763,7 +750,7 @@ export default eslintCompatPlugin({
             revocations.push({
               aliasPositions: bindingInfo?.aliasPositions ?? [],
               argumentBinding: isIdentifier(unwrapExpression(argument))
-                ? resolveVariable(unwrapExpression(argument))
+                ? resolveInScope(unwrapExpression(argument))
                 : null,
               binding: bindingInfo?.binding ?? null,
               node,

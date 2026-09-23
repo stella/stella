@@ -129,6 +129,7 @@ const _allowlistSpellingElsewhere = sql`${apikey.metadata}::jsonb`;
 // --- Cases the rule MUST NOT flag ---
 
 // Positional casts routed through text are the correct form.
+// expect-clean: no-bare-jsonb-cast/no-bare-jsonb-cast
 const _positionalThroughText = `UPDATE t SET doc = $1::text::jsonb WHERE id = $2`;
 
 // The correct form: the parameter stays text and Postgres parses it.

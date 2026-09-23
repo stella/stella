@@ -6,12 +6,9 @@ import { defineConfig } from "oxlint";
 // among them) and fail files that pass the repository lint.
 export default defineConfig({
   categories: { correctness: "off" },
-  jsPlugins: [
-    "./.oxlint-plugins/no-throw-outside-boundary.ts",
-    "./.oxlint-plugins/no-try-catch-outside-boundary.ts",
-  ],
+  jsPlugins: ["./.oxlint-plugins/result-boundary.ts"],
   rules: {
-    "no-throw-outside-boundary/no-throw-outside-boundary": "error",
-    "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "error",
+    "result-boundary/no-throw-outside-boundary": "error",
+    "result-boundary/no-try-catch-outside-boundary": "error",
   },
 });

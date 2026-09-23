@@ -35,9 +35,11 @@ export const Route = createFileRoute("/__fixture/with-loader")({
 
 function WithLoaderComponent() {
   // Factory referenced in loader — NOT flagged.
+  // expect-clean: require-loader-prefetch/require-loader-prefetch
   const views = useSuspenseQuery(viewsOptions("id"));
 
   // Bare-identifier factory referenced in loader — NOT flagged.
+  // expect-clean: require-loader-prefetch/require-loader-prefetch
   const overview = useSuspenseQuery(overviewOptions);
 
   // activityOptions is never prefetched in the loader — MUST flag.

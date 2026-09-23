@@ -38,6 +38,7 @@ const logWorkerErrorDirectly = (error: unknown): void => {
 };
 
 // Accepted: the handler is the throttled helper.
+// expect-clean: queue-worker-error-sink/queue-worker-error-sink
 worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
 
 // Accepted: a handler may branch and delegate, as long as it does not log the

@@ -1,50 +1,185 @@
-// Require `escapeLike()` on interpolations in SQL LIKE / ILIKE patterns.
+// Require `escapeLike()` on values interpolated into SQL LIKE / ILIKE patterns.
 //
-// Drizzle's `like` / `ilike` / `notLike` / `notIlike` parameterize the pattern
-// value (so it is injection-safe), but they do NOT escape the LIKE
-// metacharacters `%` and `_` inside it — in a LIKE pattern those are wildcards
-// by design, so escaping user input is the caller's job. An un-escaped
-// interpolation lets a typed `%` match every row and `_` match any character: a
-// correctness bug and a mild DoS (full-table scans, with pagination disabled on
-// the search path). The shared helper is `escapeLike()` from
-// `@/api/lib/escape-like`.
+// Drizzle's `like` / `ilike` / `notLike` / `notIlike` and a `sql` template
+// parameterize the pattern value, but they do NOT escape the LIKE
+// metacharacters `%` and `_` inside it: in a LIKE pattern those are wildcards
+// by design, so escaping user input is the caller's job. An un-escaped value
+// lets a typed `%` match every row and `_` match any character: a correctness
+// bug and a full-table scan. The shared helper is `escapeLike()` from
+// `@/api/lib/escape-like`; Postgres's default LIKE escape character is the
+// backslash the helper emits, so no `ESCAPE` clause is needed.
 //
-// Flags — a LIKE pattern (inline, or a `const` resolved to a template literal)
-// whose interpolation is not an `escapeLike(...)` call:
+// Operators and the `sql` tag are recognised by import from drizzle-orm under
+// any local name (aliased, namespace member, destructured, `(0, f)(...)`), and
+// the escape helper only counts when it resolves to its owning module.
+//
+// Flags a LIKE pattern whose dynamic part is not escaped:
 //   ilike(col, `%${q}%`)
+//   ilike(col, "%" + q + "%")
 //   const p = `%${q}%`;        like(col, p)
-//   like(col, `${prefix}%`)    // wrap prefix in escapeLike (a no-op if safe)
+//   sql`${col} ILIKE ${`%${q}%`}`
+//   sql`${col} LIKE '%' || ${q} || '%'`
 //
 // Allows:
 //   ilike(col, `%${escapeLike(q)}%`)
-//   like(col, `${escapeLike(base)}%${escapeLike(ext)}`)
-//   ilike(col, pattern)        // opaque variable — cannot inspect
+//   sql`${col} LIKE ${fold(escapeLike(q))} || '%'`
+//   ilike(col, pattern)        // opaque variable: cannot inspect
 //   like(col, "literal")       // constant, no interpolation
 //
 // Escape hatch:
-//   // oxlint-disable-next-line require-escape-like/require-escape-like
-//   with a `// SAFETY:` note when the interpolation is provably wildcard-free.
+//   // oxlint-disable-next-line require-escape-like/require-escape-like -- <why>
+//   when the interpolation is provably wildcard-free.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isCallTo, isIdentifier, unwrapExpression } from "./utils.ts";
+import {
+  type AstNode,
+  type ImportedFromOptions,
+  invokedCallee,
+  isAstNode,
+  isIdentifierReference,
+  isImportedFrom,
+  isStringLiteral,
+  resolveVariable,
+  stableInitializer,
+  unwrapExpression,
+} from "./utils.ts";
 
-const LIKE_OPERATORS = new Set(["like", "ilike", "notLike", "notIlike"]);
+type RuleContext = ImportedFromOptions["context"];
 
-const isTemplateLiteral = (node: unknown): boolean =>
-  typeof node === "object" &&
-  node !== null &&
-  (node as { type?: unknown }).type === "TemplateLiteral";
+const LIKE_OPERATORS: ReadonlySet<string> = new Set([
+  "like",
+  "ilike",
+  "notLike",
+  "notIlike",
+]);
+const SQL_TAG: ReadonlySet<string> = new Set(["sql"]);
+const ESCAPE_LIKE: ReadonlySet<string> = new Set(["escapeLike"]);
+const ESCAPE_LIKE_MODULE = "apps/api/src/lib/escape-like";
 
-// Whether any `${...}` in the pattern is not wrapped in `escapeLike(...)`.
-const hasUnescapedInterpolation = (template: unknown): boolean => {
-  const expressions = (template as { expressions?: unknown }).expressions;
-  if (!Array.isArray(expressions)) {
+const isDrizzleModule = (moduleId: string): boolean =>
+  moduleId === "drizzle-orm" || moduleId.startsWith("drizzle-orm/");
+
+// Static SQL text ending in `LIKE` / `NOT ILIKE`: the next interpolation is
+// the whole pattern.
+const LIKE_OPERAND_TAIL = /\b(?:NOT\s+)?I?LIKE\s*$/iu;
+// Static SQL text ending in `LIKE '<literal>' ||`: the next interpolation is
+// concatenated into the pattern verbatim.
+const LIKE_CONCAT_TAIL =
+  /\b(?:NOT\s+)?I?LIKE\s+(?:'(?:[^']|'')*'\s*\|\|\s*)+$/iu;
+const CONCAT_HEAD = /^\s*\|\|/u;
+
+// Guards the identifier-to-initializer walk against self-referential consts.
+const MAX_RESOLVE_DEPTH = 4;
+
+// The initializer a single-assignment `const` identifier holds.
+const constInitializer = (
+  context: RuleContext,
+  node: AstNode,
+): AstNode | null => {
+  if (!isIdentifierReference(node)) {
+    return null;
+  }
+  const variable = resolveVariable(context, node);
+  return variable === null ? null : stableInitializer(variable);
+};
+
+// Whether an expression is, or wraps, an `escapeLike(...)` call from its
+// owning module: `escapeLike(q)`, `fold(escapeLike(q))`,
+// `escapeLike(q).toLowerCase()`, or a const holding one of those.
+const isEscaped = (context: RuleContext, node: unknown, depth = 0): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null || depth > MAX_RESOLVE_DEPTH) {
     return false;
   }
-  return expressions.some(
-    (expression) => !isCallTo(unwrapExpression(expression), "escapeLike"),
+  if (expression.type === "CallExpression") {
+    if (
+      isImportedFrom({
+        context,
+        node: invokedCallee(expression),
+        modules: [ESCAPE_LIKE_MODULE],
+        names: ESCAPE_LIKE,
+      })
+    ) {
+      return true;
+    }
+    const callee = unwrapExpression(expression.callee);
+    if (
+      callee?.type === "MemberExpression" &&
+      isEscaped(context, callee.object, depth + 1)
+    ) {
+      return true;
+    }
+    return (
+      Array.isArray(expression.arguments) &&
+      expression.arguments.some((argument) =>
+        isEscaped(context, argument, depth + 1),
+      )
+    );
+  }
+  const init = constInitializer(context, expression);
+  return init !== null && isEscaped(context, init, depth + 1);
+};
+
+// The leaves of a `a + b + c` string concatenation.
+const concatenationLeaves = (node: AstNode): unknown[] => {
+  if (node.type !== "BinaryExpression" || node.operator !== "+") {
+    return [node];
+  }
+  const left = unwrapExpression(node.left);
+  const right = unwrapExpression(node.right);
+  return [
+    ...(left === null ? [] : concatenationLeaves(left)),
+    ...(right === null ? [] : concatenationLeaves(right)),
+  ];
+};
+
+const isStaticString = (node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  return (
+    isStringLiteral(expression) ||
+    (expression?.type === "TemplateLiteral" &&
+      Array.isArray(expression.expressions) &&
+      expression.expressions.length === 0)
   );
+};
+
+// Whether a JS-built LIKE pattern carries a dynamic part that is not escaped.
+// Opaque values (a parameter, a call result) cannot be inspected and pass.
+const hasUnescapedPart = (
+  context: RuleContext,
+  node: unknown,
+  depth = 0,
+): boolean => {
+  const pattern = unwrapExpression(node);
+  if (pattern === null || depth > MAX_RESOLVE_DEPTH) {
+    return false;
+  }
+  if (pattern.type === "TemplateLiteral") {
+    return (
+      Array.isArray(pattern.expressions) &&
+      pattern.expressions.some((part) => !isEscaped(context, part))
+    );
+  }
+  if (pattern.type === "BinaryExpression" && pattern.operator === "+") {
+    const leaves = concatenationLeaves(pattern);
+    return (
+      leaves.some(isStaticString) &&
+      leaves.some((leaf) => !isStaticString(leaf) && !isEscaped(context, leaf))
+    );
+  }
+  const init = constInitializer(context, pattern);
+  return init !== null && hasUnescapedPart(context, init, depth + 1);
+};
+
+const quasiText = (quasi: unknown): string => {
+  const value = isAstNode(quasi) ? quasi.value : null;
+  return typeof value === "object" &&
+    value !== null &&
+    "raw" in value &&
+    typeof value.raw === "string"
+    ? value.raw
+    : "";
 };
 
 export default eslintCompatPlugin({
@@ -61,45 +196,61 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        // `const p = `…`;` inits, so `like(col, p)` resolves to the template
-        // that built it. Declarations are visited before the call site.
-        const templateConsts = new Map<string, unknown>();
-
-        const resolvePattern = (pattern: unknown): unknown => {
-          const unwrapped = unwrapExpression(pattern);
-          if (isIdentifier(unwrapped)) {
-            return templateConsts.get(unwrapped.name);
-          }
-          return unwrapped;
-        };
-
         return {
-          before() {
-            templateConsts.clear();
-          },
-          VariableDeclarator(node) {
-            const id = (node as { id?: unknown }).id;
-            const init = unwrapExpression((node as { init?: unknown }).init);
-            if (isIdentifier(id) && isTemplateLiteral(init)) {
-              templateConsts.set(id.name, init);
-            }
-          },
           CallExpression(node) {
-            const callee = (node as { callee?: unknown }).callee;
-            if (!(isIdentifier(callee) && LIKE_OPERATORS.has(callee.name))) {
-              return;
-            }
-            const args = (node as { arguments?: unknown }).arguments;
-            if (!Array.isArray(args) || args.length < 2) {
-              return;
-            }
-            const pattern = resolvePattern(args[1]);
+            const call = unwrapExpression(node);
             if (
-              pattern !== undefined &&
-              isTemplateLiteral(pattern) &&
-              hasUnescapedInterpolation(pattern)
+              call === null ||
+              !isImportedFrom({
+                context,
+                node: invokedCallee(call),
+                modules: [isDrizzleModule],
+                names: LIKE_OPERATORS,
+              })
             ) {
+              return;
+            }
+            const callee = unwrapExpression(call.callee);
+            const args = Array.isArray(call.arguments) ? call.arguments : [];
+            // `f.call(thisArg, column, pattern)` shifts the operands by one.
+            const offset =
+              callee?.type === "MemberExpression" &&
+              invokedCallee(call) !== callee
+                ? 1
+                : 0;
+            if (hasUnescapedPart(context, args.at(1 + offset))) {
               context.report({ node, messageId: "unescaped" });
+            }
+          },
+          TaggedTemplateExpression(node) {
+            if (
+              !isImportedFrom({
+                context,
+                node: node.tag,
+                modules: [isDrizzleModule],
+                names: SQL_TAG,
+              })
+            ) {
+              return;
+            }
+            const quasi = node.quasi;
+            const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+            const expressions = Array.isArray(quasi.expressions)
+              ? quasi.expressions
+              : [];
+            for (const [index, expression] of expressions.entries()) {
+              const before = quasiText(quasis.at(index));
+              const after = quasiText(quasis.at(index + 1));
+              const concatenated =
+                LIKE_CONCAT_TAIL.test(before) ||
+                (LIKE_OPERAND_TAIL.test(before) && CONCAT_HEAD.test(after));
+              const unescaped = concatenated
+                ? !isEscaped(context, expression)
+                : LIKE_OPERAND_TAIL.test(before) &&
+                  hasUnescapedPart(context, expression);
+              if (unescaped) {
+                context.report({ node: expression, messageId: "unescaped" });
+              }
             }
           },
         };

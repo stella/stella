@@ -58,6 +58,7 @@ export const _compound = () => (
 );
 
 // --- Allowed: wrapper present or a non-name expression ---
+// expect-clean: require-dir-on-rendered-name/require-dir-on-rendered-name
 export const _ok1 = () => <span>{x.name}</span>;
 export const _ok2 = () => <BidiText>{x.displayName}</BidiText>;
 export const _ok3 = () => <UserText>{x.fileName}</UserText>;

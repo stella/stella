@@ -43,6 +43,7 @@ const _nested = check(
 
 // The derived form: the values come from the const, so the constraint cannot
 // drift from the column.
+// expect-clean: require-derived-check-enum/require-derived-check-enum
 const _derived = check(
   "t_status_check",
   sql`${column} IN (${sql.join(

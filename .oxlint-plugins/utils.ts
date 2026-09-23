@@ -470,11 +470,15 @@ export const memberPropertyName = (member: AstNode): string | null => {
     return null;
   }
   const quasi: unknown = property.quasis[0];
-  return isAstNode(quasi) &&
-    isAstNode(quasi.value) &&
-    typeof quasi.value.cooked === "string"
-    ? quasi.value.cooked
-    : null;
+  if (!isAstNode(quasi)) {
+    return null;
+  }
+  const value: unknown = quasi.value;
+  const cooked =
+    typeof value === "object" && value !== null
+      ? Reflect.get(value, "cooked")
+      : undefined;
+  return typeof cooked === "string" ? cooked : null;
 };
 
 // The export read by `namespace.property` when `base` is a module namespace.

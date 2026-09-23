@@ -7,7 +7,6 @@
 import {
   eslintCompatPlugin,
   type ESTree,
-  type Scope,
   type Variable,
 } from "@oxlint/plugins";
 
@@ -16,21 +15,19 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
 // The grouped alias (@stll/ui/lib/utils) is deprecated but still resolves to
 // this module, so both spellings import the canonical `cn`.
-const CANONICAL_CN_MODULES: readonly string[] = [
+const CANONICAL_CN_MODULES: ReadonlySet<string> = new Set([
   "@stll/ui/utils",
   "@stll/ui/lib/utils",
-];
+]);
 const CANONICAL_CN_EXPORT = "cn";
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference => isIdentifier(node);
 
 const isMemberExpression = (node: unknown): node is ESTree.MemberExpression =>
   isAstNode(node) && node.type === "MemberExpression";
@@ -258,20 +255,12 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const reportedAttributes = new Set<unknown>();
 
-        const resolveVariable = (identifier: unknown): Variable | null => {
-          if (!isIdentifierReference(identifier)) {
-            return null;
-          }
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        // Call sites hand in unnarrowed expressions; anything but an
+        // identifier reference binds to no variable.
+        const variableForExpression = (identifier: unknown): Variable | null =>
+          isIdentifierReference(identifier)
+            ? resolveVariable(context, identifier)
+            : null;
 
         const getVariableInitializer = (variable: Variable): unknown => {
           for (const definition of variable.defs) {
@@ -287,7 +276,7 @@ export default eslintCompatPlugin({
         };
 
         const isCanonicalCn = (identifier: unknown): boolean => {
-          const variable = resolveVariable(identifier);
+          const variable = variableForExpression(identifier);
           return (
             variable?.defs.some(
               (definition) =>
@@ -298,7 +287,7 @@ export default eslintCompatPlugin({
                 isAstNode(definition.parent) &&
                 definition.parent.type === "ImportDeclaration" &&
                 isAstNode(definition.parent.source) &&
-                CANONICAL_CN_MODULES.includes(definition.parent.source.value),
+                CANONICAL_CN_MODULES.has(definition.parent.source.value),
             ) ?? false
           );
         };
@@ -333,7 +322,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(expression)) {
             return null;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableForExpression(expression);
           if (variable === null || visitedVariables.has(variable)) {
             return null;
           }
@@ -477,7 +466,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(expression) || expression.name !== "undefined") {
             return false;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableForExpression(expression);
           return variable === null || variable.defs.length === 0;
         };
 
@@ -615,7 +604,7 @@ export default eslintCompatPlugin({
             ) {
               return null;
             }
-            return resolveVariable(parent.id);
+            return variableForExpression(parent.id);
           }
           return null;
         };
@@ -740,7 +729,7 @@ export default eslintCompatPlugin({
             ) {
               return null;
             }
-            const variable = resolveVariable(parent.id);
+            const variable = variableForExpression(parent.id);
             return variable === null ? null : { consumedPath, variable };
           }
           return null;
@@ -750,16 +739,16 @@ export default eslintCompatPlugin({
           variable: Variable,
           propertyPath: readonly string[],
           readPosition: number,
-        ): Array<{
+        ): {
           propertyPath: readonly string[];
           validUntil: number;
           variable: Variable;
-        }> => {
-          const aliases: Array<{
+        }[] => {
+          const aliases: {
             propertyPath: readonly string[];
             validUntil: number;
             variable: Variable;
-          }> = [];
+          }[] = [];
           const queue = [
             {
               propertyPath,
@@ -871,7 +860,7 @@ export default eslintCompatPlugin({
             return null;
           }
           if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
+            const variable = variableForExpression(expression);
             if (variable === null || visitedVariables.has(variable)) {
               return null;
             }
@@ -1077,7 +1066,7 @@ export default eslintCompatPlugin({
             return null;
           }
           if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
+            const variable = variableForExpression(expression);
             if (variable === null || visitedVariables.has(variable)) {
               return null;
             }
@@ -1152,7 +1141,7 @@ export default eslintCompatPlugin({
           }
           const expression = unwrapClassExpression(value);
           if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
+            const variable = variableForExpression(expression);
             if (variable === null || visitedVariables.has(variable)) {
               return "unknown";
             }
@@ -1253,7 +1242,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(expression)) {
             return null;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableForExpression(expression);
           if (variable === null || visitedVariables.has(variable)) {
             return null;
           }
@@ -1316,7 +1305,7 @@ export default eslintCompatPlugin({
             return values;
           }
           if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
+            const variable = variableForExpression(expression);
             if (variable === null || visitedVariables.has(variable)) {
               return null;
             }
@@ -1509,20 +1498,20 @@ export default eslintCompatPlugin({
             if (memberPath === null || memberPath.path.length < 2) {
               return directValue;
             }
-            const variable = resolveVariable(memberPath.root);
+            const variable = variableForExpression(memberPath.root);
             if (variable === null) {
               return directValue;
             }
-            const nestedWrites: Array<{
+            const nestedWrites: {
               context: "conditional" | "unconditional";
               position: number;
               value: unknown;
-            }> = [];
-            const ancestorWrites: Array<{
+            }[] = [];
+            const ancestorWrites: {
               context: "conditional" | "unconditional";
               position: number;
               values: readonly unknown[];
-            }> = [];
+            }[] = [];
             for (const pathOwner of stableObjectPathAliases(
               variable,
               memberPath.path,
@@ -1942,7 +1931,7 @@ export default eslintCompatPlugin({
               };
             }
             if (isIdentifier(expression)) {
-              const variable = resolveVariable(expression);
+              const variable = variableForExpression(expression);
               if (variable === null || visitedVariables.has(variable)) {
                 return { type: "opaque" };
               }
@@ -1950,12 +1939,12 @@ export default eslintCompatPlugin({
                 expression,
                 visitedVariables,
               );
-              const memberWrites: Array<{
+              const memberWrites: {
                 context: "conditional" | "unconditional";
                 opaque: boolean;
                 position: number;
                 value: unknown;
-              }> = [];
+              }[] = [];
               for (const ownerVariable of stableObjectAliases(
                 variable,
                 readPosition,
@@ -2131,7 +2120,7 @@ export default eslintCompatPlugin({
             return objectResolution;
           },
           stableValue(identifier, visitedVariables = new Set()) {
-            const variable = resolveVariable(identifier);
+            const variable = variableForExpression(identifier);
             if (variable === null) {
               return null;
             }
@@ -2254,7 +2243,7 @@ export default eslintCompatPlugin({
             if (!isIdentifier(expression)) {
               return;
             }
-            const variable = resolveVariable(expression);
+            const variable = variableForExpression(expression);
             if (variable === null || visitedVariables.has(variable)) {
               return;
             }
@@ -2331,7 +2320,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(node)) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = variableForExpression(node);
           if (variable === null || visitedVariables.has(variable)) {
             return false;
           }
@@ -2381,7 +2370,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(node)) {
             return null;
           }
-          const variable = resolveVariable(node);
+          const variable = variableForExpression(node);
           if (variable === null || visitedVariables.has(variable)) {
             return null;
           }
@@ -2456,7 +2445,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(node)) {
             return null;
           }
-          const variable = resolveVariable(node);
+          const variable = variableForExpression(node);
           if (variable === null) {
             return null;
           }
@@ -2730,7 +2719,7 @@ export default eslintCompatPlugin({
             return true;
           }
           if (isIdentifier(node)) {
-            const variable = resolveVariable(node);
+            const variable = variableForExpression(node);
             if (variable === null) {
               return true;
             }
@@ -2926,7 +2915,7 @@ export default eslintCompatPlugin({
               reportLocalSpreadClassNames(argument, node);
               return;
             }
-            const variable = resolveVariable(argument);
+            const variable = variableForExpression(argument);
             if (variable === null) {
               return;
             }

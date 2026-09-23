@@ -7,7 +7,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-type AstNode = { type: string } & Record<string, unknown>;
+import type { AstNode } from "./utils.ts";
+import { isAstNode } from "./utils.ts";
 
 type FilenameContext = {
   filename?: string;
@@ -42,12 +43,6 @@ const AUTO_TOOLTIP_ELEMENTS = new Set([
 ]);
 const AUTO_TOOLTIP_ATTRS = new Set(["aria-label", "title"]);
 const NATIVE_TOOLTIP_ATTRS = new Set(["title"]);
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
 
 const getJsxName = (node: unknown): string | null => {
   if (!isAstNode(node)) {

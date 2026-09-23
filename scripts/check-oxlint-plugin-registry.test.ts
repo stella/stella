@@ -9,6 +9,7 @@ import oxlintConfig from "../oxlint.config.ts";
 import {
   approvedAdapterPathErrors,
   approvedAdapterPaths,
+  redeclaredSharedHelpers,
 } from "./check-oxlint-plugin-registry.ts";
 
 const temporaryDirectories: string[] = [];
@@ -92,5 +93,24 @@ describe("TypeBox approved adapter path census", () => {
     expect(approvedAdapterPathErrors(lintConfig)).toEqual([
       `oxlint.config.ts: approved TypeBox adapter path does not exist: ${directory}`,
     ]);
+  });
+});
+
+describe("shared helper redeclarations", () => {
+  const helpers = ["AstNode", "isAstNode", "resolveVariable"];
+
+  test("reports local declarations of shared helper names", () => {
+    const source = [
+      "type AstNode = { type: string };",
+      "const isAstNode = (node: unknown) => true;",
+      "function resolveVariable(identifier) {}",
+    ].join("\n");
+    expect(redeclaredSharedHelpers(source, helpers)).toEqual(helpers);
+  });
+
+  test("accepts imports of shared helper names", () => {
+    const source =
+      'import { type AstNode, isAstNode } from "./utils.ts";\nisAstNode(x);';
+    expect(redeclaredSharedHelpers(source, helpers)).toEqual([]);
   });
 });

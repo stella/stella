@@ -20,14 +20,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   value: jsonb("value")
 //   apps/api/src/db/columns.ts                      // defines the safe type
 
-import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
-
-type AstNode = { type: string } & Record<string, unknown>;
-
-type FilenameContext = {
-  filename?: string;
-  getFilename?: () => string;
-};
+import type { AstNode } from "./utils.ts";
+import {
+  getImportedName,
+  isAstNode,
+  isFileIn,
+  isIdentifier,
+  isStringLiteral,
+} from "./utils.ts";
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
 
@@ -35,21 +35,9 @@ const PG_CORE_MODULE = "drizzle-orm/pg-core";
 // pg-core's customType. Matched by suffix so it works from any cwd.
 const ALLOWLISTED_FILE = "apps/api/src/db/columns.ts";
 
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
-
-const filenameForContext = (context: FilenameContext): string =>
-  (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
-
-const isAllowlistedFile = (filename: string): boolean =>
-  filename.endsWith(ALLOWLISTED_FILE);
-
 // The static text of a string literal or a zero-expression template
 // literal: `` `jsonb` `` and `"jsonb"` name the same SQL type, so a backtick
-// literal must not bypass the rule.
+// literal is matched too.
 const staticStringValue = (node: unknown): string | null => {
   if (isStringLiteral(node)) {
     return node.value;
@@ -82,7 +70,7 @@ const isJsonbLiteral = (node: unknown): boolean =>
 
 // Static member name of a call target: `p.jsonb`, `p["jsonb"]`, and
 // `` p[`jsonb`] `` all reach the same pg-core export, so computed string
-// keys must not bypass the rule.
+// keys are matched too.
 const staticMemberName = (callee: AstNode): string | null => {
   if (callee.type !== "MemberExpression") {
     return null;
@@ -190,7 +178,7 @@ export default eslintCompatPlugin({
             pgCoreNamespaceAliases.clear();
             pgCoreJsonbAliases.clear();
             customTypeAliases.clear();
-            return !isAllowlistedFile(filenameForContext(context));
+            return !isFileIn(context, [ALLOWLISTED_FILE]);
           },
           ImportDeclaration(node) {
             if (

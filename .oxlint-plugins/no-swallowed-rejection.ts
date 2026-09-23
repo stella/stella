@@ -52,9 +52,16 @@
 // Both guards recognize Promise-like method syntax without type information;
 // unrelated APIs named `catch` or `then` need a narrow explained suppression.
 
-import { eslintCompatPlugin, type SourceCode } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode, isIdentifier, type AstNode } from "./utils.ts";
+import type { AstNode, ScopeContext } from "./utils.ts";
+import {
+  isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  memberPropertyName,
+  resolveVariable,
+} from "./utils.ts";
 
 const ALLOWED_RECEIVER_METHODS = new Set([
   // Response body consumption.
@@ -89,29 +96,6 @@ const unwrap = (node: unknown): AstNode | null => {
     return unwrap(node.expression);
   }
   return node;
-};
-
-// Resolve a member name only when the syntax itself fixes it. Dynamic
-// computed calls stay out of scope: `promise[method](handler)` may be an
-// unrelated API, while `promise["catch"](handler)` is the same Promise shape
-// as dot notation.
-const memberPropertyName = (node: unknown): string | null => {
-  const member = unwrap(node);
-  if (member?.type !== "MemberExpression") {
-    return null;
-  }
-  if (!member.computed && isIdentifier(member.property)) {
-    return member.property.name;
-  }
-  if (
-    member.computed &&
-    isAstNode(member.property) &&
-    member.property.type === "Literal" &&
-    typeof member.property.value === "string"
-  ) {
-    return member.property.value;
-  }
-  return null;
 };
 
 // A value carrying no information about the failure it stands in for.
@@ -291,28 +275,7 @@ const hasRuntimeParameter = (handler: AstNode): boolean => {
   return false;
 };
 
-type ScopeIdentifier = Parameters<SourceCode["getScope"]>[0] & {
-  type: "Identifier";
-  name: string;
-};
-
-const isScopeIdentifier = (node: unknown): node is ScopeIdentifier =>
-  isIdentifier(node);
-
-const createHandlerResolver = (sourceCode: SourceCode) => {
-  const resolveVariable = (identifier: ScopeIdentifier) => {
-    let scope: ReturnType<typeof sourceCode.getScope> | null =
-      sourceCode.getScope(identifier);
-    while (scope) {
-      const variable = scope.set.get(identifier.name);
-      if (variable !== undefined) {
-        return variable;
-      }
-      scope = scope.upper;
-    }
-    return null;
-  };
-
+const createHandlerResolver = (context: ScopeContext) => {
   const resolveHandler = (
     expression: unknown,
     seen = new Set<unknown>(),
@@ -324,11 +287,11 @@ const createHandlerResolver = (sourceCode: SourceCode) => {
     if (FUNCTION_NODE_TYPES.has(current.type)) {
       return current;
     }
-    if (!isScopeIdentifier(current)) {
+    if (!isIdentifierReference(current)) {
       return null;
     }
 
-    const variable = resolveVariable(current);
+    const variable = resolveVariable(context, current);
     if (variable === null || seen.has(variable) || variable.defs.length !== 1) {
       return null;
     }
@@ -358,7 +321,7 @@ const createHandlerResolver = (sourceCode: SourceCode) => {
     return resolveHandler(definition.node.init, nextSeen);
   };
 
-  return { resolveHandler, resolveVariable };
+  return { resolveHandler };
 };
 
 const rejectionHandlerArgument = (node: unknown): AstNode | null => {
@@ -446,9 +409,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const { resolveHandler, resolveVariable } = createHandlerResolver(
-              context.sourceCode,
-            );
+            const { resolveHandler } = createHandlerResolver(context);
             const resolved = resolveHandler(handler);
             if (resolved === null || hasRuntimeParameter(resolved)) {
               return;
@@ -484,13 +445,13 @@ export default eslintCompatPlugin({
                   ? unwrap(returned.argument)
                   : returned;
               if (
-                isScopeIdentifier(forwarded) &&
-                isScopeIdentifier(callee.object)
+                isIdentifierReference(forwarded) &&
+                isIdentifierReference(callee.object)
               ) {
-                const receiver = resolveVariable(callee.object);
+                const receiver = resolveVariable(context, callee.object);
                 if (
                   receiver !== null &&
-                  resolveVariable(forwarded) === receiver &&
+                  resolveVariable(context, forwarded) === receiver &&
                   receiver.defs.some(
                     (definition) =>
                       definition.type === "Variable" &&

@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { type AstNode, filenameForContext, isAstNode } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 // Scaling money by a literal 100 hard-codes an exponent the currency owns.
 //
@@ -65,7 +66,7 @@ const identifierName = (node: unknown): string | undefined =>
     : undefined;
 
 /** The property of a non-computed member access, `a.b` but not `a[b]`. */
-const memberPropertyName = (node: unknown): string | undefined => {
+const nonComputedMemberName = (node: unknown): string | undefined => {
   if (
     !isAstNode(node) ||
     (node.type !== "MemberExpression" &&
@@ -90,7 +91,7 @@ const isParseCall = (node: AstNode): boolean => {
     return false;
   }
   const calleeName =
-    identifierName(node.callee) ?? memberPropertyName(node.callee);
+    identifierName(node.callee) ?? nonComputedMemberName(node.callee);
   return calleeName !== undefined && PARSE_CALL_NAMES.has(calleeName);
 };
 
@@ -107,7 +108,7 @@ const isMoneyOperand = (node: unknown, depth = 0): boolean => {
   if (!isAstNode(node) || depth > MAX_OPERAND_DEPTH) {
     return false;
   }
-  const ownName = identifierName(node) ?? memberPropertyName(node);
+  const ownName = identifierName(node) ?? nonComputedMemberName(node);
   if (ownName !== undefined && isMoneyName(ownName)) {
     return true;
   }

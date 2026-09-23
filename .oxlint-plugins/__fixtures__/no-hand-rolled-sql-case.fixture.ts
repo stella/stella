@@ -72,6 +72,7 @@ const _dollarQuoted = `SELECT $label$CASE$label$, ${columns.map(renderColumn).jo
 const _escapedQuote = `SELECT 'it''s a CASE', ${columns.map(renderColumn).join(", ")} WHERE marker = 'END'`;
 
 // Accepted: the branches are written out, so there is no list to be empty.
+// expect-clean: no-hand-rolled-sql-case/no-hand-rolled-sql-case
 const _writtenOut = sql`CASE WHEN ${condition} THEN 1 ELSE 0 END`;
 
 // Accepted: a simple CASE whose operand is interpolated and whose branches

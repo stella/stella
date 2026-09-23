@@ -7,26 +7,15 @@ import {
   type Variable,
 } from "@oxlint/plugins";
 
-import { isAstNode, isIdentifier, unwrapExpression } from "./utils.ts";
+import {
+  isAstNode,
+  isIdentifier,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
 
 const isReference = (node: unknown): node is ESTree.IdentifierReference =>
   isIdentifier(node);
-
-const resolveVariable = (
-  context: Context,
-  node: ESTree.IdentifierReference,
-) => {
-  let scope: ReturnType<typeof context.sourceCode.getScope> | null =
-    context.sourceCode.getScope(node);
-  while (scope !== null) {
-    const variable = scope.set.get(node.name);
-    if (variable !== undefined) {
-      return variable;
-    }
-    scope = scope.upper;
-  }
-  return null;
-};
 
 const unwrapType = (value: unknown) => {
   let node = isAstNode(value) ? value : null;

@@ -11,6 +11,7 @@ export const unsafeCompaction =
   generateText({ ...baseOptions });
 
 // Allowed: aliases preserve the imported policy's identity.
+// expect-clean: require-complete-compaction-generation/require-complete-compaction-generation
 export const completeCompaction = generateText({
   ...baseOptions,
   ...completePolicy,

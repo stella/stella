@@ -12,9 +12,10 @@
 //     capability cannot be enforced in one place and described in another.
 //
 // Detection boundary: syntax only. An `import` row matches an import source
-// equal to a listed specifier or ending in its final segment (the `@/`, deep
-// relative, and `.ts` spellings of one module), whether it is imported or
-// re-exported: a facade that re-exports the owner's dependency would hand the
+// that resolves to a listed module: relative, `@/` alias, and extension
+// spellings compare by canonical module id, and a subpath of a listed bare
+// package (`@tanstack/ai/<subpath>`) is the same package. It matches whether
+// the source is imported or re-exported: a facade that re-exports the owner's dependency would hand the
 // capability to every consumer without naming it. A row that also lists
 // `names` matches only a declaration that binds one of them, or a namespace
 // import, a star re-export, and a dynamic import, which reach every export; the
@@ -31,12 +32,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
+  canonicalModuleId,
   filenameForContext,
   getImportedName,
   isAstNode,
   isIdentifier,
   isMemberAccess,
   isStringLiteral,
+  repoRelativeFilename,
 } from "./utils.ts";
 
 const GLOBAL_ROOTS = ["window", "globalThis", "self"] as const;
@@ -45,7 +48,8 @@ type ImportEntry = {
   id: string;
   owner: string;
   paths: readonly string[];
-  specifiers: readonly string[];
+  // Canonical module ids of the listed specifiers.
+  modules: readonly string[];
   // `null` confines the whole specifier.
   names: readonly string[] | null;
 };
@@ -55,7 +59,8 @@ type GlobalMemberEntry = {
   owner: string;
   paths: readonly string[];
   object: string;
-  memberPath: readonly string[];
+  // The member path from its outermost property inwards.
+  reversedMemberPath: readonly string[];
 };
 
 const stringsFrom = (value: unknown): readonly string[] =>
@@ -109,17 +114,23 @@ const configuredEntries = (context: {
     if (typeof enforcement !== "object" || enforcement === null) {
       continue;
     }
-    const owner = stringsFrom(Reflect.get(entry, "owner")).join(", ");
+    const owners = stringsFrom(Reflect.get(entry, "owner"));
+    const owner = owners.join(", ");
     const paths = allowedPathsFrom(entry, enforcement);
     const kind = Reflect.get(enforcement, "kind");
 
     if (kind === "import") {
       const names = Reflect.get(enforcement, "names");
+      // An `@/` specifier names a module of the owner's app, so it resolves
+      // against the owner's path.
+      const ownerPath = owners.at(0) ?? "";
       importEntries.push({
         id,
         owner,
         paths,
-        specifiers: stringsFrom(Reflect.get(enforcement, "specifiers")),
+        modules: stringsFrom(Reflect.get(enforcement, "specifiers")).map(
+          (specifier) => canonicalModuleId(specifier, ownerPath),
+        ),
         names: names === undefined ? null : stringsFrom(names),
       });
       continue;
@@ -130,7 +141,13 @@ const configuredEntries = (context: {
       if (typeof object !== "string" || memberPath.length === 0) {
         continue;
       }
-      globalMemberEntries.push({ id, owner, paths, object, memberPath });
+      globalMemberEntries.push({
+        id,
+        owner,
+        paths,
+        object,
+        reversedMemberPath: memberPath.toReversed(),
+      });
     }
   }
 
@@ -144,27 +161,22 @@ const coversFile = (allowedPath: string, filename: string): boolean =>
     ? filename.includes(allowedPath)
     : filename.endsWith(allowedPath);
 
-// The alias, deep-relative, and extension spellings of one module resolve to
-// the same file, so a specifier also matches on its last two segments.
-const specifierSuffix = (specifier: string): string =>
-  `/${specifier.split("/").slice(-2).join("/")}`;
+// A canonical id that is still a bare package specifier (not a repository
+// path) owns its subpaths too.
+const isBarePackage = (moduleId: string): boolean =>
+  !moduleId.startsWith("apps/") &&
+  !moduleId.startsWith("packages/") &&
+  !moduleId.startsWith(".");
 
-const isOwnedSpecifier = (
-  specifiers: readonly string[],
-  source: unknown,
-): boolean => {
-  if (typeof source !== "string") {
-    return false;
-  }
-  return specifiers.some((specifier) => {
-    const suffix = specifierSuffix(specifier);
-    return (
-      source === specifier ||
-      source.endsWith(suffix) ||
-      source.endsWith(`${suffix}.ts`)
-    );
-  });
-};
+const isOwnedModule = (
+  modules: readonly string[],
+  sourceModuleId: string,
+): boolean =>
+  modules.some(
+    (moduleId) =>
+      sourceModuleId === moduleId ||
+      (isBarePackage(moduleId) && sourceModuleId.startsWith(`${moduleId}/`)),
+  );
 
 // The name a specifier takes from the module: `imported` on an import,
 // `local` on a re-export (`export { local as exported } from "..."`).
@@ -219,14 +231,14 @@ const isMemberStep = (
 const isOwnedMemberPath = (
   node: unknown,
   object: string,
-  memberPath: readonly string[],
+  reversedMemberPath: readonly string[],
 ): boolean => {
   let current: unknown = node;
   // Iterate the values, not the indices: an indexed read is `string |
   // undefined` under the plugins project's strict index access and plain
   // `string` under the lint's program, so either the guard or the compiler
   // has to be wrong about it.
-  for (const segment of memberPath.toReversed()) {
+  for (const segment of reversedMemberPath) {
     if (!isMemberStep(current, segment)) {
       return false;
     }
@@ -259,6 +271,7 @@ export default eslintCompatPlugin({
         let configured: ConfiguredEntries | null = null;
         let activeImports: readonly ImportEntry[] = [];
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
+        let importerPath = "";
 
         // `specifiers` is `null` when the declaration reaches every export
         // (a star re-export or a dynamic import), which matches any row.
@@ -267,8 +280,12 @@ export default eslintCompatPlugin({
           source: unknown,
           specifiers: unknown,
         ) => {
+          if (typeof source !== "string") {
+            return;
+          }
+          const sourceModuleId = canonicalModuleId(source, importerPath);
           for (const entry of activeImports) {
-            if (!isOwnedSpecifier(entry.specifiers, source)) {
+            if (!isOwnedModule(entry.modules, sourceModuleId)) {
               continue;
             }
             if (
@@ -289,6 +306,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             const filename = filenameForContext(context);
+            importerPath = repoRelativeFilename(context);
             configured ??= configuredEntries(context);
             const { importEntries, globalMemberEntries } = configured;
             const applies = (entry: { paths: readonly string[] }) =>
@@ -329,7 +347,9 @@ export default eslintCompatPlugin({
               return;
             }
             for (const entry of activeGlobalMembers) {
-              if (isOwnedMemberPath(node, entry.object, entry.memberPath)) {
+              if (
+                isOwnedMemberPath(node, entry.object, entry.reversedMemberPath)
+              ) {
                 context.report({
                   node,
                   messageId: "unownedUse",

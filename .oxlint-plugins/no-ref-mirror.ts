@@ -9,29 +9,25 @@ import type { ESTree } from "@oxlint/plugins";
 // render-body mirror assignment and ignores DOM refs, timers, queues, and
 // assignments inside callbacks/effects.
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import { getImportedName, isFileIn, isIdentifier } from "./utils.ts";
 
 const REACT_MODULE = "react";
 
-const filenameForContext = (context) =>
-  context.filename ?? context.getFilename?.() ?? "";
-
-const isAllowedFile = (context, allowedFiles) => {
-  const filename = filenameForContext(context);
-  return allowedFiles.some((allowedFile) => {
+// `allowedFiles` entries are a path suffix or an object carrying one in `path`.
+const allowedFilePaths = (allowedFiles) =>
+  allowedFiles.flatMap((allowedFile) => {
     if (typeof allowedFile === "string") {
-      return filename.endsWith(allowedFile);
+      return [allowedFile];
     }
     if (
       typeof allowedFile === "object" &&
       allowedFile !== null &&
       typeof allowedFile.path === "string"
     ) {
-      return filename.endsWith(allowedFile.path);
+      return [allowedFile.path];
     }
-    return false;
+    return [];
   });
-};
 
 const findContainingFunction = (node) => {
   let current = node.parent;
@@ -127,7 +123,7 @@ export default eslintCompatPlugin({
             useRefAliases.clear();
             reactNamespaces.clear();
             mirroredRefsByFunction = new WeakMap();
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&
@@ -135,10 +131,10 @@ export default eslintCompatPlugin({
               Array.isArray(options.allowedFiles)
                 ? options.allowedFiles
                 : [];
-            return !isAllowedFile(context, allowedFiles);
+            return !isFileIn(context, allowedFilePaths(allowedFiles));
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== REACT_MODULE) {
+            if (node.source.value !== REACT_MODULE) {
               return;
             }
 
@@ -150,10 +146,7 @@ export default eslintCompatPlugin({
                 reactNamespaces.add(specifier.local.name);
                 continue;
               }
-              if (
-                specifier.type === "ImportSpecifier" &&
-                getImportedName(specifier) === "useRef"
-              ) {
+              if (getImportedName(specifier) === "useRef") {
                 useRefAliases.add(specifier.local.name);
               }
             }
@@ -167,7 +160,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const [initialValue] = node.init.arguments ?? [];
+            const [initialValue] = node.init.arguments;
             if (!isIdentifier(initialValue)) {
               return;
             }
@@ -189,7 +182,7 @@ export default eslintCompatPlugin({
             }
             if (
               node.left.type !== "MemberExpression" ||
-              node.left.computed !== false ||
+              node.left.computed ||
               !isIdentifier(node.left.object) ||
               !isIdentifier(node.left.property, "current") ||
               !isIdentifier(node.right)

@@ -40,6 +40,7 @@ const _ansiSpelled = `CAST(${cursor} AS timestamp(6) without time zone)`;
 // --- Cases the rule MUST NOT flag ---
 
 // tz-aware cast.
+// expect-clean: no-naive-timestamp-cast/no-naive-timestamp-cast
 const _tz = `created_at > ${cursor}::timestamptz`;
 
 // Explicit re-anchor idiom: deliberate conversion of a zoneless value to an

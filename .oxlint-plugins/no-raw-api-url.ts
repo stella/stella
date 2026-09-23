@@ -25,14 +25,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - a template literal starting with `${env.VITE_API_URL}` then `/v1`
 
 import {
-  type AstNode,
-  filenameForContext,
   getPropertyName,
   isAstNode,
+  isFileIn,
   isIdentifier,
   isMemberAccess,
   isStringLiteral,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 // `/api...` or `/v1...` — a relative path that must not be fetched
 // directly, or a versioned path that belongs behind apiUrl().
@@ -112,8 +112,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            const filename = filenameForContext(context);
-            return !API_ENV_OWNERS.some((owner) => filename.endsWith(owner));
+            return !isFileIn(context, API_ENV_OWNERS);
           },
           MemberExpression(node: unknown) {
             if (isDirectApiEnvAccess(node)) {

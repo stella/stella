@@ -1,35 +1,20 @@
+// Entry point that keeps the `no-nanoid/no-nanoid` rule id; the table row and
+// the detector live in ./restricted-import.ts.
+
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-// Ban nanoid imports.
-//
-// The project uses native Bun.randomUUIDv7() for ID generation
-// and crypto.getRandomValues() for custom alphabets. nanoid is
-// a removed dependency; this rule prevents re-introduction.
+import {
+  restrictedImportMeta,
+  restrictedImportVisitors,
+} from "./restricted-import.ts";
 
 export default eslintCompatPlugin({
   meta: { name: "no-nanoid" },
   rules: {
     "no-nanoid": {
-      meta: {
-        type: "problem",
-        messages: {
-          noNanoid:
-            "Do not import nanoid. Use Bun.randomUUIDv7() " +
-            "for IDs or crypto.getRandomValues() for custom " +
-            "alphabets.",
-        },
-      },
+      meta: restrictedImportMeta("no-nanoid"),
       createOnce(context) {
-        return {
-          ImportDeclaration(node) {
-            if (node.source.value === "nanoid") {
-              context.report({
-                node,
-                messageId: "noNanoid",
-              });
-            }
-          },
-        };
+        return restrictedImportVisitors(context, "no-nanoid");
       },
     },
   },

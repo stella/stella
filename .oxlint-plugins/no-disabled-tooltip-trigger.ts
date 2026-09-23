@@ -20,39 +20,13 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-type FilenameContext = {
-  filename?: string;
-  getFilename?: () => string;
-};
+import type { AstNode } from "./utils.ts";
+import { filenameForContext, isAstNode, jsxName } from "./utils.ts";
 
 const TOOLTIP_ELEMENTS = new Set(["Tooltip", "TooltipRoot", "TooltipTrigger"]);
 
 // Following `render` chains costs nothing and no real trigger stack is deeper.
 const MAX_RENDER_DEPTH = 8;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
-
-const getJsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return getJsxName(node.property);
-  }
-  if (node.type === "JSXNamespacedName") {
-    return getJsxName(node.name);
-  }
-  return null;
-};
 
 const getOpeningElement = (element: unknown): AstNode | null => {
   if (!isAstNode(element) || element.type !== "JSXElement") {
@@ -73,7 +47,7 @@ const getAttribute = (
       (attribute): attribute is AstNode =>
         isAstNode(attribute) &&
         attribute.type === "JSXAttribute" &&
-        getJsxName(attribute.name) === name,
+        jsxName(attribute.name) === name,
     ) ?? null
   );
 };
@@ -101,7 +75,7 @@ const triggersDisabledButton = (tooltipElement: unknown): boolean => {
   ) {
     const openingElement = getOpeningElement(element);
     if (
-      getJsxName(openingElement?.name) === "Button" &&
+      jsxName(openingElement?.name) === "Button" &&
       getAttribute(openingElement, "disabled") !== null
     ) {
       return true;
@@ -110,9 +84,6 @@ const triggersDisabledButton = (tooltipElement: unknown): boolean => {
   }
   return false;
 };
-
-const filenameOf = (context: FilenameContext): string =>
-  context.filename ?? context.getFilename?.() ?? "";
 
 export default eslintCompatPlugin({
   meta: { name: "no-disabled-tooltip-trigger" },
@@ -128,10 +99,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            return filenameOf(context).endsWith(".tsx");
+            return filenameForContext(context).endsWith(".tsx");
           },
           JSXElement(node) {
-            const name = getJsxName(getOpeningElement(node)?.name);
+            const name = jsxName(getOpeningElement(node)?.name);
             if (
               name === null ||
               !TOOLTIP_ELEMENTS.has(name) ||

@@ -12,19 +12,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   to: "/workspaces/$workspaceId/$viewId/document"
 //   `/entities/${workspaceId}/entity/${entityId}` // API path, not web route
 
-import { isStringLiteral } from "./utils.ts";
+import { isAstNode, isStringLiteral } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const DYNAMIC_PART = "\u{E000}";
 const LEGACY_ENTITY_ROUTE =
   /^\/workspaces\/(?:[^/?#\u{E000}]|\u{E000})+\/entities\/(?:[^/?#\u{E000}]|\u{E000})+(?=[/?#]|$)/u;
-
-type AstNode = Record<string, unknown> & { type: string };
-
-const isAstNode = (value: unknown): value is AstNode =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof (value as { type: unknown }).type === "string";
 
 const templateQuasiText = (template: AstNode, index: number): string | null => {
   const quasis = template.quasis;

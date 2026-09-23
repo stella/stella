@@ -15,7 +15,9 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -33,11 +35,6 @@ const LOOP_TYPES = new Set([
   "ForStatement",
   "WhileStatement",
 ]);
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
 
 type ScopeVariable = {
   defs: {
@@ -189,10 +186,7 @@ const callWithinExpressionStatement = (
     if (expression.type === "AwaitExpression") {
       return containsUnconditionalCall(expression.argument);
     }
-    if (
-      expression.type === "CallExpression" &&
-      expression.optional !== true
-    ) {
+    if (expression.type === "CallExpression" && expression.optional !== true) {
       if (predicate(expression)) {
         return true;
       }
@@ -262,7 +256,10 @@ const abruptCompletionTarget = (node: AstNode): AstNode | null => {
   return null;
 };
 
-const nearestLoopWithin = (node: unknown, boundary: AstNode): AstNode | null => {
+const nearestLoopWithin = (
+  node: unknown,
+  boundary: AstNode,
+): AstNode | null => {
   let current = isAstNode(node) ? node.parent : null;
   while (isAstNode(current) && current !== boundary) {
     if (LOOP_TYPES.has(current.type)) {
@@ -316,28 +313,11 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const acquisitions: Acquisition[] = [];
 
-        const isEstreeIdentifier = (node: unknown): node is IdentifierNode =>
-          isIdentifier(node) && Array.isArray(node.range);
-
-        const resolveVariable = (
-          identifier: IdentifierNode,
-        ): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const isGlobalReference = (node: unknown, name: string): boolean => {
-          if (!isEstreeIdentifier(node) || node.name !== name) {
+          if (!isIdentifierReference(node) || node.name !== name) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveVariable(context, node);
           return variable === null || variable.defs.length === 0;
         };
 
@@ -353,7 +333,10 @@ export default eslintCompatPlugin({
           ) {
             return namedType(typeNode.typeAnnotation, name);
           }
-          if (typeNode.type === "TSUnionType" && Array.isArray(typeNode.types)) {
+          if (
+            typeNode.type === "TSUnionType" &&
+            Array.isArray(typeNode.types)
+          ) {
             const meaningfulTypes = typeNode.types.filter(
               (part) =>
                 isAstNode(part) &&
@@ -394,12 +377,12 @@ export default eslintCompatPlugin({
         ): boolean =>
           variable.defs.some((definition) => {
             const identifier = definitionName(definition);
-            return identifier !== null && namedType(identifier.typeAnnotation, name);
+            return (
+              identifier !== null && namedType(identifier.typeAnnotation, name)
+            );
           });
 
-        const constInitializer = (
-          variable: ScopeVariable,
-        ): AstNode | null => {
+        const constInitializer = (variable: ScopeVariable): AstNode | null => {
           for (const definition of variable.defs) {
             if (
               definition.type === "Variable" &&
@@ -450,8 +433,8 @@ export default eslintCompatPlugin({
                 target = unwrapValue(target.left);
               }
               if (
-                isEstreeIdentifier(target) &&
-                resolveVariable(target) === variable
+                isIdentifierReference(target) &&
+                resolveVariable(context, target) === variable
               ) {
                 return definition.node.init;
               }
@@ -527,10 +510,10 @@ export default eslintCompatPlugin({
           if (isGlobalConstructor(expression, "Response")) {
             return true;
           }
-          if (!isEstreeIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return false;
           }
-          const variable = resolveVariable(expression);
+          const variable = resolveVariable(context, expression);
           if (variable === null || visited.has(variable)) {
             return false;
           }
@@ -564,10 +547,10 @@ export default eslintCompatPlugin({
               isResponseExpression(expression.object)
             );
           }
-          if (!isEstreeIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return false;
           }
-          const variable = resolveVariable(expression);
+          const variable = resolveVariable(context, expression);
           if (variable === null || visited.has(variable)) {
             return false;
           }
@@ -594,10 +577,10 @@ export default eslintCompatPlugin({
           visited = new Set<ScopeVariable>(),
         ): ScopeVariable | null => {
           const expression = unwrapValue(node);
-          if (!isEstreeIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return null;
           }
-          const variable = resolveVariable(expression);
+          const variable = resolveVariable(context, expression);
           if (variable === null || visited.has(variable)) {
             return variable;
           }
@@ -654,11 +637,11 @@ export default eslintCompatPlugin({
           if (
             parent?.type === "VariableDeclarator" &&
             parent.init === current &&
-            isEstreeIdentifier(parent.id)
+            isIdentifierReference(parent.id)
           ) {
             const declaration = isAstNode(parent.parent) ? parent.parent : null;
             return {
-              binding: resolveVariable(parent.id),
+              binding: resolveVariable(context, parent.id),
               stable:
                 declaration?.type === "VariableDeclaration" &&
                 declaration.kind === "const",
@@ -667,9 +650,12 @@ export default eslintCompatPlugin({
           if (
             parent?.type === "AssignmentExpression" &&
             parent.right === current &&
-            isEstreeIdentifier(parent.left)
+            isIdentifierReference(parent.left)
           ) {
-            return { binding: resolveVariable(parent.left), stable: false };
+            return {
+              binding: resolveVariable(context, parent.left),
+              stable: false,
+            };
           }
           return { binding: null, stable: false };
         };
@@ -693,7 +679,8 @@ export default eslintCompatPlugin({
             parent = isAstNode(current.parent) ? current.parent : null;
           }
           return (
-            (parent?.type === "ReturnStatement" && parent.argument === current) ||
+            (parent?.type === "ReturnStatement" &&
+              parent.argument === current) ||
             (parent?.type === "ArrowFunctionExpression" &&
               parent.body === current)
           );
@@ -728,7 +715,10 @@ export default eslintCompatPlugin({
           statement: unknown,
           binding: ScopeVariable,
         ): boolean => {
-          if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
+          if (
+            !isAstNode(statement) ||
+            statement.type !== "ExpressionStatement"
+          ) {
             return false;
           }
           let expression = unwrapValue(statement.expression);
@@ -828,7 +818,9 @@ export default eslintCompatPlugin({
           const acquisitionIndex = acquisitionSite.block.body.indexOf(
             acquisitionSite.statement,
           );
-          const tryIndex = acquisitionSite.block.body.indexOf(trySite.statement);
+          const tryIndex = acquisitionSite.block.body.indexOf(
+            trySite.statement,
+          );
           return (
             acquisitionIndex !== -1 &&
             tryIndex > acquisitionIndex &&
@@ -899,9 +891,7 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
-          const acquisitionIndex = body.body.indexOf(
-            acquisitionSite.statement,
-          );
+          const acquisitionIndex = body.body.indexOf(acquisitionSite.statement);
           const returnIndex = body.body.indexOf(finalStatement);
           if (
             acquisitionIndex === -1 ||
@@ -950,7 +940,7 @@ export default eslintCompatPlugin({
           identifier: IdentifierNode,
           binding: ScopeVariable,
         ): "done" | "result" | null => {
-          const variable = resolveVariable(identifier);
+          const variable = resolveVariable(context, identifier);
           if (variable === null) {
             return null;
           }
@@ -1006,17 +996,17 @@ export default eslintCompatPlugin({
           binding: ScopeVariable,
         ): boolean => {
           const expression = unwrapValue(node);
-          if (isEstreeIdentifier(expression)) {
+          if (isIdentifierReference(expression)) {
             return readResultKind(expression, binding) === "done";
           }
           if (
             expression?.type === "MemberExpression" &&
             staticMemberName(expression) === "done" &&
-            isEstreeIdentifier(unwrapValue(expression.object))
+            isIdentifierReference(unwrapValue(expression.object))
           ) {
             const object = unwrapValue(expression.object);
             return (
-              isEstreeIdentifier(object) &&
+              isIdentifierReference(object) &&
               readResultKind(object, binding) === "result"
             );
           }
@@ -1080,8 +1070,9 @@ export default eslintCompatPlugin({
             return false;
           }
           return (
-            methodStatementIndexes(tryNode.handler.body, "cancel", binding)
-              .at(0) === 0
+            methodStatementIndexes(tryNode.handler.body, "cancel", binding).at(
+              0,
+            ) === 0
           );
         };
 
@@ -1162,8 +1153,7 @@ export default eslintCompatPlugin({
                 return;
               }
               if (node.type === "ThrowStatement") {
-                unsafeExit =
-                  !handlerCancels && !hasPriorCancel(node, binding);
+                unsafeExit = !handlerCancels && !hasPriorCancel(node, binding);
                 return;
               }
               if (node.type === "YieldExpression") {
@@ -1189,8 +1179,7 @@ export default eslintCompatPlugin({
                 !containsReaderMethod(node, "cancel", binding) &&
                 !containsReaderMethod(node, "releaseLock", binding)
               ) {
-                unsafeExit =
-                  !handlerCancels && !hasPriorCancel(node, binding);
+                unsafeExit = !handlerCancels && !hasPriorCancel(node, binding);
                 return;
               }
               if (node.type === "ReturnStatement") {

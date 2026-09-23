@@ -34,6 +34,7 @@ const readonlyInner = {
 // --- Cases the rule MUST NOT flag ---
 
 // Total `Record`, no `Partial` — the required fix.
+// expect-clean: no-partial-record-satisfies/no-partial-record-satisfies
 const totalRecord = {
   a: 1,
   b: 2,

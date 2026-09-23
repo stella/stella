@@ -35,6 +35,7 @@ export const directlyEscapedToOpaqueConsumer = async () => {
 
 // Allowed: direct inspection of the error channel and the canonical adapter
 // both handle the response without an intermediate binding.
+// expect-clean: require-eden-error-check/require-eden-error-check
 export const directlyInspectedError = async () => (await api.tasks.get()).error;
 
 export const directlyAdaptedResponse = async () =>

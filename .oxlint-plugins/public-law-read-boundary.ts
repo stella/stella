@@ -20,8 +20,8 @@ import {
   isAstNode,
   isIdentifier,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const SEARCH_FUNCTIONS = new Set([
   "searchPostgresDecisions",

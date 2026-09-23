@@ -57,6 +57,7 @@ export const write = () =>
 
 // Allowed: cursor-based and keyless commands carry no key position.
 export const scan = () =>
+  // expect-clean: require-coordination-key/require-coordination-key
   redis.send("SCAN", ["0", "MATCH", "workflow-run:{*}:running"]);
 
 export const ping = () => redis.send("PING", []);

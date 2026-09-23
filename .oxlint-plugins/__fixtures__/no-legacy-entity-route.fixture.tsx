@@ -71,6 +71,7 @@ export const satisfiesWrappedLegacyRoute =
   (`/workspaces/${workspaceId}` satisfies `/workspaces/${string}`) +
   `/entities/${entityId}`;
 
+// expect-clean: no-legacy-entity-route/no-legacy-entity-route
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
 export const similarlyStructuredPrivatePath =
   "/_protected/workspaces/$workspaceId/entities/$entityId";

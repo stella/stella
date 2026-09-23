@@ -5,6 +5,7 @@ declare const configureExternalReadTransaction: (
   tx: unknown,
   isolation: string,
 ) => Promise<void>;
+// expect-clean: public-law-read-boundary/require-configured-read-transaction
 declare const configureReadTransaction: (
   tx: unknown,
   isolation: string,
@@ -15,6 +16,7 @@ declare const database: {
   transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 };
 
+// expect-clean: public-law-read-boundary/require-language-alternate-counts
 export const searchPostgresDecisions = async () => {
   await readPublicDecisionLanguageAlternatesByGroup();
 };

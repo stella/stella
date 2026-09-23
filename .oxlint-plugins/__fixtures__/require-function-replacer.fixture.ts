@@ -73,6 +73,7 @@ export const letBoundToDynamicValue = () => {
 };
 
 // Allowed — inline arrow function replacer.
+// expect-clean: require-function-replacer/require-function-replacer
 export const arrowReplacer = () => text.replace(pattern, () => dynamicValue);
 
 // Allowed — inline function-expression replacer.

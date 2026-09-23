@@ -73,6 +73,7 @@ export const _ok1 = () => (
 );
 // Allowed: a trigger whose render target is not a menu item.
 export const _ok2 = () => (
+  // expect-clean: no-dialog-trigger-menu-item/no-dialog-trigger-menu-item
   <DialogTrigger render={<button type="button">{t("common.edit")}</button>} />
 );
 // Allowed: a menu item with no dialog trigger around it.

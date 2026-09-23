@@ -1,7 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
-  type AstNode,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -235,12 +235,12 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           JSXOpeningElement(node) {
-            const elementName = jsxElementName(node.name);
+            const tagName = jsxElementName(node.name);
             const dirAttr = getJsxAttr(node, "dir");
 
             if (
-              !elementName ||
-              BIDI_TEXT_COMPONENTS.has(elementName) ||
+              !tagName ||
+              BIDI_TEXT_COMPONENTS.has(tagName) ||
               literalAttrValue(dirAttr) !== "auto"
             ) {
               return;
