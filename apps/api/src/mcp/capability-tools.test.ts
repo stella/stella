@@ -655,13 +655,14 @@ describe("invoke_capability gates", () => {
     });
 
     test("destructive capabilities are not listed", async () => {
-      const listed: { id: string; destructive: boolean }[] = [];
+      type CapabilityPage = {
+        items: { id: string; destructive: boolean }[];
+        nextCursor: string | null;
+      };
+      const listed: CapabilityPage["items"] = [];
       let cursor: string | null = null;
       do {
-        const page = parseToolPayload<{
-          items: { id: string; destructive: boolean }[];
-          nextCursor: string | null;
-        }>(
+        const page: CapabilityPage = parseToolPayload<CapabilityPage>(
           // eslint-disable-next-line no-await-in-loop -- pages depend on the previous cursor
           await handleMcpToolCall({
             args: {
