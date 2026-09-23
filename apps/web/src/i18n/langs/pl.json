@@ -706,10 +706,18 @@
     "research": {
       "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
       "answers": {
-        "failed": "Bez odpowiedzi",
+        "failureReasons": {
+          "decisionUnavailable": "Orzeczenie niedostępne",
+          "missingAnswer": "Model nie odpowiedział",
+          "modelError": "Błąd modelu",
+          "noText": "Brak tekstu orzeczenia",
+          "runError": "Uruchomienie przerwane",
+          "wrongType": "Odpowiedź w złym formacie"
+        },
         "no": "Nie",
         "notAllowed": "Niedozwolone przez warunki źródła",
         "notRun": "Nieuruchomione",
+        "notStated": "Orzeczenie tego nie wskazuje",
         "pending": "Odpowiadam…",
         "showSource": "Pokaż źródło",
         "yes": "Tak"

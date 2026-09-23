@@ -706,10 +706,18 @@
     "research": {
       "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
       "answers": {
-        "failed": "Vastamata",
+        "failureReasons": {
+          "decisionUnavailable": "Lahend pole saadaval",
+          "missingAnswer": "Mudel ei vastanud",
+          "modelError": "Mudeli viga",
+          "noText": "Lahendi tekst puudub",
+          "runError": "Käivitus katkes",
+          "wrongType": "Vastus vales vormingus"
+        },
         "no": "Ei",
         "notAllowed": "Allika tingimused ei luba",
         "notRun": "Pole käivitatud",
+        "notStated": "Lahendis pole märgitud",
         "pending": "Vastan…",
         "showSource": "Näita allikat",
         "yes": "Jah"

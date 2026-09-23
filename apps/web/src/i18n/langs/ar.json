@@ -706,10 +706,18 @@
     "research": {
       "answering": "{count, plural, zero {لا توجد خلايا قيد الإجابة…} one {تجري الإجابة عن خلية واحدة…} two {تجري الإجابة عن خليتين…} few {تجري الإجابة عن # خلايا…} many {تجري الإجابة عن # خلية…} other {تجري الإجابة عن # خلية…}}",
       "answers": {
-        "failed": "لم تتم الإجابة",
+        "failureReasons": {
+          "decisionUnavailable": "الحكم غير متاح",
+          "missingAnswer": "لم يُجب النموذج",
+          "modelError": "خطأ في النموذج",
+          "noText": "لا يتوفر نص الحكم",
+          "runError": "توقّف التشغيل",
+          "wrongType": "إجابة بتنسيق غير صحيح"
+        },
         "no": "لا",
         "notAllowed": "لا تسمح به شروط المصدر",
         "notRun": "لم يُشغَّل",
+        "notStated": "لم يرد في الحكم",
         "pending": "تجري الإجابة…",
         "showSource": "عرض المصدر",
         "yes": "نعم"

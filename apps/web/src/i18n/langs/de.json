@@ -706,10 +706,18 @@
     "research": {
       "answering": "{count, plural, one {# Zelle wird beantwortet…} other {# Zellen werden beantwortet…}}",
       "answers": {
-        "failed": "Nicht beantwortet",
+        "failureReasons": {
+          "decisionUnavailable": "Entscheidung nicht verfügbar",
+          "missingAnswer": "Modell hat nicht geantwortet",
+          "modelError": "Modellfehler",
+          "noText": "Kein Entscheidungstext",
+          "runError": "Ausführung abgebrochen",
+          "wrongType": "Antwort im falschen Format"
+        },
         "no": "Nein",
         "notAllowed": "Von den Nutzungsbedingungen der Quelle nicht erlaubt",
         "notRun": "Nicht ausgeführt",
+        "notStated": "In der Entscheidung nicht angegeben",
         "pending": "Wird beantwortet…",
         "showSource": "Quelle anzeigen",
         "yes": "Ja"

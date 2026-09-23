@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ResearchQuestion } from "@/api/lib/case-law/research-answers";
+import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
+import type { CaseLawResearchAnswerType } from "@stll/api-contract";
+
+import type {
+  CaseLawResearchColumnContent,
+  ResearchQuestion,
+} from "@/api/lib/case-law/research-answers";
 import {
   exceedsSystemOneSourceBudget,
   resolveSystemOneOutcomes,
@@ -225,34 +231,53 @@ describe("resolveSystemOneOutcomes", () => {
     expect(resolved.fallbackColumnIds).toEqual(["col-amount"]);
   });
 
-  test("not stated writes an empty select cell and reports an empty int cell", () => {
+  test("not stated is a not_stated cell for every kind the tier takes", () => {
+    const contentByKind = {
+      text: { version: 1, type: "text" },
+      "single-select": columns.type.content,
+      "multi-select": { ...columns.type.content, type: "multi-select" },
+      date: { version: 1, type: "date" },
+      int: { version: 1, type: "int" },
+    } as const satisfies Record<
+      CaseLawResearchAnswerType,
+      CaseLawResearchColumnContent
+    >;
     const notStated: AnswerOutcome = {
       state: "not_stated",
       confidence: 0.8,
       rationale: "Jev found no answer in the text (80% confidence).",
     };
-    const select = resolveSystemOneOutcomes({
-      questions: askedFor(columns.type),
-      outcomes: new Map([["col-type", notStated]]),
+    const asked = splitSystemOneQuestions(
+      CASE_LAW_RESEARCH_ANSWER_TYPES.map((kind) => ({
+        columnId: kind,
+        question: `About ${kind}?`,
+        content: contentByKind[kind],
+      })),
+    ).asked;
+    // Every closed kind; text is the generative model's alone.
+    expect(asked.map((question) => question.id)).toEqual(
+      CASE_LAW_RESEARCH_ANSWER_TYPES.filter((kind) => kind !== "text"),
+    );
+
+    const resolved = resolveSystemOneOutcomes({
+      questions: asked,
+      outcomes: new Map(asked.map((question) => [question.id, notStated])),
       excerptByAnchor,
       run,
-    });
-    expect(select.settled.at(0)?.outcome).toMatchObject({
-      state: "answered",
-      answer: { version: 1, type: "single-select", value: null },
     });
 
-    const int = resolveSystemOneOutcomes({
-      questions: askedFor(columns.amount),
-      outcomes: new Map([["col-amount", notStated]]),
-      excerptByAnchor,
-      run,
-    });
-    expect(int.settled.at(0)?.outcome).toEqual({
-      state: "failed",
-      failureReason: "not_stated",
-    });
-    expect(int.fallbackColumnIds).toEqual([]);
+    expect(resolved.fallbackColumnIds).toEqual([]);
+    expect(resolved.settled.map((entry) => entry.outcome)).toEqual(
+      asked.map(() => ({
+        state: "not_stated",
+        run: {
+          version: 1,
+          ...run,
+          rationale: notStated.rationale,
+          justification: { version: 1, blocks: [] },
+        },
+      })),
+    );
   });
 
   test("a retrieved state is stamped on every cell it answered", () => {

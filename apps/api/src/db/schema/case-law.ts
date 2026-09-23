@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import {
+  CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
@@ -2169,7 +2170,10 @@ export const caseLawResearchAnswers = p.pgTable(
     answer: jsonb().$type<FieldContent>(),
     run: jsonb().$type<CaseLawResearchAnswerRun>(),
     /** A short reason class for `failed`; never the provider's message. */
-    failureReason: p.varchar("failure_reason", { length: 64 }),
+    failureReason: p.varchar("failure_reason", {
+      length: 64,
+      enum: CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,
+    }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },

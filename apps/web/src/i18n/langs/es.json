@@ -706,10 +706,18 @@
     "research": {
       "answering": "{count, plural, one {Respondiendo # celda…} other {Respondiendo # celdas…}}",
       "answers": {
-        "failed": "Sin responder",
+        "failureReasons": {
+          "decisionUnavailable": "Resolución no disponible",
+          "missingAnswer": "El modelo no respondió",
+          "modelError": "Error del modelo",
+          "noText": "Sin texto de la resolución",
+          "runError": "Ejecución interrumpida",
+          "wrongType": "Respuesta en un formato incorrecto"
+        },
         "no": "No",
         "notAllowed": "No permitido por las condiciones de la fuente",
         "notRun": "Sin ejecutar",
+        "notStated": "La resolución no lo indica",
         "pending": "Respondiendo…",
         "showSource": "Ver fuente",
         "yes": "Sí"

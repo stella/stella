@@ -11,24 +11,46 @@ import {
  */
 describe("which cells a run has to produce", () => {
   test("a cell nobody has asked about yet is run", () => {
-    expect(answerNeedsRun({ state: null, stale: false })).toBe(true);
+    expect(answerNeedsRun({ state: null, stale: false, force: false })).toBe(
+      true,
+    );
   });
 
   test("a pending cell is another run's until the stale window passes", () => {
-    expect(answerNeedsRun({ state: "pending", stale: false })).toBe(false);
-    expect(answerNeedsRun({ state: "pending", stale: true })).toBe(true);
+    for (const force of [false, true]) {
+      expect(answerNeedsRun({ state: "pending", stale: false, force })).toBe(
+        false,
+      );
+      expect(answerNeedsRun({ state: "pending", stale: true, force })).toBe(
+        true,
+      );
+    }
   });
 
-  test("a failure is retried; an answer and a refusal are not", () => {
-    expect(answerNeedsRun({ state: "failed", stale: false })).toBe(true);
-    expect(answerNeedsRun({ state: "answered", stale: false })).toBe(false);
-    expect(answerNeedsRun({ state: "not_allowed", stale: false })).toBe(false);
+  test("a failure is retried; an answer, a silent text and a refusal are not", () => {
+    const check = { stale: false, force: false };
+    expect(answerNeedsRun({ ...check, state: "failed" })).toBe(true);
+    expect(answerNeedsRun({ ...check, state: "answered" })).toBe(false);
+    expect(answerNeedsRun({ ...check, state: "not_stated" })).toBe(false);
+    expect(answerNeedsRun({ ...check, state: "not_allowed" })).toBe(false);
+  });
+
+  test("forcing reopens a settled cell, never the source's terms", () => {
+    const check = { stale: false, force: true };
+    expect(answerNeedsRun({ ...check, state: "answered" })).toBe(true);
+    expect(answerNeedsRun({ ...check, state: "not_stated" })).toBe(true);
+    expect(answerNeedsRun({ ...check, state: "not_allowed" })).toBe(false);
   });
 
   test("every state the contract declares has a decision", () => {
     for (const state of CASE_LAW_RESEARCH_ANSWER_STATES) {
-      expect(typeof answerNeedsRun({ state, stale: false })).toBe("boolean");
-      expect(typeof answerNeedsRun({ state, stale: true })).toBe("boolean");
+      for (const stale of [false, true]) {
+        for (const force of [false, true]) {
+          expect(typeof answerNeedsRun({ state, stale, force })).toBe(
+            "boolean",
+          );
+        }
+      }
     }
   });
 });

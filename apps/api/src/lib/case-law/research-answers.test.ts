@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
+import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -126,12 +128,6 @@ const roundTrips = [
     stored: { version: 1, type: "single-select", value: "yes" },
   },
   {
-    name: "single-select, undecided",
-    content: yesNo,
-    answer: null,
-    stored: { version: 1, type: "single-select", value: null },
-  },
-  {
     name: "multi-select",
     content: topics,
     answer: ["lease", "damages"],
@@ -206,6 +202,51 @@ describe("a question column of every value kind", () => {
   });
 });
 
+/** One column of each kind; total, so a new kind has to be listed. */
+const CONTENT_BY_KIND = {
+  text: { version: 1, type: "text" },
+  "single-select": yesNo,
+  "multi-select": topics,
+  date: { version: 1, type: "date" },
+  int: { version: 1, type: "int" },
+} as const satisfies Record<
+  CaseLawResearchAnswerType,
+  CaseLawResearchColumnContent
+>;
+
+describe("a decision that does not state the answer", () => {
+  test("is not_stated for every kind, with the run's reasoning kept", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...CASE_LAW_RESEARCH_ANSWER_TYPES),
+        fc.string({ maxLength: 40 }),
+        fc.subarray(["p-1", "p-2"]),
+        (kind, rationale, anchorIds) => {
+          const asked = [question("c1", CONTENT_BY_KIND[kind])];
+          // Through the schema the runner sends: null has to be a legal answer
+          // of every kind, or the model cannot say it.
+          const output = v.parse(buildResearchAnswersSchema(asked), {
+            c1: { answer: null, rationale, anchorIds },
+          });
+
+          const [parsed] = parseResearchAnswers({
+            output,
+            questions: asked,
+            knownAnchorIds: new Set(["p-1", "p-2"]),
+          });
+
+          expect(parsed?.outcome).toEqual({
+            state: "not_stated",
+            rationale: rationale.trim(),
+            anchorIds,
+          });
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+});
+
 describe("parsing the model's answers", () => {
   test("a skipped question fails as missing", () => {
     const [parsed] = parseResearchAnswers({
@@ -219,15 +260,16 @@ describe("parsing the model's answers", () => {
     });
   });
 
-  test("a text question the decision does not answer says so rather than storing nothing", () => {
+  test("blank text is the decision not stating the answer", () => {
     const [parsed] = parseResearchAnswers({
-      output: { c1: { answer: "   ", rationale: "", anchorIds: [] } },
+      output: { c1: { answer: "   ", rationale: "Silent.", anchorIds: [] } },
       questions: [question("c1", { version: 1, type: "text" })],
       knownAnchorIds: new Set(),
     });
     expect(parsed?.outcome).toEqual({
-      state: "failed",
-      failureReason: "not_stated",
+      state: "not_stated",
+      rationale: "Silent.",
+      anchorIds: [],
     });
   });
 
@@ -251,7 +293,7 @@ describe("parsing the model's answers", () => {
     expect(parsed.outcome.rationale.length).toBeLessThanOrEqual(600);
   });
 
-  test("every question ends answered or failed, whatever the model returns", () => {
+  test("every question ends answered, not stated or failed, whatever the model returns", () => {
     const scenario = fc
       .uniqueArray(fc.uuid(), { minLength: 1, maxLength: 6 })
       .chain((columnIds) =>
@@ -282,7 +324,11 @@ describe("parsing the model's answers", () => {
 
         expect(parsed.map((entry) => entry.columnId)).toEqual(columnIds);
         for (const entry of parsed) {
-          if (entry.outcome.state === "failed") {
+          const returned = output[entry.columnId]?.answer;
+          if (returned === null || returned?.trim() === "") {
+            expect(entry.outcome.state).toBe("not_stated");
+          }
+          if (entry.outcome.state !== "answered") {
             continue;
           }
           // The only content a yes/no column can hold, whatever was returned.
