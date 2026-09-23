@@ -144,7 +144,12 @@ export const safeErrorCause = (error: Error): unknown => {
 };
 
 export const safeErrorCode = (error: Error): string | undefined =>
-  safeErrorStringProperty(error, "code");
+  safeErrorStringProperty(error, "code") ??
+  // An AWS SDK service exception carries its service error code as `name`,
+  // and marks itself with `$fault`; any other error's name is its class.
+  (safeErrorProperty(error, "$fault") === undefined
+    ? undefined
+    : safeErrorStringProperty(error, "name"));
 
 const safeErrorMessage = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "message");

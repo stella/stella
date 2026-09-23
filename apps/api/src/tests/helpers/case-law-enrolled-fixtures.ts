@@ -1279,6 +1279,8 @@ const SK_US_DOCUMENT_FILE = new TextEncoder().encode(
 
 /** The source this fixture's decision is stored under; it prefixes its keys. */
 const SK_US_SOURCE_ID = "sk-us-inventory-fixture";
+/** The decision this fixture's publisher files are stored under. */
+const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
 
 /**
  * Built through the adapter's own fetch path, because what this adapter
@@ -1329,6 +1331,7 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
           sourceBinaryRef({
             family: RAW_SOURCE_FAMILY.CASE_LAW,
             sourceId: SK_US_SOURCE_ID,
+            documentId: SK_US_DECISION_ID,
             bytes,
             contentType,
           }),

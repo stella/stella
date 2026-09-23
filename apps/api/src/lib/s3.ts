@@ -617,6 +617,68 @@ export const writeS3ObjectWithRetry = async (
   throw lastError;
 };
 
+/**
+ * Write one object only when its key holds none, through the same deadline
+ * and retry as {@link writeS3ObjectWithRetry}.
+ *
+ * For a key derived from the bytes it holds, an existing object already is
+ * this write, so the store answers `412` and records nothing: no second
+ * version on a versioned bucket, whether the duplicate comes from a replay,
+ * a retried attempt that landed late, or a concurrent writer. A store that
+ * does not implement conditional writes gets a plain PUT, which is what
+ * every write was before.
+ */
+export const createS3ObjectIfAbsent = async (
+  object: S3ObjectWrite,
+): Promise<void> => {
+  let conditional = true;
+  await writeS3ObjectWithRetry(
+    object,
+    async ({ contentType, data, key }): Promise<void> => {
+      if (!conditional) {
+        await writeViaClient({ contentType, data, key });
+        return;
+      }
+      const written = await Result.tryPromise({
+        try: async () =>
+          await documentsCredentials.run(
+            async () =>
+              await getAbortableS3().send(
+                new PutObjectCommand({
+                  Body: data,
+                  Bucket: envBase.S3_BUCKET,
+                  ContentType: contentType,
+                  IfNoneMatch: "*",
+                  Key: key,
+                }),
+                { abortSignal: AbortSignal.timeout(S3_WRITE_TIMEOUT_MS) },
+              ),
+          ),
+        catch: (cause) => cause,
+      });
+      if (!Result.isError(written)) {
+        return;
+      }
+      const code =
+        written.error instanceof Error
+          ? safeErrorCode(written.error)
+          : undefined;
+      if (code === "PreconditionFailed") {
+        return;
+      }
+      if (code === "NotImplemented") {
+        conditional = false;
+        await writeViaClient({ contentType, data, key });
+        return;
+      }
+      // `ConditionalRequestConflict` (a concurrent conditional write to the
+      // key) is retried like any transient failure; the next attempt then
+      // sees the winner's object and answers 412.
+      throw written.error;
+    },
+  );
+};
+
 class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
   message: string;
   status?: number;

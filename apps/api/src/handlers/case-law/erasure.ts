@@ -28,9 +28,13 @@ import {
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
+import {
+  eraseSourceBinaries,
+  RAW_SOURCE_FAMILY,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 
-/** Wall-clock bound on the one publisher-envelope delete an erasure issues. */
+/** Wall-clock bound on the publisher-envelope and file deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 30_000;
 
 /**
@@ -120,33 +124,48 @@ type RedactInput = {
   deleteCorpus?: typeof deleteCorpusDocument;
   /** Test seam; production deletes through the documents bucket client. */
   deleteSourceRaw?: typeof deleteS3ObjectWithSignal;
+  /** Test seam; production deletes through the documents bucket client. */
+  eraseSourceFiles?: typeof eraseSourceBinaries;
 };
 
 type EraseSourceRawPayloadOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  sourceId: SafeId<"caseLawSource">;
   sourceRawS3Key: string | null;
   deleteSourceRaw: typeof deleteS3ObjectWithSignal;
+  eraseSourceFiles: typeof eraseSourceBinaries;
 };
 
 /**
- * Erase the publisher's envelope for one decision.
+ * Erase the publisher's envelope for one decision, and every file it was
+ * served.
  *
- * It is stored under its own content hash as a standalone object, in the
- * documents bucket rather than the corpus one, so erasing it is a delete and
- * nothing else.
+ * The envelope the row names is stored under its own content hash as a
+ * standalone object, in the documents bucket rather than the corpus one, so
+ * erasing it is a delete. The files live under the decision's own prefix,
+ * which no other decision writes to, so deleting that prefix erases every
+ * file written for this decision and nothing another decision holds.
  */
 const eraseSourceRawPayload = async ({
+  decisionId,
+  sourceId,
   sourceRawS3Key,
   deleteSourceRaw,
+  eraseSourceFiles,
 }: EraseSourceRawPayloadOptions): Promise<CorpusObjectErasure> => {
-  if (sourceRawS3Key === null) {
-    return { type: "deleted" };
-  }
   const erased = await Result.tryPromise({
-    try: async () =>
-      await deleteSourceRaw(
-        sourceRawS3Key,
-        AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS),
-      ),
+    try: async () => {
+      const signal = AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS);
+      await eraseSourceFiles({
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId,
+        documentId: decisionId,
+        signal,
+      });
+      if (sourceRawS3Key !== null) {
+        await deleteSourceRaw(sourceRawS3Key, signal);
+      }
+    },
     catch: (cause) => cause,
   });
   return Result.isError(erased)
@@ -266,6 +285,7 @@ type RedactionFence =
       decision: Pick<
         typeof caseLawDecisions.$inferSelect,
         | "id"
+        | "sourceId"
         | "textS3Key"
         | "normalizedS3Key"
         | "astS3Key"
@@ -283,6 +303,7 @@ export const redactCaseLawDecision = async ({
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
   deleteSourceRaw = deleteS3ObjectWithSignal,
+  eraseSourceFiles = eraseSourceBinaries,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -309,6 +330,7 @@ export const redactCaseLawDecision = async ({
       await tx
         .select({
           id: caseLawDecisions.id,
+          sourceId: caseLawDecisions.sourceId,
           textS3Key: caseLawDecisions.textS3Key,
           normalizedS3Key: caseLawDecisions.normalizedS3Key,
           astS3Key: caseLawDecisions.astS3Key,
@@ -443,12 +465,14 @@ export const redactCaseLawDecision = async ({
     });
   }
 
-  // The publisher's own envelope carries the same text as the payloads
-  // above, so an erasure that leaves it behind has erased nothing. It is a
-  // standalone object under its own hash, so it is deleted outright.
+  // The publisher's own envelope and files carry the same text as the
+  // payloads above, so an erasure that leaves them behind has erased nothing.
   const rawErasure = await eraseSourceRawPayload({
+    decisionId,
+    sourceId: decision.sourceId,
     sourceRawS3Key: decision.sourceRawS3Key,
     deleteSourceRaw,
+    eraseSourceFiles,
   });
   if (rawErasure.type === "incomplete") {
     captureError(rawErasure.error, {

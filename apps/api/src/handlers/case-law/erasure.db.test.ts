@@ -13,6 +13,7 @@ import {
   corpusIndexGenerations,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -21,6 +22,13 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { deleteCorpusDocument as realDeleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import {
+  RAW_SOURCE_FAMILY,
+  sourceBinaryPrefix,
+  writeSourceBinary,
+} from "@/api/lib/legal-search/raw-source-storage";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -39,12 +47,17 @@ const SOURCE_ID = toSafeId<"caseLawSource">(
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "0198e331-e578-7000-8000-0000000002a2",
 );
+const OTHER_DECISION_ID = toSafeId<"caseLawDecision">(
+  "0198e331-e578-7000-8000-0000000002a3",
+);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
+let fakeS3: FakeS3;
 
 beforeAll(async () => {
+  fakeS3 = startFakeS3();
   client = await createTestPglite();
   db = drizzle({ client });
   scopedDb = asTestRaw<ScopedDb>(
@@ -54,10 +67,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  fakeS3.stop();
   await client.close();
 });
 
 beforeEach(async () => {
+  fakeS3.objects.clear();
   await db.delete(caseLawCorpusTombstones).where(sql`true`);
   await db.delete(caseLawCorpusPackRefs).where(sql`true`);
   await db.delete(corpusIndexProjectionStates).where(sql`true`);
@@ -224,4 +239,98 @@ test("redaction of packed payloads tombstones every address it cannot delete", a
       .from(caseLawIndexJobs)
       .where(eq(caseLawIndexJobs.decisionId, DECISION_ID)),
   ).toEqual([{ detail: expect.stringContaining(packKey) }]);
+});
+
+test("redaction erases the decision's publisher files and no other decision's", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: OTHER_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "4 As 4/2008",
+    court: "Nejvyšší správní soud",
+    country: "CZE",
+    language: "cs",
+  });
+  // One file served for both decisions, and one this decision's envelope
+  // named before a later observation replaced it.
+  const shared = new TextEncoder().encode("%PDF-1.4 joined proceedings");
+  const superseded = new TextEncoder().encode("%PDF-1.4 earlier version");
+  const owner = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: SOURCE_ID,
+    contentType: "application/pdf",
+  } as const;
+  await writeSourceBinary({ ...owner, documentId: DECISION_ID, bytes: shared });
+  await writeSourceBinary({
+    ...owner,
+    documentId: DECISION_ID,
+    bytes: superseded,
+  });
+  const kept = await writeSourceBinary({
+    ...owner,
+    documentId: OTHER_DECISION_ID,
+    bytes: shared,
+  });
+  const keysUnder = (documentId: string): string[] =>
+    [...fakeS3.objects.keys()].filter((id) =>
+      id.includes(sourceBinaryPrefix({ ...owner, documentId })),
+    );
+  // Identical bytes are held twice, once per owner, or the independence
+  // asserted below would be vacuous.
+  expect(keysUnder(DECISION_ID)).toHaveLength(2);
+  expect(keysUnder(OTHER_DECISION_ID)).toHaveLength(1);
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: DECISION_ID,
+    scopedDb,
+  });
+
+  expect(Result.isOk(outcome) && outcome.value).toEqual({
+    type: "redacted",
+    erasure: "deleted",
+  });
+  expect(keysUnder(DECISION_ID)).toEqual([]);
+  expect(keysUnder(OTHER_DECISION_ID)).toEqual([
+    `${envBase.S3_BUCKET}/${kept.location}`,
+  ]);
+});
+
+test("a failed file delete keeps the redaction a retry target", async () => {
+  const owner = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: SOURCE_ID,
+    documentId: DECISION_ID,
+  } as const;
+  const file = await writeSourceBinary({
+    ...owner,
+    bytes: new TextEncoder().encode("%PDF-1.4 a decision"),
+    contentType: "application/pdf",
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({ sourceRawS3Key: "case-law/raw/envelope", sourceRawContentType: "x" })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
+  fakeS3.failNext({
+    method: "DELETE",
+    code: "AccessDenied",
+    status: 403,
+    key: file.location,
+  });
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: DECISION_ID,
+    scopedDb,
+  });
+
+  expect(Result.isOk(outcome) && outcome.value).toMatchObject({
+    type: "corpus-objects-remain",
+  });
+  expect(
+    await db
+      .select({ sourceRawS3Key: caseLawDecisions.sourceRawS3Key })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, DECISION_ID)),
+  ).toEqual([{ sourceRawS3Key: "case-law/raw/envelope" }]);
+  expect(fakeS3.objects.has(`${envBase.S3_BUCKET}/${file.location}`)).toBe(
+    true,
+  );
 });

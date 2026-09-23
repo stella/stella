@@ -20,7 +20,9 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
   sourceBinaryRef,
+  writeRawSourcePayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -87,6 +89,17 @@ describe("an envelope that names a binary part", () => {
   });
 });
 
+const DECISION_ID = "01920000-0000-7000-8000-00000000000a";
+
+const fileInput = (text: string) =>
+  ({
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: SOURCE_ID,
+    documentId: DECISION_ID,
+    bytes: new TextEncoder().encode(text),
+    contentType: "application/pdf",
+  }) as const;
+
 describe("storing a publisher file beside the decision's raw payload", () => {
   let fake: FakeS3;
 
@@ -99,14 +112,9 @@ describe("storing a publisher file beside the decision's raw payload", () => {
   });
 
   test("the bytes land at the address the envelope names them by", async () => {
-    const bytes = new TextEncoder().encode("%PDF-1.4 a decision");
+    const input = fileInput("%PDF-1.4 a decision");
 
-    const ref = await writeSourceBinary({
-      family: RAW_SOURCE_FAMILY.CASE_LAW,
-      sourceId: SOURCE_ID,
-      bytes,
-      contentType: "application/pdf",
-    });
+    const ref = await writeSourceBinary(input);
 
     // The address is written in the corpus location form, so a later change
     // that packs these files replaces the address and nothing else.
@@ -115,44 +123,140 @@ describe("storing a publisher file beside the decision's raw payload", () => {
     const stored = fake.objects.get(
       `${envBase.S3_BUCKET}/${location.type === "object" ? location.key : ""}`,
     );
-    expect([...(stored?.bytes ?? [])]).toEqual([...bytes]);
+    expect([...(stored?.bytes ?? [])]).toEqual([...input.bytes]);
     expect(stored?.contentType).toBe("application/pdf");
-    expect(ref.byteLength).toBe(bytes.byteLength);
+    expect(ref.byteLength).toBe(input.bytes.byteLength);
   });
 
   test("the reference a caller derives is the one the write produces", async () => {
-    const bytes = new TextEncoder().encode("%PDF-1.4 another decision");
-    const input = {
-      family: RAW_SOURCE_FAMILY.CASE_LAW,
-      sourceId: SOURCE_ID,
-      bytes,
-      contentType: "application/pdf",
-    } as const;
+    const input = fileInput("%PDF-1.4 another decision");
 
     // What a fixture, a replay or a dry run has to state about a row before
     // the write happens, held to the write by construction rather than by a
     // second copy of the key format.
-    expect(await writeSourceBinary({ ...input })).toEqual(
-      sourceBinaryRef({ ...input }),
-    );
+    expect(await writeSourceBinary(input)).toEqual(sourceBinaryRef(input));
   });
 
-  test("the same file served for two decisions is stored once", async () => {
-    const bytes = new TextEncoder().encode("%PDF-1.4 one document");
-    const input = {
-      family: RAW_SOURCE_FAMILY.CASE_LAW,
-      sourceId: SOURCE_ID,
-      bytes,
-      contentType: "application/pdf",
-    } as const;
+  test("the same file observed again is stored once, as one version", async () => {
+    const input = fileInput("%PDF-1.4 one document");
 
-    const first = await writeSourceBinary({ ...input });
-    const second = await writeSourceBinary({ ...input });
+    const first = await writeSourceBinary(input);
+    const second = await writeSourceBinary(input);
 
-    // Content-addressed: a docket whose separate opinion carries the same
-    // file, and every later replay of either, name one object rather than a
-    // copy per row.
     expect(second).toEqual(first);
-    expect([...fake.objects.keys()]).toHaveLength(1);
+    expect([...fake.versions.values()]).toEqual([1]);
+    // The repeat asked the store to create the object only if absent.
+    expect(fake.requests.at(-1)).toMatchObject({
+      method: "PUT",
+      ifNoneMatch: "*",
+    });
+  });
+
+  test("concurrent writers of the same file converge on one version", async () => {
+    fake.stop();
+    // Both requests are in flight together before either applies.
+    fake = startFakeS3({ delayMs: 50 });
+    const input = fileInput("%PDF-1.4 raced");
+
+    const [a, b] = await Promise.all([
+      writeSourceBinary(input),
+      writeSourceBinary(input),
+    ]);
+
+    expect(a).toEqual(b);
+    expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+      2,
+    );
+    expect([...fake.versions.values()]).toEqual([1]);
+  });
+
+  test("a conflicting concurrent write is retried until it sees the winner", async () => {
+    const input = fileInput("%PDF-1.4 conflicted");
+    await writeSourceBinary(input);
+    // What S3 answers while another conditional write to the key is in
+    // flight; the retry then finds the object and is answered 412.
+    fake.failNext({
+      method: "PUT",
+      code: "ConditionalRequestConflict",
+      status: 409,
+    });
+
+    await writeSourceBinary(input);
+
+    expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+      3,
+    );
+    expect([...fake.versions.values()]).toEqual([1]);
+  });
+
+  test("the same file served for two decisions is held once per decision", () => {
+    const input = fileInput("%PDF-1.4 joined proceedings");
+
+    expect(
+      sourceBinaryRef({ ...input, documentId: "another-decision" }).location,
+    ).not.toBe(sourceBinaryRef(input).location);
+  });
+});
+
+describe("storing a publisher's raw payload", () => {
+  let fake: FakeS3;
+
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
+  const payload = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: SOURCE_ID,
+    data: "<html>a decision</html>",
+    contentType: "text/html",
+  } as const;
+
+  test("a payload the row already records is not written", async () => {
+    const key = rawSourcePayloadKey(payload);
+
+    await writeRawSourcePayload({
+      ...payload,
+      storedKey: key,
+      storedContentType: "text/html",
+    });
+
+    expect(fake.requests).toEqual([]);
+  });
+
+  test("a payload stored before but not recorded adds no version", async () => {
+    // A row that moved to another payload and back, or a retry after the
+    // row write failed: the key holds these bytes already.
+    await writeRawSourcePayload({
+      ...payload,
+      storedKey: null,
+      storedContentType: null,
+    });
+    await writeRawSourcePayload({
+      ...payload,
+      storedKey: "case-law/raw/another",
+      storedContentType: "text/html",
+    });
+
+    expect([...fake.versions.values()]).toEqual([1]);
+  });
+
+  test("a changed content type on the recorded payload is rewritten", async () => {
+    const key = rawSourcePayloadKey(payload);
+    fake.put(envBase.S3_BUCKET, key, payload.data, "text/plain");
+
+    await writeRawSourcePayload({
+      ...payload,
+      storedKey: key,
+      storedContentType: "text/plain",
+    });
+
+    expect(
+      fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.contentType,
+    ).toMatch(/^text\/html\b/u);
   });
 });
