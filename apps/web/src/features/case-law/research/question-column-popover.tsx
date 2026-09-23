@@ -83,7 +83,7 @@ export const QuestionColumnPopover = ({
           <>
             <div className="flex flex-col p-1">
               <Button
-                className="justify-start gap-1.5 font-normal"
+                className="justify-start"
                 onClick={() => act("edit")}
                 size="sm"
                 variant="ghost"
@@ -98,7 +98,7 @@ export const QuestionColumnPopover = ({
         <div className="flex flex-col p-1">
           <PinProperty column={column} />
           <Button
-            className="justify-start gap-1.5 font-normal"
+            className="justify-start"
             onClick={() => {
               column.toggleVisibility(false);
               setIsOpen(false);
@@ -115,7 +115,7 @@ export const QuestionColumnPopover = ({
             <Separator />
             <div className="flex flex-col p-1">
               <Button
-                className="justify-start gap-1.5 font-normal"
+                className="justify-start"
                 onClick={() => act("run")}
                 size="sm"
                 variant="ghost"
@@ -151,7 +151,7 @@ export const QuestionColumnPopover = ({
               )}
               {may("delete") && (
                 <Button
-                  className="text-destructive justify-start gap-1.5 font-normal"
+                  className="text-destructive justify-start"
                   onClick={() => act("delete")}
                   size="sm"
                   variant="ghost"

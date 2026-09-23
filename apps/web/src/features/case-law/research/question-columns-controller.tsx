@@ -278,7 +278,14 @@ export const useQuestionColumns = ({
       addable,
       onAddToSearch: (columnIds) => {
         onShownQuestionIdsChange((shownIds) =>
-          withQuestionsOnSearch(shownIds, columnIds),
+          withQuestionsOnSearch({
+            added: columnIds,
+            knownIds:
+              columns === undefined
+                ? null
+                : new Set(columns.map((known) => known.id)),
+            shownIds,
+          }),
         );
       },
       grants,

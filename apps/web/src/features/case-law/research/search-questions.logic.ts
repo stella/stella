@@ -79,11 +79,31 @@ export const questionsOnSearch = ({
   };
 };
 
+type WithQuestionsOnSearchInput = {
+  shownIds: readonly string[];
+  added: readonly string[];
+  /**
+   * The organization's question ids, or null while they are loading. A shown
+   * id outside them is a deleted or foreign question: it is dropped before
+   * the cap, so stale entries never crowd out what the reader adds. The added
+   * ids are kept as given, since a question created a moment ago is not in
+   * the loaded list yet.
+   */
+  knownIds: ReadonlySet<string> | null;
+};
+
 /** The list with questions appended after the ones already shown. */
-export const withQuestionsOnSearch = (
-  shownIds: readonly string[],
-  added: readonly string[],
-): string[] | undefined => searchQuestionsParam([...shownIds, ...added]);
+export const withQuestionsOnSearch = ({
+  added,
+  knownIds,
+  shownIds,
+}: WithQuestionsOnSearchInput): string[] | undefined =>
+  searchQuestionsParam([
+    ...(knownIds === null
+      ? shownIds
+      : shownIds.filter((shownId) => knownIds.has(shownId))),
+    ...added,
+  ]);
 
 /** The list without one question; its answers stay the organization's. */
 export const withoutQuestionOnSearch = (

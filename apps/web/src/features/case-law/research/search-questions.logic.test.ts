@@ -113,13 +113,36 @@ describe("the list the URL carries", () => {
 
   test("adding appends after what is shown, without repeating", () => {
     for (const shownIds of urlLists) {
-      const next = withQuestionsOnSearch(shownIds, ["c2", "c1"]) ?? [];
+      const next =
+        withQuestionsOnSearch({
+          added: ["c2", "c1"],
+          knownIds: null,
+          shownIds,
+        }) ?? [];
 
       expect(next.slice(0, new Set(shownIds).size)).toEqual([
         ...new Set(shownIds),
       ]);
       expect(new Set(next)).toEqual(new Set([...shownIds, "c2", "c1"]));
       expect(next.length).toBe(new Set(next).size);
+    }
+  });
+
+  // A link at the cap made of deleted questions must still take the one the
+  // reader adds, including one created too recently to be in the loaded list.
+  test("stale ids never crowd out an added question", () => {
+    const stale = Array.from(
+      { length: CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX },
+      (_, index) => `gone${index}`,
+    );
+    for (const added of [["c1"], ["created-just-now"]]) {
+      expect(
+        withQuestionsOnSearch({
+          added,
+          knownIds: new Set(["c1", "c2"]),
+          shownIds: [...stale, "c2"],
+        }),
+      ).toEqual(["c2", ...added]);
     }
   });
 
