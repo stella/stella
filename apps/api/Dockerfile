@@ -297,6 +297,7 @@ COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/d
 COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js
 COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /app/repair-publisher-absent-text.js
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
+COPY --chown=stella:stella --from=builder /app/classify-citations.js /app/classify-citations.js
 COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
