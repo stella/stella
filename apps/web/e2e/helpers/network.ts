@@ -52,9 +52,9 @@ export type NetworkCapture = {
     // body failed (e.g. aborted/redirected mid-navigation).
     responseBytesUnavailable: boolean;
   }[];
-  // Intervals for finite API responses only. Streams remain in `requests` so
-  // request coverage sees them, but they do not represent a route-load round:
-  // the page does not wait for an EventSource to finish before it can settle.
+  // Intervals for finite API responses only. Streams and background polls
+  // remain in `requests` so request coverage sees them, but they do not
+  // represent a route-load round: the page waits on neither to settle.
   // `key` is the same method + normalized path `requests` is keyed by, so a
   // depth reading can name the chain that produced it.
   intervals: { start: number; end: number; key: string }[];
@@ -168,12 +168,24 @@ type NetworkRecord = {
   responseBytesUnavailable: boolean;
 };
 
-/** Streams are covered as requests, but never form a route-load waterfall. */
+// The app-version poll (ApiVersionMismatchReporter) fires from chrome after
+// mount and nothing on the page waits on it, so where it lands in the timeline
+// is pure scheduling: launched in a gap between two real rounds, it read as a
+// level of its own.
+const BACKGROUND_POLL_PATHS = new Set(["/health"]);
+
+/**
+ * Streams and background polls are covered as requests, but never form a
+ * route-load waterfall.
+ */
 export const countsTowardsWaterfall = ({
+  pathname,
   resourceType,
   streamed,
-}: Pick<NetworkRecord, "resourceType" | "streamed">): boolean =>
-  resourceType !== "eventsource" && !streamed;
+}: Pick<NetworkRecord, "pathname" | "resourceType" | "streamed">): boolean =>
+  resourceType !== "eventsource" &&
+  !streamed &&
+  !BACKGROUND_POLL_PATHS.has(pathname);
 
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {

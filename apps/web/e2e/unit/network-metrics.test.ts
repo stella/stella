@@ -405,16 +405,38 @@ describe("deepestWaterfallSequence", () => {
 describe("countsTowardsWaterfall", () => {
   test("keeps streamed requests in coverage without counting a load round", () => {
     expect(
-      countsTowardsWaterfall({ resourceType: "eventsource", streamed: true }),
+      countsTowardsWaterfall({
+        pathname: "/v1/events",
+        resourceType: "eventsource",
+        streamed: true,
+      }),
     ).toBe(false);
     expect(
-      countsTowardsWaterfall({ resourceType: "fetch", streamed: true }),
+      countsTowardsWaterfall({
+        pathname: "/v1/chat",
+        resourceType: "fetch",
+        streamed: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps the version poll in coverage without counting a load round", () => {
+    expect(
+      countsTowardsWaterfall({
+        pathname: "/health",
+        resourceType: "fetch",
+        streamed: false,
+      }),
     ).toBe(false);
   });
 
   test("counts finite API responses", () => {
     expect(
-      countsTowardsWaterfall({ resourceType: "fetch", streamed: false }),
+      countsTowardsWaterfall({
+        pathname: "/v1/templates",
+        resourceType: "fetch",
+        streamed: false,
+      }),
     ).toBe(true);
   });
 });
