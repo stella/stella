@@ -54,15 +54,29 @@ export const useStartVerification = ({
   const start = async (target: VerificationTarget, confirmedUnits?: number) => {
     setSizeConfirmation(null);
     setStartingFor(target);
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .verifications.post({
-        listId: toSafeId<"legalList">(listId),
-        entityId: toSafeId<"entity">(target.entityId),
-        fileFieldId: toSafeId<"field">(target.fileFieldId),
-        ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
-      });
+    const sent = await Result.tryPromise(
+      async () =>
+        await api
+          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .verifications.post({
+            listId: toSafeId<"legalList">(listId),
+            entityId: toSafeId<"entity">(target.entityId),
+            fileFieldId: toSafeId<"field">(target.fileFieldId),
+            ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+          }),
+    );
     setStartingFor(null);
+
+    if (Result.isError(sent)) {
+      // The request never got an answer (network, aborted transport).
+      stellaToast.add({
+        type: "error",
+        title: t("avt.runs.startFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+    const response = sent.value;
 
     if (response.error) {
       const detail = runSizeConfirmationDetail(response.error);
@@ -78,7 +92,7 @@ export const useStartVerification = ({
         });
         const latest = await Result.tryPromise(
           async () =>
-            await queryClient.fetchQuery(
+            await queryClient.query(
               latestVerificationsOptions({
                 workspaceId,
                 documents: [target],
