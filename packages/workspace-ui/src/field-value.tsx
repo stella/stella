@@ -12,7 +12,7 @@ import { emptyColor, resolveOptionColor } from "./colors";
 import { getClipFieldValueLabel } from "./field-value-logic";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
-type FieldValueVariant = "default" | "table" | "kanban";
+export type FieldValueVariant = "default" | "table" | "kanban";
 
 type PropertyContentType = GenericProperty["content"]["type"];
 
@@ -116,31 +116,40 @@ export const IntFieldValue = ({
   variant?: FieldValueVariant;
 }) => {
   const format = useFormatter();
-  const resolvedVariant = variant ?? "default";
-  const className = getIntClassName(resolvedVariant);
+
+  return (
+    <span className={getIntClassName(variant ?? "default")}>
+      {formatIntFieldValue({ content, format })}
+    </span>
+  );
+};
+
+type FormatIntFieldValueParams = {
+  content: Extract<WorkspaceFieldContent, { type: "int" }>;
+  format: ReturnType<typeof useFormatter>;
+};
+
+/**
+ * An int with a currency renders as that currency when the code is one
+ * `Intl` knows, else as the number followed by the raw code.
+ */
+export const formatIntFieldValue = ({
+  content,
+  format,
+}: FormatIntFieldValueParams): string => {
   const { currency } = content;
 
   if (!currency) {
-    return <span className={className}>{format.number(content.value)}</span>;
+    return format.number(content.value);
   }
 
-  const formattedResult = Result.try(() =>
+  return Result.try(() =>
     format.number(content.value, {
       style: "currency",
       currency,
       minimumFractionDigits: 0,
     }),
-  );
-
-  if (formattedResult.isErr()) {
-    return (
-      <span className={className}>
-        {`${format.number(content.value)} ${currency}`}
-      </span>
-    );
-  }
-
-  return <span className={className}>{formattedResult.value}</span>;
+  ).unwrapOr(`${format.number(content.value)} ${currency}`);
 };
 
 export const MoneyFieldValue = ({
@@ -193,7 +202,7 @@ export const PersonFieldValue = ({
  * the app's user avatar: a person field names someone who may not be a
  * workspace member at all, so there is no account to render.
  */
-const PersonAvatar = ({
+export const PersonAvatar = ({
   image,
   name,
 }: {
@@ -233,7 +242,11 @@ const firstGrapheme = (value: string): string => {
   return [...segmenter.segment(value)].at(0)?.segment ?? "?";
 };
 
-const EmptyFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
+export const EmptyFieldValue = ({
+  variant,
+}: {
+  variant: FieldValueVariant;
+}) => {
   if (variant === "kanban") {
     return null;
   }
@@ -293,7 +306,11 @@ const PendingFieldValue = ({
   );
 };
 
-const ErrorFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
+export const ErrorFieldValue = ({
+  variant,
+}: {
+  variant: FieldValueVariant;
+}) => {
   const t = useTranslations();
 
   if (variant === "kanban") {
@@ -307,7 +324,11 @@ const ErrorFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
   );
 };
 
-const UnsupportedFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
+export const UnsupportedFieldValue = ({
+  variant,
+}: {
+  variant: FieldValueVariant;
+}) => {
   const t = useTranslations();
 
   if (variant === "kanban") {
@@ -512,7 +533,7 @@ const MultiSelectFieldValue = ({
   );
 };
 
-const ClipFieldValue = ({
+export const ClipFieldValue = ({
   content,
   variant,
 }: {
@@ -549,7 +570,7 @@ type PendingSkeletonProps = {
   contentType: PropertyContentType;
 };
 
-const PendingSkeleton = ({ contentType }: PendingSkeletonProps) => {
+export const PendingSkeleton = ({ contentType }: PendingSkeletonProps) => {
   if (contentType === "single-select") {
     return <Skeleton className="h-4 w-16 rounded-full" />;
   }
@@ -583,7 +604,7 @@ const PendingSkeleton = ({ contentType }: PendingSkeletonProps) => {
   );
 };
 
-const getSelectPropertyColor = (
+export const getSelectPropertyColor = (
   property: GenericProperty,
   option: string | null,
 ) => {
@@ -607,7 +628,7 @@ const getSelectPropertyColor = (
   return resolveOptionColor(color);
 };
 
-const getIntClassName = (variant: FieldValueVariant) => {
+export const getIntClassName = (variant: FieldValueVariant) => {
   if (variant === "kanban") {
     return "text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums";
   }

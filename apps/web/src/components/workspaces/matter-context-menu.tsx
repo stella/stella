@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import {
   ArchiveRestoreIcon,
@@ -45,22 +45,16 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
-import { UserIdentity } from "@/components/user-avatar";
+import {
+  AddableMemberSelect,
+  useAddableMembers,
+} from "@/components/workspaces/addable-member-select";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
-import { organizationOptions } from "@/lib/organization/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import {
   useDeleteWorkspace,
@@ -69,10 +63,7 @@ import {
 } from "@/lib/workspaces/mutations";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
-import {
-  workspaceMembersKeys,
-  workspaceMembersOptions,
-} from "@/lib/workspaces/queries/workspace-members";
+import { workspaceMembersKeys } from "@/lib/workspaces/queries/workspace-members";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -509,27 +500,9 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: org, isPending: orgPending } = useQuery(
-    organizationOptions(activeOrganizationId),
-  );
-  const { data: existingMembers = [] } = useQuery(
-    workspaceMembersOptions(workspaceId),
-  );
+  const { isOrganizationPending: orgPending, items: memberItems } =
+    useAddableMembers(workspaceId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const organizationMembers = org ? org.members : [];
-  const availableMembers = organizationMembers.filter(
-    (m) => !existingUserIds.has(m.userId),
-  );
-
-  const memberItems = availableMembers.map((m) => ({
-    email: m.user.email,
-    image: m.user.image,
-    name: m.user.name,
-    value: m.userId,
-  }));
 
   const handleSubmit = () => {
     if (!selectedUserId) {
@@ -585,41 +558,11 @@ export const AddMemberDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
-          <Select onValueChange={setSelectedUserId} value={selectedUserId}>
-            <SelectTrigger>
-              <SelectValue>
-                {(current) => {
-                  const found = memberItems.find((m) => m.value === current);
-                  if (!found) {
-                    return t("workspaces.members.selectMember");
-                  }
-
-                  return (
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      className="min-w-0"
-                      image={found.image}
-                      name={found.name}
-                      secondaryText={found.email}
-                    />
-                  );
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {memberItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  <UserIdentity
-                    avatarClassName="size-7 shrink-0 text-3xs"
-                    className="min-w-0"
-                    image={item.image}
-                    name={item.name}
-                    secondaryText={item.email}
-                  />
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          <AddableMemberSelect
+            items={memberItems}
+            onValueChange={setSelectedUserId}
+            value={selectedUserId}
+          />
         </DialogPanel>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import {
@@ -54,17 +54,13 @@ import { SuggestedFollowupChips } from "@/features/chat/components/suggested-fol
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested-followup-prompts";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  resolveSuggestedPromptsAvailability,
-  resolveSuggestedPromptsTurnOwner,
-} from "@/features/chat/lib/suggested-prompts-availability";
-import {
   applyChatModelChange,
   chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
 import { GuideNudge } from "@/features/guides/guide-nudge";
@@ -79,7 +75,6 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
   createChatThreadId,
   getChatThreadKey,
@@ -258,63 +253,20 @@ export const ChatThreadPage = ({
 
   const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
-  // Fetch suggested follow-up prompts for Tab-to-ask (editor) and chips display.
-  // Gated by draft store emptiness so the query does not fire when the
-  // user is already typing a custom follow-up.
-  const lastMessage = messages.at(-1);
-  // Ask-user cards report their local "edit answers" mode here: reopening an
-  // answered card turns it back into a live clarification form, which the
-  // persisted part state (`output-available`) does not reflect.
-  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set<string>());
-  const handleAskUserEditingChange = useCallback(
-    (toolCallId: string, isEditing: boolean) => {
-      setEditingAskUserToolCallIds((prev) => {
-        if (isEditing === prev.has(toolCallId)) {
-          return prev;
-        }
-        const next = new Set(prev);
-        if (isEditing) {
-          next.add(toolCallId);
-        } else {
-          next.delete(toolCallId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const editorIsEmpty = useIsChatDraftEmpty(threadRef);
-  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
-    editorIsEmpty,
+  // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
+  const {
+    handleAskUserEditingChange,
+    suggestedFollowupPrompt,
+    suggestedPrompts: suggestedFollowupPrompts,
+  } = useSuggestedFollowupPrompts({
+    activeOrganizationId,
+    approvalPendingMessageId,
     error,
     isGenerating,
-    lastMessage: lastMessage ?? null,
+    messages,
+    threadRef,
     turnAbandoned,
-    turnOwner: resolveSuggestedPromptsTurnOwner({
-      approvalPendingMessageId,
-      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
-      lastMessage: lastMessage ?? null,
-    }),
   });
-  const lastMessageId =
-    suggestedPromptsAvailability.status === "eligible"
-      ? suggestedPromptsAvailability.lastMessageId
-      : "";
-  const { data: suggestedPromptsData } = useQuery(
-    chatThreadSuggestedPromptsOptions({
-      activeOrganizationId,
-      enabled: suggestedPromptsAvailability.status === "eligible",
-      lastMessageId,
-      threadRef,
-    }),
-  );
-  const suggestedFollowupPrompts =
-    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
-      ? suggestedPromptsData.prompts
-      : [];
-  const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
   const hasSuggestedFollowups = suggestedFollowupPrompts.length > 0;
 
   // Seed brand-new (empty) threads from the persisted web-search

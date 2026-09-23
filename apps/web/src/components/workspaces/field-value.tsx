@@ -1,23 +1,28 @@
-import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
-import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
-
 import {
-  emptyColor,
-  resolveOptionColor,
-} from "@/components/workspaces/property-utils";
+  ClipFieldValue,
+  EmptyFieldValue,
+  ErrorFieldValue,
+  formatIntFieldValue,
+  getIntClassName,
+  getSelectPropertyColor,
+  PendingSkeleton,
+  PersonAvatar,
+  UnsupportedFieldValue,
+} from "@stll/workspace-ui/field-value";
+import type { FieldValueVariant } from "@stll/workspace-ui/field-value";
+
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 
-export type FieldValueVariant = "default" | "table" | "kanban";
+export type { FieldValueVariant } from "@stll/workspace-ui/field-value";
 
 type FieldValueProps = {
   content: WorkspaceFieldContent | undefined;
@@ -139,33 +144,12 @@ export const IntFieldValue = ({
   variant?: FieldValueVariant;
 }) => {
   const format = useFormatter();
-  const resolvedVariant = variant ?? "default";
-  const className = getIntClassName(resolvedVariant);
-  const { currency } = content;
 
-  if (!currency) {
-    return (
-      <span className={cn(className)}>{format.number(content.value)}</span>
-    );
-  }
-
-  const formattedResult = Result.try(() =>
-    format.number(content.value, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-    }),
+  return (
+    <span className={cn(getIntClassName(variant ?? "default"))}>
+      {formatIntFieldValue({ content, format })}
+    </span>
   );
-
-  if (formattedResult.isErr()) {
-    return (
-      <span className={cn(className)}>
-        {`${format.number(content.value)} ${currency}`}
-      </span>
-    );
-  }
-
-  return <span className={cn(className)}>{formattedResult.value}</span>;
 };
 
 export const MoneyFieldValue = ({
@@ -217,59 +201,6 @@ export const PersonFieldValue = ({
   );
 };
 
-/**
- * The person's picture, or their initial when there is none. Deliberately not
- * the app's user avatar: a person field names someone who may not be a
- * workspace member at all, so there is no account to render.
- */
-const PersonAvatar = ({
-  image,
-  name,
-}: {
-  image: string | null;
-  name: string;
-}) => {
-  if (image) {
-    return (
-      <img
-        alt=""
-        className="size-4 shrink-0 rounded-full object-cover"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        src={image}
-      />
-    );
-  }
-
-  return (
-    <span
-      aria-hidden
-      className="bg-muted text-muted-foreground flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] uppercase"
-    >
-      {firstGrapheme(name)}
-    </span>
-  );
-};
-
-/**
- * The first character of a name, as a reader sees it: a spread over a string
- * yields code points, which splits an emoji or a combining mark in half.
- */
-const firstGrapheme = (value: string): string => {
-  const segmenter = new Intl.Segmenter(undefined, {
-    granularity: "grapheme",
-  });
-  return [...segmenter.segment(value)].at(0)?.segment ?? "?";
-};
-
-const EmptyFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
-  if (variant === "kanban") {
-    return null;
-  }
-
-  return <span className="text-muted-foreground text-sm">—</span>;
-};
-
 const PendingFieldValue = ({
   contentType,
   preview,
@@ -310,34 +241,6 @@ const PendingFieldValue = ({
     <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
       {t("workspaces.fields.calculating")}
       <span className="bg-muted-foreground size-2 animate-pulse rounded-full" />
-    </span>
-  );
-};
-
-const ErrorFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
-  const t = useTranslations();
-
-  if (variant === "kanban") {
-    return null;
-  }
-
-  return (
-    <span className="text-destructive line-clamp-2 text-sm italic">
-      {t("workspaces.fields.errored")}
-    </span>
-  );
-};
-
-const UnsupportedFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
-  const t = useTranslations();
-
-  if (variant === "kanban") {
-    return null;
-  }
-
-  return (
-    <span className="text-muted-foreground line-clamp-2 text-sm italic">
-      {t("workspaces.fields.formatNotSupported")}
     </span>
   );
 };
@@ -556,113 +459,4 @@ const MultiSelectFieldValue = ({
       ))}
     </span>
   );
-};
-
-const ClipFieldValue = ({
-  content,
-  variant,
-}: {
-  content: Extract<WorkspaceFieldContent, { type: "clip" }>;
-  variant: FieldValueVariant;
-}) => {
-  const value = getClipFieldValueLabel({
-    citation: content.citation,
-    url: content.url,
-  });
-
-  if (variant === "kanban") {
-    return (
-      <BidiText
-        as="span"
-        className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none"
-      >
-        {value}
-      </BidiText>
-    );
-  }
-
-  return (
-    <BidiText
-      as="span"
-      className="text-muted-foreground block truncate text-sm"
-    >
-      {value}
-    </BidiText>
-  );
-};
-
-type PendingSkeletonProps = {
-  contentType: WorkspaceProperty["content"]["type"];
-};
-
-const PendingSkeleton = ({ contentType }: PendingSkeletonProps) => {
-  if (contentType === "single-select") {
-    return <Skeleton className="h-4 w-16 rounded-full" />;
-  }
-
-  if (contentType === "multi-select") {
-    return (
-      <div className="flex flex-wrap gap-1">
-        <Skeleton className="h-4 w-12 rounded-full" />
-        <Skeleton className="h-4 w-16 rounded-full" />
-      </div>
-    );
-  }
-
-  if (contentType === "date") {
-    return <Skeleton className="h-3.5 w-20" />;
-  }
-
-  if (contentType === "int") {
-    return <Skeleton className="h-3.5 w-10" />;
-  }
-
-  if (contentType === "file") {
-    return <Skeleton className="h-4 w-24" />;
-  }
-
-  return (
-    <div className="flex w-full max-w-[12rem] flex-col gap-1">
-      <Skeleton className="h-3 w-full" />
-      <Skeleton className="h-3 w-3/4" />
-    </div>
-  );
-};
-
-const getSelectPropertyColor = (
-  property: WorkspaceProperty,
-  option: string | null,
-) => {
-  if (!option) {
-    return emptyColor;
-  }
-
-  if (
-    property.content.type !== "single-select" &&
-    property.content.type !== "multi-select"
-  ) {
-    return undefined;
-  }
-
-  const color = property.content.options.find((o) => o.value === option)?.color;
-
-  // `OptionColor` widens to `string` (arbitrary hex), so `!color` would also
-  // treat an empty string as "no color"; only `undefined` means "not found".
-  if (color === undefined) {
-    return undefined;
-  }
-
-  return resolveOptionColor(color);
-};
-
-const getIntClassName = (variant: FieldValueVariant) => {
-  if (variant === "kanban") {
-    return "text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums";
-  }
-
-  if (variant === "table") {
-    return "block max-w-full min-w-0 truncate text-start tabular-nums";
-  }
-
-  return "block min-w-0 max-w-full truncate text-start text-sm tabular-nums";
 };

@@ -163,18 +163,14 @@ import { SuggestedFollowupChips } from "@/features/chat/components/suggested-fol
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested-followup-prompts";
 import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  resolveSuggestedPromptsAvailability,
-  resolveSuggestedPromptsTurnOwner,
-} from "@/features/chat/lib/suggested-prompts-availability";
-import {
   applyChatModelChange,
   chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
   chatThreadTitleOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
@@ -189,7 +185,6 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
   type DocxEditSafety,
   docxEditRepresentationForSelection,
@@ -1674,59 +1669,20 @@ const FileChatOverlayInner = ({
     docxEditSafety,
   });
 
-  // Check eligibility for suggested prompts using draft state (avoids
-  // unnecessary API calls when user is typing).
-  const lastMessage = messages.at(-1);
-  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set<string>());
-  const handleAskUserEditingChange = useCallback(
-    (toolCallId: string, isEditing: boolean) => {
-      setEditingAskUserToolCallIds((current) => {
-        if (current.has(toolCallId) === isEditing) {
-          return current;
-        }
-        const next = new Set(current);
-        if (isEditing) {
-          next.add(toolCallId);
-        } else {
-          next.delete(toolCallId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
-  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
-    editorIsEmpty: editorIsInitiallyEmpty,
+  const {
+    handleAskUserEditingChange,
+    lastMessageId,
+    suggestedFollowupPrompt,
+    suggestedPrompts,
+  } = useSuggestedFollowupPrompts({
+    activeOrganizationId,
+    approvalPendingMessageId,
     error,
     isGenerating,
-    lastMessage: lastMessage ?? null,
+    messages,
+    threadRef,
     turnAbandoned,
-    turnOwner: resolveSuggestedPromptsTurnOwner({
-      approvalPendingMessageId,
-      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
-      lastMessage: lastMessage ?? null,
-    }),
   });
-  const lastMessageId =
-    suggestedPromptsAvailability.status === "eligible"
-      ? suggestedPromptsAvailability.lastMessageId
-      : "";
-  const { data: suggestedPromptsData } = useQuery(
-    chatThreadSuggestedPromptsOptions({
-      activeOrganizationId,
-      enabled: suggestedPromptsAvailability.status === "eligible",
-      lastMessageId,
-      threadRef,
-    }),
-  );
-  const suggestedPrompts =
-    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
-      ? suggestedPromptsData.prompts
-      : [];
-  const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
 
   const editorController = useChatEditor({
     placeholder: filePlaceholder,
