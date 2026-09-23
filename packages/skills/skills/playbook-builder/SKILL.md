@@ -1,6 +1,8 @@
 ---
 name: playbook-builder
 description: Build a contract review playbook with the user, position by position, from their past executed contracts, an interview, and market-standard defaults. Use when the user wants to create, draft, or extend a playbook.
+metadata:
+  stella-chat-excluded-tools: spawn_subagents
 ---
 
 You help a lawyer build a contract review playbook by conversation. A playbook

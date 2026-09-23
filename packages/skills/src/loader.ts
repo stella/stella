@@ -24,6 +24,14 @@ export type StellaSkill = SkillMetadata & {
   resources: SkillResource[];
 };
 
+/**
+ * Frontmatter `metadata` key under which a skill names the chat tools a turn
+ * must not offer while the skill is active. The Agent Skills spec reserves
+ * `metadata` for host extensions; the value follows the `allowed-tools`
+ * spelling: tool names separated by whitespace.
+ */
+export const CHAT_EXCLUDED_TOOLS_METADATA_KEY = "stella-chat-excluded-tools";
+
 const RESOURCE_EXTENSIONS = [
   ".csv",
   ".json",
@@ -249,6 +257,22 @@ const readMetadata = (
     entries.push([key, metadataValue]);
   }
   return Result.ok(Object.fromEntries(entries));
+};
+
+/**
+ * Chat tool names a skill excludes, read from its parsed `metadata`. Built-in
+ * skills carry the mapping from `SKILL.md`; installed skills carry the same
+ * mapping in their stored row, so both sources are read here. Empty when the
+ * key is absent; whitespace-separated, deduplicated otherwise.
+ */
+export const readExcludedChatTools = (
+  metadata: Readonly<Record<string, string>> | undefined,
+): readonly string[] => {
+  const value = metadata?.[CHAT_EXCLUDED_TOOLS_METADATA_KEY];
+  if (value === undefined) {
+    return [];
+  }
+  return [...new Set(value.split(/\s+/u).filter((name) => name.length > 0))];
 };
 
 export const normalizeResourcePath = (resourcePath: string): string => {

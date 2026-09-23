@@ -4,6 +4,7 @@ import {
   listSkillMetadata,
   loadSkill,
   parseSkillFile,
+  readExcludedChatTools,
   SkillFileError,
 } from "./loader";
 import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
@@ -158,6 +159,45 @@ metadata: [one, two]
 
 Body.`),
     ).toThrow("Skill file frontmatter metadata must be a string mapping");
+  });
+
+  test("reads the chat tools a skill excludes from its metadata", () => {
+    const parsed = parseValid(`---
+name: excluding-skill
+description: Excludes a chat tool.
+metadata:
+  stella-chat-excluded-tools: "spawn_subagents   web_search\tspawn_subagents"
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(parsed.metadata.metadata)).toEqual([
+      "spawn_subagents",
+      "web_search",
+    ]);
+  });
+
+  test("excludes no chat tool when the metadata key is absent or blank", () => {
+    const absent = parseValid(`---
+name: plain-skill
+description: Excludes nothing.
+metadata:
+  author: stella
+---
+
+Body.`);
+    const blank = parseValid(`---
+name: blank-skill
+description: Declares the key with nothing in it.
+metadata:
+  stella-chat-excluded-tools: "  "
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(absent.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(blank.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(undefined)).toEqual([]);
   });
 
   test("ignores unsupported top-level fields without widening the output", () => {

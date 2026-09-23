@@ -2,7 +2,12 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
-import { listSkillMetadata, loadSkill, readSkillResource } from "@stll/skills";
+import {
+  listSkillMetadata,
+  loadSkill,
+  readExcludedChatTools,
+  readSkillResource,
+} from "@stll/skills";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
 import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
@@ -109,6 +114,13 @@ export type ActiveChatSkillContext = {
   body: string;
   description: string;
   displayName: string;
+  /**
+   * Chat tools the skill's frontmatter excludes from a turn it is active in
+   * (`stella-chat-excluded-tools`). Read by the registration predicates in
+   * chat-tools.ts; the validation tool set ignores it so persisted calls
+   * from before the skill was activated still parse.
+   */
+  excludedChatTools: readonly string[];
   resources: SkillResource[];
   toolName: string;
   version: string | null;
@@ -166,6 +178,7 @@ export const resolveActiveChatSkillContext = async ({
     description: skill.description,
     displayName: skill.name,
     editable: false,
+    excludedChatTools: readExcludedChatTools(skill.metadata),
     id: null,
     origin: CHAT_SKILL_SOURCE.builtIn,
     resources: skill.resources,
@@ -194,6 +207,7 @@ const resolveInstalledActiveSkill = async ({
         body: agentSkills.body,
         description: agentSkills.description,
         enabled: agentSkills.enabled,
+        metadata: agentSkills.metadata,
         name: agentSkills.name,
         origin: agentSkills.origin,
         scope: agentSkills.scope,
@@ -265,6 +279,7 @@ const resolveInstalledActiveSkill = async ({
       skillUserId: skill.userId,
       userId,
     }),
+    excludedChatTools: readExcludedChatTools(skill.metadata),
     id: skill.id,
     origin: skill.origin,
     resources: resources.value,
