@@ -20,13 +20,16 @@ draft that a person approves in the editor; you never approve it.
   `search_across_matters`, `read_content_across_matters`.
   `search_across_matters` has no matter filter; it spans every matter the
   user can access. A named matter is read with `list_documents`, passing its
-  `matter_id`.
+  `matter_id`. A document's text comes from `read_content_across_matters`;
+  `read_document` returns its metadata, not its text.
 - In the stella chat these reads are the `external_*` functions inside
   `execute_typescript`, and only `external_list_matters` is documented up
   front. Before the first call to any other, call `discover_tools` with its
-  name and write the call from the signature it returns. Return plain JSON
-  from a script. If a call is rejected, re-read the signature and correct the
-  call yourself; do not hand the reads to subagents.
+  name and write the call from the signature it returns. A script has no
+  imports and returns plain JSON. If a call is rejected, re-read the
+  signature and correct the call yourself.
+- `spawn_subagents` is never used with this skill, whatever the chat's
+  delegation rule says: every call is yours.
 
 If `save_playbook` is not available to you, say that you cannot save a
 playbook here and stop; do not draft one only in the conversation.
@@ -34,8 +37,9 @@ playbook here and stop; do not draft one only in the conversation.
 When this skill says "ask the user", use the `ask-user` tool if you have it,
 and do not end your reply with a question instead; without it, ask in your
 reply and wait for the answer. Batch the questions of one step into one ask,
-and when you have a sensible default, offer it as an option. Between
-questions, keep going: draft and save until every position is settled.
+and when you have a sensible default, offer it as an option. An answer is
+not the end of your reply: act on it at once, and between questions keep
+going, drafting and saving until every position is settled.
 
 ## 1. Open
 
@@ -51,11 +55,16 @@ Ask, in one batch:
 - The language to write the playbook in.
 
 Never assume a jurisdiction, a legal tradition, or English. Skip a question
-the user has already answered.
+the user has already answered; a request that mentions suppliers or
+customers has not said which one the organization is.
 
 ## 2. Gather contracts
 
 Contracts are evidence, and they are optional; the flow works without them.
+Every search and every read is yours, in this conversation, one document at
+a time. Never call `spawn_subagents` while this skill is active, and never
+hand a search or a read to another agent: the user picks each document
+before it is read, and a subagent cannot ask them.
 
 - **Attached:** read them from the conversation. An attachment can be cut off
   without notice; if a contract looks truncated, ask the user to point to it
@@ -63,7 +72,8 @@ Contracts are evidence, and they are optional; the flow works without them.
   with `cursor`.
 - **Named:** find each one with `list_documents` or `search_across_matters`,
   then read it.
-- **Look for them:** only after the user agrees, in this order:
+- **Look for them:** only when the user asks, whether at the open or once
+  positions are saved, and always in this order:
   1. Ask which matters to search, or whether to search all they can access.
   2. For named matters, find them with `list_matters` and list their
      documents with `list_documents`. `search_across_matters` spans every
@@ -74,17 +84,18 @@ Contracts are evidence, and they are optional; the flow works without them.
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the
      whole organization, so which documents feed it is the user's choice.
+     Positions already saved are then revised from what the contracts say.
 - **None:** do not search. Build from defaults and the interview.
-
-Read contracts one at a time in this conversation.
 
 ## 3. Save early
 
 As soon as you know the name, the side, and the first position, create the
-playbook: `name`, a one-line `description`, `scope.perspective` when the side
-maps to buyer, seller, or neutral, and that position. Keep the returned
-`playbook_id` and `updatedAt`. The user sees the playbook fill in as you save,
-so do not hold positions back to save them all at the end.
+playbook: `name`, a one-line `description`, and that position, all in the
+playbook's language. Never send `scope` unless the user's own words for
+their side were buyer, seller, or neutral; a customer, supplier, recipient,
+discloser, controller, or processor gets no `scope.perspective`. Keep the
+returned `playbook_id` and `updatedAt`. The user sees the playbook fill in
+as you save, so do not hold positions back to save them all at the end.
 
 ## 4. Build positions
 
