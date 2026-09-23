@@ -23,8 +23,6 @@ import {
 export type FakeS3Object = {
   readonly bytes: Uint8Array;
   readonly contentType: string | null;
-  /** What a listing reports as the object's `LastModified`. */
-  readonly lastModified: Date;
 };
 
 export type FakeS3Method = "COPY" | "DELETE" | "GET" | "HEAD" | "LIST" | "PUT";
@@ -77,6 +75,11 @@ export type FakeS3 = {
    * by its precondition adds none.
    */
   readonly versions: Map<string, number>;
+  /**
+   * What a listing reports as each `<bucket>/<key>`'s `LastModified`: set
+   * by every applied write, and settable to age an object.
+   */
+  readonly modifiedAt: Map<string, Date>;
   readonly requests: FakeS3Request[];
   readonly failNext: (failure: FakeS3Failure) => void;
   /**
@@ -255,8 +258,10 @@ export type FakeS3Options = {
 export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
   const versions = new Map<string, number>();
+  const modifiedAt = new Map<string, Date>();
   const addVersion = (id: string): void => {
     versions.set(id, (versions.get(id) ?? 0) + 1);
+    modifiedAt.set(id, new Date());
   };
   const requests: FakeS3Request[] = [];
   const failures: { failure: FakeS3Failure; remaining: number }[] = [];
@@ -354,9 +359,9 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
         objects: new Map(
           [...objects.entries()]
             .filter(([id]) => id.startsWith(`${bucket}/`))
-            .map(([id, object]) => [
+            .map(([id]) => [
               id.slice(bucket.length + 1),
-              object.lastModified,
+              modifiedAt.get(id) ?? FAKE_EPOCH,
             ]),
         ),
         maxKeys: Number(url.searchParams.get("max-keys") ?? "1000"),
@@ -378,11 +383,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
         return errorResponse("NoSuchKey", 404, copySourceKey);
       }
       // Snapshot, as S3 does: the copy must not alias the source's bytes.
-      objects.set(id, {
-        ...source,
-        bytes: source.bytes.slice(),
-        lastModified: new Date(),
-      });
+      objects.set(id, { ...source, bytes: source.bytes.slice() });
       addVersion(id);
       return new Response(
         `${XML_HEADER}<CopyObjectResult><ETag>&quot;fake&quot;</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified></CopyObjectResult>`,
@@ -397,12 +398,13 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       if (ifNoneMatch === "*" && objects.has(id)) {
         return errorResponse("PreconditionFailed", 412, key);
       }
-      objects.set(id, { bytes, contentType, lastModified: new Date() });
+      objects.set(id, { bytes, contentType });
       addVersion(id);
       return new Response(null, { status: 200, headers: { etag: '"fake"' } });
     }
     if (method === "DELETE") {
       objects.delete(id);
+      modifiedAt.delete(id);
       return new Response(null, { status: 204 });
     }
 
@@ -465,7 +467,9 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
         },
       };
     },
+    modifiedAt,
     put: (bucket, key, bytes, contentType, lastModified = FAKE_EPOCH) => {
+      modifiedAt.set(objectId(bucket, key), lastModified);
       objects.set(objectId(bucket, key), {
         // Snapshot the caller's buffer so a later mutation cannot rewrite
         // a stored object.
@@ -474,7 +478,6 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
             ? new TextEncoder().encode(bytes)
             : bytes.slice(),
         contentType: contentType ?? null,
-        lastModified,
       });
     },
     stop: () => {

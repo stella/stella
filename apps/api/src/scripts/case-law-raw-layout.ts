@@ -14,15 +14,16 @@
  *   # then delete them
  *   bun run src/scripts/case-law-raw-layout.ts sweep-legacy --source <id> --apply
  *
- * `rows` reports without writing unless `--apply`. It stops at the first
- * decision it must retry and prints the id to resume `--after`. Every write it
- * makes is created only if absent and every pointer moves by compare-and-set,
- * so a run repeated from any point converges.
+ * `rows` reports without writing unless `--apply`, and lists every decision
+ * it could not move or check. Every write it makes is created only if absent
+ * and every pointer moves by compare-and-set, so a run repeated from any
+ * point converges.
  *
  * `sweep-legacy` refuses unless no live decision of the source points outside
  * its own prefix and every live payload of the source, read back, names only
  * files in its own prefix. Run it only once no running writer still stores
- * the older layout.
+ * the older layout. Erasures of the source's decisions stay pending until it
+ * has run.
  */
 import { panic } from "better-result";
 
@@ -99,15 +100,9 @@ if (command === "rows") {
     for (const { decisionId, outcome } of page.reported) {
       console.log(`${outcome}\t${decisionId}`);
     }
-    if (page.counts.retry > 0) {
-      console.error(
-        `Stopped at a decision to retry; resume with --after ${page.resumeAfter ?? "(start)"}`,
-      );
-      return page.resumeAfter;
-    }
     return page.resumeAfter === null ? null : await walk(page.resumeAfter);
   };
-  const stoppedAt = await walk(
+  await walk(
     afterArg === undefined ? null : toSafeId<"caseLawDecision">(afterArg),
   );
   console.log(
@@ -115,7 +110,8 @@ if (command === "rows") {
       .map(([outcome, count]) => `${outcome}=${String(count)}`)
       .join(" ")}`,
   );
-  process.exit(stoppedAt === null ? 0 : 1);
+  // A decision that failed is listed above and is tried again by a rerun.
+  process.exit((totals.get("retry") ?? 0) === 0 ? 0 : 1);
 }
 
 if (sourceId === undefined) {

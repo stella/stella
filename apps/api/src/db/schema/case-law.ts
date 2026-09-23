@@ -1237,7 +1237,8 @@ export const caseLawCorpusTombstones = p.pgTable(
  * names. Each such case is recorded here, in the transaction that learns of
  * it, and the sweeper deletes the decision's raw prefix whenever the decision
  * is erased or has no row. An entry is retired only after `settleAfter`, by
- * which every write that could have started before it is over.
+ * which every write that could have started before it is over, and once its
+ * source holds no object of the older source-wide layout.
  *
  * No foreign key, for the reason the upload intents carry none: the record
  * must outlive a row that is being erased or a source that is being removed.
@@ -1247,23 +1248,6 @@ export const caseLawRawSweeps = p.pgTable(
   {
     decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
     sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
-    /**
-     * Source-wide objects from before raw keys were per decision, which this
-     * decision's row or payloads named. They may be shared, so they are
-     * deleted only once no live decision of the source names a key of that
-     * layout. Payloads are kept apart from files because a payload names
-     * files: it is read for them before it is deleted.
-     */
-    legacyPayloadKeys: p
-      .varchar("legacy_payload_keys", { length: 512 })
-      .array()
-      .notNull()
-      .default([]),
-    legacyFileKeys: p
-      .varchar("legacy_file_keys", { length: 512 })
-      .array()
-      .notNull()
-      .default([]),
     settleAfter: timestamptz("settle_after").notNull(),
     nextAttemptAt: timestamptz("next_attempt_at").notNull(),
     attemptCount: p.integer("attempt_count").default(0).notNull(),

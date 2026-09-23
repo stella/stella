@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -9,7 +9,6 @@ import {
 } from "@/api/lib/legal-search/corpus-location";
 import {
   decodeSourceRawEnvelopeObjects,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -19,12 +18,11 @@ import type {
 import {
   createS3ObjectIfAbsent,
   deleteS3ObjectWithSignal,
-  headS3ObjectWithSignal,
   listS3ObjectKeys,
-  listS3ObjectPage,
-  readS3ObjectIfPresent,
+  headS3ObjectWithSignal,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
+import { copyObject } from "@/api/lib/s3-presign";
 
 /**
  * Where a publisher's response is kept, for both corpus families.
@@ -82,6 +80,12 @@ export type RawSourcePayloadOwner =
 const sha256Of = (data: Uint8Array | string): string =>
   new Bun.CryptoHasher("sha256").update(data).digest("hex");
 
+/** A document's payload key for a payload of this digest. */
+export const rawDocumentPayloadKey = (
+  owner: RawDocumentOwner,
+  sha256: string,
+): string => `${rawDocumentPrefix(owner)}${PAYLOADS_SEGMENT}${sha256}`;
+
 /** Where one payload lives: its own digest, under its owner's prefix. */
 export const rawSourcePayloadKey = ({
   owner,
@@ -92,7 +96,7 @@ export const rawSourcePayloadKey = ({
 }): string => {
   switch (owner.family) {
     case RAW_SOURCE_FAMILY.CASE_LAW:
-      return `${rawDocumentPrefix(owner)}${PAYLOADS_SEGMENT}${sha256Of(data)}`;
+      return rawDocumentPayloadKey(owner, sha256Of(data));
     case RAW_SOURCE_FAMILY.LEGISLATION:
       return `${owner.family}/raw/${owner.sourceId}/${sha256Of(data)}`;
     default:
@@ -397,8 +401,14 @@ export const isUnmovableRawObjectError = (error: unknown): boolean =>
   error instanceof RawSourceObjectUnhomeableError;
 
 /**
- * Copy one file into its document, checked against the digest and length
- * the envelope states rather than trusted for having been read.
+ * Copy one object into its document, server-side: nothing passes through
+ * this process, whatever its size.
+ *
+ * The source is addressed by its own digest, so the name is the check: a
+ * source whose name is not the digest the reference states, whose length is
+ * not the one it states, or that is not stored at all cannot be copied, on
+ * this attempt or any later one. An object already at the destination holds
+ * the same bytes, since that key is the same digest, and is not copied again.
  */
 export const copyRawObject = async ({
   copy: { fromKey, ref },
@@ -409,26 +419,31 @@ export const copyRawObject = async ({
   window: RawSourceWriteWindow;
   signal: AbortSignal;
 }): Promise<void> => {
-  const read = await readS3ObjectIfPresent(fromKey, signal);
-  if (read === null) {
+  if (!fromKey.endsWith(`/${ref.sha256}`)) {
     throw new RawSourceObjectCopyError({
-      message: `Envelope names a file that is not stored: ${fromKey}`,
+      message: `A copy source is not named by its digest: ${fromKey}`,
       fromKey,
     });
   }
-  const bytes = new Uint8Array(read);
-  if (bytes.byteLength !== ref.byteLength || sha256Of(bytes) !== ref.sha256) {
+  const source = await headS3ObjectWithSignal(fromKey, signal);
+  if (source === null || source.contentLength !== ref.byteLength) {
     throw new RawSourceObjectCopyError({
-      message: `Stored file does not match the envelope's digest: ${fromKey}`,
+      message: `A copy source is not stored as its reference states: ${fromKey}`,
       fromKey,
     });
+  }
+  const location = parseCorpusLocation(ref.location);
+  if (location.type !== "object") {
+    return panic(`Unexpected raw object location ${ref.location}`);
+  }
+  if ((await headS3ObjectWithSignal(location.key, signal)) !== null) {
+    return;
   }
   assertWriteWindowOpen(window);
-  await createS3ObjectIfAbsent({
-    contentType: ref.contentType,
-    data: bytes,
-    key: ref.location,
-  });
+  const copied = await copyObject(fromKey, location.key);
+  if (Result.isError(copied)) {
+    throw copied.error;
+  }
 };
 
 class RawDocumentErasureIncompleteError extends TaggedError(
@@ -458,36 +473,6 @@ export const deleteRawKeys = async (
 const RAW_ERASE_PAGE = 100;
 /** Rounds before an erasure gives up and stays a retry target. */
 const RAW_ERASE_MAX_ROUNDS = 10;
-
-const RAW_PAYLOAD_LIST_PAGE = 1000;
-
-/**
- * Every payload key one document holds, however many observations stored
- * one: a page at a time, to the end.
- */
-export const listRawDocumentPayloadKeys = async ({
-  signal,
-  ...owner
-}: RawDocumentOwner & { signal: AbortSignal }): Promise<string[]> => {
-  const prefix = `${rawDocumentPrefix(owner)}${PAYLOADS_SEGMENT}`;
-  const collect = async (
-    startAfter: string | null,
-    keys: readonly string[],
-  ): Promise<string[]> => {
-    const page = await listS3ObjectPage({
-      prefix,
-      startAfter,
-      maxKeys: RAW_PAYLOAD_LIST_PAGE,
-      signal,
-    });
-    const collected = [...keys, ...page.objects.map(({ key }) => key)];
-    const last = collected.at(-1);
-    return page.truncated && last !== undefined
-      ? await collect(last, collected)
-      : collected;
-  };
-  return await collect(null, []);
-};
 
 /**
  * Delete every raw object one document owns: its payloads, including those
@@ -522,41 +507,4 @@ export const eraseRawDocument = async ({
     await eraseRound(round + 1);
   };
   await eraseRound(1);
-};
-
-/** Largest envelope a reference census reads to find the files it names. */
-const RAW_ENVELOPE_READ_MAX_BYTES = 64 * 1024 * 1024;
-
-/**
- * The file references one stored payload names, or none when it is absent
- * or is not an envelope. Only a payload stored as an envelope names files
- * (a writer records the envelope's media type with it), so any other
- * payload, a publisher's document of any size included, is not read.
- */
-export const readRawPayloadRefs = async (
-  key: string,
-  signal: AbortSignal,
-): Promise<SourceRawObjectRef[]> => {
-  const head = await headS3ObjectWithSignal(key, signal);
-  if (
-    head === null ||
-    head.contentType?.startsWith(SOURCE_RAW_ENVELOPE_CONTENT_TYPE) !== true
-  ) {
-    return [];
-  }
-  if (
-    head.contentLength === null ||
-    head.contentLength > RAW_ENVELOPE_READ_MAX_BYTES
-  ) {
-    throw new RawDocumentErasureIncompleteError({
-      message: `Raw envelope ${key} is larger than a census reads`,
-      prefix: key,
-    });
-  }
-  const read = await readS3ObjectIfPresent(key, signal);
-  return read === null
-    ? []
-    : Object.values(
-        decodeSourceRawEnvelopeObjects(new TextDecoder().decode(read)),
-      );
 };

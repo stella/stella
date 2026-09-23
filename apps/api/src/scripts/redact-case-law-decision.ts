@@ -52,7 +52,7 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
         exitCode: 0,
         message:
           outcome.legacyRaw === "pending"
-            ? `${corpus} Raw objects it named in the earlier source-wide layout are still stored, because a live decision of the source still names that layout; the raw sweep deletes them once the layout backfill has moved every such decision.`
+            ? `${corpus} Its source still holds raw objects of the earlier source-wide layout, which may include this decision's; they are deleted by the source's legacy sweep (case-law-raw-layout sweep-legacy), and the raw sweep entry stays open until then.`
             : corpus,
       };
     }

@@ -329,6 +329,19 @@ const legacyDecision = async ({
   return { decisionId, payloadKey, fileKey };
 };
 
+const openSweeps = async () =>
+  (
+    await db.select({ id: caseLawRawSweeps.decisionId }).from(caseLawRawSweeps)
+  ).map(({ id }) => id);
+
+const sweepLegacy = async (sourceId: SafeId<"caseLawSource">) =>
+  await sweepCaseLawLegacyRawSource({
+    scopedDb,
+    sourceId,
+    mode: LEGACY_RAW_SWEEP_MODE.APPLY,
+    signal: signal(),
+  });
+
 const migrateSource = async (sourceId: SafeId<"caseLawSource">) =>
   await reconcileCaseLawRawLayoutPage({
     scopedDb,
@@ -425,9 +438,20 @@ describe("erasing one decision's raw objects", () => {
     { name: "share one envelope and its file", sameEnvelope: true },
     { name: "share only a file", sameEnvelope: false },
   ])(
-    "in the older layout, where two decisions $name, erases A's only once no live decision names that layout",
+    "in the older layout, where two decisions $name, keeps A's erasure open until the source's older objects are swept, then leaves B whole",
     async ({ sameEnvelope }) => {
       const sourceId = await createSource();
+      // An observation of A the row no longer points at: nothing names it.
+      const replaced = encodeSourceRawEnvelope({
+        listing: '{"only":"replaced"}',
+      });
+      const replacedKey = `case-law/raw/${sourceId}/${sha256(replaced)}`;
+      fake.put(
+        envBase.S3_BUCKET,
+        replacedKey,
+        replaced,
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
       const a = await legacyDecision({
         sourceId,
         caseNumber: "III. ÚS 1/2026",
@@ -449,31 +473,30 @@ describe("erasing one decision's raw objects", () => {
         legacyRaw: "pending",
       });
       await drainSweeps();
-      // B still names both objects; neither may go.
+      // B still names both objects; neither may go, and A's entry stays.
       expect(
         (await namedBy(b.decisionId)).filter((key) => !stored(key)),
       ).toEqual([]);
-      expect(stored(a.fileKey)).toBe(true);
+      expect(await openSweeps()).toEqual([a.decisionId]);
 
-      // B moves into its own prefix; nothing live names the older layout.
+      // B moves into its own prefix; A's entry still waits for the sweep.
       expect((await migrateSource(sourceId)).counts.migrated).toBe(1);
       const keptForB = await namedBy(b.decisionId);
       expect(keptForB.every((key) => key.includes("/documents/"))).toBe(true);
+      await drainSweeps();
+      expect(await openSweeps()).toEqual([a.decisionId]);
 
+      expect(await sweepLegacy(sourceId)).toMatchObject({ type: "swept" });
       await drainSweeps();
 
-      // What only A named is gone; everything B names is stored.
+      // Nothing A was ever stored with remains; everything B names does.
+      expect(holding('"replaced"')).toEqual([]);
       if (!sameEnvelope) {
         expect(holding('"erased"')).toEqual([]);
       }
-      expect(stored(a.payloadKey)).toBe(false);
-      expect(stored(a.fileKey)).toBe(false);
+      expect(stored(a.payloadKey) || stored(a.fileKey)).toBe(false);
       expect(keptForB.filter((key) => !stored(key))).toEqual([]);
-      expect(
-        await db
-          .select({ id: caseLawRawSweeps.decisionId })
-          .from(caseLawRawSweeps),
-      ).toEqual([]);
+      expect(await openSweeps()).toEqual([]);
     },
   );
 });
@@ -512,26 +535,53 @@ describe("a sweep", () => {
     ).toEqual([]);
   });
 
-  test("erases an older-layout decision's objects at once when nothing else live names that layout", async () => {
+  test("closes an erasure's entry only after its settle time, sweeping a late write each time", async () => {
     const sourceId = await createSource();
-    const a = await legacyDecision({
+    await observe({
       sourceId,
       caseNumber: "X. ÚS 2/2026",
-      listing: '{"only":"alone"}',
-      file: "%PDF alone",
+      sourceDocumentId: "settle",
+      listing: "{}",
+      file: "%PDF settle",
+      order: 1n,
     });
+    const a = await decisionIdOf(sourceId, "X. ÚS 2/2026");
+    await redact(a);
+    // What a writer that died after its write landed leaves: nothing
+    // recorded but the erasure's own entry.
+    const late = `${prefixOf(sourceId, a)}payloads/${"a".repeat(64)}`;
+    fake.put(envBase.S3_BUCKET, late, "late");
+    await db
+      .update(caseLawRawSweeps)
+      .set({ nextAttemptAt: sql`now() - interval '1 second'` })
+      .where(sql`true`);
 
-    expect(await redact(a.decisionId)).toMatchObject({
-      type: "redacted",
-      legacyRaw: "erased",
-    });
-    expect(holding('"alone"')).toEqual([]);
-    expect(stored(a.fileKey)).toBe(false);
+    await reconcileCaseLawRawSweeps({ scopedDb, limit: 10, signal: signal() });
+
+    expect(stored(late)).toBe(false);
+    // Swept, but not retired: its settle time is still ahead, and the next
+    // attempt is not before it.
+    const [entry] = await db
+      .select({
+        settleAfter: caseLawRawSweeps.settleAfter,
+        nextAttemptAt: caseLawRawSweeps.nextAttemptAt,
+      })
+      .from(caseLawRawSweeps);
+    expect(entry?.settleAfter.getTime()).toBeGreaterThan(Date.now());
+    expect(entry?.nextAttemptAt.getTime()).toBeGreaterThanOrEqual(
+      entry?.settleAfter.getTime() ?? Number.POSITIVE_INFINITY,
+    );
+
+    fake.put(envBase.S3_BUCKET, late, "later still");
+    await drainSweeps();
+
+    expect(stored(late)).toBe(false);
+    expect(await openSweeps()).toEqual([]);
   });
 });
 
 describe("a payload in its own prefix naming a file of the older layout", () => {
-  test("has that file erased with it once nothing else live names the layout", async () => {
+  test("keeps the erasure open until the source's older objects are swept", async () => {
     const sourceId = await createSource();
     await observe({
       sourceId,
@@ -541,8 +591,6 @@ describe("a payload in its own prefix naming a file of the older layout", () => 
       order: 1n,
     });
     const a = await decisionIdOf(sourceId, "XII. ÚS 1/2026");
-    // What a replay stored before replays copied files in: an envelope in
-    // the decision's prefix naming a source-wide file.
     const fileBytes = bytesOf("%PDF only named by an own envelope");
     const legacyFile = `case-law/raw/${sourceId}/${sha256(fileBytes)}`;
     fake.put(envBase.S3_BUCKET, legacyFile, fileBytes, "application/pdf");
@@ -564,10 +612,14 @@ describe("a payload in its own prefix naming a file of the older layout", () => 
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
 
-    expect(await redact(a)).toMatchObject({ legacyRaw: "erased" });
+    expect(await redact(a)).toMatchObject({ legacyRaw: "pending" });
+    expect(keysUnder(prefixOf(sourceId, a))).toEqual([]);
+
+    expect(await sweepLegacy(sourceId)).toMatchObject({ type: "swept" });
+    await drainSweeps();
 
     expect(stored(legacyFile)).toBe(false);
-    expect(keysUnder(prefixOf(sourceId, a))).toEqual([]);
+    expect(await openSweeps()).toEqual([]);
   });
 });
 
@@ -616,6 +668,51 @@ describe("a write racing an erasure", () => {
         .select({ id: caseLawRawSweeps.decisionId })
         .from(caseLawRawSweeps),
     ).toEqual([{ id: a }]);
+  });
+});
+
+describe("a refresh whose raw upload fails", () => {
+  test("leaves the row's pointer as it is now, not as it was read", async () => {
+    const sourceId = await createSource();
+    await observe({
+      sourceId,
+      caseNumber: "XIV. ÚS 1/2026",
+      sourceDocumentId: "moved",
+      listing: '{"v":1}',
+      file: "%PDF v1",
+      order: 1n,
+    });
+    const a = await decisionIdOf(sourceId, "XIV. ÚS 1/2026");
+    const held = fake.holdNext({
+      method: "PUT",
+      keyIncludes: prefixOf(sourceId, a),
+    });
+    fake.failNext({
+      method: "PUT",
+      code: "AccessDenied",
+      status: 403,
+      keyIncludes: "/payloads/",
+    });
+    const writing = observe({
+      sourceId,
+      caseNumber: "XIV. ÚS 1/2026",
+      sourceDocumentId: "moved",
+      listing: '{"v":2}',
+      file: "%PDF v2",
+      order: 2n,
+    });
+    await held.reached;
+    // The pointer moves while the refresh is in flight, as the layout
+    // backfill moves it.
+    const movedTo = `${prefixOf(sourceId, a)}payloads/${"b".repeat(64)}`;
+    await db
+      .update(caseLawDecisions)
+      .set({ sourceRawS3Key: movedTo })
+      .where(eq(caseLawDecisions.id, a));
+    held.release();
+    await writing;
+
+    expect((await rowOf(a))?.sourceRawS3Key).toBe(movedTo);
   });
 });
 
@@ -700,14 +797,7 @@ describe("a new decision whose raw write fails partway", () => {
 
 describe("the raw object census", () => {
   const age = (key: string, ageMs: number) => {
-    const object = fake.objects.get(bucketId(key));
-    if (object === undefined) {
-      throw new Error(`no object ${key}`);
-    }
-    fake.objects.set(bucketId(key), {
-      ...object,
-      lastModified: new Date(Date.now() - ageMs),
-    });
+    fake.modifiedAt.set(bucketId(key), new Date(Date.now() - ageMs));
   };
 
   test("queues what no live decision owns and leaves the rest", async () => {
@@ -869,6 +959,25 @@ describe("moving decisions out of the older layout", () => {
   });
 });
 
+describe("a decision whose older-layout file is not what its envelope says", () => {
+  test("is reported unmovable and its pointer left, never pointed at a bad copy", async () => {
+    const sourceId = await createSource();
+    const a = await legacyDecision({
+      sourceId,
+      caseNumber: "XV. ÚS 1/2026",
+      listing: "{}",
+      file: "%PDF as named",
+    });
+    fake.put(envBase.S3_BUCKET, a.fileKey, "%PDF truncated", "application/pdf");
+
+    const page = await migrateSource(sourceId);
+
+    expect(page.counts.unmovable).toBe(1);
+    expect((await rowOf(a.decisionId))?.sourceRawS3Key).toBe(a.payloadKey);
+    expect(keysUnder(prefixOf(sourceId, a.decisionId))).toEqual([]);
+  });
+});
+
 describe("moving a decision while it changes", () => {
   test("a move overtaken by a newer observation leaves the newer pointer", async () => {
     const sourceId = await createSource();
@@ -924,6 +1033,9 @@ describe("moving a decision while it changes", () => {
     await reconcileCaseLawRawSweeps({ scopedDb, limit: 100, signal: signal() });
 
     expect(keysUnder(prefixOf(sourceId, a.decisionId))).toEqual([]);
+    // Only the older-layout original is left, for the source's sweep.
+    expect(holding("moved-then-erased")).toEqual([bucketId(a.payloadKey)]);
+    await sweepLegacy(sourceId);
     expect(holding("moved-then-erased")).toEqual([]);
   });
 });

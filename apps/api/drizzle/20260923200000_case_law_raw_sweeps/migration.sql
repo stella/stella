@@ -8,8 +8,6 @@ SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "case_law_raw_sweeps" (
   "decision_id" uuid PRIMARY KEY NOT NULL,
   "source_id" uuid NOT NULL,
-  "legacy_payload_keys" varchar(512)[] DEFAULT '{}'::varchar(512)[] NOT NULL,
-  "legacy_file_keys" varchar(512)[] DEFAULT '{}'::varchar(512)[] NOT NULL,
   "settle_after" timestamptz NOT NULL,
   "next_attempt_at" timestamptz NOT NULL,
   "attempt_count" integer DEFAULT 0 NOT NULL,

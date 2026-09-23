@@ -13,16 +13,14 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  classifyCaseLawRawKey,
-  deleteRawKeys,
   eraseRawDocument,
-  listRawDocumentPayloadKeys,
-  RAW_KEY_OWNERSHIP,
+  isLegacyCaseLawRawKey,
+  legacyCaseLawRawPrefix,
   RAW_SOURCE_ERASURE_SETTLE_MS,
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
-  readRawPayloadRefs,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
  * The erasure side of per-decision raw storage.
@@ -34,9 +32,9 @@ import {
  *
  * Objects in the layout that came before (one content-addressed key per
  * source, shared by every decision served the same bytes) cannot be deleted
- * for one decision on its word alone. They are deleted once no live
- * decision of the source names a key of that layout at all, which is the
- * state the layout backfill converges every source to.
+ * for one decision on its word alone. The source-wide legacy sweep deletes
+ * them once it has proven nothing live names them, and an erased decision's
+ * entry stays until it has.
  */
 
 type CaseLawRawOwner = {
@@ -55,13 +53,12 @@ type EnqueueCaseLawRawSweepOptions = CaseLawRawOwner & {
   firstAttemptAt: Date;
   /** Before this, the entry is not retired, however clean the prefix. */
   settleAfter: Date;
-  legacyPayloadKeys?: readonly string[];
 };
 
 /**
  * Record that a decision's raw prefix is owed a sweep, in the transaction
- * that learned it. Merges with an entry already there: the earliest attempt,
- * the latest settle time and every legacy key either named.
+ * that learned it. Merges with an entry already there: the earliest attempt
+ * and the latest settle time.
  */
 export const enqueueCaseLawRawSweepTx = async (
   tx: Transaction,
@@ -70,7 +67,6 @@ export const enqueueCaseLawRawSweepTx = async (
     sourceId,
     firstAttemptAt,
     settleAfter,
-    legacyPayloadKeys = [],
   }: EnqueueCaseLawRawSweepOptions,
 ): Promise<void> => {
   // audit: skip — erasure bookkeeping; the erasure itself is audited in
@@ -80,14 +76,12 @@ export const enqueueCaseLawRawSweepTx = async (
     .values({
       decisionId,
       sourceId,
-      legacyPayloadKeys: [...legacyPayloadKeys],
       settleAfter,
       nextAttemptAt: firstAttemptAt,
     })
     .onConflictDoUpdate({
       target: caseLawRawSweeps.decisionId,
       set: {
-        legacyPayloadKeys: sql`ARRAY(SELECT DISTINCT unnest(${caseLawRawSweeps.legacyPayloadKeys} || excluded.legacy_payload_keys))`,
         settleAfter: sql`GREATEST(${caseLawRawSweeps.settleAfter}, excluded.settle_after)`,
         nextAttemptAt: sql`LEAST(${caseLawRawSweeps.nextAttemptAt}, excluded.next_attempt_at)`,
       },
@@ -208,8 +202,13 @@ export type CaseLawRawSweepOutcome =
   | { type: typeof RAW_PREFIX_STATE.RESERVED }
   | {
       type: "swept";
-      /** Whether legacy objects this decision named are still stored. */
-      legacy: "none" | "erased" | "pending";
+      /**
+       * Whether the source still holds objects of the older, source-wide
+       * layout. The decision may have been served bytes stored there, and
+       * they are deleted only by the source-wide legacy sweep, so until
+       * that has run the entry is kept and the erasure is not complete.
+       */
+      legacy: "none" | "pending";
     };
 
 type SweepCaseLawRawDecisionOptions = CaseLawRawOwner & {
@@ -217,31 +216,46 @@ type SweepCaseLawRawDecisionOptions = CaseLawRawOwner & {
   signal: AbortSignal;
 };
 
-/** A key list as one SQL array value rather than a parameter list. */
-const varcharArray = (keys: readonly string[]) =>
-  sql`ARRAY[${sql.join(
-    keys.map((key) => sql`${key}`),
-    sql`, `,
-  )}]::varchar[]`;
+/** Keys a check for remaining older-layout objects reads at most. */
+const LEGACY_PRESENCE_PAGE = 10;
 
-const legacyOf = (keys: readonly string[], owner: CaseLawRawOwner): string[] =>
-  keys.filter(
-    (key) =>
-      classifyCaseLawRawKey(key, {
-        sourceId: owner.sourceId,
-        documentId: owner.decisionId,
-      }) === RAW_KEY_OWNERSHIP.LEGACY,
+/**
+ * Whether the source still holds any object of the older layout. Read one
+ * level deep, where those keys sit; an inconclusive page answers yes.
+ */
+export const sourceHoldsLegacyRawObjects = async (
+  sourceId: string,
+  signal: AbortSignal,
+): Promise<boolean> => {
+  const page = await listS3ObjectPage({
+    prefix: legacyCaseLawRawPrefix(sourceId),
+    startAfter: null,
+    delimiter: "/",
+    maxKeys: LEGACY_PRESENCE_PAGE,
+    signal,
+  });
+  return (
+    page.truncated ||
+    page.objects.some(({ key }) => isLegacyCaseLawRawKey(key, sourceId))
   );
+};
 
 /**
  * Sweep one decision's raw objects, if its state allows it: the one path
  * that deletes a decision's raw prefix, shared by the erasure and by the
- * sweeper that follows it up.
+ * sweeper that follows it up. Repeating it from any point is harmless.
  *
- * The order is what makes it safe to repeat from any point: the legacy files
- * the decision's payloads name are recorded before any payload is deleted,
- * and legacy payloads go only after the files they name. The entry is
- * retired only once nothing is pending and its settle time has passed.
+ * A decision that is live or reserved is not touched, and its entry is
+ * dropped in a transaction that holds the row against a concurrent
+ * erasure, so an erasure's own entry is never dropped for a state that
+ * erasure has just ended.
+ *
+ * An erased or never-written decision's prefix is deleted. Objects of the
+ * older layout are not: they are shared by content, so none is deleted on
+ * one decision's word; the source-wide legacy sweep deletes them once it has
+ * proven nothing live names them. The entry stays, and the erasure reads
+ * as pending, until the source holds none. It is retired only after its
+ * settle time, by which every write that started before it is over.
  */
 export const sweepCaseLawRawDecision = async ({
   scopedDb,
@@ -249,122 +263,51 @@ export const sweepCaseLawRawDecision = async ({
   ...owner
 }: SweepCaseLawRawDecisionOptions): Promise<CaseLawRawSweepOutcome> => {
   const { decisionId } = owner;
-  const state = await scopedDb(
-    async (tx) =>
+  const kept = await scopedDb(async (tx) => {
+    // Erasure takes this row FOR UPDATE and writes its entry in the same
+    // transaction, so the state read here holds until the entry is gone.
+    await tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId))
+      .for("share");
+    const state =
       (await readRawPrefixStates(tx, [decisionId])).get(decisionId) ??
-      panic("Raw prefix state lost"),
-  );
-  if (state === RAW_PREFIX_STATE.LIVE || state === RAW_PREFIX_STATE.RESERVED) {
-    // Nothing here is this entry's to delete. The entry goes: whatever
-    // queued it has been overtaken by a row that owns the prefix, or by a
-    // reservation whose insert will.
+      panic("Raw prefix state lost");
+    if (
+      state !== RAW_PREFIX_STATE.LIVE &&
+      state !== RAW_PREFIX_STATE.RESERVED
+    ) {
+      return null;
+    }
+    // Nothing here is this entry's to delete: whatever queued it has been
+    // overtaken by a row that owns the prefix, or by a reservation whose
+    // insert will.
+    await tx
+      .delete(caseLawRawSweeps)
+      .where(eq(caseLawRawSweeps.decisionId, decisionId));
+    return state;
+  });
+  if (kept !== null) {
+    return { type: kept };
+  }
+
+  await eraseRawDocument({ ...documentOwner(owner), signal });
+  const legacy = (await sourceHoldsLegacyRawObjects(owner.sourceId, signal))
+    ? "pending"
+    : "none";
+  if (legacy === "none") {
     await scopedDb(async (tx) => {
       await tx
         .delete(caseLawRawSweeps)
-        .where(eq(caseLawRawSweeps.decisionId, decisionId));
-    });
-    return { type: state };
-  }
-
-  const entry = await scopedDb(
-    async (tx) =>
-      (
-        await tx
-          .select({
-            legacyPayloadKeys: caseLawRawSweeps.legacyPayloadKeys,
-            legacyFileKeys: caseLawRawSweeps.legacyFileKeys,
-          })
-          .from(caseLawRawSweeps)
-          .where(eq(caseLawRawSweeps.decisionId, decisionId))
-      ).at(0) ?? { legacyPayloadKeys: [], legacyFileKeys: [] },
-  );
-
-  // Before anything is deleted: every legacy file a payload of this
-  // decision names, so a payload is never gone before what it named is
-  // recorded.
-  const document = documentOwner(owner);
-  const ownPayloadKeys = await listRawDocumentPayloadKeys({
-    ...document,
-    signal,
-  });
-  const named = await Promise.all(
-    [...ownPayloadKeys, ...entry.legacyPayloadKeys].map(
-      async (key) => await readRawPayloadRefs(key, signal),
-    ),
-  );
-  const namedLegacyFiles = legacyOf(
-    named.flat().map(({ location }) => location),
-    owner,
-  );
-  const legacyFileKeys = [
-    ...new Set([...entry.legacyFileKeys, ...namedLegacyFiles]),
-  ];
-  if (legacyFileKeys.length > entry.legacyFileKeys.length) {
-    await scopedDb(async (tx) => {
-      await tx
-        .insert(caseLawRawSweeps)
-        .values({
-          decisionId,
-          sourceId: owner.sourceId,
-          legacyPayloadKeys: entry.legacyPayloadKeys,
-          legacyFileKeys,
-          settleAfter: rawSweepSettleAfter(),
-          nextAttemptAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: caseLawRawSweeps.decisionId,
-          set: {
-            legacyFileKeys: sql`ARRAY(SELECT DISTINCT unnest(${caseLawRawSweeps.legacyFileKeys} || excluded.legacy_file_keys))`,
-          },
-        });
+        .where(
+          and(
+            eq(caseLawRawSweeps.decisionId, decisionId),
+            lte(caseLawRawSweeps.settleAfter, sql`now()`),
+          ),
+        );
     });
   }
-
-  await eraseRawDocument({ ...document, signal });
-
-  const legacyPayloadKeys = legacyOf(entry.legacyPayloadKeys, owner);
-  const legacyFiles = legacyOf(legacyFileKeys, owner);
-  let legacy: "none" | "erased" | "pending" = "none";
-  if (legacyPayloadKeys.length > 0 || legacyFiles.length > 0) {
-    const shared = await scopedDb(
-      async (tx) =>
-        await sourceHasLiveLegacyReferences(tx, {
-          sourceId: owner.sourceId,
-          exceptDecisionId: decisionId,
-        }),
-    );
-    if (shared) {
-      legacy = "pending";
-    } else {
-      await deleteRawKeys(legacyFiles, signal);
-      await deleteRawKeys(legacyPayloadKeys, signal);
-      legacy = "erased";
-    }
-  }
-
-  await scopedDb(async (tx) => {
-    if (legacy === "erased") {
-      // Exactly the keys deleted above: one a concurrent sweep recorded
-      // since this one read the entry stays for the next attempt.
-      await tx
-        .update(caseLawRawSweeps)
-        .set({
-          legacyPayloadKeys: sql`ARRAY(SELECT unnest(${caseLawRawSweeps.legacyPayloadKeys}) EXCEPT SELECT unnest(${varcharArray(entry.legacyPayloadKeys)}))`,
-          legacyFileKeys: sql`ARRAY(SELECT unnest(${caseLawRawSweeps.legacyFileKeys}) EXCEPT SELECT unnest(${varcharArray(legacyFileKeys)}))`,
-        })
-        .where(eq(caseLawRawSweeps.decisionId, decisionId));
-    }
-    await tx
-      .delete(caseLawRawSweeps)
-      .where(
-        and(
-          eq(caseLawRawSweeps.decisionId, decisionId),
-          lte(caseLawRawSweeps.settleAfter, sql`now()`),
-          sql`cardinality(${caseLawRawSweeps.legacyPayloadKeys}) = 0`,
-          sql`cardinality(${caseLawRawSweeps.legacyFileKeys}) = 0`,
-        ),
-      );
-  });
   return { type: "swept", legacy };
 };
 

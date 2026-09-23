@@ -36,10 +36,6 @@ import {
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  classifyCaseLawRawKey,
-  RAW_KEY_OWNERSHIP,
-} from "@/api/lib/legal-search/raw-source-storage";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -147,9 +143,10 @@ type RawErasure =
   | { type: "incomplete"; error: unknown };
 
 /**
- * Objects of the earlier source-wide raw layout this decision named. They
- * may be shared with another decision, so they go once no live decision of
- * the source names that layout; until then the sweep entry keeps them.
+ * Whether objects of the earlier source-wide raw layout remain in the
+ * decision's source. The decision may have been served bytes stored there;
+ * they are shared by content, so they go only with the source-wide legacy
+ * sweep, and the erasure's sweep entry stays until they have.
  */
 export type LegacyRawErasure = Extract<
   CaseLawRawSweepOutcome,
@@ -348,16 +345,7 @@ export const redactCaseLawDecision = async ({
       })
       .where(eq(caseLawDecisions.id, decisionId));
     // The raw prefix is swept below and again once every write that could
-    // have started before this fence is over. A pointer in the earlier
-    // source-wide layout is recorded here, before the row stops naming it.
-    const legacyPayloadKeys =
-      decision.sourceRawS3Key !== null &&
-      classifyCaseLawRawKey(decision.sourceRawS3Key, {
-        sourceId: decision.sourceId,
-        documentId: decisionId,
-      }) === RAW_KEY_OWNERSHIP.LEGACY
-        ? [decision.sourceRawS3Key]
-        : [];
+    // have started before this fence is over.
     await enqueueCaseLawRawSweepTx(tx, {
       decisionId,
       sourceId: decision.sourceId,
@@ -365,7 +353,6 @@ export const redactCaseLawDecision = async ({
         Temporal.Now.instant().epochMilliseconds + RAW_SWEEP_FOLLOW_UP_MS,
       ),
       settleAfter: rawSweepSettleAfter(),
-      legacyPayloadKeys,
     });
     const cancelledIntents = await cancelCaseLawCorpusUploadIntents({
       decisionId,

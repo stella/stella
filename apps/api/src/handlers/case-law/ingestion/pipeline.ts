@@ -2283,8 +2283,13 @@ const processDecisionAttempt = async ({
                     textFields: result.textFields,
                   }),
                   sourceRaw: null,
-                  sourceRawS3Key,
-                  sourceRawContentType,
+                  // A failed upload writes no pointer at all: the one this
+                  // attempt read may since have been moved, and writing it
+                  // back would point the row at an object nothing else
+                  // accounts for any more.
+                  ...(s3UploadFailed
+                    ? {}
+                    : { sourceRawS3Key, sourceRawContentType }),
                   parserVersion: result.parserVersion ?? 0,
                 }),
             ...(payloadNeedsGuard ? {} : payloadColumns),

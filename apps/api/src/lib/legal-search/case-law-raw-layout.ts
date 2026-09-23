@@ -15,6 +15,7 @@ import {
 import {
   classifyCaseLawRawKey,
   copyRawObject,
+  rawDocumentPayloadKey,
   homeRawPayloadObjects,
   isUnmovableRawObjectError,
   openRawSourceWriteWindow,
@@ -23,12 +24,12 @@ import {
   rawSourcePayloadKey,
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
-import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
-import {
-  getS3ObjectSizeWithSignal,
-  isMissingS3ObjectError,
-  readS3ObjectIfPresent,
-} from "@/api/lib/s3";
+import type {
+  RawDocumentOwner,
+  RawObjectCopy,
+  RawSourceWriteWindow,
+} from "@/api/lib/legal-search/raw-source-storage";
+import { headS3ObjectWithSignal, readS3ObjectIfPresent } from "@/api/lib/s3";
 
 /**
  * Every decision's raw pointer, reconciled against the per-decision layout.
@@ -78,7 +79,7 @@ export const RAW_LAYOUT_ROW_OUTCOME = {
   UNMOVABLE: "unmovable",
   /** In its own prefix, but its payload or a file it names is not stored. */
   DANGLING: "dangling",
-  /** Failed in a way a later attempt may not: the page stops before it. */
+  /** Failed in a way a later attempt may not; reported and tried next pass. */
   RETRY: "retry",
 } as const;
 
@@ -108,19 +109,11 @@ const payloadText = (bytes: Uint8Array): Uint8Array | string =>
   }).unwrapOr(null) ?? bytes;
 
 /** Whether the store holds the key; any other failure is raised. */
-const isStored = async (key: string, signal: AbortSignal): Promise<boolean> => {
-  const head = await Result.tryPromise({
-    try: async () => await getS3ObjectSizeWithSignal(key, signal),
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(head)) {
-    return true;
-  }
-  if (isMissingS3ObjectError(head.error)) {
-    return false;
-  }
-  throw head.error;
-};
+const isStored = async (key: string, signal: AbortSignal): Promise<boolean> =>
+  (await headS3ObjectWithSignal(key, signal)) !== null;
+
+/** Largest payload read into this process to find the files it names. */
+const RAW_ENVELOPE_READ_MAX_BYTES = 64 * 1024 * 1024;
 
 type ReconcileRawRowOptions = {
   scopedDb: ScopedDb;
@@ -157,15 +150,45 @@ const reconcileRawRow = async ({
   const own = classifyCaseLawRawKey(storedKey, owner) === RAW_KEY_OWNERSHIP.OWN;
   const signal = AbortSignal.timeout(RAW_LAYOUT_IO_TIMEOUT_MS);
 
-  if (
-    own &&
-    !readEveryPayload &&
-    row.sourceRawContentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE
-  ) {
+  const head = await headS3ObjectWithSignal(storedKey, signal);
+  if (head === null) {
     return {
-      outcome: (await isStored(storedKey, signal))
-        ? RAW_LAYOUT_ROW_OUTCOME.CURRENT
-        : RAW_LAYOUT_ROW_OUTCOME.DANGLING,
+      outcome: own
+        ? RAW_LAYOUT_ROW_OUTCOME.DANGLING
+        : RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE,
+      copies: 0,
+    };
+  }
+  // Only an envelope names files; a writer stores one under the envelope's
+  // media type. The legacy sweep's census reads every payload regardless.
+  const envelope =
+    head.contentType?.startsWith(SOURCE_RAW_ENVELOPE_CONTENT_TYPE) === true;
+  const readable =
+    head.contentLength !== null &&
+    head.contentLength <= RAW_ENVELOPE_READ_MAX_BYTES;
+  if (!envelope && !(readEveryPayload && readable)) {
+    return own
+      ? { outcome: RAW_LAYOUT_ROW_OUTCOME.CURRENT, copies: 0 }
+      : await movePayload({
+          scopedDb,
+          row,
+          mode,
+          window,
+          storedKey,
+          owner,
+          signal,
+          plan: {
+            type: "copy",
+            byteLength: head.contentLength ?? -1,
+            contentType: head.contentType ?? "application/octet-stream",
+          },
+        });
+  }
+  if (!readable) {
+    return {
+      outcome: own
+        ? RAW_LAYOUT_ROW_OUTCOME.DANGLING
+        : RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE,
       copies: 0,
     };
   }
@@ -209,8 +232,94 @@ const reconcileRawRow = async ({
       copies: 0,
     };
   }
+  if (!envelope && copies.length === 0 && !own) {
+    // Read only for the census: it names nothing, so it moves as bytes.
+    return await movePayload({
+      scopedDb,
+      row,
+      mode,
+      window,
+      storedKey,
+      owner,
+      signal,
+      plan: {
+        type: "copy",
+        byteLength: storedBytes.byteLength,
+        contentType: head.contentType ?? "application/octet-stream",
+      },
+    });
+  }
+  return await movePayload({
+    scopedDb,
+    row,
+    mode,
+    window,
+    storedKey,
+    owner,
+    signal,
+    plan: {
+      type: "write",
+      payload: copies.length === 0 ? storedBytes : homing.value.payload,
+      copies,
+    },
+  });
+};
 
-  const payload = copies.length === 0 ? storedBytes : homing.value.payload;
+type MovePayloadOptions = {
+  scopedDb: ScopedDb;
+  row: RawLayoutRow;
+  mode: RawLayoutMode;
+  window: RawSourceWriteWindow;
+  storedKey: string;
+  owner: RawDocumentOwner & { family: typeof RAW_SOURCE_FAMILY.CASE_LAW };
+  signal: AbortSignal;
+  plan:
+    | {
+        /**
+         * A payload that names no files, copied server-side under the same
+         * digest: it is never read into this process.
+         */
+        type: "copy";
+        byteLength: number;
+        contentType: string;
+      }
+    | {
+        /** An envelope rewritten to name its files' new addresses. */
+        type: "write";
+        payload: Uint8Array | string;
+        copies: RawObjectCopy[];
+      };
+};
+
+/**
+ * Put a decision's payload, and every file it names, under its own prefix,
+ * then move its pointer compare-and-set on the key it was read with.
+ */
+const movePayload = async ({
+  scopedDb,
+  row,
+  mode,
+  window,
+  storedKey,
+  owner,
+  signal,
+  plan,
+}: MovePayloadOptions): Promise<RawRowReconciliation> => {
+  const digest = storedKey.slice(storedKey.lastIndexOf("/") + 1);
+  const copies =
+    plan.type === "write"
+      ? plan.copies
+      : [
+          {
+            fromKey: storedKey,
+            ref: {
+              location: rawDocumentPayloadKey(owner, digest),
+              sha256: digest,
+              contentType: plan.contentType,
+              byteLength: plan.byteLength,
+            },
+          },
+        ];
   if (mode === RAW_LAYOUT_MODE.PLAN) {
     const sources = await Promise.all(
       copies.map(async ({ fromKey }) => await isStored(fromKey, signal)),
@@ -235,15 +344,21 @@ const reconcileRawRow = async ({
       throw copied.error;
     }
   }
-  const writtenKey = await writeRawSourcePayload({
-    owner,
-    window,
-    data: payload,
-    contentType: row.sourceRawContentType ?? "application/octet-stream",
-    storedKey,
-    storedContentType: row.sourceRawContentType,
-  });
-  if (writtenKey !== rawSourcePayloadKey({ owner, data: payload })) {
+  const writtenKey =
+    plan.type === "copy"
+      ? rawDocumentPayloadKey(owner, digest)
+      : await writeRawSourcePayload({
+          owner,
+          window,
+          data: plan.payload,
+          contentType: row.sourceRawContentType ?? "application/octet-stream",
+          storedKey,
+          storedContentType: row.sourceRawContentType,
+        });
+  if (
+    plan.type === "write" &&
+    writtenKey !== rawSourcePayloadKey({ owner, data: plan.payload })
+  ) {
     return panic("Raw layout wrote a payload under an unexpected key");
   }
 
@@ -294,7 +409,8 @@ const reconcileRawRow = async ({
 
 type ReportedRawLayoutOutcome =
   | typeof RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE
-  | typeof RAW_LAYOUT_ROW_OUTCOME.DANGLING;
+  | typeof RAW_LAYOUT_ROW_OUTCOME.DANGLING
+  | typeof RAW_LAYOUT_ROW_OUTCOME.RETRY;
 
 export type RawLayoutPageResult = {
   /** Resume after this id; null once the table is walked to its end. */
@@ -318,9 +434,11 @@ type ReconcileRawLayoutPageOptions = {
 };
 
 /**
- * One page of the decisions table in id order. The checkpoint it answers
- * stops before the first decision that must be tried again, so no decision
- * is stepped over on a failure that says nothing about it.
+ * One page of the decisions table in id order. A decision that fails is
+ * reported and passed, not waited on: one that fails every time would
+ * otherwise hold every decision after it. The recurring walk wraps, so it
+ * is tried again on the next pass, and the legacy sweep's census refuses
+ * while any decision of its source still fails.
  */
 export const reconcileCaseLawRawLayoutPage = async ({
   scopedDb,
@@ -378,7 +496,6 @@ export const reconcileCaseLawRawLayoutPage = async ({
         }),
       catch: (cause) => cause,
     });
-  let resumeAfter = cursor;
   for (const row of rows) {
     // In id order, so the checkpoint can stop before a decision to retry.
     const reconciled = await reconcile(row);
@@ -387,19 +504,16 @@ export const reconcileCaseLawRawLayoutPage = async ({
       : reconciled.value;
     counts[outcome] += 1;
     counts.copies += copies;
-    if (outcome === RAW_LAYOUT_ROW_OUTCOME.RETRY) {
-      return { resumeAfter, counts, reported };
-    }
     if (
       outcome === RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE ||
-      outcome === RAW_LAYOUT_ROW_OUTCOME.DANGLING
+      outcome === RAW_LAYOUT_ROW_OUTCOME.DANGLING ||
+      outcome === RAW_LAYOUT_ROW_OUTCOME.RETRY
     ) {
       reported.push({ decisionId: row.id, outcome });
     }
-    resumeAfter = row.id;
   }
   return {
-    resumeAfter: rows.length < limit ? null : resumeAfter,
+    resumeAfter: rows.length < limit ? null : (rows.at(-1)?.id ?? null),
     counts,
     reported,
   };
