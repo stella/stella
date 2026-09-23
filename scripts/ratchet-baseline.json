@@ -890,6 +890,10 @@
     "count": 0,
     "files": {}
   },
+  "scanned-file-boundary-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
     "count": 0,
     "files": {}
