@@ -19,6 +19,7 @@ import {
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
   sourceBinaryRef,
@@ -91,14 +92,14 @@ describe("an envelope that names a binary part", () => {
 
 const DECISION_ID = "01920000-0000-7000-8000-00000000000a";
 
-const fileInput = (text: string) =>
-  ({
-    family: RAW_SOURCE_FAMILY.CASE_LAW,
-    sourceId: SOURCE_ID,
-    documentId: DECISION_ID,
-    bytes: new TextEncoder().encode(text),
-    contentType: "application/pdf",
-  }) as const;
+const fileInput = (text: string) => ({
+  family: RAW_SOURCE_FAMILY.CASE_LAW,
+  sourceId: SOURCE_ID,
+  documentId: DECISION_ID,
+  bytes: new TextEncoder().encode(text),
+  contentType: "application/pdf",
+  window: openRawSourceWriteWindow(),
+});
 
 describe("storing a publisher file beside the decision's raw payload", () => {
   let fake: FakeS3;
@@ -189,6 +190,17 @@ describe("storing a publisher file beside the decision's raw payload", () => {
     expect([...fake.versions.values()]).toEqual([1]);
   });
 
+  test("a write whose window has closed is refused before it reaches the store", async () => {
+    // A writer that saw its decision live longer ago than an erasure's
+    // settled sweep waits for may not write under it any more.
+    const closed = { ...fileInput("%PDF late"), window: { closesAtMs: 0 } };
+
+    await expect(writeSourceBinary(closed)).rejects.toThrow(
+      "Raw source write window closed",
+    );
+    expect(fake.requests).toEqual([]);
+  });
+
   test("the same file served for two decisions is held once per decision", () => {
     const input = fileInput("%PDF-1.4 joined proceedings");
 
@@ -210,8 +222,12 @@ describe("storing a publisher's raw payload", () => {
   });
 
   const payload = {
-    family: RAW_SOURCE_FAMILY.CASE_LAW,
-    sourceId: SOURCE_ID,
+    owner: {
+      family: RAW_SOURCE_FAMILY.CASE_LAW,
+      sourceId: SOURCE_ID,
+      documentId: DECISION_ID,
+    },
+    window: openRawSourceWriteWindow(),
     data: "<html>a decision</html>",
     contentType: "text/html",
   } as const;
@@ -238,7 +254,7 @@ describe("storing a publisher's raw payload", () => {
     });
     await writeRawSourcePayload({
       ...payload,
-      storedKey: "case-law/raw/another",
+      storedKey: `case-law/raw/${SOURCE_ID}/documents/${DECISION_ID}/payloads/${"0".repeat(64)}`,
       storedContentType: "text/html",
     });
 

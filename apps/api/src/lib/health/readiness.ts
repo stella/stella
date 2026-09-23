@@ -5,7 +5,9 @@ import { probeDatabase } from "@/api/lib/health/probe-database";
 import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
+  deleteS3ObjectWithSignal,
   getS3ObjectWithSignal,
+  listS3ObjectPage,
   putTemporaryS3ObjectWithSignal,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -14,6 +16,7 @@ export const READINESS_DEPENDENCY = {
   database: "database",
   documentConverter: "document-converter",
   objectStorage: "object-storage",
+  rawSourceErasure: "raw-source-erasure",
   redis: "redis",
   scheduledJobs: "scheduled-jobs",
 } as const;
@@ -113,6 +116,55 @@ const probeObjectStorage = async (signal: AbortSignal): Promise<void> => {
   await probeObjectStorageReadiness(objectStorageReadinessProbe, signal);
 };
 
+/**
+ * The raw-source prefix this process lists and deletes under: erasures and
+ * the sweeps that follow them run here. A role that may write there but not
+ * delete would erase nothing and report it only per erasure, so readiness
+ * asks for both. The probed key is never written, so the delete removes
+ * nothing; it is still refused without the permission.
+ */
+const RAW_SOURCE_READINESS_PREFIX = "case-law/raw/";
+const RAW_SOURCE_READINESS_KEY = `${RAW_SOURCE_READINESS_PREFIX}.readiness`;
+
+type RawSourceErasureReadinessProbe = {
+  list: (signal: AbortSignal) => Promise<void>;
+  delete: (signal: AbortSignal) => Promise<void>;
+};
+
+/**
+ * Proven once per process: the permission is the task's, and a delete on
+ * every readiness poll would add a delete marker to a versioned bucket each
+ * time. A failure is not latched, so a fixed role passes on the next poll.
+ */
+export const createRawSourceErasureReadinessProbe = ({
+  list,
+  delete: remove,
+}: RawSourceErasureReadinessProbe): ReadinessProbe => {
+  let proven = false;
+  return async (signal) => {
+    if (proven) {
+      return;
+    }
+    await list(signal);
+    await remove(signal);
+    proven = true;
+  };
+};
+
+const probeRawSourceErasure = createRawSourceErasureReadinessProbe({
+  list: async (signal) => {
+    await listS3ObjectPage({
+      prefix: RAW_SOURCE_READINESS_PREFIX,
+      startAfter: null,
+      maxKeys: 1,
+      signal,
+    });
+  },
+  delete: async (signal) => {
+    await deleteS3ObjectWithSignal(RAW_SOURCE_READINESS_KEY, signal);
+  },
+});
+
 const probeScheduledJobs = async (): Promise<void> => {
   if (!scheduledJobsReady) {
     await Promise.reject(
@@ -131,6 +183,7 @@ const runtimeReadinessProbes = {
     await probeDocumentConverter(signal, PROBE_TIMEOUT_MS);
   },
   [READINESS_DEPENDENCY.objectStorage]: probeObjectStorage,
+  [READINESS_DEPENDENCY.rawSourceErasure]: probeRawSourceErasure,
   [READINESS_DEPENDENCY.redis]: probeRedis,
   [READINESS_DEPENDENCY.scheduledJobs]: probeScheduledJobs,
 } satisfies ReadinessProbes;

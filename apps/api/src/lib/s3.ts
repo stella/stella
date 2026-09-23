@@ -908,6 +908,55 @@ export const listS3ObjectKeys = async ({
     return await collectFrom(undefined);
   });
 
+type ListS3ObjectPageOptions = {
+  prefix: string;
+  /** Resume after this key; the page holds only keys sorting after it. */
+  startAfter: string | null;
+  /** Only the keys directly under the prefix, none past this separator. */
+  delimiter?: "/";
+  maxKeys: number;
+  signal: AbortSignal;
+};
+
+export type S3ListedObject = { key: string; lastModified: Date };
+
+export type S3ObjectPage = {
+  objects: S3ListedObject[];
+  /** Whether keys past the last one returned remain under the prefix. */
+  truncated: boolean;
+};
+
+/**
+ * One page of the documents bucket under `prefix`, in key order, with each
+ * object's modification time. A walk resumes from the last key it saw rather
+ * than from a continuation token, so its cursor is a key a job can persist.
+ */
+export const listS3ObjectPage = async ({
+  prefix,
+  startAfter,
+  delimiter,
+  maxKeys,
+  signal,
+}: ListS3ObjectPageOptions): Promise<S3ObjectPage> =>
+  await documentsCredentials.run(async () => {
+    const page = await getAbortableS3().send(
+      new ListObjectsV2Command({
+        Bucket: envBase.S3_BUCKET,
+        Prefix: prefix,
+        MaxKeys: maxKeys,
+        ...(startAfter === null ? {} : { StartAfter: startAfter }),
+        ...(delimiter === undefined ? {} : { Delimiter: delimiter }),
+      }),
+      { abortSignal: signal },
+    );
+    const objects = (page.Contents ?? []).flatMap(({ Key, LastModified }) =>
+      Key === undefined || LastModified === undefined
+        ? []
+        : [{ key: Key, lastModified: LastModified }],
+    );
+    return { objects, truncated: page.IsTruncated === true };
+  });
+
 type BoundedS3ReadOptions = {
   bucket: string;
   key: string;

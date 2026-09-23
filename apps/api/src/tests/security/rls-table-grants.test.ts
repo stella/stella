@@ -148,6 +148,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Which decision owns which member of a corpus pack: ingestion bookkeeping
   // beside the upload intents, never read through the request role.
   "case_law_corpus_pack_refs",
+  // Raw prefixes owed a sweep: keys of erased decisions, recorded by
+  // ingestion and erasure and drained by the root scheduler.
+  "case_law_raw_sweeps",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",

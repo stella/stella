@@ -37,6 +37,7 @@ process.env["REDIS_URL"] = `redis://127.0.0.1:${fakeRedis.port}`;
 const {
   API_READINESS_DEPENDENCIES,
   READINESS_DEPENDENCY,
+  createRawSourceErasureReadinessProbe,
   probeObjectStorageReadiness,
   probeRedis,
   runReadinessProbes,
@@ -55,6 +56,9 @@ const successfulProbes = (calls: ReadinessDependency[]): ReadinessProbes => ({
   },
   [READINESS_DEPENDENCY.objectStorage]: async () => {
     calls.push(READINESS_DEPENDENCY.objectStorage);
+  },
+  [READINESS_DEPENDENCY.rawSourceErasure]: async () => {
+    calls.push(READINESS_DEPENDENCY.rawSourceErasure);
   },
   [READINESS_DEPENDENCY.redis]: async () => {
     calls.push(READINESS_DEPENDENCY.redis);
@@ -117,6 +121,33 @@ describe("API dependency readiness", () => {
       new AbortController().signal,
     );
     expect(calls).toEqual(["read"]);
+  });
+
+  test("a role that may not delete raw sources is not ready until it may", async () => {
+    const calls: string[] = [];
+    let mayDelete = false;
+    const probe = createRawSourceErasureReadinessProbe({
+      list: async () => {
+        calls.push("list");
+      },
+      delete: async () => {
+        calls.push("delete");
+        if (!mayDelete) {
+          throw Object.assign(new Error("Access denied"), {
+            name: "AccessDenied",
+          });
+        }
+      },
+    });
+    const signal = new AbortController().signal;
+
+    await expect(probe(signal)).rejects.toThrow("Access denied");
+    mayDelete = true;
+    await probe(signal);
+    // Proven once, then not asked again: every delete adds a marker.
+    await probe(signal);
+
+    expect(calls).toEqual(["list", "delete", "list", "delete"]);
   });
 
   test("exercises the declared dependency set in both directions", async () => {

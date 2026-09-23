@@ -151,8 +151,8 @@ test("a changed envelope over the same file adds no version of the file", async 
     .where(eq(caseLawDecisions.sourceId, sourceId));
   // The envelope did change, so this observation did reach the write.
   expect(after?.key).not.toBe(before?.key);
-  const fileVersions = [...fake.versions.entries()].filter(([id]) =>
-    id.includes("/documents/"),
+  const fileVersions = [...fake.versions.entries()].filter(
+    ([id]) => id.includes("/documents/") && !id.includes("/payloads/"),
   );
   expect(fileVersions.map(([, count]) => count)).toEqual([1]);
 

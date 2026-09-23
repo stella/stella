@@ -9,6 +9,7 @@ import {
   caseLawCorpusTombstones,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawRawSweeps,
   caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionStates,
@@ -23,8 +24,9 @@ import {
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { deleteCorpusDocument as realDeleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
-  sourceBinaryPrefix,
+  rawDocumentPrefix,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -77,6 +79,7 @@ beforeEach(async () => {
   await db.delete(caseLawCorpusPackRefs).where(sql`true`);
   await db.delete(corpusIndexProjectionStates).where(sql`true`);
   await db.delete(caseLawIndexJobs).where(sql`true`);
+  await db.delete(caseLawRawSweeps).where(sql`true`);
   await db.delete(caseLawDecisions).where(sql`true`);
   await db.delete(caseLawSources).where(sql`true`);
   await db.delete(corpusIndexGenerations).where(sql`true`);
@@ -131,6 +134,7 @@ test("redaction queues the erase the projection worker applies", async () => {
   expect(Result.isOk(outcome) && outcome.value).toEqual({
     type: "redacted",
     erasure: "deleted",
+    legacyRaw: "none",
   });
   expect(
     await db
@@ -206,6 +210,7 @@ test("redaction of packed payloads tombstones every address it cannot delete", a
   expect(Result.isOk(outcome) && outcome.value).toEqual({
     type: "redacted",
     erasure: "tombstoned",
+    legacyRaw: "none",
   });
   expect(deleted).toEqual([]);
   expect(
@@ -258,6 +263,7 @@ test("redaction erases the decision's publisher files and no other decision's", 
     family: RAW_SOURCE_FAMILY.CASE_LAW,
     sourceId: SOURCE_ID,
     contentType: "application/pdf",
+    window: openRawSourceWriteWindow(),
   } as const;
   await writeSourceBinary({ ...owner, documentId: DECISION_ID, bytes: shared });
   await writeSourceBinary({
@@ -272,7 +278,7 @@ test("redaction erases the decision's publisher files and no other decision's", 
   });
   const keysUnder = (documentId: string): string[] =>
     [...fakeS3.objects.keys()].filter((id) =>
-      id.includes(sourceBinaryPrefix({ ...owner, documentId })),
+      id.includes(rawDocumentPrefix({ ...owner, documentId })),
     );
   // Identical bytes are held twice, once per owner, or the independence
   // asserted below would be vacuous.
@@ -287,6 +293,7 @@ test("redaction erases the decision's publisher files and no other decision's", 
   expect(Result.isOk(outcome) && outcome.value).toEqual({
     type: "redacted",
     erasure: "deleted",
+    legacyRaw: "none",
   });
   expect(keysUnder(DECISION_ID)).toEqual([]);
   expect(keysUnder(OTHER_DECISION_ID)).toEqual([
@@ -294,11 +301,28 @@ test("redaction erases the decision's publisher files and no other decision's", 
   ]);
 });
 
+test("redaction clears the inline raw column a row may still hold", async () => {
+  await db
+    .update(caseLawDecisions)
+    .set({ sourceRaw: "<html>Osobní údaj.</html>" })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
+
+  await redactCaseLawDecision({ decisionId: DECISION_ID, scopedDb });
+
+  expect(
+    await db
+      .select({ sourceRaw: caseLawDecisions.sourceRaw })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, DECISION_ID)),
+  ).toEqual([{ sourceRaw: null }]);
+});
+
 test("a failed file delete keeps the redaction a retry target", async () => {
   const owner = {
     family: RAW_SOURCE_FAMILY.CASE_LAW,
     sourceId: SOURCE_ID,
     documentId: DECISION_ID,
+    window: openRawSourceWriteWindow(),
   } as const;
   const file = await writeSourceBinary({
     ...owner,

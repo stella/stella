@@ -87,6 +87,10 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import {
+  enqueueCaseLawRawSweepTx,
+  rawSweepSettleAfter,
+} from "@/api/lib/legal-search/case-law-raw-sweeps";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   type ActiveCorpusProjectionSourceLock,
@@ -134,13 +138,15 @@ import {
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
+  copyRawObject,
+  homeRawPayloadObjects,
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
   sourceBinaryRef,
   writeRawSourcePayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
-import type { WriteRawSourcePayloadOptions } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isPgConstraintError,
@@ -482,23 +488,8 @@ export const allocateSourceObservationOrder = async ({
     return allocated.order;
   });
 
-type UploadSourceRawOptions = Omit<
-  WriteRawSourcePayloadOptions,
-  "family" | "sourceId"
-> & { sourceId: SafeId<"caseLawSource"> };
-
-/**
- * Upload sourceRaw to S3 under a content-addressable key, in the case-law
- * partition. Returns the S3 object key. Failing here holds the page cursor;
- * see the caller and {@link writeRawSourcePayload} for why that is safe.
- */
-const uploadSourceRaw = async (
-  options: UploadSourceRawOptions,
-): Promise<string> =>
-  await writeRawSourcePayload({
-    ...options,
-    family: RAW_SOURCE_FAMILY.CASE_LAW,
-  });
+/** Wall-clock bound on copying one file an envelope names into its decision. */
+const RAW_OBJECT_COPY_TIMEOUT_MS = 60_000;
 
 type PlanSourceRawPayloadOptions = {
   result: IngestionResult;
@@ -1037,6 +1028,13 @@ const processDecisionAttempt = async ({
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
+
+  // Opened before the read below that proves the decision is not erased, so
+  // every raw write this attempt makes starts within the window of that
+  // read, and an erasure's settled sweep comes after all of them.
+  const rawWriteWindow = openRawSourceWriteWindow();
+  /** Set once this attempt starts writing raw objects under its decision. */
+  let rawWriteAttempted = false;
 
   // Lock exact and repair-only identities before slow raw/corpus work. Exact
   // publisher aliases are reserved below. A heuristic repair alias may adopt
@@ -1637,6 +1635,37 @@ const processDecisionAttempt = async ({
     return existingPolicyOutcome;
   }
 
+  /**
+   * Raw objects this attempt wrote for a decision whose row it will not
+   * insert. Whether anything may keep them depends on whether a row or a
+   * reservation for the id ever lands, which the sweeper decides once every
+   * write for it is over; a failure to record that is left to the census.
+   */
+  const recordAbandonedRawWrite = async (): Promise<void> => {
+    if (existing !== undefined || !rawWriteAttempted) {
+      return;
+    }
+    const recorded = await Result.tryPromise({
+      try: async () =>
+        await scopedDb(async (tx) => {
+          await enqueueCaseLawRawSweepTx(tx, {
+            decisionId,
+            sourceId,
+            firstAttemptAt: rawSweepSettleAfter(),
+            settleAfter: rawSweepSettleAfter(),
+          });
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(recorded)) {
+      captureError(recorded.error, {
+        decisionId,
+        sourceId,
+        step: "processDecision.recordAbandonedRawWrite",
+      });
+    }
+  };
+
   // Acquire the raw-source artifact before persisting its hash. A new row
   // cannot safely advance without the artifact; an update preserves its old
   // key and carries a retryable failure through the eventual row outcome.
@@ -1660,6 +1689,15 @@ const processDecisionAttempt = async ({
             artifact: { s3UploadFailed, sourceRawContentType, sourceRawS3Key },
           } as const;
         }
+        const owner = {
+          family: RAW_SOURCE_FAMILY.CASE_LAW,
+          sourceId,
+          documentId: decisionId,
+        } as const;
+        // A payload read back from storage (a replay) names files where they
+        // were stored before; those are copied under this decision, so its
+        // erasure reaches them and no other decision's can.
+        const homed = homeRawPayloadObjects({ payload: plan.payload, owner });
         // The publisher's files first: the envelope names them, so it is
         // never stored before they are. That order is also why a row that
         // already records this exact envelope proves its files are stored,
@@ -1668,25 +1706,32 @@ const processDecisionAttempt = async ({
         // a failure between them lands nothing twice.
         const payloadAlreadyStored =
           storedRawKey ===
-            rawSourcePayloadKey({
-              family: RAW_SOURCE_FAMILY.CASE_LAW,
-              sourceId,
-              data: plan.payload,
-            }) && storedRawContentType === rawContentType;
+            rawSourcePayloadKey({ owner, data: homed.payload }) &&
+          storedRawContentType === rawContentType;
         if (!payloadAlreadyStored) {
+          rawWriteAttempted = true;
           for (const { bytes, contentType } of plan.files) {
             await writeSourceBinary({
-              family: RAW_SOURCE_FAMILY.CASE_LAW,
-              sourceId,
-              documentId: decisionId,
+              ...owner,
               bytes,
               contentType,
+              window: rawWriteWindow,
+            });
+          }
+          for (const copy of homed.copies) {
+            await copyRawObject({
+              copy,
+              window: rawWriteWindow,
+              signal: AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
             });
           }
         }
-        sourceRawS3Key = await uploadSourceRaw({
-          sourceId,
-          data: plan.payload,
+        // Failing here holds the page cursor; see the catch below and
+        // `writeRawSourcePayload` for why that is safe.
+        sourceRawS3Key = await writeRawSourcePayload({
+          owner,
+          window: rawWriteWindow,
+          data: homed.payload,
           contentType: rawContentType,
           storedKey: storedRawKey,
           storedContentType: storedRawContentType,
@@ -1742,6 +1787,7 @@ const processDecisionAttempt = async ({
   };
   const sourceRawArtifact = await acquireSourceRawArtifact();
   if (sourceRawArtifact.type === "retry") {
+    await recordAbandonedRawWrite();
     return sourceRawArtifact.outcome;
   }
   const {
@@ -2163,6 +2209,27 @@ const processDecisionAttempt = async ({
     });
   };
 
+  /**
+   * This attempt wrote raw objects for a decision that was erased before
+   * its row write: they landed after, or may yet land after, the erasure's
+   * own sweep. Recorded in the transaction that saw the erasure, so the
+   * sweeper deletes them whatever becomes of this process.
+   */
+  const sweepRawWriteLostToErasureTx = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+  ): Promise<void> => {
+    if (!rawWriteAttempted) {
+      return;
+    }
+    await enqueueCaseLawRawSweepTx(tx, {
+      decisionId: id,
+      sourceId,
+      firstAttemptAt: new Date(),
+      settleAfter: rawSweepSettleAfter(),
+    });
+  };
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -2267,6 +2334,7 @@ const processDecisionAttempt = async ({
             columns: { corpusMirrorStatus: true, redactedAt: true },
           });
           if (winner?.redactedAt) {
+            await sweepRawWriteLostToErasureTx(tx, existing.id);
             return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
           }
           return winner?.corpusMirrorStatus ===
@@ -2306,6 +2374,7 @@ const processDecisionAttempt = async ({
               columns: { corpusMirrorStatus: true, redactedAt: true },
             });
             if (winner?.redactedAt) {
+              await sweepRawWriteLostToErasureTx(tx, existing.id);
               return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
             }
             return winner?.corpusMirrorStatus ===
@@ -2505,6 +2574,7 @@ const processDecisionAttempt = async ({
   }
 
   if (Result.isError(rowWrite)) {
+    await recordAbandonedRawWrite();
     const isConcurrentIdentityInsert =
       isPgConstraintError(
         rowWrite.error,

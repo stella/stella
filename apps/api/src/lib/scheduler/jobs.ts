@@ -15,6 +15,11 @@ import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import {
+  CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
+  RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+  RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
+} from "@/api/lib/scheduler/tasks/case-law-raw-storage";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
@@ -195,6 +200,30 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+  },
+  {
+    description: "Delete raw objects of erased or never-written decisions",
+    id: "caseLaw.reconcileRawSweeps.minutely",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
+  },
+  {
+    description:
+      "Move decisions into per-decision raw storage and check their objects",
+    id: "caseLaw.reconcileRawRows.minutely",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+  },
+  {
+    description: "Find raw objects no live decision owns",
+    id: "caseLaw.censusRawObjects.fiveMinute",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   },
   {
     description:

@@ -1257,8 +1257,12 @@ describe("processDecision — source raw upload failure", () => {
   });
 
   /** The key the raw payload is content-addressed under. */
-  const rawKey = (sourceId: string, payload: string): string =>
-    `case-law/raw/${sourceId}/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}`;
+  /** The payload's own digest, under the decision's own raw prefix. */
+  const rawKey = (sourceId: string, payload: string): RegExp =>
+    new RegExp(
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      "u",
+    );
 
   test("reports a new decision's failed raw upload as retryable, not thrown", async () => {
     // A thrown failure is caught by the decision loop, counted as skipped,
@@ -1337,7 +1341,7 @@ describe("processDecision — source raw upload failure", () => {
     const writes = fake.requests.filter(({ method }) => method === "PUT");
     expect(writes).toHaveLength(1);
     expect(writes.at(0)?.bucket).toBe(envBase.S3_BUCKET);
-    expect(writes.at(0)?.key).toBe(rawKey(sourceId, sourceRaw));
+    expect(writes.at(0)?.key).toMatch(rawKey(sourceId, sourceRaw));
     // The charset parameter is the client's; the media type is the
     // pipeline's, and it is what a re-parse reads the object back as.
     expect(writes.at(0)?.contentType).toMatch(/^text\/plain\b/u);
