@@ -1513,7 +1513,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 64,
+    "count": 68,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1535,7 +1535,10 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
       "apps/api/src/handlers/case-law/polarity/seed-rules.ts": 2,
       "apps/api/src/handlers/chat/chat-turn-state.ts": 2,
+      "apps/api/src/handlers/expenses/list.ts": 1,
       "apps/api/src/handlers/playbooks/starters.ts": 3,
+      "apps/api/src/handlers/time-entries/get.ts": 1,
+      "apps/api/src/handlers/time-entries/list.ts": 2,
       "apps/api/src/lib/bilingual/run-queue.ts": 1,
       "apps/api/src/lib/document-review/run-queue.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 1,
