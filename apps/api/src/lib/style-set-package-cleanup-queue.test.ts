@@ -25,11 +25,12 @@ describe("style set package cleanup queue", () => {
     );
   });
 
-  test("requeues a cleanup job after its retries were exhausted", async () => {
-    const remove = mock(async () => undefined);
+  test("retries a cleanup job after its retries were exhausted", async () => {
+    const retry = mock(async () => undefined);
     const getJob = mock(async () => ({
-      getState: async () => "failed",
-      remove,
+      getState: async () => "failed" as const,
+      remove: mock(async () => undefined),
+      retry,
     }));
     const add = mock(async () => undefined);
 
@@ -40,7 +41,49 @@ describe("style set package cleanup queue", () => {
       styleSetId: "set",
     });
 
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  test("keeps the grace period when replacing a failed cleanup job", async () => {
+    const retry = mock(async () => undefined);
+    const remove = mock(async () => undefined);
+    const getJob = mock(async () => ({
+      getState: async () => "failed" as const,
+      remove,
+      retry,
+    }));
+    const add = mock(async () => undefined);
+
+    await enqueueStyleSetPackageCleanupJob({
+      cleanupQueue: { add, getJob },
+      delayMs: 900_000,
+      s3Key: "old.docx",
+      styleSetId: "set",
+    });
+
+    expect(retry).not.toHaveBeenCalled();
     expect(remove).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith(
+      "delete-style-set-package",
+      { s3Key: "old.docx", styleSetId: "set" },
+      {
+        delay: 900_000,
+        jobId: "delete%2Dstyle%2Dset%2Dpackage-old.docx",
+      },
+    );
+  });
+
+  test("clamps a past deadline to an immediate cleanup", async () => {
+    const add = mock(async () => undefined);
+
+    await enqueueStyleSetPackageCleanupJob({
+      cleanupQueue: { add, getJob: async () => undefined },
+      delayMs: -1,
+      s3Key: "old.docx",
+      styleSetId: "set",
+    });
+
     expect(add).toHaveBeenCalledWith(
       "delete-style-set-package",
       { s3Key: "old.docx", styleSetId: "set" },
@@ -58,8 +101,9 @@ describe("style set package cleanup queue", () => {
     // object would have no runnable cleanup.
     const remove = mock(async () => undefined);
     const getJob = mock(async () => ({
-      getState: async () => "completed",
+      getState: async () => "completed" as const,
       remove,
+      retry: mock(async () => undefined),
     }));
     const add = mock(async () => undefined);
 
@@ -79,8 +123,9 @@ describe("style set package cleanup queue", () => {
     // ignored or reset the grace period the caller is relying on.
     const remove = mock(async () => undefined);
     const getJob = mock(async () => ({
-      getState: async () => "delayed",
+      getState: async () => "delayed" as const,
       remove,
+      retry: mock(async () => undefined),
     }));
     const add = mock(async () => undefined);
 

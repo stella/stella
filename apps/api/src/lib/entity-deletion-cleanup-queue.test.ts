@@ -126,84 +126,20 @@ describe("entity deletion cleanup queue", () => {
   test("replaces a completed queue job for nonterminal durable cleanup", async () => {
     const add = mock(async () => undefined);
     const remove = mock(async () => undefined);
-    const cleanupQueue = asTestRaw<
-      Parameters<typeof enqueueEntityDeletionCleanupJob>[0]["cleanupQueue"]
-    >({
-      add,
-      getJob: mock(async () => ({
-        getState: mock(async () => "completed"),
-        remove,
-      })),
+    await enqueueEntityDeletionCleanupJob({
+      cleanupQueue: {
+        add,
+        getJob: async () => ({
+          getState: async () => "completed" as const,
+          remove,
+          retry: mock(async () => undefined),
+        }),
+      },
+      requestId,
     });
-
-    await enqueueEntityDeletionCleanupJob({ cleanupQueue, requestId });
 
     expect(remove).toHaveBeenCalledTimes(1);
     expect(add).toHaveBeenCalledTimes(1);
-  });
-
-  test("bounds every Redis operation used for deterministic queue delivery", async () => {
-    const neverSettles = new Promise<never>(() => {});
-    const pending = mock(async () => await neverSettles);
-    type CleanupQueue = Parameters<
-      typeof enqueueEntityDeletionCleanupJob
-    >[0]["cleanupQueue"];
-    const queues = [
-      asTestRaw<CleanupQueue>({
-        add: mock(async () => undefined),
-        getJob: pending,
-      }),
-      asTestRaw<CleanupQueue>({
-        add: mock(async () => undefined),
-        getJob: mock(async () => ({
-          getState: pending,
-          remove: mock(async () => undefined),
-        })),
-      }),
-      asTestRaw<CleanupQueue>({
-        add: mock(async () => undefined),
-        getJob: mock(async () => ({
-          getState: mock(async () => "completed" as const),
-          remove: pending,
-        })),
-      }),
-      asTestRaw<CleanupQueue>({
-        add: pending,
-        getJob: mock(async () => undefined),
-      }),
-    ];
-
-    const errors = await Promise.all(
-      queues.map(
-        async (queueWithStall) =>
-          await enqueueEntityDeletionCleanupJob({
-            cleanupQueue: queueWithStall,
-            operationTimeoutMs: 5,
-            requestId,
-          }).then(
-            () => null,
-            (error: unknown) => error,
-          ),
-      ),
-    );
-
-    expect(errors).toEqual([
-      expect.objectContaining({
-        label: "entity-deletion-cleanup.queue.get-job",
-      }),
-      expect.objectContaining({
-        label: "entity-deletion-cleanup.queue.get-state",
-      }),
-      expect.objectContaining({
-        label: "entity-deletion-cleanup.queue.remove-job",
-      }),
-      expect.objectContaining({
-        label: "entity-deletion-cleanup.queue.add-job",
-      }),
-    ]);
-    for (const error of errors) {
-      expect(error).toBeInstanceOf(TimeoutError);
-    }
   });
 
   test("allows only one reconciliation pass at a time", async () => {

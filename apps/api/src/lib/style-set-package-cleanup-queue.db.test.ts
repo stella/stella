@@ -40,7 +40,12 @@ const { testDb, ids } = await getRlsFixture();
 
 type StubJobState = "active" | "completed" | "delayed" | "failed";
 
-type AddedJob = { data: unknown; delay: number; jobId: string; name: string };
+type AddedJob = {
+  data: unknown;
+  delay: number | undefined;
+  jobId: string;
+  name: string;
+};
 
 const added: AddedJob[] = [];
 const priorJobs = new Map<string, StubJobState>();
@@ -49,9 +54,14 @@ const cleanupQueue = {
   add: async (
     name: string,
     data: unknown,
-    options: { delay: number; jobId: string },
+    options: { delay?: number; jobId: string },
   ) => {
-    added.push({ data, delay: options.delay, jobId: options.jobId, name });
+    added.push({
+      data,
+      delay: options.delay,
+      jobId: options.jobId,
+      name,
+    });
     priorJobs.set(options.jobId, "delayed");
   },
   getJob: async (jobId: string) => {
@@ -63,6 +73,9 @@ const cleanupQueue = {
       getState: async () => state,
       remove: async () => {
         priorJobs.delete(jobId);
+      },
+      retry: async () => {
+        priorJobs.set(jobId, "delayed");
       },
     };
   },

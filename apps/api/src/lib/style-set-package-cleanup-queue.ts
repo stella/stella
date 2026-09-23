@@ -10,8 +10,14 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
-import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type {
+  QueueRequeueOutcome,
+  RequeueableQueue,
+} from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -49,19 +55,8 @@ type EnqueueStyleSetPackageCleanupOptions = StyleSetPackageCleanupJobData & {
   delayMs?: number;
 };
 
-type StyleSetPackageCleanupJob = {
-  getState: () => Promise<string>;
-  remove: () => Promise<void>;
-};
-
-type StyleSetPackageCleanupQueue = {
-  add: (
-    name: string,
-    data: StyleSetPackageCleanupJobData,
-    options: { delay: number; jobId: string },
-  ) => Promise<unknown>;
-  getJob: (jobId: string) => Promise<StyleSetPackageCleanupJob | undefined>;
-};
+type StyleSetPackageCleanupQueue =
+  RequeueableQueue<StyleSetPackageCleanupJobData>;
 
 const getQueue = createLazyBullMqQueue<StyleSetPackageCleanupJobData>({
   name: QUEUE_NAME,
@@ -88,6 +83,14 @@ export const enqueueStyleSetPackageCleanup = async ({
   });
 };
 
+// The job id is derived from the key, so a claim for a key this queue has
+// already handled meets the kept record of that run: a claim placed ahead
+// of the write completes as a no-op while the style set is still live, and
+// `removeOnComplete` keeps that record. A job still waiting, delayed, or active
+// is the claim, and saying so is what keeps a sweep from spending its per-tick
+// budget on rows that are already covered — a cleanup waits out the whole
+// download TTL, so a healthy row keeps a live job far longer than a sweep's
+// settle window.
 export const enqueueStyleSetPackageCleanupJob = async ({
   cleanupQueue,
   delayMs,
@@ -98,35 +101,14 @@ export const enqueueStyleSetPackageCleanupJob = async ({
   delayMs: number;
   s3Key: string;
   styleSetId: string;
-}): Promise<QueueRequeueOutcome> => {
-  // The job id is derived from the key, so a claim for a key this queue has
-  // already handled collides with the retained record of that run. Both
-  // terminal states have to be reclaimed, not just `failed`: a claim placed
-  // ahead of the write completes as a no-op while the style set is still live,
-  // and `removeOnComplete` keeps that record, so a later replacement of the
-  // same key would `add()` a duplicate id, BullMQ would ignore it, and the
-  // superseded object would be left with no runnable cleanup. A job still
-  // waiting, delayed, or active needs no re-add: it is the claim, and saying
-  // so is what keeps a sweep from spending its per-tick budget on rows that
-  // are already covered — a cleanup waits out the whole download TTL, so a
-  // healthy row keeps a live job far longer than a sweep's settle window.
-  const jobId = createBullMqJobId(CLEANUP_JOB_NAME, s3Key);
-  const existingJob = await cleanupQueue.getJob(jobId);
-  if (existingJob) {
-    const state = await existingJob.getState();
-    if (state !== "completed" && state !== "failed") {
-      return QUEUE_REQUEUE_OUTCOME.QUEUE_OWNED;
-    }
-    await existingJob.remove();
-  }
-
-  await cleanupQueue.add(
-    CLEANUP_JOB_NAME,
-    { s3Key, styleSetId },
-    { delay: Math.max(0, delayMs), jobId },
-  );
-  return QUEUE_REQUEUE_OUTCOME.REQUEUED;
-};
+}): Promise<QueueRequeueOutcome> =>
+  await requeueDeterministicJob({
+    data: { s3Key, styleSetId },
+    delayMs,
+    jobId: createBullMqJobId(CLEANUP_JOB_NAME, s3Key),
+    name: CLEANUP_JOB_NAME,
+    queue: cleanupQueue,
+  });
 
 /**
  * How long a row may name a superseded package before the sweep takes it over.

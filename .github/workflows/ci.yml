@@ -1745,6 +1745,52 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
+  # API suites that drive real BullMQ queues and workers against Valkey. The
+  # runner discovers every suite that declares the Valkey gate. Like the
+  # Postgres suites, they run at full depth only.
+  valkey-suites:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.suite_depth == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    services:
+      valkey:
+        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run Valkey-gated API suites
+        working-directory: apps/api
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+        run: bun run test:valkey
+
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
   # ordinary pull requests on the fast Oxc diagnostics path.
@@ -3088,6 +3134,7 @@ jobs:
         collab-redis,
         code-quality,
         postgres-suites,
+        valkey-suites,
         release-typecheck,
         typecheck-baseline,
         web-build,
@@ -3150,6 +3197,7 @@ jobs:
             "release-typecheck": "release_typecheck_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "typecheck-baseline": "package_checks_required",
+            "valkey-suites": "package_checks_required",
             "web-build": "web_build_required",
             "web-image-smoke": "web_image_smoke_required",
             "windows-scripts": "windows_scripts_required"

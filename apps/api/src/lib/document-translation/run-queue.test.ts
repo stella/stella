@@ -1,7 +1,6 @@
 import { expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { enqueueDocumentTranslationRunJob } from "./run-queue";
@@ -51,27 +50,4 @@ test("retries a failed queue job instead of duplicating it", async () => {
 
   expect(retry).toHaveBeenCalledTimes(1);
   expect(add).not.toHaveBeenCalled();
-});
-
-test("bounds queue operations used for durable translation delivery", async () => {
-  const neverSettles = new Promise<never>(() => {});
-  const queue = asTestRaw<TranslationQueue>({
-    add: mock(async () => undefined),
-    getJob: mock(async () => await neverSettles),
-  });
-
-  const rejection = await enqueueDocumentTranslationRunJob({
-    args,
-    operationTimeoutMs: 5,
-    queue,
-  }).then(
-    () => null,
-    (error: unknown) => error,
-  );
-
-  expect(rejection).toBeInstanceOf(TimeoutError);
-  expect(rejection).toMatchObject({
-    label: "document-translation.queue.get-job",
-    timeoutMs: 5,
-  });
 });

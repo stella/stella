@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { type Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 
 import {
   claimNextAccountDeletionEffectChunk,
@@ -12,6 +12,8 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { detached } from "@/api/lib/detached";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
@@ -29,11 +31,6 @@ const MAX_CHUNKS_PER_JOB = 10;
 type AccountDeletionCleanupJobData = {
   requestId: SafeId<"accountDeletionRequest">;
 };
-
-type AccountDeletionCleanupQueue = Pick<
-  Queue<AccountDeletionCleanupJobData>,
-  "add" | "getJob"
->;
 
 type AccountDeletionCleanupRequestDeps = {
   claimChunk: typeof claimNextAccountDeletionEffectChunk;
@@ -74,21 +71,15 @@ export const enqueueAccountDeletionCleanupJob = async ({
   cleanupQueue,
   requestId,
 }: {
-  cleanupQueue: AccountDeletionCleanupQueue;
+  cleanupQueue: RequeueableQueue<AccountDeletionCleanupJobData>;
   requestId: SafeId<"accountDeletionRequest">;
 }): Promise<void> => {
-  const jobId = createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME);
-  const existingJob = await cleanupQueue.getJob(jobId);
-  if (existingJob) {
-    const state = await existingJob.getState();
-    if (state === "failed" || state === "completed") {
-      await existingJob.remove();
-    } else {
-      return;
-    }
-  }
-
-  await cleanupQueue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
+  await requeueDeterministicJob({
+    data: { requestId },
+    jobId: createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME),
+    name: STORAGE_CLEANUP_JOB_NAME,
+    queue: cleanupQueue,
+  });
 };
 
 type DrainAccountDeletionEffectsParams = {

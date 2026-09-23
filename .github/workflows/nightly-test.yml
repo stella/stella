@@ -303,6 +303,48 @@ jobs:
         # adding a gated test cannot silently omit it from this workflow.
         run: bun run test:postgres
 
+  # BullMQ-backed API suites that gate on STELLA_RUN_VALKEY_TESTS=true and a
+  # real REDIS_URL, run against the Valkey image the local stack pins.
+  valkey-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    services:
+      valkey:
+        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run Valkey-gated API suites
+        working-directory: apps/api
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+        run: bun run test:valkey
+
   # Upstream-API drift canary for the CJEU adapter. Hits live Cellar SPARQL +
   # EUR-Lex endpoints, so a failure most often means an upstream schema/endpoint
   # changed, not a regression in our code. Isolated from the Postgres suites so

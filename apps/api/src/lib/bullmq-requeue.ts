@@ -1,3 +1,11 @@
+import { panic } from "better-result";
+import type {
+  FinishedStatus,
+  JobState,
+  JobsOptions,
+  RetryOptions,
+} from "bullmq";
+
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -8,8 +16,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * runs many of them, and its scheduler lease is measured in minutes: without a
  * bound the whole tick would sit on the first unanswered command and be killed
  * with nothing recorded. Failing fast instead makes the stall a captured error
- * per row, and the next tick retries. Matches the bound the other queue
- * handoffs use.
+ * per row, and the next tick retries.
  */
 const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 
@@ -26,74 +33,162 @@ export const QUEUE_REQUEUE_OUTCOME = {
 export type QueueRequeueOutcome =
   (typeof QUEUE_REQUEUE_OUTCOME)[keyof typeof QUEUE_REQUEUE_OUTCOME];
 
+/** `getState` answers `unknown` for an id the queue no longer holds. */
+type ExistingJobState = JobState | "unknown";
+
+/**
+ * What a job already holding the id means for the re-enqueue:
+ *   - `owned`: a live job is the enqueue this call would otherwise duplicate.
+ *   - `retry`: a failed job reruns under its own id and data, with a fresh
+ *     attempt budget, so a queue with backoff retries it the way it would a new
+ *     job. A retry starts at once, so a requeue that asks for a delay replaces
+ *     the failed job instead (remove, then add with the delay).
+ *   - `reclaim`: a completed job is kept history, not work; it is removed
+ *     so the `add` that follows is not ignored as a duplicate id.
+ *   - `add`: the id was released between the lookup and the state read.
+ */
+type ExistingJobAction = "add" | "owned" | "reclaim" | "retry";
+
+const EXISTING_JOB_ACTION = {
+  active: "owned",
+  completed: "reclaim",
+  delayed: "owned",
+  failed: "retry",
+  prioritized: "owned",
+  unknown: "add",
+  waiting: "owned",
+  "waiting-children": "owned",
+} as const satisfies Record<ExistingJobState, ExistingJobAction>;
+
+const FRESH_ATTEMPTS = {
+  resetAttemptsMade: true,
+  resetAttemptsStarted: true,
+} as const satisfies RetryOptions;
+
 /** Structural, so both a real job and a plain fake satisfy it. */
 type RequeueableJob = {
-  getState: () => Promise<string>;
+  getState: () => Promise<ExistingJobState>;
   remove: () => Promise<void>;
-  retry: () => Promise<void>;
+  retry: (state: FinishedStatus, options: RetryOptions) => Promise<void>;
 };
 
+type RequeueAddOptions = Pick<JobsOptions, "delay"> & { jobId: string };
+
 /** The queue surface one re-enqueue needs, so a caller can pass a plain fake. */
-export type RequeueableQueue<DataType> = {
+export type RequeueableQueue<
+  DataType,
+  JobType extends RequeueableJob = RequeueableJob,
+> = {
   add: (
     name: string,
     data: DataType,
-    options: { jobId: string },
+    options: RequeueAddOptions,
   ) => Promise<unknown>;
-  getJob: (jobId: string) => Promise<RequeueableJob | null | undefined>;
+  getJob: (jobId: string) => Promise<JobType | null | undefined>;
 };
 
-type RequeueDeterministicJobOptions<DataType> = {
+type RequeueDeterministicJobOptions<
+  DataType,
+  JobType extends RequeueableJob,
+> = {
   data: DataType;
+  delayMs?: number;
   jobId: string;
   name: string;
-  queue: RequeueableQueue<DataType>;
+  operationTimeoutMs?: number;
+  queue: RequeueableQueue<DataType, JobType>;
+  /**
+   * Builds the re-added job's data from the completed job it replaces, for a
+   * job whose data names something the earlier run already wrote.
+   */
+  reclaimData?: (previous: JobType) => DataType;
 };
 
 /**
- * Hand one persisted row back to its queue under the row's own job id.
+ * Hand one persisted row back to its queue under the row's own job id. The
+ * one place a deterministic job id is reused; `confine-owner` rejects state
+ * reads elsewhere.
  *
  * `add` alone is not the idempotent operation a reconciler needs. The queue
  * ignores an `add` whose id it still holds, and retention keeps terminal
  * records long after the row they ran for was reopened, so re-adding under
- * such an id is dropped without an error and the row stays pending forever. A
- * terminal record is therefore retried or reclaimed, while a job in any live
- * state is left alone: it is the enqueue this sweep would otherwise duplicate.
+ * such an id would be dropped without an error. Every state a job can report
+ * maps to one action in `EXISTING_JOB_ACTION`.
  */
-export const requeueDeterministicJob = async <DataType>({
+export const requeueDeterministicJob = async <
+  DataType,
+  JobType extends RequeueableJob,
+>({
   data,
+  delayMs,
   jobId,
   name,
+  operationTimeoutMs = QUEUE_OPERATION_TIMEOUT_MS,
   queue,
-}: RequeueDeterministicJobOptions<DataType>): Promise<QueueRequeueOutcome> => {
+  reclaimData,
+}: RequeueDeterministicJobOptions<
+  DataType,
+  JobType
+>): Promise<QueueRequeueOutcome> => {
   const bounded = async <T>(
     label: string,
     command: () => Promise<T>,
   ): Promise<T> =>
     await withTimeout(async () => await command(), {
       label: `queue-requeue.${label}`,
-      timeoutMs: QUEUE_OPERATION_TIMEOUT_MS,
+      timeoutMs: operationTimeoutMs,
     });
+
+  const add = async (jobData: DataType): Promise<QueueRequeueOutcome> => {
+    await bounded(
+      "add-job",
+      async () =>
+        await queue.add(name, jobData, {
+          jobId,
+          ...(delayMs === undefined ? {} : { delay: Math.max(0, delayMs) }),
+        }),
+    );
+    return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  };
 
   const existing = await bounded(
     "get-job",
     async () => await queue.getJob(jobId),
   );
-  if (existing) {
-    const state = await bounded(
-      "get-state",
-      async () => await existing.getState(),
-    );
-    if (state === "failed") {
-      await bounded("retry-job", async () => await existing.retry());
-      return QUEUE_REQUEUE_OUTCOME.REQUEUED;
-    }
-    if (state !== "completed") {
-      return QUEUE_REQUEUE_OUTCOME.QUEUE_OWNED;
-    }
-    await bounded("remove-job", async () => await existing.remove());
+  if (!existing) {
+    return await add(data);
   }
 
-  await bounded("add-job", async () => await queue.add(name, data, { jobId }));
-  return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  const state = await bounded(
+    "get-state",
+    async () => await existing.getState(),
+  );
+  const action = EXISTING_JOB_ACTION[state];
+  switch (action) {
+    case "owned": {
+      return QUEUE_REQUEUE_OUTCOME.QUEUE_OWNED;
+    }
+    case "retry": {
+      if (delayMs !== undefined && delayMs > 0) {
+        await bounded("remove-job", async () => await existing.remove());
+        return await add(data);
+      }
+      await bounded(
+        "retry-job",
+        async () => await existing.retry("failed", FRESH_ATTEMPTS),
+      );
+      return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    }
+    case "reclaim": {
+      await bounded("remove-job", async () => await existing.remove());
+      return await add(reclaimData ? reclaimData(existing) : data);
+    }
+    case "add": {
+      return await add(data);
+    }
+    default: {
+      action satisfies never;
+      return panic(`Unhandled existing job action: ${String(action)}`);
+    }
+  }
 };

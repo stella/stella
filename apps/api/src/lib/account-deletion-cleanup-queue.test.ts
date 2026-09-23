@@ -103,26 +103,33 @@ describe("account deletion cleanup queue", () => {
     expect(completeChunk).not.toHaveBeenCalled();
   });
 
-  test("replaces a retained terminal job before re-enqueueing cleanup", async () => {
-    await Promise.all(
-      (["failed", "completed"] as const).map(async (state) => {
-        const remove = mock(async () => undefined);
-        const add = mock(async () => undefined);
-        const cleanupQueue = asTestRaw<
-          Parameters<typeof enqueueAccountDeletionCleanupJob>[0]["cleanupQueue"]
-        >({
-          add,
-          getJob: mock(async () => ({
-            getState: mock(async () => state),
-            remove,
-          })),
-        });
+  test("hands a kept terminal job back to the queue", async () => {
+    const handOff = async (state: "completed" | "failed") => {
+      const calls = {
+        add: mock(async () => undefined),
+        remove: mock(async () => undefined),
+        retry: mock(async () => undefined),
+      };
+      await enqueueAccountDeletionCleanupJob({
+        cleanupQueue: {
+          add: calls.add,
+          getJob: async () => ({
+            getState: async () => state,
+            remove: calls.remove,
+            retry: calls.retry,
+          }),
+        },
+        requestId,
+      });
+      return calls;
+    };
 
-        await enqueueAccountDeletionCleanupJob({ cleanupQueue, requestId });
+    const failed = await handOff("failed");
+    expect(failed.retry).toHaveBeenCalledTimes(1);
+    expect(failed.add).not.toHaveBeenCalled();
 
-        expect(remove).toHaveBeenCalledTimes(1);
-        expect(add).toHaveBeenCalledTimes(1);
-      }),
-    );
+    const completed = await handOff("completed");
+    expect(completed.remove).toHaveBeenCalledTimes(1);
+    expect(completed.add).toHaveBeenCalledTimes(1);
   });
 });

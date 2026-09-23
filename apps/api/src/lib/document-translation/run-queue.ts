@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { type Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -49,6 +49,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
@@ -115,7 +117,6 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
-import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "document-translation-runs";
@@ -134,11 +135,6 @@ type DocumentTranslationRunJobData = {
   organizationId: string;
   userId: string;
 };
-
-type DocumentTranslationRunQueue = Pick<
-  Queue<DocumentTranslationRunJobData>,
-  "add" | "getJob"
->;
 
 export type EnqueueDocumentTranslationRunArgs = {
   runId: SafeId<"documentTranslationRun">;
@@ -179,45 +175,13 @@ export const enqueueDocumentTranslationRun = async (
 
 export const enqueueDocumentTranslationRunJob = async ({
   args,
-  operationTimeoutMs = QUEUE_OPERATION_TIMEOUT_MS,
   queue,
 }: {
   args: EnqueueDocumentTranslationRunArgs;
-  operationTimeoutMs?: number;
-  queue: DocumentTranslationRunQueue;
+  queue: RequeueableQueue<DocumentTranslationRunJobData>;
 }): Promise<void> => {
   const { name, data, opts } = runJob(args);
-  const existing = await withTimeout(
-    async () => await queue.getJob(opts.jobId),
-    {
-      label: "document-translation.queue.get-job",
-      timeoutMs: operationTimeoutMs,
-    },
-  );
-  if (existing) {
-    const state = await withTimeout(async () => await existing.getState(), {
-      label: "document-translation.queue.get-state",
-      timeoutMs: operationTimeoutMs,
-    });
-    if (state === "failed") {
-      await withTimeout(async () => await existing.retry(), {
-        label: "document-translation.queue.retry-job",
-        timeoutMs: operationTimeoutMs,
-      });
-      return;
-    }
-    if (state !== "completed") {
-      return;
-    }
-    await withTimeout(async () => await existing.remove(), {
-      label: "document-translation.queue.remove-job",
-      timeoutMs: operationTimeoutMs,
-    });
-  }
-  await withTimeout(async () => await queue.add(name, data, opts), {
-    label: "document-translation.queue.add-job",
-    timeoutMs: operationTimeoutMs,
-  });
+  await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue });
 };
 
 const enqueueDocumentTranslationRuns = async (

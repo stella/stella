@@ -27,6 +27,13 @@ const reportedLine = (diagnostic: unknown, ruleName: string): number | null => {
   return typeof line === "number" ? line : null;
 };
 
+type LintSingleRuleOptions = {
+  /** The rule's options object, for a rule configured by data. */
+  ruleOptions?: unknown;
+  /** Where the source is written, relative to a scratch root. */
+  sourcePath?: string;
+};
+
 /**
  * The lines one local rule reports on `source`, in order, run through the
  * real oxlint CLI with only that rule enabled. Read from the JSON report, not
@@ -35,6 +42,7 @@ const reportedLine = (diagnostic: unknown, ruleName: string): number | null => {
 export const lintSingleRule = async (
   ruleName: string,
   source: string,
+  { ruleOptions, sourcePath = "source.ts" }: LintSingleRuleOptions = {},
 ): Promise<number[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const lintResult = await Result.tryPromise(async () => {
@@ -46,11 +54,14 @@ export const lintSingleRule = async (
         jsPlugins: [
           path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${ruleName}.ts`),
         ],
-        rules: { [`${ruleName}/${ruleName}`]: "error" },
+        rules: {
+          [`${ruleName}/${ruleName}`]:
+            ruleOptions === undefined ? "error" : ["error", ruleOptions],
+        },
       })};\n`,
     );
-    const sourcePath = path.join(directory, "source.ts");
-    await Bun.write(sourcePath, source);
+    const sourceFile = path.join(directory, sourcePath);
+    await Bun.write(sourceFile, source);
     const spawned = Bun.spawn(
       [
         process.execPath,
@@ -60,7 +71,7 @@ export const lintSingleRule = async (
         configPath,
         "-f",
         "json",
-        sourcePath,
+        sourceFile,
       ],
       { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
     );

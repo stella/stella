@@ -41,6 +41,21 @@ describe("renderOwnershipDocument", () => {
     ).toContain("global `navigator.clipboard.writeText`");
   });
 
+  test("renders a member-call row with its scope", () => {
+    expect(
+      renderOwnershipDocument([
+        entry({
+          enforcement: {
+            kind: "member-call",
+            method: "getState",
+            within: ["apps/api/src/"],
+            allowed: [],
+          },
+        }),
+      ]),
+    ).toContain("call `.getState()` in `apps/api/src/`");
+  });
+
   test("renders one row per entry, keyed by id", () => {
     const rendered = renderOwnershipDocument(OWNERSHIP);
     for (const { id } of OWNERSHIP) {

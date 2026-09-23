@@ -1,11 +1,13 @@
 import { Result, UnhandledException } from "better-result";
-import { type Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 
 import type { EntityDeletionCleanupStatus } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { detached } from "@/api/lib/detached";
 import {
   claimNextEntityDeletionEffectChunk,
@@ -36,11 +38,6 @@ const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 type EntityDeletionCleanupJobData = {
   requestId: SafeId<"entityDeletionCleanupRequest">;
 };
-
-type EntityDeletionCleanupQueue = Pick<
-  Queue<EntityDeletionCleanupJobData>,
-  "add" | "getJob"
->;
 
 type EntityDeletionCleanupRequestDeps = {
   claimChunk: typeof claimNextEntityDeletionEffectChunk;
@@ -86,48 +83,17 @@ export const enqueueEntityDeletionCleanup = async (
 
 export const enqueueEntityDeletionCleanupJob = async ({
   cleanupQueue,
-  operationTimeoutMs = QUEUE_OPERATION_TIMEOUT_MS,
   requestId,
 }: {
-  cleanupQueue: EntityDeletionCleanupQueue;
-  operationTimeoutMs?: number;
+  cleanupQueue: RequeueableQueue<EntityDeletionCleanupJobData>;
   requestId: SafeId<"entityDeletionCleanupRequest">;
 }): Promise<void> => {
-  const jobId = createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME);
-  const existingJob = await withTimeout(
-    async () => await cleanupQueue.getJob(jobId),
-    {
-      label: "entity-deletion-cleanup.queue.get-job",
-      timeoutMs: operationTimeoutMs,
-    },
-  );
-  if (existingJob) {
-    const state = await withTimeout(async () => await existingJob.getState(), {
-      label: "entity-deletion-cleanup.queue.get-state",
-      timeoutMs: operationTimeoutMs,
-    });
-    if (state === "failed" || state === "completed") {
-      await withTimeout(async () => await existingJob.remove(), {
-        label: "entity-deletion-cleanup.queue.remove-job",
-        timeoutMs: operationTimeoutMs,
-      });
-    } else {
-      return;
-    }
-  }
-
-  await withTimeout(
-    async () =>
-      await cleanupQueue.add(
-        STORAGE_CLEANUP_JOB_NAME,
-        { requestId },
-        { jobId },
-      ),
-    {
-      label: "entity-deletion-cleanup.queue.add-job",
-      timeoutMs: operationTimeoutMs,
-    },
-  );
+  await requeueDeterministicJob({
+    data: { requestId },
+    jobId: createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME),
+    name: STORAGE_CLEANUP_JOB_NAME,
+    queue: cleanupQueue,
+  });
 };
 
 export const createEntityDeletionCleanupReconciler = ({
