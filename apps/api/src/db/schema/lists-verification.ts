@@ -7,6 +7,7 @@ import {
   VERIFICATION_LIMITS,
   CLAIM_REVIEW_EVENT_KINDS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
+  VERIFICATION_RUN_ERROR_CODES,
   VERIFICATION_RUN_STATUSES,
   SCORED_CLAIM_STATES,
 } from "@/api/lib/lists/verification/contract";
@@ -21,8 +22,10 @@ import type {
 
 import {
   jsonb,
+  organization,
   p,
   pUuid,
+  safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
@@ -42,6 +45,7 @@ const quoted = (values: readonly string[]) =>
 
 const CLAIM_ANCHOR_TYPE_SQL_VALUES = quoted(CLAIM_ANCHOR_TYPES);
 const RUN_STATUS_SQL_VALUES = quoted(VERIFICATION_RUN_STATUSES);
+const RUN_ERROR_CODE_SQL_VALUES = quoted(VERIFICATION_RUN_ERROR_CODES);
 const RUN_ACTIVE_STATUS_SQL_VALUES = quoted(VERIFICATION_RUN_ACTIVE_STATUSES);
 const CLAIM_TYPE_SQL_VALUES = quoted(CLAIM_TYPES);
 const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
@@ -63,6 +67,11 @@ export const legalListVerificationRuns = p.pgTable(
   "legal_list_verification_runs",
   {
     id: pUuid<"legalListVerificationRun">().primaryKey(),
+    // The worker rebuilds its tenant scope from the row, so the organization
+    // is recorded rather than looked up.
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -77,6 +86,7 @@ export const legalListVerificationRuns = p.pgTable(
       .text("status", { enum: VERIFICATION_RUN_STATUSES })
       .notNull()
       .default("queued"),
+    errorCode: p.text("error_code", { enum: VERIFICATION_RUN_ERROR_CODES }),
     requestedBy: p
       .text("requested_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -106,9 +116,20 @@ export const legalListVerificationRuns = p.pgTable(
       .uniqueIndex("legal_list_verification_runs_active_document_uidx")
       .on(table.workspaceId, table.entityId, table.fileFieldId)
       .where(sql`${table.status} IN (${RUN_ACTIVE_STATUS_SQL_VALUES})`),
+    // The reconciler's keyset walk over runs still waiting for a worker.
+    p
+      .index("legal_list_verification_runs_queued_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'queued'`),
     p.check(
       "legal_list_verification_runs_status_check",
       sql`${table.status} IN (${RUN_STATUS_SQL_VALUES})`,
+    ),
+    // A failed run always says why, and no other run carries a reason.
+    p.check(
+      "legal_list_verification_runs_error_code_check",
+      sql`(${table.status} = 'failed') = (${table.errorCode} IS NOT NULL)
+        AND (${table.errorCode} IS NULL OR ${table.errorCode} IN (${RUN_ERROR_CODE_SQL_VALUES}))`,
     ),
     p.check(
       "legal_list_verification_runs_content_hash_check",

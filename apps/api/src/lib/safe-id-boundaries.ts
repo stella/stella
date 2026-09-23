@@ -85,6 +85,11 @@ export const brandPersistedBilingualTranslationRunId = (
 ): SafeId<"bilingualTranslationRun"> =>
   toSafeId<"bilingualTranslationRun">(runId);
 
+export const brandPersistedListVerificationRunId = (
+  runId: string,
+): SafeId<"legalListVerificationRun"> =>
+  toSafeId<"legalListVerificationRun">(runId);
+
 export const brandPersistedDocumentReviewRunId = (
   runId: string,
 ): SafeId<"documentReviewRun"> => toSafeId<"documentReviewRun">(runId);

@@ -48,6 +48,10 @@ import {
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
+  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+  reconcileListVerificationRuns,
+} from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
+import {
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
   sweepFileComparisonUploads,
 } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -145,6 +149,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
+  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,

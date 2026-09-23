@@ -46,6 +46,7 @@ beforeAll(async () => {
   });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
+    organizationId,
     workspaceId,
     entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),

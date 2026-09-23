@@ -28,6 +28,7 @@ CREATE INDEX "legal_list_fact_details_list_idx" ON "legal_list_fact_details" ("w
 
 CREATE TABLE "legal_list_verification_runs" (
 	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"entity_id" uuid NOT NULL,
 	"file_field_id" uuid NOT NULL,
@@ -35,6 +36,7 @@ CREATE TABLE "legal_list_verification_runs" (
 	"content_sha256" varchar(64) NOT NULL,
 	"evidence" jsonb NOT NULL,
 	"status" text DEFAULT 'queued' NOT NULL,
+	"error_code" text,
 	"requested_by" text,
 	"pipeline_version" integer DEFAULT 1 NOT NULL,
 	"model_ref" varchar(256),
@@ -43,14 +45,18 @@ CREATE TABLE "legal_list_verification_runs" (
 	"finished_at" timestamptz,
 	CONSTRAINT "legal_list_verification_runs_id_ws_unq" UNIQUE ("id", "workspace_id"),
 	CONSTRAINT "legal_list_verification_runs_status_check" CHECK ("status" IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+	CONSTRAINT "legal_list_verification_runs_error_code_check" CHECK (("status" = 'failed') = ("error_code" IS NOT NULL)
+        AND ("error_code" IS NULL OR "error_code" IN ('pin_unresolved', 'pin_content_changed', 'unsupported_format', 'no_text', 'ai_unavailable', 'extraction_failed', 'grading_failed', 'enqueue_failed', 'internal'))),
 	CONSTRAINT "legal_list_verification_runs_content_hash_check" CHECK ("content_sha256" ~ '^[0-9a-f]{64}$'),
 	CONSTRAINT "legal_list_verification_runs_evidence_shape_check" CHECK (jsonb_typeof("evidence"->'facts') = 'array'
         AND jsonb_typeof("evidence"->'listId') = 'string'),
 	CONSTRAINT "legal_list_verification_runs_pipeline_version_check" CHECK ("pipeline_version" > 0),
+	CONSTRAINT "legal_list_verification_runs_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
 	CONSTRAINT "legal_list_verification_runs_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE,
 	CONSTRAINT "legal_list_verification_runs_requested_by_user_id_fk" FOREIGN KEY ("requested_by") REFERENCES "user"("id") ON DELETE SET NULL
 );--> statement-breakpoint
 CREATE INDEX "legal_list_verification_runs_document_created_idx" ON "legal_list_verification_runs" ("workspace_id", "entity_id", "file_field_id", "created_at" DESC, "id" DESC);--> statement-breakpoint
+CREATE INDEX "legal_list_verification_runs_queued_idx" ON "legal_list_verification_runs" ("created_at", "id") WHERE "status" = 'queued';--> statement-breakpoint
 CREATE UNIQUE INDEX "legal_list_verification_runs_active_document_uidx" ON "legal_list_verification_runs" ("workspace_id", "entity_id", "file_field_id") WHERE "status" IN ('queued', 'running');--> statement-breakpoint
 
 CREATE TABLE "legal_list_claims" (

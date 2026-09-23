@@ -518,6 +518,9 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/lists/verifications/claim-reviews/create"),
   },
+  "lists.verifications.create": {
+    load: async () => await import("@/api/handlers/lists/verifications/create"),
+  },
   "lists.verifications.get": {
     load: async () => await import("@/api/handlers/lists/verifications/get"),
   },

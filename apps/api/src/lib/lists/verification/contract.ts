@@ -125,13 +125,28 @@ export const VERIFICATION_RUN_STATUSES = [
 ] as const;
 export type VerificationRunStatus = (typeof VERIFICATION_RUN_STATUSES)[number];
 
+/** Why a run failed. Closed so the read surface can explain each one. */
+export const VERIFICATION_RUN_ERROR_CODES = [
+  "pin_unresolved",
+  "pin_content_changed",
+  "unsupported_format",
+  "no_text",
+  "ai_unavailable",
+  "extraction_failed",
+  "grading_failed",
+  "enqueue_failed",
+  "internal",
+] as const;
+export type VerificationRunErrorCode =
+  (typeof VERIFICATION_RUN_ERROR_CODES)[number];
+
 /** At most one run per document may hold these (partial unique index). */
 export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "queued",
   "running",
 ] as const satisfies readonly VerificationRunStatus[];
 
-type VerificationEvidenceSource = {
+export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;
   sourceEntityVersionId: SafeId<"entityVersion">;
   locator: LegalListSourceLocator;
@@ -139,7 +154,8 @@ type VerificationEvidenceSource = {
 };
 
 /** One anchor fact as a run read it. Runs pin the record by value, so a
- *  finished verification stays readable after the list is edited. */
+ *  finished verification stays readable after the list is edited. Detail
+ *  fields are null for a fact nobody has described yet. */
 export type VerificationEvidenceFact = {
   factEntityId: SafeId<"entity">;
   text: string;
@@ -147,7 +163,7 @@ export type VerificationEvidenceFact = {
   occurredOnPrecision: FactDatePrecision | null;
   evidenceKind: string | null;
   medium: string | null;
-  confidence: FactConfidence;
+  confidence: FactConfidence | null;
   interpretationNote: string | null;
   sources: readonly VerificationEvidenceSource[];
 };
@@ -206,4 +222,8 @@ export const VERIFICATION_LIMITS = {
   CLAIMS_PER_RUN_MAX: 2000,
   /** Reviewer actions one claim may accumulate; bounds a run's review read. */
   REVIEW_EVENTS_PER_CLAIM_MAX: 200,
+  /** Facts one run is checked against; every grading call carries them all. */
+  FACTS_PER_RUN_MAX: 500,
+  /** Sources pinned per fact, oldest first. */
+  SOURCES_PER_FACT_MAX: 5,
 } as const;

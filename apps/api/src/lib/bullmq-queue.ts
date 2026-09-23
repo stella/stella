@@ -25,6 +25,7 @@ const BULLMQ_QUEUE_HOSTS = {
   "entity-deletion-cleanup": "api",
   "file-derivatives": "api",
   "flow-run": "api",
+  "legal-list-verification-runs": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
   workflow: "api",

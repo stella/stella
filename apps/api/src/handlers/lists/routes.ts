@@ -26,6 +26,7 @@ import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
+import createVerification from "@/api/handlers/lists/verifications/create";
 import readVerification from "@/api/handlers/lists/verifications/get";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -125,6 +126,10 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
     body: createBulkClaimReviews.config.body,
     permissions: createBulkClaimReviews.config.permissions,
+  })
+  .post("/verifications", createVerification.handler, {
+    body: createVerification.config.body,
+    permissions: createVerification.config.permissions,
   })
   .get("/verifications/:runId", readVerification.handler, {
     params: readVerification.config.params,
