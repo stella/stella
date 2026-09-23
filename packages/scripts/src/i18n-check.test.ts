@@ -5,6 +5,7 @@ import {
   emptyBaseline,
   findCommonDuplicates,
   findSharedValueDuplicates,
+  findStaleBaselineEntries,
   findUntranslated,
   isSorted,
   sortKeys,
@@ -375,5 +376,48 @@ describe("buildCommonValueMap", () => {
     expect(map.get("Remove")).toBe("common.a"); // first wins
     expect(map.get("Save")).toBe("common.c");
     expect(map.size).toBe(2);
+  });
+});
+
+describe("findStaleBaselineEntries", () => {
+  const en: NestedMessages = {
+    common: { save: "Save" },
+    chat: { saveDraft: "Save", title: "Conversation" },
+    tasks: { title: "Conversation", status: "Status" },
+  };
+  const locales = new Map<string, NestedMessages>([
+    ["de", { chat: { title: "Unterhaltung" }, tasks: { status: "Status" } }],
+  ]);
+
+  test("keeps every entry the catalogs still need", () => {
+    const baseline: CheckBaseline = {
+      identicalToSource: { "tasks.status": ["de"] },
+      duplicatesCommon: ["chat.saveDraft"],
+      duplicateValues: ["chat.title", "tasks.title"],
+    };
+    expect(findStaleBaselineEntries({ source: en, locales, baseline })).toEqual(
+      [],
+    );
+  });
+
+  test("reports resolved, removed, and unknown-locale entries", () => {
+    const baseline: CheckBaseline = {
+      identicalToSource: {
+        "chat.title": ["de"],
+        "tasks.gone": ["de"],
+        "tasks.status": ["xx"],
+      },
+      duplicatesCommon: ["tasks.status"],
+      duplicateValues: ["tasks.status"],
+    };
+    expect(findStaleBaselineEntries({ source: en, locales, baseline })).toEqual(
+      [
+        "identicalToSource: chat.title (de)",
+        "identicalToSource: tasks.gone (de)",
+        "identicalToSource: tasks.status (xx)",
+        "duplicatesCommon: tasks.status",
+        "duplicateValues: tasks.status",
+      ],
+    );
   });
 });

@@ -207,7 +207,8 @@ export const emptyBaseline = (): CheckBaseline => ({
 const HAS_LETTER = /\p{L}/u;
 
 // Strings that are universally identical across languages: acronyms, format /
-// standard tokens, and proper-noun product names. Extend sparingly — a common
+// standard tokens, proper-noun product names, and identifiers a national
+// register or court system prints verbatim (IČO, Sp. zn.). Extend sparingly — a common
 // word that has real translations (e.g. "Free" -> "Gratis") does NOT belong
 // here; scope intentional brand labels (e.g. DeepL "Free"/"Pro" tiers) per-key
 // via the baseline instead.
@@ -237,6 +238,15 @@ const ALLOWED_IDENTICAL = new Set<string>([
   "Word",
   "Excel",
   "Markdown",
+  "OAuth 2.0",
+  "BIC/SWIFT",
+  "CLI & MCP",
+  "Kanban",
+  "Flexoki",
+  "Nord",
+  "InfoSoud",
+  "IČO",
+  "Sp. zn.",
 ]);
 
 // Parsing ICU is on the isTriviallyIdentical hot path, so memoize: every
@@ -467,6 +477,63 @@ export const findSharedValueDuplicates = (
   return offenders.toSorted((a, b) => a.key.localeCompare(b.key));
 };
 
+type FindStaleBaselineEntriesOptions = {
+  source: NestedMessages;
+  /** Target catalogs keyed by locale code. */
+  locales: ReadonlyMap<string, NestedMessages>;
+  baseline: CheckBaseline;
+};
+
+/**
+ * Baseline entries the current catalogs no longer need: the translation
+ * landed, the key was removed, or the duplicate was consolidated. Failing on
+ * them keeps the baseline shrinking; otherwise a resolved entry lingers and
+ * silently re-permits the regression it once grandfathered.
+ */
+export const findStaleBaselineEntries = ({
+  source,
+  locales,
+  baseline,
+}: FindStaleBaselineEntriesOptions): string[] => {
+  const stale: string[] = [];
+
+  const untranslatedByLocale = new Map(
+    [...locales].map(([locale, target]) => [
+      locale,
+      new Set(findUntranslated(source, target, locale, emptyBaseline())),
+    ]),
+  );
+  for (const [key, entryLocales] of Object.entries(
+    baseline.identicalToSource,
+  )) {
+    for (const locale of entryLocales) {
+      if (!untranslatedByLocale.get(locale)?.has(key)) {
+        stale.push(`identicalToSource: ${key} (${locale})`);
+      }
+    }
+  }
+
+  const commonDuplicates = new Set(
+    findCommonDuplicates(source, emptyBaseline()).map(({ key }) => key),
+  );
+  for (const key of baseline.duplicatesCommon) {
+    if (!commonDuplicates.has(key)) {
+      stale.push(`duplicatesCommon: ${key}`);
+    }
+  }
+
+  const sharedValues = new Set(
+    findSharedValueDuplicates(source, emptyBaseline()).map(({ key }) => key),
+  );
+  for (const key of baseline.duplicateValues) {
+    if (!sharedValues.has(key)) {
+      stale.push(`duplicateValues: ${key}`);
+    }
+  }
+
+  return stale;
+};
+
 // --- CLI ---
 
 if (import.meta.main) {
@@ -655,6 +722,26 @@ if (import.meta.main) {
       const synced = syncMessages(enMessages, messages);
       await Bun.write(filePath, `${JSON.stringify(synced, null, 2)}\n`);
       console.log("  ✓ synced");
+    }
+  }
+
+  if (!shouldSync) {
+    const stale = findStaleBaselineEntries({
+      source: enMessages,
+      locales: new Map(
+        localeMessages.map(({ file, messages }) => [
+          file.replace(/\.json$/u, ""),
+          messages,
+        ]),
+      ),
+      baseline,
+    });
+    if (stale.length > 0) {
+      hasIssues = true;
+      console.log(`\n${baselinePath}:`);
+      for (const entry of stale) {
+        console.log(`  - stale baseline entry: ${entry} (remove it)`);
+      }
     }
   }
 

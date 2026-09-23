@@ -214,7 +214,7 @@ export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   return (
     <DatePickerPopoverBase
       {...props}
-      clearLabel={t("clearDate")}
+      clearLabel={tCommon("clearDate")}
       locale={locale}
       overdueLabel={t("overdue")}
       // The props type omits all four labels so this wrapper owns them, but

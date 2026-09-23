@@ -3068,8 +3068,6 @@ type Messages = {
       "fileExists": "A file with this path already exists";
       "filesHeading": "Files";
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
-      "formDescription": "Description";
-      "formName": "Name";
       "formVersionPlaceholder": "1.0.0";
       "generateAddResource": "Add file";
       "generateDraft": "Draft skill";
@@ -3422,9 +3420,7 @@ type Messages = {
         "command": "Skill shortcut";
         "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only";
         "commandPrefix": "/";
-        "description": "Description";
         "descriptionPlaceholder": "Short description shown in the picker";
-        "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
         "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used";
         "scope": "Visibility";
@@ -4481,7 +4477,6 @@ type Messages = {
       "reviewer": "Reviewer";
     };
     "assignees": "Collaborators";
-    "clearDate": "Clear date";
     "completeWork": "Complete work";
     "deadlines": "Deadlines";
     "delegationReason": "Reason for change";
@@ -4582,7 +4577,6 @@ type Messages = {
     "clearMyLookupFormatDefault": "Clear my default";
     "conditionAddGroup": "Add group";
     "conditionAddRule": "Add rule";
-    "conditionAnd": "And";
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
     "conditionDecidedNo": "No · {probability}";
     "conditionDecidedOnGenerate": "Decided when you generate";
@@ -4609,7 +4603,6 @@ type Messages = {
     "conditionOpOnOrAfter": "on or after";
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
-    "conditionOr": "Or";
     "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
@@ -4936,11 +4929,9 @@ type Messages = {
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx";
       "currentKey": "Stored key";
       "description": "Configure a DeepL API key to enable document translation. Free and Pro keys are both supported.";
-      "remove": "Remove";
       "removed": "DeepL key removed";
       "removedDescription": "Translation is disabled until a new key is added.";
       "removing": "Removing…";
-      "save": "Save";
       "saved": "DeepL key saved";
       "savedDescription": "Translations are now available.";
       "tierFree": "Free";
