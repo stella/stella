@@ -49,6 +49,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "case_law_matter_links",
   "case_law_polarity_rules",
   "case_law_provision_citations",
+  "case_law_raw_sweeps",
   "case_law_reconciliation_items",
   "case_law_research_answers",
   "case_law_research_columns",
