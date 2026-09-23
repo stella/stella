@@ -18,6 +18,9 @@ export const MCP_CHAT_TOOL_POLICY_KINDS = {
   "delete_clause": "mutation",
   "save_playbook": "mutation",
   "run_playbook": "mutation",
+  "create_reader_annotation": "mutation",
+  "update_reader_annotation": "mutation",
+  "delete_reader_annotation": "mutation",
   "save_time_entry": "mutation",
   "delete_time_entry": "mutation",
   "manage_organization": "mutation"
@@ -41,6 +44,9 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_clause": "approve-once",
   "save_playbook": "grantable",
   "run_playbook": "grantable",
+  "create_reader_annotation": "grantable",
+  "update_reader_annotation": "grantable",
+  "delete_reader_annotation": "approve-once",
   "save_time_entry": "grantable",
   "delete_time_entry": "approve-once",
   "manage_organization": "approve-once"

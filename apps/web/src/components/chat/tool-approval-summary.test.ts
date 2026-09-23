@@ -1,6 +1,14 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import { buildRegistryWriteSummaryRows } from "./tool-approval-summary";
+import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+
+import {
+  buildRegistryWriteSummaryRows,
+  findCachedReaderAnnotationRows,
+  findReaderAnnotationMark,
+  getReaderAnnotationEditTargetId,
+} from "./tool-approval-summary";
 
 const EMPTY = "(empty)";
 const DOCUMENT_LABEL = "(document)";
@@ -10,6 +18,7 @@ const build = (toolName: string, input: unknown) =>
     documentLabel: DOCUMENT_LABEL,
     emptyLabel: EMPTY,
     input,
+    readerAnnotation: null,
     toolName,
     uploadPlaceholder: UPLOAD_PLACEHOLDER,
   });
@@ -160,5 +169,170 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(rows.find((row) => row.key === "billing_reference")?.value).toBe(
       EMPTY,
     );
+  });
+});
+
+const annotationRow = ({
+  body = null,
+  groupId = null,
+  id,
+  kind,
+  quote,
+}: {
+  body?: string | null;
+  groupId?: string | null;
+  id: string;
+  kind: "comment" | "highlight";
+  quote: string;
+}) => ({
+  authorId: "user-1",
+  blockAnchorId: `block-${id}`,
+  body,
+  color: kind === "highlight" ? "yellow" : null,
+  groupId,
+  id,
+  kind,
+  quote,
+});
+
+const READER_ROWS = [
+  annotationRow({ id: "hl-1", kind: "highlight", quote: "The seller shall" }),
+  annotationRow({
+    body: "Check the notice period.",
+    groupId: "group-1",
+    id: "cm-1",
+    kind: "comment",
+    quote: "First paragraph.",
+  }),
+  annotationRow({
+    groupId: "group-1",
+    id: "cm-2",
+    kind: "comment",
+    quote: "Second paragraph.",
+  }),
+];
+
+const seededReaderCache = () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(["legal-reader", "document"], { id: "hl-1" });
+  queryClient.setQueryData(
+    readerAnnotationKeys.forTarget({
+      activeOrganizationId: "org-1",
+      targetId: "decision-1",
+      targetType: "decision",
+    }),
+    READER_ROWS,
+  );
+  return queryClient;
+};
+
+const cachedReaderLists = (queryClient: QueryClient) =>
+  queryClient
+    .getQueriesData({ queryKey: readerAnnotationKeys.all })
+    .map(([, data]) => data);
+
+const lookUpMark = (annotationId: string) => {
+  const rows = findCachedReaderAnnotationRows({
+    annotationId,
+    cachedLists: cachedReaderLists(seededReaderCache()),
+  });
+  return rows === undefined
+    ? null
+    : findReaderAnnotationMark({ annotationId, rows });
+};
+
+describe("reader annotation approval lookup", () => {
+  test("any row of a multi-paragraph mark resolves the whole mark", () => {
+    const expected = {
+      body: "Check the notice period.",
+      kind: "comment",
+      quote: "First paragraph. Second paragraph.",
+    } as const;
+    expect(lookUpMark("cm-1")).toEqual(expected);
+    expect(lookUpMark("cm-2")).toEqual(expected);
+  });
+
+  test("an ungrouped highlight resolves to its own row only", () => {
+    expect(lookUpMark("hl-1")).toEqual({
+      body: null,
+      kind: "highlight",
+      quote: "The seller shall",
+    });
+  });
+
+  test("a mark no reader holds resolves to nothing", () => {
+    expect(lookUpMark("missing")).toBeNull();
+  });
+
+  test("the cached list comes back by reference, keeping snapshots stable", () => {
+    const queryClient = seededReaderCache();
+    const lookUp = () =>
+      findCachedReaderAnnotationRows({
+        annotationId: "cm-1",
+        cachedLists: cachedReaderLists(queryClient),
+      });
+    expect(lookUp()).toBe(lookUp());
+  });
+
+  test("only update and delete name a mark to look up", () => {
+    const input = { annotation_id: "cm-1", confirm: true };
+    expect(
+      getReaderAnnotationEditTargetId({
+        input,
+        toolName: "delete_reader_annotation",
+      }),
+    ).toBe("cm-1");
+    expect(
+      getReaderAnnotationEditTargetId({ input, toolName: "delete_clause" }),
+    ).toBeNull();
+  });
+});
+
+describe("reader annotation approval rows", () => {
+  const LABELS = {
+    commentText: "Comment text",
+    passage: {
+      comment: "Commented passage",
+      highlight: "Highlighted passage",
+    },
+  };
+  const DELETE_INPUT = { annotation_id: "cm-1", confirm: true };
+
+  test("a found mark replaces its id with what it covers", () => {
+    const mark = lookUpMark("cm-1");
+    const rows = buildRegistryWriteSummaryRows({
+      documentLabel: DOCUMENT_LABEL,
+      emptyLabel: EMPTY,
+      input: DELETE_INPUT,
+      readerAnnotation: mark === null ? null : { labels: LABELS, mark },
+      toolName: "delete_reader_annotation",
+      uploadPlaceholder: UPLOAD_PLACEHOLDER,
+    });
+    expect(rows.map(({ key, label, value }) => [key, label, value])).toEqual([
+      ["quote", "Commented passage", "First paragraph. Second paragraph."],
+      ["body", "Comment text", "Check the notice period."],
+      ["confirm", "Confirm", "true"],
+    ]);
+  });
+
+  test("a highlight's passage row names it and carries no comment text", () => {
+    const mark = lookUpMark("hl-1");
+    const rows = buildRegistryWriteSummaryRows({
+      documentLabel: DOCUMENT_LABEL,
+      emptyLabel: EMPTY,
+      input: { annotation_id: "hl-1", change: { type: "color", color: "red" } },
+      readerAnnotation: mark === null ? null : { labels: LABELS, mark },
+      toolName: "update_reader_annotation",
+      uploadPlaceholder: UPLOAD_PLACEHOLDER,
+    });
+    expect(rows.map(({ key, label }) => [key, label])).toEqual([
+      ["quote", "Highlighted passage"],
+      ["change", "Change"],
+    ]);
+  });
+
+  test("a mark outside the cache keeps the generic summary", () => {
+    const rows = build("delete_reader_annotation", DELETE_INPUT);
+    expect(rows.map((row) => row.key)).toEqual(["annotation_id", "confirm"]);
   });
 });

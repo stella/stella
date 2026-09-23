@@ -288,6 +288,23 @@ export const generatedToolAnnotations: Readonly<
     command: ["playbook", "run"],
     scope: "knowledge_write",
   },
+  list_reader_annotations: {
+    command: ["annotation", "list"],
+    scope: "read",
+    itemsKey: "annotations",
+  },
+  create_reader_annotation: {
+    command: ["annotation", "create"],
+    scope: "knowledge_write",
+  },
+  update_reader_annotation: {
+    command: ["annotation", "update"],
+    scope: "knowledge_write",
+  },
+  delete_reader_annotation: {
+    command: ["annotation", "delete"],
+    scope: "knowledge_write",
+  },
   list_time_entries: {
     command: ["time-entry", "list"],
     scope: "read",

@@ -401,6 +401,22 @@ export const CAPABILITY_DISPATCH = {
   "invoices.update": {
     load: async () => await import("@/api/handlers/invoices/update"),
   },
+  "legal-reader.annotations.create": {
+    load: async () =>
+      await import("@/api/handlers/legal-reader/annotations/create"),
+  },
+  "legal-reader.annotations.delete": {
+    load: async () =>
+      await import("@/api/handlers/legal-reader/annotations/delete"),
+  },
+  "legal-reader.annotations.list": {
+    load: async () =>
+      await import("@/api/handlers/legal-reader/annotations/list"),
+  },
+  "legal-reader.annotations.update": {
+    load: async () =>
+      await import("@/api/handlers/legal-reader/annotations/update"),
+  },
   "legislation.boe-get-law": {
     load: async () => await import("@/api/handlers/legislation/boe-get-law"),
   },

@@ -205,6 +205,12 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
       readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
       readVersionBlocks: readVersionBlocksMock,
+      // The corpus gate has its own tests; here a document is reachable.
+      resolveAnnotationTarget: async () =>
+        await Promise.resolve({
+          status: "available" as const,
+          readBlocks: async () => await Promise.resolve([]),
+        }),
       searchConsolidatedLegislation: searchConsolidatedLegislationMock,
       getLawTextBlock: getLawTextBlockMock,
       executeRegistryLookup: executeRegistryLookupMock,
@@ -1687,6 +1693,41 @@ const CONTRACT_CORPUS = {
         } satisfies DescribeTemplateResult);
       },
       expectRefPaths: [],
+    },
+  ],
+  list_reader_annotations: [
+    {
+      mode: "a mark over two paragraphs",
+      buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
+      tx: () => ({
+        select: selectQueue([
+          [
+            ["p-3", "The court held"],
+            ["p-4", "that the claim was time-barred"],
+          ].map(([blockAnchorId, quote], index) => ({
+            id: uid(61 + index),
+            groupId: uid(63),
+            kind: "comment",
+            visibility: "shared",
+            color: null,
+            style: null,
+            blockAnchorId,
+            startOffset: 0,
+            endOffset: 10,
+            quote,
+            body: index === 0 ? "Check the limitation date" : null,
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+            authorId: uid(64),
+            authorName: "Reader",
+            authorImage: null,
+            mine: true,
+            createdAtCursor: "2026-01-01T00:00:00.000000Z",
+          })),
+        ]),
+      }),
+      expectRefPaths: [],
+      expectPayloadContains: ["Check the limitation date", "p-4"],
     },
   ],
 } as const satisfies Record<ProjectableReadToolName, readonly ContractCall[]>;

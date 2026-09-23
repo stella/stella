@@ -1120,11 +1120,13 @@ type Messages = {
       "configure_template_fields": "Configure template fields";
       "create-document": "Preparing document";
       "create_matter_document": "Creating document";
+      "create_reader_annotation": "Add highlight or comment";
       "create_template": "Create template";
       "delete_clause": "Delete clause";
       "delete_contact": "Delete contact";
       "delete_document": "Delete document";
       "delete_matter": "Delete matter";
+      "delete_reader_annotation": "Delete highlight or comment";
       "delete_task": "Delete task";
       "delete_time_entry": "Delete time entry";
       "describe-stella-api": "Preparing data lookup";
@@ -1200,6 +1202,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_reader_annotation": "Edit highlight or comment";
       "web_search": "Searching the web";
     };
     "toolCall": {
@@ -3445,6 +3448,8 @@ type Messages = {
       "colorViolet": "Violet";
       "colorYellow": "Yellow";
       "commentPlaceholder": "Write a comment…";
+      "commentText": "Comment text";
+      "commentedPassage": "Commented passage";
       "guestAuthor": "You";
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.";
       "guestMigrationComplete": "Highlights and notes saved.";
@@ -3452,6 +3457,7 @@ type Messages = {
       "guestSavePrompt": "Your highlights and notes will be saved when you create a free account.";
       "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.";
       "highlight": "Highlight";
+      "highlightedPassage": "Highlighted passage";
       "removeHighlight": "Remove highlight";
       "sharedBadge": "Shared";
       "styleHighlight": "Highlight";

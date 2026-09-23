@@ -5,7 +5,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
-import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   HeadingLevel,
@@ -122,16 +122,6 @@ export const inlinesToPlainText = plainTextOf;
 
 export const getParagraphNumberPieceId = (blockId: string): string =>
   `paragraph-number:${blockId}`;
-
-export const getTableCellPieceId = ({
-  blockId,
-  columnIndex,
-  rowIndex,
-}: {
-  blockId: string;
-  columnIndex: number;
-  rowIndex: number;
-}): string => `table:${blockId}:${rowIndex}:${columnIndex}`;
 
 /**
  * The one match the find is standing on. Same mark as the rest — the reader is
@@ -1303,10 +1293,10 @@ export const BlockRenderer = ({
       >
         <tbody>
           {block.rows.map((row, rowIndex) => (
-            // eslint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds getTableCellPieceId's identity below) and never reordered/inserted by the reader UI.
+            // eslint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds tableCellPieceId's identity below) and never reordered/inserted by the reader UI.
             <tr key={rowIndex}>
               {row.map((cell, columnIndex) => {
-                const pieceId = getTableCellPieceId({
+                const pieceId = tableCellPieceId({
                   blockId: block.id,
                   rowIndex,
                   columnIndex,
@@ -1410,7 +1400,7 @@ export const buildDocumentAstSearchPieces = (
       for (const [rowIndex, row] of block.rows.entries()) {
         for (const [columnIndex, cell] of row.entries()) {
           pieces.push({
-            id: getTableCellPieceId({
+            id: tableCellPieceId({
               blockId: block.id,
               rowIndex,
               columnIndex,

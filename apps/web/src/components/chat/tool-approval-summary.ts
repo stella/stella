@@ -1,3 +1,8 @@
+import { READER_ANNOTATION_KINDS } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderAnnotationKind } from "@stll/api-contract/legal-reader-annotations";
+
+import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
+
 /**
  * Pure (no-React) helpers that turn a chat tool's approval input into readable
  * key/value rows for `ToolApprovalCard`. Kept free of React so the row logic is
@@ -124,12 +129,15 @@ export const buildRegistryWriteSummaryRows = ({
   documentLabel,
   emptyLabel,
   input,
+  readerAnnotation,
   toolName,
   uploadPlaceholder,
 }: {
   documentLabel: string;
   emptyLabel: string;
   input: unknown;
+  /** The mark an annotation edit or delete names, when the reader holds it. */
+  readerAnnotation: ReaderAnnotationSummary | null;
   toolName: string;
   uploadPlaceholder: string;
 }): ReadableInputRow[] => {
@@ -139,6 +147,10 @@ export const buildRegistryWriteSummaryRows = ({
       input,
       requestLabel: humanizeIdentifier(toolName),
     });
+  }
+
+  if (readerAnnotation !== null && isReaderAnnotationEditToolName(toolName)) {
+    return buildReaderAnnotationRows({ emptyLabel, input, readerAnnotation });
   }
 
   if (
@@ -315,6 +327,166 @@ const buildFillTemplateRows = ({
         value: formatReadableInputValue({ emptyLabel, value }),
       });
     }
+  }
+  return rows;
+};
+
+/** The annotation tools whose input names an existing mark by id. */
+const READER_ANNOTATION_EDIT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "delete_reader_annotation",
+  "update_reader_annotation",
+] as const satisfies readonly ApprovalToolName[]);
+
+const isReaderAnnotationEditToolName = (toolName: string): boolean =>
+  READER_ANNOTATION_EDIT_TOOL_NAMES.has(toolName);
+
+/** The mark id an annotation edit or delete names; null for any other tool. */
+export const getReaderAnnotationEditTargetId = ({
+  input,
+  toolName,
+}: {
+  input: unknown;
+  toolName: string;
+}): string | null => {
+  if (!isReaderAnnotationEditToolName(toolName) || !isRecord(input)) {
+    return null;
+  }
+  const annotationId = input["annotation_id"];
+  return typeof annotationId === "string" ? annotationId : null;
+};
+
+/** The fields of a cached reader annotation row the approval summary reads. */
+type ReaderAnnotationRow = {
+  body: string | null;
+  groupId: string | null;
+  id: string;
+  kind: ReaderAnnotationKind;
+  quote: string;
+};
+
+const isReaderAnnotationKind = (
+  value: unknown,
+): value is ReaderAnnotationKind =>
+  READER_ANNOTATION_KINDS.some((kind) => kind === value);
+
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === "string";
+
+const isReaderAnnotationRow = (value: unknown): value is ReaderAnnotationRow =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  isNullableString(value["groupId"]) &&
+  isReaderAnnotationKind(value["kind"]) &&
+  typeof value["quote"] === "string" &&
+  isNullableString(value["body"]);
+
+/**
+ * The cached list that holds a mark, returned by reference so a store
+ * snapshot stays stable until the cache itself changes. The chat names the
+ * mark by id alone, not by the document it sits on, so every reader's cached
+ * list is searched; the cache is untyped at that breadth, hence the narrowing.
+ */
+export const findCachedReaderAnnotationRows = ({
+  annotationId,
+  cachedLists,
+}: {
+  annotationId: string;
+  cachedLists: Iterable<unknown>;
+}): readonly ReaderAnnotationRow[] | undefined => {
+  for (const list of cachedLists) {
+    if (
+      Array.isArray(list) &&
+      list.every(isReaderAnnotationRow) &&
+      list.some((row) => row.id === annotationId)
+    ) {
+      return list;
+    }
+  }
+  return undefined;
+};
+
+export type ReaderAnnotationMark = {
+  /** A comment's text; null for a highlight. */
+  body: string | null;
+  kind: ReaderAnnotationKind;
+  /** Every paragraph the mark covers, in the reader's order. */
+  quote: string;
+};
+
+/**
+ * The mark a row id belongs to. A mark over several paragraphs is one row per
+ * paragraph under a shared group, so the quote joins the whole group the way
+ * the reader's toolbar does, and the comment text comes from the one row that
+ * carries it.
+ */
+export const findReaderAnnotationMark = ({
+  annotationId,
+  rows,
+}: {
+  annotationId: string;
+  rows: readonly ReaderAnnotationRow[];
+}): ReaderAnnotationMark | null => {
+  const target = rows.find((row) => row.id === annotationId);
+  if (target === undefined) {
+    return null;
+  }
+  const group =
+    target.groupId === null
+      ? [target]
+      : rows.filter((row) => row.groupId === target.groupId);
+  return {
+    body: group.find((row) => row.body !== null)?.body ?? null,
+    kind: target.kind,
+    quote: group.map((row) => row.quote).join(" "),
+  };
+};
+
+export type ReaderAnnotationSummary = {
+  labels: {
+    commentText: string;
+    /** The passage row's label, which names the kind of mark. */
+    passage: Record<ReaderAnnotationKind, string>;
+  };
+  mark: ReaderAnnotationMark;
+};
+
+/**
+ * The approver sees the mark itself (the words it covers, labelled by its
+ * kind, and a comment's text) in place of its opaque id; the rest of the input (an
+ * update's change, a delete's confirmation) reads as usual.
+ */
+const buildReaderAnnotationRows = ({
+  emptyLabel,
+  input,
+  readerAnnotation: { labels, mark },
+}: {
+  emptyLabel: string;
+  input: Record<string, unknown>;
+  readerAnnotation: ReaderAnnotationSummary;
+}): ReadableInputRow[] => {
+  const rows: ReadableInputRow[] = [
+    {
+      key: "quote",
+      label: labels.passage[mark.kind],
+      value: truncate(mark.quote),
+    },
+  ];
+  if (mark.body !== null) {
+    rows.push({
+      key: "body",
+      label: labels.commentText,
+      value: truncate(mark.body),
+    });
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (key === "annotation_id") {
+      continue;
+    }
+    rows.push({
+      key,
+      label: humanizeIdentifier(key),
+      value: formatReadableInputValue({ emptyLabel, value }),
+    });
   }
   return rows;
 };

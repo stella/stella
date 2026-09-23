@@ -239,6 +239,22 @@ export type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
 export type InlineBlock = Extract<Block, { inlines: Inline[] }>;
 
 /**
+ * What a reader's mark on a table cell is anchored by: a cell has no anchor
+ * of its own, so the table's block id and the cell's position stand in. The
+ * reader renders by it and the server places marks by it, so both read it
+ * from here.
+ */
+export const tableCellPieceId = ({
+  blockId,
+  columnIndex,
+  rowIndex,
+}: {
+  blockId: string;
+  columnIndex: number;
+  rowIndex: number;
+}): string => `table:${blockId}:${String(rowIndex)}:${String(columnIndex)}`;
+
+/**
  * Whether a block kind carries one inline run, per kind. Total over
  * `Block["type"]`, so a kind added without an entry is a type error
  * rather than a block a text walker silently skips.

@@ -1224,6 +1224,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_tasks",
       "list_clauses",
       "list_playbooks",
+      "list_reader_annotations",
       "list_time_entries",
       "resolve_rate",
       "list_invoices",

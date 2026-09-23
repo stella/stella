@@ -143,9 +143,15 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // doing both would put the model, alone, in charge of that decision. Write-only
 // and excluded from the anonymized surface, so that ceiling is unchanged; law
 // carries no feedback tool.
+// default 63 -> 67 and anonymized 28 -> 29 for the reader-annotation tools:
+// list, create, update and delete a highlight or comment on a decision or a
+// statute. Separate tools, one intent each: create places a mark from an
+// anchor and a quote and reports per-passage issues, update names one change,
+// delete is destructive and confirmed. Only the list is a read, so only it
+// reaches the anonymized surface.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 63,
-  anonymized: 28,
+  default: 67,
+  anonymized: 29,
   law: 10,
 };
 
@@ -315,9 +321,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // report the human approved and the one that is sent cannot diverge. Both
 // descriptions were shortened to pay for part of it; feedback tools are not on
 // the anonymized or law surfaces.
+// The four reader-annotation tools then measure 172_122 default and 75_306
+// anonymized (the list alone reaches the anonymized surface). Most of it is
+// create's input: the discriminated mark and the anchored passages the server
+// places the mark by.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 163_600,
-  anonymized: 73_300,
+  default: 172_200,
+  anonymized: 75_400,
   law: 28_250,
 };
 
@@ -395,9 +405,12 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // anonymized and law surfaces carry the same schema inside their headroom.
 // prepare_feedback returns the approval_token submit_feedback requires:
 // measured 53_509 default. The anonymized and law surfaces are unchanged.
+// The reader-annotation tools add the listed marks with their passages, the
+// created mark's stored passages, and two receipts: measured 55_085 default and
+// 33_799 anonymized, where the list is the only one of them.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 53_550,
-  anonymized: 32_850,
+  default: 55_150,
+  anonymized: 33_850,
   law: 10_050,
 };
 

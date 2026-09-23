@@ -1,13 +1,18 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
+
+import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import { pageLengthKeepingMarksWhole } from "@/api/handlers/legal-reader/annotations/page.logic";
 import {
   annotationTargetTypeSchema,
   requireAnnotationTargetType,
 } from "@/api/handlers/legal-reader/annotations/schema";
+import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
@@ -34,7 +39,9 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "internal", reason: "reader_annotations" },
+  description:
+    "List the highlights and comments on one decision or statute version: the caller's own and those colleagues shared.",
+  mcp: { type: "tool", name: "list_reader_annotations" },
   access: "read",
   query: querySchema,
 } satisfies HandlerConfig;
@@ -100,76 +107,99 @@ true satisfies UnexpectedProjectedAnnotationColumn extends never ? true : never;
  * membership, so a name is only ever shown for a colleague. Oldest first,
  * so the margin reads in the order the notes were made.
  */
+type ListReaderAnnotationsProps = Omit<
+  AnnotationAuthorScope,
+  "recordAuditEvent"
+> & {
+  query: Static<typeof querySchema>;
+};
+
+export const listReaderAnnotationsHandler = async function* ({
+  organizationId,
+  query,
+  safeDb,
+  userId,
+}: ListReaderAnnotationsProps) {
+  const limit = query.limit ?? LIMITS.readerAnnotationsPageSizeDefault;
+  const conditions = [
+    eq(legalReaderAnnotations.organizationId, organizationId),
+    eq(
+      legalReaderAnnotations.targetType,
+      requireAnnotationTargetType(query.targetType),
+    ),
+    eq(legalReaderAnnotations.targetId, query.targetId),
+  ];
+
+  if (query.cursor) {
+    const cursor = annotationCursor.decode(query.cursor);
+    if (!cursor) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
+      );
+    }
+    const cursorCondition = annotationCursor.keysetAfter({
+      cursor,
+      direction: "ascending",
+      idColumn: legalReaderAnnotations.id,
+    });
+    if (cursorCondition) {
+      conditions.push(cursorCondition);
+    }
+  }
+
+  const rows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          ...ANNOTATION_PROJECTION,
+          authorId: legalReaderAnnotations.userId,
+          authorName: user.name,
+          authorImage: user.image,
+          mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
+          createdAtCursor: annotationCursor.cursorValue.as("created_at_cursor"),
+        })
+        .from(legalReaderAnnotations)
+        .innerJoin(
+          member,
+          and(
+            eq(member.userId, legalReaderAnnotations.userId),
+            eq(member.organizationId, organizationId),
+          ),
+        )
+        .innerJoin(user, eq(user.id, member.userId))
+        .where(and(...conditions))
+        .orderBy(
+          asc(legalReaderAnnotations.createdAt),
+          asc(legalReaderAnnotations.id),
+        )
+        // Room to finish the last mark on the page: a mark's rows are
+        // contiguous in this order and number at most the span cap.
+        .limit(limit + READER_ANNOTATION_MAX_SPANS),
+    ),
+  );
+
+  const page = createCursorPage({
+    rows,
+    limit: pageLengthKeepingMarksWhole(rows, limit),
+    cursorForItem: (item) =>
+      annotationCursor.encode(item.createdAtCursor, item.id),
+  });
+
+  return Result.ok({
+    ...page,
+    limit,
+    items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+  });
+};
+
 const listReaderAnnotations = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user: me }) {
-    const limit = query.limit ?? LIMITS.readerAnnotationsPageSizeDefault;
-    const conditions = [
-      eq(legalReaderAnnotations.organizationId, session.activeOrganizationId),
-      eq(
-        legalReaderAnnotations.targetType,
-        requireAnnotationTargetType(query.targetType),
-      ),
-      eq(legalReaderAnnotations.targetId, query.targetId),
-    ];
-
-    if (query.cursor) {
-      const cursor = annotationCursor.decode(query.cursor);
-      if (!cursor) {
-        return Result.err(
-          new HandlerError({ status: 400, message: "Invalid cursor" }),
-        );
-      }
-      const cursorCondition = annotationCursor.keysetAfter({
-        cursor,
-        direction: "ascending",
-        idColumn: legalReaderAnnotations.id,
-      });
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
-      }
-    }
-
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            ...ANNOTATION_PROJECTION,
-            authorId: legalReaderAnnotations.userId,
-            authorName: user.name,
-            authorImage: user.image,
-            mine: sql<boolean>`${legalReaderAnnotations.userId} = ${me.id}`,
-            createdAtCursor:
-              annotationCursor.cursorValue.as("created_at_cursor"),
-          })
-          .from(legalReaderAnnotations)
-          .innerJoin(
-            member,
-            and(
-              eq(member.userId, legalReaderAnnotations.userId),
-              eq(member.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .innerJoin(user, eq(user.id, member.userId))
-          .where(and(...conditions))
-          .orderBy(
-            asc(legalReaderAnnotations.createdAt),
-            asc(legalReaderAnnotations.id),
-          )
-          .limit(limit + 1),
-      ),
-    );
-
-    const page = createCursorPage({
-      rows,
-      limit,
-      cursorForItem: (item) =>
-        annotationCursor.encode(item.createdAtCursor, item.id),
-    });
-
-    return Result.ok({
-      ...page,
-      items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+    return yield* listReaderAnnotationsHandler({
+      organizationId: session.activeOrganizationId,
+      query,
+      safeDb,
+      userId: me.id,
     });
   },
 );

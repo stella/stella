@@ -23,6 +23,9 @@ import {
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
 import type {
+  ReaderAnnotationColor,
+  ReaderAnnotationKind,
+  ReaderAnnotationStyle,
   ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
 } from "@stll/api-contract/legal-reader-annotations";
@@ -1624,6 +1627,8 @@ export const buildActiveDecisionPrompt = ({
       id: decisionId,
     })}.`,
     [
+      // The id reader-annotation tools take as `target_id`.
+      `Decision id: ${decisionId}`,
       `Court: ${sanitizePromptLine({ maxLength: 200, text: court })}`,
       country
         ? `Country: ${sanitizePromptLine({ maxLength: 80, text: country })}`
@@ -1656,6 +1661,8 @@ const SHARED_ANNOTATION: ReaderAnnotationVisibility = "shared";
 const DECISION_ANNOTATION_TARGET: ReaderAnnotationTargetType = "decision";
 const ANNOTATION_QUOTE_MAX_CHARS = 1200;
 const ANNOTATION_BODY_MAX_CHARS = 2000;
+/** The column's own bound. */
+const ANNOTATION_ANCHOR_MAX_CHARS = 64;
 /**
  * The whole marks section, not one mark. Per-mark caps bound a runaway quote;
  * this bounds a runaway reader, whose 200 admissible marks would otherwise add
@@ -1665,13 +1672,52 @@ const ANNOTATION_BODY_MAX_CHARS = 2000;
 export const ANNOTATIONS_SECTION_MAX_CHARS = 16_000;
 
 type PromptAnnotationRow = {
+  blockAnchorId: string;
   body: string | null;
-  color: string | null;
+  color: ReaderAnnotationColor | null;
   groupId: string | null;
   id: string;
-  kind: string;
+  kind: ReaderAnnotationKind;
   mine: boolean;
   quote: string;
+  style: ReaderAnnotationStyle | null;
+  visibility: ReaderAnnotationVisibility;
+};
+
+/**
+ * What the model reads of a highlight's look. The reader draws a style as
+ * meaning (struck out, underlined), so it is named, not left to a colour.
+ */
+const describeHighlight = (
+  color: ReaderAnnotationColor | null,
+  style: ReaderAnnotationStyle | null,
+): string => {
+  const parts = [color, style === "highlight" ? null : style].filter(
+    (part) => part !== null,
+  );
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
+};
+
+/**
+ * Whose mark it is and who else sees it: the user's private note is not the
+ * organization's view.
+ */
+const describeAuthor = ({
+  mine,
+  visibility,
+}: Pick<PromptAnnotationRow, "mine" | "visibility">): string => {
+  if (!mine) {
+    return "a colleague";
+  }
+  switch (visibility) {
+    case "private":
+      return "the user, private";
+    case "shared":
+      return "the user, shared with the organization";
+    default:
+      visibility satisfies never;
+      return panic(`Unhandled annotation visibility: ${String(visibility)}`);
+  }
 };
 
 /**
@@ -1702,17 +1748,27 @@ export const formatAnnotationsForPrompt = (
       maxLength: ANNOTATION_QUOTE_MAX_CHARS,
       text: group.map((row) => row.quote).join(" "),
     });
-    const author = first.mine ? "the user" : "a colleague";
+    const author = describeAuthor(first);
     const label =
       first.kind === "comment"
         ? `Comment by ${author}`
-        : `Highlight by ${author}${first.color ? ` (${sanitizePromptLine({ maxLength: 20, text: first.color })})` : ""}`;
+        : `Highlight by ${author}${describeHighlight(first.color, first.style)}`;
+    // The anchors the document text above carries, so a mark is tied to the
+    // passage it sits on and can be quoted back by it.
+    const anchors = [...new Set(group.map((row) => row.blockAnchorId))]
+      .map(
+        (anchor) =>
+          `[${sanitizePromptLine({ maxLength: ANNOTATION_ANCHOR_MAX_CHARS, text: anchor })}]`,
+      )
+      .join(", ");
     const body = group.find((row) => row.body !== null)?.body ?? null;
     const note =
       body === null
         ? ""
         : `\nNote:\n${sanitizePromptBlock({ maxLength: ANNOTATION_BODY_MAX_CHARS, text: body })}`;
-    lines.push(`- ${label}\nQuoted passage:\n${quote}${note}`);
+    lines.push(
+      `- ${label}, at ${anchors} (mark id ${first.id})\nQuoted passage:\n${quote}${note}`,
+    );
   }
 
   // Whole marks only, and a count of what was dropped: a reader who is told
@@ -1950,6 +2006,7 @@ export const buildActiveDecisionSection = async ({
             safeDb((tx) =>
               tx
                 .select({
+                  blockAnchorId: legalReaderAnnotations.blockAnchorId,
                   body: legalReaderAnnotations.body,
                   color: legalReaderAnnotations.color,
                   groupId: legalReaderAnnotations.groupId,
@@ -1957,6 +2014,8 @@ export const buildActiveDecisionSection = async ({
                   kind: legalReaderAnnotations.kind,
                   mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
                   quote: legalReaderAnnotations.quote,
+                  style: legalReaderAnnotations.style,
+                  visibility: legalReaderAnnotations.visibility,
                 })
                 .from(legalReaderAnnotations)
                 .where(
@@ -2009,6 +2068,8 @@ export const buildActiveDecisionSection = async ({
 
 type BuildActiveStatutePromptProps = {
   country: string;
+  /** The consolidation's id, which reader-annotation tools take as `target_id`. */
+  documentId: SafeId<"legislationDocument">;
   documentType: string | null;
   eli: string;
   /**
@@ -2042,6 +2103,7 @@ const describeStatuteCoverage = (
 
 export const buildActiveStatutePrompt = ({
   country,
+  documentId,
   documentType,
   eli,
   fulltext,
@@ -2059,6 +2121,7 @@ export const buildActiveStatutePrompt = ({
     })}".`,
     [
       `Identifier: ${sanitizePromptLine({ maxLength: 512, text: eli })}`,
+      `Document id: ${documentId}`,
       `Country: ${sanitizePromptLine({ maxLength: 80, text: country })}`,
       `Language: ${sanitizePromptLine({ maxLength: 80, text: language })}`,
       documentType
@@ -2290,6 +2353,8 @@ export const buildActiveStatuteSection = async ({
                   kind: legalReaderAnnotations.kind,
                   mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
                   quote: legalReaderAnnotations.quote,
+                  style: legalReaderAnnotations.style,
+                  visibility: legalReaderAnnotations.visibility,
                 })
                 .from(legalReaderAnnotations)
                 .where(
@@ -2320,6 +2385,7 @@ export const buildActiveStatuteSection = async ({
 
     const { blocks, fulltext, version } = statute;
     const statutePrompt = buildActiveStatutePrompt({
+      documentId: activeStatute.documentId,
       fulltext,
       country: version.country,
       documentType: version.documentType,

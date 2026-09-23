@@ -12,14 +12,18 @@ import {
 } from "@/api/handlers/legal-reader/annotations/schema";
 import type { UpdateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
 import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
+import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["update"] },
-  mcp: { type: "internal", reason: "reader_annotations" },
+  description:
+    "Change one of the caller's highlights or comments: its words, colour, style, or visibility.",
+  mcp: { type: "tool", name: "update_reader_annotation" },
   params: annotationParamsSchema,
   body: updateAnnotationBodySchema,
 } satisfies HandlerConfig;
@@ -58,6 +62,59 @@ const changesFor = (
  * the query as well as in the row policy, so a colleague's shared note is
  * never touched even if a policy were to loosen.
  */
+type UpdateReaderAnnotationProps = AnnotationAuthorScope & {
+  annotationId: SafeId<"legalReaderAnnotation">;
+  change: UpdateAnnotationBody;
+};
+
+export const updateReaderAnnotationHandler = async function* ({
+  annotationId,
+  change: body,
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  userId,
+}: UpdateReaderAnnotationProps) {
+  const rows = yield* Result.await(
+    safeDb(async (tx) => {
+      const mutatedRows = await tx
+        .update(legalReaderAnnotations)
+        .set({ ...changesFor(body), updatedAt: new Date() })
+        .where(
+          wholeAnnotationSql({
+            annotationId,
+            organizationId,
+            userId,
+          }),
+        )
+        .returning({
+          id: legalReaderAnnotations.id,
+          targetType: legalReaderAnnotations.targetType,
+        });
+      const first = mutatedRows.at(0);
+      if (first !== undefined) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: annotationAuditResourceType(
+            requireAnnotationTargetType(first.targetType),
+          ),
+          resourceId: annotationId,
+          metadata: { change: body.change },
+        });
+      }
+      return mutatedRows;
+    }),
+  );
+
+  if (rows.length === 0) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Annotation not found" }),
+    );
+  }
+
+  return Result.ok({ ok: true as const });
+};
+
 const updateReaderAnnotation = createSafeRootHandler(
   config,
   async function* ({
@@ -68,44 +125,14 @@ const updateReaderAnnotation = createSafeRootHandler(
     session,
     user,
   }) {
-    const rows = yield* Result.await(
-      safeDb(async (tx) => {
-        const mutatedRows = await tx
-          .update(legalReaderAnnotations)
-          .set({ ...changesFor(body), updatedAt: new Date() })
-          .where(
-            wholeAnnotationSql({
-              annotationId,
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-            }),
-          )
-          .returning({
-            id: legalReaderAnnotations.id,
-            targetType: legalReaderAnnotations.targetType,
-          });
-        const first = mutatedRows.at(0);
-        if (first !== undefined) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: annotationAuditResourceType(
-              requireAnnotationTargetType(first.targetType),
-            ),
-            resourceId: annotationId,
-            metadata: { change: body.change },
-          });
-        }
-        return mutatedRows;
-      }),
-    );
-
-    if (rows.length === 0) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Annotation not found" }),
-      );
-    }
-
-    return Result.ok({ ok: true as const });
+    return yield* updateReaderAnnotationHandler({
+      annotationId,
+      change: body,
+      organizationId: session.activeOrganizationId,
+      recordAuditEvent,
+      safeDb,
+      userId: user.id,
+    });
   },
 );
 

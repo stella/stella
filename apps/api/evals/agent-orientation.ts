@@ -984,6 +984,53 @@ const TASKS: readonly Task[] = [
     },
   },
   {
+    id: "create-reader-annotation",
+    // The model has the anchored text in front of it; the right call names
+    // the paragraph by its anchor and quotes the words, instead of guessing
+    // character offsets it cannot measure.
+    request:
+      "In decision 99999999-9999-4999-8999-999999999999, paragraph [p-12] " +
+      'reads "The limitation period began when the damage became known." ' +
+      'Highlight "began when the damage became known" in green for me.',
+    mcp: {
+      toolName: "create_reader_annotation",
+      exampleArgs: {
+        target_type: "decision",
+        target_id: "99999999-9999-4999-8999-999999999999",
+        mark: { kind: "highlight", color: "green" },
+        passages: [
+          { anchor: "p-12", quote: "began when the damage became known" },
+        ],
+      },
+      checkArgs: (args) => [
+        ...field(args, "target_type", "decision"),
+        ...field(args, "target_id", "99999999-9999-4999-8999-999999999999"),
+        ...nestedField(args, ["mark", "kind"], "highlight"),
+        ...nestedField(args, ["mark", "color"], "green"),
+        ...nestedField(args, ["passages", "0", "anchor"], "p-12"),
+        ...nestedField(
+          args,
+          ["passages", "0", "quote"],
+          "began when the damage became known",
+        ),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["annotation", "create"],
+      flags: {
+        "target-type": "decision",
+        "target-id": "99999999-9999-4999-8999-999999999999",
+        input: JSON.stringify({
+          mark: { kind: "highlight", color: "green" },
+          passages: [
+            { anchor: "p-12", quote: "began when the damage became known" },
+          ],
+        }),
+      },
+    },
+  },
+  {
     id: "preview-template-conditions",
     request: `Preview template ${NDA_TEMPLATE_ID}'s AI-decided conditions with values {"party_name": "Beta s.r.o.", "is_consumer": false} without filling it.`,
     mcp: {
