@@ -616,7 +616,7 @@ describe("processDecision — canonical storage mode", () => {
     expect(events.at(-1)).toBe("intent-delete");
   });
 
-  test("skips the corpus PUT when a settled row already records the payload", async () => {
+  test("leaves a settled row's payload alone when only the publisher page moved", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
@@ -653,15 +653,26 @@ describe("processDecision — canonical storage mode", () => {
     });
     // An unchanged payload contributes no member either.
     expect(transferredPacks).toEqual([]);
-    // The mirror settles back onto the pointers it already held.
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
-      corpusMirrorStatus: "settled",
-      textS3Key: recorded.textKey,
-      normalizedS3Key: recorded.sectionsKey,
-      astS3Key: recorded.astKey,
-      contentHash: recorded.contentHash,
+    // Nor does it touch the row's payload or pointers: the metadata refresh
+    // is the only write, so the document is not copied back into the row
+    // and trimmed out again.
+    expect(updatedDecisionRows).toHaveLength(1);
+    for (const column of [
+      "fulltext",
+      "sections",
+      "documentAst",
+      "corpusMirrorStatus",
+      "textS3Key",
+      "normalizedS3Key",
+      "astS3Key",
+      "contentHash",
+    ]) {
+      expect(updatedDecisionRows.at(0)).not.toHaveProperty(column);
+    }
+    expect(updatedDecisionRows.at(0)).toMatchObject({
+      sourceHash: decision.rawHash,
     });
-    expect(events.at(-1)).toBe("intent-delete");
+    expect(events).not.toContain("intent-reserve");
   });
 
   test("a pending mirror settles once and then stops writing", async () => {

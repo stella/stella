@@ -154,6 +154,7 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
+  corpusContentHash,
   corpusMirrorColumns,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -2281,10 +2282,24 @@ const processDecisionAttempt = async ({
       corpusPayload.text || hasUsableAst(corpusPayload.ast),
     );
 
+    // The publisher's page can move while the document it carries does not.
+    // A settled row that already records this exact payload in the corpus
+    // keeps it: writing it back into the row as pending, only for the settle
+    // to put the same pointers back, rewrites the whole document for nothing.
+    const modePlan = planCorpusWrite(corpus.mode);
+    const storedPayloadUnchanged =
+      existing !== undefined &&
+      modePlan.type !== "postgres-only" &&
+      existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
+      corpusCarriesDocument(existing.contentHash) &&
+      storedCorpusWrite(existing)?.contentHash ===
+        corpusContentHash(corpusPayload);
+
     const corpusPlan: CorpusWritePlan =
-      preserveStoredDocument && pendingMirrorPayload === null
+      (preserveStoredDocument && pendingMirrorPayload === null) ||
+      storedPayloadUnchanged
         ? { type: "preserve-stored" }
-        : planCorpusWrite(corpus.mode);
+        : modePlan;
 
     const postgresPayload = {
       fulltext: corpusPayload.text,
