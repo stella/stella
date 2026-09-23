@@ -12,6 +12,7 @@ import {
   externalToolDefinition,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { listBuiltInSkillTools } from "@/api/mcp/gateway/skills";
 import type { SkillToolRow } from "@/api/mcp/gateway/skills";
 import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -114,7 +115,9 @@ describe("skill tool output contract", () => {
     const tools = await listSkillTools();
 
     const names = tools.map((tool) => tool.name);
-    expect(names).toHaveLength(skillRows.length);
+    expect(names).toHaveLength(
+      skillRows.length + listBuiltInSkillTools().length,
+    );
     expect(names).toContain("skill__data_report");
     expect(names.some((name) => name.startsWith("skill__data_report_"))).toBe(
       true,
@@ -167,6 +170,39 @@ describe("skill tool output contract", () => {
     expect(result.content).toEqual([
       { type: "text", text: JSON.stringify(expected) },
     ]);
+    expect(
+      v.safeParse(
+        SKILL_TOOL_OUTPUT.outputSchemaSource,
+        result.structuredContent,
+      ).success,
+    ).toBe(true);
+  });
+
+  test("a built-in skill is served with no stored row and satisfies the contract", async () => {
+    const builtIn = listBuiltInSkillTools().at(0);
+    if (builtIn === undefined) {
+      throw new Error("expected a built-in skill to ship");
+    }
+    const context = createContext([]);
+    const listed = (
+      await listMcpTools(context, "default", ["stella:skills"])
+    ).find((tool) => tool.description === builtIn.description);
+    if (listed === undefined) {
+      throw new Error("expected the built-in skill to be listed");
+    }
+
+    const result = await handleMcpToolCall({
+      args: {},
+      context,
+      toolName: listed.name,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      body: builtIn.body,
+      name: builtIn.slug,
+      origin: "built-in",
+    });
     expect(
       v.safeParse(
         SKILL_TOOL_OUTPUT.outputSchemaSource,

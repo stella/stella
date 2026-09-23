@@ -543,26 +543,30 @@ const skillFixtureRow = ({
   version: "1.0.0",
 });
 
-const SKILL_FIXTURES = resolveSkillToolPrecedence([
-  skillFixtureRow({
-    slug: "summarize",
-    name: "Summarize a document",
-    description:
-      "Step-by-step instructions for producing a client-ready summary of a contract or decision.",
-  }),
-  skillFixtureRow({
-    slug: "risk_review",
-    name: "Risk review (English-law leases)",
-    description:
-      "Checklist for reviewing the risk allocation in an English-law commercial lease.",
-  }),
-  skillFixtureRow({
-    slug: "risk.review",
-    name: "Risk review (Czech commercial contracts)",
-    description:
-      "Checklist for reviewing risk clauses in a Czech commercial contract (obchodní smlouva).",
-  }),
-]);
+// The fixtures are the whole skill set under test, so no built-in joins them.
+const SKILL_FIXTURES = resolveSkillToolPrecedence({
+  builtIn: [],
+  installed: [
+    skillFixtureRow({
+      slug: "summarize",
+      name: "Summarize a document",
+      description:
+        "Step-by-step instructions for producing a client-ready summary of a contract or decision.",
+    }),
+    skillFixtureRow({
+      slug: "risk_review",
+      name: "Risk review (English-law leases)",
+      description:
+        "Checklist for reviewing the risk allocation in an English-law commercial lease.",
+    }),
+    skillFixtureRow({
+      slug: "risk.review",
+      name: "Risk review (Czech commercial contracts)",
+      description:
+        "Checklist for reviewing risk clauses in a Czech commercial contract (obchodní smlouva).",
+    }),
+  ],
+});
 
 const skillToolNameOf = (slug: string): string =>
   SKILL_FIXTURES.find((skill) => skill.slug === slug)?.exposedName ??
