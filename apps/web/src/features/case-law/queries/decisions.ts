@@ -16,7 +16,7 @@ import {
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -375,6 +375,16 @@ type CaseLawQueryExpansion = Awaited<
   ReturnType<typeof api.case.decisions.search.expand.post>
 >["data"];
 
+/** Payment required, forbidden, and over quota: the organization's answer. */
+const EXPANSION_DECLINED_STATUSES: ReadonlySet<number> = new Set([
+  402, 403, 429,
+]);
+
+const DECLINED_EXPANSION = {
+  alternatives: [],
+  outcome: "none",
+} satisfies NonNullable<CaseLawQueryExpansion>;
+
 /** A request that failed on the way: searched as typed, asked again later. */
 const DEGRADED_EXPANSION = {
   alternatives: [],
@@ -401,16 +411,26 @@ export const caseLawQueryExpansionOptions = ({
       { activeOrganizationId, country, query },
     ],
     queryFn: async ({ signal }) => {
-      const result = await Result.tryPromise(async () =>
-        unwrapEden(
-          await api.case.decisions.search.expand.post(
-            { country, query },
-            { fetch: { signal } },
+      const result = await Result.tryPromise({
+        try: async () =>
+          unwrapEden(
+            await api.case.decisions.search.expand.post(
+              { country, query },
+              { fetch: { signal } },
+            ),
           ),
-        ),
-      );
+        catch: (error: unknown) => error,
+      });
       if (result.isOk()) {
         return result.value;
+      }
+      // The organization declining the spend (no grant, no plan, no quota)
+      // is an answer, not a fault: settled, unreported, not asked again.
+      if (
+        APIError.is(result.error) &&
+        EXPANSION_DECLINED_STATUSES.has(result.error.status)
+      ) {
+        return DECLINED_EXPANSION;
       }
       if (!signal.aborted) {
         onFailure(result.error);

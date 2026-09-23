@@ -61,20 +61,18 @@ Rules:
 
 Example (CZE, cs): "vrácení kauce" gives [{"term":"kauce","alternatives":["jistota"]}]`;
 
+/**
+ * The shape only, not the bounds. A model that returns one alternative too
+ * many must not lose the valid ones beside it: `normalizeLegalAlternatives`
+ * enforces every bound, dropping what exceeds it, and `maxOutputTokens` caps
+ * what can arrive at all.
+ */
 const expansionOutputSchema = v.strictObject({
-  alternatives: v.pipe(
-    v.array(
-      v.strictObject({
-        term: v.pipe(v.string(), v.maxLength(LEGAL_ALTERNATIVES_LIMITS.chars)),
-        alternatives: v.pipe(
-          v.array(
-            v.pipe(v.string(), v.maxLength(LEGAL_ALTERNATIVES_LIMITS.chars)),
-          ),
-          v.maxLength(LEGAL_ALTERNATIVES_LIMITS.perTerm),
-        ),
-      }),
-    ),
-    v.maxLength(LEGAL_ALTERNATIVES_LIMITS.terms),
+  alternatives: v.array(
+    v.strictObject({
+      term: v.string(),
+      alternatives: v.array(v.string()),
+    }),
   ),
 });
 
