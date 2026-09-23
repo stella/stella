@@ -140,7 +140,7 @@ export const QuestionColumnPopover = ({
             <div className="flex flex-col p-1">
               {may("remove") && (
                 <Button
-                  className="justify-start gap-1.5 font-normal"
+                  className="justify-start"
                   onClick={() => act("remove")}
                   size="sm"
                   variant="ghost"
