@@ -7,7 +7,6 @@ import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { anchorAfterResolution } from "@/features/case-law/decision-resolution.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionCitationsInfiniteOptions,
@@ -206,15 +205,22 @@ type CanonicalDecisionHashOptions = {
 };
 
 /** The fragment a canonical redirect carries; see `anchorAfterResolution`. */
-const canonicalDecisionHash = ({
+const canonicalDecisionHash = async ({
   decision: { documentAst, resolution },
   hash,
-}: CanonicalDecisionHashOptions): string =>
-  anchorAfterResolution({
-    resolution,
-    documentAst,
-    anchorId: hash === "" ? undefined : hash,
-  }) ?? "";
+}: CanonicalDecisionHashOptions): Promise<string> => {
+  // Loaded on redirect only: the document parser stays out of the chunks
+  // every page preloads.
+  const { anchorAfterResolution } =
+    await import("@/features/case-law/decision-resolution.logic");
+  return (
+    anchorAfterResolution({
+      resolution,
+      documentAst,
+      anchorId: hash === "" ? undefined : hash,
+    }) ?? ""
+  );
+};
 
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
@@ -314,7 +320,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     if (currentPath !== canonicalPath) {
       redirectToCanonicalDecisionPath({
         canonicalParams,
-        hash: canonicalDecisionHash({ decision, hash }),
+        hash: await canonicalDecisionHash({ decision, hash }),
         search,
       });
     }
@@ -360,7 +366,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   if (currentPath !== canonicalPath) {
     redirectToCanonicalDecisionPath({
       canonicalParams,
-      hash: canonicalDecisionHash({ decision, hash }),
+      hash: await canonicalDecisionHash({ decision, hash }),
       search,
     });
   }

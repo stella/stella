@@ -8,7 +8,6 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
-import { anchorAfterResolution } from "@/features/case-law/decision-resolution.logic";
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -209,6 +208,10 @@ export const openCaseLawDecision = async (
     }
 
     const { decision } = resolved;
+    // Loaded on open: the document parser stays out of the chunks every
+    // page preloads.
+    const { anchorAfterResolution } =
+      await import("@/features/case-law/decision-resolution.logic");
     const target = anchorAfterResolution({ ...resolved, anchorId });
     open(target === undefined ? decision : { ...decision, anchorId: target });
   } catch (error) {
