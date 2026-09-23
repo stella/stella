@@ -12,8 +12,10 @@
  * takes: composed into its judgment, whose citations are then extracted over
  * the whole document, with the old row absorbed; or kept as standalone
  * reasons, retyped, while no stored ruling is its judgment. No publisher
- * request is made. A folded row leaves the selection, so passes resume by
- * running again; run until one visits nothing.
+ * request is made. A folded row leaves the selection; a row the fold cannot
+ * place (rejected, not a supplement, missing payload) stays in it, so resume
+ * with `--after=<resumeAfter>` from the last report, and stop when a pass
+ * reports no merged, standalone or withheld rows.
  *
  * Not a scheduled job and not a migration: it rewrites judgments, so it runs
  * under an operator who reads the report.

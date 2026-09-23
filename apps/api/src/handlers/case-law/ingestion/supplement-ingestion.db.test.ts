@@ -593,6 +593,35 @@ test("reasons a correction moves to another docket leave their former ruling for
   );
 });
 
+test("a ruling a correction dates after its reasons drops them and parks them again", async () => {
+  const fixture = await newSource();
+  await ingestDecision(fixture, decisionOf(RULING));
+  await ingestSupplement(fixture, supplementOf(REASONS));
+  const ruling = await decisionBy(fixture.sourceId, "339002");
+  expect(ruling.fulltext).toContain(REASONS_TEXT);
+
+  // Reasons may only join a ruling dated on or before them.
+  await ingestDecision(
+    fixture,
+    decisionOf(
+      saosRow({
+        id: 339_002,
+        judgmentType: "SENTENCE",
+        judgmentDate: "2018-05-02",
+        body: RULING_TEXT,
+      }),
+    ),
+  );
+
+  const corrected = await decisionBy(fixture.sourceId, "339002");
+  expect(corrected.id).toBe(ruling.id);
+  expect(corrected.fulltext).not.toContain(REASONS_TEXT);
+  expect(await supplementRow(fixture.sourceId, "339001")).toMatchObject({
+    decisionId: null,
+    mergedSourceHash: null,
+  });
+});
+
 test("reasons parked while their ruling is being written are composed by that write", async () => {
   const fixture = await newSource();
   const reasons = supplementOf(REASONS);

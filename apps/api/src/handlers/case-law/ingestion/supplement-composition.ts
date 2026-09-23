@@ -16,7 +16,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -497,6 +497,33 @@ export const markSupplementsMerged = async (
           caseLawDecisionSupplements.sourceDocumentId,
           supplements.map(({ sourceDocumentId }) => sourceDocumentId),
         ),
+      ),
+    );
+};
+
+/**
+ * Park every supplement a judgment's rewritten document left out. Written in
+ * the transaction that replaced that document: a correction can leave the
+ * judgment no longer one a supplement may join, and the association would
+ * otherwise outlive the text. A parked supplement is listed again and placed
+ * anew.
+ */
+export const detachSupplementsLeftOut = async (
+  tx: Transaction,
+  { sourceId, decisionId, supplements }: MarkSupplementsMergedOptions,
+): Promise<void> => {
+  const kept = supplements.map(({ sourceDocumentId }) => sourceDocumentId);
+  // audit: skip — background case-law ingestion; public case-law data
+  await tx
+    .update(caseLawDecisionSupplements)
+    .set({ decisionId: null, mergedSourceHash: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(caseLawDecisionSupplements.sourceId, sourceId),
+        eq(caseLawDecisionSupplements.decisionId, decisionId),
+        kept.length === 0
+          ? undefined
+          : notInArray(caseLawDecisionSupplements.sourceDocumentId, kept),
       ),
     );
 };

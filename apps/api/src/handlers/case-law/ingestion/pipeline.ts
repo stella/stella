@@ -69,6 +69,7 @@ import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion
 import {
   composeDecisionWithSupplements,
   detachSupplement,
+  detachSupplementsLeftOut,
   lockSupplementTarget,
   markSupplementsMerged,
   planSupplementComposition,
@@ -2506,12 +2507,16 @@ const processDecisionAttempt = async ({
           )
           .returning({ id: caseLawDecisions.id });
 
-        if (updated.length > 0 && composedSupplements.length > 0) {
-          await markSupplementsMerged(tx, {
+        if (updated.length > 0 && composition !== null) {
+          const merged = {
             sourceId,
             decisionId: existing.id,
             supplements: composedSupplements,
-          });
+          };
+          await markSupplementsMerged(tx, merged);
+          // The document this update wrote is the one the supplements left
+          // out are no longer in.
+          await detachSupplementsLeftOut(tx, merged);
         }
 
         if (updated.length === 0) {
