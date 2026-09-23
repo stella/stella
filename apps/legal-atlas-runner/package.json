@@ -29,7 +29,7 @@
     "smoke": "bun src/index.ts smoke",
     "test": "bun test src --pass-with-no-tests",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/legal-atlas-runner",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware apps/legal-atlas-runner",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/legal-atlas-runner",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },

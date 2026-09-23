@@ -185,7 +185,6 @@ export const RESULT_CONVENTION_EXCLUDE_GLOBS = [
   "**/__tests__/**",
   "**/__fixtures__/**",
   "**/*.gen.*",
-  "**/*.d.ts",
 ] as const;
 
 export type ResultBoundaryOptOut = {

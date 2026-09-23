@@ -350,6 +350,27 @@ const fixtureRuleOverrides = [
   ]),
 ];
 
+// Tooling that runs from a checkout, never in a deployed runtime.
+const toolingScriptFiles = [
+  "scripts/**",
+  "apps/*/scripts/**",
+  "packages/*/scripts/**",
+  "packages/scripts/**",
+] as const;
+
+// Product UI that renders to a reader: the web app, the desktop shell, and the
+// shared component packages they compose.
+const productUiFiles = [
+  "apps/web/src/**/*.{ts,tsx}",
+  "apps/desktop/src/**/*.{ts,tsx}",
+  "packages/ui/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+] as const;
+const productUiComponentFiles = productUiFiles.map((glob) =>
+  glob.replace("*.{ts,tsx}", "*.tsx"),
+);
+
 const browserSurfaceFiles = [
   "apps/web/src/**/*.{ts,tsx}",
   "apps/desktop/src/**/*.{ts,tsx}",
@@ -493,6 +514,7 @@ const pragmaticDragAdapterDeepImportBan = {
 // Oxlint 1.80 split the monolithic react/react-compiler rule into categories.
 // These are one logical ruleset: spreads preserve the former whole-compiler
 // exemption only where the compiler cannot meaningfully analyze the source.
+// `react/invariant` and `react/todo` are off everywhere (base rules below).
 const reactCompilerRulesOff = {
   "react/capitalized-calls": "off",
   "react/error-boundaries": "off",
@@ -501,7 +523,6 @@ const reactCompilerRulesOff = {
   "react/hooks": "off",
   "react/immutability": "off",
   "react/incompatible-library": "off",
-  "react/invariant": "off",
   "react/memo-dependencies": "off",
   "react/no-deriving-state-in-effects": "off",
   "react/preserve-manual-memoization": "off",
@@ -512,7 +533,6 @@ const reactCompilerRulesOff = {
   "react/set-state-in-render": "off",
   "react/static-components": "off",
   "react/syntax": "off",
-  "react/todo": "off",
   "react/unsupported-syntax": "off",
   "react/use-memo": "off",
   "react/void-use-memo": "off",
@@ -609,8 +629,26 @@ const customCssClassNames = [
 
 export default defineConfig({
   extends: [core, react, shadcn],
+  // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
+  // pre-commit hook and the docs-source check run without type information,
+  // where every suppression of a type-aware rule would read as unused.
+  options: { denyWarnings: true },
   settings: {
     shadcn: SHADCN_LINT_SETTINGS,
+    // The design-system primitives render the named DOM element, so the a11y
+    // rules check them as such. `Link` is left out: TanStack's `to` is not an
+    // `href`, and anchor rules would misread it.
+    "jsx-a11y": {
+      components: {
+        Button: "button",
+        Input: "input",
+        Label: "label",
+        Textarea: "textarea",
+      },
+    },
+    react: {
+      linkComponents: [{ name: "Link", attributes: ["to"] }],
+    },
     tailwindcss: {
       entryPoint: [
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
@@ -691,9 +729,9 @@ export default defineConfig({
     // to a semantic tag breaks composition (e.g. `<div role="row">`
     // inside a non-table grid). Re-enable and clean up per-file.
     "jsx-a11y/prefer-tag-over-role": "off",
-    // Disabled: rule misses `<label htmlFor={dynamicId}>` pairs and
-    // floods file dialogs with false positives. Re-enable once it
-    // supports computed htmlFor.
+    // Disabled: render-prop buttons whose accessible name comes from dynamic
+    // children, and intentionally empty `<th />` cells (selection and action
+    // columns), read as unlabelled controls.
     "jsx-a11y/control-has-associated-label": "off",
     // Disabled: the `??=` form it suggests can re-trigger
     // `typescript/no-unnecessary-condition` on typed-as-defined
@@ -728,7 +766,7 @@ export default defineConfig({
     "react/jsx-no-comment-textnodes": "error",
     "react/iframe-missing-sandbox": "error",
     "react/jsx-no-target-blank": "error",
-    "react/jsx-no-script-url": "error",
+    "react/jsx-no-script-url": ["error", { includeFromSettings: true }],
     "react/button-has-type": "error",
     "react/checked-requires-onchange-or-readonly": "error",
     "react/no-unknown-property": "error",
@@ -854,10 +892,6 @@ export default defineConfig({
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
-    "no-raw-public-law-seo/no-raw-public-law-seo": "off",
-    "public-case-law-db-boundary/public-case-law-db-boundary": "off",
-    "public-law-read-boundary/require-language-alternate-counts": "off",
-    "public-law-read-boundary/require-configured-read-transaction": "off",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
     "require-function-replacer/require-function-replacer": "error",
@@ -911,11 +945,27 @@ export default defineConfig({
     // default represents an explicit unknown-upstream disposition.
     "typescript/switch-exhaustiveness-check": [
       "error",
-      { considerDefaultExhaustiveForUnions: false },
+      {
+        considerDefaultExhaustiveForUnions: false,
+        requireDefaultForNonUnion: true,
+      },
+    ],
+    // Interpolate only values with a meaningful string form: a nullish,
+    // `any`, RegExp or `never` operand renders "undefined", "[object ...]" or
+    // a pattern where text was meant. Numbers and booleans stay allowed.
+    "typescript/restrict-template-expressions": [
+      "error",
+      {
+        allowAny: false,
+        allowBoolean: true,
+        allowNever: false,
+        allowNullish: false,
+        allowNumber: true,
+        allowRegExp: false,
+      },
     ],
 
     "unicorn/switch-case-braces": "off",
-    "unicorn/number-literal-case": "off",
     "unicorn/escape-case": "off",
     "unicorn/no-hex-escape": "off",
     "unicorn/prefer-string-replace-all": "off",
@@ -931,7 +981,7 @@ export default defineConfig({
     // `TaggedError("X")<{...}>()` pattern used throughout the codebase.
     "unicorn/throw-new-error": "off",
     "unicorn/no-array-reduce": "error",
-    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-sort": "error",
     "unicorn/no-useless-spread": "off",
     // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
     // Number(x) transform is not semantics-preserving (lenient prefix parsing,
@@ -941,8 +991,6 @@ export default defineConfig({
     "unicorn/no-nested-ternary": "off",
     "unicorn/prefer-set-has": "error",
     "unicorn/prefer-spread": "off",
-
-    "react_perf/jsx-no-new-function-as-prop": "off",
 
     "react/hook-use-state": "off",
     // These categories report React Compiler implementation limits and internal
@@ -957,14 +1005,10 @@ export default defineConfig({
 
     "import/no-named-as-default-member": "off",
     "import/no-named-as-default": "off",
-    "import/no-relative-parent-imports": "off",
-    "import/no-namespace": "off",
 
     "promise/prefer-await-to-then": "off",
     "promise/prefer-await-to-callbacks": "off",
     "promise/avoid-new": "off",
-
-    "jsdoc/require-param-type": "off",
 
     "typescript/strict-boolean-expressions": [
       "error",
@@ -1637,8 +1681,10 @@ export default defineConfig({
       },
     },
     {
-      // Evals are scripts too: on-demand model runs that print reports.
-      files: ["**/scripts/**", "**/evals/**"],
+      // Repository and workspace tooling: CLIs that print reports, plus the
+      // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
+      // as runtime workers and backfills, keeps the product rules.
+      files: [...toolingScriptFiles, "apps/*/evals/**"],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the
@@ -1686,11 +1732,13 @@ export default defineConfig({
       },
     },
     {
-      // Load-test CLIs intentionally print progress/errors to the
-      // terminal; keep product API code on structured logging.
-      // (One-off DOCX fixture scripts now live under apps/api/src/scripts,
-      // already covered by the **/scripts/** override above.)
-      files: ["apps/api/src/tests/load/**/*.ts"],
+      // Load-test CLIs and the operator commands shipped in the API image
+      // print usage, progress and reports to the terminal; keep product API
+      // code on structured logging. The type rules still apply to both.
+      files: [
+        "apps/api/src/tests/load/**/*.ts",
+        "apps/api/src/scripts/**/*.ts",
+      ],
       rules: { "no-console": "off" },
     },
     {
@@ -1718,8 +1766,6 @@ export default defineConfig({
         "no-bare-error/no-bare-error": "off",
         "no-non-null-assertion": "off",
         "typescript/no-unsafe-type-assertion": "off",
-        "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts":
-          "off",
       },
     },
     {
@@ -1744,17 +1790,7 @@ export default defineConfig({
       rules: { "require-unicode-regexp": "off" },
     },
     {
-      // The tokenizer regex here is a standard quoted-string-with-escapes
-      // matcher (linear in practice). Naming its capture group to satisfy
-      // prefer-named-capture-group puts the line into the PR diff, which
-      // re-surfaces a CodeQL "polynomial regular expression" false positive
-      // on a pattern that already exists on main. Keep the regex byte-
-      // identical to main and disable the rule for this single-regex file.
-      files: ["packages/template-conditions/src/index.ts"],
-      rules: { "prefer-named-capture-group": "off" },
-    },
-    {
-      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
+      files: [...productUiFiles],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
@@ -2117,11 +2153,7 @@ export default defineConfig({
         "apps/api/src/**/tests/**",
         "apps/api/src/**/__tests__/**",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/**/tests/**",
-        "apps/web/src/**/__tests__/**",
         "packages/*/src/**/*.{test,spec}.{ts,tsx}",
-        "packages/*/src/**/tests/**",
-        "packages/*/src/**/__tests__/**",
       ],
       rules: {
         "no-swallowed-rejection/no-swallowed-rejection": "off",
@@ -2137,23 +2169,18 @@ export default defineConfig({
         "apps/api/src/**/tests/**",
         "apps/api/src/**/__tests__/**",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/**/tests/**",
-        "apps/web/src/**/__tests__/**",
         "packages/*/src/**/*.{test,spec}.{ts,tsx}",
-        "packages/*/src/**/tests/**",
-        "packages/*/src/**/__tests__/**",
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",
       },
     },
     {
-      // Error toasts: scoped to apps/web, the only surface that raises
-      // `stellaToast`. A handler that shows an error toast without binding
+      // Error toasts: a handler that shows an error toast without binding
       // and capturing the caught error surfaces the failure to one user and
       // to nobody else.
       files: [
-        "apps/web/src/**/*.{ts,tsx}",
+        ...productUiFiles,
         ".oxlint-plugins/__fixtures__/require-toast-error-capture.fixture.ts",
       ],
       rules: {
@@ -2169,7 +2196,6 @@ export default defineConfig({
         "apps/api/src/**/*.logic.ts",
         "apps/api/src/**/*-policy.ts",
         "apps/api/src/**/*-normalizer.ts",
-        "apps/api/src/**/*-codec.ts",
         "apps/api/src/handlers/case-law/ingestion/reconciliation-plan.ts",
         "apps/api/src/handlers/case-law/polarity/classifier.ts",
         "apps/api/src/handlers/case-law/polarity/rule-engine.ts",
@@ -2319,7 +2345,9 @@ export default defineConfig({
       // Icon-only actions need visible hover/focus affordance for sighted users;
       // aria-label alone is not discoverable. Decorative icons are ignored.
       files: [
-        "apps/web/src/**/*.tsx",
+        ...productUiComponentFiles.filter(
+          (glob) => !glob.startsWith("packages/ui/"),
+        ),
         ".oxlint-plugins/__fixtures__/icon-button-requires-tooltip.fixture.tsx",
       ],
       rules: {
@@ -2497,7 +2525,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: [...productUiFiles],
       rules: {
         "no-ambient-hotkey-format/no-ambient-hotkey-format": "error",
       },
@@ -2516,8 +2544,7 @@ export default defineConfig({
       // document surface stays LTR-based and formats with its own
       // resolved locales rather than the UI numbering preference.
       files: [
-        "apps/web/src/**/*.{ts,tsx}",
-        "packages/ui/src/**/*.{ts,tsx}",
+        ...productUiFiles,
         ".oxlint-plugins/__fixtures__/no-raw-locale-format.fixture.ts",
       ],
       rules: {
@@ -2552,8 +2579,11 @@ export default defineConfig({
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
         "apps/legal-atlas-runner/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-raw-date-parsing.fixture.ts",
       ],
+      // The package that owns the helpers and the named day length.
+      excludeFiles: ["packages/time/src/**"],
       rules: {
         "no-raw-date-parsing/no-raw-date-parsing": "error",
       },
@@ -2561,13 +2591,12 @@ export default defineConfig({
     {
       // Tests construct fixture instants from literals deterministically and
       // deliberately demonstrate the footguns (e.g. the dates.test.ts DST
-      // assertions), so the date-parsing rule stays out of them. The helpers
-      // and the day-length literal live in the `@stll/time` package, which
-      // this rule (scoped to the app source trees above) does not cover.
+      // assertions), so the date-parsing rule stays out of them.
       files: [
         "apps/api/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
         "apps/legal-atlas-runner/src/**/*.{test,spec}.{ts,tsx}",
+        "packages/*/src/**/*.{test,spec}.{ts,tsx}",
         "apps/api/src/**/__tests__/**",
         "apps/api/src/tests/**",
       ],
@@ -2580,8 +2609,7 @@ export default defineConfig({
       // literal dir="auto" is forbidden (it strands the caret left when empty);
       // numeric inputs must be explicitly dir="ltr".
       files: [
-        "apps/web/src/**/*.tsx",
-        "packages/ui/src/**/*.tsx",
+        ...productUiComponentFiles,
         ".oxlint-plugins/__fixtures__/no-input-dir-auto.fixture.tsx",
       ],
       rules: {
@@ -2590,10 +2618,13 @@ export default defineConfig({
     },
     {
       // Bidirectional: rendering a user-provided name needs `dir` so it
-      // isn't reordered under RTL.
+      // isn't reordered under RTL. packages/chat stays out: its one named
+      // value is a catalogue model name inside a native `<option>`, whose
+      // text-only content cannot take the wrapper.
       files: [
-        "apps/web/src/**/*.tsx",
-        "packages/ui/src/**/*.tsx",
+        ...productUiComponentFiles.filter(
+          (glob) => !glob.startsWith("packages/chat/"),
+        ),
         ".oxlint-plugins/__fixtures__/require-dir-on-rendered-name.fixture.tsx",
       ],
       rules: {
@@ -2603,8 +2634,7 @@ export default defineConfig({
     {
       // Numbers must go through the locale formatter so digits localize.
       files: [
-        "apps/web/src/**/*.tsx",
-        "packages/ui/src/**/*.tsx",
+        ...productUiComponentFiles,
         ".oxlint-plugins/__fixtures__/no-unformatted-number.fixture.tsx",
       ],
       rules: {
@@ -3026,8 +3056,10 @@ export default defineConfig({
     },
     {
       files: [
-        "apps/web/src/routes/robots[.]txt.ts",
-        "apps/web/src/routes/sitemap[.]xml.ts",
+        // TanStack's literal-dot filenames: escape the brackets, which a glob
+        // otherwise reads as a character class.
+        "apps/web/src/routes/robots\\[.\\]txt.ts",
+        "apps/web/src/routes/sitemap\\[.\\]xml.ts",
         "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
         "apps/web/src/lib/public-law-sitemap.ts",
         "apps/web/src/features/statutes/statute-sitemap.ts",
@@ -3073,10 +3105,6 @@ export default defineConfig({
           },
         ],
       },
-    },
-    {
-      files: ["apps/web/src/**/appearance-settings.tsx"],
-      rules: { "no-raw-colors/no-raw-colors": "off" },
     },
     {
       files: ["packages/ui/src/**/button.tsx"],
@@ -3183,7 +3211,6 @@ export default defineConfig({
       // behavior, but must not reimplement per-field display branches.
       files: [
         "apps/web/src/components/inspector/entity-metadata-panel.tsx",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
         "apps/web/src/components/workspaces/kanban/kanban-card.tsx",
       ],
@@ -3302,13 +3329,14 @@ export default defineConfig({
     },
     {
       // fetch() without a timeout is allowed in throwaway / non-runtime
-      // surfaces: sandbox playground, load tests, build configs, unit
-      // tests. Product runtime code (apps/api, apps/web, apps/collab,
-      // apps/desktop, packages/*) keeps the guard on.
+      // surfaces: sandbox playground, load tests, tooling scripts, build
+      // configs, unit tests. Product runtime code (apps/api including its
+      // src/scripts workers, apps/web, apps/collab, apps/desktop, packages/*)
+      // keeps the guard on.
       files: [
         "apps/playground/**/*.{ts,tsx}",
         "apps/api/src/tests/**/*.ts",
-        "**/scripts/**",
+        ...toolingScriptFiles,
         "**/*.test.{ts,tsx}",
         "**/*.config.{ts,tsx}",
       ],
@@ -3530,7 +3558,6 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
               "apps/api/src/handlers/sharepoint/graph-oauth.ts",
               "apps/api/src/lib/deepl/client.ts",
-              "apps/api/src/lib/document-processing-provider.ts",
               "apps/api/src/lib/files/gotenberg.ts",
               // This probe reaches only the operator-configured Gotenberg
               // deployment; no request or persisted data selects the origin.
@@ -3557,6 +3584,25 @@ export default defineConfig({
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "off",
+      },
+    },
+    {
+      // The other server runtimes: the collaboration server and the
+      // legal-atlas runner daemons log and reach the network like the API.
+      files: ["apps/collab/src/**/*.ts", "apps/legal-atlas-runner/src/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/collab/src/server-test-process.ts"],
+      rules: {
+        "no-raw-error-logging/no-raw-error-logging": "error",
+        "no-secret-in-log-sink/no-secret-in-log-sink": "error",
+        "require-safe-outbound-target/require-safe-outbound-target": [
+          "error",
+          {
+            allowedFiles: [
+              // Posts only to the operator-configured API origin.
+              "apps/collab/src/server.ts",
+            ],
+          },
+        ],
       },
     },
     {
@@ -3668,20 +3714,6 @@ export default defineConfig({
       },
     },
     {
-      // @stll/business-registries subpath types resolve as error in
-      // type-aware linting because the workspace package dist isn't
-      // always available during local lint runs.
-      files: [
-        "apps/api/src/handlers/contacts/business-registries-lookup.ts",
-        "apps/api/src/handlers/chat/tools/ares-tools.ts",
-      ],
-      rules: {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-call": "off",
-      },
-    },
-    {
       files: ["apps/api/**/*.ts"],
       excludeFiles: [
         // These are the only low-level documents-bucket writers: they own
@@ -3743,7 +3775,6 @@ export default defineConfig({
         "apps/api/scripts/**/*.test.ts",
         "apps/web/src/**/*.test.{ts,tsx}",
         "packages/*/src/**/*.test.{ts,tsx}",
-        "packages/*/src/**/tests/**/*.{ts,tsx}",
         "apps/landing/src/**/*.test.{ts,tsx}",
       ],
       rules: {
@@ -3809,7 +3840,6 @@ export default defineConfig({
         "apps/api/src/tests/**/*.ts",
         "apps/legal-atlas-runner/src/**/*.test.ts",
         "packages/**/*.test.{ts,tsx}",
-        "packages/**/__tests__/**/*.{ts,tsx}",
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
@@ -3957,20 +3987,14 @@ export default defineConfig({
       },
     },
     {
+      // Every route module, including the `public-routes.ts`,
+      // `corpus-routes.ts` and `ui-routes.ts` variants.
       files: [
         "apps/api/src/handlers/**/*routes.ts",
         "apps/api/src/handlers/**/*route.ts",
       ],
       rules: {
         "require-safe-route-handlers/no-direct-handler-config": "error",
-      },
-    },
-    {
-      files: [
-        "apps/api/src/handlers/**/routes.ts",
-        "apps/api/src/handlers/**/*route.ts",
-      ],
-      rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "error",
         "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes": "error",
       },
@@ -4003,8 +4027,10 @@ export default defineConfig({
       // route files define endpoints inline via createSafe*Handler; the rule is
       // enabled for new route files but these are not migrated in this pass.
       files: [
+        "apps/api/src/handlers/case-law/public-routes.ts",
         "apps/api/src/handlers/case-law/routes.ts",
         "apps/api/src/handlers/files/routes.ts",
+        "apps/api/src/handlers/legislation/public-routes.ts",
         "apps/api/src/handlers/search/routes.ts",
         "apps/api/src/handlers/time-entries/routes.ts",
         "apps/api/src/handlers/workspaces/routes.ts",
@@ -4101,7 +4127,6 @@ export default defineConfig({
         "apps/api/src/handlers/smoke/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/well-known/routes.ts",
-        "apps/api/src/handlers/workspaces/events.ts",
       ],
       rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "off",
@@ -4118,13 +4143,8 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/api/src/handlers/search/search.ts"],
-      rules: { "no-body-ownership-ids/no-body-ownership-ids": "off" },
-    },
-    {
       files: ["apps/api/src/lib/docx/**/*.ts"],
       rules: {
-        "no-untyped-updates/no-untyped-updates": "off",
         "unicorn/prefer-modern-dom-apis": "off",
         "unicorn/prefer-dom-node-remove": "off",
         "unicorn/prefer-dom-node-append": "off",
@@ -4149,15 +4169,8 @@ export default defineConfig({
       ],
       plugins: ["jest", "vitest"],
       rules: {
-        "jest/no-hooks": "off",
-        "jest/no-conditional-in-test": "off",
         "jest/no-conditional-expect": "off",
-        "jest/max-expects": "off",
-        "jest/require-hook": "off",
-        "jest/prefer-each": "off",
         "jest/valid-title": "off",
-        "no-console": "off",
-        "require-await": "off",
         "typescript/require-await": "off",
         "require-yield": "off",
         "typescript/unbound-method": "off",
@@ -4171,12 +4184,10 @@ export default defineConfig({
           "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
-        "require-safe-route-handlers/require-safe-route-handlers": "off",
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
         "security-guards/no-unscoped-user-query": "off",
         "vitest/no-focused-tests": "error",
-        "vitest/prefer-importing-vitest-globals": "off",
         // bun:test globals (describe/test/expect/it/…) can resolve as `error`
         // when test files are excluded from a package's main tsconfig.
         // Suppressing unsafe rules for test files avoids false positives that

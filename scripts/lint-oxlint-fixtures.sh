@@ -47,6 +47,5 @@ bun test ./.oxlint-plugins/__tests__/no-layout-motion-classes.test.ts
 
 exec bun --bun oxlint -c oxlint.config.ts \
   --report-unused-disable-directives-severity=error \
-  --deny-warnings \
   --type-aware \
   .oxlint-plugins/__fixtures__
