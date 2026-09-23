@@ -52,7 +52,12 @@ the default provider chain (see `getTanStackTextModelById`).
   values, `source_id` to change a position and its absence to add one, sending
   only what changed, and recovering from a duplicate-issue refusal and a stale
   `expected_updated_at`? Calls run through the production tool pipeline over an
-  in-memory store. Run a small model beside a large one.
+  in-memory store. Run a small model beside a large one. Its behavior tier
+  (`--tier behavior`) activates the shipped `playbook-builder` skill and
+  answers `ask-user` from a script: does the model ask side, governing law,
+  and language before drafting, search only matters the user named, read only
+  the contracts the user confirmed, ask only where the contracts disagree, and
+  never resend an unchanged position?
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
