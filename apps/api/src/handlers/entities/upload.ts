@@ -45,7 +45,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scanned-file";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import {
   allocateFileObject,
   fileContentWithMintedObject,

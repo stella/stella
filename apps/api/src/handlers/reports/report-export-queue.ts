@@ -45,7 +45,7 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
-import { scanUpload } from "@/api/lib/file-scan/scanned-file";
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";

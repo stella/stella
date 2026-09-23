@@ -49,8 +49,8 @@ import type { FileKey } from "@/api/lib/file-key";
 import {
   FileScanRejectedError,
   scanUpload,
-  storedFile,
-} from "@/api/lib/file-scan/scanned-file";
+} from "@/api/lib/file-scan/scan-upload";
+import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   generateImageThumbnail,

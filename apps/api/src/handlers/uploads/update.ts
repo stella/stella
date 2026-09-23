@@ -43,7 +43,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
-} from "@/api/lib/file-scan/scanned-file";
+} from "@/api/lib/file-scan/scan-upload";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";

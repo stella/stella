@@ -4,7 +4,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
-} from "@/api/lib/file-scan/scanned-file";
+} from "@/api/lib/file-scan/scan-upload";
 
 export const scanEmailAttachmentForSave = async ({
   bytes,

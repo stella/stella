@@ -14,7 +14,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scanned-file";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { getS3 } from "@/api/lib/s3";
 import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 import {

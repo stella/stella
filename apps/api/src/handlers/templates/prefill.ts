@@ -25,7 +25,7 @@ import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scanned-file";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";

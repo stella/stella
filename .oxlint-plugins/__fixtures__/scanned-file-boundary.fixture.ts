@@ -1,6 +1,9 @@
 // The brand's schema would mint keys from any string.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { fileKeySchema } from "@/api/lib/file-key";
+// The scan module's mint would wrap unscanned bytes.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 declare class ScannedFile {
   private constructor();
@@ -32,6 +35,7 @@ const _scannedBytes = scanned.bytes;
 
 export const __scannedFileBoundaryFixture = {
   fileKeySchema,
+  mintScannedFile,
   _forgedFile,
   _forgedKey,
   _fromPrototype,

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { scanUpload } from "@/api/lib/file-scan/scanned-file";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
