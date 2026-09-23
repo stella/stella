@@ -17,36 +17,23 @@ import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import {
+  EMAIL_CITATION_BLOCK_MODE,
+  type EmailAttachmentDescriptor,
+  MSG_MIME_TYPE,
   EMAIL_HEADER_CITATION_ID,
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
+  type EmailCitationBlock,
+  type EmailCitationBlockMode,
   type EmailTextAttachmentCharset,
+  MAX_EMAIL_CITATION_BLOCKS,
+  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
 } from "@stll/api-contract";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
-import {
-  EMAIL_CITATION_BLOCK_MODE,
-  type EmailCitationBlock,
-  type EmailCitationBlockMode,
-  MAX_EMAIL_CITATION_BLOCKS,
-  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
-} from "@/api/lib/files/email-citations";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 import { isRecord } from "@/api/lib/type-guards";
-
-export const EML_MIME_TYPE = "message/rfc822";
-export const MSG_MIME_TYPE = "application/vnd.ms-outlook";
-
-export const EMAIL_MIME_TYPES = {
-  [EML_MIME_TYPE]: null,
-  [MSG_MIME_TYPE]: null,
-} as const satisfies Record<string, null>;
-
-const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
-  eml: EML_MIME_TYPE,
-  msg: MSG_MIME_TYPE,
-};
 
 const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   gif: "image/gif",
@@ -70,28 +57,6 @@ const EMAIL_WRITING_DIRECTIONS = {
   rtl: null,
 } as const;
 
-export const isEmailMimeType = (mimeType: string): boolean =>
-  mimeType in EMAIL_MIME_TYPES;
-
-export const resolveEmailMimeType = ({
-  fileName,
-  mimeType,
-}: {
-  fileName: string;
-  mimeType: string;
-}): string | null => {
-  if (isEmailMimeType(mimeType)) {
-    return mimeType;
-  }
-
-  const dotIndex = fileName.lastIndexOf(".");
-  if (dotIndex === -1) {
-    return null;
-  }
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EMAIL_EXTENSION_MIME_TYPES[extension] ?? null;
-};
-
 export class EmailParseError extends TaggedError("EmailParseError")<{
   message: string;
   mimeType: string;
@@ -106,15 +71,6 @@ export type EmailAttachment = {
   fileName: string | null;
   mimeType: string | null;
   bytes: Uint8Array;
-};
-
-export type EmailAttachmentDescriptor = {
-  charset: EmailTextAttachmentCharset | null;
-  id: string;
-  fileName: string | null;
-  mimeType: string | null;
-  sizeBytes: number;
-  previewable: boolean;
 };
 
 type EmailBody =

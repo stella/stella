@@ -19,13 +19,15 @@
 import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { load } from "cheerio";
 
-import { FolioDocxReviewer } from "@stll/folio-core/server";
-
-import { extractText as extractDocxText } from "@/api/lib/docx/extract-text";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
+} from "@stll/api-contract";
+import { FolioDocxReviewer } from "@stll/folio-core/server";
+
+import { extractText as extractDocxText } from "@/api/lib/docx/extract-text";
+import {
   parseEmail,
   parsedEmailToText,
   type EmailAttachment,

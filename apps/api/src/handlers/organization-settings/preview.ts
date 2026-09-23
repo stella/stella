@@ -2,16 +2,14 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { renderMatterReference } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  toReference,
-  toScopeKey,
-  validatePattern,
-} from "@/api/lib/matter-reference";
+import { toScopeKey, validatePattern } from "@/api/lib/matter-reference";
 
 const previewOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.String({ minLength: 1, maxLength: 128 }),
@@ -57,7 +55,7 @@ const previewOrganizationSettingsHandler = async function* ({
   );
 
   const nextValue = (counter?.lastValue ?? 0) + 1;
-  const preview = toReference({
+  const preview = renderMatterReference({
     pattern: body.matterNumberPattern,
     now,
     seq: nextValue,

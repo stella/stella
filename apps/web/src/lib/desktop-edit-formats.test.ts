@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { DOCX_MIME, PPTX_MIME, XLSX_MIME } from "@/lib/consts";
 import {
   canOpenDesktopEdit,
-  DESKTOP_EDIT_FILE_TYPES,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 
@@ -66,12 +66,12 @@ describe("desktop-edit format detection", () => {
   });
 
   test("keeps the supported-format registry closed and application-labelled", () => {
-    expect(Object.keys(DESKTOP_EDIT_FILE_TYPES)).toEqual([
+    expect(Object.keys(DESKTOP_EDIT_FILE_TYPE_DETAILS)).toEqual([
       "docx",
       "pptx",
       "xlsx",
     ]);
-    expect(DESKTOP_EDIT_FILE_TYPES).toMatchObject({
+    expect(DESKTOP_EDIT_FILE_TYPE_DETAILS).toMatchObject({
       docx: { application: "Word", extension: ".docx" },
       pptx: { application: "PowerPoint", extension: ".pptx" },
       xlsx: { application: "Excel", extension: ".xlsx" },

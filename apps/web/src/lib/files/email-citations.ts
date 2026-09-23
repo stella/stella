@@ -11,11 +11,6 @@ export const EMAIL_CITATION_SCROLL_EVENT = "email:scroll-to-citation";
 const EMAIL_CITATION_LOOKUP_EVENT = "email:lookup-citation";
 const EMAIL_CITATION_REGISTRATION_EVENT = "email:citation-registration";
 
-export type EmailCitationBlock = {
-  id: string;
-  text: string;
-};
-
 export type EmailCitationTarget = EmailCitationHrefTarget;
 
 export type EmailCitationSource = {

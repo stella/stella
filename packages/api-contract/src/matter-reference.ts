@@ -65,3 +65,30 @@ export const renderMatterReferencePattern = ({
   }
   return rendered;
 };
+
+type RenderMatterReferenceOptions = {
+  now: Date;
+  padding: number;
+  pattern: string;
+  seq: number;
+};
+
+/**
+ * Render a full reference, with the sequence zero-padded to `padding` digits.
+ * Padding sets a minimum width only: a longer sequence is never truncated.
+ *
+ * Examples (given 2026-02-20, seq=1, padding=3):
+ * - "{YYYY}/{SEQ}" -> "2026/001"
+ * - "CORP-{SEQ}-{YYYY}" -> "CORP-001-2026"
+ */
+export const renderMatterReference = ({
+  now,
+  padding,
+  pattern,
+  seq,
+}: RenderMatterReferenceOptions): string =>
+  renderMatterReferencePattern({
+    now,
+    pattern,
+    sequence: String(seq).padStart(padding, "0"),
+  });

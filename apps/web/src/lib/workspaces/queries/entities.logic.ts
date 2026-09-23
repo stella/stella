@@ -1,6 +1,7 @@
 import { hashKey } from "@tanstack/react-query";
 
 import type { EntityFind } from "@stll/api-contract";
+import type { ViewSort } from "@stll/api/eden-contract";
 
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 
@@ -39,10 +40,7 @@ export const normalizeFind = (
   };
 };
 
-export type ViewSort = {
-  propertyId: string;
-  desc: boolean;
-};
+export type { ViewSort };
 
 export type EntitiesFieldMode = "full" | "visible";
 

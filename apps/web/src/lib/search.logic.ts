@@ -1,10 +1,12 @@
 import { panic } from "better-result";
 
+import { isEmailMimeType } from "@stll/api-contract";
+
 import type {
   GlobalSearchHit,
   GlobalSearchResultType,
 } from "@/lib/api-contract";
-import { DOCX_MIME, isEmailMimeType, PDF_MIME } from "@/lib/consts";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { getSearchTextCandidates } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 

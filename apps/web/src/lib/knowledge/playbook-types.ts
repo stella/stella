@@ -1,8 +1,42 @@
+import type {
+  AskManual,
+  DeterministicCheck,
+  FallbackEntry,
+  GradedPosition,
+  IdealLanguage,
+  Negotiation,
+  PlaybookScope,
+  PlaybookTrigger,
+  Position,
+  PositionSeverity,
+  PositionStandard,
+  PositionStandardSource,
+  ReferencePassage,
+  TierRule,
+} from "@stll/api/eden-contract";
+
 import type { api } from "@/lib/api";
 
-// All playbook position types are inferred from the Eden API surface so the
-// editor's working state and save payload stay in lockstep with the backend
-// `playbookPositionsSchema` (v3). Never hand-redefine the Position shape here.
+// Playbook position types are the backend `playbookPositionsSchema` (v3) types
+// themselves, re-exported by the API, so the editor's working state and save
+// payload stay in lockstep with it. Never hand-redefine the Position shape
+// here; derive from these instead.
+export type {
+  AskManual,
+  DeterministicCheck,
+  FallbackEntry,
+  GradedPosition,
+  IdealLanguage,
+  Negotiation,
+  PlaybookScope,
+  PlaybookTrigger,
+  Position,
+  PositionSeverity,
+  PositionStandard,
+  PositionStandardSource,
+  ReferencePassage,
+  TierRule,
+};
 
 type PlaybookDetailResponse = Awaited<
   ReturnType<ReturnType<typeof api.playbooks>["get"]>
@@ -14,48 +48,31 @@ type PlaybookDetailData = Exclude<
 >;
 
 export type PlaybookPositionsValue = PlaybookDetailData["positions"];
-export type Position = PlaybookPositionsValue["items"][number];
 
 // What the org's reviewers have done with each position, computed from their
 // findings on every read. Keyed by `position.sourceId`.
 export type PlaybookPositionDecisions = PlaybookDetailData["positionDecisions"];
 
-// Scope facets, also inferred rather than hand-listed: a new perspective or
-// trigger added to the backend schema must not need a matching edit here.
-export type PlaybookScope = NonNullable<PlaybookDetailData["scope"]>;
 export type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
-export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
 
 // Advisory approval status (v1) — draft while unreviewed, approved once
 // snapshotted by `POST /playbooks/:playbookId/approve`.
 export type PlaybookApprovalStatus = PlaybookDetailData["status"];
 
 // Discriminated on `mode`; narrow to the concrete variant with `mode === "…"`.
-export type GradedPosition = Extract<Position, { mode: "graded" }>;
 export type ExtractPosition = Extract<Position, { mode: "extract" }>;
-
-export type PositionSeverity = GradedPosition["severity"];
 
 // How it should be, for one graded position: an authored tier ladder or the
 // passages of a reference document someone already negotiated. Grading
 // dispatches on `source`, and so does every editor below.
-export type PositionStandard = GradedPosition["standard"];
-export type PositionStandardSource = PositionStandard["source"];
 export type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
 export type ReferenceStandard = Extract<
   PositionStandard,
   { source: "reference" }
 >;
-export type ReferencePassage = ReferenceStandard["passages"][number];
 
 export type PositionTiers = TieredStandard["tiers"];
-export type TierRule = PositionTiers["acceptable"]["rules"][number];
-export type FallbackEntry = PositionTiers["fallback"]["entries"][number];
-export type IdealLanguage = NonNullable<PositionTiers["acceptable"]["ideal"]>;
-export type DeterministicCheck = NonNullable<GradedPosition["check"]>;
-export type Negotiation = NonNullable<GradedPosition["negotiation"]>;
 export type GradedAskConfig = GradedPosition["ask"];
-export type AskManual = ExtractPosition["ask"];
 export type PositionAskContent = AskManual["content"];
 
 export type PlaybookListResponse = Awaited<

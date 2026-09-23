@@ -157,8 +157,6 @@ true satisfies Exclude<
   ? true
   : never;
 
-export type ViewLayoutType = ContractViewLayoutType;
-
 const hasFiltersField = (value: unknown): value is { filters: unknown } =>
   typeof value === "object" && value !== null && "filters" in value;
 

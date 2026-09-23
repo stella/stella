@@ -3,12 +3,15 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  matchesMatterReferencePattern,
+  renderMatterReference,
+} from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { matchesPattern, previewReference } from "@/lib/matter-reference";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
@@ -26,10 +29,16 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
 
   const { matterNumberPattern: pattern, matterNumberPadding: padding } =
     settings;
-  const example = previewReference({ pattern, padding });
+  const example = renderMatterReference({
+    now: new Date(),
+    padding,
+    pattern,
+    seq: 1,
+  });
   const trimmed = props.value.trim();
   const showWarning =
-    trimmed.length > 0 && !matchesPattern(trimmed, pattern, padding);
+    trimmed.length > 0 &&
+    !matchesMatterReferencePattern(trimmed, pattern, padding);
 
   if (props.variant === "inline") {
     if (showWarning && !props.error) {

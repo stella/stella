@@ -178,7 +178,7 @@ export type LoopBlock = {
   directiveParagraphs: number[];
 };
 
-export type Block = IfBlock | LoopBlock;
+export type DirectiveBlock = IfBlock | LoopBlock;
 
 export type TemplateFieldKind = "string" | "boolean" | "array" | "object";
 

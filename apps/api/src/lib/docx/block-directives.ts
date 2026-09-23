@@ -84,8 +84,8 @@ import {
   normalizeRowBlockMarkers,
 } from "./row-block-markers";
 import type {
-  Block,
   BlockDirective,
+  DirectiveBlock,
   IfBlock,
   IfBranch,
   LoopBlock,
@@ -273,7 +273,7 @@ const scanDirectivesInParagraphs = (
 // ── Block tree parsing ───────────────────────────────────
 
 type ParseResult = {
-  blocks: Block[];
+  blocks: DirectiveBlock[];
   errors: TemplateStructureError[];
 };
 
@@ -284,13 +284,13 @@ type ParseResult = {
 export const parseBlockTree = (
   directives: readonly BlockDirective[],
 ): ParseResult => {
-  const blocks: Block[] = [];
+  const blocks: DirectiveBlock[] = [];
   const errors: TemplateStructureError[] = [];
 
   let i = 0;
 
-  const parseBlocks = (): Block[] => {
-    const result: Block[] = [];
+  const parseBlocks = (): DirectiveBlock[] => {
+    const result: DirectiveBlock[] = [];
 
     while (i < directives.length) {
       const d = directives[i];

@@ -14,7 +14,10 @@ import {
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
+  type EmailCitationBlock,
+  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
   toChatDecisionPassageHref,
+  resolveEmailMimeType,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -85,12 +88,7 @@ import {
   CorpusPayloadUnavailableError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { EmailCitationBlock } from "@/api/lib/files/email-citations";
-import { MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH } from "@/api/lib/files/email-citations";
-import {
-  emailToPreview,
-  resolveEmailMimeType,
-} from "@/api/lib/files/email-to-html";
+import { emailToPreview } from "@/api/lib/files/email-to-html";
 import {
   loadOfficeEvidence,
   resolveOfficeEvidenceFormat,

@@ -109,6 +109,7 @@
     "./utils": "./src/lib/utils.ts",
     "./week": "./src/lib/week.ts",
     "./inspector": "./src/inspector/index.ts",
+    "./inspector/layout-tokens": "./src/inspector/layout-tokens.ts",
     "./kanban": "./src/kanban/index.ts",
     "./theme.css": "./src/styles/theme.css",
     "./components/accordion": "./src/components/accordion.tsx",

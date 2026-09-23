@@ -115,7 +115,7 @@ import {
   type OpenFileInDesktopResult,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPES,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   canOpenDesktopEdit,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
@@ -512,7 +512,7 @@ export const RowActions = ({
     }
 
     const application =
-      DESKTOP_EDIT_FILE_TYPES[desktopEditFileType].application;
+      DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType].application;
     await showDesktopEditOpenResultToast({
       messages: {
         notOpenedDescription: t.rich(

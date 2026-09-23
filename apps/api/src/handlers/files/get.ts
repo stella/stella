@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { status } from "elysia";
 
-import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+import {
+  DOCUMENT_PROPERTIES_MAX_BYTES,
+  resolveEmailMimeType,
+} from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -14,10 +17,7 @@ import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
-import {
-  emailToPreview,
-  resolveEmailMimeType,
-} from "@/api/lib/files/email-to-html";
+import { emailToPreview } from "@/api/lib/files/email-to-html";
 import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
 import {
   FILE_READ_URL_EXPIRY_SECONDS,

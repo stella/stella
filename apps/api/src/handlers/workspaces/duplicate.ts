@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { renderMatterReference } from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { transactionAbortError } from "@/api/db/safe-db";
@@ -43,7 +45,6 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
 import {
@@ -678,7 +679,7 @@ export const createDuplicateWorkspace = (
           });
         }
 
-        const reference = toReference({
+        const reference = renderMatterReference({
           pattern,
           now,
           seq: counter.lastValue,
