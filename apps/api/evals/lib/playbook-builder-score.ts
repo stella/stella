@@ -32,7 +32,7 @@ const TOPIC_PATTERNS = [
   ],
   [
     "side",
-    /\b(side|which party|perspective|role|represent|are you the|are we the|acting for|on behalf of)\b/iu,
+    /\b(side|which party|perspective|role|represent|are you the|are we the|acting for|on behalf of|as the (customer|buyer|seller|supplier|vendor|discloser|disclosing party|recipient|receiving party|licensor|licensee|controller|processor))\b/iu,
   ],
   [
     "type",

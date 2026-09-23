@@ -31,6 +31,10 @@ describe("playbook-builder question topics", () => {
     ["Should I look for signed agreements in your matters?", "contracts"],
     ["Do you have any past executed NDAs you want me to use?", "contracts"],
     ["Which side are you on: buyer or seller?", "side"],
+    [
+      "Are you reviewing these agreements as the customer buying the services?",
+      "side",
+    ],
     ["Which law governs these agreements?", "law"],
     ["Which governing law should the playbook assume?", "law"],
     ["What language should the playbook be written in?", "language"],
