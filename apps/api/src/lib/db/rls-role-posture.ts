@@ -26,3 +26,33 @@ export const applicationRlsRolePostureViolation = (
   }
   return null;
 };
+
+/** Role attributes of the database login the process connects with. */
+export type DatabaseLoginPosture = {
+  loginName: string;
+  bypassesRls: boolean;
+  isSuperuser: boolean;
+  ownedPolicyTables: number;
+};
+
+/**
+ * The login attributes recorded at startup, so each deployment's role layout
+ * is visible in its logs. Empty when the login holds none of them.
+ */
+export const databaseLoginPostureNotes = (
+  posture: DatabaseLoginPosture,
+): string[] => {
+  const notes: string[] = [];
+  if (posture.isSuperuser) {
+    notes.push("login is a superuser");
+  }
+  if (posture.bypassesRls) {
+    notes.push("login has elevated role attributes");
+  }
+  if (posture.ownedPolicyTables > 0) {
+    notes.push(
+      `login owns ${String(posture.ownedPolicyTables)} tables with row-level policies`,
+    );
+  }
+  return notes;
+};

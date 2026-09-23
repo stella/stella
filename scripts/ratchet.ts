@@ -690,6 +690,41 @@ const countDirectAuditLogInserts = (content: string): number => {
   );
 };
 
+// Imports of the root connection handle, by alias or relative path. Request
+// handlers are covered by lint; this keeps the remaining sites visible.
+const ROOT_CONNECTION_MODULE_SUFFIX = "db/root";
+const countDirectRootConnectionImports = (content: string): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source.tsx",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let count = 0;
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.endsWith(ROOT_CONNECTION_MODULE_SUFFIX)
+    ) {
+      continue;
+    }
+    const bindingsNode = statement.importClause?.namedBindings;
+    if (
+      bindingsNode !== undefined &&
+      ts.isNamedImports(bindingsNode) &&
+      bindingsNode.elements.some(
+        (specifier) =>
+          (specifier.propertyName ?? specifier.name).text === "rootDb",
+      )
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 const countInlineTimestampCursorSql = (content: string): number =>
   countMatches(
     stripComments(content),
@@ -2026,6 +2061,18 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
     count: countDirectAuditLogInserts,
+  },
+  {
+    scope: "file",
+    id: "direct-root-connection-imports",
+    description:
+      "imports of the root database connection (`rootDb`) outside request handlers, which lint already covers; new code takes a scoped or purpose-named handle",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/db/root.ts" ||
+      file.startsWith("apps/api/src/handlers/"),
+    count: countDirectRootConnectionImports,
   },
   {
     scope: "file",
