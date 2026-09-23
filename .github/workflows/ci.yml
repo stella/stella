@@ -2,8 +2,7 @@ name: CI Checks
 
 on:
   pull_request:
-    # `labeled` lets adding `ci:full` start a full-depth run.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    types: [opened, synchronize, reopened, ready_for_review]
   # The merge queue builds main plus one pull request and merges only if this
   # workflow reports `ci-result` success on that commit, so release-boundary
   # checks must include merge_group and validate the tree that will land.
@@ -39,9 +38,10 @@ jobs:
       # adds the heavy suites (browsers, services, release images, other
       # platforms): on merge_group and workflow_dispatch, and on a pull
       # request labelled `ci:full`, which a merge that bypasses the queue
-      # needs. Every heavy job gates on `suite_depth == 'full'`, and
-      # ci-result fails any non-pull_request run planned without it.
+      # needs (ci-full-label.yml dispatches this workflow when the label is
+      # added). Every heavy job gates on `suite_depth == 'full'`.
       suite_depth: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')) && 'full' || 'fast' }}
+      changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -351,7 +351,7 @@ jobs:
     name: Changeset present for published package changes
     needs: ci-plan
     if: >-
-      github.event_name == 'pull_request'
+      needs.ci-plan.outputs.changeset_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -3085,18 +3085,47 @@ jobs:
     steps:
       - name: Evaluate CI outcome
         env:
-          API_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.api_image_smoke_required }}
-          API_IMAGE_SMOKE_RESULT: ${{ needs.api-image-smoke.result }}
           EVENT: ${{ github.event_name }}
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; scripts/ci-plan.test.ts requires every job to be
           # in `needs`.
           NEEDS: ${{ toJSON(needs) }}
+          PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
-          WEB_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.web_image_smoke_required }}
-          WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
+          # The ci-plan output each job's `if:` selects it by; null for a job
+          # that always runs at full depth. scripts/ci-plan.test.ts binds each
+          # entry to its job's `if:`, and a job missing here fails the run.
+          JOB_SCOPES: >-
+            {
+            "agent-sandbox-docker": "agent_sandbox_docker_required",
+            "api-image-deps": "api_image_deps_required",
+            "api-image-smoke": "api_image_smoke_required",
+            "changeset": "changeset_required",
+            "ci-browser": null,
+            "ci-checks": null,
+            "ci-tests": null,
+            "code-quality": "package_checks_required",
+            "collab-redis": "collab_redis_required",
+            "desktop-clippy": "desktop_rust_checks_required",
+            "e2e": null,
+            "e2e-landing": "e2e_landing_required",
+            "e2e-production-shard": "e2e_core_required",
+            "e2e-vite-canary": "e2e_core_required",
+            "landing-build": "landing_build_required",
+            "legal-atlas-image": "legal_atlas_image_required",
+            "marketing-screenshots": "marketing_screenshots_required",
+            "migration-upgrade-rehearsal": "migration_rehearsal_required",
+            "mobile-build": "mobile_build_required",
+            "postgres-suites": "package_checks_required",
+            "release-typecheck": "release_typecheck_required",
+            "stack-redaction-browsers": "stack_redaction_browsers_required",
+            "typecheck-baseline": "package_checks_required",
+            "web-build": "web_build_required",
+            "web-image-smoke": "web_image_smoke_required",
+            "windows-scripts": "windows_scripts_required"
+            }
         run: |
           # When the CI plan was skipped (draft PR), all downstream
           # jobs are also skipped. This is expected and should not
@@ -3106,42 +3135,15 @@ jobs:
             exit 0
           fi
 
-          # Heavy suites skip at `fast` depth, which only an unlabelled pull
-          # request uses. Anywhere else a skipped heavy suite would read as a
-          # pass.
-          if [[ "$PLAN_RESULT" == "success" && "$EVENT" != "pull_request" && "$SUITE_DEPTH" != "full" ]]; then
-            echo "::error::$EVENT run planned suite depth '$SUITE_DEPTH'; the heavy suites must run."
-            exit 1
-          fi
-
-          # Selected artifact checks must positively succeed. A skipped,
-          # cancelled, or missing result cannot certify a release candidate.
-          if [[ "$SUITE_DEPTH" == "full" ]] && {
-            [[ "$API_IMAGE_SMOKE_REQUIRED" == "true" && "$API_IMAGE_SMOKE_RESULT" != "success" ]] \
-            || [[ "$WEB_IMAGE_SMOKE_REQUIRED" == "true" && "$WEB_IMAGE_SMOKE_RESULT" != "success" ]]
-          }; then
-            echo "::error::Required release image smoke did not succeed."
-            exit 1
-          fi
-
-          cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
-          failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
-
-          if [[ "$EVENT" == "workflow_dispatch" ]]; then
-            if [[ -n "$failed$cancelled" ]]; then
-              echo "::error::CI checks failed or were cancelled: $failed $cancelled"
-              exit 1
-            fi
-            exit 0
-          fi
-
-          if [[ "$PLAN_RESULT" == "cancelled" ]]; then
+          # Only a pull request run is ever superseded by a newer run of
+          # the same ref; anywhere else a cancelled run certifies nothing.
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" == "pull_request" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
-            echo "::error::CI planning failed."
+            echo "::error::CI planning did not succeed ($PLAN_RESULT)."
             exit 1
           fi
 
@@ -3150,14 +3152,45 @@ jobs:
             exit 1
           fi
 
-          # "cancelled" means cancel-in-progress replaced this
-          # run with a newer one; the newer run is authoritative.
-          if [[ -n "$cancelled" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
-            exit 0
-          fi
-
-          if [[ -n "$failed" ]]; then
-            echo "::error::CI checks failed: $failed"
-            exit 1
-          fi
+          case "$SUITE_DEPTH" in
+            full)
+              # Every job the plan selected must succeed: a skipped or
+              # cancelled one did not check this tree.
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" '
+                [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
+                  | if ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                    elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
+                      (if $result == "success" then empty else "\($job) (planned, \($result))" end)
+                    elif $result == "success" or $result == "skipped" then empty
+                    else "\($job) (\($result))"
+                    end]
+                | join(", ")' <<< "$NEEDS")
+              if [[ -n "$violations" ]]; then
+                echo "::error::CI checks did not succeed: $violations"
+                exit 1
+              fi
+              ;;
+            fast)
+              # Only an unlabelled pull request plans `fast`: its heavy
+              # suites skip by design, and a cancelled job means a newer run
+              # of the same ref replaced this one.
+              if [[ "$EVENT" != "pull_request" ]]; then
+                echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
+                exit 1
+              fi
+              cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
+              if [[ -n "$cancelled" ]]; then
+                echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
+                exit 0
+              fi
+              failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+              if [[ -n "$failed" ]]; then
+                echo "::error::CI checks failed: $failed"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::CI plan produced no suite depth ('$SUITE_DEPTH')."
+              exit 1
+              ;;
+          esac

@@ -116,23 +116,47 @@ if (resultJob.steps.length !== 1 || !resultStep) {
   throw new TypeError("CI result must have exactly one evaluation step");
 }
 
-const SUITE_DEPTH_BY_EVENT = {
-  merge_group: "full",
-  pull_request: "fast",
-  workflow_dispatch: "full",
+const jobScopes = v.parse(
+  v.record(v.string(), v.nullable(v.string())),
+  JSON.parse(resultStep.env["JOB_SCOPES"] ?? ""),
+);
+
+const EVENT = {
+  mergeGroup: "merge_group",
+  pullRequest: "pull_request",
+  workflowDispatch: "workflow_dispatch",
 } as const;
+type Event = (typeof EVENT)[keyof typeof EVENT];
+
+const SUITE_DEPTH = { fast: "fast", full: "full" } as const;
+type SuiteDepth = (typeof SUITE_DEPTH)[keyof typeof SUITE_DEPTH];
+
+const FULL_DEPTH_EVENTS = [EVENT.mergeGroup, EVENT.workflowDispatch] as const;
 
 type EvaluateResultOptions = {
-  event: keyof typeof SUITE_DEPTH_BY_EVENT;
+  event: Event;
   results: Record<string, string>;
-  suiteDepth?: string;
+  suiteDepth?: SuiteDepth | "";
+  unplannedScopes?: readonly string[];
 };
 
+// Runs the ci-result step as GitHub would, with every job succeeding and
+// every scope selected unless the options say otherwise.
 const evaluateResult = ({
   event,
   results,
-  suiteDepth = SUITE_DEPTH_BY_EVENT[event],
+  suiteDepth = event === EVENT.pullRequest
+    ? SUITE_DEPTH.fast
+    : SUITE_DEPTH.full,
+  unplannedScopes = [],
 }: EvaluateResultOptions) => {
+  const plan = Object.fromEntries(
+    Object.values(jobScopes).flatMap((scope) =>
+      scope === null
+        ? []
+        : [[scope, unplannedScopes.includes(scope) ? "false" : "true"]],
+    ),
+  );
   const needs = Object.fromEntries(
     resultJob.needs.map((job) => [
       job,
@@ -142,16 +166,18 @@ const evaluateResult = ({
   const run = Bun.spawnSync({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
-      API_IMAGE_SMOKE_REQUIRED: "true",
-      API_IMAGE_SMOKE_RESULT: needs["api-image-smoke"]?.result ?? "",
       EVENT: event,
+      JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
       PATH: process.env["PATH"] ?? "",
+      PLAN: JSON.stringify({
+        ...plan,
+        suite_depth: suiteDepth,
+        trusted: "true",
+      }),
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
       SUITE_DEPTH: suiteDepth,
       TRUSTED: "true",
-      WEB_IMAGE_SMOKE_REQUIRED: "true",
-      WEB_IMAGE_SMOKE_RESULT: needs["web-image-smoke"]?.result ?? "",
     },
     stdout: "ignore",
     stderr: "ignore",
@@ -159,25 +185,14 @@ const evaluateResult = ({
   return run.exitCode;
 };
 
-test("the required result gate accepts only successful selected image smokes at full depth", () => {
-  expect(resultJob.needs).toContain("api-image-smoke");
-  expect(resultJob.needs).toContain("web-image-smoke");
-  for (const event of ["merge_group", "workflow_dispatch"] as const) {
-    for (const job of ["api-image-smoke", "web-image-smoke"]) {
-      for (const result of ["success", "skipped", "cancelled", "failure", ""]) {
-        expect(
-          evaluateResult({ event, results: { [job]: result } }),
-          `${event} ${job} ${result}`,
-        ).toBe(result === "success" ? 0 : 1);
-      }
-    }
-  }
-});
-
-const workflowIf = (job: unknown) =>
+const jobIf = (job: unknown) =>
   v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
 
 const FULL_DEPTH_PREDICATE = "needs.ci-plan.outputs.suite_depth == 'full'";
+const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+  jobIf(body).includes(FULL_DEPTH_PREDICATE) ? [job] : [],
+);
+const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
@@ -186,9 +201,9 @@ test("the result gate evaluates every job in the workflow", () => {
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   fc.assert(
     fc.property(
-      fc.constantFrom(...resultJob.needs.filter((job) => job !== "ci-plan")),
+      fc.constantFrom(...gatedJobs),
       fc.constantFrom("failure", "timed_out", ""),
-      fc.constantFrom("pull_request", "merge_group", "workflow_dispatch"),
+      fc.constantFrom(...Object.values(EVENT)),
       (job, result, event) => {
         expect(
           evaluateResult({ event, results: { [job]: result } }),
@@ -200,36 +215,97 @@ test("the result gate evaluates every job in the workflow", () => {
   );
 });
 
-test("heavy suites skip on pull requests and run in the merge queue", () => {
-  const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
-    workflowIf(body).includes(FULL_DEPTH_PREDICATE) ? [job] : [],
+test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
+  expect(new Set(Object.keys(jobScopes))).toEqual(new Set(gatedJobs));
+  for (const job of gatedJobs) {
+    const selectedBy = [
+      ...jobIf(ciJobs[job]).matchAll(
+        /needs\.ci-plan\.outputs\.(\w+_required) == 'true'/gu,
+      ),
+    ].map((match) => match[1]);
+    const scope = jobScopes[job];
+    expect(selectedBy, job).toEqual(scope === null ? [] : [scope]);
+  }
+});
+
+test("a full-depth run fails every planned job that did not succeed", () => {
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...gatedJobs),
+      fc.constantFrom("skipped", "cancelled", "failure"),
+      fc.constantFrom(
+        ...FULL_DEPTH_EVENTS,
+        // A `ci:full` pull request.
+        EVENT.pullRequest,
+      ),
+      (job, result, event) => {
+        expect(
+          evaluateResult({
+            event,
+            results: { [job]: result },
+            suiteDepth: SUITE_DEPTH.full,
+          }),
+          `${event} ${job} ${result}`,
+        ).toBe(1);
+      },
+    ),
+    propertyConfig({ numRuns: 100 }),
   );
+});
+
+test("a full-depth run passes jobs whose scope was not planned only when skipped", () => {
+  for (const job of gatedJobs) {
+    const scope = jobScopes[job];
+    if (scope === undefined || scope === null) {
+      continue;
+    }
+    for (const event of FULL_DEPTH_EVENTS) {
+      const unplanned = { event, unplannedScopes: [scope] };
+      expect(
+        evaluateResult({ ...unplanned, results: { [job]: "skipped" } }),
+        `${event} ${job} skipped`,
+      ).toBe(0);
+      expect(
+        evaluateResult({ ...unplanned, results: { [job]: "cancelled" } }),
+        `${event} ${job} cancelled`,
+      ).toBe(1);
+    }
+  }
+});
+
+test("only an unlabelled pull request skips heavy suites or passes a superseded run", () => {
   expect(heavyJobs.length).toBeGreaterThan(0);
-  // Both image smokes are selected here, as for a release: skipping them
-  // passes a pull request and fails any full-depth run.
-  const skippedOnPullRequest = Object.fromEntries(
+  const skippedHeavy = Object.fromEntries(
     heavyJobs.map((job) => [job, "skipped"]),
   );
   expect(
-    evaluateResult({ event: "pull_request", results: skippedOnPullRequest }),
+    evaluateResult({ event: EVENT.pullRequest, results: skippedHeavy }),
   ).toBe(0);
-  // A `ci:full` pull request runs at full depth and must run them too.
   expect(
     evaluateResult({
-      event: "pull_request",
-      results: skippedOnPullRequest,
-      suiteDepth: "full",
+      event: EVENT.pullRequest,
+      results: { "ci-tests": "cancelled" },
     }),
-  ).toBe(1);
-  for (const event of ["merge_group", "workflow_dispatch"] as const) {
-    expect(evaluateResult({ event, results: skippedOnPullRequest })).toBe(1);
-    for (const suiteDepth of ["fast", ""]) {
+  ).toBe(0);
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "ci-plan": "cancelled" },
+    }),
+  ).toBe(0);
+  for (const event of FULL_DEPTH_EVENTS) {
+    expect(evaluateResult({ event, results: {} }), event).toBe(0);
+    expect(evaluateResult({ event, results: skippedHeavy }), event).toBe(1);
+    expect(
+      evaluateResult({ event, results: { "ci-plan": "cancelled" } }),
+      event,
+    ).toBe(1);
+    for (const suiteDepth of [SUITE_DEPTH.fast, ""] as const) {
       expect(
         evaluateResult({ event, results: {}, suiteDepth }),
         `${event} at depth '${suiteDepth}'`,
       ).toBe(1);
     }
-    expect(evaluateResult({ event, results: {} })).toBe(0);
   }
 });
 

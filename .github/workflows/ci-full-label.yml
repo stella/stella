@@ -1,0 +1,39 @@
+name: CI full label
+
+# Adding `ci:full` to a pull request runs CI Checks at full depth on its head,
+# so a merge that bypasses the merge queue still has the heavy suites behind
+# it. Later pushes pick the label up from the pull_request payload. Listening
+# to `labeled` here instead of in ci.yml keeps other labels from restarting CI.
+#
+# pull_request_target runs this file from the base branch with a write token:
+# it never checks out or runs pull request code, and reads only event fields
+# passed through the environment.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] reads event fields only, never checks out or executes PR code
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    if: github.event.label.name == 'ci:full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Run CI Checks at full depth on the pull request head
+        env:
+          BASE_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # A dispatch can only target a branch of this repository.
+          if [[ "$HEAD_REPO" != "$BASE_REPO" ]]; then
+            echo "::error::Pull request #$PR_NUMBER comes from $HEAD_REPO; a full run is only available through the merge queue."
+            exit 1
+          fi
+          gh workflow run ci.yml --repo "$BASE_REPO" --ref "$HEAD_REF"
+          echo "Dispatched CI Checks at full depth for #$PR_NUMBER ($HEAD_REF)."
