@@ -238,7 +238,7 @@ const LEGACY_PRESENCE_PAGE = 10;
  * Whether the source still holds any object of the older layout. Read one
  * level deep, where those keys sit; an inconclusive page answers yes.
  */
-export const sourceHoldsLegacyRawObjects = async (
+const sourceHoldsLegacyRawObjects = async (
   sourceId: string,
   signal: AbortSignal,
 ): Promise<boolean> => {

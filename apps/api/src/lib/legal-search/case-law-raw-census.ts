@@ -47,8 +47,7 @@ export const RAW_CENSUS_MODE = {
   APPLY: "apply",
 } as const;
 
-export type RawCensusMode =
-  (typeof RAW_CENSUS_MODE)[keyof typeof RAW_CENSUS_MODE];
+type RawCensusMode = (typeof RAW_CENSUS_MODE)[keyof typeof RAW_CENSUS_MODE];
 
 export type RawCensusCursor = {
   sourceId: SafeId<"caseLawSource">;
@@ -56,7 +55,7 @@ export type RawCensusCursor = {
   startAfter: string | null;
 };
 
-export type RawCensusCounts = Record<RawPrefixState, number> & {
+type RawCensusCounts = Record<RawPrefixState, number> & {
   /** Unowned prefixes whose newest object is still inside the grace. */
   recent: number;
   /** Keys under the documents prefix that name no decision id. */

@@ -43,7 +43,7 @@ export const RAW_SOURCE_FAMILY = {
   LEGISLATION: "legislation",
 } as const;
 
-export type RawSourceFamily =
+type RawSourceFamily =
   (typeof RAW_SOURCE_FAMILY)[keyof typeof RAW_SOURCE_FAMILY];
 
 /** The stored document one raw object belongs to. */
@@ -117,7 +117,7 @@ export const rawSourcePayloadKey = ({
  * erasure sweeps the document's prefix again once every write that could
  * have started before it is over; see {@link RAW_SOURCE_ERASURE_SETTLE_MS}.
  */
-export const RAW_SOURCE_WRITE_WINDOW_MS = 10 * 60 * 1000;
+const RAW_SOURCE_WRITE_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * When an erasure's last sweep may run: past the write window, plus far more
@@ -126,7 +126,7 @@ export const RAW_SOURCE_WRITE_WINDOW_MS = 10 * 60 * 1000;
  */
 export const RAW_SOURCE_ERASURE_SETTLE_MS = 6 * RAW_SOURCE_WRITE_WINDOW_MS;
 
-export class RawSourceWriteWindowClosedError extends TaggedError(
+class RawSourceWriteWindowClosedError extends TaggedError(
   "RawSourceWriteWindowClosedError",
 )<{ message: string }> {}
 
@@ -373,7 +373,7 @@ export type HomedRawPayload = {
   copies: RawObjectCopy[];
 };
 
-export class RawSourceObjectUnhomeableError extends TaggedError(
+class RawSourceObjectUnhomeableError extends TaggedError(
   "RawSourceObjectUnhomeableError",
 )<{ message: string; location: string }> {}
 
@@ -437,9 +437,7 @@ export const homeRawPayloadObjects = ({
   );
 };
 
-export class RawSourceObjectCopyError extends TaggedError(
-  "RawSourceObjectCopyError",
-)<{
+class RawSourceObjectCopyError extends TaggedError("RawSourceObjectCopyError")<{
   message: string;
   fromKey: string;
 }> {}

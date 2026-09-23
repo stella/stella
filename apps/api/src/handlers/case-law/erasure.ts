@@ -148,7 +148,7 @@ type RawErasure =
  * they are shared by content, so they go only with the source-wide legacy
  * sweep, and the erasure's sweep entry stays until they have.
  */
-export type LegacyRawErasure = Extract<
+type LegacyRawErasure = Extract<
   CaseLawRawSweepOutcome,
   { type: "swept" }
 >["legacy"];

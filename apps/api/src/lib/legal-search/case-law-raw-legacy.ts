@@ -37,7 +37,7 @@ export const LEGACY_RAW_SWEEP_MODE = {
   APPLY: "apply",
 } as const;
 
-export type LegacyRawSweepMode =
+type LegacyRawSweepMode =
   (typeof LEGACY_RAW_SWEEP_MODE)[keyof typeof LEGACY_RAW_SWEEP_MODE];
 
 type CensusCounts = RawLayoutPageResult["counts"];

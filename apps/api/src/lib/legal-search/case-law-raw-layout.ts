@@ -62,8 +62,7 @@ export const RAW_LAYOUT_MODE = {
   APPLY: "apply",
 } as const;
 
-export type RawLayoutMode =
-  (typeof RAW_LAYOUT_MODE)[keyof typeof RAW_LAYOUT_MODE];
+type RawLayoutMode = (typeof RAW_LAYOUT_MODE)[keyof typeof RAW_LAYOUT_MODE];
 
 /** What became of one decision a page read. */
 export const RAW_LAYOUT_ROW_OUTCOME = {
@@ -86,7 +85,7 @@ export const RAW_LAYOUT_ROW_OUTCOME = {
   RETRY: "retry",
 } as const;
 
-export type RawLayoutRowOutcome =
+type RawLayoutRowOutcome =
   (typeof RAW_LAYOUT_ROW_OUTCOME)[keyof typeof RAW_LAYOUT_ROW_OUTCOME];
 
 type RawLayoutRow = {
