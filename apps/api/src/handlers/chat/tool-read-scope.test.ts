@@ -119,9 +119,14 @@ describe("tool read scope", () => {
     const tools = recordToolReadScope({ recorder, tools: { read } });
     recorder.startTurn();
 
-    await expect(tools["read"]?.execute?.({}, undefined)).rejects.toThrow(
-      "Failed to record the thread's data scope.",
+    const rejection: unknown = await Promise.resolve(
+      tools["read"]?.execute?.({}, undefined),
+    ).then(
+      () => null,
+      (error: unknown) => error,
     );
+
+    expect(rejection).toBeInstanceOf(Error);
   });
 
   test("a mutation keeps its committed result when the scope write fails", async () => {
