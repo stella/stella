@@ -2,9 +2,9 @@
  * One result as a row of the workspace table, whatever the result is.
  *
  * The grid, the pinning and the cells are the shell's; this is what a
- * public-law results row adds: the number-or-checkbox cell every row has, the
- * click and the Enter that open the result, and the marker saying which row
- * the inspector is showing. What opening means, and which row is showing, is
+ * public-law results row adds: the number cell every row has (with a checkbox
+ * where the page acts on picked rows), the click and the Enter that open the
+ * result, and the marker saying which row the inspector is showing. What opening means, and which row is showing, is
  * the row host's.
  */
 
@@ -12,7 +12,10 @@ import type React from "react";
 import { useCallback, useRef } from "react";
 
 import { flexRender } from "@tanstack/react-table";
-import { row_getIsSelected } from "@tanstack/react-table/static-functions";
+import {
+  row_getCanSelect,
+  row_getIsSelected,
+} from "@tanstack/react-table/static-functions";
 
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -143,13 +146,19 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       <PublicLawRowCells
         contentMode={contentMode}
         selectCell={
-          <SelectRowContent
-            index={index}
-            label={rowLabel}
-            lastSelectedIndex={lastSelectedIndex}
-            row={row}
-            table={table}
-          />
+          row_getCanSelect(row) ? (
+            <SelectRowContent
+              index={index}
+              label={rowLabel}
+              lastSelectedIndex={lastSelectedIndex}
+              row={row}
+              table={table}
+            />
+          ) : (
+            <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums">
+              {rowLabel}
+            </span>
+          )
         }
         visibleCells={visibleCells}
       />

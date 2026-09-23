@@ -37,12 +37,14 @@ import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
+import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
 import type {
   StatuteRowData,
   TableCellContext,
   TableColumnDef,
   TableHeaderContext,
 } from "@/components/workspaces/table/types";
+import { selectColId } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import {
   statuteListLinkTarget,
   useOpenStatuteTab,
@@ -188,12 +190,32 @@ const useStatuteTableColumns = (): TableColumnDef<StatuteRowData>[] => {
   // Rebuilt only when the words change: a controlled table handed new column
   // definitions every render loops.
   return useMemo(
-    () =>
-      STATUTE_COLUMN_IDS.map((column) =>
+    () => [
+      ROW_NUMBER_COLUMN,
+      ...STATUTE_COLUMN_IDS.map((column) =>
         statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
       ),
+    ],
     [t],
   );
+};
+
+const renderNothing = () => null;
+
+/**
+ * The utility column the row numbers stand in, as in the decision table. The
+ * row draws its cell; the list picks nothing, so there is no checkbox.
+ */
+const ROW_NUMBER_COLUMN: TableColumnDef<StatuteRowData> = {
+  id: selectColId,
+  size: SELECT_COLUMN_SIZE,
+  minSize: SELECT_COLUMN_SIZE,
+  enableSorting: false,
+  enableHiding: false,
+  enableResizing: false,
+  enablePinning: true,
+  header: renderNothing,
+  cell: renderNothing,
 };
 
 const statuteColumnDef = (

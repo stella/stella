@@ -155,6 +155,9 @@ export const PublicLawTable = <
     columns,
     defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
     getRowId,
+    // Without a selection to report to, the select column draws row numbers
+    // only: no checkbox offers a pick nothing on the page acts on.
+    enableRowSelection: selection !== undefined,
     state: tableState.state,
     ...tableState.listeners,
   });
