@@ -11,7 +11,7 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -27,8 +27,18 @@ import {
   readCzRegionalChain,
   readCzRegionalDocument,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import type {
+  CzRegionalApiItem,
+  CzRegionalBuildResult,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { errorTag } from "@/api/lib/errors/error-tag";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
+import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -361,5 +371,257 @@ describe("the decision type is the publisher's enum in the local language", () =
         built.type === "built" ? built.decision.documentAst : null,
       ),
     ).toContain("TRESTNÍ PŘÍKAZ");
+  });
+});
+
+/**
+ * The document payload's metadata is validated only as a record, and the
+ * publisher sends `null` for a key it leaves empty. The three keys a row is
+ * built from are read at the boundary: `null` is no value, and any other shape
+ * is refused as the field it is rather than left to a bare `TypeError`.
+ */
+describe("document metadata the publisher sends null or reshaped", () => {
+  const assembleWith = async (
+    overrides: Record<string, unknown>,
+  ): Promise<CzRegionalBuildResult> =>
+    assembleCzRegionalDecision({
+      item: await itemByDocket(LISTING, APPELLATE_DOCKET),
+      document: readCzRegionalDocument(
+        await documentWithMetadata(APPELLATE_DOCUMENT, overrides),
+      ),
+      chain: null,
+    });
+
+  const builtWith = async (
+    overrides: Record<string, unknown>,
+  ): Promise<IngestionResult> => {
+    const built = await assembleWith(overrides);
+    return built.type === "built"
+      ? built.decision
+      : panic(`did not build: ${built.type}`);
+  };
+
+  const expectRefusedAs = async (
+    overrides: Record<string, unknown>,
+    field: UnpersistableDecisionField,
+  ): Promise<void> => {
+    const thrown = await assembleWith(overrides).then(
+      () => panic("expected the build to be refused"),
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(UnpersistableDecisionFieldError);
+    expect(errorTag(thrown)).toBe("UnpersistableDecisionFieldError");
+    expect(
+      thrown instanceof UnpersistableDecisionFieldError
+        ? thrown.field
+        : undefined,
+    ).toBe(field);
+  };
+
+  test.each([
+    ["first", { firstName: null, lastName: "Mazáková" }, "Mazáková"],
+    ["last", { firstName: "Dana", lastName: null }, "Dana"],
+  ])(
+    "a solver with a null %s name keeps the part it states",
+    async (_part, solver, printed) => {
+      const decision = await builtWith({ solver });
+
+      expect(decision.judges).toEqual([
+        { role: "rapporteur", nameAsPrinted: printed },
+      ]);
+    },
+  );
+
+  test("a solver with no name part names no judge", async () => {
+    const decision = await builtWith({
+      solver: { firstName: null, lastName: null },
+    });
+
+    expect(decision.judges).toBeUndefined();
+  });
+
+  test.each([
+    ["a number", 7],
+    ["a list", ["Dana", "Mazáková"]],
+    ["a record with a non-string name", { firstName: 7, lastName: "M" }],
+  ])(
+    "a solver sent as %s is refused as a judge name",
+    async (_shape, solver) => {
+      await expectRefusedAs(
+        { solver },
+        UNPERSISTABLE_DECISION_FIELDS.JUDGE_NAME,
+      );
+    },
+  );
+
+  test("null affectedDocs states no cited cases", async () => {
+    const decision = await builtWith({ affectedDocs: null });
+
+    expect(decision.publisherCitedCases).toBeUndefined();
+  });
+
+  test.each([
+    ["an object", { caseNumber: { senate: 18 } }],
+    ["a list holding null", [null]],
+    ["a list holding a string", ["18 C 130/2024"]],
+  ])(
+    "affectedDocs sent as %s is refused as publisher citations",
+    async (_shape, affectedDocs) => {
+      await expectRefusedAs(
+        { affectedDocs },
+        UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
+      );
+    },
+  );
+
+  test("a relation with a null case number cites nothing", async () => {
+    const decision = await builtWith({
+      affectedDocs: [{ caseNumber: null, courtCode: "OSHK" }],
+    });
+
+    expect(decision.publisherCitedCases).toBeUndefined();
+  });
+
+  test.each([
+    ["a partial docket", { senate: 18 }],
+    ["a string", "18 C 130/2024"],
+  ])(
+    "a relation case number sent as %s is refused as publisher citations",
+    async (_shape, caseNumber) => {
+      await expectRefusedAs(
+        { affectedDocs: [{ caseNumber, courtCode: "OSHK" }] },
+        UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
+      );
+    },
+  );
+
+  test("a null court code is a court's document", async () => {
+    const built = await assembleWith({ courtCode: null });
+
+    expect(built.type).toBe("built");
+  });
+
+  test.each([
+    ["a number", 7],
+    ["an object", { code: "NONE" }],
+  ])(
+    "a court code sent as %s is refused as a court code",
+    async (_shape, courtCode) => {
+      await expectRefusedAs(
+        { courtCode },
+        UNPERSISTABLE_DECISION_FIELDS.COURT_CODE,
+      );
+    },
+  );
+});
+
+describe("the crawl keeps a refused row as its listing", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    mock.restore();
+  });
+
+  /** Crawl one day page whose district document carries `districtMetadata`. */
+  const crawlDay = async ({
+    cursor,
+    withAppellate,
+    districtMetadata,
+  }: {
+    cursor: string;
+    withAppellate: boolean;
+    districtMetadata: Record<string, unknown>;
+  }): Promise<Awaited<ReturnType<typeof czRegionalAdapter.fetchPage>>> => {
+    const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
+    const bodies = new Map([
+      [
+        district.odkaz ?? panic("the district row links no document"),
+        await documentWithMetadata(DISTRICT_DOCUMENT, districtMetadata),
+      ],
+      [
+        appellate.odkaz ?? panic("the appellate row links no document"),
+        await readFixture(APPELLATE_DOCUMENT),
+      ],
+    ]);
+    const listing = JSON.stringify({
+      items: withAppellate ? [district, appellate] : [district],
+      totalPages: 1,
+      pageNumber: 0,
+    });
+    globalThis.fetch = asFetchMock(
+      async (input: string) =>
+        await Promise.resolve(
+          new Response(bodies.get(input) ?? listing, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+    );
+    return await czRegionalAdapter.fetchPage(cursor, {});
+  };
+
+  test("a refused row is stored listing-only beside the rest of the page", async () => {
+    const page = await crawlDay({
+      cursor: "2025-06-11:0",
+      withAppellate: true,
+      districtMetadata: { courtCode: 7 },
+    });
+
+    const decisions = page.unwrap().decisions;
+    expect(
+      decisions.map(({ caseNumber, isListingOnly }) => ({
+        caseNumber,
+        isListingOnly,
+      })),
+    ).toEqual([
+      { caseNumber: "18 C 130/2024", isListingOnly: true },
+      { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+    ]);
+    // The raw listing row is what a later replay or reconciliation rebuilds it
+    // from, so the listing-only row carries it and nothing else.
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decisions[0]?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing"]);
+  });
+
+  test("a day of refused rows is not an empty day to gap-skip past", async () => {
+    // Thirty empty days in a row would make an empty day skip a week ahead.
+    const page = await crawlDay({
+      cursor: "2025-06-11:0:30",
+      withAppellate: false,
+      districtMetadata: { courtCode: 7 },
+    });
+
+    expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
+  });
+
+  test("an assembly failure other than a refusal halts the page", async () => {
+    // The first serialization of the district listing row fails as a defect
+    // would; a listing-only fallback would serialize it again and succeed.
+    const stringify = JSON.stringify.bind(JSON);
+    let failed = false;
+    spyOn(JSON, "stringify").mockImplementation(
+      (value: unknown, replacer?: undefined, space?: string | number) => {
+        if (
+          !failed &&
+          isRecord(value) &&
+          value["jednaciCislo"] === DISTRICT_DOCKET
+        ) {
+          failed = true;
+          throw new Error("assembly defect");
+        }
+        return stringify(value, replacer, space);
+      },
+    );
+
+    const page = await crawlDay({
+      cursor: "2025-06-11:0",
+      withAppellate: true,
+      districtMetadata: {},
+    });
+
+    expect(failed).toBe(true);
+    expect(page.isErr()).toBe(true);
   });
 });
