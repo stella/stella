@@ -34,6 +34,27 @@ type PredictionContext = {
   actorId: string;
 };
 
+type StatusEvent = Extract<ClaimReviewEvent, { kind: "status" }>;
+
+/** A status set by one reviewer on one claim; clearing it clears its origin. */
+const predictStatus = (
+  status: StatusEvent["status"],
+): Pick<ClaimReview, "status" | "statusOrigin"> => {
+  switch (status) {
+    case null: {
+      return { status: null, statusOrigin: null };
+    }
+    case "reviewed":
+    case "disputed": {
+      return { status, statusOrigin: "single" };
+    }
+    default: {
+      status satisfies never;
+      return panic(`Unhandled review status: ${String(status)}`);
+    }
+  }
+};
+
 export const predictClaimReview = (
   current: ClaimReview | null,
   event: ClaimReviewEvent,
@@ -43,12 +64,7 @@ export const predictClaimReview = (
   const decided = { decidedAt: at, decidedBy: actorId };
   switch (event.kind) {
     case "status": {
-      return {
-        ...review,
-        ...decided,
-        status: event.status,
-        statusOrigin: event.status === null ? null : "single",
-      };
+      return { ...review, ...decided, ...predictStatus(event.status) };
     }
     case "override": {
       return { ...review, ...decided, override: event.state };

@@ -6,6 +6,7 @@
 
 import * as React from "react";
 
+import { panic } from "better-result";
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -358,8 +359,17 @@ const claimMatchesFilter = (
     case "reviewed": {
       return isSettled(claim.review);
     }
-    default: {
+    case "supported":
+    case "tension":
+    case "contradicted":
+    case "nocover":
+    case "notverifiable":
+    case "recordconflict": {
       return state === filter;
+    }
+    default: {
+      filter satisfies never;
+      return panic(`Unhandled verdict filter: ${String(filter)}`);
     }
   }
 };

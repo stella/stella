@@ -4,6 +4,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { ArrowLeftIcon, PlayIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -147,7 +148,7 @@ const RunBody = ({ workspaceId, run, listId, onOpenRun }: RunBodyProps) => {
     }
     default: {
       run.status satisfies never;
-      return null;
+      return panic(`Unhandled verification status: ${String(run.status)}`);
     }
   }
 };

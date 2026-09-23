@@ -310,7 +310,6 @@ const InterpretationNoteEditor = ({
       <Textarea
         aria-label={t("avt.anchorFacts.interpretationNote")}
         autoFocus
-        dir="auto"
         onChange={(event) => setDraft(event.target.value)}
         placeholder={t("avt.anchorFacts.interpretationNotePlaceholder")}
         value={draft}

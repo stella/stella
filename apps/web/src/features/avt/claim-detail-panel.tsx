@@ -393,22 +393,24 @@ const decisionState = (review: ClaimReview | null): ReviewDecisionState => {
 const DecisionStatus = ({ review }: { review: ClaimReview | null }) => {
   const t = useTranslations();
   const format = useFormatter();
-  if (review === null || review.status === null || review.decidedAt === null) {
+  const status = review?.status ?? null;
+  const decidedAtIso = review?.decidedAt ?? null;
+  if (status === null || decidedAtIso === null) {
     return null;
   }
   const decidedAt = format.dateTime(
-    Temporal.Instant.from(review.decidedAt).epochMilliseconds,
+    Temporal.Instant.from(decidedAtIso).epochMilliseconds,
     MEDIUM_DATE_SHORT_TIME_FORMAT,
   );
   return (
     <ReviewStatusBadge
       size="sm"
-      tone={review.status === "reviewed" ? "success" : "destructive"}
+      tone={status === "reviewed" ? "success" : "destructive"}
       variant="solid"
     >
-      {review.status === "reviewed"
+      {status === "reviewed"
         ? t("avt.review.reviewed", {
-            origin: review.statusOrigin ?? "single",
+            origin: review?.statusOrigin ?? "single",
             decidedAt,
           })
         : t("avt.review.disputed", { decidedAt })}
@@ -436,7 +438,6 @@ const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
         <Textarea
           aria-label={t("avt.claimDetail.note.add")}
           autoFocus
-          dir="auto"
           onChange={(event) => setDraft(event.target.value)}
           placeholder={t("avt.claimDetail.note.placeholder")}
           value={draft}
@@ -667,7 +668,8 @@ const FactCard = ({
 
 const FactBody = ({ fact }: { fact: EvidenceFact }) => {
   const t = useTranslations();
-  const quote = fact.sources.find((source) => source.quote !== null)?.quote;
+  const quote =
+    fact.sources.find((source) => source.quote !== null)?.quote ?? null;
   return (
     <div className="space-y-2 px-3 py-2.5">
       <p className="text-sm leading-relaxed" dir="auto">
@@ -675,7 +677,7 @@ const FactBody = ({ fact }: { fact: EvidenceFact }) => {
       </p>
       <MediumChip medium={fact.medium} />
       <InterpNote note={fact.interpretationNote} />
-      {quote !== undefined && quote !== null && (
+      {quote !== null && (
         <p
           className="text-muted-foreground border-s-2 ps-2 text-xs italic"
           dir="auto"

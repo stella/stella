@@ -24,6 +24,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { cn } from "@stll/ui/utils";
 
 import type { SaveState } from "@/features/avt/save-state.logic";
 import type {
@@ -219,11 +220,12 @@ export const SaveIndicator = ({ state }: { state: SaveState }) => {
   return (
     <span
       aria-live="polite"
-      className={
+      className={cn(
+        "text-2xs",
         state === "failed"
-          ? "text-destructive-foreground text-2xs"
-          : "text-muted-foreground text-2xs"
-      }
+          ? "text-destructive-foreground"
+          : "text-muted-foreground",
+      )}
     >
       {t(SAVE_STATE_KEYS[state])}
     </span>

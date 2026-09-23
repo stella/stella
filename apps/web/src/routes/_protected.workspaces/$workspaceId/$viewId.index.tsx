@@ -1,5 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { AvtRoute } from "@/features/avt/avt-route";
@@ -196,7 +197,7 @@ function RouteComponent() {
       );
     default: {
       activeView.layout.type satisfies never;
-      return null;
+      return panic(`Unhandled view layout: ${String(activeView.layout.type)}`);
     }
   }
 }
