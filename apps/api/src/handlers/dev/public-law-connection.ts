@@ -20,6 +20,10 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 const CONNECT_COMMAND_TIMEOUT_MS = 120_000;
 const PROBE_TIMEOUT_MS = 5000;
+// A connector may daemonize before its tunnel accepts connections; readiness
+// gets ~15 s of doubling waits before the run is recorded as failed.
+const READINESS_ATTEMPTS = 5;
+const READINESS_FIRST_DELAY_MS = 1000;
 const FAILURE_TAIL_CHARS = 500;
 const SEARCH_CLUSTER = "q09";
 
@@ -115,6 +119,19 @@ const probeCorpus = async (): Promise<ProbeOutcome> => {
     : { status: "unreachable", reason: reasons.join("; ") };
 };
 
+const awaitCorpusReadiness = async (): Promise<ProbeOutcome> => {
+  let probe = await probeCorpus();
+  for (
+    let attempt = 1;
+    attempt < READINESS_ATTEMPTS && probe.status === "unreachable";
+    attempt++
+  ) {
+    await Bun.sleep(READINESS_FIRST_DELAY_MS * 2 ** (attempt - 1));
+    probe = await probeCorpus();
+  }
+  return probe;
+};
+
 const readTail = async (filePath: string): Promise<string> => {
   const text = await Bun.file(filePath).text();
   return text.trim().slice(-FAILURE_TAIL_CHARS);
@@ -145,7 +162,7 @@ const runConnectCommand = async (command: string): Promise<void> => {
     lastFailure = `Connect command failed (${exit})${tail ? `: ${tail}` : ""}`;
     return;
   }
-  const probe = await probeCorpus();
+  const probe = await awaitCorpusReadiness();
   lastFailure =
     probe.status === "reachable"
       ? null
