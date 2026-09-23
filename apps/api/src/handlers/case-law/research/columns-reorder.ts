@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
 import {
@@ -11,6 +11,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
   description:
@@ -46,21 +47,28 @@ const reorderResearchColumns = createSafeRootHandler(
         if (existingIds.size !== columnIds.length) {
           return { status: "mismatch" as const };
         }
-        for (const [index, columnId] of columnIds.entries()) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the columns an organization may hold (the body schema's maxItems), inside one transaction
-          await tx
-            .update(caseLawResearchColumns)
-            .set({ position: index + 1 })
-            .where(
-              and(
-                eq(caseLawResearchColumns.id, columnId),
-                eq(
-                  caseLawResearchColumns.organizationId,
-                  session.activeOrganizationId,
-                ),
+        await tx
+          .update(caseLawResearchColumns)
+          .set({
+            position: sqlCaseFragment({
+              branches: columnIds.map(
+                (columnId, index) =>
+                  sql`when ${caseLawResearchColumns.id} = ${columnId} then ${index + 1}::integer`,
               ),
-            );
-        }
+              // The WHERE clause restricts the update to the ids the branches
+              // name, so the ELSE only ever renders; it never evaluates.
+              fallback: sql`${caseLawResearchColumns.position}`,
+            }),
+          })
+          .where(
+            and(
+              eq(
+                caseLawResearchColumns.organizationId,
+                session.activeOrganizationId,
+              ),
+              inArray(caseLawResearchColumns.id, columnIds),
+            ),
+          );
         await recordAuditEvent(
           tx,
           columnIds.map((columnId, index) => ({

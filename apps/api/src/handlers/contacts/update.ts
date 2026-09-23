@@ -29,7 +29,7 @@ import {
   enqueueContactSearchRepairs,
   flushContactSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(contactTypeSchema),
@@ -95,25 +95,18 @@ export const updateContactHandler = async function* ({
   }
 
   if (attorneyIds.length > 0) {
-    const uniqueAttorneyIds = [...new Set(attorneyIds)];
-    const hasInvalidAttorney = yield* Result.await(
-      safeDb(async (tx) => {
-        for (const attorneyId of uniqueAttorneyIds) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded: at most two attorney ids per request, deduplicated
-          const validAttorneyId = await validateOrgUserId(
+    const validAttorneyIds = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await validateOrgUserIds(
             tx,
-            brandPersistedUserId(attorneyId),
+            attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
             organizationId,
-          );
-          if (!validAttorneyId) {
-            return true;
-          }
-        }
-        return false;
-      }),
+          ),
+      ),
     );
 
-    if (hasInvalidAttorney) {
+    if (!validAttorneyIds) {
       return Result.err(
         new HandlerError({
           status: 400,

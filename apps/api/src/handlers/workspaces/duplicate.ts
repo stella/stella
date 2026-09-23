@@ -6,8 +6,8 @@ import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { transactionAbortError } from "@/api/db/safe-db";
 import {
-  entities,
-  fields,
+  type entities,
+  type fields,
   matterCounters,
   properties,
   propertyDependencies,
@@ -30,7 +30,11 @@ import {
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
-import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
+import {
+  type CurrentVersionAssignment,
+  insertEntityBatch,
+} from "@/api/lib/entity-versions/insert-entity-batch";
+import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -817,6 +821,13 @@ export const createDuplicateWorkspace = (
             ).length,
           });
           let nextStampIndex = 0;
+          // Ids are minted here and parents resolve from `entityIdMap`, so the
+          // loop only builds rows and `insertEntityBatch` writes them after it;
+          // `orderEntitiesForDuplicate` puts parents first.
+          const entityRows: (typeof entities.$inferInsert)[] = [];
+          const versionRows: EntityVersionValues[] = [];
+          const currentVersions: CurrentVersionAssignment[] = [];
+          const fieldRows: (typeof fields.$inferInsert)[] = [];
 
           for (const source of entitiesToDuplicate) {
             if (!source.currentVersion) {
@@ -839,8 +850,7 @@ export const createDuplicateWorkspace = (
               ? (entityIdMap.get(source.parentId) ?? null)
               : null;
 
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: children reference parent IDs created in earlier iterations via entityIdMap; also the version insert and currentVersionId update just below depend on this row
-            await tx.insert(entities).values({
+            entityRows.push({
               id: newEntityId,
               workspaceId: targetWorkspaceId,
               kind: source.kind,
@@ -877,8 +887,7 @@ export const createDuplicateWorkspace = (
               metadata: source.metadata,
             });
 
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-            await insertEntityVersion(tx, {
+            versionRows.push({
               id: newVersionId,
               workspaceId: targetWorkspaceId,
               entityId: newEntityId,
@@ -886,12 +895,10 @@ export const createDuplicateWorkspace = (
               stamp: entityStamp?.stamp ?? null,
               createdBy: user.id,
             });
-
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
-            await tx
-              .update(entities)
-              .set({ currentVersionId: newVersionId })
-              .where(eq(entities.id, newEntityId));
+            currentVersions.push({
+              entityId: newEntityId,
+              versionId: newVersionId,
+            });
 
             const newFields = source.currentVersion.fields.flatMap((field) => {
               const propertyId = propertyIdMap.get(field.propertyId);
@@ -908,10 +915,7 @@ export const createDuplicateWorkspace = (
                 },
               ];
             });
-            if (newFields.length > 0) {
-              // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the version created in this iteration
-              await tx.insert(fields).values(newFields);
-            }
+            fieldRows.push(...newFields);
 
             entityIdMap.set(source.id, newEntityId);
             // IDs are minted in source field order, so the transactional run
@@ -934,6 +938,15 @@ export const createDuplicateWorkspace = (
               nativeExtractionRequests.push(extractionRequest);
             }
           }
+
+          await insertEntityBatch({
+            tx,
+            entityRows,
+            versionRows,
+            stampOrigin: "issued",
+            currentVersions,
+            fieldRows,
+          });
         }
 
         await recordAuditEvent(tx, {

@@ -4,7 +4,7 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, fields, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import type { entityVersions } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -15,9 +15,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
-  carryVerificationCodes,
-  insertEntityVersions,
-} from "@/api/lib/entity-versions/insert-entity-version";
+  type CurrentVersionAssignment,
+  insertEntityBatch,
+} from "@/api/lib/entity-versions/insert-entity-batch";
+import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -776,6 +777,31 @@ const targetVersionValues = ({
   }
 };
 
+type ResolveRootCopyNameOptions = {
+  tx: Transaction;
+  rootSource: WritableEntitySnapshot | undefined;
+  targetParentId: SafeId<"entity"> | null;
+  targetRootName: string | undefined;
+  targetWorkspaceId: SafeId<"workspace">;
+};
+
+/** The copy root's name in its target folder; `undefined` without a root. */
+const resolveRootCopyName = async ({
+  tx,
+  rootSource,
+  targetParentId,
+  targetRootName,
+  targetWorkspaceId,
+}: ResolveRootCopyNameOptions): Promise<string | undefined> =>
+  rootSource === undefined
+    ? undefined
+    : await resolveEntityName({
+        tx,
+        workspaceId: targetWorkspaceId,
+        parentId: targetParentId,
+        name: targetRootName ?? rootSource.name,
+      });
+
 /**
  * Copy entities to a target workspace. Used by both duplicate
  * (same workspace) and copy-to-workspace (cross-workspace).
@@ -886,6 +912,19 @@ export const copyEntities = async ({
   let nextStampIndex = 0;
 
   const versionTransfers: VersionTransfer[] = [];
+  // Every id is minted here and every parent resolves from `idMap`, so the
+  // loop only builds rows and `insertEntityBatch` writes them after it.
+  const entityRows: (typeof entities.$inferInsert)[] = [];
+  const versionRows: ReturnType<typeof targetVersionValues>[] = [];
+  const currentVersions: CurrentVersionAssignment[] = [];
+  const carriedFieldInserts: CopiedFieldInsert[] = [];
+  const rootCopyName = await resolveRootCopyName({
+    tx,
+    rootSource: sourceEntities.find((source) => source.id === sourceEntityId),
+    targetParentId,
+    targetRootName,
+    targetWorkspaceId,
+  });
 
   for (const source of sourceEntities) {
     const currentVersion = source.versions.find(
@@ -920,13 +959,7 @@ export const copyEntities = async ({
 
     const copyName =
       source.id === sourceEntityId
-        ? // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- runs for the copy root only, once per call, not per row
-          await resolveEntityName({
-            tx,
-            workspaceId: targetWorkspaceId,
-            parentId: newParentId ?? null,
-            name: targetRootName ?? source.name,
-          })
+        ? (rootCopyName ?? panic("Copy root name was not resolved"))
         : source.name;
 
     const entityStamp =
@@ -935,8 +968,7 @@ export const copyEntities = async ({
           panic("Fewer document stamps allocated than documents copied"))
         : null;
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row
-    await tx.insert(entities).values({
+    entityRows.push({
       id: newEntityId,
       workspaceId: targetWorkspaceId,
       kind: source.kind,
@@ -954,26 +986,21 @@ export const copyEntities = async ({
       SafeId<"entityVersion">,
       SafeId<"entityVersion">
     >();
-    const versionRows = source.versions.map((version) => {
+    for (const version of source.versions) {
       const targetVersionId = createSafeId<"entityVersion">();
       targetVersionIds.set(version.id, targetVersionId);
       versionTransfers.push({ sourceVersionId: version.id, targetVersionId });
-      return targetVersionValues({
-        copyStamp: entityStamp?.stamp ?? null,
-        entityId: newEntityId,
-        id: targetVersionId,
-        transfer,
-        version,
-        workspaceId: targetWorkspaceId,
-      });
-    });
-
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-    await insertEntityVersions({
-      tx,
-      values: versionRows,
-      stampOrigin: transfer.type === "copy" ? "issued" : "copied",
-    });
+      versionRows.push(
+        targetVersionValues({
+          copyStamp: entityStamp?.stamp ?? null,
+          entityId: newEntityId,
+          id: targetVersionId,
+          transfer,
+          version,
+          workspaceId: targetWorkspaceId,
+        }),
+      );
+    }
 
     const newVersionId =
       targetVersionIds.get(currentVersion.id) ??
@@ -985,13 +1012,8 @@ export const copyEntities = async ({
             ?.id
         : undefined;
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
-    await tx
-      .update(entities)
-      .set({ currentVersionId: newVersionId })
-      .where(eq(entities.id, newEntityId));
+    currentVersions.push({ entityId: newEntityId, versionId: newVersionId });
 
-    const carriedFieldInserts: CopiedFieldInsert[] = [];
     // The returned field, derivative queueing and extraction all describe the
     // document as it stands, so they read the current version's rows; older
     // versions are carried for their history alone.
@@ -1048,10 +1070,6 @@ export const copyEntities = async ({
         }
       }
     }
-    if (carriedFieldInserts.length > 0) {
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the versions created in this iteration
-      await tx.insert(fields).values(carriedFieldInserts);
-    }
 
     idMap.set(source.id, newEntityId);
     // The field ids above are minted in insertion order, so this derives the
@@ -1078,6 +1096,15 @@ export const copyEntities = async ({
       parentId: newParentId ?? null,
     });
   }
+
+  await insertEntityBatch({
+    tx,
+    entityRows,
+    versionRows,
+    stampOrigin: transfer.type === "copy" ? "issued" : "copied",
+    currentVersions,
+    fieldRows: carriedFieldInserts,
+  });
 
   // A copy's versions were minted their own codes by the insert above. A move
   // is the same document elsewhere, so the codes already printed on its

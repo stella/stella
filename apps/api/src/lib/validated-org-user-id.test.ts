@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
-import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+import {
+  validateOrgUserId,
+  validateOrgUserIds,
+} from "@/api/lib/validated-org-user-id";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -47,5 +50,46 @@ describe("validateOrgUserId", () => {
     );
 
     expect(validated).toBeNull();
+  });
+});
+
+const txWhereReturning = (rows: { userId: string }[]) =>
+  asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: async () => rows,
+      }),
+    }),
+  });
+
+describe("validateOrgUserIds", () => {
+  test("brands every member in input order", async () => {
+    const validated = await validateOrgUserIds(
+      txWhereReturning([{ userId: UUID_ID }, { userId: AUTH_GENERATED_ID }]),
+      [toSafeId<"user">(AUTH_GENERATED_ID), toSafeId<"user">(UUID_ID)],
+      organizationId,
+    );
+
+    expect(validated?.map(String)).toEqual([AUTH_GENERATED_ID, UUID_ID]);
+  });
+
+  test("returns null when any id is not a member", async () => {
+    const validated = await validateOrgUserIds(
+      txWhereReturning([{ userId: UUID_ID }]),
+      [toSafeId<"user">(AUTH_GENERATED_ID), toSafeId<"user">(UUID_ID)],
+      organizationId,
+    );
+
+    expect(validated).toBeNull();
+  });
+
+  test("an empty list validates without a read", async () => {
+    const validated = await validateOrgUserIds(
+      asTestRaw<Transaction>({}),
+      [],
+      organizationId,
+    );
+
+    expect(validated).toEqual([]);
   });
 });

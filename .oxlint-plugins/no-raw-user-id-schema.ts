@@ -19,6 +19,11 @@ const CONTACT_OWNER_FIELDS = new Set([
   "responsibleAttorneyId",
 ]);
 
+const ORG_USER_VALIDATORS = new Set([
+  "validateOrgUserId",
+  "validateOrgUserIds",
+]);
+
 const containsSchemaIdentifier = (node, name) => {
   if (!node) {
     return false;
@@ -70,7 +75,7 @@ export default eslintCompatPlugin({
           rawUserIdSchema:
             "User ID schema field '{{name}}' must use tUserId, not t.String(). Brand user IDs at the handler boundary.",
           missingOrgUserValidation:
-            "Contact owner field '{{name}}' must be validated with validateOrgUserId before it is written.",
+            "Contact owner field '{{name}}' must be validated with validateOrgUserId(s) before it is written.",
         },
       },
       createOnce(context) {
@@ -107,7 +112,7 @@ export default eslintCompatPlugin({
             ownerFieldNodes.length = 0;
           },
           Identifier(node) {
-            if (node.name === "validateOrgUserId") {
+            if (ORG_USER_VALIDATORS.has(node.name)) {
               hasValidateOrgUserId = true;
             }
           },

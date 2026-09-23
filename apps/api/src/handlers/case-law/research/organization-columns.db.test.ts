@@ -311,9 +311,10 @@ describe("an organization holding more columns than it may add", () => {
     });
     expect(statusOf(reordered)).toBeNull();
     const { columns } = asTestRaw<{ columns: { id: string }[] }>(reordered);
-    expect(columns).toHaveLength(HELD);
     // The order the request named, not the order the rows were created in.
-    expect(columns.at(0)?.id).toBe(columnIds.at(-1));
+    expect(columns.map((column) => column.id)).toEqual(
+      [...columnIds].toReversed(),
+    );
   });
 
   test("one more column is still refused", async () => {

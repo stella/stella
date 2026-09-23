@@ -167,19 +167,18 @@ const readIdsFile = async (
 const seedRules = async () => {
   console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
-  for (const rule of SEED_RULES) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- constant seed list
-    await rootDb
-      .insert(caseLawPolarityRules)
-      .values({
+  await rootDb
+    .insert(caseLawPolarityRules)
+    .values(
+      SEED_RULES.map((rule) => ({
         pattern: rule.pattern,
         polarity: rule.polarity,
         language: rule.language,
         source: RULE_SOURCE.MANUAL,
         confidence: 1,
-      })
-      .onConflictDoNothing();
-  }
+      })),
+    )
+    .onConflictDoNothing();
 
   console.log("Seed rules applied.");
 };

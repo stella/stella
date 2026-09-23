@@ -338,8 +338,8 @@ describe("duplicate entity", () => {
               }),
             };
           }
-          if (table === entities && isInsertedEntity(value)) {
-            insertedEntities.push(value);
+          if (table === entities && Array.isArray(value)) {
+            insertedEntities.push(...value.filter(isInsertedEntity));
           } else if (table === entityVersions) {
             return entityVersionInsertResult(value);
           } else if (table === fields && Array.isArray(value)) {
@@ -595,12 +595,15 @@ describe("duplicate entity", () => {
           }
 
           if (table === entities) {
-            if (!isInsertedEntity(value)) {
-              throw new Error("Invalid inserted entity fixture value");
+            if (!Array.isArray(value) || !value.every(isInsertedEntity)) {
+              throw new TypeError("Invalid inserted entity fixture value");
             }
-            insertedEntities.push(value);
+            insertedEntities.push(...value);
           } else if (table === entityVersions) {
-            insertedVersions.push(value);
+            if (!Array.isArray(value)) {
+              throw new TypeError("Invalid inserted version fixture value");
+            }
+            insertedVersions.push(...value);
             return entityVersionInsertResult(value);
           } else if (table === fields) {
             insertedFields.push(value);

@@ -59,8 +59,6 @@ export const DOCUMENT_BYTE_WRITE_DISPOSITION = {
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
   "handlers/entities/restore-version.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/upload.ts": STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
-  "handlers/uploads/entity-create-tree.ts":
-    STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/uploads/entity-version.ts":
     STORED_BYTE_DISPOSITION.STRIPPED_UPSTREAM,
   "handlers/uploads/update.ts": STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
@@ -69,6 +67,8 @@ export const DOCUMENT_BYTE_WRITE_DISPOSITION = {
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
   "lib/entity-versions/create-entity-version-from-buffer.ts":
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
+  "lib/entity-versions/insert-entity-batch.ts":
+    STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "lib/entity-versions/insert-entity-version.ts":
     STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "lib/entity-versions/write-file-version.ts":

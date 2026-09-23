@@ -912,27 +912,22 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 97,
+    "count": 71,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
-      "apps/api/scripts/classify-citations.ts": 3,
-      "apps/api/scripts/ingestion-status.ts": 6,
+      "apps/api/scripts/classify-citations.ts": 2,
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
-      "apps/api/src/handlers/case-law/research/columns-reorder.ts": 1,
       "apps/api/src/handlers/chat/delete-thread.ts": 2,
       "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts": 1,
       "apps/api/src/handlers/chat/upload-files.ts": 1,
-      "apps/api/src/handlers/contacts/create.ts": 1,
-      "apps/api/src/handlers/contacts/update.ts": 1,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
-      "apps/api/src/handlers/entities/copy-utils.ts": 5,
       "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/fields/kanban-placement/update.ts": 1,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 2,
@@ -942,10 +937,8 @@
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
       "apps/api/src/handlers/reports/build-report-data.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 2,
-      "apps/api/src/handlers/uploads/entity-create-tree.ts": 4,
       "apps/api/src/handlers/views/table-export.ts": 1,
-      "apps/api/src/handlers/workspaces/duplicate.ts": 4,
-      "apps/api/src/lib/account-deletion-steps.ts": 3,
+      "apps/api/src/lib/account-deletion-steps.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
@@ -969,8 +962,7 @@
       "apps/api/src/scripts/backfill-fulltext.ts": 3,
       "apps/api/src/scripts/corpus-column-trim.ts": 2,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
-      "apps/api/src/scripts/normalize-case-numbers.ts": 1,
-      "apps/api/src/scripts/seed-polarity-rules.ts": 1
+      "apps/api/src/scripts/normalize-case-numbers.ts": 1
     }
   },
   "no-network-await-in-loop-suppressions": {

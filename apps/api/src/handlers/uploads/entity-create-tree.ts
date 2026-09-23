@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  entities,
+  type entities,
   pendingUploads,
   type PendingUploadPurposeData,
   workspaces,
@@ -18,7 +18,11 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
-import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
+import { insertInChunks } from "@/api/lib/db/bulk-write";
+import {
+  type CurrentVersionAssignment,
+  insertEntityBatch,
+} from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -377,6 +381,10 @@ const createDirectoryRows = async ({
   const directoryIdsByKey = new Map<string, SafeId<"entity">>();
   const createdDirectories: { key: string; entityId: SafeId<"entity"> }[] = [];
   const auditEvents: AuditEvent[] = [];
+  // Ids are minted here and each parent resolves from an earlier directory, so
+  // the loop only builds rows and `insertEntityBatch` writes them after it.
+  const entityRows: (typeof entities.$inferInsert)[] = [];
+  const currentVersions: CurrentVersionAssignment[] = [];
 
   for (const directory of directories) {
     let parentId = rootParentId;
@@ -391,8 +399,7 @@ const createDirectoryRows = async ({
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: same tx client, entityVersions/update/audit all depend on entityId/entityVersionId from this insert
-    await tx.insert(entities).values({
+    entityRows.push({
       id: entityId,
       workspaceId,
       kind: "folder",
@@ -400,18 +407,7 @@ const createDirectoryRows = async ({
       name: directory.name,
       createdBy: userId,
     });
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
-    await insertEntityVersion(tx, {
-      id: entityVersionId,
-      workspaceId,
-      entityId,
-      versionNumber: 1,
-    });
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
-    await tx
-      .update(entities)
-      .set({ currentVersionId: entityVersionId })
-      .where(eq(entities.id, entityId));
+    currentVersions.push({ entityId, versionId: entityVersionId });
 
     auditEvents.push({
       action: AUDIT_ACTION.CREATE,
@@ -433,9 +429,19 @@ const createDirectoryRows = async ({
     createdDirectories.push({ key: directory.key, entityId });
   }
 
-  // The folder rows have to go in one at a time (a child needs its parent's
-  // id), but their audit rows do not: the recorder writes an array in one
-  // statement.
+  await insertEntityBatch({
+    tx,
+    entityRows,
+    versionRows: currentVersions.map(({ entityId, versionId }) => ({
+      id: versionId,
+      workspaceId,
+      entityId,
+      versionNumber: 1,
+    })),
+    stampOrigin: "issued",
+    currentVersions,
+    fieldRows: [],
+  });
   if (auditEvents.length > 0) {
     await recordAuditEvent(tx, auditEvents);
   }
@@ -469,6 +475,7 @@ const createPendingRows = async ({
   Result<TreeWriteFile[], "file-parent-not-found">
 > => {
   const createdFiles: TreeWriteFile[] = [];
+  const pendingUploadRows: (typeof pendingUploads.$inferInsert)[] = [];
 
   for (const file of files) {
     let parentId = rootParentId;
@@ -486,9 +493,7 @@ const createPendingRows = async ({
       parentId,
     };
 
-    // audit: skip — presigned URL bookkeeping; entity audit lands on finalize.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential inserts in the tree-creation transaction; parents resolved earlier
-    await tx.insert(pendingUploads).values({
+    pendingUploadRows.push({
       id: file.uploadId,
       organizationId,
       workspaceId,
@@ -513,6 +518,11 @@ const createPendingRows = async ({
       headers: file.headers,
     });
   }
+
+  await insertInChunks(pendingUploadRows, async (batch) => {
+    // audit: skip — presigned URL bookkeeping; entity audit lands on finalize.
+    await tx.insert(pendingUploads).values(batch);
+  });
 
   return Result.ok(createdFiles);
 };
