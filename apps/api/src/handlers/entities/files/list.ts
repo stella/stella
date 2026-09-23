@@ -112,9 +112,7 @@ const listFilesHandler = async function* ({
 
   return Result.ok({
     ...page,
-    items: page.items.map(
-      ({ createdAt: _createdAt, fieldId: _fieldId, ...file }) => file,
-    ),
+    items: page.items.map(({ createdAt: _createdAt, ...file }) => file),
   });
 };
 
@@ -122,9 +120,9 @@ const config = {
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +
-    "file name, and media type. Documents without a file, and folders and " +
-    "tasks, are left out; use entities.list for the full table with column " +
-    "values.",
+    "file field id, file name, and media type. Documents without a file, " +
+    "and folders and tasks, are left out; use entities.list for the full " +
+    "table with column values.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
