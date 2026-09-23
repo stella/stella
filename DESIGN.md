@@ -7,6 +7,8 @@ generates consistent, on-brand output.
 
 > **Canonical source of truth:** `packages/ui/src/styles/theme.css`.
 > This file is a human-readable summary; when in doubt, read the CSS.
+> The token table and font stack are generated from it:
+> `bun scripts/design-tokens-doc.ts --write`.
 
 ---
 
@@ -34,6 +36,8 @@ with purple gradients, gamified, playful, or illustration-heavy.
 All colours are consumed via CSS custom properties. Never hard-code
 hex values in components; use the semantic tokens below.
 
+<!-- BEGIN GENERATED DESIGN TOKENS -->
+
 | Token                  | Light                         | Dark                          | Role                      |
 | ---------------------- | ----------------------------- | ----------------------------- | ------------------------- |
 | `--background`         | white                         | neutral-950 / 95% white blend | Page canvas               |
@@ -51,9 +55,11 @@ hex values in components; use the semantic tokens below.
 | `--success`            | emerald-500                   | emerald-500                   | Success status            |
 | `--warning`            | amber-500                     | amber-500                     | Warning status            |
 | `--highlight`          | yellow-300 / 50%              | yellow-500 / 20%              | Search/text highlight     |
-| `--border`             | black / 8%                    | white / 6%                    | Borders, dividers         |
-| `--input`              | black / 10%                   | white / 8%                    | Input borders             |
+| `--border`             | black / 10%                   | white / 8%                    | Borders, dividers         |
+| `--input`              | black / 12%                   | white / 10%                   | Input borders             |
 | `--ring`               | neutral-400                   | neutral-500                   | Focus rings               |
+
+<!-- END GENERATED DESIGN TOKENS -->
 
 ### Sidebar Tokens
 
@@ -103,17 +109,24 @@ dark-mode combination.
 
 ### Font Stack
 
+<!-- BEGIN GENERATED FONT STACK -->
+
 ```
-"DM Sans", ui-sans-serif, system-ui, sans-serif,
+"DM Sans", "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif,
 "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"
 ```
 
-**DM Sans** is the sole brand typeface. Variable font (weight 100-900),
-normal and italic styles, WOFF2 with Latin + Latin Extended coverage.
-`font-display: swap` for fast first paint.
+<!-- END GENERATED FONT STACK -->
 
-No secondary or serif typeface is used in the product. Legal document
-content renders in document-specific fonts (not DM Sans).
+**DM Sans** is the brand typeface. Variable font (weight 100-900),
+normal and italic styles, WOFF2 with Latin + Latin Extended coverage.
+`font-display: swap` for fast first paint. **Noto Sans Arabic** covers
+Arabic script, which DM Sans does not.
+
+**Source Serif 4** (`--reader-body-font`, defined in
+`apps/web/src/components/legal-reader/reader.css`) is reserved for legal
+reading surfaces: statute, provision, and case-law text. App chrome never
+uses it. Legal document content renders in document-specific fonts.
 
 ### Typographic Conventions
 

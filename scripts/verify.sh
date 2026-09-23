@@ -353,6 +353,7 @@ run_step "Test input coverage" run_test_input_coverage_guard
 run_step "Desktop Rust inputs" run_desktop_rust_inputs_guard
 run_step "Test shard partition" bun test scripts/test-shards.test.ts
 run_step "Module ownership" bun run check:module-ownership
+run_step "Design token docs" bun run check:design-tokens
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard

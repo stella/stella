@@ -835,6 +835,13 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun run check:module-ownership
 
+      - name: Design token docs
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # DESIGN.md's semantic token table and font stack are rendered from
+        # packages/ui/src/styles/theme.css, so a token change that skips the
+        # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
+        run: bun run check:design-tokens
+
       - name: Suppression waiver ledger
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The ratchet budgets cap how many suppressions each lint rule carries.
