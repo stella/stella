@@ -150,6 +150,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@aws-sdk/client-bedrock-runtime": "^3.1101.0",
         "@better-auth/core": "catalog:",
         "@electric-sql/pglite": "^0.5.8",
         "@faker-js/faker": "^10.6.0",
