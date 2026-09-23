@@ -134,7 +134,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tailwindcss": "1.12.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint-tsgolint": "7.0.2002",
     "react": "catalog:react19",
     "scslre": "0.3.0",
     "sherif": "catalog:",
