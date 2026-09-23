@@ -10,12 +10,14 @@ import {
 /**
  * One consolidation of a statute, addressed by the day its validity window
  * opened. A request that names a day no consolidation opened on, or one that
- * names the latest text, redirects to the address that text is canonical at.
+ * names the text the bare address shows, redirects to the address that text is canonical at.
  */
 export const Route = createFileRoute("/law/$country/statutes/$slug/v/$version")(
   {
     validateSearch: publicStatuteSearchSchema,
-    loaderDeps: ({ search: { asOf, jump } }) => ({ asOf, jump }),
+    // The whole search, not a pick: a canonical redirect re-issues it, and a
+    // parameter left out here would be dropped on the way.
+    loaderDeps: ({ search }) => search,
     loader: async ({ context: { queryClient }, deps, location, params }) =>
       await loadPublicStatuteRoute({
         hash: location.hash,

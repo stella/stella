@@ -10,7 +10,10 @@ import {
   isStatuteSlug,
   STATUTE_SLUG_MAX_LENGTH,
 } from "@/api/handlers/legislation/slug";
-import { workKeyConditions } from "@/api/handlers/legislation/work-key";
+import {
+  selectDefaultVersionId,
+  workKeyConditions,
+} from "@/api/handlers/legislation/work-key";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
@@ -28,7 +31,7 @@ export const readStatuteBySlugParamsSchema = t.Object({
 
 export const readStatuteBySlugQuerySchema = t.Object({
   country: tPublicLawCountry,
-  /** Absent means "the latest consolidation the corpus holds". */
+  /** Absent means the version in force today, else the latest one. */
   asOf: t.Optional(t.String({ format: "date" })),
 });
 
@@ -50,9 +53,9 @@ type ReadStatuteBySlugOptions = {
  * `by-eli` does over the whole Work, so both entry points cannot disagree
  * about which consolidation a date names.
  *
- * Without a date the latest consolidation answers, not the one in force
- * today: a repealed act still has a public page, and its last text is what
- * that page shows.
+ * Without a date the version in force today answers, falling back to the
+ * latest consolidation when none is in force: a repealed act still has a
+ * public page, and its last text is what that page shows.
  */
 export const readStatuteBySlugHandler = async ({
   legislationDb,
@@ -104,16 +107,21 @@ export const readStatuteBySlugHandler = async ({
       return { type: "unknown-work" } as const;
     }
 
-    const conditions = workKeyConditions(work);
-    if (asOf !== undefined) {
-      conditions.push(
-        inForceOn(
-          legislationDocuments.versionValidFrom,
-          legislationDocuments.versionValidTo,
-          sql`${asOf}::date`,
-        ),
-      );
+    if (asOf === undefined) {
+      const defaultId = await selectDefaultVersionId(tx, work);
+      return defaultId === null
+        ? ({ type: "uncovered-date" } as const)
+        : ({ type: "expression", id: defaultId } as const);
     }
+
+    const conditions = workKeyConditions(work);
+    conditions.push(
+      inForceOn(
+        legislationDocuments.versionValidFrom,
+        legislationDocuments.versionValidTo,
+        sql`${asOf}::date`,
+      ),
+    );
 
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
