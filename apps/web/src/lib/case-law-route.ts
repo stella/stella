@@ -51,16 +51,10 @@ export const resolveCaseLawRouteCountry = ({
     ? defaultCaseLawCountryForLocale(locale)
     : publicCaseLawCountry(country);
 
-export type CaseLawDecisionSearchHit = {
+/** What a search hit is matched against a typed reference by. */
+type DecisionRefCandidate = {
   caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: string | null;
-  decisionId: string;
   ecli: string | null;
-  language: string | null;
-  languageAlternates: readonly unknown[] | null;
-  slug: string | null;
 };
 
 export const decodeCaseLawDecisionRef = (value: string): string =>
@@ -71,10 +65,10 @@ export const decodeCaseLawDecisionRef = (value: string): string =>
 const normalizeDecisionRef = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 
-export const pickCaseLawDecisionHit = (
+export const pickCaseLawDecisionHit = <THit extends DecisionRefCandidate>(
   decisionRef: string,
-  hits: readonly CaseLawDecisionSearchHit[],
-): CaseLawDecisionSearchHit | null => {
+  hits: readonly THit[],
+): THit | null => {
   const normalizedRef = normalizeDecisionRef(decisionRef);
   const exactCaseNumber = hits.find(
     (hit) => normalizeDecisionRef(hit.caseNumber) === normalizedRef,

@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  type CaseLawDecisionSearchHit,
   decodeCaseLawDecisionRef,
   pickCaseLawDecisionHit,
   resolveCaseLawRouteCountry,
@@ -17,16 +16,10 @@ const caseLawHit = ({
 }: {
   caseNumber: string;
   decisionId: string;
-}): CaseLawDecisionSearchHit => ({
+}) => ({
   caseNumber,
-  country: "CZE",
-  court: "Nejvyssi soud",
-  decisionDate: "2024-01-31",
   decisionId,
   ecli: null,
-  language: "cs",
-  languageAlternates: [],
-  slug: null,
 });
 
 describe("case-law decision routes", () => {

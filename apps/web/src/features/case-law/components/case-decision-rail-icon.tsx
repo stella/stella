@@ -7,7 +7,6 @@ import type { CaseDecisionViewPayload } from "@/components/inspector/case-decisi
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { CourtTierBadge } from "@/features/case-law/components/court-name";
-import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 /**
@@ -32,10 +31,7 @@ export const CaseDecisionRailIcon = ({
   // through `railIconInactive: "legible"` on the registration, the public rail
   // by not fading a rail icon at all.
   return (
-    <CourtTierBadge
-      abbreviation={abbreviation}
-      tier={isCourtTier(decision.courtTier) ? decision.courtTier : "other"}
-    />
+    <CourtTierBadge abbreviation={abbreviation} tier={decision.courtTier} />
   );
 };
 

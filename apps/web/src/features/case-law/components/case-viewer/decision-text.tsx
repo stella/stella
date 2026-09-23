@@ -3,7 +3,6 @@ import type { ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -64,29 +63,29 @@ import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { dissentingJudges } from "@/features/case-law/decision-judges";
-import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-type Decision = DecisionDocumentState & {
-  caseNumber: string;
-  court: string;
-  /** The court's chip, as the read derived it; absent where it states none. */
-  courtAbbreviation?: string | null | undefined;
-  courtTier?: string | null | undefined;
-  id: string;
-  language: string;
-  fulltext: string | null;
-  documentAst?: unknown;
-  judges: readonly DecisionJudge[];
-  /** Where the publisher offers this decision's data, from the read API. */
-  sourceAttributionUrl: string | null;
-  textFields: ReadDecisionTextFields;
-};
+type Decision = Pick<
+  PublicCaseLawDecision,
+  | keyof DecisionDocumentState
+  | "caseNumber"
+  | "court"
+  | "courtAbbreviation"
+  | "courtTier"
+  | "documentAst"
+  | "fulltext"
+  | "id"
+  | "judges"
+  | "language"
+  | "sourceAttributionUrl"
+  | "textFields"
+>;
 
 type DecisionTextProps = {
   activeMatchIndex: number;

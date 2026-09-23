@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { AiHeadnotes } from "@/features/case-law/components/case-viewer/analysis
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { editorialSupplementBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 
 const ast = {
   blocks: [
@@ -42,41 +43,53 @@ const ast = {
   },
   source: { documentId: "1", printUrl: "", system: "test", webUrl: "" },
   version: 1,
-} as const satisfies DocumentAst;
+} satisfies DocumentAst;
+
+type TextDecision = ComponentProps<typeof DecisionText>["decision"];
+
+const absent = {
+  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  type: TEXT_FIELD_TYPE.ABSENT,
+} as const;
+
+/** A decision as the read answers it, with no publisher text beside it. */
+const textDecision = (overrides: Partial<TextDecision> = {}): TextDecision => ({
+  caseNumber: "1 As 1/2026",
+  court: "Test court",
+  courtAbbreviation: null,
+  courtTier: "other",
+  documentAst: ast,
+  documentPending: false,
+  documentReadFailed: false,
+  documentUnavailable: false,
+  fulltext: null,
+  id: toSafeId<"caseLawDecision">("9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
+  judges: [],
+  language: "cs",
+  sourceAttributionUrl: null,
+  textFields: {
+    abstract: absent,
+    headnote: absent,
+    legalSentence: absent,
+    summary: absent,
+  },
+  ...overrides,
+});
 
 const renderDecision = (abstract: string): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
         activeMatchIndex={-1}
-        decision={{
-          caseNumber: "1 As 1/2026",
-          court: "Test court",
-          documentAst: ast,
-          documentPending: false,
-          documentReadFailed: false,
-          documentUnavailable: false,
-          fulltext: null,
-          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-          judges: [],
-          language: "cs",
+        decision={textDecision({
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
             abstract: { text: abstract, type: TEXT_FIELD_TYPE.PRESENT },
-            headnote: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-            legalSentence: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-            summary: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
+            headnote: absent,
+            legalSentence: absent,
+            summary: absent,
           },
-        }}
+        })}
         decisionId="dec-1"
         searchQuery=""
       />
@@ -113,37 +126,20 @@ describe("a decision whose text did not resolve", () => {
         <QueryClientProvider client={new QueryClient()}>
           <DecisionText
             activeMatchIndex={-1}
-            decision={{
-              caseNumber: "1 As 1/2026",
-              court: "Test court",
+            decision={textDecision({
               documentAst: null,
               documentPending: true,
               documentReadFailed: true,
-              documentUnavailable: false,
-              fulltext: null,
-              id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-              judges: [],
-              language: "cs",
-              sourceAttributionUrl: null,
               textFields: {
                 abstract: {
                   text: "Analytická právní věta o náhradě škody.",
                   type: TEXT_FIELD_TYPE.PRESENT,
                 },
-                headnote: {
-                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-                  type: TEXT_FIELD_TYPE.ABSENT,
-                },
-                legalSentence: {
-                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-                  type: TEXT_FIELD_TYPE.ABSENT,
-                },
-                summary: {
-                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-                  type: TEXT_FIELD_TYPE.ABSENT,
-                },
+                headnote: absent,
+                legalSentence: absent,
+                summary: absent,
               },
-            }}
+            })}
             decisionId="dec-1"
             searchQuery=""
           />
@@ -232,7 +228,7 @@ const searchedAst = {
   },
   source: { documentId: "1", printUrl: "", system: "test", webUrl: "" },
   version: 1,
-} as const satisfies DocumentAst;
+} satisfies DocumentAst;
 
 const renderSearchedDecision = ({
   activeMatchIndex,
@@ -245,37 +241,7 @@ const renderSearchedDecision = ({
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
         activeMatchIndex={activeMatchIndex}
-        decision={{
-          caseNumber: "1 As 1/2026",
-          court: "Test court",
-          documentAst: searchedAst,
-          documentPending: false,
-          documentReadFailed: false,
-          documentUnavailable: false,
-          fulltext: null,
-          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-          judges: [],
-          language: "en",
-          sourceAttributionUrl: null,
-          textFields: {
-            abstract: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-            headnote: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-            legalSentence: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-            summary: {
-              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-              type: TEXT_FIELD_TYPE.ABSENT,
-            },
-          },
-        }}
+        decision={textDecision({ documentAst: searchedAst, language: "en" })}
         decisionId="dec-1"
         landingAnchorId={landingAnchorId}
         searchQuery="contract"
@@ -288,11 +254,6 @@ const BODY_TEXT = "Court text.";
 type TextFieldOverrides = Partial<
   Record<"abstract" | "legalSentence" | "summary", string>
 >;
-
-const absent = {
-  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-  type: TEXT_FIELD_TYPE.ABSENT,
-} as const;
 
 const presentOr = (text: string | undefined) =>
   text === undefined ? absent : { text, type: TEXT_FIELD_TYPE.PRESENT };
@@ -318,17 +279,16 @@ const publisherParagraph = (
 
 const renderTopMatter = ({
   analysis,
-  courtAbbreviation,
-  courtTier,
+  courtAbbreviation = null,
+  courtTier = "other",
   documentAst = ast,
   fields = {},
   notesByAnchorId,
   searchQuery = "",
-}: {
+}: Partial<
+  Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
+> & {
   analysis?: DecisionAnalysis;
-  courtAbbreviation?: string;
-  courtTier?: string;
-  documentAst?: unknown;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
   searchQuery?: string;
@@ -342,27 +302,17 @@ const renderTopMatter = ({
             <AiHeadnotes analysis={analysis} onAnchorClick={() => undefined} />
           )
         }
-        decision={{
-          caseNumber: "1 As 1/2026",
-          court: "Test court",
+        decision={textDecision({
           courtAbbreviation,
           courtTier,
           documentAst,
-          documentPending: false,
-          documentReadFailed: false,
-          documentUnavailable: false,
-          fulltext: null,
-          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-          judges: [],
-          language: "cs",
-          sourceAttributionUrl: null,
           textFields: {
             abstract: presentOr(fields.abstract),
             headnote: absent,
             legalSentence: presentOr(fields.legalSentence),
             summary: presentOr(fields.summary),
           },
-        }}
+        })}
         decisionId="dec-1"
         notesByAnchorId={notesByAnchorId}
         searchQuery={searchQuery}

@@ -4,7 +4,6 @@ import { SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -47,32 +46,38 @@ import { useDecisionAnnotationSurface } from "@/features/case-law/components/cas
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
-import type { DecisionJudge } from "@/features/case-law/decision-judges";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
 
-type DecisionWorkspaceDecision = DecisionDocumentState & {
+type DecisionWorkspaceDecision = Pick<
+  PublicCaseLawDecision,
+  | keyof DecisionDocumentState
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "courtAbbreviation"
+  | "courtTier"
+  | "decisionDate"
+  | "decisionType"
+  | "documentAst"
+  | "ecli"
+  | "fulltext"
+  | "id"
+  | "judges"
+  | "language"
+  | "metadata"
+  | "sourceAttributionUrl"
+  | "textFields"
+> & {
+  /**
+   * Never sent by the public read: `useDecisionAnalysis` mirrors a finished
+   * analysis into the decision's cache entry, so a remount reads it here.
+   */
   analysis?: unknown;
-  caseNumber: string;
-  country: string;
-  court: string;
-  /** The court's chip, as the read derived it; absent where it states none. */
-  courtAbbreviation?: string | null | undefined;
-  courtTier?: string | null | undefined;
-  decisionDate: Date | string | null;
-  decisionType?: string | null;
-  documentAst: unknown;
-  ecli?: string | null;
-  fulltext: string | null;
-  id: string;
-  judges: readonly DecisionJudge[];
-  language: string;
-  metadata: Record<string, unknown>;
-  sourceAttributionUrl: string | null;
-  textFields: ReadDecisionTextFields;
 };
 
 type DecisionWorkspaceBaseProps = {

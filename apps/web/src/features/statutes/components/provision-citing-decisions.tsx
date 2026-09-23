@@ -13,20 +13,15 @@ import { filterCitingDecisions } from "@/features/statutes/provision-inspector.l
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import type { PublicLawData } from "@/lib/public-law-api";
 
-export type CitingDecisionRow = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: string | null;
-  decisionId: string;
-  language: string;
-  languageAlternates: readonly unknown[];
-  sentenceText: string | null;
-  slug: string | null;
-};
+/** One decision citing the provision, as the citing-decisions read answers it. */
+export type CitingDecisionRow = PublicLawData<
+  (typeof api.case.provisions)["citing-decisions"]["get"]
+>["items"][number];
 
 /** One citing decision with the passage that applies the provision. */
 export const CitingDecisionItem = ({

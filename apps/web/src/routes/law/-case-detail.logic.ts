@@ -407,7 +407,7 @@ export const createPublicCaseLawDecisionHead = ({
       decisionType: decision.decisionType,
       ecli: decision.ecli,
       language: decision.language,
-      sourceName: decision.source?.name ?? null,
+      sourceName: decision.source.name,
       sourceUrl: decision.sourceUrl,
       updatedAt: decision.updatedAt,
     }),

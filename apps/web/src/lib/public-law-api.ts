@@ -47,6 +47,18 @@ type DisabledPublicLawData = {
   readonly error: typeof PUBLIC_LAW_DISABLED_MARKER;
 };
 
+/**
+ * What a public-law Eden read answers once `unwrapPublicLawEden` has settled
+ * it. Web types that stand for a response derive from this, so a field the
+ * API adds, drops, or tightens reaches every consumer.
+ */
+export type PublicLawData<
+  TRead extends (...args: never[]) => Promise<{ data: unknown }>,
+> = Exclude<
+  NonNullable<Awaited<ReturnType<TRead>>["data"]>,
+  DisabledPublicLawData
+>;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 

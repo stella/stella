@@ -13,12 +13,11 @@ import {
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -122,8 +121,6 @@ type DecisionBySlugKey = {
   slug: string;
 };
 
-type FacetBucket = { value: string; count: number };
-
 /**
  * The facets of one result set, as the search endpoint reports them on the
  * first page. Null on a cursor page: counting again per page would cost a
@@ -137,17 +134,15 @@ export type SearchFacets = NonNullable<
   >["facets"]
 >;
 
-export type CaseLawBrowseFacets = {
-  country: FacetBucket[];
-  court: FacetBucket[];
-  year: FacetBucket[];
-};
+export type CaseLawBrowseFacets = PublicLawData<
+  typeof api.case.decisions.facets.get
+>;
 
 /** Facets of the whole corpus, or of one jurisdiction when `country` is given. */
 export const decisionFacetsOptions = (country: string) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.facets(country),
-    queryFn: async ({ signal }): Promise<CaseLawBrowseFacets> => {
+    queryFn: async ({ signal }) => {
       const response = await api.case.decisions.facets.get({
         query: { country },
         fetch: { signal },
@@ -279,9 +274,7 @@ export const decisionsInfiniteOptions = (
             identifiers: h.identifiers,
             court: h.court,
             courtAbbreviation: h.courtAbbreviation,
-            // Folded into the catch-all where the UI has no heading for the
-            // label, the same way the facet rail folds one.
-            courtTier: isCourtTier(h.courtTier) ? h.courtTier : "other",
+            courtTier: h.courtTier,
             country: h.country,
             language: h.language,
             languageAlternates: h.languageAlternates,
