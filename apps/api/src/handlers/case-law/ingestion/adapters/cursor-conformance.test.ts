@@ -294,6 +294,22 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.PL_KIO]: {
+    disposition: "exercised",
+    // The listing answers a window it holds nothing for with a zero count and
+    // no rows. The crawl never reaches a record from here, because it only
+    // follows listed rows.
+    exhaustedSource: () =>
+      htmlResponse(
+        '<input type="hidden" value="0,0,0,0,0" id="resultCounts" />',
+      ),
+    maxSteadyStateCursors: 4,
+    // A parked lap is three single pages: the present month, the count of
+    // rows dated up to its end, and the one tail page that count points at —
+    // rulings with no issue date sit past every month and are only reachable
+    // there.
+    maxSteadyStatePositions: 3,
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**
