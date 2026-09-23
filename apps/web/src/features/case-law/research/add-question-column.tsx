@@ -25,8 +25,6 @@ import type {
   QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
 import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-question-column-limit";
-import { guideAnchor } from "@/features/guides/guide-anchor";
-import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 
 /**
  * What pressing the add-question control does here, or null where there is no
@@ -234,7 +232,6 @@ const PickQuestionTrigger = ({
               size="xs"
               type="button"
               variant="muted"
-              {...guideAnchor(GUIDE_ANCHORS.tabularReviewAddColumn)}
             />
           }
         >
