@@ -391,8 +391,10 @@ const storeSourceRaw = async ({
   const written = await Result.tryPromise({
     try: async () =>
       await writeSourceRaw({
-        family: RAW_SOURCE_FAMILY.LEGISLATION,
-        sourceId: input.sourceId,
+        owner: {
+          family: RAW_SOURCE_FAMILY.LEGISLATION,
+          sourceId: input.sourceId,
+        },
         data,
         contentType,
         storedKey: stored.sourceRawS3Key,

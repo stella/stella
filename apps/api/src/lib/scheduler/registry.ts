@@ -12,6 +12,14 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
+  censusCaseLawRawObjectsTask,
+  RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+  RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
+  reconcileCaseLawRawRowsTask,
+  reconcileCaseLawRawSweepsTask,
+} from "@/api/lib/scheduler/tasks/case-law-raw-storage";
+import {
   BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   backfillCaseLawRedactionTombstones,
 } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
@@ -120,6 +128,9 @@ const SCHEDULER_TASKS = {
   [BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK]: backfillCorpusIndexJobDetail,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,
+  [RECONCILE_CASE_LAW_RAW_SWEEPS_TASK]: reconcileCaseLawRawSweepsTask,
+  [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
+  [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,

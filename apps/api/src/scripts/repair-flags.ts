@@ -13,6 +13,7 @@
  */
 
 const DECIMAL_INTEGER = /^\d+$/u;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 /** Whether `--<name>` was passed. */
 export const hasFlag = (name: string): boolean =>
@@ -106,6 +107,30 @@ export const rejectUnknownFlags = ({
   );
   console.error(usage);
   process.exit(1);
+};
+
+/**
+ * A UUID named by `--<name>`, or undefined when the flag is absent. Anything
+ * else passed there exits with the usage: a mistyped id must not widen a
+ * run to everything.
+ */
+export const flagUuid = ({
+  name,
+  usage,
+}: {
+  name: string;
+  usage: string;
+}): string | undefined => {
+  const raw = flagValue(name);
+  if (raw === undefined && !hasFlag(name)) {
+    return undefined;
+  }
+  if (raw === undefined || !UUID.test(raw)) {
+    console.error(`--${name} takes a UUID.`);
+    console.error(usage);
+    process.exit(1);
+  }
+  return raw;
 };
 
 /**

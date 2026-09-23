@@ -201,12 +201,13 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   }
   expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
 
-  // The payload the replay read landed under its own content hash, byte for
-  // byte, and under the media type the row recorded. A re-parse that returned
-  // no payload would otherwise clear the row's pointer to it.
+  // The payload the replay read landed under its own content hash, in the
+  // decision's own prefix, byte for byte, and under the media type the row
+  // recorded. A re-parse that returned no payload would otherwise clear the
+  // row's pointer to it.
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(STORED_PAYLOAD);
-  const contentAddressedKey = `case-law/raw/${sourceId}/${hasher.digest("hex")}`;
+  const contentAddressedKey = `case-law/raw/${sourceId}/documents/${id}/payloads/${hasher.digest("hex")}`;
   const stored = fake.objects.get(
     `${envBase.S3_BUCKET}/${contentAddressedKey}`,
   );

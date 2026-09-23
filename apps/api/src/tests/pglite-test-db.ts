@@ -275,7 +275,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
-      "case_law_citation_resolution_progress"
+      "case_law_citation_resolution_progress",
+      "case_law_raw_sweeps"
     TO stella_ingestion
   `,
   `
@@ -292,7 +293,8 @@ export const ROLE_GRANT_STATEMENTS = [
     REVOKE ALL PRIVILEGES ON TABLE
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
-      "case_law_decision_source_identities"
+      "case_law_decision_source_identities",
+      "case_law_raw_sweeps"
     FROM stella
   `,
   // Legislation corpus — same global model as case law.

@@ -720,6 +720,35 @@ export const getS3ObjectSizeWithSignal = async (
     return response.ContentLength ?? null;
   });
 
+/**
+ * What the store says about one object without reading it, or `null` when
+ * it confirms the key holds nothing.
+ */
+export const headS3ObjectWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<{
+  contentLength: number | null;
+  contentType: string | null;
+} | null> => {
+  const head = await presentOrNull(
+    async () =>
+      await documentsCredentials.run(
+        async () =>
+          await getAbortableS3().send(
+            new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+            { abortSignal: signal },
+          ),
+      ),
+  );
+  return head === null
+    ? null
+    : {
+        contentLength: head.ContentLength ?? null,
+        contentType: head.ContentType ?? null,
+      };
+};
+
 /** Read one object while allowing the caller to cancel the HTTP request. */
 export const getS3ObjectWithSignal = async (
   key: string,
@@ -770,25 +799,34 @@ export const isMissingS3ObjectError = (error: unknown): boolean => {
 };
 
 /**
+ * A request's answer, or `null` when the store confirms the key holds
+ * nothing. Every other failure is raised: see {@link isMissingS3ObjectError}.
+ */
+const presentOrNull = async <T>(
+  request: () => Promise<T>,
+): Promise<T | null> => {
+  const response = await Result.tryPromise({
+    try: request,
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(response)) {
+    return response.value;
+  }
+  if (isMissingS3ObjectError(response.error)) {
+    return null;
+  }
+  throw response.error;
+};
+
+/**
  * Read one object, or `null` when the store confirms it holds no such key.
  * Every other failure is raised: see {@link isMissingS3ObjectError}.
  */
 export const readS3ObjectIfPresent = async (
   key: string,
   signal: AbortSignal,
-): Promise<ArrayBuffer | null> => {
-  const read = await Result.tryPromise({
-    try: async () => await getS3ObjectWithSignal(key, signal),
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(read)) {
-    return read.value;
-  }
-  if (isMissingS3ObjectError(read.error)) {
-    return null;
-  }
-  throw read.error;
-};
+): Promise<ArrayBuffer | null> =>
+  await presentOrNull(async () => await getS3ObjectWithSignal(key, signal));
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */
 export const deleteS3ObjectWithSignal = async (
@@ -908,6 +946,59 @@ export const listS3ObjectKeys = async ({
     return await collectFrom(undefined);
   });
 
+type ListS3ObjectPageOptions = {
+  prefix: string;
+  /** Resume after this key; the page holds only keys sorting after it. */
+  startAfter: string | null;
+  /** Only the keys directly under the prefix, none past this separator. */
+  delimiter?: "/";
+  maxKeys: number;
+  signal: AbortSignal;
+};
+
+export type S3ListedObject = { key: string; lastModified: Date };
+
+export type S3ObjectPage = {
+  objects: S3ListedObject[];
+  /** Whether keys past the last one returned remain under the prefix. */
+  truncated: boolean;
+};
+
+/**
+ * One page of the documents bucket under `prefix`, in key order, with each
+ * object's modification time. A walk resumes from the last key it saw rather
+ * than from a continuation token, so its cursor is a key a job can persist.
+ */
+export const listS3ObjectPage = async ({
+  prefix,
+  startAfter,
+  delimiter,
+  maxKeys,
+  signal,
+}: ListS3ObjectPageOptions): Promise<S3ObjectPage> =>
+  await documentsCredentials.run(async () => {
+    const page = await getAbortableS3().send(
+      new ListObjectsV2Command({
+        Bucket: envBase.S3_BUCKET,
+        Prefix: prefix,
+        MaxKeys: maxKeys,
+        ...(startAfter === null ? {} : { StartAfter: startAfter }),
+        ...(delimiter === undefined ? {} : { Delimiter: delimiter }),
+      }),
+      { abortSignal: signal },
+    );
+    // The SDK omits `Contents` on an empty page.
+    const objects =
+      page.Contents === undefined
+        ? []
+        : page.Contents.flatMap(({ Key, LastModified }) =>
+            Key === undefined || LastModified === undefined
+              ? []
+              : [{ key: Key, lastModified: LastModified }],
+          );
+    return { objects, truncated: page.IsTruncated === true };
+  });
+
 type BoundedS3ReadOptions = {
   bucket: string;
   key: string;
@@ -952,6 +1043,25 @@ export const readS3ObjectBounded = async ({
     }
     return await response.Body.transformToByteArray();
   });
+
+/**
+ * {@link readS3ObjectBounded} from the documents bucket, or `null` when the
+ * store confirms it holds no such key.
+ */
+export const readS3ObjectBoundedIfPresent = async ({
+  key,
+  maxBytes,
+  signal,
+}: Omit<BoundedS3ReadOptions, "bucket">): Promise<Uint8Array | null> =>
+  await presentOrNull(
+    async () =>
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key,
+        maxBytes,
+        signal,
+      }),
+  );
 
 // The signed URL is consumed by the very next statement, so it only has to
 // outlive one read.

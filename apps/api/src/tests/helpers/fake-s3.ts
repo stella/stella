@@ -47,8 +47,22 @@ export type FakeS3Failure = {
   readonly status: number;
   /** Restrict to one key; every key when omitted. */
   readonly key?: string;
+  /** Restrict to keys containing this. */
+  readonly keyIncludes?: string;
   /** How many matching requests fail; one when omitted. */
   readonly times?: number;
+};
+
+export type FakeS3HoldMatch = {
+  readonly method: FakeS3Method;
+  /** Hold only a request whose key contains this. */
+  readonly keyIncludes: string;
+};
+
+export type FakeS3Hold = {
+  /** Settles once a matching request is held. */
+  readonly reached: Promise<undefined>;
+  readonly release: () => void;
 };
 
 export type FakeS3 = {
@@ -61,18 +75,33 @@ export type FakeS3 = {
    * by its precondition adds none.
    */
   readonly versions: Map<string, number>;
+  /**
+   * What a listing reports as each `<bucket>/<key>`'s `LastModified`: set
+   * by every applied write, and settable to age an object.
+   */
+  readonly modifiedAt: Map<string, Date>;
   readonly requests: FakeS3Request[];
   readonly failNext: (failure: FakeS3Failure) => void;
+  /**
+   * Hold the next matching request in flight, after it reached the store and
+   * before it applies, until released: a test that needs one write to land
+   * after something else happened releases it at that point.
+   */
+  readonly holdNext: (match: FakeS3HoldMatch) => FakeS3Hold;
   readonly put: (
     bucket: string,
     key: string,
     bytes: Uint8Array | string,
     contentType?: string,
+    lastModified?: Date,
   ) => void;
   readonly stop: () => void;
 };
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>';
+
+/** The modification time of an object a test seeded without stating one. */
+const FAKE_EPOCH = new Date("2026-01-01T00:00:00.000Z");
 
 const escapeXml = (value: string): string =>
   value
@@ -169,26 +198,38 @@ const rangeResponse = ({
 
 const listResponse = ({
   bucket,
-  keys,
+  objects,
   maxKeys,
   prefix,
   startAfter,
+  delimiter,
 }: {
   bucket: string;
-  keys: readonly string[];
+  objects: ReadonlyMap<string, Date>;
   maxKeys: number;
   prefix: string;
   startAfter: string | undefined;
+  delimiter: string | undefined;
 }): Response => {
-  const matching = keys
+  // A delimiter rolls every deeper key into a common prefix, which this store
+  // does not report: a caller reading one level gets that level's objects.
+  const matching = [...objects.keys()]
     .filter((key) => key.startsWith(prefix))
+    .filter(
+      (key) =>
+        delimiter === undefined ||
+        !key.slice(prefix.length).includes(delimiter),
+    )
     .filter((key) => startAfter === undefined || key > startAfter)
     .toSorted();
   const page = matching.slice(0, maxKeys);
   const truncated = matching.length > page.length;
   const last = page.at(-1);
   const contents = page
-    .map((key) => `<Contents><Key>${escapeXml(key)}</Key></Contents>`)
+    .map(
+      (key) =>
+        `<Contents><Key>${escapeXml(key)}</Key><LastModified>${(objects.get(key) ?? FAKE_EPOCH).toISOString()}</LastModified></Contents>`,
+    )
     .join("");
   const continuation =
     truncated && last !== undefined
@@ -217,11 +258,18 @@ export type FakeS3Options = {
 export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
   const versions = new Map<string, number>();
+  const modifiedAt = new Map<string, Date>();
   const addVersion = (id: string): void => {
     versions.set(id, (versions.get(id) ?? 0) + 1);
+    modifiedAt.set(id, new Date());
   };
   const requests: FakeS3Request[] = [];
   const failures: { failure: FakeS3Failure; remaining: number }[] = [];
+  const holds: {
+    match: FakeS3HoldMatch;
+    reached: () => void;
+    released: Promise<undefined>;
+  }[] = [];
 
   const takeFailure = (
     method: FakeS3Method,
@@ -230,7 +278,9 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     const index = failures.findIndex(
       ({ failure }) =>
         failure.method === method &&
-        (failure.key === undefined || failure.key === key),
+        (failure.key === undefined || failure.key === key) &&
+        (failure.keyIncludes === undefined ||
+          key.includes(failure.keyIncludes)),
     );
     if (index === -1) {
       return null;
@@ -285,6 +335,15 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       return errorResponse(failure.code, failure.status, key);
     }
 
+    const holdIndex = holds.findIndex(
+      ({ match }) => match.method === method && key.includes(match.keyIncludes),
+    );
+    if (holdIndex !== -1) {
+      const [hold] = holds.splice(holdIndex, 1);
+      hold?.reached();
+      await hold?.released;
+    }
+
     if (delayMs > 0) {
       await Bun.sleep(delayMs);
       // The client hung up mid-request: answer without applying it, the way
@@ -297,12 +356,23 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     if (method === "LIST") {
       return listResponse({
         bucket,
-        keys: [...objects.keys()]
-          .filter((id) => id.startsWith(`${bucket}/`))
-          .map((id) => id.slice(bucket.length + 1)),
+        objects: new Map(
+          [...objects.entries()]
+            .filter(([id]) => id.startsWith(`${bucket}/`))
+            .map(([id]) => [
+              id.slice(bucket.length + 1),
+              modifiedAt.get(id) ?? FAKE_EPOCH,
+            ]),
+        ),
         maxKeys: Number(url.searchParams.get("max-keys") ?? "1000"),
         prefix: url.searchParams.get("prefix") ?? "",
-        startAfter: url.searchParams.get("continuation-token") ?? undefined,
+        // Continuation tokens are the last key served, so both ways of
+        // resuming a walk read the same.
+        startAfter:
+          url.searchParams.get("continuation-token") ??
+          url.searchParams.get("start-after") ??
+          undefined,
+        delimiter: url.searchParams.get("delimiter") ?? undefined,
       });
     }
 
@@ -334,6 +404,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     }
     if (method === "DELETE") {
       objects.delete(id);
+      modifiedAt.delete(id);
       return new Response(null, { status: 204 });
     }
 
@@ -379,7 +450,26 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     failNext: (failure) => {
       failures.push({ failure, remaining: failure.times ?? 1 });
     },
-    put: (bucket, key, bytes, contentType) => {
+    holdNext: (match) => {
+      const reached = Promise.withResolvers<undefined>();
+      const released = Promise.withResolvers<undefined>();
+      holds.push({
+        match,
+        reached: () => {
+          reached.resolve(undefined);
+        },
+        released: released.promise,
+      });
+      return {
+        reached: reached.promise,
+        release: () => {
+          released.resolve(undefined);
+        },
+      };
+    },
+    modifiedAt,
+    put: (bucket, key, bytes, contentType, lastModified = FAKE_EPOCH) => {
+      modifiedAt.set(objectId(bucket, key), lastModified);
       objects.set(objectId(bucket, key), {
         // Snapshot the caller's buffer so a later mutation cannot rewrite
         // a stored object.

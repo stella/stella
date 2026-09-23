@@ -108,7 +108,7 @@ const recordingRawWriter = () => {
     const hasher = new Bun.CryptoHasher("sha256");
     hasher.update(options.data);
     return await Promise.resolve(
-      `${options.family}/raw/${options.sourceId}/${hasher.digest("hex")}`,
+      `${options.owner.family}/raw/${options.owner.sourceId}/${hasher.digest("hex")}`,
     );
   };
   return { calls, write };
@@ -327,7 +327,7 @@ test("the publisher's payload round-trips onto the row", async () => {
   expect(raw.calls).toHaveLength(1);
   expect(raw.calls[0]?.data).toBe(sourceRaw);
   expect(raw.calls[0]?.contentType).toBe("text/html; charset=utf-8");
-  expect(raw.calls[0]?.family).toBe("legislation");
+  expect(raw.calls[0]?.owner.family).toBe("legislation");
 
   const [row] = await db
     .select({

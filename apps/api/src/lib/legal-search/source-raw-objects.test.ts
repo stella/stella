@@ -8,6 +8,7 @@
  * and a packed address later are one shape and one reader.
  */
 
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
@@ -19,10 +20,11 @@ import {
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
   sourceBinaryRef,
-  writeRawSourcePayload,
+  writeCaseLawRawPayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -91,14 +93,14 @@ describe("an envelope that names a binary part", () => {
 
 const DECISION_ID = "01920000-0000-7000-8000-00000000000a";
 
-const fileInput = (text: string) =>
-  ({
-    family: RAW_SOURCE_FAMILY.CASE_LAW,
-    sourceId: SOURCE_ID,
-    documentId: DECISION_ID,
-    bytes: new TextEncoder().encode(text),
-    contentType: "application/pdf",
-  }) as const;
+const fileInput = (text: string) => ({
+  family: RAW_SOURCE_FAMILY.CASE_LAW,
+  sourceId: SOURCE_ID,
+  documentId: DECISION_ID,
+  bytes: new TextEncoder().encode(text),
+  contentType: "application/pdf",
+  window: openRawSourceWriteWindow(),
+});
 
 describe("storing a publisher file beside the decision's raw payload", () => {
   let fake: FakeS3;
@@ -114,7 +116,7 @@ describe("storing a publisher file beside the decision's raw payload", () => {
   test("the bytes land at the address the envelope names them by", async () => {
     const input = fileInput("%PDF-1.4 a decision");
 
-    const ref = await writeSourceBinary(input);
+    const ref = (await writeSourceBinary(input)).unwrap();
 
     // The address is written in the corpus location form, so a later change
     // that packs these files replaces the address and nothing else.
@@ -134,14 +136,16 @@ describe("storing a publisher file beside the decision's raw payload", () => {
     // What a fixture, a replay or a dry run has to state about a row before
     // the write happens, held to the write by construction rather than by a
     // second copy of the key format.
-    expect(await writeSourceBinary(input)).toEqual(sourceBinaryRef(input));
+    expect((await writeSourceBinary(input)).unwrap()).toEqual(
+      sourceBinaryRef(input),
+    );
   });
 
   test("the same file observed again is stored once, as one version", async () => {
     const input = fileInput("%PDF-1.4 one document");
 
-    const first = await writeSourceBinary(input);
-    const second = await writeSourceBinary(input);
+    const first = (await writeSourceBinary(input)).unwrap();
+    const second = (await writeSourceBinary(input)).unwrap();
 
     expect(second).toEqual(first);
     expect([...fake.versions.values()]).toEqual([1]);
@@ -189,6 +193,18 @@ describe("storing a publisher file beside the decision's raw payload", () => {
     expect([...fake.versions.values()]).toEqual([1]);
   });
 
+  test("a write whose window has closed is refused before it reaches the store", async () => {
+    // A writer that saw its decision live longer ago than an erasure's
+    // settled sweep waits for may not write under it any more.
+    const closed = { ...fileInput("%PDF late"), window: { closesAtMs: 0 } };
+
+    const refused = await writeSourceBinary(closed);
+    expect(Result.isError(refused) && refused.error.message).toContain(
+      "Raw source write window closed",
+    );
+    expect(fake.requests).toEqual([]);
+  });
+
   test("the same file served for two decisions is held once per decision", () => {
     const input = fileInput("%PDF-1.4 joined proceedings");
 
@@ -210,8 +226,12 @@ describe("storing a publisher's raw payload", () => {
   });
 
   const payload = {
-    family: RAW_SOURCE_FAMILY.CASE_LAW,
-    sourceId: SOURCE_ID,
+    owner: {
+      family: RAW_SOURCE_FAMILY.CASE_LAW,
+      sourceId: SOURCE_ID,
+      documentId: DECISION_ID,
+    },
+    window: openRawSourceWriteWindow(),
     data: "<html>a decision</html>",
     contentType: "text/html",
   } as const;
@@ -219,7 +239,7 @@ describe("storing a publisher's raw payload", () => {
   test("a payload the row already records is not written", async () => {
     const key = rawSourcePayloadKey(payload);
 
-    await writeRawSourcePayload({
+    await writeCaseLawRawPayload({
       ...payload,
       storedKey: key,
       storedContentType: "text/html",
@@ -231,14 +251,14 @@ describe("storing a publisher's raw payload", () => {
   test("a payload stored before but not recorded adds no version", async () => {
     // A row that moved to another payload and back, or a retry after the
     // row write failed: the key holds these bytes already.
-    await writeRawSourcePayload({
+    await writeCaseLawRawPayload({
       ...payload,
       storedKey: null,
       storedContentType: null,
     });
-    await writeRawSourcePayload({
+    await writeCaseLawRawPayload({
       ...payload,
-      storedKey: "case-law/raw/another",
+      storedKey: `case-law/raw/${SOURCE_ID}/documents/${DECISION_ID}/payloads/${"0".repeat(64)}`,
       storedContentType: "text/html",
     });
 
@@ -249,7 +269,7 @@ describe("storing a publisher's raw payload", () => {
     const key = rawSourcePayloadKey(payload);
     fake.put(envBase.S3_BUCKET, key, payload.data, "text/plain");
 
-    await writeRawSourcePayload({
+    await writeCaseLawRawPayload({
       ...payload,
       storedKey: key,
       storedContentType: "text/plain",

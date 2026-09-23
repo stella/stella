@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -15,6 +17,12 @@ import {
   completeCaseLawCorpusUploadIntentCleanups,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type { CancelledCaseLawCorpusUploadIntent } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import {
+  enqueueCaseLawRawSweepTx,
+  rawSweepSettleAfter,
+  sweepCaseLawRawDecision,
+} from "@/api/lib/legal-search/case-law-raw-sweeps";
+import type { CaseLawRawSweepOutcome } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import {
   CorpusIndexProjectionSubjectMissingError,
@@ -28,18 +36,19 @@ import {
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  eraseSourceBinaries,
-  RAW_SOURCE_FAMILY,
-} from "@/api/lib/legal-search/raw-source-storage";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 
-/** Wall-clock bound on the publisher-envelope and file deletes of an erasure. */
-const RAW_ERASE_TIMEOUT_MS = 30_000;
+/** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
+const RAW_ERASE_TIMEOUT_MS = 60_000;
+
+/**
+ * When the sweeper first follows an erasure up. The erasure sweeps inline;
+ * this is the retry when that sweep failed or the process died before it.
+ */
+const RAW_SWEEP_FOLLOW_UP_MS = 5 * 60 * 1000;
 
 /**
  * GDPR redaction / takedown for a case-law decision. Personal data lives
- * in (up to) four places once the migration is underway, and erasure
+ * in (up to) five places once the migration is underway, and erasure
  * must hit all of them:
  *
  *   1. The corpus index, through the projection queue: clearing the canonical
@@ -47,6 +56,8 @@ const RAW_ERASE_TIMEOUT_MS = 30_000;
  *   2. The pg-fts projection (case_law_search_documents).
  *   3. The object-storage corpus payloads (text/sections/AST).
  *   4. The Postgres canonical columns (fulltext/sections/document_ast).
+ *   5. The publisher's raw payloads and files, under the decision's own
+ *      raw prefix (see `case-law-raw-sweeps.ts`).
  *
  * The decision row itself is kept (citation-graph node) but stripped of
  * personal text. `content_hash` is nulled so nothing re-projects the body.
@@ -122,67 +133,25 @@ type RedactInput = {
   scopedDb: ScopedDb;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteCorpus?: typeof deleteCorpusDocument;
-  /** Test seam; production deletes through the documents bucket client. */
-  deleteSourceRaw?: typeof deleteS3ObjectWithSignal;
-  /** Test seam; production deletes through the documents bucket client. */
-  eraseSourceFiles?: typeof eraseSourceBinaries;
+  /** Test seam; production sweeps through the documents bucket client. */
+  sweepRaw?: typeof sweepCaseLawRawDecision;
 };
 
-type EraseSourceRawPayloadOptions = {
-  decisionId: SafeId<"caseLawDecision">;
-  sourceId: SafeId<"caseLawSource">;
-  sourceRawS3Key: string | null;
-  deleteSourceRaw: typeof deleteS3ObjectWithSignal;
-  eraseSourceFiles: typeof eraseSourceBinaries;
-};
+/** How the publisher's own payloads and files were reached. */
+type RawErasure =
+  | { type: "swept"; legacyRaw: LegacyRawErasure }
+  | { type: "incomplete"; error: unknown };
 
 /**
- * Erase the publisher's envelope for one decision, and every file it was
- * served.
- *
- * The envelope the row names is stored under its own content hash as a
- * standalone object, in the documents bucket rather than the corpus one, so
- * erasing it is a delete. The files live under the decision's own prefix,
- * which no other decision writes to, so deleting that prefix erases every
- * file written for this decision and nothing another decision holds.
+ * Whether objects of the earlier source-wide raw layout remain in the
+ * decision's source. The decision may have been served bytes stored there;
+ * they are shared by content, so they go only with the source-wide legacy
+ * sweep, and the erasure's sweep entry stays until they have.
  */
-const eraseSourceRawPayload = async ({
-  decisionId,
-  sourceId,
-  sourceRawS3Key,
-  deleteSourceRaw,
-  eraseSourceFiles,
-}: EraseSourceRawPayloadOptions): Promise<CorpusObjectErasure> => {
-  const signal = AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS);
-  const files = await Result.tryPromise({
-    try: async () =>
-      await eraseSourceFiles({
-        family: RAW_SOURCE_FAMILY.CASE_LAW,
-        sourceId,
-        documentId: decisionId,
-        signal,
-      }),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(files)) {
-    return { type: "incomplete", error: files.error };
-  }
-  if (Result.isError(files.value)) {
-    return { type: "incomplete", error: files.value.error };
-  }
-  if (sourceRawS3Key === null) {
-    return { type: "deleted" };
-  }
-  const envelope = await Result.tryPromise({
-    try: async () => {
-      await deleteSourceRaw(sourceRawS3Key, signal);
-    },
-    catch: (cause) => cause,
-  });
-  return Result.isError(envelope)
-    ? { type: "incomplete", error: envelope.error }
-    : { type: "deleted" };
-};
+type LegacyRawErasure = Extract<
+  CaseLawRawSweepOutcome,
+  { type: "swept" }
+>["legacy"];
 
 export type RedactCaseLawDecisionOutcome =
   | { type: "not-found" }
@@ -193,7 +162,11 @@ export type RedactCaseLawDecisionOutcome =
    * tombstoned address is served to nobody — and they are distinguished
    * because only one of them leaves bytes for a later rewrite to reclaim.
    */
-  | { type: "redacted"; erasure: "deleted" | "tombstoned" }
+  | {
+      type: "redacted";
+      erasure: "deleted" | "tombstoned";
+      legacyRaw: LegacyRawErasure;
+    }
   /**
    * The row is redacted and every index copy removed, but at least one
    * corpus object still holds the payload. Its pointer columns are kept as
@@ -313,8 +286,7 @@ export const redactCaseLawDecision = async ({
   decisionId,
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
-  deleteSourceRaw = deleteS3ObjectWithSignal,
-  eraseSourceFiles = eraseSourceBinaries,
+  sweepRaw = sweepCaseLawRawDecision,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -367,8 +339,21 @@ export const redactCaseLawDecision = async ({
         sections: null,
         documentAst: null,
         contentHash: null,
+        // The inline raw column predates object storage; nothing writes it
+        // any more, and a row that still holds it holds the publisher's text.
+        sourceRaw: null,
       })
       .where(eq(caseLawDecisions.id, decisionId));
+    // The raw prefix is swept below and again once every write that could
+    // have started before this fence is over.
+    await enqueueCaseLawRawSweepTx(tx, {
+      decisionId,
+      sourceId: decision.sourceId,
+      firstAttemptAt: new Date(
+        Temporal.Now.instant().epochMilliseconds + RAW_SWEEP_FOLLOW_UP_MS,
+      ),
+      settleAfter: rawSweepSettleAfter(),
+    });
     const cancelledIntents = await cancelCaseLawCorpusUploadIntents({
       decisionId,
       tx,
@@ -476,19 +461,38 @@ export const redactCaseLawDecision = async ({
     });
   }
 
-  // The publisher's own envelope and files carry the same text as the
+  // The publisher's own payloads and files carry the same text as the
   // payloads above, so an erasure that leaves them behind has erased nothing.
-  const rawErasure = await eraseSourceRawPayload({
-    decisionId,
-    sourceId: decision.sourceId,
-    sourceRawS3Key: decision.sourceRawS3Key,
-    deleteSourceRaw,
-    eraseSourceFiles,
+  // They live under the decision's own prefix, which no other decision
+  // writes to; the sweep deletes that prefix and nothing another decision
+  // holds.
+  const rawSwept = await Result.tryPromise({
+    try: async () =>
+      await sweepRaw({
+        decisionId,
+        sourceId: decision.sourceId,
+        scopedDb,
+        signal: AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS),
+      }),
+    catch: (cause) => cause,
   });
+  const rawErasure = ((): RawErasure => {
+    if (Result.isError(rawSwept)) {
+      return { type: "incomplete", error: rawSwept.error };
+    }
+    if (rawSwept.value.type === "incomplete") {
+      return { type: "incomplete", error: rawSwept.value.error };
+    }
+    if (rawSwept.value.type !== "swept") {
+      // The fence above erased the row in this very call.
+      return panic(`Erased decision swept as ${rawSwept.value.type}`);
+    }
+    return { type: "swept", legacyRaw: rawSwept.value.legacy };
+  })();
   if (rawErasure.type === "incomplete") {
     captureError(rawErasure.error, {
       decisionId,
-      step: "redactCaseLawDecision.deleteSourceRawPayload",
+      step: "redactCaseLawDecision.sweepSourceRaw",
     });
     await recordFailedRedactionAudit({
       decisionId,
@@ -532,9 +536,17 @@ export const redactCaseLawDecision = async ({
   }
 
   const detail =
-    corpusErasure.type === "tombstoned"
-      ? `tombstoned: ${corpusErasure.tombstoned.join(", ")}`.slice(0, 2048)
-      : null;
+    [
+      corpusErasure.type === "tombstoned"
+        ? `tombstoned: ${corpusErasure.tombstoned.join(", ")}`
+        : null,
+      // Recorded so the audit trail does not read as finished while the
+      // source's older raw objects are still stored; see `LegacyRawErasure`.
+      rawErasure.legacyRaw === "pending" ? "legacy raw pending" : null,
+    ]
+      .filter((part) => part !== null)
+      .join("; ")
+      .slice(0, 2048) || null;
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — this insert IS the append-only erasure audit row
@@ -547,5 +559,9 @@ export const redactCaseLawDecision = async ({
     });
   });
 
-  return Result.ok({ type: "redacted", erasure: corpusErasure.type });
+  return Result.ok({
+    type: "redacted",
+    erasure: corpusErasure.type,
+    legacyRaw: rawErasure.legacyRaw,
+  });
 };

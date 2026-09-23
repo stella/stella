@@ -43,14 +43,19 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
   }
   const outcome = redaction.value;
   switch (outcome.type) {
-    case "redacted":
+    case "redacted": {
+      const corpus =
+        outcome.erasure === "tombstoned"
+          ? `Redacted decision ${decisionIdArg} across all stores; its payloads were members of a shared pack, so their addresses are tombstoned and served to nobody until the pack is rewritten.`
+          : `Redacted decision ${decisionIdArg} across all stores.`;
       return {
         exitCode: 0,
         message:
-          outcome.erasure === "tombstoned"
-            ? `Redacted decision ${decisionIdArg} across all stores; its payloads were members of a shared pack, so their addresses are tombstoned and served to nobody until the pack is rewritten.`
-            : `Redacted decision ${decisionIdArg} across all stores.`,
+          outcome.legacyRaw === "pending"
+            ? `${corpus} Its source still holds raw objects of the earlier source-wide layout, which may include this decision's; they are deleted by the source's legacy sweep (case-law-raw-layout sweep-legacy), and the raw sweep entry stays open until then.`
+            : corpus,
       };
+    }
     case "not-found":
       return { exitCode: 1, message: `Decision ${decisionIdArg} not found.` };
     case "corpus-objects-remain": {
