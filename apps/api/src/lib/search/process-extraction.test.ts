@@ -12,6 +12,7 @@ import {
   EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
 } from "@/api/lib/errors/tagged-errors";
+import { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
@@ -26,6 +27,7 @@ import type {
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const entityId = toSafeId<"entity">("entity_1");
@@ -82,8 +84,7 @@ const updateSetMock = mock(() => ({ where: updateWhereMock }));
 const updateMock = mock(() => ({ set: updateSetMock }));
 const extractFileTextResultMock = mock(
   async (
-    _buffer: ArrayBuffer,
-    _mimeType: string,
+    _file: ScannedFile,
     _options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
@@ -370,17 +371,19 @@ describe("processExtraction", () => {
     // The extractor is handed the object the run's file identity names, read
     // from storage rather than handed in by the test.
     expect(objectReadKeys()).toEqual([key]);
-    expect(extractFileTextResultMock).toHaveBeenCalledWith(
-      expect.any(ArrayBuffer),
-      fileContent.mimeType,
-      {
-        signal: lifecycleSignal,
-        timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
-      },
-    );
+    expect(extractFileTextResultMock).toHaveBeenCalledWith(expect.anything(), {
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+    });
     const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
+    // The bytes reach the extractor as a stored file under the run's key.
+    expect(extracted?.mimeType).toBe(fileContent.mimeType);
+    expect(extracted instanceof ScannedFile).toBe(true);
+    expect(extracted?.source.type).toBe("stored");
     expect(
-      extracted === undefined ? null : new TextDecoder().decode(extracted),
+      extracted === undefined
+        ? null
+        : new TextDecoder().decode(extracted.bytes),
     ).toBe(SOURCE_BYTES);
     // A sandbox failure is terminal: nothing is encrypted and nothing is
     // written, so no projection statement runs at all.
@@ -426,7 +429,9 @@ describe("processExtraction", () => {
   });
 
   test("reads native extraction input through the caller-provided storage scope", async () => {
-    const readSource = mock(async () => new ArrayBuffer(8));
+    const readSource = mock(async ({ mimeType }: { mimeType: string }) =>
+      testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
 
     await executeNativeExtraction({
       fileField: fileContent,
@@ -443,10 +448,11 @@ describe("processExtraction", () => {
       },
     });
 
-    expect(readSource).toHaveBeenCalledWith(
-      `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
-      expect.any(AbortSignal),
-    );
+    expect(readSource).toHaveBeenCalledWith({
+      key: `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
+      mimeType: fileContent.mimeType,
+      signal: expect.any(AbortSignal),
+    });
     // The provided scope replaces the default reader outright: the store sees
     // no request at all.
     expect(fake.requests).toEqual([]);
@@ -456,7 +462,7 @@ describe("processExtraction", () => {
     const controller = new AbortController();
     const started = Promise.withResolvers<undefined>();
     const observedSignals: AbortSignal[] = [];
-    const readSource = mock(async (_key: string, signal: AbortSignal) => {
+    const readSource = mock(async ({ signal }: { signal: AbortSignal }) => {
       observedSignals.push(signal);
       started.resolve(undefined);
       await new Promise<void>((_resolve, reject) => {
@@ -468,7 +474,10 @@ describe("processExtraction", () => {
           },
         );
       });
-      return new ArrayBuffer();
+      return testScannedFile({
+        bytes: new ArrayBuffer(0),
+        mimeType: fileContent.mimeType,
+      });
     });
 
     const extraction = executeNativeExtraction({

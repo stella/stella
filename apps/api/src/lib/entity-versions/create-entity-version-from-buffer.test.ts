@@ -18,6 +18,7 @@ import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -43,10 +44,15 @@ let intentStatuses: string[] = [];
 let putsAtIntentReservation: number[] = [];
 
 /** The key `createFileKey` hands the writer for this input. */
-const OBJECT_KEY = "org_1/ws_1/file_1.docx";
-const STORED_OBJECT_ID = `${envBase.S3_BUCKET}/${OBJECT_KEY}`;
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const OBJECT_KEY = createFileKey({
+  organizationId: toSafeId<"organization">("org_1"),
+  workspaceId: toSafeId<"workspace">("ws_1"),
+  fileId: "file_1",
+  mimeType: DOCX_MIME_TYPE,
+});
+const STORED_OBJECT_ID = `${envBase.S3_BUCKET}/${OBJECT_KEY}`;
 
 /** A DOCX carrying a document reference, as a stamped download hands it back. */
 const stampedDocxBytes = async (): Promise<Uint8Array> => {

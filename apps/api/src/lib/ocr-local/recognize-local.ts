@@ -18,6 +18,7 @@ import {
   validateOcrResult,
   type DocumentOcrResult,
 } from "@/api/lib/document-processing-ocr-result";
+import type { FileKey } from "@/api/lib/file-key";
 import { LIMITS } from "@/api/lib/limits";
 import {
   resolveRuntimeWorkerPath,
@@ -67,7 +68,8 @@ export const recognizePdfTextLocally = async ({
   sourceKey,
 }: {
   signal: AbortSignal;
-  sourceKey: string;
+  /** A file key: the source was scanned when it was stored. */
+  sourceKey: FileKey;
   readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   readSourceSize?: (key: string, signal: AbortSignal) => Promise<number | null>;
   resolveModelDir?: () => string | undefined;

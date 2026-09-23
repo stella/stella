@@ -20,10 +20,12 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
+import type { FileKey } from "@/api/lib/file-key";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3ObjectWithSignal } from "@/api/lib/s3";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,
@@ -339,13 +341,17 @@ const recordDocxVersionLanguage = async ({
 export const executeNativeExtraction = async ({
   fileField,
   lifecycleSignal,
-  readSource = getS3ObjectWithSignal,
+  readSource = readStoredFile,
   run,
   dependencies = EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES,
 }: {
   fileField: Extract<FieldContent, { type: "file" }>;
   lifecycleSignal: AbortSignal;
-  readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
+  readSource?: (input: {
+    key: FileKey;
+    mimeType: string;
+    signal: AbortSignal;
+  }) => Promise<ScannedFile>;
   run: NativeExtractionRun;
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
 }): Promise<NativeExtractionProjectionOutcome> => {
@@ -362,8 +368,9 @@ export const executeNativeExtraction = async ({
     fileId: source.fileId,
     mimeType: source.storageMimeType,
   });
-  const buffer = await withTimeout(
-    async (signal) => await readSource(key, signal),
+  const stored = await withTimeout(
+    async (signal) =>
+      await readSource({ key, mimeType: source.extractionMimeType, signal }),
     {
       label: "native extraction source read",
       signal: lifecycleSignal,
@@ -371,7 +378,8 @@ export const executeNativeExtraction = async ({
     },
   );
   lifecycleSignal.throwIfAborted();
-  const extraction = await extractText(buffer, source.extractionMimeType, {
+  const buffer = stored.bytes;
+  const extraction = await extractText(stored, {
     signal: lifecycleSignal,
     timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
   });

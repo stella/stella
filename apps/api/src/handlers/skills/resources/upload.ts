@@ -13,6 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -190,7 +191,14 @@ const uploadSkillResource = createSafeRootHandler(
 
     let content: string;
     if (binaryMimeType !== null) {
-      const extracted = await extractFileText(buffer, binaryMimeType, {
+      const scanned = yield* Result.await(
+        scanUploadForHandler({
+          bytes: buffer,
+          declaredMimeType: binaryMimeType,
+          fileName: path,
+        }),
+      );
+      const extracted = await extractFileText(scanned, {
         source: "skill-resource-upload",
         skillId: params.skillId,
       });

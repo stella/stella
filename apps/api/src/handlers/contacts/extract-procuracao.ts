@@ -14,6 +14,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { getS3 } from "@/api/lib/s3";
 import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 import {
@@ -217,9 +218,20 @@ const extractProcuracao = createSafeRootHandler(
         return fileBufferResult;
       }
 
+      // The presigned extraction upload was never scanned: its key is a
+      // staging key, not a file key, so it cannot be read as a stored file.
+      const scanned = await scanUploadForHandler({
+        bytes: fileBufferResult.value,
+        declaredMimeType: mimeType,
+        fileName: upload.declaredName,
+      });
+      if (Result.isError(scanned)) {
+        return scanned;
+      }
+
       const textResult = await Result.tryPromise({
         try: async () =>
-          await extractFileText(fileBufferResult.value, mimeType, {
+          await extractFileText(scanned.value, {
             source: "contacts-extract-procuracao",
           }),
         catch: (cause) =>

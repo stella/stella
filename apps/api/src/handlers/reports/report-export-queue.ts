@@ -45,6 +45,7 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
@@ -286,12 +287,17 @@ type ConvertReportToPdf = (
 ) => Promise<Result<ArrayBuffer, unknown>>;
 
 const convertReportDocxToPdf: ConvertReportToPdf = async (docx) => {
-  const bytes = new Uint8Array(docx);
-  const result = await convertToPdf(
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-    "report.docx",
-    DOCX_MIME_TYPE,
-  );
+  // The report is filled from a stored template whose content the scan never
+  // saw in this combination, so the filled output is scanned like an upload.
+  const scanned = await scanUpload({
+    bytes: new Uint8Array(docx),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: "report.docx",
+  });
+  if (Result.isError(scanned)) {
+    return Result.err(scanned.error);
+  }
+  const result = await convertToPdf(scanned.value);
   if (Result.isError(result)) {
     return Result.err(result.error);
   }

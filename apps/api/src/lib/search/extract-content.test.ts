@@ -5,6 +5,7 @@ import {
   XLSX_MIME_TYPE,
   OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { extractFileText, resolveExtractionMimeType } from "./extract-content";
 
@@ -50,9 +51,12 @@ describe("resolveExtractionMimeType", () => {
   });
 });
 
+const extractFixtureText = async (bytes: ArrayBuffer, mimeType: string) =>
+  await extractFileText(testScannedFile({ bytes, mimeType }));
+
 describe("extractFileText", () => {
   test("extracts direct text files", async () => {
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       toArrayBuffer("hello\nworld"),
       "text/plain",
     );
@@ -61,7 +65,7 @@ describe("extractFileText", () => {
   });
 
   test("extracts PDF text through anydoc, including Form XObject text", async () => {
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("xobject-text.pdf"),
       "application/pdf",
     );
@@ -70,7 +74,7 @@ describe("extractFileText", () => {
   });
 
   test("returns no text for an image-only PDF so OCR can be requested", async () => {
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("image-only.pdf"),
       "application/pdf",
     );
@@ -83,7 +87,7 @@ describe("extractFileText", () => {
     // "OCR is required" marker the worker keys on. When anydoc ships per-page
     // extraction, this fixture should instead surface its native text pages
     // and this expectation must flip.
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("mixed-3pages.pdf"),
       "application/pdf",
     );
@@ -113,7 +117,10 @@ describe("extractFileText", () => {
       "",
     ].join("\r\n");
 
-    const text = await extractFileText(toArrayBuffer(email), "message/rfc822");
+    const text = await extractFixtureText(
+      toArrayBuffer(email),
+      "message/rfc822",
+    );
 
     expect(text).toContain("From: Jane Lawyer <jane@example.com>");
     expect(text).toContain("To: client@example.org");
@@ -144,7 +151,10 @@ describe("extractFileText", () => {
       "",
     ].join("\r\n");
 
-    const text = await extractFileText(toArrayBuffer(email), "message/rfc822");
+    const text = await extractFixtureText(
+      toArrayBuffer(email),
+      "message/rfc822",
+    );
 
     expect(text).toContain("Subject: Contract draft");
     expect(text).toContain("Email body survives.");
@@ -152,7 +162,7 @@ describe("extractFileText", () => {
   });
 
   test("extracts spreadsheet cells from every sheet", async () => {
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("schedule.xlsx"),
       XLSX_MIME_TYPE,
     );
@@ -170,7 +180,7 @@ describe("extractFileText", () => {
   });
 
   test("extracts titles and body text from every slide", async () => {
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("deck.pptx"),
       PPTX_MIME_TYPE,
     );
@@ -189,7 +199,7 @@ describe("extractFileText", () => {
     });
     expect(mimeType).toBe(XLSX_MIME_TYPE);
 
-    const text = await extractFileText(
+    const text = await extractFixtureText(
       await readFixture("schedule.xlsx"),
       mimeType,
     );
@@ -205,12 +215,15 @@ describe("extractFileText", () => {
   test("returns null for malformed office documents instead of throwing", async () => {
     const truncated = (await readFixture("schedule.xlsx")).slice(0, 512);
 
-    expect(await extractFileText(truncated, XLSX_MIME_TYPE)).toBeNull();
+    expect(await extractFixtureText(truncated, XLSX_MIME_TYPE)).toBeNull();
     expect(
-      await extractFileText(toArrayBuffer("not a spreadsheet"), XLSX_MIME_TYPE),
+      await extractFixtureText(
+        toArrayBuffer("not a spreadsheet"),
+        XLSX_MIME_TYPE,
+      ),
     ).toBeNull();
     expect(
-      await extractFileText(new ArrayBuffer(0), PPTX_MIME_TYPE),
+      await extractFixtureText(new ArrayBuffer(0), PPTX_MIME_TYPE),
     ).toBeNull();
   });
 });

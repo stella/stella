@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
 import {
   resolveRuntimeWorkerPath,
@@ -17,7 +18,7 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
   sourceFile: "pdf-worker.ts",
 });
 
-export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
+export const isEncryptedPdf = async ({ bytes: buffer }: ScannedFile) => {
   const result = await spawnWorker({
     workerPath: WORKER_PATH,
     stdin: new Blob([buffer]),

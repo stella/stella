@@ -27,6 +27,7 @@ import {
 } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -111,7 +112,7 @@ describe("chat attachment hydration", () => {
       fileName: "contacts.csv",
       mimeType: TEXT_CSV_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
-      s3Key: ATTACHMENT_KEY,
+      s3Key: testFileKey(ATTACHMENT_KEY),
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -136,7 +137,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
-      s3Key: ATTACHMENT_KEY,
+      s3Key: testFileKey(ATTACHMENT_KEY),
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -153,7 +154,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: ATTACHMENT_KEY,
+      s3Key: testFileKey(ATTACHMENT_KEY),
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -180,7 +181,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.png",
       mimeType: IMAGE_PNG_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: ATTACHMENT_KEY,
+      s3Key: testFileKey(ATTACHMENT_KEY),
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -215,7 +216,7 @@ describe("chat attachment hydration", () => {
         fileName: "draft.docx",
         mimeType: DOCX_MIME_TYPE,
         sendMode,
-        s3Key: ATTACHMENT_KEY,
+        s3Key: testFileKey(ATTACHMENT_KEY),
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -261,7 +262,7 @@ describe("chat attachment hydration", () => {
         fileName: "schedule.xlsx",
         mimeType: XLSX_MIME_TYPE,
         sendMode,
-        s3Key: ATTACHMENT_KEY,
+        s3Key: testFileKey(ATTACHMENT_KEY),
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -327,7 +328,7 @@ describe("chat attachment hydration", () => {
       fileName: "schedule.xlsx",
       mimeType: XLSX_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: ATTACHMENT_KEY,
+      s3Key: testFileKey(ATTACHMENT_KEY),
     });
 
     expect(Result.isOk(hydrateResult)).toBe(true);

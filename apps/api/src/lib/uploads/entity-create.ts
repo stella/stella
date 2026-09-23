@@ -51,6 +51,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -486,14 +487,14 @@ export type FinalizeEntityCreateProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  /** The bytes already downloaded from `tmp/{uploadId}` for scanning. */
-  fileBuffer: ArrayBuffer;
   declaredName: string;
   declaredMime: string;
   declaredSize: number;
   declaredSha256Hex: string;
   purposeData: EntityCreatePurposeData;
   scanWarnings: string[] | undefined;
+  /** The staged upload as scanned, before reference removal. */
+  scanned: ScannedFile;
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
   promoteTmpObject: (
@@ -528,13 +529,13 @@ export const finalizeEntityCreate = async function* ({
   organizationId,
   workspaceId,
   userId,
-  fileBuffer,
   declaredName,
   declaredMime,
   declaredSize,
   declaredSha256Hex,
   purposeData,
   scanWarnings,
+  scanned,
   uploadId,
   claimRequestId,
   promoteTmpObject,
@@ -547,7 +548,7 @@ export const finalizeEntityCreate = async function* ({
   // the finalize runtime had to download it for scanning.
   let encrypted = false;
   if (declaredMime === PDF_MIME_TYPE) {
-    const encryptedResult = await isEncryptedPdf(fileBuffer);
+    const encryptedResult = await isEncryptedPdf(scanned);
     if (Result.isError(encryptedResult)) {
       captureError(encryptedResult.error, {
         mimeType: PDF_MIME_TYPE,

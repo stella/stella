@@ -1,19 +1,30 @@
 import { Result } from "better-result";
 
-import { scanFile } from "@/api/lib/file-scan/scan";
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export const isTemplateOutputValid = async ({
+/**
+ * Filled template output, scanned before it reaches PDF conversion. Stricter
+ * than an upload: a warning verdict fails too, so null means "do not convert".
+ */
+export const scanTemplateOutput = async ({
   buffer,
   fileName,
 }: {
   buffer: Uint8Array;
   fileName: string;
-}): Promise<boolean> => {
-  const scanned = await scanFile({
-    buffer,
+}): Promise<ScannedFile | null> => {
+  const scanned = await scanUpload({
+    bytes: buffer,
     declaredMimeType: DOCX_MIME_TYPE,
     fileName,
   });
-  return Result.isOk(scanned) && scanned.value.verdict === "pass";
+  if (Result.isError(scanned)) {
+    return null;
+  }
+  const { source } = scanned.value;
+  return source.type === "scan" && source.scan.verdict === "pass"
+    ? scanned.value
+    : null;
 };

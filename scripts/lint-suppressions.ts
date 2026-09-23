@@ -148,6 +148,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "audit rows written outside the audit-log recorder",
   },
   {
+    rule: "scanned-file-boundary/scanned-file-boundary",
+    tier: "security",
+    guards: "unscanned bytes cast into a parser's scan proof",
+  },
+  {
     rule: "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete",
     tier: "security",
     guards:

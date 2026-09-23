@@ -35,6 +35,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
+import type { FileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
 import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
@@ -56,7 +57,7 @@ type Fixture = {
   expectedDeletedKeys: string[];
   organizationId: SafeId<"organization">;
   otherUserId: SafeId<"user">;
-  retainedAttachmentKey: string;
+  retainedAttachmentKey: FileKey;
   retainedThreadId: SafeId<"chatThread">;
   retainedWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;

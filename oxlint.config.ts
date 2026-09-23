@@ -824,6 +824,7 @@ export default defineConfig({
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "scanned-file-boundary/scanned-file-boundary": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
@@ -1185,6 +1186,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",

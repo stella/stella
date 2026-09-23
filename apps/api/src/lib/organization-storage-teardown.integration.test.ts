@@ -34,10 +34,12 @@ import {
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
+import type { FileKey } from "@/api/lib/file-key";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -87,7 +89,7 @@ type Fixture = {
   organizationId: SafeId<"organization">;
   organizationWriterIntentId: SafeId<"pendingUpload">;
   organizationWriterKey: string;
-  otherChatAttachmentKey: string;
+  otherChatAttachmentKey: FileKey;
   otherOrganizationId: SafeId<"organization">;
   otherTemplateKey: string;
   pdfKey: string;
@@ -215,6 +217,7 @@ const seedChatAttachment = async ({
 }) => {
   const threadId = toSafeId<"chatThread">(uuid());
   const userFileId = toSafeId<"userFile">(uuid());
+  const s3Key = testFileKey(`${userId}/${userFileId}.pdf`);
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId,
@@ -229,11 +232,11 @@ const seedChatAttachment = async ({
     mimeType: PDF_MIME,
     sizeBytes: 4096,
     sha256Hex: "c".repeat(64),
-    s3Key: `${userId}/${userFileId}.pdf`,
+    s3Key,
     threadId,
     thumbnailFileId,
   });
-  return { s3Key: `${userId}/${userFileId}.pdf`, threadId, userFileId };
+  return { s3Key, threadId, userFileId };
 };
 
 beforeAll(async () => {

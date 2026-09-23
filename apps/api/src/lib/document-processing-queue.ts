@@ -92,6 +92,7 @@ import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-r
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -947,14 +948,13 @@ export const processDocumentProcessingRun = async (
           const extractionOutcome = await executeNativeExtraction({
             fileField: source.content,
             lifecycleSignal,
-            readSource: async (key, signal) =>
-              await readTenantS3ArrayBuffer({
-                key,
+            readSource: async (input) =>
+              await readStoredFile({
+                ...input,
                 scope: {
                   organizationId: run.organizationId,
                   workspaceId: run.workspaceId,
                 },
-                signal,
               }),
             run,
           });

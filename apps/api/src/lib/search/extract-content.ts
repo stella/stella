@@ -17,6 +17,7 @@ import {
   ExtractionWorkerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { resolveEmailMimeType } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -118,8 +119,7 @@ type ExtractFileTextResultOptions = {
 };
 
 export const extractFileTextResult = async (
-  buffer: ArrayBuffer,
-  mimeType: string,
+  { bytes: buffer, mimeType }: ScannedFile,
   {
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
@@ -166,11 +166,10 @@ export const extractFileTextResult = async (
  * can never be mistaken for a successfully empty document.
  */
 export const extractFileText = async (
-  buffer: ArrayBuffer,
-  mimeType: string,
+  file: ScannedFile,
   context?: Record<string, string>,
 ): Promise<string | null> => {
-  const first = await extractFileTextResult(buffer, mimeType);
+  const first = await extractFileTextResult(file);
   if (!Result.isError(first)) {
     return first.value;
   }
@@ -180,9 +179,7 @@ export const extractFileText = async (
   // before giving up; there is no queue behind it to requeue into.
   const retryable =
     first.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.external;
-  const result = retryable
-    ? await extractFileTextResult(buffer, mimeType)
-    : first;
+  const result = retryable ? await extractFileTextResult(file) : first;
   if (!Result.isError(result)) {
     return result.value;
   }

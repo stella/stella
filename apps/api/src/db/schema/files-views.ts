@@ -1,3 +1,5 @@
+import type { FileKey } from "@/api/lib/file-key";
+
 import { chatThreads } from "./chat";
 import {
   jsonb,
@@ -28,7 +30,8 @@ export const userFiles = p.pgTable(
     mimeType: p.varchar("mime_type", { length: 255 }).notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
     sha256Hex: p.varchar("sha256_hex", { length: 64 }).notNull(),
-    s3Key: p.text("s3_key").notNull(),
+    // Only scanned chat attachments are written here (`uploadMessageFiles`).
+    s3Key: p.text("s3_key").$type<FileKey>().notNull(),
     threadId: safeUuid<"chatThread">("thread_id")
       .notNull()
       .references(() => chatThreads.id, {

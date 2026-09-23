@@ -23,8 +23,8 @@ import {
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
-import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
-import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
+import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
+import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 export type FillByIdLogicProps = {
   safeDb: SafeDb;
@@ -175,25 +175,16 @@ export const fillByIdLogic = async function* ({
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
-    const docxBytes = new Uint8Array(result.buffer);
-    if (
-      !(await isTemplateOutputValid({
-        buffer: docxBytes,
-        fileName: baseName,
-      }))
-    ) {
+    const scannedOutput = await scanTemplateOutput({
+      buffer: new Uint8Array(result.buffer),
+      fileName: baseName,
+    });
+    if (scannedOutput === null) {
       return Result.err(
         new HandlerError({ status: 422, message: "Template output invalid" }),
       );
     }
-    const pdfResult = await convertToPdf(
-      docxBytes.buffer.slice(
-        docxBytes.byteOffset,
-        docxBytes.byteOffset + docxBytes.byteLength,
-      ),
-      baseName,
-      DOCX_MIME_TYPE,
-    );
+    const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
       return Result.err(
         new HandlerError({

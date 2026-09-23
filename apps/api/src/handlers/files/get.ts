@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
@@ -157,16 +158,6 @@ const fetchStoredFileResponse = async (
   return response;
 };
 
-const fetchStoredFile = async (key: string): Promise<ArrayBuffer | null> => {
-  const response = await fetchStoredFileResponse(key);
-
-  if (!response) {
-    return null;
-  }
-
-  return await response.arrayBuffer();
-};
-
 const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
   secureDocumentResponse({
     body: buffer,
@@ -256,17 +247,21 @@ export const printPdfHandler = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const sourceBuffer = await fetchStoredFile(sourceKey);
+  const source = await Result.tryPromise(
+    async () =>
+      await readStoredFile({
+        key: sourceKey,
+        mimeType: content.mimeType,
+        fileName: content.fileName,
+      }),
+  );
 
-  if (!sourceBuffer) {
+  if (Result.isError(source)) {
+    captureError(source.error, { source: "stored-file-fetch" });
     return status(502);
   }
 
-  const conversionResult = await convertToPdf(
-    sourceBuffer,
-    content.fileName,
-    content.mimeType,
-  );
+  const conversionResult = await convertToPdf(source.value);
 
   if (Result.isError(conversionResult)) {
     captureError(conversionResult.error, {
