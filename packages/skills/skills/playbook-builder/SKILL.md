@@ -24,9 +24,11 @@ draft that a person approves in the editor; you never approve it.
 If `save_playbook` is not available to you, say that you cannot save a
 playbook here and stop; do not draft one only in the conversation.
 
-When this skill says "ask the user", use the `ask-user` tool if you have it;
-otherwise ask in your reply and wait for the answer. Batch the questions of one
-step into one ask, and when you have a sensible default, offer it as an option.
+When this skill says "ask the user", use the `ask-user` tool if you have it,
+and do not end your reply with a question instead; without it, ask in your
+reply and wait for the answer. Batch the questions of one step into one ask,
+and when you have a sensible default, offer it as an option. Between
+questions, keep going: draft and save until every position is settled.
 
 ## 1. Open
 
@@ -54,12 +56,17 @@ Contracts are evidence, and they are optional; the flow works without them.
   with `cursor`.
 - **Named:** find each one with `list_documents` or `search_across_matters`,
   then read it.
-- **Look for them:** only after the user agrees. Ask which matters to search
-  (or all they can access, if they say so), then search only there. Show the
-  candidates in one question, each named with its matter, and let the user
-  pick. Read only the ones the user confirms, at most eight. A search also
-  returns drafts and the counterparty's paper, and a playbook is visible to
-  the whole organization, so which documents feed it is the user's choice.
+- **Look for them:** only after the user agrees, in this order:
+  1. Ask which matters to search, or whether to search all they can access.
+  2. For named matters, find them with `list_matters` and list their
+     documents with `list_documents`. `search_across_matters` spans every
+     matter the user can access, so use it only when they chose all.
+  3. Ask the user to pick from the candidates: one question, each document an
+     option named with its matter.
+  4. Read only the documents the user picked, at most eight. Never read one
+     they did not pick, however relevant it looks: a search also returns
+     drafts and the counterparty's paper, and a playbook is visible to the
+     whole organization, so which documents feed it is the user's choice.
 - **None:** do not search. Build from defaults and the interview.
 
 Read contracts one at a time in this conversation.
@@ -75,8 +82,10 @@ so do not hold positions back to save them all at the end.
 ## 4. Build positions
 
 Draft the positions a reviewer needs for this contract type, side, and
-governing law, in the playbook's language. Start from market-standard
-defaults, then let the contracts and the user's answers move them.
+governing law. Start from market-standard defaults, then let the contracts and
+the user's answers move them. Write every saved text (name, description,
+issue, rules, wording, guidance, negotiation) in the playbook's language, even
+when the conversation is in another.
 
 For each graded position, fill every field that applies:
 
@@ -101,9 +110,9 @@ SaaS), mention that the user can start from it on the playbooks page instead.
 
 ## Saving rules
 
-- Save each position when it settles, one position per call. After the first
-  save, pass `playbook_id` and the latest `updatedAt` as
-  `expected_updated_at`.
+- Save each position when it settles, one position per call, written in the
+  playbook's language. After the first save, pass `playbook_id` and the
+  latest `updatedAt` as `expected_updated_at`.
 - Send only positions that are new or changed. Never resend the playbook or a
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,
