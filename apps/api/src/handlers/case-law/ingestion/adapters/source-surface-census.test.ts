@@ -62,6 +62,7 @@ import {
   plCourtsSearchFixture,
   plKioFixture,
   plNsaFixture,
+  plNcourtFixture,
   plSnFixture,
   plTkFixture,
   skCourtsFixture,
@@ -134,6 +135,7 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.PL_TK]: [{ kind: "built", fixture: plTkFixture }],
   [ADAPTER_KEYS.PL_NSA]: [{ kind: "built", fixture: plNsaFixture }],
+  [ADAPTER_KEYS.PL_NCOURT]: [{ kind: "built", fixture: plNcourtFixture }],
   [ADAPTER_KEYS.AT_COURTS]: [
     ...atRisEvidence(ADAPTER_KEYS.AT_COURTS),
     { kind: "page-recording", file: "at-courts-page.json.gz" },

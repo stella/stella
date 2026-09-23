@@ -81,6 +81,7 @@ import {
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
@@ -943,6 +944,83 @@ export const plKioFixture = (): EnrolledAdapterFixture => ({
       built.type === "built"
         ? built.decision
         : panic("pl-kio fixture did not build"),
+    );
+  },
+});
+
+// ── PL common courts (ncourt-api) fixture ────────────────
+
+const PL_NCOURT_ID = "155020000001003_II_Ca_000236_2018_Uz_2018-03-22_001";
+
+/** One listed row, every element the listing prints. */
+const PL_NCOURT_LISTING_ROW = {
+  id: PL_NCOURT_ID,
+  signature: "II Ca 236/18",
+  date: "2018-03-22 01:00:00.0 CET",
+  publicationDate: "2018-03-26 22:10:06.0 CEST",
+  lastUpdate: "2018-03-26 12:07:34.0 CEST",
+  courtId: "15502000",
+  departmentId: "1003",
+  type: "DECISION, REASON",
+  excerpt: "Sygn. akt II Ca 236/18 POSTANOWIENIE Dnia 22 marca 2018r.",
+} as const;
+
+/**
+ * The record, carrying every element the API prints for any judgment, each
+ * with a value. No one real record fills them all: most leave the recorder,
+ * the decision and the thesis empty.
+ */
+const PL_NCOURT_DETAIL = `<?xml version="1.0" encoding="UTF-8"?>
+<judgement id="${PL_NCOURT_ID}">
+   <signature>II Ca 236/18</signature>
+   <date>2018-03-22 01:00:00.0 CET</date>
+   <publicationDate>2018-03-26 22:10:06.0 CEST</publicationDate>
+   <courtId>15502000</courtId>
+   <departmentId>1003</departmentId>
+   <type>DECISION, REASON</type>
+   <chairman>Jan Nowak</chairman>
+   <judges><judge>Maria Wiśniewska</judge><judge>Jan Nowak</judge></judges>
+   <themePhrases><themePhrase>Skarga o wznowienie postępowania</themePhrase></themePhrases>
+   <references><reference>Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego (Dz. U. z 1964 r. Nr 43, poz. 296 - art. 410)</reference></references>
+   <legalBases><legalBasis>art.410§1 kpc</legalBasis></legalBases>
+   <recorder>st. sekr. sąd. Anna Kowalska</recorder>
+   <decision>odrzuca skargę</decision>
+   <reviser>Tomasz Zieliński</reviser>
+   <publisher>Ewa Lis</publisher>
+   <dateOfPublication>2018-03-26 22:10:06.0 CEST</dateOfPublication>
+   <dateOfLastUpdate>2018-03-26 12:07:34.0 CEST</dateOfLastUpdate>
+   <thesis>Skarga o wznowienie oparta na nieważności podlega odrzuceniu.</thesis>
+</judgement>`;
+
+/** The document, carrying every root attribute any document states. */
+const PL_NCOURT_CONTENT = `<?xml version='1.0' encoding='UTF-8'?>
+<xPart xPublisherFullName="Ewa Lis" xVersion="1.0" xYear="2018" xLang="PL" xToPage="2" xEditor="elis" xPublisher="elis" xEditorFullName="Ewa Lis" xFlag="published" xDocType="Uz" xml:space="preserve" xFromPg="1" xVolType="15/502000/0001003/Ca" xVolNmbr="000236" xClassifier="tzielinski" xClassifierFullName="Tomasz Zieliński" xClassified="true">
+  <xName>Postanowienie+Uzasadnienie</xName>
+  <xBlock>
+    <xText>Sygn. akt II Ca 236/18</xText>
+    <xUnit xIsTitle="true" xBold="true" xType="part">
+      <xName>POSTANOWIENIE</xName>
+      <xText>Dnia 22 marca 2018r.</xText>
+      <xText>po rozpoznaniu sprawy ze skargi <xAnon>E. K.</xAnon> o wznowienie postępowania na podstawie <xLexLink xArt="art. 410" xIsapId="WDU19640430296" xTitle="Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego" xAddress="Dz. U. z 1964 r. Nr 43, poz. 296">art. 410 kpc</xLexLink></xText>
+      <xText><xBx>odrzucić skargę.</xBx></xText>
+    </xUnit>
+  </xBlock>
+</xPart>`;
+
+/** Built from the three payloads directly, as the crawl hands them over. */
+export const plNcourtFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const built = assemblePlNcourtDecision({
+      listingXml: `<judgement>${Object.entries(PL_NCOURT_LISTING_ROW)
+        .map(([name, value]) => `<${name}>${value}</${name}>`)
+        .join("")}</judgement>`,
+      detailXml: PL_NCOURT_DETAIL,
+      contentXml: PL_NCOURT_CONTENT,
+    });
+    return await Promise.resolve(
+      built.type === "built"
+        ? built.decision
+        : panic("pl-ncourt fixture did not build"),
     );
   },
 });

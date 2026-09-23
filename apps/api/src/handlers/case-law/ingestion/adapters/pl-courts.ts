@@ -2137,7 +2137,8 @@ const listPlCourtsSourceFields = (parts: SourceRawParts): readonly string[] => {
  * served it: the dump row, the search row and the per-judgment record. What
  * is left out is the aggregator's own renderings of that record, two
  * corpus-wide endpoints, and the deciding court's service — which states
- * fields the aggregator does not and is a publisher of its own.
+ * fields the aggregator does not, is a publisher of its own, and is read by
+ * pl-ncourt.
  */
 const SOURCE_SURFACES = [
   "listing-dump",
@@ -2165,9 +2166,8 @@ const PL_COURTS_SOURCE_SURFACES = {
     "html-download": excludedSourceSurface(
       "the same document text inside page chrome",
     ),
-    "upstream-document": backlogSurface(
-      ADAPTER_KEYS.PL_COURTS,
-      "the deciding court's own document, served by a second publisher whose request budget this crawl does not declare yet",
+    "upstream-document": excludedSourceSurface(
+      "the deciding court's own document, recorded by pl-ncourt under that publisher's own budget",
     ),
     "citing-list": excludedSourceSurface(
       "the inbound view of an edge the stored record already states outbound",
@@ -2179,9 +2179,8 @@ const PL_COURTS_SOURCE_SURFACES = {
     "court-dictionary": excludedSourceSurface(
       "reference data, not a payload about any one decision",
     ),
-    "upstream-detail": backlogSurface(
-      ADAPTER_KEYS.PL_COURTS,
-      "the deciding court's own record states the recorder and a date the aggregator does not, and is served by a second publisher whose request budget this crawl does not declare yet",
+    "upstream-detail": excludedSourceSurface(
+      "the deciding court's own record, recorded by pl-ncourt under that publisher's own budget",
     ),
     "upstream-listing": excludedSourceSurface(
       "a second listing of the same decisions: a coverage oracle rather than a field source",

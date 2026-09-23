@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "dbb69c570e31c7f9bc6c76c036cf3efc8caf7ee2a88b830f2e1fade2f001e52d",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?court=15502000&limit=1&sort=signature-asc",
+  "capturedAt": "2026-09-23T10:19:54.016Z",
+  "note": "one court: the filter applied"
+}

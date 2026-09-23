@@ -86,6 +86,11 @@ export const PUBLISHER_GATES = {
   "uzp-pl": { publisher: "Urząd Zamówień Publicznych", intervalMs: 1000 },
   /** ipo.trybunal.gov.pl. */
   "trybunal-pl": { publisher: "Trybunał Konstytucyjny", intervalMs: 1500 },
+  /** apiorzeczenia.wroclaw.sa.gov.pl, the common courts' judgments API. */
+  "ms-gov-pl": {
+    publisher: "Ministerstwo Sprawiedliwości",
+    intervalMs: 1000,
+  },
   /** rozhodnuti.nsoud.cz. */
   "nsoud-cz": { publisher: "Nejvyšší soud", intervalMs: POLITE_INTERVAL_MS },
   /** vyhledavac.nssoud.cz. */
@@ -161,6 +166,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_KIO]: "uzp-pl",
   [ADAPTER_KEYS.PL_TK]: "trybunal-pl",
   [ADAPTER_KEYS.PL_NSA]: "huggingface-datasets",
+  [ADAPTER_KEYS.PL_NCOURT]: "ms-gov-pl",
   [ADAPTER_KEYS.AT_COURTS]: "ris-bka",
   [ADAPTER_KEYS.AT_VFGH]: "ris-bka",
   [ADAPTER_KEYS.AT_VWGH]: "ris-bka",

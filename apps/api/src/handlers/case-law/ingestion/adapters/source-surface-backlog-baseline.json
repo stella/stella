@@ -5,7 +5,7 @@
     "cz-nss": ["listing", "original", "text"],
     "sk-courts": ["bulk-dump", "document"],
     "sk-us": ["archive-listing", "collection-listing"],
-    "pl-courts": ["enrichment", "upstream-detail", "upstream-document"],
+    "pl-courts": ["enrichment"],
     "at-courts": ["attachments"],
     "at-vfgh": ["attachments"],
     "at-vwgh": ["attachments"],
