@@ -145,7 +145,7 @@ switch (result.type) {
     );
     if (result.referencedAfter) {
       console.error(
-        "A live decision pointed into the older layout while this ran; a writer of it is still running. Its objects remain recoverable as noncurrent versions for the bucket's retention.",
+        "A live decision pointed into the older layout while this ran, so a writer of that layout is still running. Stop it, then run `rows --apply`.",
       );
       process.exit(1);
     }

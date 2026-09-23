@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import { rootDb } from "@/api/db/root";
@@ -36,6 +37,7 @@ export const CENSUS_CASE_LAW_RAW_OBJECTS_TASK =
 const SWEEP_LIMIT = 20;
 const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
+const CONTINUATION_DELAY_MS = 1000;
 
 const rootScopedDb: ScopedDb = async (run) => await rootDb.transaction(run);
 
@@ -86,6 +88,7 @@ const parseRowCursor = (payload: Record<string, unknown> | null) => {
 export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   job,
   logger,
+  scheduleContinuation,
   signal,
 }) => {
   signal.throwIfAborted();
@@ -116,6 +119,19 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
       decisionId,
       outcome,
     });
+  }
+  // A page that moved decisions is the backfill still running: the next
+  // page follows at once. A page that only checked waits for the schedule.
+  if (
+    page.counts.migrated > 0 &&
+    page.resumeAfter !== null &&
+    !signal.aborted
+  ) {
+    scheduleContinuation(
+      new Date(
+        Temporal.Now.instant().epochMilliseconds + CONTINUATION_DELAY_MS,
+      ),
+    );
   }
 };
 

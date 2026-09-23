@@ -720,6 +720,40 @@ export const getS3ObjectSizeWithSignal = async (
     return response.ContentLength ?? null;
   });
 
+/**
+ * What the store says about one object without reading it, or `null` when
+ * it confirms the key holds nothing.
+ */
+export const headS3ObjectWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<{
+  contentLength: number | null;
+  contentType: string | null;
+} | null> => {
+  const head = await Result.tryPromise({
+    try: async () =>
+      await documentsCredentials.run(
+        async () =>
+          await getAbortableS3().send(
+            new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+            { abortSignal: signal },
+          ),
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(head)) {
+    return {
+      contentLength: head.value.ContentLength ?? null,
+      contentType: head.value.ContentType ?? null,
+    };
+  }
+  if (isMissingS3ObjectError(head.error)) {
+    return null;
+  }
+  throw head.error;
+};
+
 /** Read one object while allowing the caller to cancel the HTTP request. */
 export const getS3ObjectWithSignal = async (
   key: string,

@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/legal-search/corpus-location";
 import {
   decodeSourceRawEnvelopeObjects,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   withSourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -18,7 +19,9 @@ import type {
 import {
   createS3ObjectIfAbsent,
   deleteS3ObjectWithSignal,
+  headS3ObjectWithSignal,
   listS3ObjectKeys,
+  listS3ObjectPage,
   readS3ObjectIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -456,29 +459,34 @@ const RAW_ERASE_PAGE = 100;
 /** Rounds before an erasure gives up and stays a retry target. */
 const RAW_ERASE_MAX_ROUNDS = 10;
 
+const RAW_PAYLOAD_LIST_PAGE = 1000;
+
 /**
- * Every key under one document's prefix, bounded: a prefix that outlasts
- * the bound throws rather than being answered in part.
+ * Every payload key one document holds, however many observations stored
+ * one: a page at a time, to the end.
  */
-export const listRawDocumentKeys = async ({
+export const listRawDocumentPayloadKeys = async ({
   signal,
   ...owner
 }: RawDocumentOwner & { signal: AbortSignal }): Promise<string[]> => {
-  const prefix = rawDocumentPrefix(owner);
-  const ceiling = RAW_ERASE_PAGE * RAW_ERASE_MAX_ROUNDS;
-  const keys = await listS3ObjectKeys({
-    bucket: envBase.S3_BUCKET,
-    prefix,
-    maxKeys: ceiling,
-    signal,
-  });
-  if (keys.length > ceiling) {
-    throw new RawDocumentErasureIncompleteError({
-      message: `More raw objects than one pass reads under ${prefix}`,
+  const prefix = `${rawDocumentPrefix(owner)}${PAYLOADS_SEGMENT}`;
+  const collect = async (
+    startAfter: string | null,
+    keys: readonly string[],
+  ): Promise<string[]> => {
+    const page = await listS3ObjectPage({
       prefix,
+      startAfter,
+      maxKeys: RAW_PAYLOAD_LIST_PAGE,
+      signal,
     });
-  }
-  return keys;
+    const collected = [...keys, ...page.objects.map(({ key }) => key)];
+    const last = collected.at(-1);
+    return page.truncated && last !== undefined
+      ? await collect(last, collected)
+      : collected;
+  };
+  return await collect(null, []);
 };
 
 /**
@@ -516,34 +524,39 @@ export const eraseRawDocument = async ({
   await eraseRound(1);
 };
 
-/** Largest payload a reference census reads to find the files it names. */
-const RAW_PAYLOAD_READ_MAX_BYTES = 64 * 1024 * 1024;
+/** Largest envelope a reference census reads to find the files it names. */
+const RAW_ENVELOPE_READ_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
  * The file references one stored payload names, or none when it is absent
- * or is not an envelope.
+ * or is not an envelope. Only a payload stored as an envelope names files
+ * (a writer records the envelope's media type with it), so any other
+ * payload, a publisher's document of any size included, is not read.
  */
 export const readRawPayloadRefs = async (
   key: string,
   signal: AbortSignal,
 ): Promise<SourceRawObjectRef[]> => {
-  const read = await readS3ObjectIfPresent(key, signal);
-  if (read === null) {
+  const head = await headS3ObjectWithSignal(key, signal);
+  if (
+    head === null ||
+    head.contentType?.startsWith(SOURCE_RAW_ENVELOPE_CONTENT_TYPE) !== true
+  ) {
     return [];
   }
-  if (read.byteLength > RAW_PAYLOAD_READ_MAX_BYTES) {
+  if (
+    head.contentLength === null ||
+    head.contentLength > RAW_ENVELOPE_READ_MAX_BYTES
+  ) {
     throw new RawDocumentErasureIncompleteError({
-      message: `Raw payload ${key} is larger than a census reads`,
+      message: `Raw envelope ${key} is larger than a census reads`,
       prefix: key,
     });
   }
-  return Object.values(
-    decodeSourceRawEnvelopeObjects(new TextDecoder().decode(read)),
-  );
+  const read = await readS3ObjectIfPresent(key, signal);
+  return read === null
+    ? []
+    : Object.values(
+        decodeSourceRawEnvelopeObjects(new TextDecoder().decode(read)),
+      );
 };
-
-/** Whether a key under a document's prefix holds a payload rather than a file. */
-export const isRawPayloadKey = (
-  key: string,
-  owner: RawDocumentOwner,
-): boolean => key.startsWith(`${rawDocumentPrefix(owner)}${PAYLOADS_SEGMENT}`);

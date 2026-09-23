@@ -16,8 +16,7 @@ import {
   classifyCaseLawRawKey,
   deleteRawKeys,
   eraseRawDocument,
-  isRawPayloadKey,
-  listRawDocumentKeys,
+  listRawDocumentPayloadKeys,
   RAW_KEY_OWNERSHIP,
   RAW_SOURCE_ERASURE_SETTLE_MS,
   RAW_SOURCE_FAMILY,
@@ -284,9 +283,10 @@ export const sweepCaseLawRawDecision = async ({
   // decision names, so a payload is never gone before what it named is
   // recorded.
   const document = documentOwner(owner);
-  const ownPayloadKeys = (
-    await listRawDocumentKeys({ ...document, signal })
-  ).filter((key) => isRawPayloadKey(key, document));
+  const ownPayloadKeys = await listRawDocumentPayloadKeys({
+    ...document,
+    signal,
+  });
   const named = await Promise.all(
     [...ownPayloadKeys, ...entry.legacyPayloadKeys].map(
       async (key) => await readRawPayloadRefs(key, signal),
