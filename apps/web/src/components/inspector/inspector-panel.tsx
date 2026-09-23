@@ -461,8 +461,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     <RenderStormRegion name="inspector">
       {/* Panes paint `bg-background`; pointing the token at the matter tint
           here gives every pane the same ground as the rest of the matter
-          chrome, including panes added later. Without a matter of its own the
-          inspector inherits the route's tint variables. */}
+          chrome, including panes added later. The panel always declares its
+          own tint variables: it also mounts outside the matter routes (the
+          law readers), where nothing above it does, and an undefined tint
+          would invalidate `--background` for every pane. */}
       <div
         // Every pane is a flex child of this row, and a flex child's automatic
         // minimum is its content: one unshrinkable cell, chip row or fixed
@@ -472,11 +474,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // content's to demand.
         className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)] *:min-w-0"
         data-slot="inspector"
-        style={
-          inspectorMatterColor === null
-            ? undefined
-            : matterChromeStyle(inspectorMatterColor)
-        }
+        style={matterChromeStyle(inspectorMatterColor)}
       >
         <div className="hidden md:contents">
           <InspectorRail
