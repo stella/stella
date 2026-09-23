@@ -35,5 +35,3 @@ export const WRITE_PRIMITIVE_SCOPES = [
     scope: "stella:documents_write",
   },
 ] as const;
-
-export type WritePrimitiveScope = (typeof WRITE_PRIMITIVE_SCOPES)[number];

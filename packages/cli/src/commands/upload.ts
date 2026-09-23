@@ -181,8 +181,9 @@ export const uploadCommand: Command<Context> = buildCommand<
       flags.entityId === undefined
         ? ["matters_write", "documents_write"]
         : ["documents_write"];
+    const { token } = this;
     const missingScope = requiredScopes.find(
-      (scope) => !scopeGranted({ token: this.token, scope }),
+      (scope) => !scopeGranted({ token, scope }),
     );
     if (missingScope !== undefined) {
       writers.stderr(
