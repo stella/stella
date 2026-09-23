@@ -122,7 +122,11 @@ import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { MCP_ALL_RESOURCE_SCOPES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import {
+  MCP_ALL_RESOURCE_SCOPES,
+  MCP_MEMBER_ID_CLAIM,
+  MCP_OAUTH_SCOPES,
+} from "@/api/mcp/constants";
 
 /** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
@@ -1275,9 +1279,31 @@ const createAuth = () => {
             return activeOrganizationId;
           },
         },
-        customAccessTokenClaims: ({ referenceId }) => ({
-          org_id: referenceId,
-        }),
+        customAccessTokenClaims: async ({ referenceId, user }) => {
+          if (!referenceId || !user) {
+            return { org_id: referenceId };
+          }
+          // `member_id` pins the token to the membership row that minted it,
+          // so a later membership of the same user in the same organization
+          // (removal followed by re-invitation) is a different identity.
+          const row = await rootDb
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.userId, user.id),
+                eq(member.organizationId, referenceId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows.at(0));
+          if (!row) {
+            throw new APIError("FORBIDDEN", {
+              message: "The user is not a member of this organization",
+            });
+          }
+          return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+        },
       }),
       oauthUiFragmentBridgePlugin,
     ],
@@ -1514,6 +1540,7 @@ type MemberAuthorizationLookup = {
 };
 
 type MemberAuthorization = {
+  memberId: string;
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
@@ -1528,7 +1555,7 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ role: member.role })
+      .select({ memberId: member.id, role: member.role })
       .from(member)
       .where(
         and(
@@ -1539,7 +1566,9 @@ export const resolveMemberAuthorization = async (
       .limit(1)
       .then((rows) => rows.at(0));
 
-    return row ? { role: row.role, workspace: null } : null;
+    return row
+      ? { memberId: row.memberId, role: row.role, workspace: null }
+      : null;
   }
 
   const membershipExists = exists(
@@ -1555,6 +1584,7 @@ export const resolveMemberAuthorization = async (
   );
   const row = await db
     .select({
+      memberId: member.id,
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
@@ -1585,10 +1615,11 @@ export const resolveMemberAuthorization = async (
   }
 
   if (row.workspaceId === null || row.workspaceStatus === null) {
-    return { role: row.role, workspace: null };
+    return { memberId: row.memberId, role: row.role, workspace: null };
   }
 
   return {
+    memberId: row.memberId,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
   };

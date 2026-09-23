@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import * as v from "valibot";
@@ -12,8 +13,11 @@ import * as v from "valibot";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { getAuth } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
 import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import { authenticateMcpRequest } from "@/api/mcp/auth";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -38,11 +42,32 @@ import type {
 
 setDefaultTimeout(120_000);
 
+// The MCP verifier loads the signing keys over HTTP; serve that one address
+// from the real auth handler so the token path runs unchanged.
+const passThroughFetch = globalThis.fetch;
+const fetchSpy = spyOn(globalThis, "fetch");
+
 beforeAll(async () => {
   await initAgentAuthTestDb();
+  const jwksUrl = getAuthEndpointUrl("jwks");
+  const serveJwks: typeof fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      if (request.url === jwksUrl) {
+        return await getAuth().handler(request);
+      }
+      return await passThroughFetch(input, init);
+    },
+    { preconnect: passThroughFetch.preconnect },
+  );
+  fetchSpy.mockImplementation(serveJwks);
 });
 
 afterAll(async () => {
+  fetchSpy.mockRestore();
   await releaseAgentAuthTestDb();
 });
 
@@ -163,6 +188,17 @@ const inviteIntoOrganization = async ({
   await invitee.setActiveOrganization(organizationId);
 };
 
+/** Whether an OAuth access token opens an MCP request context. */
+const opensMcpContext = async (accessToken: string): Promise<boolean> => {
+  const context = await Result.tryPromise(async () => {
+    const session = await authenticateMcpRequest(accessToken);
+    return await resolveMcpSessionContext(session, {
+      request: new Request(`${BASE}/mcp`, { method: "POST" }),
+    });
+  });
+  return context.isOk();
+};
+
 describe("organization member credential lifecycle", () => {
   test("removing a member ends every credential they hold in that organization, and re-inviting them restores none", async () => {
     const auth = getAuth();
@@ -233,5 +269,49 @@ describe("organization member credential lifecycle", () => {
     });
 
     expect(await checkCredentials(credentials)).toEqual(NOTHING_AUTHENTICATES);
+  });
+
+  test("an OAuth access token opens MCP only for the membership it was issued under", async () => {
+    const auth = getAuth();
+    const owner = await signInHuman(`owner-${Bun.randomUUIDv7()}@stella.dev`);
+    const organization = await auth.api.createOrganization({
+      body: {
+        name: "Token membership",
+        slug: `token-membership-${Bun.randomUUIDv7()}`,
+      },
+      headers: owner.headers(),
+    });
+    await owner.setActiveOrganization(organization.id);
+
+    const memberEmail = `member-${Bun.randomUUIDv7()}@stella.dev`;
+    const member = await signInHuman(memberEmail);
+    await inviteIntoOrganization({
+      owner,
+      invitee: member,
+      organizationId: organization.id,
+    });
+
+    const oauthClient = await registerOAuthClient();
+    const firstGrant = await grantOAuthClient(member, oauthClient);
+    expect(await opensMcpContext(firstGrant.accessToken)).toBe(true);
+
+    await auth.api.removeMember({
+      body: { memberIdOrEmail: memberEmail, organizationId: organization.id },
+      headers: owner.headers(),
+    });
+    expect(await opensMcpContext(firstGrant.accessToken)).toBe(false);
+
+    const returningMember = await signInHuman(memberEmail);
+    await inviteIntoOrganization({
+      owner,
+      invitee: returningMember,
+      organizationId: organization.id,
+    });
+
+    // The access token is still within its lifetime and its signature is
+    // valid; the new membership is a different row, so it no longer opens.
+    expect(await opensMcpContext(firstGrant.accessToken)).toBe(false);
+    const secondGrant = await grantOAuthClient(returningMember, oauthClient);
+    expect(await opensMcpContext(secondGrant.accessToken)).toBe(true);
   });
 });

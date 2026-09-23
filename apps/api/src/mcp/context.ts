@@ -341,6 +341,19 @@ export const resolveMcpSessionContext = async (
     });
   }
 
+  // OAuth access tokens issued before the member_id claim existed carry none
+  // and open on live membership alone. Remove this allowance (require the
+  // claim on OAuth client tokens) once every such token has expired, i.e.
+  // one maximum access-token lifetime after the claim shipped.
+  if (
+    session.memberId !== undefined &&
+    session.memberId !== authorization.memberId
+  ) {
+    throw new McpOrganizationAccessError({
+      message: "Token was issued for a previous membership",
+    });
+  }
+
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
