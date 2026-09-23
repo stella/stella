@@ -1,7 +1,7 @@
 /**
- * `20260923170000_document_review_passage_references_by_id`: rows written
- * before passages were addressed by id are reduced to the ids the current
- * schema stores, and a replay changes nothing.
+ * `passage-reference-normalize.ts`: rows written before passages were
+ * addressed by id are reduced to the ids the current schema stores, and a
+ * second run changes nothing.
  */
 
 import {
@@ -13,17 +13,20 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import nodePath from "node:path";
 
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  PASSAGE_REFERENCE_STEPS,
+  PASSAGES_BY_ID_FUNCTION,
+  POSITION_ITEMS_BY_ID_FUNCTION,
+} from "@/api/lib/document-review/passage-reference-normalize";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -33,10 +36,25 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
 
-const MIGRATION = nodePath.resolve(
-  import.meta.dir,
-  "../../../drizzle/20260923170000_document_review_passage_references_by_id/migration.sql",
-);
+// Larger than every seeded table, so one batch per step drains it.
+const BATCH = 1000;
+
+const runSteps = async (
+  steps: readonly (typeof PASSAGE_REFERENCE_STEPS)[number][],
+): Promise<void> => {
+  const [current, ...rest] = steps;
+  if (current === undefined) {
+    return;
+  }
+  await testDb.execute(current.rewrite(BATCH));
+  await runSteps(rest);
+};
+
+const normalize = async () => {
+  await testDb.execute(PASSAGES_BY_ID_FUNCTION);
+  await testDb.execute(POSITION_ITEMS_BY_ID_FUNCTION);
+  await runSteps(PASSAGE_REFERENCE_STEPS);
+};
 
 const POSITION_ID = "88888888-8888-4888-8888-888888888888";
 const PASSAGE_ID = "99999999-9999-4999-8999-999999999999";
@@ -169,7 +187,7 @@ beforeAll(async () => {
     decision: "open",
   });
 
-  await installPgliteMigration({ db: testDb, migrationPath: MIGRATION });
+  await normalize();
 });
 
 afterAll(async () => {
@@ -217,9 +235,9 @@ describe("passage references by id", () => {
     ]);
   });
 
-  test("a replay changes nothing", async () => {
+  test("a second run changes nothing", async () => {
     const before = await storedRows();
-    await installPgliteMigration({ db: testDb, migrationPath: MIGRATION });
+    await normalize();
 
     expect(await storedRows()).toEqual(before);
   });

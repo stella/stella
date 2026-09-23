@@ -19,6 +19,7 @@ import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
@@ -64,9 +65,10 @@ const basis: DocumentReviewRunBasis = {
 const payloadWith = (
   fix: ReviewFix | null,
   standardSource: "tiers" | "reference",
+  positionId: string,
 ): DocumentReviewFindingPayload => ({
   finding: {
-    positionId: DECIDED_POSITION_ID,
+    positionId,
     issue: "Leakage time bar",
     severity: "high",
     standardSource,
@@ -82,6 +84,7 @@ const payloadWith = (
 const seedRun = async (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
+  runBasis: DocumentReviewRunBasis = basis,
 ): Promise<SafeId<"documentReviewRun">> => {
   const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
   seededRunIds.push(runId);
@@ -93,7 +96,7 @@ const seedRun = async (
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: CONTENT_SHA256,
-    basis,
+    basis: runBasis,
     status: "completed",
     startedAt: new Date(),
     finishedAt: new Date(),
@@ -109,6 +112,7 @@ type SeedFindingArgs = {
   decidedAt: Date | null;
   fix: ReviewFix | null;
   standardSource?: "tiers" | "reference";
+  positionId?: string;
 };
 
 const seedFinding = async ({
@@ -119,6 +123,7 @@ const seedFinding = async ({
   decidedAt,
   fix,
   standardSource = "tiers",
+  positionId = DECIDED_POSITION_ID,
 }: SeedFindingArgs): Promise<void> => {
   await testDb.insert(documentReviewFindings).values({
     id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
@@ -128,10 +133,10 @@ const seedFinding = async ({
     entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
-    positionId: DECIDED_POSITION_ID,
+    positionId,
     positionTitle: "Leakage time bar",
     outcome: "deviation",
-    payload: payloadWith(fix, standardSource),
+    payload: payloadWith(fix, standardSource, positionId),
     decision,
     ...(decidedAt === null ? {} : { decidedBy: null, decidedAt }),
   });
@@ -229,27 +234,6 @@ describe("position decision overlay", () => {
     });
   });
 
-  test("a fix graded against a reference is counted but not surfaced as the latest text", async () => {
-    const runId = await seedRun(ids.orgA, ids.wsA1);
-    await seedFinding({
-      runId,
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      decision: "accepted",
-      decidedAt: new Date("2026-08-30T10:00:00.000Z"),
-      fix: {
-        kind: "replaceBlock",
-        blockId: "para-4",
-        text: "Wording taken from a reference document",
-      },
-      standardSource: "reference",
-    });
-
-    const summary = (await overlay())[DECIDED_POSITION_ID];
-    expect(summary?.accepted).toBe(3);
-    expect(summary?.latestAcceptedFixText).toBe("6 months");
-  });
-
   test("an undecided finding still counts as a run that graded the position", async () => {
     const runId = await seedRun(ids.orgA, ids.wsA1);
     await seedFinding({
@@ -262,8 +246,8 @@ describe("position decision overlay", () => {
     });
 
     const summary = (await overlay())[DECIDED_POSITION_ID];
-    expect(summary?.runs).toBe(5);
-    expect(summary?.accepted).toBe(3);
+    expect(summary?.runs).toBe(4);
+    expect(summary?.accepted).toBe(2);
     expect(summary?.dismissed).toBe(1);
   });
 
@@ -283,5 +267,87 @@ describe("position decision overlay", () => {
         positionIds: [],
       }),
     ).toEqual({});
+  });
+
+  // A reference-graded fix restates its reference document: the overlay shows
+  // its text to a reader who can open the passage's matter, and only counts it
+  // for one who cannot.
+  test("a reference-graded fix's text follows the reader's matter access", async () => {
+    const REFERENCE_POSITION_ID = "99999999-9999-4999-8999-999999999999";
+    const referenceBasis: DocumentReviewRunBasis =
+      asTestRaw<DocumentReviewRunBasis>({
+        ...basis,
+        playbook: {
+          ...basis.playbook,
+          definitionSnapshot: {
+            ...basis.playbook.definitionSnapshot,
+            positions: {
+              version: 3,
+              items: [
+                {
+                  sourceId: REFERENCE_POSITION_ID,
+                  mode: "graded",
+                  standard: {
+                    source: "reference",
+                    termKind: "language",
+                    passages: [
+                      {
+                        id: Bun.randomUUIDv7(),
+                        workspaceId: ids.wsA1,
+                        entityId: Bun.randomUUIDv7(),
+                        fileFieldId: Bun.randomUUIDv7(),
+                        entityVersionId: Bun.randomUUIDv7(),
+                        blockId: "r-1",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      });
+    const runId = await seedRun(ids.orgA, ids.wsA2, referenceBasis);
+    await seedFinding({
+      runId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      decision: "accepted",
+      decidedAt: new Date("2026-08-30T10:00:00.000Z"),
+      fix: {
+        kind: "replaceBlock",
+        blockId: "para-4",
+        text: "Wording drawn from the reference document",
+      },
+      standardSource: "reference",
+      positionId: REFERENCE_POSITION_ID,
+    });
+
+    const overlayFor = async (userId: SafeId<"user">) =>
+      (
+        await createMembershipScopedDb(testDb, {
+          organizationId: ids.orgA,
+          serverValidatedWorkspaceIds: [],
+          userId,
+        })(
+          async (tx) =>
+            await readPositionDecisionOverlay({
+              tx: asTestRaw<Transaction>(tx),
+              organizationId: ids.orgA,
+              positionIds: [REFERENCE_POSITION_ID],
+            }),
+        )
+      )[REFERENCE_POSITION_ID];
+
+    // userA1 belongs to wsA1, where the passage came from.
+    expect(await overlayFor(ids.userA1)).toMatchObject({
+      accepted: 1,
+      latestAcceptedFixText: "Wording drawn from the reference document",
+    });
+    // userA2 belongs to wsA2 only: the decision counts, the text does not.
+    expect(await overlayFor(ids.userA2)).toMatchObject({
+      accepted: 1,
+      latestAcceptedFixText: null,
+    });
   });
 });
