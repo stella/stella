@@ -663,7 +663,6 @@ describe("invoke_capability gates", () => {
       let cursor: string | null = null;
       do {
         const page: CapabilityPage = parseToolPayload<CapabilityPage>(
-          // eslint-disable-next-line no-await-in-loop -- pages depend on the previous cursor
           await handleMcpToolCall({
             args: {
               limit: MAX_LIST_LIMIT,
