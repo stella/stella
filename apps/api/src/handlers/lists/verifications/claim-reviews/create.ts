@@ -33,32 +33,48 @@ import {
 const literals = <T extends string>(values: readonly T[]) =>
   t.Union(values.map((value) => t.Literal(value)));
 
+/** Events are stored as sent and never rewritten, so a key the schema does
+ *  not name is refused rather than kept. */
+const STRICT = { additionalProperties: false } as const;
+
 const eventSchema = t.Union([
-  t.Object({
-    kind: t.Literal("status"),
-    status: t.Nullable(literals(CLAIM_REVIEW_STATUSES)),
-  }),
-  t.Object({
-    kind: t.Literal("override"),
-    state: t.Nullable(literals(CLAIM_OVERRIDE_STATES)),
-  }),
-  t.Object({
-    kind: t.Literal("note"),
-    note: t.String({ maxLength: VERIFICATION_LIMITS.NOTE_MAX }),
-  }),
-  t.Object({ kind: t.Literal("reopen") }),
-  t.Object({
-    kind: t.Literal("record-conflict"),
-    resolution: t.Nullable(
-      t.Union([
-        t.Object({
-          kind: t.Literal("governed"),
-          factEntityId: tSafeId("entity"),
-        }),
-        t.Object({ kind: t.Literal("escalated") }),
-      ]),
-    ),
-  }),
+  t.Object(
+    {
+      kind: t.Literal("status"),
+      status: t.Nullable(literals(CLAIM_REVIEW_STATUSES)),
+    },
+    STRICT,
+  ),
+  t.Object(
+    {
+      kind: t.Literal("override"),
+      state: t.Nullable(literals(CLAIM_OVERRIDE_STATES)),
+    },
+    STRICT,
+  ),
+  t.Object(
+    {
+      kind: t.Literal("note"),
+      note: t.String({ maxLength: VERIFICATION_LIMITS.NOTE_MAX }),
+    },
+    STRICT,
+  ),
+  t.Object({ kind: t.Literal("reopen") }, STRICT),
+  t.Object(
+    {
+      kind: t.Literal("record-conflict"),
+      resolution: t.Nullable(
+        t.Union([
+          t.Object(
+            { kind: t.Literal("governed"), factEntityId: tSafeId("entity") },
+            STRICT,
+          ),
+          t.Object({ kind: t.Literal("escalated") }, STRICT),
+        ]),
+      ),
+    },
+    STRICT,
+  ),
 ]);
 
 const bodySchema = t.Object({
@@ -167,7 +183,14 @@ const createClaimReview = createSafeHandler(
           action: AUDIT_ACTION.REVIEW,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
           resourceId: runId,
-          metadata: { claimId, eventId, event: payload },
+          // The note itself stays in the event row, which lives and dies with
+          // the matter; the audit log keeps only what kind of action it was.
+          metadata: {
+            claimId,
+            eventId,
+            kind: payload.kind,
+            ...(payload.kind === "note" && { noteLength: payload.note.length }),
+          },
         });
 
         const after = await readClaimReviews({

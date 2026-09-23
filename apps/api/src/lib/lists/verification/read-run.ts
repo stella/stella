@@ -198,6 +198,7 @@ export const readVerificationRun = async ({
     entityVersionId: run.entityVersionId,
     evidence: run.evidence,
     status: run.status,
+    errorCode: run.errorCode,
     pipelineVersion: run.pipelineVersion,
     modelRef: run.modelRef,
     requestedBy: run.requestedBy,
@@ -213,7 +214,6 @@ export const readVerificationRun = async ({
       text: claim.text,
       anchor: claim.anchor,
       refs: claim.refs,
-      supersession: claim.supersession,
       review: reviewOf(claim.id),
     })),
   };

@@ -44,7 +44,7 @@ CREATE TABLE "legal_list_verification_runs" (
 	"started_at" timestamptz,
 	"finished_at" timestamptz,
 	CONSTRAINT "legal_list_verification_runs_id_ws_unq" UNIQUE ("id", "workspace_id"),
-	CONSTRAINT "legal_list_verification_runs_status_check" CHECK ("status" IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+	CONSTRAINT "legal_list_verification_runs_status_check" CHECK ("status" IN ('queued', 'running', 'completed', 'failed')),
 	CONSTRAINT "legal_list_verification_runs_error_code_check" CHECK (("status" = 'failed') = ("error_code" IS NOT NULL)
         AND ("error_code" IS NULL OR "error_code" IN ('pin_unresolved', 'pin_content_changed', 'unsupported_format', 'no_text', 'ai_unavailable', 'extraction_failed', 'grading_failed', 'enqueue_failed', 'internal'))),
 	CONSTRAINT "legal_list_verification_runs_content_hash_check" CHECK ("content_sha256" ~ '^[0-9a-f]{64}$'),
@@ -53,7 +53,8 @@ CREATE TABLE "legal_list_verification_runs" (
 	CONSTRAINT "legal_list_verification_runs_pipeline_version_check" CHECK ("pipeline_version" > 0),
 	CONSTRAINT "legal_list_verification_runs_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
 	CONSTRAINT "legal_list_verification_runs_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE,
-	CONSTRAINT "legal_list_verification_runs_requested_by_user_id_fk" FOREIGN KEY ("requested_by") REFERENCES "user"("id") ON DELETE SET NULL
+	CONSTRAINT "legal_list_verification_runs_requested_by_user_id_fk" FOREIGN KEY ("requested_by") REFERENCES "user"("id") ON DELETE SET NULL,
+	CONSTRAINT "legal_list_verification_runs_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE CASCADE
 );--> statement-breakpoint
 CREATE INDEX "legal_list_verification_runs_document_created_idx" ON "legal_list_verification_runs" ("workspace_id", "entity_id", "file_field_id", "created_at" DESC, "id" DESC);--> statement-breakpoint
 CREATE INDEX "legal_list_verification_runs_queued_idx" ON "legal_list_verification_runs" ("created_at", "id") WHERE "status" = 'queued';--> statement-breakpoint
@@ -72,7 +73,6 @@ CREATE TABLE "legal_list_claims" (
 	"anchor" jsonb NOT NULL,
 	"refs" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"record_conflict" jsonb,
-	"supersession" jsonb,
 	"created_at" timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT "legal_list_claims_id_run_ws_unq" UNIQUE ("id", "run_id", "workspace_id"),
 	CONSTRAINT "legal_list_claims_type_check" CHECK ("type" IN ('fact', 'opinion', 'unverifiable')),
@@ -98,7 +98,7 @@ CREATE TABLE "legal_list_claim_review_events" (
 	"kind" text NOT NULL,
 	"payload" jsonb NOT NULL,
 	"actor_id" text,
-	"created_at" timestamptz DEFAULT now() NOT NULL,
+	"created_at" timestamptz DEFAULT clock_timestamp() NOT NULL,
 	CONSTRAINT "legal_list_claim_review_events_kind_check" CHECK ("kind" IN ('status', 'override', 'note', 'reopen', 'record-conflict')),
 	CONSTRAINT "legal_list_claim_review_events_payload_kind_check" CHECK ("payload"->>'kind' = "kind"),
 	CONSTRAINT "legal_list_claim_review_events_claim_fk" FOREIGN KEY ("claim_id", "run_id", "workspace_id") REFERENCES "legal_list_claims"("id", "run_id", "workspace_id") ON DELETE CASCADE,
@@ -127,7 +127,6 @@ DECLARE
 BEGIN
 	FOREACH table_name IN ARRAY ARRAY[
 		'legal_list_fact_details',
-		'legal_list_verification_runs',
 		'legal_list_claims',
 		'legal_list_claim_review_events'
 	]
@@ -143,6 +142,30 @@ BEGIN
 			EXECUTE format('CREATE POLICY workspace_delete ON %I AS PERMISSIVE FOR DELETE TO stella USING (%s)', table_name, workspace_access);
 		END IF;
 	END LOOP;
+END
+$$;--> statement-breakpoint
+
+-- A run carries both scopes, and the worker rebuilds its tenant from the row,
+-- so every command requires the workspace and the organization together.
+DO $$
+DECLARE
+	scope text := $predicate$
+		(CASE
+			WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+			THEN true
+			ELSE workspace_id IN (
+				SELECT aw.authorized_workspace_id
+				FROM public.stella_authorized_workspaces aw
+			)
+		END) AND organization_id = (SELECT current_setting('app.organization_id', true))
+	$predicate$;
+BEGIN
+	ALTER TABLE "legal_list_verification_runs" ENABLE ROW LEVEL SECURITY;
+	GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_verification_runs" TO stella;
+	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_select ON "legal_list_verification_runs" AS PERMISSIVE FOR SELECT TO stella USING (%s)', scope);
+	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_insert ON "legal_list_verification_runs" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (%s)', scope);
+	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_update ON "legal_list_verification_runs" AS PERMISSIVE FOR UPDATE TO stella USING (%s)', scope);
+	EXECUTE format('CREATE POLICY legal_list_verification_runs_workspace_delete ON "legal_list_verification_runs" AS PERMISSIVE FOR DELETE TO stella USING (%s)', scope);
 END
 $$;--> statement-breakpoint
 

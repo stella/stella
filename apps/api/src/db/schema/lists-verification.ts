@@ -14,7 +14,6 @@ import {
 import type {
   ClaimAnchor,
   ClaimRef,
-  ClaimSupersession,
   RecordConflict,
   ClaimReviewEventPayload,
   VerificationEvidence,
@@ -33,6 +32,7 @@ import {
   timestamptz,
   user,
   workspaceCheck,
+  wsOrganizationPolicies,
   wsPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -144,7 +144,16 @@ export const legalListVerificationRuns = p.pgTable(
       "legal_list_verification_runs_pipeline_version_check",
       sql`${table.pipelineVersion} > 0`,
     ),
-    ...wsPolicies(),
+    // The worker rebuilds its tenant scope from this row, so the organization
+    // is held to the workspace's own, and both scopes gate every command.
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "legal_list_verification_runs_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    ...wsOrganizationPolicies("legal_list_verification_runs"),
   ],
 );
 
@@ -173,7 +182,6 @@ export const legalListClaims = p.pgTable(
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
-    supersession: jsonb().$type<ClaimSupersession>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -260,7 +268,12 @@ export const legalListClaimReviewEvents = p.pgTable(
     actorId: p
       .text("actor_id")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    // The insert's own clock, not the transaction's start: events are folded
+    // in this order, and a reviewer whose transaction began earlier but took
+    // the claim's lock later must still sort after the event they saw.
+    createdAt: timestamptz("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
   },
   (table) => [
     p

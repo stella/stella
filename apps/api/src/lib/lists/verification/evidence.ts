@@ -7,7 +7,7 @@
  * longer says where the fact comes from.
  */
 
-import { and, asc, eq, inArray, ne, or, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -25,6 +25,10 @@ import type {
   VerificationEvidenceFact,
   VerificationEvidenceSource,
 } from "@/api/lib/lists/verification/contract";
+
+/** Pinned text is bounded: the run row carries every fact by value. */
+const clip = (text: string): string =>
+  text.slice(0, VERIFICATION_LIMITS.EVIDENCE_TEXT_MAX);
 
 type ReadEvidenceArgs = {
   tx: Transaction;
@@ -82,44 +86,61 @@ export const readVerificationEvidence = async ({
     return { type: "too-many-facts", count: facts.length };
   }
 
+  // Ranked within each fact, so one heavily sourced fact cannot use up the
+  // read and leave the others pinned with no sources.
+  const ranked = tx
+    .select({
+      itemEntityId: legalListItemSources.itemEntityId,
+      sourceEntityId: legalListItemSources.sourceEntityId,
+      sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
+      locator: legalListItemSources.locator,
+      quote: legalListItemSources.quote,
+      rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
+        "rank",
+      ),
+    })
+    .from(legalListItemSources)
+    .where(
+      and(
+        eq(legalListItemSources.workspaceId, workspaceId),
+        inArray(
+          legalListItemSources.itemEntityId,
+          facts.map((fact) => fact.factEntityId),
+        ),
+        ne(legalListItemSources.verificationStatus, "rejected"),
+      ),
+    )
+    .as("ranked");
   const sources =
     facts.length === 0
       ? []
       : await tx
           .select({
-            itemEntityId: legalListItemSources.itemEntityId,
-            sourceEntityId: legalListItemSources.sourceEntityId,
-            sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
-            locator: legalListItemSources.locator,
-            quote: legalListItemSources.quote,
+            itemEntityId: ranked.itemEntityId,
+            sourceEntityId: ranked.sourceEntityId,
+            sourceEntityVersionId: ranked.sourceEntityVersionId,
+            locator: ranked.locator,
+            quote: ranked.quote,
           })
-          .from(legalListItemSources)
-          .where(
-            and(
-              eq(legalListItemSources.workspaceId, workspaceId),
-              inArray(
-                legalListItemSources.itemEntityId,
-                facts.map((fact) => fact.factEntityId),
-              ),
-              ne(legalListItemSources.verificationStatus, "rejected"),
-            ),
-          )
-          .orderBy(
-            asc(legalListItemSources.createdAt),
-            asc(legalListItemSources.id),
-          )
+          .from(ranked)
+          .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
+          .orderBy(asc(ranked.itemEntityId), asc(ranked.rank))
           .limit(
             VERIFICATION_LIMITS.FACTS_PER_RUN_MAX *
               VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX,
           );
 
-  const sourcesByFact = new Map<SafeId<"entity">, VerificationEvidenceSource[]>();
-  for (const { itemEntityId, ...source } of sources) {
+  const sourcesByFact = new Map<
+    SafeId<"entity">,
+    VerificationEvidenceSource[]
+  >();
+  for (const { itemEntityId, quote, ...source } of sources) {
+    const pinned = { ...source, quote: quote === null ? null : clip(quote) };
     const bucket = sourcesByFact.get(itemEntityId);
     if (bucket === undefined) {
-      sourcesByFact.set(itemEntityId, [source]);
-    } else if (bucket.length < VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX) {
-      bucket.push(source);
+      sourcesByFact.set(itemEntityId, [pinned]);
+    } else {
+      bucket.push(pinned);
     }
   }
 
@@ -127,19 +148,17 @@ export const readVerificationEvidence = async ({
     type: "read",
     evidence: {
       listId,
-      facts: facts.map(
-        (fact): VerificationEvidenceFact => ({
-          factEntityId: fact.factEntityId,
-          text: fact.text,
-          occurredOn: fact.occurredOn,
-          occurredOnPrecision: fact.occurredOnPrecision,
-          evidenceKind: fact.evidenceKind,
-          medium: fact.medium,
-          confidence: fact.confidence,
-          interpretationNote: fact.interpretationNote,
-          sources: sourcesByFact.get(fact.factEntityId) ?? [],
-        }),
-      ),
+      facts: facts.map((fact): VerificationEvidenceFact => ({
+        factEntityId: fact.factEntityId,
+        text: clip(fact.text),
+        occurredOn: fact.occurredOn,
+        occurredOnPrecision: fact.occurredOnPrecision,
+        evidenceKind: fact.evidenceKind,
+        medium: fact.medium,
+        confidence: fact.confidence,
+        interpretationNote: fact.interpretationNote,
+        sources: sourcesByFact.get(fact.factEntityId) ?? [],
+      })),
     },
   };
 };

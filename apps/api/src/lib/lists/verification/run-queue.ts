@@ -140,7 +140,12 @@ export const enqueueListVerificationRun = async (
  * root handle.
  */
 export const reconcileStuckListVerificationRuns = async (): Promise<number> => {
-  const now = Temporal.Now.instant().epochMilliseconds;
+  const runningCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
+  );
+  const queuedCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
+  );
   const recovered = await rootDb
     .update(legalListVerificationRuns)
     .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
@@ -148,17 +153,11 @@ export const reconcileStuckListVerificationRuns = async (): Promise<number> => {
       or(
         and(
           eq(legalListVerificationRuns.status, "running"),
-          lt(
-            legalListVerificationRuns.startedAt,
-            new Date(now - STUCK_RUNNING_MS),
-          ),
+          lt(legalListVerificationRuns.startedAt, runningCutoff),
         ),
         and(
           eq(legalListVerificationRuns.status, "queued"),
-          lt(
-            legalListVerificationRuns.createdAt,
-            new Date(now - STUCK_QUEUED_MS),
-          ),
+          lt(legalListVerificationRuns.createdAt, queuedCutoff),
         ),
       ),
     )
@@ -341,7 +340,11 @@ const setRunFailed = async (
   });
 };
 
-type ResolvedFile = { fileId: string; mimeType: string; pdfFileId: string | null };
+type ResolvedFile = {
+  fileId: string;
+  mimeType: string;
+  pdfFileId: string | null;
+};
 
 /** The pinned file, or why it can no longer be read as pinned. */
 const resolvePinnedFile = async (
@@ -500,7 +503,9 @@ const executeRun = async (
   const claims = extracted.value;
   const graded = await gradeClaims({
     claims: claims.flatMap((claim, position) =>
-      claim.type === "fact" ? [{ key: String(position), text: claim.text }] : [],
+      claim.type === "fact"
+        ? [{ key: String(position), text: claim.text }]
+        : [],
     ),
     facts: run.evidence.facts,
     blocks: document.blocks,
@@ -512,14 +517,10 @@ const executeRun = async (
 
   const rows = claimRows(actor, claims, graded.value.grades);
   await actor.scopedDb(async (tx) => {
-    if (rows.length > 0) {
-      // audit: skip — engine output of a run audited at creation.
-      await tx.insert(legalListClaims).values(rows).onConflictDoNothing({
-        target: [legalListClaims.runId, legalListClaims.position],
-      });
-    }
+    // Complete first, guarded on `running`: a run the janitor already failed
+    // must not gain claims afterwards.
     // audit: skip — lifecycle bookkeeping on a run audited at creation.
-    await tx
+    const completed = await tx
       .update(legalListVerificationRuns)
       .set({ status: "completed", finishedAt: new Date() })
       .where(
@@ -528,7 +529,18 @@ const executeRun = async (
           eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
           eq(legalListVerificationRuns.status, "running"),
         ),
-      );
+      )
+      .returning({ id: legalListVerificationRuns.id });
+    if (completed.length === 0 || rows.length === 0) {
+      return;
+    }
+    // audit: skip — engine output of a run audited at creation.
+    await tx
+      .insert(legalListClaims)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [legalListClaims.runId, legalListClaims.position],
+      });
   });
   return null;
 };

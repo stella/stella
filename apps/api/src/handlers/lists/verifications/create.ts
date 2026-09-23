@@ -5,7 +5,7 @@
  */
 
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
@@ -97,7 +97,9 @@ const createVerification = createSafeHandler(
       }),
     );
     const version = target.entity?.currentVersion;
-    const field = version?.fields.find((candidate) => candidate.id === fileFieldId);
+    const field = version?.fields.find(
+      (candidate) => candidate.id === fileFieldId,
+    );
     if (
       target.list === undefined ||
       version === undefined ||
@@ -105,7 +107,10 @@ const createVerification = createSafeHandler(
       field?.content.type !== "file"
     ) {
       return Result.err(
-        new HandlerError({ status: 404, message: "List or document not found" }),
+        new HandlerError({
+          status: 404,
+          message: "List or document not found",
+        }),
       );
     }
     const file = field.content;
@@ -141,7 +146,10 @@ const createVerification = createSafeHandler(
       { organizationId },
     );
     const sizeError = await assertRunSizeConfirmedForHandler({
-      metering: { actionType: "doc_review", modelRole: VERIFICATION_MODEL_ROLE },
+      metering: {
+        actionType: "doc_review",
+        modelRole: VERIFICATION_MODEL_ROLE,
+      },
       estimatedUnits: estimateDocumentRunUnits({
         modelId: model.modelId,
         actionType: "doc_review",
@@ -166,37 +174,42 @@ const createVerification = createSafeHandler(
     const runId = createSafeId<"legalListVerificationRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
-        // One unfinished verification per document; the partial unique index
-        // makes a lost race impossible rather than unlikely.
-        const active = await tx
-          .select({ id: legalListVerificationRuns.id })
-          .from(legalListVerificationRuns)
-          .where(
-            and(
-              eq(legalListVerificationRuns.workspaceId, workspaceId),
-              eq(legalListVerificationRuns.entityId, entityId),
-              eq(legalListVerificationRuns.fileFieldId, fileFieldId),
-              inArray(legalListVerificationRuns.status, [
-                ...VERIFICATION_RUN_ACTIVE_STATUSES,
-              ]),
-            ),
-          )
-          .limit(1);
-        if (active.length > 0) {
+        // One unfinished verification per document. The insert defers to the
+        // partial unique index, so a concurrent start loses cleanly instead of
+        // surfacing a unique violation.
+        const created = await tx
+          .insert(legalListVerificationRuns)
+          .values({
+            id: runId,
+            organizationId,
+            workspaceId,
+            entityId,
+            fileFieldId,
+            entityVersionId: version.id,
+            contentSha256: file.sha256Hex,
+            evidence: evidence.evidence,
+            status: "queued",
+            requestedBy: user.id,
+          })
+          .onConflictDoNothing({
+            target: [
+              legalListVerificationRuns.workspaceId,
+              legalListVerificationRuns.entityId,
+              legalListVerificationRuns.fileFieldId,
+            ],
+            // Literals, not parameters: Postgres matches this against the
+            // partial index's predicate when it plans the statement.
+            where: sql`${legalListVerificationRuns.status} IN (${sql.join(
+              VERIFICATION_RUN_ACTIVE_STATUSES.map((status) =>
+                sql.raw(`'${status}'`),
+              ),
+              sql`, `,
+            )})`,
+          })
+          .returning({ id: legalListVerificationRuns.id });
+        if (created.length === 0) {
           return false;
         }
-        await tx.insert(legalListVerificationRuns).values({
-          id: runId,
-          organizationId,
-          workspaceId,
-          entityId,
-          fileFieldId,
-          entityVersionId: version.id,
-          contentSha256: file.sha256Hex,
-          evidence: evidence.evidence,
-          status: "queued",
-          requestedBy: user.id,
-        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.EXECUTE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,

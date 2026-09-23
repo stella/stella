@@ -109,19 +109,12 @@ export type ClaimVerdict =
       recordConflict: RecordConflict;
     };
 
-/** A claim withdrawn or revised by a later statement: kept and dated. */
-export type ClaimSupersession = {
-  byEntityId: SafeId<"entity">;
-  note: string;
-};
-
 /** Lifecycle of one verification run: `queued`, `running`, then terminal. */
 export const VERIFICATION_RUN_STATUSES = [
   "queued",
   "running",
   "completed",
   "failed",
-  "cancelled",
 ] as const;
 export type VerificationRunStatus = (typeof VERIFICATION_RUN_STATUSES)[number];
 
@@ -226,4 +219,6 @@ export const VERIFICATION_LIMITS = {
   FACTS_PER_RUN_MAX: 500,
   /** Sources pinned per fact, oldest first. */
   SOURCES_PER_FACT_MAX: 5,
+  /** Characters of a fact's text or a source quote pinned on a run. */
+  EVIDENCE_TEXT_MAX: 2000,
 } as const;
