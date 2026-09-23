@@ -84,23 +84,15 @@ export type PresignUploadResult = {
  * under the path, not as a subdomain. AWS itself supports both
  * but virtual-hosted-style is the default and faster.
  */
-const isPathStyleRequired = (endpoint: string): boolean => {
-  try {
-    const host = new URL(endpoint).hostname.toLowerCase();
-    return !(host.includes("s3") && host.endsWith(".amazonaws.com"));
-  } catch {
-    return true;
-  }
+const isAwsS3Endpoint = (endpoint: string): boolean => {
+  const host = URL.parse(endpoint)?.hostname.toLowerCase();
+  return (
+    host !== undefined && host.includes("s3") && host.endsWith(".amazonaws.com")
+  );
 };
 
-const isAwsS3Endpoint = (endpoint: string): boolean => {
-  try {
-    const host = new URL(endpoint).hostname.toLowerCase();
-    return host.includes("s3") && host.endsWith(".amazonaws.com");
-  } catch {
-    return false;
-  }
-};
+const isPathStyleRequired = (endpoint: string): boolean =>
+  !isAwsS3Endpoint(endpoint);
 
 type CachedClient = { client: AwsS3Client; createdAt: number };
 type CachedStsClient = { client: STSClient; createdAt: number };
@@ -428,13 +420,9 @@ const getScopedAwsS3Client = async (
   const existing = _scopedClientCache.get(cacheKey);
   if (existing) {
     touchScopedClient(cacheKey, existing);
-    let cached: CachedScopedClient;
-    try {
-      cached = await existing.promise;
-    } catch (error) {
-      removeScopedClient(cacheKey, existing);
-      throw error;
-    }
+    // A rejected entry has already evicted itself through the handler
+    // attached where it was created, so a failure simply propagates.
+    const cached = await existing.promise;
     if (
       hasScopedSessionTimeForPresign({ expiresAt: cached.expiresAt, expiresIn })
     ) {

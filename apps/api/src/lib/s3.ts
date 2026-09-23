@@ -68,28 +68,31 @@ const fetchCredentialJson = async (
     headers?: Record<string, string>;
   },
 ): Promise<S3Credentials | null> => {
-  try {
-    const response = await fetchImpl(url, {
-      ...(headers ? { headers } : {}),
-      signal: AbortSignal.timeout(2000),
-    });
-    if (!response.ok) {
-      return null;
-    }
+  // An unreachable or malformed endpoint means this credential source is not
+  // available here; the caller falls through to the next one.
+  const fetched = await Result.tryPromise(
+    async (): Promise<S3Credentials | null> => {
+      const response = await fetchImpl(url, {
+        ...(headers ? { headers } : {}),
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!response.ok) {
+        return null;
+      }
 
-    const creds: unknown = await response.json();
-    if (!isCredentialsShape(creds)) {
-      return null;
-    }
+      const creds: unknown = await response.json();
+      if (!isCredentialsShape(creds)) {
+        return null;
+      }
 
-    return {
-      accessKeyId: creds.AccessKeyId,
-      secretAccessKey: creds.SecretAccessKey,
-      sessionToken: creds.Token,
-    };
-  } catch {
-    return null;
-  }
+      return {
+        accessKeyId: creds.AccessKeyId,
+        secretAccessKey: creds.SecretAccessKey,
+        sessionToken: creds.Token,
+      };
+    },
+  );
+  return fetched.unwrapOr(null);
 };
 
 /**
@@ -117,15 +120,14 @@ const containerCredentialsUrl = (
     return null;
   }
 
-  try {
-    const parsedUrl = new URL(fullUri);
-    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-      return null;
-    }
-    return parsedUrl.toString();
-  } catch {
+  const parsedUrl = URL.parse(fullUri);
+  if (
+    parsedUrl === null ||
+    (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:")
+  ) {
     return null;
   }
+  return parsedUrl.toString();
 };
 
 const fetchEcsCredentials = async ({
@@ -181,55 +183,58 @@ const fetchImdsCredentials = async ({
 }: {
   fetchImpl?: Fetcher;
 } = {}): Promise<S3Credentials | null> => {
-  try {
-    const tokenResponse = await fetchImpl(
-      "http://169.254.169.254/latest/api/token",
-      {
-        method: "PUT",
-        headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
-        signal: AbortSignal.timeout(2000),
-      },
-    );
-    if (!tokenResponse.ok) {
-      return null;
-    }
-    const imdsToken = await tokenResponse.text();
+  // Off EC2 the metadata endpoint does not answer; that is the local-dev case,
+  // not a failure.
+  const fetched = await Result.tryPromise(
+    async (): Promise<S3Credentials | null> => {
+      const tokenResponse = await fetchImpl(
+        "http://169.254.169.254/latest/api/token",
+        {
+          method: "PUT",
+          headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+      if (!tokenResponse.ok) {
+        return null;
+      }
+      const imdsToken = await tokenResponse.text();
 
-    const roleResponse = await fetchImpl(
-      "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
-      {
-        headers: { "X-aws-ec2-metadata-token": imdsToken },
-        signal: AbortSignal.timeout(2000),
-      },
-    );
-    if (!roleResponse.ok) {
-      return null;
-    }
-    const roleName = (await roleResponse.text()).trim();
+      const roleResponse = await fetchImpl(
+        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+        {
+          headers: { "X-aws-ec2-metadata-token": imdsToken },
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+      if (!roleResponse.ok) {
+        return null;
+      }
+      const roleName = (await roleResponse.text()).trim();
 
-    const credsResponse = await fetchImpl(
-      `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
-      {
-        headers: { "X-aws-ec2-metadata-token": imdsToken },
-        signal: AbortSignal.timeout(2000),
-      },
-    );
-    if (!credsResponse.ok) {
-      return null;
-    }
-    const creds: unknown = await credsResponse.json();
-    if (!isCredentialsShape(creds)) {
-      return null;
-    }
+      const credsResponse = await fetchImpl(
+        `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
+        {
+          headers: { "X-aws-ec2-metadata-token": imdsToken },
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+      if (!credsResponse.ok) {
+        return null;
+      }
+      const creds: unknown = await credsResponse.json();
+      if (!isCredentialsShape(creds)) {
+        return null;
+      }
 
-    return {
-      accessKeyId: creds.AccessKeyId,
-      secretAccessKey: creds.SecretAccessKey,
-      sessionToken: creds.Token,
-    };
-  } catch {
-    return null;
-  }
+      return {
+        accessKeyId: creds.AccessKeyId,
+        secretAccessKey: creds.SecretAccessKey,
+        sessionToken: creds.Token,
+      };
+    },
+  );
+  return fetched.unwrapOr(null);
 };
 
 // Set only by `configureS3ForTesting`; production always uses the env.
@@ -254,14 +259,15 @@ const buildS3Client = (
       : {}),
   });
 
-const isPathStyleRequired = (endpoint: string): boolean => {
-  try {
-    const host = new URL(endpoint).hostname.toLowerCase();
-    return !(host.includes("s3") && host.endsWith(".amazonaws.com"));
-  } catch {
-    return true;
-  }
+const isAwsS3Endpoint = (endpoint: string): boolean => {
+  const host = URL.parse(endpoint)?.hostname.toLowerCase();
+  return (
+    host !== undefined && host.includes("s3") && host.endsWith(".amazonaws.com")
+  );
 };
+
+const isPathStyleRequired = (endpoint: string): boolean =>
+  !isAwsS3Endpoint(endpoint);
 
 const buildAbortableS3Client = (
   creds?: OptionalS3Credentials | null,
@@ -298,15 +304,6 @@ const staticCredentialsFromEnv = (): OptionalS3Credentials | null =>
     envBase.S3_ACCESS_KEY_ID,
     envBase.S3_SECRET_ACCESS_KEY,
   );
-
-const isAwsS3Endpoint = (endpoint: string): boolean => {
-  try {
-    const host = new URL(endpoint).hostname.toLowerCase();
-    return host.includes("s3") && host.endsWith(".amazonaws.com");
-  } catch {
-    return false;
-  }
-};
 
 const resolveAwsRuntimeCredentials = async (
   fetchImpl: Fetcher,
