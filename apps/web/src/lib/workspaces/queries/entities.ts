@@ -478,6 +478,7 @@ export const workspaceFoldersOptions = (workspaceId: string) =>
 
 export type WorkspaceFile = {
   entityId: string;
+  fieldId: string;
   name: string | null;
   parentId: string | null;
   fileName: string;
@@ -510,6 +511,7 @@ const fetchAllWorkspaceFiles = async ({
     files.push(
       ...data.items.map((file) => ({
         entityId: file.entityId,
+        fieldId: file.fieldId,
         name: file.name,
         parentId: file.parentId,
         fileName: file.fileName,

@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Adicionar fato",
+      "addInterpretationNote": "Adicionar nota de interpretação",
       "addUnavailable": "Indisponível neste harness — adicionar um fato exige persistência que ainda não está configurada.",
       "confirmedByReviewer": "Confirmado pelo revisor",
       "description": "Evidências concretas — e-mails, mensagens, extratos bancários, fatos acordados — extraídas para o registro de fatos-âncora contra o qual as alegações são verificadas. Revise, edite ou adicione fatos manualmente.",
       "editFact": "Editar fato",
+      "editInterpretationNote": "Editar nota de interpretação",
       "editOrRetype": "Editar / redigitar",
+      "empty": "Marque itens desta lista como fatos para verificar documentos em relação a eles.",
       "extractionAndReview": "Extração e revisão",
       "factCount": "{count, plural, one {# fato} other {# fatos}}",
       "factText": "Texto do fato-âncora",
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong> — o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
       "heldForReview": "Em espera para revisão",
+      "holdOutOfScoring": "Excluir da pontuação",
       "importSource": "Importar fonte",
       "importUnavailable": "Indisponível neste harness — importar uma fonte exige ingestão e armazenamento que ainda não estão configurados.",
+      "includeInScoring": "Incluir na pontuação",
       "interpretation": "Interpretação",
+      "interpretationNote": "Nota de interpretação",
+      "interpretationNotePlaceholder": "Se o significado desta evidência é contestado, explique como. Deixe em branco se não for.",
       "interpretiveConfidence": "Confiança interpretativa",
+      "openList": "Abrir lista",
       "record": "Registro de fatos-âncora",
+      "setConfidence": "Definir confiança",
       "sourceAndProvenance": "Fonte e proveniência",
       "timePeriod": "Período",
       "title": "Fatos-âncora"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "Nenhum modelo ativo configurado nesta versão — resultado: <strong>Sem cobertura, verificação pendente</strong>.",
         "reopen": "Reabrir → verificar contra o registro",
-        "reopenExplanation": "<strong>Deixada de lado como não verificável.</strong> Se esta for de fato uma alegação verificável, reabra-a: o AVT mantém a sua reclassificação e executa apenas a verificação contra o registro que havia sido pulada."
+        "reopenExplanation": "<strong>Deixada de lado como não verificável.</strong> Se esta for de fato uma alegação verificável, reabra-a: o AVT mantém a sua reclassificação e executa apenas a verificação contra o registro que havia sido pulada.",
+        "reopenedPending": "Reaberta como alegação verificável. Ela aparece como <strong>Sem cobertura</strong> até que o documento seja verificado novamente."
       },
       "note": {
         "add": "Adicionar nota / correção",
         "heading": "Sua nota · {savedAt}",
+        "headingUndated": "Sua nota",
         "placeholder": "Registre uma correção ou uma explicação. Salvar registra a nota apenas nesta alegação — não altera o veredito nem o registro de fatos-âncora.",
         "saveCorrection": "Salvar correção"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Por que a data decide o veredito",
         "description": "Dois fatos-âncora tratam do mesmo ponto — <strong>{subject}</strong> — mas divergem. Ambos são fontes de <strong>alta confiança</strong>, então não se trata de um problema de confiabilidade: o próprio registro é internamente inconsistente. O AVT retém o veredito em vez de pontuar a alegação, porque escolher um registro em detrimento do outro é um julgamento que cabe a você fazer e registrar — não algo que a ferramenta deva fazer silenciosamente.",
         "escalated": "Marcado localmente para acompanhamento da equipe de evidências. O conflito no registro permanece aberto e contabilizado até que uma fonte prevalecente seja selecionada.",
+        "escalatedNotice": "Sinalizado para a equipe de evidências. O conflito no registro permanece aberto e contabilizado até que um registro prevalecente seja escolhido.",
         "flagForEvidenceTeam": "Sinalizar para a equipe de evidências",
+        "governed": "<strong>{value}</strong> prevalece: a alegação é julgada em relação a este registro. O outro registro permanece arquivado.",
         "governingPreview": "Esta prévia local trata <strong>{factId}</strong> como prevalecente e avalia a alegação contra <strong>{value}</strong>. Ambos os registros de exemplo permanecem inalterados.",
         "governingPreviewWithVerdict": "Esta prévia local trata <strong>{factId}</strong> como prevalecente e avalia a alegação contra <strong>{value}</strong> — resultando em <strong>{verdict}</strong>. Ambos os registros de exemplo permanecem inalterados.",
         "oppositeSides": "As duas datas ficam em <emphasis>lados opostos</emphasis> do evento delimitador. O registro que prevalecer decide o resultado — portanto, resolver o conflito aqui define diretamente o veredito.",
         "reconcile": "Reconciliar o registro",
         "resultAsAt": "Em <strong>{date}</strong>, {note}",
         "title": "Evidências conflitantes no registro",
-        "treatAsGoverning": "Tratar {id} como prevalecente"
+        "treatAsGoverning": "Tratar {id} como prevalecente",
+        "treatAsGoverningRecord": "Tratar como prevalecente"
       },
       "relation": {
         "conflicts": "Conflita",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, one {# sustentação} other {# sustentações}}",
         "verdictWithheld": "Veredito retido"
       },
+      "sourceCount": "{count, plural, one {# fonte} other {# fontes}}",
       "timeline": {
         "asAt": "Em <strong>{date}</strong>",
         "asAtDate": "Data de referência",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Asserção objetiva e verificável — pontuada contra o registro. Inclui alegações formuladas como admissões ou negações: julgadas pela proposição subjacente, não pelas meras palavras."
+        "hint": "Asserção objetiva e verificável — pontuada contra o registro. Inclui alegações formuladas como admissões ou negações: julgadas pela proposição subjacente, não pelas meras palavras.",
+        "label": "Fato"
       },
       "opinion": {
         "hint": "Um juízo de valor ou caracterização — nenhum documento pode confirmá-lo ou contradizê-lo, por isso é deixado de lado, não pontuado.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Interpretação",
+      "levels": {
+        "high": "Alta",
+        "low": "Baixa",
+        "medium": "Média"
+      },
       "tooltip": "Confiança interpretativa — quão inequívoco é o significado desta evidência. Independente do meio da fonte (manuscrito, digitalização etc.)."
     },
     "confirm": {
+      "acknowledge": "Entendi",
       "recordConflict": "Confirmar resolução",
       "supported": "Confirmar — pronta",
       "verdict": "Confirmar veredito"
@@ -250,6 +272,16 @@
       "supported": "O registro confirma esta alegação. Sua aprovação atesta que a ferramenta a leu corretamente — nenhum julgamento é necessário.",
       "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido."
     },
+    "documents": {
+      "claimSummary": "Contradita: {contradicted} · Em tensão: {tension} · Conflito no registro: {conflicts}",
+      "empty": "Envie um documento para este caso para verificá-lo.",
+      "notVerified": "Ainda não verificado",
+      "open": "Abrir",
+      "otherList": "Verificado em relação a outra lista",
+      "sizeConfirmTitle": "Verificar este documento?",
+      "verify": "Verificar",
+      "verifyAgain": "Verificar novamente"
+    },
     "guidance": {
       "escalate": "Escalar",
       "manualJudgement": "Julgamento manual",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, one {# correspondência} other {# correspondências}}",
-      "position": "{current}/{total}"
+      "next": "Próxima correspondência",
+      "position": "{current}/{total}",
+      "previous": "Correspondência anterior"
+    },
+    "review": {
+      "disputed": "Em disputa · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Aceita como rotina} other {Revisada}} · {decidedAt}",
+      "undo": "Desfazer decisão"
+    },
+    "runs": {
+      "back": "Todos os documentos",
+      "errors": {
+        "aiUnavailable": "Nenhum modelo de IA está disponível para verificar documentos. Verifique as configurações de IA da organização.",
+        "enqueueFailed": "Não foi possível iniciar a verificação. Tente novamente.",
+        "extractionFailed": "Não foi possível extrair as alegações deste documento.",
+        "gradingFailed": "Não foi possível verificar as alegações em relação aos fatos da lista.",
+        "internal": "A verificação falhou inesperadamente.",
+        "noText": "Não foi possível ler nenhum texto deste documento.",
+        "pinContentChanged": "O documento mudou depois que a verificação começou. Verifique-o novamente.",
+        "pinUnresolved": "A versão do documento na qual esta verificação foi iniciada não pode mais ser encontrada.",
+        "unsupportedFormat": "Só é possível verificar arquivos DOCX, PDFs e arquivos com uma versão em PDF."
+      },
+      "evidencePinned": "Verificado em relação a {count, plural, one {# fato} other {# fatos}}, como estavam em {checkedAt}. Edições posteriores na lista não alteram esta verificação.",
+      "failedTitle": "Falha na verificação",
+      "inProgress": "Verificando as alegações do documento em relação aos fatos da lista…",
+      "loadFailed": "Não foi possível carregar esta verificação.",
+      "noClaims": "Nenhuma alegação foi encontrada neste documento.",
+      "startFailed": "Não foi possível iniciar a verificação",
+      "status": {
+        "completed": "Verificado",
+        "failed": "Falhou",
+        "queued": "Na fila",
+        "running": "Verificando"
+      }
+    },
+    "save": {
+      "failed": "Não salvo",
+      "failedTitle": "Sua alteração não foi salva",
+      "saved": "Salvo",
+      "saving": "Salvando…"
     },
     "sourceMediumTooltip": "Meio da fonte — um descritor neutro. Por si só, não reduz a confiança.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "Aceitar {count, plural, one {# alegação de rotina} other {# alegações de rotina}}",
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
       "claimStatus": " ({state}{contested, select, true {, contestada} other {}}{superseded, select, true {, substituída} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "page": "Página {page}",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
         "claims": "Alegações",
-        "needsJudgement": "Precisa de julgamento"
+        "needsJudgement": "Precisa de julgamento",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Escolher uma lista",
+      "documents": "Documentos",
+      "evidenceList": "Fatos de",
+      "noLists": "Este caso não tem listas.",
+      "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
     }
   },
   "bilingual": {

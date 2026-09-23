@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Fakt hinzufügen",
+      "addInterpretationNote": "Notiz zur Auslegung hinzufügen",
       "addUnavailable": "In dieser Testumgebung nicht verfügbar – das Hinzufügen eines Fakts erfordert eine noch nicht angebundene Persistenz.",
       "confirmedByReviewer": "Durch Prüfer bestätigt",
       "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
       "editFact": "Fakt bearbeiten",
+      "editInterpretationNote": "Notiz zur Auslegung bearbeiten",
       "editOrRetype": "Bearbeiten / neu eingeben",
+      "empty": "Markieren Sie Einträge dieser Liste als Fakten, mit denen Dokumente abgeglichen werden.",
       "extractionAndReview": "Extraktion und Prüfung",
       "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
       "factText": "Text des Ankerfakts",
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
       "heldForReview": "Zur Prüfung zurückgestellt",
+      "holdOutOfScoring": "Aus der Bewertung ausschließen",
       "importSource": "Quelle importieren",
       "importUnavailable": "In dieser Testumgebung nicht verfügbar – das Importieren einer Quelle erfordert eine noch nicht angebundene Datenaufnahme und Speicherung.",
+      "includeInScoring": "In die Bewertung einbeziehen",
       "interpretation": "Auslegung",
+      "interpretationNote": "Notiz zur Auslegung",
+      "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",
       "interpretiveConfidence": "Auslegungssicherheit",
+      "openList": "Liste öffnen",
       "record": "Ankerfaktenbestand",
+      "setConfidence": "Sicherheit festlegen",
       "sourceAndProvenance": "Quelle und Herkunft",
       "timePeriod": "Zeitraum",
       "title": "Ankerfakten"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "In diesem Build ist kein Live-Modell angebunden – Ergebnis: <strong>Keine Abdeckung, Prüfung ausstehend</strong>.",
         "reopen": "Erneut öffnen → mit Bestand abgleichen",
-        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus."
+        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus.",
+        "reopenedPending": "Als überprüfbare Behauptung erneut geöffnet. Sie wird als <strong>Keine Abdeckung</strong> angezeigt, bis das Dokument erneut geprüft wird."
       },
       "note": {
         "add": "Notiz / Korrektur hinzufügen",
         "heading": "Ihre Notiz · {savedAt}",
+        "headingUndated": "Ihre Notiz",
         "placeholder": "Erfassen Sie eine Korrektur oder Erklärung. Beim Speichern wird die Notiz nur dieser Behauptung zugeordnet – das Ergebnis und der Ankerfaktenbestand bleiben unverändert.",
         "saveCorrection": "Korrektur speichern"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Warum das Datum über das Ergebnis entscheidet",
         "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
         "escalated": "Lokal zur Nachverfolgung durch das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis eine maßgebliche Quelle ausgewählt ist.",
+        "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
         "flagForEvidenceTeam": "Für das Belegteam markieren",
+        "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
         "governingPreview": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab. Beide Testeinträge bleiben unverändert.",
         "governingPreviewWithVerdict": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab – Ergebnis: <strong>{verdict}</strong>. Beide Testeinträge bleiben unverändert.",
         "oppositeSides": "Die beiden Daten liegen auf <emphasis>entgegengesetzten Seiten</emphasis> des maßgeblichen Ereignisses. Welcher Eintrag gilt, entscheidet das Ergebnis – die Klärung des Widerspruchs legt das Ergebnis daher unmittelbar fest.",
         "reconcile": "Bestand abgleichen",
         "resultAsAt": "Zum <strong>{date}</strong> {note}",
         "title": "Widersprüchliche Belege im Bestand",
-        "treatAsGoverning": "{id} als maßgeblich behandeln"
+        "treatAsGoverning": "{id} als maßgeblich behandeln",
+        "treatAsGoverningRecord": "Als maßgeblich behandeln"
       },
       "relation": {
         "conflicts": "Widerspricht",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
         "verdictWithheld": "Ergebnis zurückgehalten"
       },
+      "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
       "timeline": {
         "asAt": "Zum <strong>{date}</strong>",
         "asAtDate": "Stichtag",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektive, überprüfbare Aussage – wird mit dem Bestand abgeglichen. Umfasst auch als Eingeständnis oder Bestreiten formulierte Behauptungen: Bewertet wird die zugrunde liegende Aussage, nicht der bloße Wortlaut."
+        "hint": "Objektive, überprüfbare Aussage – wird mit dem Bestand abgeglichen. Umfasst auch als Eingeständnis oder Bestreiten formulierte Behauptungen: Bewertet wird die zugrunde liegende Aussage, nicht der bloße Wortlaut.",
+        "label": "Fakt"
       },
       "opinion": {
         "hint": "Werturteil oder Charakterisierung – kein Dokument kann dies bestätigen oder widerlegen; daher wird es zurückgestellt und nicht bewertet.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Auslegung",
+      "levels": {
+        "high": "Hoch",
+        "low": "Niedrig",
+        "medium": "Mittel"
+      },
       "tooltip": "Auslegungssicherheit – wie eindeutig die Bedeutung dieses Belegs ist. Unabhängig vom Quellenmedium (Handschrift, Scan usw.)."
     },
     "confirm": {
+      "acknowledge": "Zur Kenntnis nehmen",
       "recordConflict": "Lösung bestätigen",
       "supported": "Bestätigen – bereit",
       "verdict": "Ergebnis bestätigen"
@@ -250,6 +272,16 @@
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
       "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat."
     },
+    "documents": {
+      "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
+      "empty": "Laden Sie ein Dokument in diese Akte hoch, um es zu prüfen.",
+      "notVerified": "Noch nicht geprüft",
+      "open": "Öffnen",
+      "otherList": "Gegen eine andere Liste geprüft",
+      "sizeConfirmTitle": "Dieses Dokument prüfen?",
+      "verify": "Prüfen",
+      "verifyAgain": "Erneut prüfen"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
-      "position": "{current}/{total}"
+      "next": "Nächster Treffer",
+      "position": "{current}/{total}",
+      "previous": "Vorheriger Treffer"
+    },
+    "review": {
+      "disputed": "Beanstandet · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}} · {decidedAt}",
+      "undo": "Entscheidung rückgängig machen"
+    },
+    "runs": {
+      "back": "Alle Dokumente",
+      "errors": {
+        "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
+        "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
+        "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
+        "gradingFailed": "Die Behauptungen konnten nicht mit den Fakten der Liste abgeglichen werden.",
+        "internal": "Die Prüfung ist unerwartet fehlgeschlagen.",
+        "noText": "Aus diesem Dokument konnte kein Text gelesen werden.",
+        "pinContentChanged": "Das Dokument hat sich nach Beginn der Prüfung geändert. Prüfen Sie es erneut.",
+        "pinUnresolved": "Die Dokumentversion, für die diese Prüfung gestartet wurde, ist nicht mehr auffindbar.",
+        "unsupportedFormat": "Es können nur DOCX-Dateien, PDFs und Dateien mit einer PDF-Fassung geprüft werden."
+      },
+      "evidencePinned": "Geprüft anhand von {count, plural, one {# Fakt} other {# Fakten}}, wie sie am {checkedAt} vorlagen. Spätere Änderungen an der Liste wirken sich nicht auf diese Prüfung aus.",
+      "failedTitle": "Prüfung fehlgeschlagen",
+      "inProgress": "Die Behauptungen des Dokuments werden mit den Fakten der Liste abgeglichen …",
+      "loadFailed": "Diese Prüfung konnte nicht geladen werden.",
+      "noClaims": "In diesem Dokument wurden keine Behauptungen gefunden.",
+      "startFailed": "Die Prüfung konnte nicht gestartet werden",
+      "status": {
+        "completed": "Geprüft",
+        "failed": "Fehlgeschlagen",
+        "queued": "In der Warteschlange",
+        "running": "Wird geprüft"
+      }
+    },
+    "save": {
+      "failed": "Nicht gespeichert",
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
+      "saved": "Gespeichert",
+      "saving": "Wird gespeichert …"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
       "claimStatus": " ({state}{contested, select, true {, strittig} other {}}{superseded, select, true {, überholt} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "page": "Seite {page}",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
         "claims": "Behauptungen",
-        "needsJudgement": "Entscheidung erforderlich"
+        "needsJudgement": "Entscheidung erforderlich",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Liste auswählen",
+      "documents": "Dokumente",
+      "evidenceList": "Fakten aus",
+      "noLists": "Diese Akte hat keine Listen.",
+      "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
     }
   },
   "bilingual": {

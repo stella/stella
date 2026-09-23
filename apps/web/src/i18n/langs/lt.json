@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Pridėti faktą",
+      "addInterpretationNote": "Pridėti aiškinimo pastabą",
       "addUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: faktui pridėti reikia dar neprijungto nuolatinio saugojimo.",
       "confirmedByReviewer": "Patvirtino tikrintojas",
       "description": "Patikimi įrodymai, pavyzdžiui, el. laiškai, žinutės, banko įrašai ir sutarti faktai, išskirti į atraminių faktų registrą, su kuriuo tikrinami teiginiai. Peržiūrėkite, redaguokite arba pridėkite faktų rankiniu būdu.",
       "editFact": "Redaguoti faktą",
+      "editInterpretationNote": "Redaguoti aiškinimo pastabą",
       "editOrRetype": "Redaguoti arba įvesti iš naujo",
+      "empty": "Pažymėkite šio sąrašo elementus kaip faktus, pagal kuriuos bus tikrinami dokumentai.",
       "extractionAndReview": "Išskyrimas ir peržiūra",
       "factCount": "{count, plural, one {# faktas} few {# faktai} many {# faktų} other {# fakto}}",
       "factText": "Atraminio fakto tekstas",
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
       "heldForReview": "Sulaikyta peržiūrai",
+      "holdOutOfScoring": "Neįtraukti į vertinimą",
       "importSource": "Importuoti šaltinį",
       "importUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: šaltiniui importuoti reikia dar neprijungto duomenų gavimo ir saugojimo.",
+      "includeInScoring": "Įtraukti į vertinimą",
       "interpretation": "Aiškinimas",
+      "interpretationNote": "Aiškinimo pastaba",
+      "interpretationNotePlaceholder": "Jei šio įrodymo reikšmė yra ginčijama, aprašykite, kaip. Jei ne, palikite lauką tuščią.",
       "interpretiveConfidence": "Aiškinimo patikimumas",
+      "openList": "Atverti sąrašą",
       "record": "Atraminių faktų registras",
+      "setConfidence": "Nustatyti patikimumą",
       "sourceAndProvenance": "Šaltinis ir kilmė",
       "timePeriod": "Laikotarpis",
       "title": "Atraminiai faktai"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "Šioje versijoje neprijungtas tiesioginis modelis: rezultatas yra <strong>Nėra aprėpties, laukiama patikros</strong>.",
         "reopen": "Atverti iš naujo → tikrinti pagal registrą",
-        "reopenExplanation": "<strong>Atidėta kaip nepatikrinama.</strong> Jei šį teiginį iš tiesų galima patikrinti, atverkite jį iš naujo: AVT išsaugos jūsų perklasifikavimą ir atliks tik anksčiau praleistą patikrą pagal registrą."
+        "reopenExplanation": "<strong>Atidėta kaip nepatikrinama.</strong> Jei šį teiginį iš tiesų galima patikrinti, atverkite jį iš naujo: AVT išsaugos jūsų perklasifikavimą ir atliks tik anksčiau praleistą patikrą pagal registrą.",
+        "reopenedPending": "Atverta iš naujo kaip patikrinamas teiginys. Kol dokumentas nebus patikrintas iš naujo, jis rodomas kaip <strong>Nėra aprėpties</strong>."
       },
       "note": {
         "add": "Pridėti pastabą arba pataisą",
         "heading": "Jūsų pastaba · {savedAt}",
+        "headingUndated": "Jūsų pastaba",
         "placeholder": "Įrašykite pataisą arba paaiškinimą. Išsaugojus pastaba susiejama tik su šiuo teiginiu; išvada ir atraminių faktų registras nesikeičia.",
         "saveCorrection": "Išsaugoti pataisą"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Kodėl data lemia išvadą",
         "description": "Du atraminiai faktai susiję su tuo pačiu dalyku, <strong>{subject}</strong>, tačiau vienas kitam prieštarauja. Abu yra <strong>didelio patikimumo</strong> šaltiniai, todėl tai nėra patikimumo problema: pats registras yra vidujai prieštaringas. AVT nepateikia išvados ir nevertina teiginio, nes pasirinkti vieną įrašą vietoj kito turite jūs ir šį pasirinkimą turite užfiksuoti; įrankis neturėtų to daryti neatsiklausęs.",
         "escalated": "Pažymėta vietoje tolesnei įrodymų grupės peržiūrai. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis šaltinis.",
+        "escalatedNotice": "Pažymėta įrodymų grupei. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis įrašas.",
         "flagForEvidenceTeam": "Perduoti įrodymų grupei",
+        "governed": "<strong>{value}</strong> yra vadovaujamasis: teiginys vertinamas pagal šį įrašą. Kitas įrašas lieka registre.",
         "governingPreview": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
         "governingPreviewWithVerdict": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>; gaunama išvada <strong>{verdict}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
         "oppositeSides": "Šios dvi datos yra <emphasis>skirtingose ribinio įvykio pusėse</emphasis>. Rezultatą lemia tai, kuris įrašas laikomas vadovaujamuoju, todėl čia išsprendus prieštaravimą tiesiogiai nustatoma išvada.",
         "reconcile": "Suderinti registrą",
         "resultAsAt": "<strong>{date}</strong> dieną {note}",
         "title": "Prieštaringi įrodymai registre",
-        "treatAsGoverning": "Laikyti {id} vadovaujamuoju"
+        "treatAsGoverning": "Laikyti {id} vadovaujamuoju",
+        "treatAsGoverningRecord": "Laikyti vadovaujamuoju"
       },
       "relation": {
         "conflicts": "Prieštarauja",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
         "verdictWithheld": "Išvada nepateikta"
       },
+      "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
       "timeline": {
         "asAt": "<strong>{date}</strong> dieną",
         "asAtDate": "Vertinimo data",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektyvus patikrinamas teiginys, vertinamas pagal registrą. Tai apima pripažinimo arba neigimo forma pateiktus teiginius: vertinamas pagrindinis teiginys, o ne vien žodžiai."
+        "hint": "Objektyvus patikrinamas teiginys, vertinamas pagal registrą. Tai apima pripažinimo arba neigimo forma pateiktus teiginius: vertinamas pagrindinis teiginys, o ne vien žodžiai.",
+        "label": "Faktas"
       },
       "opinion": {
         "hint": "Vertinamasis sprendimas arba apibūdinimas, kurio negali patvirtinti ar paneigti joks dokumentas; jis atidedamas, o ne vertinamas.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Aiškinimas",
+      "levels": {
+        "high": "Aukštas",
+        "low": "Žemas",
+        "medium": "Vidutinis"
+      },
       "tooltip": "Aiškinimo patikimumas rodo, kiek vienareikšmė yra įrodymo prasmė. Jis nepriklauso nuo šaltinio laikmenos, pavyzdžiui, rašysenos ar nuskaitymo."
     },
     "confirm": {
+      "acknowledge": "Supratau",
       "recordConflict": "Patvirtinti sprendimą",
       "supported": "Patvirtinti: paruošta",
       "verdict": "Patvirtinti išvadą"
@@ -250,6 +272,16 @@
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
       "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus."
     },
+    "documents": {
+      "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",
+      "empty": "Įkelkite į šią bylą dokumentą, kad jį patikrintumėte.",
+      "notVerified": "Dar nepatikrinta",
+      "open": "Atverti",
+      "otherList": "Patikrinta pagal kitą sąrašą",
+      "sizeConfirmTitle": "Patikrinti šį dokumentą?",
+      "verify": "Tikrinti",
+      "verifyAgain": "Tikrinti iš naujo"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
-      "position": "{current}/{total}"
+      "next": "Kitas atitikmuo",
+      "position": "{current}/{total}",
+      "previous": "Ankstesnis atitikmuo"
+    },
+    "review": {
+      "disputed": "Užginčyta · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}} · {decidedAt}",
+      "undo": "Anuliuoti sprendimą"
+    },
+    "runs": {
+      "back": "Visi dokumentai",
+      "errors": {
+        "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
+        "enqueueFailed": "Nepavyko pradėti tikrinimo. Bandykite dar kartą.",
+        "extractionFailed": "Nepavyko išskirti šiame dokumente esančių teiginių.",
+        "gradingFailed": "Nepavyko patikrinti teiginių pagal sąrašo faktus.",
+        "internal": "Tikrinimas netikėtai nepavyko.",
+        "noText": "Iš šio dokumento nepavyko nuskaityti teksto.",
+        "pinContentChanged": "Dokumentas pasikeitė pradėjus tikrinimą. Patikrinkite jį iš naujo.",
+        "pinUnresolved": "Dokumento versijos, su kuria buvo pradėtas šis tikrinimas, daugiau rasti nepavyksta.",
+        "unsupportedFormat": "Tikrinti galima tik DOCX, PDF failus ir failus, turinčius PDF versiją."
+      },
+      "evidencePinned": "Patikrinta pagal {count, plural, one {# faktą} few {# faktus} many {# faktų} other {# fakto}}, buvusius tokius, kokie buvo {checkedAt}. Vėlesni sąrašo pakeitimai šio tikrinimo nekeičia.",
+      "failedTitle": "Tikrinimas nepavyko",
+      "inProgress": "Tikrinami dokumento teiginiai pagal sąrašo faktus…",
+      "loadFailed": "Nepavyko įkelti šio tikrinimo.",
+      "noClaims": "Šiame dokumente teiginių nerasta.",
+      "startFailed": "Nepavyko pradėti tikrinimo",
+      "status": {
+        "completed": "Patikrinta",
+        "failed": "Nepavyko",
+        "queued": "Eilėje",
+        "running": "Tikrinama"
+      }
+    },
+    "save": {
+      "failed": "Neišsaugota",
+      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas",
+      "saved": "Išsaugota",
+      "saving": "Išsaugoma…"
     },
     "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "{count, plural, one {Priimti # įprastą teiginį} few {Priimti # įprastus teiginius} many {Priimti # įprastų teiginių} other {Priimti # įprasto teiginio}}",
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
       "claimStatus": " ({state}{contested, select, true {, ginčijama} other {}}{superseded, select, true {, pakeista} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "page": "{page} psl.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
         "claims": "Teiginiai",
-        "needsJudgement": "Reikia sprendimo"
+        "needsJudgement": "Reikia sprendimo",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Pasirinkti sąrašą",
+      "documents": "Dokumentai",
+      "evidenceList": "Faktai iš",
+      "noLists": "Šioje byloje nėra sąrašų.",
+      "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
   },
   "bilingual": {

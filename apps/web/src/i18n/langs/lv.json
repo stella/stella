@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Pievienot faktu",
+      "addInterpretationNote": "Pievienot interpretācijas piezīmi",
       "addUnavailable": "Šajā testa vidē funkcija nav pieejama: fakta pievienošanai vajadzīga pastāvīga glabāšana, kas vēl nav pieslēgta.",
       "confirmedByReviewer": "Pārbaudītāja apstiprināts",
       "description": "Droši pierādījumi, piemēram, e-pasta vēstules, ziņas, bankas ieraksti un saskaņoti fakti, kas iegūti enkurfaktu reģistram, ar kuru tiek pārbaudīti apgalvojumi. Pārskatiet, rediģējiet vai manuāli pievienojiet faktus.",
       "editFact": "Rediģēt faktu",
+      "editInterpretationNote": "Rediģēt interpretācijas piezīmi",
       "editOrRetype": "Rediģēt vai ievadīt vēlreiz",
+      "empty": "Atzīmējiet šī saraksta vienumus kā faktus, pret kuriem tiks pārbaudīti dokumenti.",
       "extractionAndReview": "Iegūšana un pārskatīšana",
       "factCount": "{count, plural, zero {# faktu} one {# fakts} other {# fakti}}",
       "factText": "Enkurfakta teksts",
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
       "heldForReview": "Aizturēts pārskatīšanai",
+      "holdOutOfScoring": "Izslēgt no vērtējuma",
       "importSource": "Importēt avotu",
       "importUnavailable": "Šajā testa vidē funkcija nav pieejama: avota importēšanai vajadzīga datu saņemšana un glabāšana, kas vēl nav pieslēgta.",
+      "includeInScoring": "Iekļaut vērtējumā",
       "interpretation": "Interpretācija",
+      "interpretationNote": "Interpretācijas piezīme",
+      "interpretationNotePlaceholder": "Ja šī pierādījuma nozīme ir apstrīdēta, aprakstiet, kā. Ja nav, atstājiet lauku tukšu.",
       "interpretiveConfidence": "Interpretācijas ticamība",
+      "openList": "Atvērt sarakstu",
       "record": "Enkurfaktu reģistrs",
+      "setConfidence": "Iestatīt ticamību",
       "sourceAndProvenance": "Avots un izcelsme",
       "timePeriod": "Laikposms",
       "title": "Enkurfakti"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "Šajā versijā nav pieslēgts tiešsaistes modelis: rezultāts ir <strong>Nav seguma, gaida pārbaudi</strong>.",
         "reopen": "Atvērt vēlreiz → pārbaudīt pret reģistru",
-        "reopenExplanation": "<strong>Atlikts kā nepārbaudāms.</strong> Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz: AVT saglabās jūsu pārklasifikāciju un veiks tikai iepriekš izlaisto pārbaudi pret reģistru."
+        "reopenExplanation": "<strong>Atlikts kā nepārbaudāms.</strong> Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz: AVT saglabās jūsu pārklasifikāciju un veiks tikai iepriekš izlaisto pārbaudi pret reģistru.",
+        "reopenedPending": "Atvērts vēlreiz kā pārbaudāms apgalvojums. Tas tiek rādīts kā <strong>Nav seguma</strong>, kamēr dokuments netiek pārbaudīts vēlreiz."
       },
       "note": {
         "add": "Pievienot piezīmi vai labojumu",
         "heading": "Jūsu piezīme · {savedAt}",
+        "headingUndated": "Jūsu piezīme",
         "placeholder": "Ierakstiet labojumu vai paskaidrojumu. Saglabājot piezīme tiek sasaistīta tikai ar šo apgalvojumu; slēdziens un enkurfaktu reģistrs netiek mainīti.",
         "saveCorrection": "Saglabāt labojumu"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Kāpēc datums nosaka slēdzienu",
         "description": "Divi enkurfakti attiecas uz vienu un to pašu jautājumu, <strong>{subject}</strong>, taču ir pretrunā. Abi ir <strong>augstas ticamības</strong> avoti, tāpēc tā nav uzticamības problēma: pats reģistrs ir iekšēji pretrunīgs. AVT nesniedz slēdzienu un nevērtē apgalvojumu, jo izvēle starp ierakstiem ir lēmums, kas jāpieņem un jāreģistrē jums; rīks nedrīkst to izdarīt klusējot.",
         "escalated": "Lokāli atzīmēts pierādījumu komandas turpmākai pārbaudei. Reģistra pretruna paliek atvērta un uzskaitīta, līdz tiek izvēlēts noteicošais avots.",
+        "escalatedNotice": "Atzīmēts pierādījumu komandai. Reģistra pretruna paliek atvērta un uzskaitīta, līdz tiek izvēlēts noteicošais ieraksts.",
         "flagForEvidenceTeam": "Nodot pierādījumu komandai",
+        "governed": "<strong>{value}</strong> ir noteicošais: apgalvojums tiek vērtēts pret šo ierakstu. Otrs ieraksts paliek reģistrā.",
         "governingPreview": "Šajā lokālajā priekšskatījumā <strong>{factId}</strong> tiek uzskatīts par noteicošo, un apgalvojums tiek vērtēts pret <strong>{value}</strong>. Abi testa reģistra ieraksti paliek nemainīti.",
         "governingPreviewWithVerdict": "Šajā lokālajā priekšskatījumā <strong>{factId}</strong> tiek uzskatīts par noteicošo, un apgalvojums tiek vērtēts pret <strong>{value}</strong>; rezultāts ir <strong>{verdict}</strong>. Abi testa reģistra ieraksti paliek nemainīti.",
         "oppositeSides": "Abi datumi atrodas <emphasis>pretējās robežnotikuma pusēs</emphasis>. Rezultātu nosaka tas, kurš ieraksts ir noteicošais, tāpēc pretrunas atrisināšana šeit tieši nosaka slēdzienu.",
         "reconcile": "Saskaņot reģistru",
         "resultAsAt": "Uz <strong>{date}</strong> {note}",
         "title": "Pretrunīgi pierādījumi reģistrā",
-        "treatAsGoverning": "Uzskatīt {id} par noteicošo"
+        "treatAsGoverning": "Uzskatīt {id} par noteicošo",
+        "treatAsGoverningRecord": "Uzskatīt par noteicošo"
       },
       "relation": {
         "conflicts": "Ir pretrunā",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, zero {# pamatojumu} one {# pamatojums} other {# pamatojumi}}",
         "verdictWithheld": "Slēdziens nav sniegts"
       },
+      "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
       "timeline": {
         "asAt": "Uz <strong>{date}</strong>",
         "asAtDate": "Datums, uz kuru vērtē",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektīvs, pārbaudāms apgalvojums, ko vērtē pret reģistru. Ietver apgalvojumus, kas formulēti kā atzīšana vai noliegums: tiek vērtēts pamatā esošais apgalvojums, nevis tikai vārdi."
+        "hint": "Objektīvs, pārbaudāms apgalvojums, ko vērtē pret reģistru. Ietver apgalvojumus, kas formulēti kā atzīšana vai noliegums: tiek vērtēts pamatā esošais apgalvojums, nevis tikai vārdi.",
+        "label": "Fakts"
       },
       "opinion": {
         "hint": "Vērtējums vai raksturojums, ko neviens dokuments nevar apstiprināt vai atspēkot; tas tiek atlikts, nevis vērtēts.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Interpretācija",
+      "levels": {
+        "high": "Augsta",
+        "low": "Zema",
+        "medium": "Vidēja"
+      },
       "tooltip": "Interpretācijas ticamība norāda, cik nepārprotama ir pierādījuma nozīme. Tā nav atkarīga no avota nesēja, piemēram, rokraksta vai skenējuma."
     },
     "confirm": {
+      "acknowledge": "Sapratu",
       "recordConflict": "Apstiprināt risinājumu",
       "supported": "Apstiprināt: gatavs",
       "verdict": "Apstiprināt slēdzienu"
@@ -250,6 +272,16 @@
       "supported": "Reģistrs to apstiprina. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; vērtējošs lēmums nav vajadzīgs.",
       "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus."
     },
+    "documents": {
+      "claimSummary": "Pretrunā: {contradicted} · Daļēji pretrunā: {tension} · Reģistra pretruna: {conflicts}",
+      "empty": "Augšupielādējiet dokumentu šajā lietā, lai to pārbaudītu.",
+      "notVerified": "Vēl nav pārbaudīts",
+      "open": "Atvērt",
+      "otherList": "Pārbaudīts pret citu sarakstu",
+      "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
+      "verify": "Pārbaudīt",
+      "verifyAgain": "Pārbaudīt vēlreiz"
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
-      "position": "{current}/{total}"
+      "next": "Nākamā atbilstība",
+      "position": "{current}/{total}",
+      "previous": "Iepriekšējā atbilstība"
+    },
+    "review": {
+      "disputed": "Apstrīdēts · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}} · {decidedAt}",
+      "undo": "Atsaukt lēmumu"
+    },
+    "runs": {
+      "back": "Visi dokumenti",
+      "errors": {
+        "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
+        "enqueueFailed": "Neizdevās sākt pārbaudi. Mēģiniet vēlreiz.",
+        "extractionFailed": "Neizdevās iegūt šajā dokumentā ietvertos apgalvojumus.",
+        "gradingFailed": "Neizdevās pārbaudīt apgalvojumus pret saraksta faktiem.",
+        "internal": "Pārbaude neparedzēti neizdevās.",
+        "noText": "Neizdevās nolasīt tekstu no šī dokumenta.",
+        "pinContentChanged": "Dokuments mainījās pēc pārbaudes sākuma. Pārbaudiet to vēlreiz.",
+        "pinUnresolved": "Dokumenta versiju, ar kuru tika sākta šī pārbaude, vairs nevar atrast.",
+        "unsupportedFormat": "Pārbaudīt var tikai DOCX failus, PDF failus un failus ar PDF versiju."
+      },
+      "evidencePinned": "Pārbaudīts pret {count, plural, zero {# faktu} one {# faktu} other {# faktus}}, kādi tie bija {checkedAt}. Vēlākas izmaiņas sarakstā šo pārbaudi nemaina.",
+      "failedTitle": "Pārbaude neizdevās",
+      "inProgress": "Notiek dokumenta apgalvojumu pārbaude pret saraksta faktiem…",
+      "loadFailed": "Neizdevās ielādēt šo pārbaudi.",
+      "noClaims": "Šajā dokumentā apgalvojumi nav atrasti.",
+      "startFailed": "Neizdevās sākt pārbaudi",
+      "status": {
+        "completed": "Pārbaudīts",
+        "failed": "Neizdevās",
+        "queued": "Rindā",
+        "running": "Notiek pārbaude"
+      }
+    },
+    "save": {
+      "failed": "Nav saglabāts",
+      "failedTitle": "Jūsu izmaiņas netika saglabātas",
+      "saved": "Saglabāts",
+      "saving": "Saglabā…"
     },
     "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "{count, plural, zero {Pieņemt # standarta apgalvojumu} one {Pieņemt # standarta apgalvojumu} other {Pieņemt # standarta apgalvojumus}}",
       "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
       "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
       "claimStatus": " ({state}{contested, select, true {, apstrīdēts} other {}}{superseded, select, true {, aizstāts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
+      "page": "{page}. lapa",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
         "claims": "Apgalvojumi",
-        "needsJudgement": "Vajadzīgs lēmums"
+        "needsJudgement": "Vajadzīgs lēmums",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Izvēlēties sarakstu",
+      "documents": "Dokumenti",
+      "evidenceList": "Fakti no",
+      "noLists": "Šai lietai nav sarakstu.",
+      "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
     }
   },
   "bilingual": {

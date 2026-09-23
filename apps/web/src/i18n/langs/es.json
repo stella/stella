@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Añadir hecho",
+      "addInterpretationNote": "Añadir nota de interpretación",
       "addUnavailable": "No disponible en este entorno de prueba: añadir un hecho requiere una persistencia que aún no está conectada.",
       "confirmedByReviewer": "Confirmado por el revisor",
       "description": "Las pruebas sólidas (correos, mensajes, registros bancarios y hechos acordados) se extraen al registro de hechos de referencia con el que se contrastan las afirmaciones. Revise, edite o añada hechos manualmente.",
       "editFact": "Editar hecho",
+      "editInterpretationNote": "Editar nota de interpretación",
       "editOrRetype": "Editar / volver a escribir",
+      "empty": "Marque elementos de esta lista como hechos con los que contrastar los documentos.",
       "extractionAndReview": "Extracción y revisión",
       "factCount": "{count, plural, one {# hecho} other {# hechos}}",
       "factText": "Texto del hecho de referencia",
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
       "heldForReview": "Pendiente de revisión",
+      "holdOutOfScoring": "Excluir de la puntuación",
       "importSource": "Importar fuente",
       "importUnavailable": "No disponible en este entorno de prueba: importar una fuente requiere una ingesta y un almacenamiento que aún no están conectados.",
+      "includeInScoring": "Incluir en la puntuación",
       "interpretation": "Interpretación",
+      "interpretationNote": "Nota de interpretación",
+      "interpretationNotePlaceholder": "Si el significado de esta prueba es cuestionado, explique cómo. Déjelo en blanco si no lo es.",
       "interpretiveConfidence": "Confianza interpretativa",
+      "openList": "Abrir lista",
       "record": "Registro de hechos de referencia",
+      "setConfidence": "Establecer confianza",
       "sourceAndProvenance": "Fuente y procedencia",
       "timePeriod": "Periodo",
       "title": "Hechos de referencia"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "No hay ningún modelo en vivo conectado en esta versión: el resultado es <strong>Sin cobertura, comprobación pendiente</strong>.",
         "reopen": "Reabrir → contrastar con el registro",
-        "reopenExplanation": "<strong>Reservada como no verificable.</strong> Si la afirmación puede comprobarse, vuelva a abrirla: AVT conserva la reclasificación y ejecuta únicamente la comprobación del registro que se omitió."
+        "reopenExplanation": "<strong>Reservada como no verificable.</strong> Si la afirmación puede comprobarse, vuelva a abrirla: AVT conserva la reclasificación y ejecuta únicamente la comprobación del registro que se omitió.",
+        "reopenedPending": "Reabierta como afirmación comprobable. Se muestra como <strong>Sin cobertura</strong> hasta que el documento se vuelva a verificar."
       },
       "note": {
         "add": "Añadir nota / corrección",
         "heading": "Su nota · {savedAt}",
+        "headingUndated": "Su nota",
         "placeholder": "Anote una corrección o explicación. Al guardar, la nota se vincula solo a esta afirmación; no cambia el resultado ni el registro de hechos de referencia.",
         "saveCorrection": "Guardar corrección"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Por qué la fecha determina el resultado",
         "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
         "escalated": "Marcado localmente para que el equipo de pruebas haga seguimiento. El conflicto del registro permanece abierto y se contabiliza hasta que se seleccione una fuente prevalente.",
+        "escalatedNotice": "Marcado para el equipo de pruebas. El conflicto del registro permanece abierto y se contabiliza hasta que se elija un registro prevalente.",
         "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
+        "governed": "<strong>{value}</strong> prevalece: la afirmación se valora frente a este registro. El otro registro permanece archivado.",
         "governingPreview": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>. Ambos registros de prueba permanecen sin cambios.",
         "governingPreviewWithVerdict": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>, con el resultado <strong>{verdict}</strong>. Ambos registros de prueba permanecen sin cambios.",
         "oppositeSides": "Las dos fechas están en <emphasis>lados opuestos</emphasis> del hecho determinante. El registro que prevalezca decide el resultado; resolver aquí el conflicto fija directamente el resultado.",
         "reconcile": "Conciliar el registro",
         "resultAsAt": "A <strong>{date}</strong>, {note}",
         "title": "Pruebas contradictorias en el registro",
-        "treatAsGoverning": "Considerar prevalente {id}"
+        "treatAsGoverning": "Considerar prevalente {id}",
+        "treatAsGoverningRecord": "Considerar prevalente"
       },
       "relation": {
         "conflicts": "Contradice",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, one {# respaldo} other {# respaldos}}",
         "verdictWithheld": "Resultado retenido"
       },
+      "sourceCount": "{count, plural, one {# fuente} other {# fuentes}}",
       "timeline": {
         "asAt": "A <strong>{date}</strong>",
         "asAtDate": "Fecha de referencia",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Afirmación objetiva y comprobable: se contrasta con el registro. Incluye afirmaciones formuladas como admisiones o negaciones; se valora la proposición subyacente, no las meras palabras."
+        "hint": "Afirmación objetiva y comprobable: se contrasta con el registro. Incluye afirmaciones formuladas como admisiones o negaciones; se valora la proposición subyacente, no las meras palabras.",
+        "label": "Hecho"
       },
       "opinion": {
         "hint": "Juicio de valor o caracterización: ningún documento puede confirmarlo ni contradecirlo, por lo que se reserva y no se puntúa.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Interpretación",
+      "levels": {
+        "high": "Alta",
+        "low": "Baja",
+        "medium": "Media"
+      },
       "tooltip": "Confianza interpretativa: hasta qué punto es inequívoco el significado de esta prueba. Es independiente del formato de la fuente (manuscrito, escaneo, etc.)."
     },
     "confirm": {
+      "acknowledge": "Entendido",
       "recordConflict": "Confirmar resolución",
       "supported": "Confirmar: listo",
       "verdict": "Confirmar resultado"
@@ -250,6 +272,16 @@
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
       "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado."
     },
+    "documents": {
+      "claimSummary": "Contradicha: {contradicted} · En tensión: {tension} · Conflicto del registro: {conflicts}",
+      "empty": "Suba un documento a este asunto para verificarlo.",
+      "notVerified": "Aún no verificado",
+      "open": "Abrir",
+      "otherList": "Verificado con otra lista",
+      "sizeConfirmTitle": "¿Verificar este documento?",
+      "verify": "Verificar",
+      "verifyAgain": "Volver a verificar"
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, one {# coincidencia} other {# coincidencias}}",
-      "position": "{current}/{total}"
+      "next": "Coincidencia siguiente",
+      "position": "{current}/{total}",
+      "previous": "Coincidencia anterior"
+    },
+    "review": {
+      "disputed": "Impugnada · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Aceptada como rutinaria} other {Revisada}} · {decidedAt}",
+      "undo": "Deshacer decisión"
+    },
+    "runs": {
+      "back": "Todos los documentos",
+      "errors": {
+        "aiUnavailable": "No hay ningún modelo de IA disponible para verificar documentos. Revise la configuración de IA de la organización.",
+        "enqueueFailed": "No se pudo iniciar la verificación. Inténtelo de nuevo.",
+        "extractionFailed": "No se pudieron extraer las afirmaciones de este documento.",
+        "gradingFailed": "No se pudieron contrastar las afirmaciones con los hechos de la lista.",
+        "internal": "La verificación falló de forma inesperada.",
+        "noText": "No se pudo leer ningún texto de este documento.",
+        "pinContentChanged": "El documento cambió después de iniciar la verificación. Vuelva a verificarlo.",
+        "pinUnresolved": "Ya no se puede encontrar la versión del documento con la que se inició esta verificación.",
+        "unsupportedFormat": "Solo se pueden verificar archivos DOCX, PDF y archivos con una versión en PDF."
+      },
+      "evidencePinned": "Verificado con {count, plural, one {# hecho} other {# hechos}} tal y como constaban el {checkedAt}. Las ediciones posteriores de la lista no modifican esta verificación.",
+      "failedTitle": "Error en la verificación",
+      "inProgress": "Contrastando las afirmaciones del documento con los hechos de la lista…",
+      "loadFailed": "No se pudo cargar esta verificación.",
+      "noClaims": "No se encontraron afirmaciones en este documento.",
+      "startFailed": "No se pudo iniciar la verificación",
+      "status": {
+        "completed": "Verificado",
+        "failed": "Fallida",
+        "queued": "En cola",
+        "running": "Verificando"
+      }
+    },
+    "save": {
+      "failed": "No guardado",
+      "failedTitle": "No se guardó su cambio",
+      "saved": "Guardado",
+      "saving": "Guardando…"
     },
     "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "Aceptar {count, plural, one {# afirmación rutinaria} other {# afirmaciones rutinarias}}",
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
       "claimStatus": " ({state}{contested, select, true {, cuestionada} other {}}{superseded, select, true {, sustituida} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "page": "Página {page}",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
         "claims": "Afirmaciones",
-        "needsJudgement": "Requieren valoración"
+        "needsJudgement": "Requieren valoración",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Elegir una lista",
+      "documents": "Documentos",
+      "evidenceList": "Hechos de",
+      "noLists": "Este asunto no tiene listas.",
+      "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
   },
   "bilingual": {

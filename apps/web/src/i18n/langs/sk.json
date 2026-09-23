@@ -137,21 +137,30 @@
   "avt": {
     "anchorFacts": {
       "addFact": "Pridať fakt",
+      "addInterpretationNote": "Pridať poznámku k výkladu",
       "addUnavailable": "V tomto testovacom prostredí nie je k dispozícii — pridanie faktu vyžaduje doposiaľ nezapojené trvalé úložisko.",
       "confirmedByReviewer": "Potvrdené kontrolujúcou osobou",
       "description": "Priame dôkazy — e-maily, správy, bankové záznamy, nesporné skutočnosti — spracované do súboru referenčných faktov, s ktorými sa porovnávajú tvrdenia. Fakty môžete kontrolovať, upravovať alebo ručne pridávať.",
       "editFact": "Upraviť fakt",
+      "editInterpretationNote": "Upraviť poznámku k výkladu",
       "editOrRetype": "Upraviť / prepísať",
+      "empty": "Označte položky tohto zoznamu ako fakty, voči ktorým sa budú kontrolovať dokumenty.",
       "extractionAndReview": "Extrakcia a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktov} other {# faktu}}",
       "factText": "Text referenčného faktu",
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
+      "holdOutOfScoring": "Vylúčiť z hodnotenia",
       "importSource": "Importovať zdroj",
       "importUnavailable": "V tomto testovacom prostredí nie je k dispozícii — import zdroja vyžaduje doposiaľ nezapojené spracovanie a úložisko.",
+      "includeInScoring": "Zahrnúť do hodnotenia",
       "interpretation": "Výklad",
+      "interpretationNote": "Poznámka k výkladu",
+      "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",
       "interpretiveConfidence": "Istota výkladu",
+      "openList": "Otvoriť zoznam",
       "record": "Súbor referenčných faktov",
+      "setConfidence": "Nastaviť istotu",
       "sourceAndProvenance": "Zdroj a pôvod",
       "timePeriod": "Časové obdobie",
       "title": "Referenčné fakty"
@@ -165,11 +174,13 @@
       "notVerifiable": {
         "pending": "V tejto verzii nie je zapojený žiadny živý model — výsledok je <strong>Bez pokrytia, čaká na kontrolu</strong>.",
         "reopen": "Znovu otvoriť → porovnať so záznamami",
-        "reopenExplanation": "<strong>Odložené ako neoveriteľné.</strong> Ak sa toto tvrdenie v skutočnosti dá overiť, znovu ho otvorte: AVT zachová vašu zmenu klasifikácie a vykoná iba predtým preskočené porovnanie so záznamami."
+        "reopenExplanation": "<strong>Odložené ako neoveriteľné.</strong> Ak sa toto tvrdenie v skutočnosti dá overiť, znovu ho otvorte: AVT zachová vašu zmenu klasifikácie a vykoná iba predtým preskočené porovnanie so záznamami.",
+        "reopenedPending": "Znovu otvorené ako overiteľné tvrdenie. Kým sa dokument znovu neoverí, zobrazuje sa ako <strong>Bez pokrytia</strong>."
       },
       "note": {
         "add": "Pridať poznámku / opravu",
         "heading": "Vaša poznámka · {savedAt}",
+        "headingUndated": "Vaša poznámka",
         "placeholder": "Zaznamenajte opravu alebo vysvetlenie. Uložená poznámka sa vzťahuje iba na toto tvrdenie — nemení záver ani súbor referenčných faktov.",
         "saveCorrection": "Uložiť opravu"
       },
@@ -181,14 +192,17 @@
         "dateDecides": "Prečo o závere rozhoduje dátum",
         "description": "Dva referenčné fakty sa týkajú rovnakej otázky — <strong>{subject}</strong> — ale odporujú si. Oba pochádzajú zo zdrojov s <strong>vysokou mierou istoty</strong>, nejde teda o problém spoľahlivosti: vnútorne rozporné sú samotné záznamy. AVT nevydá záver ani tvrdenie neohodnotí, pretože výber rozhodujúceho záznamu vyžaduje váš úsudok a jeho zaznamenanie — nástroj ho nesmie vykonať bez upozornenia.",
         "escalated": "Miestne označené na preverenie tímom pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci zdroj.",
+        "escalatedNotice": "Označené pre tím pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci záznam.",
         "flagForEvidenceTeam": "Označiť pre tím pre dôkazy",
+        "governed": "<strong>{value}</strong> je rozhodujúci: tvrdenie sa posudzuje podľa tohto záznamu. Druhý záznam zostáva evidovaný.",
         "governingPreview": "Tento miestny náhľad považuje <strong>{factId}</strong> za rozhodujúci a posudzuje tvrdenie podľa hodnoty <strong>{value}</strong>. Oba testovacie záznamy zostávajú bez zmeny.",
         "governingPreviewWithVerdict": "Tento miestny náhľad považuje <strong>{factId}</strong> za rozhodujúci a posudzuje tvrdenie podľa hodnoty <strong>{value}</strong> — výsledkom je <strong>{verdict}</strong>. Oba testovacie záznamy zostávajú bez zmeny.",
         "oppositeSides": "Tieto dva dátumy ležia na <emphasis>opačných stranách</emphasis> rozhodnej udalosti. Výsledok určí záznam, ktorý bude rozhodujúci — vyriešenie rozporu na tomto mieste preto priamo stanoví záver.",
         "reconcile": "Vyriešiť rozpor v záznamoch",
         "resultAsAt": "Ku dňu <strong>{date}</strong> {note}",
         "title": "Rozporné dôkazy v záznamoch",
-        "treatAsGoverning": "Považovať {id} za rozhodujúci"
+        "treatAsGoverning": "Považovať {id} za rozhodujúci",
+        "treatAsGoverningRecord": "Považovať za rozhodujúci"
       },
       "relation": {
         "conflicts": "Odporuje",
@@ -206,6 +220,7 @@
         "supportCount": "{count, plural, one {# podporný fakt} few {# podporné fakty} many {# podporných faktov} other {# podporného faktu}}",
         "verdictWithheld": "Záver nevydaný"
       },
+      "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
       "timeline": {
         "asAt": "Ku dňu <strong>{date}</strong>",
         "asAtDate": "Rozhodný dátum",
@@ -215,7 +230,8 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektívne, overiteľné tvrdenie — hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová."
+        "hint": "Objektívne, overiteľné tvrdenie — hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová.",
+        "label": "Fakt"
       },
       "opinion": {
         "hint": "Hodnotiaci úsudok alebo charakteristika — žiadny dokument ich nemôže potvrdiť ani vyvrátiť, preto sa odkladajú bez hodnotenia.",
@@ -229,9 +245,15 @@
     },
     "confidence": {
       "interpretation": "Výklad",
+      "levels": {
+        "high": "Vysoká",
+        "low": "Nízka",
+        "medium": "Stredná"
+      },
       "tooltip": "Istota výkladu — nakoľko je význam tohto dôkazu jednoznačný. Nezávisí od média zdroja (rukopis, sken a pod.)."
     },
     "confirm": {
+      "acknowledge": "Zobrať na vedomie",
       "recordConflict": "Potvrdiť riešenie",
       "supported": "Potvrdiť — pripravené",
       "verdict": "Potvrdiť záver"
@@ -250,6 +272,16 @@
       "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne — nie je potrebný žiadny hodnotiaci úsudok.",
       "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty."
     },
+    "documents": {
+      "claimSummary": "V rozpore: {contradicted} · V napätí: {tension} · Rozpor v záznamoch: {conflicts}",
+      "empty": "Nahrajte do tohto spisu dokument, ktorý chcete overiť.",
+      "notVerified": "Zatiaľ neoverené",
+      "open": "Otvoriť",
+      "otherList": "Skontrolované podľa iného zoznamu",
+      "sizeConfirmTitle": "Overiť tento dokument?",
+      "verify": "Overiť",
+      "verifyAgain": "Overiť znova"
+    },
     "guidance": {
       "escalate": "Postúpiť ďalej",
       "manualJudgement": "Vyžaduje úsudok",
@@ -258,7 +290,46 @@
     },
     "matches": {
       "count": "{count, plural, one {# zhoda} few {# zhody} many {# zhôd} other {# zhody}}",
-      "position": "{current}/{total}"
+      "next": "Ďalšia zhoda",
+      "position": "{current}/{total}",
+      "previous": "Predchádzajúca zhoda"
+    },
+    "review": {
+      "disputed": "Spochybnené · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}} · {decidedAt}",
+      "undo": "Vrátiť rozhodnutie"
+    },
+    "runs": {
+      "back": "Všetky dokumenty",
+      "errors": {
+        "aiUnavailable": "Na overenie dokumentov nie je dostupný žiadny model AI. Skontrolujte nastavenia AI organizácie.",
+        "enqueueFailed": "Overenie sa nepodarilo spustiť. Skúste to znova.",
+        "extractionFailed": "Tvrdenia v tomto dokumente sa nepodarilo extrahovať.",
+        "gradingFailed": "Tvrdenia sa nepodarilo porovnať s faktami zo zoznamu.",
+        "internal": "Overenie neočakávane zlyhalo.",
+        "noText": "Z tohto dokumentu sa nepodarilo prečítať žiadny text.",
+        "pinContentChanged": "Dokument sa po začatí overovania zmenil. Overte ho znova.",
+        "pinUnresolved": "Verziu dokumentu, pri ktorej sa toto overenie začalo, sa už nedarí nájsť.",
+        "unsupportedFormat": "Overiť možno len súbory DOCX, PDF a súbory s vygenerovanou verziou PDF."
+      },
+      "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktom} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
+      "failedTitle": "Overenie zlyhalo",
+      "inProgress": "Porovnávanie tvrdení dokumentu s faktami zoznamu…",
+      "loadFailed": "Toto overenie sa nepodarilo načítať.",
+      "noClaims": "V tomto dokumente sa nenašli žiadne tvrdenia.",
+      "startFailed": "Overenie sa nepodarilo spustiť",
+      "status": {
+        "completed": "Overené",
+        "failed": "Zlyhalo",
+        "queued": "Vo fronte",
+        "running": "Overovanie"
+      }
+    },
+    "save": {
+      "failed": "Neuložené",
+      "failedTitle": "Vaša zmena sa neuložila",
+      "saved": "Uložené",
+      "saving": "Ukladanie…"
     },
     "sourceMediumTooltip": "Médium zdroja — neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
@@ -291,13 +362,23 @@
       "acceptRoutine": "Prijať {count, plural, one {# bežné tvrdenie} few {# bežné tvrdenia} many {# bežných tvrdení} other {# bežného tvrdenia}}",
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
       "claimStatus": " ({state}{contested, select, true {, sporné} other {}}{superseded, select, true {, nahradené} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
+      "page": "Stránka {page}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
         "claims": "Tvrdenia",
-        "needsJudgement": "Vyžaduje úsudok"
+        "needsJudgement": "Vyžaduje úsudok",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Vybrať zoznam",
+      "documents": "Dokumenty",
+      "evidenceList": "Fakty zo zoznamu",
+      "noLists": "Tento spis nemá žiadne zoznamy.",
+      "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
     }
   },
   "bilingual": {

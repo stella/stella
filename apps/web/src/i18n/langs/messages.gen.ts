@@ -140,21 +140,30 @@ type Messages = {
   "avt": {
     "anchorFacts": {
       "addFact": "Add fact";
+      "addInterpretationNote": "Add interpretation note";
       "addUnavailable": "Not available in this harness — adding a fact needs persistence that is not wired up yet.";
       "confirmedByReviewer": "Confirmed by reviewer";
       "description": "Hard evidence — emails, messages, bank records, agreed facts — extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.";
       "editFact": "Edit fact";
+      "editInterpretationNote": "Edit interpretation note";
       "editOrRetype": "Edit / retype";
+      "empty": "Mark items of this list as facts to check documents against them.";
       "extractionAndReview": "Extraction & review";
       "factCount": "{count, plural, one {# fact} other {# facts}}";
       "factText": "Anchor fact text";
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
+      "holdOutOfScoring": "Hold out of scoring";
       "importSource": "Import source";
       "importUnavailable": "Not available in this harness — importing a source needs ingestion and storage that are not wired up yet.";
+      "includeInScoring": "Include in scoring";
       "interpretation": "Interpretation";
+      "interpretationNote": "Interpretation note";
+      "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
       "interpretiveConfidence": "Interpretive confidence";
+      "openList": "Open list";
       "record": "Anchor-fact record";
+      "setConfidence": "Set confidence";
       "sourceAndProvenance": "Source & provenance";
       "timePeriod": "Time period";
       "title": "Anchor facts";
@@ -169,10 +178,12 @@ type Messages = {
         "pending": "No live model wired up in this build — landed on <strong>No coverage, pending check</strong>.";
         "reopen": "Re-open → check against record";
         "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.";
+        "reopenedPending": "Re-opened as a checkable claim. It shows as <strong>No coverage</strong> until the document is verified again.";
       };
       "note": {
         "add": "Add note / correction";
         "heading": "Your note · {savedAt}";
+        "headingUndated": "Your note";
         "placeholder": "Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record.";
         "saveCorrection": "Save correction";
       };
@@ -184,7 +195,9 @@ type Messages = {
         "dateDecides": "Why the date decides the verdict";
         "description": "Two anchor facts speak to the same point — <strong>{subject}</strong> — but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record — not one the tool should make silently.";
         "escalated": "Marked locally for evidence-team follow-up. The record conflict remains open and counted until a governing source is selected.";
+        "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.";
         "flagForEvidenceTeam": "Flag for evidence team";
+        "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.";
         "governingPreview": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong>. Both fixture records remain unchanged.";
         "governingPreviewWithVerdict": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong> — landing on <strong>{verdict}</strong>. Both fixture records remain unchanged.";
         "oppositeSides": "The two dates fall on <emphasis>opposite sides</emphasis> of the boundary event. Whichever record governs decides the outcome — so resolving the conflict here directly sets the verdict.";
@@ -192,6 +205,7 @@ type Messages = {
         "resultAsAt": "As at <strong>{date}</strong>, the {note}";
         "title": "Conflicting evidence in the record";
         "treatAsGoverning": "Treat {id} as governing";
+        "treatAsGoverningRecord": "Treat as governing";
       };
       "relation": {
         "conflicts": "Conflicts";
@@ -209,6 +223,7 @@ type Messages = {
         "supportCount": "{count, plural, one {# support} other {# supports}}";
         "verdictWithheld": "Verdict withheld";
       };
+      "sourceCount": "{count, plural, one {# source} other {# sources}}";
       "timeline": {
         "asAt": "As at <strong>{date}</strong>";
         "asAtDate": "As-at date";
@@ -219,6 +234,7 @@ type Messages = {
     "claimTypes": {
       "fact": {
         "hint": "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words.";
+        "label": "Fact";
       };
       "opinion": {
         "hint": "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.";
@@ -232,9 +248,15 @@ type Messages = {
     };
     "confidence": {
       "interpretation": "Interpretation";
+      "levels": {
+        "high": "High";
+        "low": "Low";
+        "medium": "Medium";
+      };
       "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.).";
     };
     "confirm": {
+      "acknowledge": "Acknowledge";
       "recordConflict": "Confirm resolution";
       "supported": "Confirm — ready";
       "verdict": "Confirm verdict";
@@ -253,6 +275,16 @@ type Messages = {
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.";
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.";
     };
+    "documents": {
+      "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}";
+      "empty": "Upload a document to this matter to verify it.";
+      "notVerified": "Not verified yet";
+      "open": "Open";
+      "otherList": "Checked against another list";
+      "sizeConfirmTitle": "Verify this document?";
+      "verify": "Verify";
+      "verifyAgain": "Verify again";
+    };
     "guidance": {
       "escalate": "Escalate";
       "manualJudgement": "Manual judgement";
@@ -261,7 +293,46 @@ type Messages = {
     };
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}";
+      "next": "Next match";
       "position": "{current}/{total}";
+      "previous": "Previous match";
+    };
+    "review": {
+      "disputed": "Disputed · {decidedAt}";
+      "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}";
+      "undo": "Undo decision";
+    };
+    "runs": {
+      "back": "All documents";
+      "errors": {
+        "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.";
+        "enqueueFailed": "The verification could not be started. Try again.";
+        "extractionFailed": "The claims in this document could not be extracted.";
+        "gradingFailed": "The claims could not be checked against the list's facts.";
+        "internal": "The verification failed unexpectedly.";
+        "noText": "No text could be read from this document.";
+        "pinContentChanged": "The document changed after the verification started. Verify it again.";
+        "pinUnresolved": "The document version this verification was started on can no longer be found.";
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be verified.";
+      };
+      "evidencePinned": "Checked against {count, plural, one {# fact} other {# facts}} as they stood on {checkedAt}. Later edits to the list do not change this verification.";
+      "failedTitle": "Verification failed";
+      "inProgress": "Checking the document's claims against the list's facts…";
+      "loadFailed": "This verification could not be loaded.";
+      "noClaims": "No claims were found in this document.";
+      "startFailed": "Could not start the verification";
+      "status": {
+        "completed": "Verified";
+        "failed": "Failed";
+        "queued": "Queued";
+        "running": "Verifying";
+      };
+    };
+    "save": {
+      "failed": "Not saved";
+      "failedTitle": "Your change was not saved";
+      "saved": "Saved";
+      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -294,13 +365,23 @@ type Messages = {
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}";
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}";
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}";
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
       "claimStatus": " ({state}{contested, select, true {, contested} other {}}{superseded, select, true {, superseded} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
+      "page": "Page {page}";
       "selectClaim": "Select a claim to inspect the record.";
       "showQueue": "Show queue";
       "stats": {
         "claims": "Claims";
         "needsJudgement": "Needs judgement";
+        "progress": "{settled}/{total}";
       };
+    };
+    "view": {
+      "chooseList": "Choose a list";
+      "documents": "Documents";
+      "evidenceList": "Facts from";
+      "noLists": "This matter has no lists";
+      "pickList": "Choose the list whose facts this matter's documents are checked against.";
     };
   };
   "bilingual": {
