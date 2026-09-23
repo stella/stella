@@ -137,7 +137,7 @@ describe("findingForReader", () => {
       delta: { kind: "language" },
       rationale: null,
       recommendation: null,
-      referenceCitations: [],
+      referenceCitations: referenceFinding.referenceCitations,
       fix: null,
       referenceDetail: "withheld",
     });
@@ -163,9 +163,9 @@ describe("findingForReader", () => {
 });
 
 describe("referencesForReader", () => {
-  test("keeps ids and drops names of references outside the readable set", () => {
+  test("keeps ids and drops names and digests of references outside the readable set", () => {
     expect(referencesForReader([reference], new Set())).toEqual([
-      { ...reference, workspaceName: null, name: null },
+      { ...reference, workspaceName: null, name: null, contentSha256: null },
     ]);
     expect(
       referencesForReader([reference], new Set([REFERENCE_WORKSPACE])),

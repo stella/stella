@@ -179,6 +179,8 @@ type RunBasisLabels = {
   proposedFromReferencesLabel: string;
   /** "for the Purchaser", or the phrase for a run judged for no side. */
   sideLabel: string;
+  /** "2 reference documents": references listed without a name. */
+  unnamedReferencesLabel: (count: number) => string;
 };
 
 type RunSummaryArgs = RunBasisLabels & {
@@ -210,6 +212,7 @@ export const buildRunSummarySentence = ({
   playbookProposed,
   proposedFromReferencesLabel,
   sideLabel,
+  unnamedReferencesLabel,
 }: RunSummaryArgs): string => {
   const parts: string[] = [];
   if (targetName.length > 0) {
@@ -223,9 +226,13 @@ export const buildRunSummarySentence = ({
     const names = references.flatMap(({ name }) =>
       name.length > 0 ? [name] : [],
     );
-    if (names.length > 0) {
-      parts.push(names.join(", "));
-    }
+    const unnamed = references.length - names.length;
+    parts.push(
+      [
+        ...names,
+        ...(unnamed > 0 ? [unnamedReferencesLabel(unnamed)] : []),
+      ].join(", "),
+    );
   }
   parts.push(
     playbookProposed || playbookName.length === 0

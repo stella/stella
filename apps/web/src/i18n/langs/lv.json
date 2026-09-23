@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "{role} labā",
         "noSide": "Nav puses",
-        "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm"
+        "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm",
+        "unnamedReferences": "{count, plural, zero {# atsauces dokumentu} one {# atsauces dokuments} other {# atsauces dokumenti}}"
       },
       "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
       "targetColumn": "Šis dokuments",

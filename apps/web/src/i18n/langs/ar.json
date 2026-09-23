@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "لصالح {role}",
         "noSide": "بلا طرف",
-        "proposedFromReferences": "مواقف مقترحة من المراجع"
+        "proposedFromReferences": "مواقف مقترحة من المراجع",
+        "unnamedReferences": "{count, plural, zero {لا مستندات مرجعية} one {مستند مرجعي واحد} two {مستندان مرجعيان} few {# مستندات مرجعية} many {# مستندًا مرجعيًا} other {# مستند مرجعي}}"
       },
       "targetAsReference": "لا يمكن أن يكون المستند قيد المراجعة مرجعًا لنفسه.",
       "targetColumn": "هذا المستند",

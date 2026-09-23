@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "dla {role}",
         "noSide": "bez strony",
-        "proposedFromReferences": "stanowiska zaproponowane z referencji"
+        "proposedFromReferences": "stanowiska zaproponowane z referencji",
+        "unnamedReferences": "{count, plural, one {# dokument referencyjny} few {# dokumenty referencyjne} many {# dokumentów referencyjnych} other {# dokumentu referencyjnego}}"
       },
       "targetAsReference": "Sprawdzany dokument nie może być własną referencją.",
       "targetColumn": "Ten dokument",

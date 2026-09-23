@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "za {role}",
         "noSide": "bez strany",
-        "proposedFromReferences": "pozice navržené z referencí"
+        "proposedFromReferences": "pozice navržené z referencí",
+        "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů}}"
       },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",

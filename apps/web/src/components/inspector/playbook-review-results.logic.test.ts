@@ -194,10 +194,12 @@ describe("the one caption sentence the card shows", () => {
   });
 });
 
-// The two phrases the caller resolves in its own locale; the sentence only
-// has to place them.
+// The phrases the caller resolves in its own locale; the sentence only has to
+// place them.
 const PROPOSED_FROM_REFERENCES = "positions proposed from the references";
 const NO_SIDE = "no side";
+const unnamedReferences = (count: number) =>
+  `${String(count)} reference ${count === 1 ? "document" : "documents"}`;
 
 describe("what the run says it read", () => {
   const reference = {
@@ -218,9 +220,27 @@ describe("what the run says it read", () => {
         playbookName: "SPA (buyer)",
         playbookProposed: false,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
         sideLabel: "for the Purchaser",
       }),
     ).toBe("Draft SPA v4 · Precedent SPA · SPA (buyer) · for the Purchaser");
+  });
+
+  test("counts references listed without a name", () => {
+    expect(
+      buildRunSummarySentence({
+        targetName: "Draft SPA",
+        targetVersionNumber: null,
+        references: [reference, { ...reference, name: "", fileName: "" }],
+        playbookName: "SPA (buyer)",
+        playbookProposed: false,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
+        sideLabel: NO_SIDE,
+      }),
+    ).toBe(
+      "Draft SPA · Precedent SPA, 1 reference document · SPA (buyer) · no side",
+    );
   });
 
   test("says where an unsaved run's positions came from, and that no side was chosen", () => {
@@ -232,6 +252,7 @@ describe("what the run says it read", () => {
         playbookName: "Positions confirmed for this review",
         playbookProposed: true,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
         sideLabel: NO_SIDE,
       }),
     ).toBe(
@@ -277,6 +298,7 @@ describe("what a history row says a run was measured against", () => {
         playbookName: "Buy-side SPA",
         playbookProposed: false,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
         references: null,
         sideLabel: "for the Purchaser",
       }),
@@ -289,6 +311,7 @@ describe("what a history row says a run was measured against", () => {
         playbookName: "Positions confirmed for this review",
         playbookProposed: true,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
         references: "2 references",
         sideLabel: NO_SIDE,
       }),
@@ -303,6 +326,7 @@ describe("what a history row says a run was measured against", () => {
         playbookName: null,
         playbookProposed: true,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
         references: null,
         sideLabel: NO_SIDE,
       }),

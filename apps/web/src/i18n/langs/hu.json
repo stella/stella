@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "{role} számára",
         "noSide": "nincs oldal",
-        "proposedFromReferences": "a referenciákból javasolt álláspontok"
+        "proposedFromReferences": "a referenciákból javasolt álláspontok",
+        "unnamedReferences": "{count, plural, one {# referenciadokumentum} other {# referenciadokumentum}}"
       },
       "targetAsReference": "Az ellenőrzött dokumentum nem lehet saját referenciája.",
       "targetColumn": "Ez a dokumentum",

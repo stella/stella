@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "{role} jaoks",
         "noSide": "Pool puudub",
-        "proposedFromReferences": "Võrdlustest pakutud seisukohad"
+        "proposedFromReferences": "Võrdlustest pakutud seisukohad",
+        "unnamedReferences": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
       },
       "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
       "targetColumn": "See dokument",

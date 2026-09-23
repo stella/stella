@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "for the {role}",
         "noSide": "no side",
-        "proposedFromReferences": "positions proposed from the references"
+        "proposedFromReferences": "positions proposed from the references",
+        "unnamedReferences": "{count, plural, one {# reference document} other {# reference documents}}"
       },
       "targetAsReference": "The reviewed document cannot be its own reference.",
       "targetColumn": "This document",

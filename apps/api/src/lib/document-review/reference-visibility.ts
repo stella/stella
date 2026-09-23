@@ -8,9 +8,9 @@
  * reader by `reference-passages.ts`; this module applies the same rule to the
  * rest of the finding and to the run's reference list. A reader who can open
  * every matter a position's passages came from sees the finding as graded;
- * otherwise the finding keeps its verdict on the target document and drops the
- * reference-derived fields, and the run's reference list keeps ids but not
- * names.
+ * otherwise the finding keeps its verdict, target citations and passage ids,
+ * and drops the other reference-derived fields; the run's reference list keeps
+ * ids but not names or content digests.
  *
  * Every endpoint that returns findings or a run basis goes through here.
  *
@@ -92,13 +92,15 @@ export const readableReferenceWorkspaces = async function* ({
 
 export type ReaderReference = Omit<
   PinnedReference,
-  "workspaceName" | "name"
+  "workspaceName" | "name" | "contentSha256"
 > & {
   workspaceName: string | null;
   name: string | null;
+  contentSha256: string | null;
 };
 
-/** The run's reference list for this reader: names only where readable. */
+/** The run's reference list for this reader: names and content digests only
+ *  where readable. */
 export const referencesForReader = (
   references: readonly PinnedReference[],
   readable: ReadonlySet<string>,
@@ -106,7 +108,7 @@ export const referencesForReader = (
   references.map((reference) =>
     readable.has(reference.workspaceId)
       ? reference
-      : { ...reference, workspaceName: null, name: null },
+      : { ...reference, workspaceName: null, name: null, contentSha256: null },
   );
 
 export type ReaderFinding = ReviewFinding & {
@@ -142,7 +144,14 @@ export const findingForReader = (
     extracted: finding.extracted,
     rationale: null,
     citations: finding.citations,
-    referenceCitations: [],
+    // Passage ids only (older rows may carry more); their text resolves
+    // through the passages endpoint, which answers per reader.
+    referenceCitations: (finding.referenceCitations ?? []).map(
+      ({ fileFieldId, passages }) => ({
+        fileFieldId,
+        passages: passages.map(({ id, blockId }) => ({ id, blockId })),
+      }),
+    ),
     recommendation: null,
     fix: null,
     referenceDetail: "withheld",

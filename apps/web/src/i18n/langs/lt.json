@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "{role} naudai",
         "noSide": "Nėra pusės",
-        "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų"
+        "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
+        "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
       },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",

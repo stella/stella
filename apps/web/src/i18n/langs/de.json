@@ -3000,7 +3000,8 @@
       "summary": {
         "forParty": "für {role}",
         "noSide": "keine Partei",
-        "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte"
+        "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte",
+        "unnamedReferences": "{count, plural, one {# Referenzdokument} other {# Referenzdokumente}}"
       },
       "targetAsReference": "Das geprüfte Dokument kann nicht seine eigene Referenz sein.",
       "targetColumn": "Dieses Dokument",
