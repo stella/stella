@@ -278,7 +278,7 @@ const main = (targets: readonly string[]): number => {
   }
   if (failures.length > 0) {
     console.error("Oxlint fixture hit counts differ:");
-    for (const failure of failures.sort()) {
+    for (const failure of failures.toSorted()) {
       console.error(`- ${failure}`);
     }
     console.error(
