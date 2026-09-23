@@ -1,3 +1,4 @@
+import type { api } from "@/lib/api";
 import type {
   AskManual,
   DeterministicCheck,
@@ -13,9 +14,7 @@ import type {
   PositionStandardSource,
   ReferencePassage,
   TierRule,
-} from "@stll/api/eden-contract";
-
-import type { api } from "@/lib/api";
+} from "@/lib/eden-client";
 
 // Playbook position types are the backend `playbookPositionsSchema` (v3) types
 // themselves, re-exported by the API, so the editor's working state and save

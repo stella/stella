@@ -15,12 +15,6 @@ import type {
   TemplateRecipeDefinition,
   ViewLayoutType,
 } from "@stll/api-contract";
-import type {
-  GlobalSearchHit,
-  LegalListSourceLocator,
-  ViewLayout,
-  ViewTemplateProperty,
-} from "@stll/api/eden-contract";
 import type { ConditionNode } from "@stll/conditions";
 import type { OptionColor } from "@stll/ui/option-color";
 
@@ -31,7 +25,13 @@ import type {
   ChatSourceDocument,
   ChatUITools,
 } from "@/api/handlers/chat/types";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type {
+  GlobalSearchHit,
+  LegalListSourceLocator,
+  ViewLayout,
+  ViewTemplateProperty,
+  WebApiRoutes,
+} from "@/lib/eden-client";
 
 type PropertiesResponse =
   WebApiRoutes["properties"][":workspaceId"]["get"]["response"][200];

@@ -7,6 +7,8 @@
 import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
+import { EML_MIME_TYPE } from "@stll/api-contract";
+
 import {
   member as authMember,
   session as authSession,
@@ -24,11 +26,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  EML_MIME_TYPE,
-  parseEmail,
-  parsedEmailToText,
-} from "@/api/lib/files/email-to-html";
+import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
