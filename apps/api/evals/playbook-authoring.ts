@@ -20,30 +20,44 @@
  * active build a playbook the way the skill says? The skill reaches the
  * prompt through the production active-skill path, `ask-user` is the
  * production definition answered from a script (so the interview runs inside
- * one agent loop), and the matter reads are production definitions answered
- * from fixtures (`lib/playbook-builder-scenarios.ts`).
+ * one agent loop), and the matter reads are answered from fixtures
+ * (`lib/playbook-builder-scenarios.ts`) on each of two surfaces: as direct
+ * MCP tools, and as the chat surface, where the fixtures sit behind the
+ * production registry runner under the real `execute_typescript` and
+ * `discover_tools` tools and the sandbox, so a run meets the same eager and
+ * lazy catalog, error envelopes, and refs a chat does.
  *
  *   bun run eval:playbook-authoring -- --models gpt-5.4-nano,gpt-5.6-luna --runs 3
- *   bun run eval:playbook-authoring -- --tier behavior --task discovery
+ *   bun run eval:playbook-authoring -- --tier behavior --task discovery --surface chat
  */
 
 import { Value } from "@sinclair/typebox/value";
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
+import { DEFAULT_MODELS } from "@stll/ai-catalog";
+
 import { buildActiveSkillSection } from "@/api/handlers/chat/chat-prompt";
+import {
+  CHAT_CODE_MODE_SYSTEM_PROMPT,
+  createChatCodeModeSurface,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import type { ChatCodeModeReadRunner } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   streamChatChunks,
   toolCallEndInputOf,
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -55,6 +69,8 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
+import type { McpToolHandler } from "@/api/mcp/tool-types";
+import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 
 import { runEvalModelTurn } from "./lib/model-turn";
@@ -70,13 +86,18 @@ import type {
 } from "./lib/playbook-authoring-score";
 import {
   BUILDER_SCENARIOS,
+  BUILDER_SURFACES,
+  DISCOVER_TOOLS,
+  EXECUTE_TYPESCRIPT,
   MATTER_TOOL_NAMES,
   answerMatterTool,
+  isMatterToolName,
 } from "./lib/playbook-builder-scenarios";
 import type {
   AskedQuestion,
   BuilderEvent,
   BuilderScenario,
+  BuilderSurface,
   MatterToolName,
 } from "./lib/playbook-builder-scenarios";
 import { findUnchangedResends } from "./lib/playbook-builder-score";
@@ -85,7 +106,13 @@ import type { PlaybookStore, StoredPlaybook } from "./lib/playbook-store";
 
 // A bare id resolves through whichever configured provider rates it; Claude
 // ids are pinned to Anthropic so another default provider cannot claim them.
-const DEFAULT_MODELS = ["anthropic::claude-haiku-4-5-20251001", "gpt-5.6-luna"];
+// The instance default chat model is the one a chat without an organization
+// override runs, so the chat surface is measured on it.
+const DEFAULT_EVAL_MODELS = [
+  "anthropic::claude-haiku-4-5-20251001",
+  "gpt-5.6-luna",
+  DEFAULT_MODELS.openai.chat,
+];
 const DEFAULT_RUNS = 1;
 // Every run is a paid request; keep a typo from turning into a bill.
 const MAX_RUNS = 20;
@@ -97,6 +124,8 @@ const MODEL_TURN_TIMEOUT_MS = 300_000;
 const BEHAVIOR_MAX_ITERATIONS = 40;
 const BEHAVIOR_TURN_TIMEOUT_MS = 900_000;
 const PLAYBOOK_BUILDER_SKILL = "playbook-builder";
+// Sandbox admission key for the chat surface; runs are sequential.
+const EVAL_SANDBOX_KEY = "playbook-authoring-eval";
 
 const TIERS = ["contract", "behavior"] as const;
 type Tier = (typeof TIERS)[number];
@@ -496,6 +525,12 @@ const productionTool = (
   }).server(handler);
 };
 
+/** The JSON an MCP client reads from a tool result's first text block. */
+const payloadOf = (result: ReturnType<typeof serializeToolResult>): unknown => {
+  const text = result.content.at(0);
+  return text?.type === "text" ? JSON.parse(text.text) : null;
+};
+
 const errorCodeOf = (payload: unknown): string | null => {
   const error = isRecord(payload) ? payload["error"] : undefined;
   if (!isRecord(error)) {
@@ -518,14 +553,13 @@ const createTools = ({
   let conflictPending = task.conflictBeforeFirstUpdate;
 
   const call = async (name: (typeof TOOL_NAMES)[number], input: unknown) => {
-    const result = await handleMcpToolCall({
-      args: isRecord(input) ? input : {},
-      context: store.context,
-      toolName: name,
-    });
-    const text = result.content.at(0);
-    const payload: unknown =
-      text?.type === "text" ? JSON.parse(text.text) : null;
+    const payload = payloadOf(
+      await handleMcpToolCall({
+        args: isRecord(input) ? input : {},
+        context: store.context,
+        toolName: name,
+      }),
+    );
     // The raw input is kept whether or not the call was accepted: a pass rate
     // without the payloads the tool refused cannot say which side failed.
     trace.push({ name, input, result: payload });
@@ -714,9 +748,16 @@ const BEHAVIOR_SYSTEM_PREAMBLE =
 /**
  * The system prompt a chat with the built-in skill active carries: the skill
  * is resolved and rendered by the production active-skill path, from the
- * shipped `SKILL.md`.
+ * shipped `SKILL.md`. On the chat surface the code-mode section precedes it,
+ * where `buildPromptParts` (`chat-prompt.ts`) places it.
  */
-const behaviorSystemPrompt = async (store: PlaybookStore): Promise<string> => {
+const behaviorSystemPrompt = async ({
+  store,
+  surface,
+}: {
+  store: PlaybookStore;
+  surface: BuilderSurface;
+}): Promise<string> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName: PLAYBOOK_BUILDER_SKILL },
     memberRole: { role: store.context.memberRole },
@@ -730,7 +771,11 @@ const behaviorSystemPrompt = async (store: PlaybookStore): Promise<string> => {
         `The ${PLAYBOOK_BUILDER_SKILL} skill did not resolve`,
         resolved.error,
       );
-  return `${BEHAVIOR_SYSTEM_PREAMBLE}\n\n${buildActiveSkillSection(skill)}`;
+  return [
+    BEHAVIOR_SYSTEM_PREAMBLE,
+    ...(surface === "chat" ? [CHAT_CODE_MODE_SYSTEM_PROMPT] : []),
+    buildActiveSkillSection(skill),
+  ].join("\n\n");
 };
 
 const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
@@ -754,36 +799,169 @@ const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
 const allPositions = (store: PlaybookStore): Position[] =>
   store.playbooks().flatMap(({ positions }) => positions.items);
 
+type Recorder = (
+  event: Omit<BuilderEvent, "questions" | "resentUnchanged" | "error"> &
+    Partial<BuilderEvent>,
+) => BuilderEvent;
+
+/**
+ * The same tool with every call recorded: the event is pushed before the
+ * call runs, so the reads a script makes follow their `execute_typescript`
+ * event, and `failureOf` reads the failure off the output afterwards.
+ */
+const recordedTool = ({
+  tool,
+  record,
+  failureOf,
+}: {
+  tool: AnyServerTool;
+  record: Recorder;
+  failureOf: (output: unknown) => string | null;
+}): AnyServerTool => {
+  const execute = tool.execute ?? panic(`${tool.name} has no server execute`);
+  return {
+    ...tool,
+    execute: async (input: unknown, context?: unknown) => {
+      const event = record({ name: tool.name, input });
+      const output: unknown = await execute(input, context);
+      event.error = failureOf(output);
+      return output;
+    },
+  };
+};
+
+/** `execute_typescript` reports a failed run as `{ success: false, error }`. */
+const scriptFailureOf = (output: unknown): string | null => {
+  if (!isRecord(output) || output["success"] !== false) {
+    return null;
+  }
+  const error = output["error"];
+  return isRecord(error)
+    ? `${String(error["name"])}: ${String(error["message"])}`
+    : "failed";
+};
+
+/**
+ * The matter reads as an MCP client meets them: direct tools with the
+ * production schemas, answered from the fixtures.
+ */
+const mcpMatterTools = (record: Recorder): AnyServerTool[] =>
+  MATTER_TOOL_NAMES.map((name) =>
+    productionTool(name, async (input) => {
+      const result = answerMatterTool(name, isRecord(input) ? input : {});
+      record({
+        name,
+        input,
+        error: result.status === "error" ? result.error.message : null,
+      });
+      return await Promise.resolve(payloadOf(serializeToolResult(result)));
+    }),
+  );
+
+/**
+ * The matter reads as the stella chat serves them: `external_*` functions
+ * inside `execute_typescript`, documented by `discover_tools`, run through
+ * the production registry runner (ref dehydration, boundary normalization,
+ * egress, strict projection) with the fixtures standing in for the handlers.
+ * A read the fixtures do not answer is unavailable, as a read behind a
+ * disabled feature is in chat.
+ */
+const chatMatterTools = ({
+  store,
+  record,
+}: {
+  store: PlaybookStore;
+  record: Recorder;
+}): AnyServerTool[] => {
+  const refRegistry = createChatRefRegistry();
+  const runReadTool: ChatCodeModeReadRunner = async (toolName, args) => {
+    if (!isMatterToolName(toolName)) {
+      const error = new ChatToolError({
+        kind: "unavailable",
+        message: `${toolName} has nothing to read in this eval.`,
+      });
+      record({ name: toolName, input: args, error: error.message });
+      throw error;
+    }
+    // The handler's view of the call: refs already resolved to ids, so the
+    // scenario checks read the same input on both surfaces. A call refused
+    // before the handler keeps the input the script wrote.
+    let handlerArgs: Record<string, unknown> | undefined;
+    const handler: McpToolHandler = ({ args: normalized }) => {
+      handlerArgs = normalized;
+      return answerMatterTool(toolName, normalized);
+    };
+    const result = await runRegistryReadTool({
+      toolName,
+      args,
+      context: store.context,
+      refRegistry,
+      handler,
+    });
+    if (Result.isError(result)) {
+      record({
+        name: toolName,
+        input: handlerArgs ?? args,
+        error: `${result.error.kind}: ${result.error.message}`,
+      });
+      throw result.error;
+    }
+    record({ name: toolName, input: handlerArgs ?? args });
+    return result.value;
+  };
+  const { tool, discoveryTool } = createChatCodeModeSurface({
+    concurrencyKey: EVAL_SANDBOX_KEY,
+    runReadTool,
+  });
+  const discovery =
+    discoveryTool ??
+    panic(
+      `chat code mode always has lazy reads, so ${DISCOVER_TOOLS} must exist`,
+    );
+  return [
+    recordedTool({ tool, record, failureOf: scriptFailureOf }),
+    recordedTool({ tool: discovery, record, failureOf: () => null }),
+  ];
+};
+
 const createBehaviorTools = ({
   store,
   scenario,
+  surface,
   events,
 }: {
   store: PlaybookStore;
   scenario: BuilderScenario;
+  surface: BuilderSurface;
   events: BuilderEvent[];
 }): AnyServerTool[] => {
-  const record = (
-    event: Omit<BuilderEvent, "questions" | "resentUnchanged"> &
-      Partial<BuilderEvent>,
-  ) => events.push({ questions: [], resentUnchanged: [], ...event });
+  const record: Recorder = (event) => {
+    const recorded: BuilderEvent = {
+      questions: [],
+      resentUnchanged: [],
+      error: null,
+      ...event,
+    };
+    events.push(recorded);
+    return recorded;
+  };
 
   const callRegistry = async (
     name: (typeof TOOL_NAMES)[number],
     input: unknown,
   ): Promise<unknown> => {
     const before = allPositions(store);
-    const result = await handleMcpToolCall({
-      args: isRecord(input) ? input : {},
-      context: store.context,
-      toolName: name,
-    });
-    const text = result.content.at(0);
-    const payload: unknown =
-      text?.type === "text" ? JSON.parse(text.text) : null;
+    const payload = payloadOf(
+      await handleMcpToolCall({
+        args: isRecord(input) ? input : {},
+        context: store.context,
+        toolName: name,
+      }),
+    );
     record({
       name,
       input,
+      error: errorCodeOf(payload),
       resentUnchanged:
         name === SAVE_PLAYBOOK
           ? findUnchangedResends({ input, before, after: allPositions(store) })
@@ -807,16 +985,16 @@ const createBehaviorTools = ({
     };
   });
 
+  const matterTools =
+    surface === "chat"
+      ? chatMatterTools({ store, record })
+      : mcpMatterTools(record);
+
   return [
     ...TOOL_NAMES.map((name) =>
       productionTool(name, async (input) => await callRegistry(name, input)),
     ),
-    ...MATTER_TOOL_NAMES.map((name) =>
-      productionTool(name, async (input) => {
-        record({ name, input });
-        return await Promise.resolve(answerMatterTool(name, input));
-      }),
-    ),
+    ...matterTools,
     askUser,
   ];
 };
@@ -824,6 +1002,7 @@ const createBehaviorTools = ({
 type BehaviorRun = {
   model: string;
   scenario: string;
+  surface: BuilderSurface;
   run: number;
   outcome: "pass" | "fail" | "error";
   defects: string[];
@@ -838,24 +1017,26 @@ const runScenario = async ({
   modelId,
   repeat,
   scenario,
+  surface,
 }: {
   model: ResolvedTanStackTextModel;
   modelId: string;
   repeat: number;
   scenario: BuilderScenario;
+  surface: BuilderSurface;
 }): Promise<BehaviorRun> => {
   const store = createPlaybookStore([]);
   const events: BuilderEvent[] = [];
   const turn = await runModelTurn({
     model,
     prompt: scenario.brief,
-    system: await behaviorSystemPrompt(store),
-    tools: createBehaviorTools({ store, scenario, events }),
+    system: await behaviorSystemPrompt({ store, surface }),
+    tools: createBehaviorTools({ store, scenario, surface, events }),
     iterations: BEHAVIOR_MAX_ITERATIONS,
     timeoutMs: BEHAVIOR_TURN_TIMEOUT_MS,
   });
   const playbooks = store.playbooks();
-  const defects = scenario.check({ events, playbooks });
+  const defects = scenario.check({ surface, events, playbooks });
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbooks.some(
@@ -872,6 +1053,7 @@ const runScenario = async ({
   return {
     model: modelId,
     scenario: scenario.id,
+    surface,
     run: repeat,
     outcome,
     defects,
@@ -888,14 +1070,14 @@ const renderBehaviorReport = (runs: readonly BehaviorRun[]): string => {
     const modelRuns = runs.filter((run) => run.model === modelId);
     lines.push(
       `\n### ${modelId}\n`,
-      "| scenario | run | outcome | questions | reads | saves | defects | tokens | ms |",
-      "| --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: |",
+      "| scenario | surface | run | outcome | questions | scripts | reads | saves | defects | tokens | ms |",
+      "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const count = (predicate: (event: BuilderEvent) => boolean) =>
         String(run.events.filter(predicate).length);
       lines.push(
-        `| ${run.scenario} | ${String(run.run)} | ${run.outcome} | ${count(({ name }) => name === ASK_USER_TOOL_NAME)} | ${count(({ name }) => name === "read_content_across_matters")} | ${count(({ name }) => name === SAVE_PLAYBOOK)} | ${cell(run.defects)} | ${String(run.tokens ?? "-")} | ${String(run.latencyMs)} |`,
+        `| ${run.scenario} | ${run.surface} | ${String(run.run)} | ${run.outcome} | ${count(({ name }) => name === ASK_USER_TOOL_NAME)} | ${count(({ name }) => name === EXECUTE_TYPESCRIPT)} | ${count(({ name }) => name === "read_content_across_matters")} | ${count(({ name }) => name === SAVE_PLAYBOOK)} | ${cell(run.defects)} | ${String(run.tokens ?? "-")} | ${String(run.latencyMs)} |`,
       );
     }
     const passed = modelRuns.filter((run) => run.outcome === "pass");
@@ -911,6 +1093,8 @@ type CliOptions = {
   models: string[];
   runs: number;
   tiers: readonly Tier[];
+  /** Behavior tier only: which surfaces the matter reads take. */
+  surfaces: readonly BuilderSurface[];
   taskFilter: string | null;
   jsonPath: string | null;
 };
@@ -918,11 +1102,15 @@ type CliOptions = {
 const isTier = (value: string): value is Tier =>
   TIERS.some((tier) => tier === value);
 
+const isSurface = (value: string): value is BuilderSurface =>
+  BUILDER_SURFACES.some((surface) => surface === value);
+
 const parseArgs = (argv: readonly string[]): CliOptions => {
   const options: CliOptions = {
-    models: DEFAULT_MODELS,
+    models: DEFAULT_EVAL_MODELS,
     runs: DEFAULT_RUNS,
     tiers: TIERS,
+    surfaces: BUILDER_SURFACES,
     taskFilter: null,
     jsonPath: null,
   };
@@ -948,6 +1136,12 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
         options.tiers = isTier(value)
           ? [value]
           : panic(`--tier takes ${TIERS.join(" or ")}`);
+        index += 1;
+        break;
+      case "--surface":
+        options.surfaces = isSurface(value)
+          ? [value]
+          : panic(`--surface takes ${BUILDER_SURFACES.join(" or ")}`);
         index += 1;
         break;
       case "--task":
@@ -1049,13 +1243,21 @@ const main = async () => {
       }
     }
     for (const scenario of scenarios) {
-      for (let repeat = 1; repeat <= options.runs; repeat += 1) {
-        process.stderr.write(
-          `${id} · ${scenario.id} · run ${String(repeat)}\n`,
-        );
-        behaviorRuns.push(
-          await runScenario({ model, modelId: id, repeat, scenario }),
-        );
+      for (const surface of options.surfaces) {
+        for (let repeat = 1; repeat <= options.runs; repeat += 1) {
+          process.stderr.write(
+            `${id} · ${scenario.id} · ${surface} · run ${String(repeat)}\n`,
+          );
+          behaviorRuns.push(
+            await runScenario({
+              model,
+              modelId: id,
+              repeat,
+              scenario,
+              surface,
+            }),
+          );
+        }
       }
     }
   }

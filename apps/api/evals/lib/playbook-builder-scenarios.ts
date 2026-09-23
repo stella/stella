@@ -7,10 +7,13 @@
  * order of the calls, never the model's prose.
  */
 
-import { panic } from "better-result";
-
+import type { RegistryReadToolDataByName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { attachmentText } from "@/api/handlers/chat/upload-files";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import type { InternalToolResult } from "@/api/mcp/tool-types";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 import { classifyQuestion, isCzech } from "./playbook-builder-score";
 import type { QuestionTopic } from "./playbook-builder-score";
@@ -25,6 +28,23 @@ export const MATTER_TOOL_NAMES = [
 
 export type MatterToolName = (typeof MATTER_TOOL_NAMES)[number];
 
+export const isMatterToolName = (name: string): name is MatterToolName =>
+  MATTER_TOOL_NAMES.some((matterTool) => matterTool === name);
+
+/**
+ * How the matter reads reach the model. `mcp` hands them over as direct
+ * tools with their production schemas, as an MCP client is served them.
+ * `chat` is the stella chat surface: the reads are `external_*` functions
+ * inside `execute_typescript`, only `list_matters` is documented up front,
+ * and the rest are reached through `discover_tools`.
+ */
+export const BUILDER_SURFACES = ["mcp", "chat"] as const;
+
+export type BuilderSurface = (typeof BUILDER_SURFACES)[number];
+
+export const EXECUTE_TYPESCRIPT = "execute_typescript";
+export const DISCOVER_TOOLS = "discover_tools";
+
 export type AskedQuestion = {
   question: string;
   reason: string;
@@ -32,16 +52,24 @@ export type AskedQuestion = {
   default: string | undefined;
 };
 
-/** One call a run made, in order. `questions` is set on an `ask-user` call. */
+/**
+ * One call a run made, in order. `questions` is set on an `ask-user` call.
+ * On the chat surface a matter read inside a script is its own event, named
+ * by its registry name and placed after the `execute_typescript` event that
+ * ran it; `input` is what the handler saw, so a ref has become its id.
+ */
 export type BuilderEvent = {
   name: string;
   input: unknown;
   questions: readonly AskedQuestion[];
   /** Issues a save named by `source_id` and left unchanged. */
   resentUnchanged: readonly string[];
+  /** The refusal or failure the call was answered with, if any. */
+  error: string | null;
 };
 
 type BuilderEvidence = {
+  surface: BuilderSurface;
   events: readonly BuilderEvent[];
   playbooks: readonly StoredPlaybook[];
 };
@@ -56,18 +84,21 @@ export type BuilderScenario = {
 // --- the organization's matters -------------------------------------------
 
 const SUPPLY_MATTER = {
-  id: "5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e01",
+  id: toSafeId<"workspace">("5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e01"),
   name: "Nordwind Logistik: supplier contracts",
+  reference: "NWL-2024-017",
 };
 const DISPUTE_MATTER = {
-  id: "5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e02",
+  id: toSafeId<"workspace">("5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e02"),
   name: "Harbour Co v Nordwind (dispute)",
+  reference: "NWL-2025-003",
 };
 const MATTERS = [SUPPLY_MATTER, DISPUTE_MATTER];
+const MATTER_TIMESTAMP = "2026-08-20T09:00:00.000Z";
 
 type FixtureDocument = {
-  id: string;
-  matterId: string;
+  id: SafeId<"entity">;
+  matterId: SafeId<"workspace">;
   name: string;
   text: string;
 };
@@ -94,7 +125,7 @@ const servicesAgreement = ({
   ].join("\n\n");
 
 const KELLER = {
-  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01",
+  id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Keller GmbH (signed 2025-03-14).pdf",
   text: servicesAgreement({
@@ -105,7 +136,7 @@ const KELLER = {
   }),
 };
 const BRANDT = {
-  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f02",
+  id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f02"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Brandt AG (executed).docx",
   text: servicesAgreement({
@@ -118,7 +149,7 @@ const BRANDT = {
 // Counterparty paper, not executed: the confirmation question exists so the
 // user can keep this out of the playbook.
 const VOGEL_DRAFT = {
-  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f03",
+  id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f03"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Vogel (DRAFT v3, supplier markup).docx",
   text: servicesAgreement({
@@ -130,7 +161,7 @@ const VOGEL_DRAFT = {
 };
 // Executed, but in a matter the user did not name.
 const HARBOUR = {
-  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f04",
+  id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f04"),
   matterId: DISPUTE_MATTER.id,
   name: "Services Agreement Nordwind - Harbour Co (executed).pdf",
   text: servicesAgreement({
@@ -158,82 +189,93 @@ const stringArg = (input: unknown, key: string): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
-/** Answers the matter reads from the fixtures, shaped like their projections. */
+const success = <TData>(data: TData): InternalToolResult<TData> => ({
+  status: "success",
+  data,
+});
+
+/**
+ * The matter reads answered from the fixtures. Each answer is typed as the
+ * production handler's own data, so a fixture cannot drift from the shape a
+ * handler returns and the chat projection strict-parses.
+ */
+type MatterFixtures = {
+  [TName in MatterToolName]: (
+    args: Record<string, unknown>,
+  ) => InternalToolResult<RegistryReadToolDataByName[TName]>;
+};
+
+const MATTER_FIXTURES: MatterFixtures = {
+  list_matters: () =>
+    success({
+      matters: MATTERS.map(({ id, name, reference }) => ({
+        id,
+        name,
+        reference,
+        status: "active",
+        lastActivityAt: MATTER_TIMESTAMP,
+        createdAt: MATTER_TIMESTAMP,
+      })),
+      nextCursor: null,
+    }),
+  list_documents: (args) => {
+    const matterId = stringArg(args, "matter_id");
+    return success({
+      documents: DOCUMENTS.filter((doc) => doc.matterId === matterId).map(
+        ({ id, name }) => ({ id, name, kind: "document", parentId: null }),
+      ),
+      nextCursor: null,
+    });
+  },
+  search_across_matters: (args) => {
+    const words = (stringArg(args, "query") ?? "")
+      .toLowerCase()
+      .split(/\W+/u)
+      .filter((word) => word.length > 2);
+    const hits = DOCUMENTS.filter((doc) =>
+      words.some((word) =>
+        `${doc.name} ${doc.text}`.toLowerCase().includes(word),
+      ),
+    );
+    return success({
+      totalCount: hits.length,
+      nextCursor: null,
+      hits: hits.map((doc) => ({
+        entityId: doc.id,
+        workspaceId: doc.matterId,
+        workspaceName: matterOf(doc.matterId)?.name ?? "",
+        name: doc.name,
+        kind: "document",
+        headline: doc.text.slice(0, 160),
+      })),
+    });
+  },
+  read_content_across_matters: (args) => {
+    const doc = DOCUMENTS.find(({ id }) => id === stringArg(args, "entity_id"));
+    if (doc === undefined) {
+      return structuredErrorResult({
+        code: "not_found",
+        message: "No such document",
+      });
+    }
+    return success({
+      charCount: doc.text.length,
+      entityId: doc.id,
+      kind: "document",
+      name: doc.name,
+      text: doc.text,
+      truncated: false,
+      nextCursor: null,
+      workspaceId: doc.matterId,
+    });
+  },
+};
+
+/** Answers a matter read from the fixtures, as its handler would. */
 export const answerMatterTool = (
   name: MatterToolName,
-  input: unknown,
-): unknown => {
-  switch (name) {
-    case "list_matters":
-      return {
-        matters: MATTERS.map(({ id, name: matterName }) => ({
-          matterId: id,
-          name: matterName,
-          status: "active",
-        })),
-        nextCursor: null,
-      };
-    case "list_documents": {
-      const matterId = stringArg(input, "matter_id");
-      return {
-        documents: DOCUMENTS.filter((doc) => doc.matterId === matterId).map(
-          ({ id, name: documentName }) => ({
-            id,
-            name: documentName,
-            kind: "document",
-            parentId: null,
-          }),
-        ),
-        nextCursor: null,
-      };
-    }
-    case "search_across_matters": {
-      const words = (stringArg(input, "query") ?? "")
-        .toLowerCase()
-        .split(/\W+/u)
-        .filter((word) => word.length > 2);
-      const hits = DOCUMENTS.filter((doc) =>
-        words.some((word) =>
-          `${doc.name} ${doc.text}`.toLowerCase().includes(word),
-        ),
-      );
-      return {
-        totalCount: hits.length,
-        nextCursor: null,
-        hits: hits.map((doc) => ({
-          entityId: doc.id,
-          workspaceId: doc.matterId,
-          workspaceName: matterOf(doc.matterId)?.name ?? "",
-          name: doc.name,
-          kind: "document",
-          headline: doc.text.slice(0, 160),
-        })),
-      };
-    }
-    case "read_content_across_matters": {
-      const doc = DOCUMENTS.find(
-        ({ id }) => id === stringArg(input, "entity_id"),
-      );
-      if (doc === undefined) {
-        return { error: { code: "not_found", message: "No such document" } };
-      }
-      return {
-        charCount: doc.text.length,
-        entityId: doc.id,
-        kind: "document",
-        name: doc.name,
-        text: doc.text,
-        truncated: false,
-        nextCursor: null,
-        workspaceId: doc.matterId,
-      };
-    }
-    default: {
-      name satisfies never;
-      return panic(`No fixture answers ${String(name)}`);
-    }
-  }
-};
+  args: Record<string, unknown>,
+): InternalToolResult => MATTER_FIXTURES[name](args);
 
 // --- evidence readers -----------------------------------------------------
 
@@ -286,9 +328,44 @@ const missingTopics = (
 };
 
 const matterCalls = (events: readonly BuilderEvent[]) =>
-  events.filter(({ name }) =>
-    MATTER_TOOL_NAMES.some((matterTool) => matterTool === name),
-  );
+  events.filter(({ name }) => isMatterToolName(name));
+
+const discoveredNames = (input: unknown): string[] => {
+  const names =
+    typeof input === "object" && input !== null && "toolNames" in input
+      ? input.toolNames
+      : undefined;
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === "string")
+    : [];
+};
+
+/**
+ * On the chat surface every read but `list_matters` is documented only by
+ * `discover_tools`; a call written without its signature is the guess the
+ * skill tells the model not to make, whether or not it happened to work.
+ */
+const readsBeforeDiscovery = (events: readonly BuilderEvent[]): string[] => {
+  const discovered = new Set<string>();
+  const defects: string[] = [];
+  for (const { name, input } of events) {
+    if (name === DISCOVER_TOOLS) {
+      for (const discoveredName of discoveredNames(input)) {
+        discovered.add(discoveredName.replace(/^external_/u, ""));
+      }
+      continue;
+    }
+    if (
+      isMatterToolName(name) &&
+      name !== "list_matters" &&
+      !discovered.has(name)
+    ) {
+      defects.push(`called ${name} before discover_tools named it`);
+      discovered.add(name);
+    }
+  }
+  return defects;
+};
 
 const readDocumentIds = (events: readonly BuilderEvent[]) =>
   new Set(
@@ -309,9 +386,28 @@ const tierTexts = (position: Position): string[] => {
   ];
 };
 
-/** Defects every scenario shares: one playbook, enough positions, no resends. */
-const commonDefects = ({ events, playbooks }: BuilderEvidence): string[] => {
+/**
+ * Defects every scenario shares: one playbook, enough positions, no resends,
+ * no matter read or script refused, and on the chat surface no read written
+ * before its signature was discovered.
+ */
+const commonDefects = ({
+  events,
+  playbooks,
+  surface,
+}: BuilderEvidence): string[] => {
   const defects: string[] = [];
+  for (const { name, error } of events) {
+    if (
+      error !== null &&
+      (isMatterToolName(name) || name === EXECUTE_TYPESCRIPT)
+    ) {
+      defects.push(`${name} failed: ${error}`);
+    }
+  }
+  if (surface === "chat") {
+    defects.push(...readsBeforeDiscovery(events));
+  }
   if (playbooks.length !== 1) {
     defects.push(`${String(playbooks.length)} playbooks stored; expected one`);
   }
@@ -419,9 +515,13 @@ const discovery: BuilderScenario = {
     if (events.some(({ name }) => name === "search_across_matters")) {
       defects.push("searched across every matter although the user named one");
     }
+    // A refused call listed nothing, and its input still holds the ref the
+    // script wrote rather than the matter id; it is charged above as a
+    // failure, not here.
     const otherMatters = events.filter(
-      ({ name, input }) =>
+      ({ name, input, error }) =>
         name === "list_documents" &&
+        error === null &&
         stringArg(input, "matter_id") !== SUPPLY_MATTER.id,
     );
     if (otherMatters.length > 0) {

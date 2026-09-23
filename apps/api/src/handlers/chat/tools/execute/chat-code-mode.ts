@@ -153,6 +153,41 @@ const buildChatReadTools = (
     }).server(async (args: unknown) => await runReadTool(toolName, args));
   });
 
+/**
+ * Runs one projected read for the sandbox: `args` is whatever the script
+ * passed, already reduced to a record. Chat binds this to the registry runner
+ * behind its defect memo; the playbook-authoring eval binds fixtures behind
+ * the same runner so a model meets the chat surface (eager `list_matters`,
+ * `discover_tools` for every other read, the sandbox, the error envelopes)
+ * without a database.
+ */
+export type ChatCodeModeReadRunner = (
+  toolName: RegistryReadToolName,
+  args: Record<string, unknown>,
+) => Promise<unknown>;
+
+type CreateChatCodeModeSurfaceProps = {
+  concurrencyKey: string;
+  runReadTool: ChatCodeModeReadRunner;
+};
+
+/**
+ * The code-mode surface over Stella's sandbox and the chat-projectable read
+ * catalog. `buildChatCodeMode` is this with the registry runner bound.
+ */
+export const createChatCodeModeSurface = ({
+  concurrencyKey,
+  runReadTool,
+}: CreateChatCodeModeSurfaceProps): CreateCodeModeResult =>
+  createCodeMode({
+    driver: createStellaIsolateDriver({ concurrencyKey }),
+    tools: buildChatReadTools(
+      async (toolName, args) =>
+        await runReadTool(toolName, isRecord(args) ? args : {}),
+    ),
+    ...CODE_MODE_RUNTIME_CONFIG,
+  });
+
 type BuildChatCodeModeProps = Omit<
   ChatRegistryContextDeps,
   "pinServerValidatedWorkspaceId"
@@ -167,36 +202,32 @@ export const buildChatCodeMode = (
   const { refRegistry, toolDefectMemo, ...contextDeps } = props;
   const context = buildMcpContextFromChat(contextDeps);
 
-  const tools = buildChatReadTools(async (toolName, args) => {
-    const toolArgs = isRecord(args) ? args : {};
-    // Mechanical retry policy: an identical call that already failed with a
-    // server defect this turn is refused before dispatch. "Do not retry this
-    // call" is enforced here, not left to the model's reading of error prose.
-    if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-      throw new ChatToolError({
-        kind: "server-defect",
-        message: knownDefectRefusalMessage(toolName),
-      });
-    }
-    const result = await runRegistryReadTool({
-      toolName,
-      args: toolArgs,
-      context,
-      refRegistry,
-    });
-    if (Result.isError(result)) {
-      if (result.error.kind === "server-defect") {
-        toolDefectMemo.recordDefect(toolName, toolArgs);
+  return createChatCodeModeSurface({
+    concurrencyKey: contextDeps.userId,
+    runReadTool: async (toolName, toolArgs) => {
+      // Mechanical retry policy: an identical call that already failed with a
+      // server defect this turn is refused before dispatch. "Do not retry this
+      // call" is enforced here, not left to the model's reading of error prose.
+      if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
+        throw new ChatToolError({
+          kind: "server-defect",
+          message: knownDefectRefusalMessage(toolName),
+        });
       }
-      throw result.error;
-    }
-    return result.value;
-  });
-
-  return createCodeMode({
-    driver: createStellaIsolateDriver({ concurrencyKey: contextDeps.userId }),
-    tools,
-    ...CODE_MODE_RUNTIME_CONFIG,
+      const result = await runRegistryReadTool({
+        toolName,
+        args: toolArgs,
+        context,
+        refRegistry,
+      });
+      if (Result.isError(result)) {
+        if (result.error.kind === "server-defect") {
+          toolDefectMemo.recordDefect(toolName, toolArgs);
+        }
+        throw result.error;
+      }
+      return result.value;
+    },
   });
 };
 

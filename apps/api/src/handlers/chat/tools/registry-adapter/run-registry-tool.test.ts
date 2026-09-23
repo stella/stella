@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -21,6 +22,7 @@ import { runRegistryReadTool } from "./run-registry-tool";
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
+const DOCUMENT_UUID = "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01";
 
 /** A scopedDb whose select chain resolves to the seeded matter rows. */
 const selectScopedDb = (rows: readonly unknown[]): ScopedDb =>
@@ -104,6 +106,80 @@ describe("runRegistryReadTool", () => {
       toolName: "list_matters",
     }).unwrap();
     expect(dehydrated.args["matter_id"]).toBe(WS_UUID);
+  });
+
+  test("an injected handler answers between production dehydration and projection", async () => {
+    const registry = createChatRefRegistry();
+    const rows = [
+      {
+        id: WS_UUID,
+        name: "Acme",
+        reference: "REF-1",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    // Mints mat_1 the way a chat turn does: by listing matters first.
+    await runRegistryReadTool({
+      args: {},
+      context: buildContext({ scopedDb: selectScopedDb(rows) }),
+      refRegistry: registry,
+      toolName: "list_matters",
+    });
+
+    const seen: Record<string, unknown>[] = [];
+    const handler: McpToolHandler = ({ args }) => {
+      seen.push(args);
+      return {
+        status: "success",
+        data: {
+          documents: [
+            {
+              id: DOCUMENT_UUID,
+              name: "NDA.docx",
+              kind: "document",
+              parentId: null,
+            },
+          ],
+          nextCursor: null,
+        },
+      };
+    };
+    const context = buildContext();
+
+    const result = await runRegistryReadTool({
+      args: { matter_id: "mat_1" },
+      context,
+      handler,
+      refRegistry: registry,
+      toolName: "list_documents",
+    });
+
+    // The ref was dehydrated before the handler saw the call...
+    expect(seen).toEqual([{ matter_id: WS_UUID }]);
+    // ...and the handler's ids were projected to refs after it.
+    const payload = result.unwrap();
+    expect(payload).toMatchObject({ documents: [{ id: "ent_1" }] });
+    expect(containsRawUuid(payload)).toBe(false);
+
+    // The handler's own argument parse still runs ahead of the injected
+    // handler: the unknown key a model invents for a matter filter is refused
+    // with the validation envelope, and the handler never runs.
+    const refused = await runRegistryReadTool({
+      args: { query: "NDA", matter_ids: ["mat_1"] },
+      context,
+      handler,
+      refRegistry: registry,
+      toolName: "search_across_matters",
+    });
+    expect(Result.isError(refused)).toBe(true);
+    if (Result.isError(refused)) {
+      expect(refused.error.kind).toBe("invalid-input");
+      expect(refused.error.message).toContain("validation_error");
+      expect(refused.error.message).toContain("matter_ids");
+    }
+    expect(seen).toHaveLength(1);
   });
 
   test("maps an isError registry result to a ChatToolError", async () => {
