@@ -159,10 +159,7 @@ export const legalAlternativesExpander = (
   );
   // A word the answer does not name is the common case, not a miss: it
   // simply gets no alternative beside it.
-  return (term) => {
-    const found = byKey.get(functionWordKey(term));
-    return found === undefined ? NO_ALTERNATIVE_WORDS : found;
-  };
+  return (term) => byKey.get(functionWordKey(term)) ?? NO_ALTERNATIVE_WORDS;
 };
 
 /**
