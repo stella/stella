@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -53,6 +54,7 @@ import {
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
+  getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
@@ -120,7 +122,7 @@ import {
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
-import { includes } from "@/api/lib/type-guards";
+import { includes, isRecord } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -774,6 +776,25 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
+ * Whether the current auth request is the organization page's continue step.
+ * The provider re-enters its authorize logic from that endpoint under the
+ * authorize path, so the step is recognised by the request it answers.
+ */
+const isOrganizationPageContinuation = (): boolean => {
+  const endpoint = tryGetCurrentAuthEndpointContext();
+  const request = endpoint?.request;
+  if (!request || request.method !== "POST") {
+    return false;
+  }
+  return (
+    new URL(request.url).pathname ===
+      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
+    isRecord(endpoint.body) &&
+    endpoint.body["postLogin"] === true
+  );
+};
+
+/**
  * Keeps signed OAuth interaction state, including native-client loopback URIs,
  * out of CDN-visible URLs. It must run after the OAuth provider so it can
  * rewrite both its navigation response and its fetch-mode redirect object.
@@ -1248,12 +1269,19 @@ const createAuth = () => {
               return false;
             }
 
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
+            // The organization page continues the authorization once the user
+            // has picked; the provider asks this predicate again on that step,
+            // so the pick itself has to end the redirect.
+            if (activeOrganizationId && isOrganizationPageContinuation()) {
+              return false;
+            }
+
             const organizations: { id: string }[] =
               await auth.api.listOrganizations({
                 headers,
               });
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
 
             return (
               organizations.length !== 1 ||

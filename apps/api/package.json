@@ -67,6 +67,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1136.0",
     "@better-auth/api-key": "catalog:",
     "@better-auth/cimd": "catalog:",
+    "@better-auth/core": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysia/cors": "^1.4.2",
     "@firecrawl/anydoc": "0.2.4",
@@ -161,7 +162,6 @@
   },
   "devDependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1101.0",
-    "@better-auth/core": "catalog:",
     "@electric-sql/pglite": "^0.5.8",
     "@faker-js/faker": "^10.6.0",
     "@modelcontextprotocol/client": "2.0.0",

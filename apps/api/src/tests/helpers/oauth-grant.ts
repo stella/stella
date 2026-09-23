@@ -30,6 +30,7 @@ const registrationSchema = v.looseObject({
   client_secret: v.pipe(v.string(), v.minLength(1)),
 });
 const redirectSchema = v.looseObject({ url: v.string() });
+
 const tokenSchema = v.looseObject({
   access_token: v.pipe(v.string(), v.minLength(1)),
   refresh_token: v.pipe(v.string(), v.minLength(1)),
@@ -65,6 +66,10 @@ const readJson = async <TSchema extends v.GenericSchema>(
   }
   return v.parse(schema, await response.json());
 };
+
+/** Read the provider's JSON redirect answer to a browser step. */
+export const readOAuthRedirect = async (response: Response): Promise<URL> =>
+  new URL((await readJson(response, redirectSchema)).url);
 
 /** Register a confidential web client the way a hosted connector does. */
 export const registerOAuthClient = async (): Promise<RegisteredOAuthClient> => {
@@ -102,18 +107,20 @@ const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??
   panic(`consent redirect carried no code: ${redirectUrl}`);
 
-/**
- * The web page the provider sends a browser to when consent is needed. The
- * helpers here drive users who belong to exactly one organization; anyone in
- * more is first sent to the organization picker instead.
- */
+/** The web page the provider sends a browser to when consent is needed. */
 export const OAUTH_CONSENT_PAGE_PATH = "/consent";
+
+/**
+ * The web page where a user in more than one organization picks the one a
+ * grant is scoped to, before consent.
+ */
+export const OAUTH_ORGANIZATION_PAGE_PATH = "/auth/organization";
 
 /**
  * The signed copy of the authorization request the provider hands a web page
  * in the fragment; the page posts it back unchanged to continue.
  */
-const readSignedQuery = (page: URL): string =>
+export const readSignedQuery = (page: URL): string =>
   new URLSearchParams(page.hash.slice(1)).get("oauth_query") ??
   panic(`${page.pathname} redirect carried no signed query`);
 
@@ -152,21 +159,23 @@ export const authorizeOAuthClient = async (
   return { codeVerifier, redirect: new URL(authorized.url) };
 };
 
-/**
- * Authorize and consent as the signed-in browser, then exchange the code.
- * The consent is scoped to the browser's active organization.
- */
-export const grantOAuthClient = async (
-  browser: HumanBrowser,
-  client: RegisteredOAuthClient,
-): Promise<OAuthGrant> => {
+type ConsentAndExchangeOptions = {
+  browser: HumanBrowser;
+  client: RegisteredOAuthClient;
+  codeVerifier: string;
+  consentPage: URL;
+};
+
+/** Accept on the consent page the provider sent the browser to, then exchange the code. */
+export const consentAndExchange = async ({
+  browser,
+  client,
+  codeVerifier,
+  consentPage,
+}: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
   const auth = getAuth();
-  const { codeVerifier, redirect: consentPage } = await authorizeOAuthClient(
-    browser,
-    client,
-  );
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
-    panic(`authorize did not lead to consent: ${consentPage.pathname}`);
+    panic(`expected the consent page, got ${consentPage.pathname}`);
   }
   const signedQuery = readSignedQuery(consentPage);
   const consented = await readJson(
@@ -204,6 +213,26 @@ export const grantOAuthClient = async (
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
   };
+};
+
+/**
+ * Authorize and consent as the signed-in browser, then exchange the code.
+ * The consent is scoped to the browser's active organization.
+ */
+export const grantOAuthClient = async (
+  browser: HumanBrowser,
+  client: RegisteredOAuthClient,
+): Promise<OAuthGrant> => {
+  const { codeVerifier, redirect: consentPage } = await authorizeOAuthClient(
+    browser,
+    client,
+  );
+  return await consentAndExchange({
+    browser,
+    client,
+    codeVerifier,
+    consentPage,
+  });
 };
 
 type IntrospectOAuthTokenOptions = {
