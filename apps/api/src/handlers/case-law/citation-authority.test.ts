@@ -8,11 +8,12 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import {
+  CITATION_AUTHORITY_WRITE_TOLERANCE,
   type CitationContributionWeight,
   citationContributionWeight,
   hasResolvedCitations,
-  oldestCitationAuthorityRecomputeAt,
   recomputeCitationAuthorityBatch,
+  tryAdvanceCitationAuthoritySweep,
 } from "@/api/handlers/case-law/citation-authority";
 import {
   citationScore,
@@ -75,55 +76,67 @@ type SweepOptions = {
   contributionWeight?: CitationContributionWeight;
 };
 
+type SweepTotals = {
+  scanned: number;
+  written: number;
+  cited: number;
+  batches: number;
+};
+
 /**
- * Walk a whole sweep at the given batch size, and report what it did.
- *
- * A pinned window is what makes the walk terminate: the boundary and the stamp
- * are the same instant, so a row this sweep recomputed is no longer *before*
- * the boundary. Two instants from two clocks would not have that property, and
- * a boundary even a millisecond ahead of the stamp is a walk that never ends.
+ * Walk one whole pass at the given batch size, and report what it did. Each
+ * batch starts where the last one stopped; a short batch ends the pass.
  */
 const sweep = async (
   limit: number,
   options: SweepOptions = {},
-): Promise<{ recomputed: number; cited: number; batches: number }> => {
+): Promise<SweepTotals> => {
   const now = options.now ?? NOW;
-  const totals = { recomputed: 0, cited: 0, batches: 0 };
+  const totals = { scanned: 0, written: 0, cited: 0, batches: 0 };
+  let after: string | null = null;
   for (let turn = 0; turn < 200; turn += 1) {
+    const position = after;
     const batch = await db.transaction(
       async (tx) =>
         await recomputeCitationAuthorityBatch(tx, {
+          after: position,
           limit,
-          window: { type: "pinned", at: now },
+          now: { type: "pinned", at: now },
           ...(options.contributionWeight
             ? { contributionWeight: options.contributionWeight }
             : {}),
           courtWeightEntries: options.courtWeightEntries ?? SEED_ENTRIES,
         }),
     );
-    if (batch.recomputed === 0) {
-      return totals;
-    }
-    totals.recomputed += batch.recomputed;
+    totals.scanned += batch.scanned;
+    totals.written += batch.written;
     totals.cited += batch.cited;
     totals.batches += 1;
+    after = batch.lastId;
+    if (batch.scanned < limit) {
+      return totals;
+    }
   }
   throw new Error("the citation-authority sweep did not terminate");
 };
 
 /**
- * Put every decision back in the due set.
- *
- * The production sweep does this by waiting: a row falls due again once the
- * refresh interval has passed. A test that has to re-run a sweep at a pinned
- * instant clears the stamp instead, which is the same state a corpus is in
- * before its first sweep.
+ * Put every decision back to the never-computed defaults, so the next pass
+ * has to write all of them.
  */
-const markAllDue = async (): Promise<void> => {
+const resetAuthority = async (): Promise<void> => {
   await db.execute(
-    sql`UPDATE case_law_decisions SET citation_authority_computed_at = NULL`,
+    sql`UPDATE case_law_decisions SET citation_authority = 0, citation_count = 0`,
   );
 };
+
+/** Every decision tuple's header: `xmax` is where an update or lock lands. */
+const tupleHeaders = async (): Promise<unknown> =>
+  await db.execute(sql`
+    SELECT id::text AS id, xmin::text AS xmin, xmax::text AS xmax
+      FROM case_law_decisions
+     ORDER BY id
+  `);
 
 // createTestPglite()'s full in-process build (no PGLITE_TEST_SNAPSHOT) is
 // close enough to bun:test's 5s default hook timeout that running this file
@@ -285,7 +298,6 @@ test("a listing-only citing decision weighs on nothing", async () => {
       metadata: { _stellaPartialObservation: { isListingOnly: true } },
     })
     .where(eq(caseLawDecisions.id, supremeCitingId));
-  await markAllDue();
   await sweep(1000);
 
   expect(await countOf(citedId)).toBe(before - 1);
@@ -296,7 +308,6 @@ test("a listing-only citing decision weighs on nothing", async () => {
     .update(caseLawDecisions)
     .set({ metadata: {} })
     .where(eq(caseLawDecisions.id, supremeCitingId));
-  await markAllDue();
   await sweep(1000);
 
   expect(await countOf(citedId)).toBe(before);
@@ -327,156 +338,125 @@ test("a more authoritative citing court yields higher authority", async () => {
   expect(supreme).toBeGreaterThan(regional);
 });
 
-test("the sweep covers every decision once and then reports itself current", async () => {
-  // Every batch stamps the rows it wrote, which takes them out of the set the
-  // next batch walks. That is the whole of the sweep's bookkeeping: no cursor
-  // is persisted, so this is what proves the walk terminates rather than
-  // re-serving the same rows or stopping short of the corpus.
+test("a pass examines every decision once", async () => {
   const [{ n: total } = { n: 0 }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(caseLawDecisions);
-  await markAllDue();
-  const walked = await sweep(1000);
-  expect(walked.recomputed).toBe(total);
+  const walked = await sweep(2);
+  expect(walked.scanned).toBe(total);
   expect(walked.cited).toBe(1);
-  // Immediately afterwards nothing is due against the same boundary.
-  expect((await sweep(1000)).recomputed).toBe(0);
+  // Not vacuous: the pass took several batches, so the keyset resumed.
+  expect(walked.batches).toBeGreaterThan(1);
+});
+
+test("a pass over an unchanged graph writes no tuple", async () => {
+  // A decision nobody cites holds the zeroes a recompute would write, and a
+  // cited one only drifts by its decay. Rewriting either says nothing new and
+  // still writes a tuple and every index entry on it, on every pass.
+  const before = await tupleHeaders();
+  const again = await sweep(1000);
+  expect(again.written).toBe(0);
+  expect(await tupleHeaders()).toEqual(before);
+
+  // Decay inside the tolerance is not a change worth a write either.
+  const halfADayLater = new Date(NOW.getTime() + 43_200_000);
+  const drifted = await sweep(1000, { now: halfADayLater });
+  expect(drifted.written).toBe(0);
+  expect(await tupleHeaders()).toEqual(before);
+  // Not vacuous: the value did move, by less than the tolerance.
+  const exactLater = citationScore(
+    [...CITED_CITATIONS],
+    halfADayLater,
+    SEED_MAP,
+  );
+  const stored = await authorityOf(citedId);
+  expect(exactLater).not.toBe(stored);
+  expect(Math.abs(exactLater - stored)).toBeLessThanOrEqual(
+    CITATION_AUTHORITY_WRITE_TOLERANCE,
+  );
+
+  // Decay beyond it is written, to the exact value at that instant.
+  const yearsLater = new Date("2036-06-05T00:00:00.000Z");
+  const decayed = await sweep(1000, { now: yearsLater });
+  expect(decayed.written).toBe(1);
+  expect(await authorityOf(citedId)).toBeCloseTo(
+    citationScore([...CITED_CITATIONS], yearsLater, SEED_MAP),
+    9,
+  );
+
+  // Restore the fixture's instant for the tests that follow.
+  await sweep(1000);
+  expect(await authorityOf(citedId)).toBeCloseTo(
+    citationScore([...CITED_CITATIONS], NOW, SEED_MAP),
+    9,
+  );
 });
 
 test("batching is arithmetic-neutral", async () => {
   // The bound that makes the statement survive a growing corpus must not buy
   // a different ranking. One decision per batch and the whole corpus in one
   // batch have to leave the same values behind, to the last bit.
-  await markAllDue();
+  await resetAuthority();
   const oneAtATime = await sweep(1);
   const perBatch = await snapshot();
 
-  await markAllDue();
+  await resetAuthority();
   const allAtOnce = await sweep(1000);
   const single = await snapshot();
 
-  expect(oneAtATime.recomputed).toBe(allAtOnce.recomputed);
+  expect(oneAtATime.written).toBe(allAtOnce.written);
+  expect(oneAtATime.written).toBeGreaterThan(0);
   expect(oneAtATime.batches).toBeGreaterThan(allAtOnce.batches);
   expect(perBatch).toEqual(single);
 });
 
-test("a completed pinned sweep leaves nothing computed before its instant", async () => {
-  // The guarantee is a floor, not an equality. A row the rolling loop computed
-  // *after* the pinned instant is fresher and is deliberately skipped, so the
-  // assertion is that nothing is left older — which is what "the backfill
-  // finished" has to mean for it to be worth running.
-  await markAllDue();
-  const later = new Date(NOW.getTime() + 60_000);
-  await db.execute(sql`
-    UPDATE case_law_decisions
-       SET citation_authority_computed_at = ${later.toISOString()}::timestamptz
-     WHERE id = ${orphanId}
-  `);
-
-  await sweep(1000);
-
-  const [{ n: stale } = { n: 0 }] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(caseLawDecisions)
-    .where(
-      sql`citation_authority_computed_at IS NULL
-          OR citation_authority_computed_at < ${NOW.toISOString()}::timestamptz`,
-    );
-  expect(stale).toBe(0);
-
-  // And the fresher row kept its own stamp rather than being dragged back.
-  const [{ at } = { at: null }] = await db
-    .select({ at: caseLawDecisions.citationAuthorityComputedAt })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, orphanId));
-  expect(at).toEqual(later);
-
-  await markAllDue();
-  await sweep(1000);
-});
-
-test("a resumed sweep skips what the interrupted one finished", async () => {
-  // The restart hazard: a fresh instant is a *new* sweep and recomputes the
-  // whole corpus, because every row the interrupted run stamped is older than
-  // the new boundary. Handed the original instant, the walk resumes.
-  await markAllDue();
-  const interrupted = await db.transaction(
-    async (tx) =>
-      await recomputeCitationAuthorityBatch(tx, {
-        limit: 2,
-        window: { type: "pinned", at: NOW },
-        courtWeightEntries: SEED_ENTRIES,
-      }),
-  );
-  expect(interrupted.recomputed).toBe(2);
-
-  const resumed = await sweep(1000);
+test("the continuous sweep resumes its pass and rests between passes", async () => {
+  await db.execute(sql`DELETE FROM case_law_citation_authority_sweep`);
   const [{ n: total } = { n: 0 }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(caseLawDecisions);
-  expect(resumed.recomputed).toBe(total - 2);
-});
-
-test("a rolling window converges even when the host clock runs ahead", async () => {
-  // The boundary and the stamp must come from one clock. Expressed as an age,
-  // both come from PostgreSQL, so a row this batch stamped is never still
-  // older than the boundary — which is the difference between a sweep that
-  // finishes and one that rewrites the same oldest rows forever.
-  await markAllDue();
-  let turnsTaken = 0;
-  let converged = false;
-  for (let turn = 0; turn < 50; turn += 1) {
-    const batch = await db.transaction(
+  const step = async (intervalMs: number) =>
+    await db.transaction(
       async (tx) =>
-        await recomputeCitationAuthorityBatch(tx, {
-          limit: 1000,
-          window: { type: "olderThan", ms: 60_000 },
+        await tryAdvanceCitationAuthoritySweep(tx, {
+          limit: 2,
+          intervalMs,
           courtWeightEntries: SEED_ENTRIES,
         }),
     );
-    turnsTaken = turn;
-    if (batch.recomputed === 0) {
-      converged = true;
+  const hour = 3_600_000;
+
+  // One pass, a batch per step, each step starting where the last one stopped.
+  let scanned = 0;
+  let steps = 0;
+  for (; steps < 50; steps += 1) {
+    const advanced = await step(hour);
+    if (advanced?.type !== "advanced") {
+      throw new Error(
+        `expected an advancing step, got ${String(advanced?.type)}`,
+      );
+    }
+    scanned += advanced.batch.scanned;
+    if (advanced.passComplete) {
       break;
     }
   }
-  // Reaching a fixed point at all is the whole assertion; a boundary from a
-  // different clock than the stamp would spin here until the turn limit.
-  expect(converged).toBe(true);
-  expect(turnsTaken).toBeGreaterThan(0);
+  expect(scanned).toBe(total);
+  expect(steps).toBeGreaterThan(0);
 
-  // Restore the fixture's pinned instant for the tests that follow.
-  await markAllDue();
-  await sweep(1000);
-});
+  // Within the interval the sweep is current, and says so without writing.
+  const before = await tupleHeaders();
+  expect(await step(hour)).toEqual({ type: "current" });
+  expect(await tupleHeaders()).toEqual(before);
 
-test("the staleness probe reports the oldest computed instant", async () => {
-  // The oldest rather than the newest: a sweep advances row by row, so the
-  // freshest row says nothing about the picture as a whole.
-  await markAllDue();
-  await sweep(1000, { now: new Date("2026-06-06T00:00:00.000Z") });
-  expect(await db.transaction(oldestCitationAuthorityRecomputeAt)).toEqual(
-    new Date("2026-06-06T00:00:00.000Z"),
-  );
-  // Restore the fixture's instant for the tests that follow.
-  await markAllDue();
-  await sweep(1000);
-});
+  // Once the interval has passed, a new pass starts from the beginning.
+  const next = await step(0);
+  expect(next?.type).toBe("advanced");
+  if (next?.type === "advanced") {
+    expect(next.batch.scanned).toBe(2);
+  }
 
-test("a decision that has never been computed makes the probe answer null", async () => {
-  const uncomputed = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
-    id: uncomputed,
-    sourceId,
-    caseNumber: "9 Cdo 9/2022",
-    court: "Okresní soud",
-    country: "CZE",
-    language: "cs",
-    decisionDate: "2022-01-01",
-  });
-  expect(await db.transaction(oldestCitationAuthorityRecomputeAt)).toBeNull();
-  // And the sweep picks it up first, because never-computed rows sort first.
-  expect((await sweep(1)).recomputed).toBe(1);
+  // The daemon ranks at the database's clock; put the fixture's instant back.
   await sweep(1000);
 });
 
@@ -487,7 +467,6 @@ test("the contribution weight is a seam the aggregate reads through", async () =
   // nothing else, including the citation count.
   const doubled: CitationContributionWeight = (options) =>
     sql`2 * (${citationContributionWeight(options)})`;
-  await markAllDue();
   await sweep(1000, { contributionWeight: doubled });
 
   const expected = citationScore([...CITED_CITATIONS], NOW, SEED_MAP);
@@ -498,7 +477,6 @@ test("the contribution weight is a seam the aggregate reads through", async () =
   );
   expect(await countOf(citedId)).toBe(3);
 
-  await markAllDue();
   await sweep(1000);
   expect(await authorityOf(citedId)).toBeCloseTo(expected, 9);
 });
@@ -548,7 +526,6 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
     citationText: "5 Cdo 5/2020",
   });
 
-  await markAllDue();
   await sweep(1000, { courtWeightEntries: CUSTOM_ENTRIES });
 
   expect(await authorityOf(customCitedId)).toBeCloseTo(
@@ -576,7 +553,6 @@ test("an unseeded registry recomputes at the default weight", async () => {
   // A registry with no rows renders no CASE branches, and a branchless
   // `CASE ... ELSE 1 END` is a syntax error: the whole recompute failed
   // instead of weighing every citing court at the default nothing ranks.
-  await markAllDue();
   try {
     await sweep(1000, { courtWeightEntries: [] });
 
@@ -591,7 +567,6 @@ test("an unseeded registry recomputes at the default weight", async () => {
   } finally {
     // The corpus is shared with every test below, so a failed assertion must
     // not leave them reading authority computed against an empty registry.
-    await markAllDue();
     await sweep(1000);
   }
 });
@@ -650,7 +625,6 @@ test("the cited decision's own age does not change its authority", async () => {
     },
   ]);
 
-  await markAllDue();
   await sweep(1000);
 
   // Not vacuous: the fixture differs precisely where the removed term read.

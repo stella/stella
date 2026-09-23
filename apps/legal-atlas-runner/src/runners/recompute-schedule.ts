@@ -2,11 +2,10 @@
  * How long the citation-authority sweep waits before its next batch, given how
  * the batch that just finished ended.
  *
- * The sweep is continuous rather than periodic: it takes bounded batches of
- * the least recently computed decisions, and a batch that finds none is what
- * "the corpus is current" looks like. So the schedule has two regimes rather
- * than a single interval — a duty cycle while there is work, and a poll while
- * there is not.
+ * The sweep runs in passes of bounded batches, and between passes it reports
+ * itself current until the next one is due. So the schedule has two regimes
+ * rather than a single interval — a duty cycle while a pass is under way, and
+ * a poll while none is.
  *
  * Kept free of the runner's DB and env imports so the schedule can be
  * exercised on its own.
@@ -15,9 +14,9 @@
 import { panic } from "better-result";
 
 export const RECOMPUTE_OUTCOME = {
-  /** A batch recomputed decisions. */
+  /** A batch of the current pass ran. */
   ADVANCED: "advanced",
-  /** Nothing was due: every decision is current within the refresh interval. */
+  /** No pass is due: the last one began less than an interval ago. */
   CURRENT: "current",
   /** Another process holds the sweep. Not an error; asked again next turn. */
   SKIPPED: "skipped",
