@@ -870,7 +870,9 @@ test("a citation settled before it is written gets the walk's answer", async () 
       expect(resolution).toBeUndefined();
       continue;
     }
-    expect(resolution).toEqual({
+    // The stored rule id is plain text; compared as a value, not a type.
+    const actual: unknown = resolution;
+    expect(actual).toEqual({
       citedDecisionId: row.citedDecisionId,
       resolutionStatus: row.resolutionStatus,
       resolutionRuleId: row.resolutionRuleId,

@@ -95,19 +95,20 @@ const sweep = async (
   const totals = { scanned: 0, written: 0, cited: 0, batches: 0 };
   let after: string | null = null;
   for (let turn = 0; turn < 200; turn += 1) {
-    const position = after;
-    const batch = await db.transaction(
-      async (tx) =>
-        await recomputeCitationAuthorityBatch(tx, {
-          after: position,
-          limit,
-          now: { type: "pinned", at: now },
-          ...(options.contributionWeight
-            ? { contributionWeight: options.contributionWeight }
-            : {}),
-          courtWeightEntries: options.courtWeightEntries ?? SEED_ENTRIES,
-        }),
-    );
+    const position: string | null = after;
+    const batch: Awaited<ReturnType<typeof recomputeCitationAuthorityBatch>> =
+      await db.transaction(
+        async (tx) =>
+          await recomputeCitationAuthorityBatch(tx, {
+            after: position,
+            limit,
+            now: { type: "pinned", at: now },
+            ...(options.contributionWeight
+              ? { contributionWeight: options.contributionWeight }
+              : {}),
+            courtWeightEntries: options.courtWeightEntries ?? SEED_ENTRIES,
+          }),
+      );
     totals.scanned += batch.scanned;
     totals.written += batch.written;
     totals.cited += batch.cited;

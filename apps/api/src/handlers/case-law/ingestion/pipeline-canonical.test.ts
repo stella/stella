@@ -664,14 +664,15 @@ describe("processDecision — canonical storage mode", () => {
     });
     // An unchanged payload contributes no member either.
     expect(transferredPacks).toEqual([]);
-    // Nor does it touch the row's payload or pointers: the metadata refresh
-    // is the only write, so the document is not copied back into the row
-    // and trimmed out again.
+    // Nor does it touch the row's pointers or copy the document back into
+    // the row: the metadata refresh is the only write, and the payload
+    // columns are at most held to the trimmed shape canonical settles to.
     expect(updatedDecisionRows).toHaveLength(1);
+    const updatedRow = updatedDecisionRows.at(0) ?? {};
+    for (const column of ["fulltext", "sections", "documentAst"]) {
+      expect(updatedRow[column] ?? null).toBeNull();
+    }
     for (const column of [
-      "fulltext",
-      "sections",
-      "documentAst",
       "corpusMirrorStatus",
       "textS3Key",
       "normalizedS3Key",

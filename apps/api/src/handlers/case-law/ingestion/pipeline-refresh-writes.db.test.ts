@@ -59,6 +59,12 @@ const canonical = {
   },
 } satisfies CaseLawCorpusDependencies;
 
+/** Settles into the corpus like canonical, but keeps the row's payload. */
+const dualWrite = {
+  mode: "dual-write",
+  transfer: canonical.transfer,
+} satisfies CaseLawCorpusDependencies;
+
 const postgresOnly = {
   mode: "off",
   transfer: {
@@ -168,17 +174,93 @@ const citationHeaders = async (decisionId: string): Promise<unknown> =>
     `)
   ).rows;
 
+/**
+ * Wrap a query builder so that awaiting it first runs `before`. Every call
+ * on the chain returns a wrapped builder, so the hook fires when the whole
+ * statement is sent, not when it starts being built.
+ */
+const runningFirst = <T extends object>(
+  target: T,
+  before: () => Promise<void>,
+): T =>
+  new Proxy(target, {
+    get(object, key) {
+      const value: unknown = Reflect.get(object, key);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (key === "then") {
+        return async (
+          onFulfilled?: (value: unknown) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ): Promise<unknown> => {
+          await before();
+          return await Reflect.apply(value, object, [onFulfilled, onRejected]);
+        };
+      }
+      return (...args: unknown[]) => {
+        const out: unknown = Reflect.apply(value, object, args);
+        return typeof out === "object" && out !== null
+          ? runningFirst(out, before)
+          : out;
+      };
+    },
+  });
+
+/**
+ * A scoped db on which `race` runs once, in the writer's own transaction,
+ * just before its first update of a decision row: what another worker
+ * committing between the writer's read and its row lock would leave.
+ */
+const racingScopedDb = (
+  race: (
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ) => Promise<void>,
+): ScopedDb => {
+  let pending = true;
+  return async (callback) =>
+    await db.transaction(async (tx) => {
+      const racing = new Proxy(tx, {
+        get(object, key) {
+          const value: unknown = Reflect.get(object, key);
+          if (key === "update" && typeof value === "function") {
+            return (table: unknown) => {
+              const builder: unknown = Reflect.apply(value, object, [table]);
+              if (
+                table !== caseLawDecisions ||
+                !pending ||
+                typeof builder !== "object" ||
+                builder === null
+              ) {
+                return builder;
+              }
+              return runningFirst(builder, async () => {
+                if (pending) {
+                  pending = false;
+                  await race(tx);
+                }
+              });
+            };
+          }
+          return typeof value === "function" ? value.bind(object) : value;
+        },
+      });
+      return await callback(asTestRaw(racing));
+    });
+};
+
 let order = 0n;
 const ingest = async (
   input: IngestionResult,
   corpus: CaseLawCorpusDependencies,
+  writer: ScopedDb = scopedDb,
 ) => {
   order += 1n;
   const outcome = await processDecision({
     input,
     observationOrder: order,
     sourceId,
-    scopedDb,
+    scopedDb: writer,
     observedAt: new Date(Date.UTC(2026, 8, 23, 12, 0, Number(order))),
     refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     corpus,
@@ -330,4 +412,58 @@ test("a refresh that moves the decision's language re-settles its kept citations
   // Still the same decision, now in the other language.
   expect((await storedRow(caseNumber)).id).toBe(first.id);
   expect(await citationHeaders(first.id)).not.toEqual(citations);
+});
+
+test("an unchanged refresh converges a retained payload to the trimmed shape", async () => {
+  // Settled while the mode kept the payload in the row too; the mode has
+  // since moved to canonical, where a settled row holds it only in the corpus.
+  const caseNumber = "30 Cdo 500/2024";
+  await ingest(withDocument(caseNumber, "page-v1"), dualWrite);
+  const first = await storedRow(caseNumber);
+  expect(first.mirrorStatus).toBe("settled");
+  expect(first.holdsInlineText).toBe(true);
+  const packsBefore = transferred.length;
+
+  const refreshed = await ingest(
+    withDocument(caseNumber, "page-v2"),
+    canonical,
+  );
+  const second = await storedRow(caseNumber);
+  expect(second.observationOrder).toBe(String(refreshed));
+  expect(second.holdsInlineText).toBe(false);
+  // Nothing about the decision changed, and the corpus already held it.
+  expect(second.contentHash).toBe(first.contentHash);
+  expect(second.textKey).toBe(first.textKey);
+  expect(second.updatedAt).toBe(first.updatedAt);
+  expect(transferred.length).toBe(packsBefore);
+});
+
+test("a payload replaced between the read and the write is planned again", async () => {
+  // Another worker, holding an older observation of a different document,
+  // settles it after this refresh read the row. The refresh must not keep
+  // that document under its own newer observation.
+  const caseNumber = "30 Cdo 600/2024";
+  await ingest(withDocument(caseNumber, "page-v1"), canonical);
+  const first = await storedRow(caseNumber);
+  const packsBefore = transferred.length;
+
+  const refreshed = await ingest(
+    withDocument(caseNumber, "page-v2"),
+    canonical,
+    racingScopedDb(async (tx) => {
+      await tx.execute(sql`
+        UPDATE case_law_decisions
+           SET content_hash = ${"f".repeat(64)},
+               text_s3_key = text_s3_key || '.other'
+         WHERE id = ${first.id}::uuid
+      `);
+    }),
+  );
+  const second = await storedRow(caseNumber);
+  expect(second.observationOrder).toBe(String(refreshed));
+  expect(second.contentHash).toBe(first.contentHash);
+  expect(second.textKey).toBe(first.textKey);
+  expect(second.mirrorStatus).toBe("settled");
+  // Planned against what the row then held, so the document went back in.
+  expect(transferred.length).toBeGreaterThan(packsBefore);
 });

@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import type { PgInsertValue } from "drizzle-orm/pg-core";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -345,6 +346,11 @@ const DECISION_ROW_WRITE_STATUS = {
   WINNER_PENDING: "winner-pending",
   WINNER_REDACTED: "winner-redacted",
   WINNER_SETTLED: "winner-settled",
+  /**
+   * The row this attempt planned against changed its payload before the
+   * write, while this observation still owns it: plan again from the row.
+   */
+  STALE_PAYLOAD: "stale-payload",
 } as const;
 
 type DecisionRowWriteStatus =
@@ -514,6 +520,14 @@ type ProcessDecisionOptions = Omit<
 };
 
 type SourceObservation = { order: bigint };
+
+/** The row as read still predates this observation, so it may write it. */
+const observationStillOwns = (
+  row: { sourceObservationOrder: bigint | null } | undefined,
+  order: bigint,
+): boolean =>
+  row !== undefined &&
+  (row.sourceObservationOrder === null || row.sourceObservationOrder < order);
 
 const storedObservationPrecedes = ({ order }: SourceObservation) =>
   or(
@@ -1077,7 +1091,7 @@ const writeDecisionCitations = async (
         citedDecisionDate: row.citedDecisionDate ?? null,
       })),
     });
-    const settled: CitationRow[] = [];
+    const settled: PgInsertValue<typeof caseLawCitations>[] = [];
     for (const row of written) {
       const resolution = resolutions.get(row.id);
       settled.push(
@@ -1279,6 +1293,22 @@ const storedRowDiffers = (values: Record<string, unknown>): SQL => {
     ];
   });
   return terms.length === 0 ? sql`false` : sql`(${sql.join(terms, sql` OR `)})`;
+};
+
+/**
+ * SQL for "writing this payload changes what the decision says". A
+ * preserved payload says what it said: trimming it to the corpus is a change
+ * of storage, not of the decision. A written document is taken as changed
+ * rather than compared, which would read megabytes to learn it.
+ */
+const payloadChangedSql = (
+  plan: CorpusWritePlan,
+  written: Record<string, unknown>,
+): SQL => {
+  if (plan.type === "preserve-stored") {
+    return sql`false`;
+  }
+  return "fulltext" in written ? sql`true` : storedRowDiffers(written);
 };
 
 /**
@@ -2623,10 +2653,18 @@ const processDecisionAttempt = async ({
             }),
           };
         case "preserve-stored":
-          // Every payload column, and every pointer into object storage,
-          // stays exactly as stored. Leaving them out of the update is
-          // what preserves them.
-          return {};
+          // Every pointer into object storage stays exactly as stored.
+          // Leaving the payload out of the update is what preserves it,
+          // except where the corpus is confirmed to hold this exact payload
+          // and the mode keeps it only there: those columns converge to
+          // the trimmed shape the settle would have left.
+          return storedPayloadUnchanged &&
+            corpusPayloadDisposition({
+              mode: corpus.mode,
+              written: storedCorpusWrite(existing),
+            }) === "trim"
+            ? { ...TRIMMED_CORPUS_PAYLOAD_COLUMNS }
+            : {};
         default: {
           corpusPlan satisfies never;
           return panic(`Unhandled corpus write plan: ${String(corpusPlan)}`);
@@ -2933,7 +2971,7 @@ const processDecisionAttempt = async ({
         const metadataWrite = markedMetadata ?? describedMetadata;
         const writtenPayload = payloadNeedsGuard ? {} : payloadColumns;
         const contentChanged = sql`(
-          ${"fulltext" in writtenPayload ? sql`true` : storedRowDiffers(writtenPayload)}
+          ${payloadChangedSql(corpusPlan, writtenPayload)}
           OR ${storedRowDiffers(describedColumns)}
           OR ${caseLawDecisions.metadata} IS DISTINCT FROM ${markedMetadata ?? describedMetadataSql}
         )`;
@@ -2983,7 +3021,12 @@ const processDecisionAttempt = async ({
                   )
                 : undefined,
               storedPayloadUnchanged
-                ? sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`
+                ? and(
+                    sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
+                    sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
+                    sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
+                    sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
+                  )
                 : undefined,
               pendingMirrorPayload === null
                 ? undefined
@@ -3017,11 +3060,23 @@ const processDecisionAttempt = async ({
           // needs the source page as its replay path.
           const winner = await tx.query.caseLawDecisions.findFirst({
             where: { id: { eq: existing.id } },
-            columns: { corpusMirrorStatus: true, redactedAt: true },
+            columns: {
+              corpusMirrorStatus: true,
+              redactedAt: true,
+              sourceObservationOrder: true,
+            },
           });
           if (winner?.redactedAt) {
             await sweepRawWriteLostToErasureTx(tx, existing.id);
             return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
+          }
+          // Still this observation's to write, so the miss was the payload
+          // fence: another write replaced what the plan compared against.
+          if (
+            storedPayloadUnchanged &&
+            observationStillOwns(winner, observationOrder)
+          ) {
+            return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
           }
           return winner?.corpusMirrorStatus ===
             CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
@@ -3368,6 +3423,27 @@ const processDecisionAttempt = async ({
         inserted: false,
         searchVectorFailed: false,
       };
+    case DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD:
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt,
+        observationOrder,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
+        corpus,
+        corpusBatch,
+        judges,
+        polarityRules,
+      });
     default:
       writeStatus satisfies never;
       return panic(`Unhandled write status: ${String(writeStatus)}`);
