@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
+import { PublicLawConnectionItem } from "@/components/dev/public-law-connection-item";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
@@ -287,6 +288,8 @@ export const DevSidebarGroup = () => {
         >
           Simulate slow load
         </MenuCheckboxItem>
+        <MenuSeparator />
+        <PublicLawConnectionItem />
         <MenuSeparator />
         <MenuItem
           disabled={seeding}

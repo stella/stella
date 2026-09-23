@@ -100,6 +100,15 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
+  /**
+   * Local executable the Dev menu runs to reach the public-law corpus that
+   * PUBLIC_LAW_DATABASE_URL and CORPUS_INDEX_Q09_SEARCH_ENDPOINT point at
+   * (for example, a script that opens local tunnels). It lives outside the
+   * repository so connection details never do.
+   */
+  DEV_PUBLIC_LAW_CONNECT_COMMAND: v.optional(
+    v.pipe(v.string(), v.minLength(1)),
+  ),
   BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
   BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
   BETTER_AUTH_COOKIE_PREFIX: v.optional(
@@ -485,6 +494,7 @@ export const envApiServerSchema = {
 
 type EnvApiInvariantInput = {
   BETTER_AUTH_URL: string;
+  DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FRONTEND_URL: string;
@@ -505,6 +515,7 @@ type EnvApiInvariantInput = {
 
 export const envApiInvariantViolation = ({
   BETTER_AUTH_URL,
+  DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
   FRONTEND_URL,
@@ -550,6 +561,15 @@ export const envApiInvariantViolation = ({
   }
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
     return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
+  }
+  // Tests boot with the developer's local .env, so the command may be set
+  // there; only a deployed environment refuses it, and the route that runs it
+  // answers 404 outside development either way.
+  if (
+    DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined &&
+    DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")
+  ) {
+    return "DEV_PUBLIC_LAW_CONNECT_COMMAND is only supported in local development and tests.";
   }
   if (USE_MOCK_AI && DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
     return "USE_MOCK_AI is only supported in local development and tests.";

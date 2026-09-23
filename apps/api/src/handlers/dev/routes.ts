@@ -33,6 +33,10 @@ import {
   type FirmKnowledgeSeedStatus,
   isReusableFirmKnowledgeJob,
 } from "./firm-knowledge-job-store";
+import {
+  readPublicLawConnection,
+  startPublicLawConnection,
+} from "./public-law-connection";
 
 const VITE_CACHE_DIR = path.resolve(
   import.meta.dir,
@@ -354,7 +358,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .post("/clear-cache", () => {
     rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
     return { ok: true };
-  });
+  })
+  .get("/public-law-connection", readPublicLawConnection)
+  .post("/public-law-connection", startPublicLawConnection);
 
 // Public dev-only routes (no auth — needed for the unauthenticated
 // email-OTP flow). Returns 404 outside dev so this never exists in
