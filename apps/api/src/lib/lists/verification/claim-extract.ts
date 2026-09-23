@@ -1,8 +1,8 @@
 /**
  * Pass one: find the claims a document makes.
  *
- * The model reads the whole document (cached) and, one window of blocks at a
- * time, lists each claim as a verbatim quote of the block it sits in. The
+ * The model reads the document one window of blocks at a time, with a few
+ * neighbouring blocks for context, and lists each claim as a verbatim quote of the block it sits in. The
  * quote is located in the block's own text here, so a claim's anchor is
  * always the document's words, never the model's paraphrase. A quote that
  * cannot be found is shown back once for correction; one that still cannot
@@ -26,12 +26,18 @@ import type {
   ClaimType,
 } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
-import { createVerificationCall } from "@/api/lib/lists/verification/model-call";
+import {
+  blocksText,
+  createVerificationCall,
+} from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 
 /** Blocks per extraction call: small enough that the model does not skim. */
 const WINDOW_BLOCKS = 40;
+/** Blocks shown on each side of a window, so a claim split across a block
+ *  boundary still reads as one. */
+const CONTEXT_BLOCKS = 3;
 const CONCURRENCY = 3;
 
 const rawClaimSchema = v.strictObject({
@@ -66,12 +72,20 @@ For each claim give:
 - type: fact when the record could confirm or refute it; opinion when it is the author's judgment or characterisation; unverifiable when it is factual in form but nothing outside the author's own mind could bear on it.
 - framing: recalled when the author presents it as their own recollection or belief ("I recall", "to the best of my knowledge"); otherwise asserted.
 
-List claims in the order they appear. Only list claims in the blocks you are asked about; the rest of the document is context.`;
+List claims in the order they appear. Only list claims in the blocks you are asked about; the blocks around them are context.`;
 
-const windowTask = (window: readonly VerificationBlock[]): string => {
-  const first = window.at(0)?.id ?? "";
-  const last = window.at(-1)?.id ?? "";
-  return `List the claims in blocks ${first} through ${last} (${String(window.length)} blocks):\n${window.map((block) => block.id).join(", ")}`;
+type Window = { from: number; to: number };
+
+const windowTask = (
+  blocks: readonly VerificationBlock[],
+  { from, to }: Window,
+): string => {
+  const asked = blocks.slice(from, to);
+  const context = blocks.slice(
+    Math.max(0, from - CONTEXT_BLOCKS),
+    Math.min(blocks.length, to + CONTEXT_BLOCKS),
+  );
+  return `Document blocks:\n${blocksText(context)}\n\nList the claims in these blocks only: ${asked.map((block) => block.id).join(", ")}`;
 };
 
 type Grounding =
@@ -87,11 +101,19 @@ const ground = (
   const blockIndex = blockIndexById.get(raw.blockId);
   const block = blockIndex === undefined ? undefined : blocks.at(blockIndex);
   if (blockIndex === undefined || block === undefined) {
-    return { type: "misquoted", raw, reason: "names a block that does not exist" };
+    return {
+      type: "misquoted",
+      raw,
+      reason: "names a block that does not exist",
+    };
   }
   const span = locateQuote(block.text, raw.quote, cursor.get(block.id) ?? 0);
   if (span === null) {
-    return { type: "misquoted", raw, reason: "is not in that block word for word" };
+    return {
+      type: "misquoted",
+      raw,
+      reason: "is not in that block word for word",
+    };
   }
   cursor.set(block.id, span.end);
   const text = block.text
@@ -117,7 +139,9 @@ const ground = (
   };
 };
 
-const repairMessage = (misquoted: readonly { raw: RawClaim; reason: string }[]) =>
+const repairMessage = (
+  misquoted: readonly { raw: RawClaim; reason: string }[],
+) =>
   `These claims could not be found as quoted. For each, give it again with the exact words of the block it is in, or leave it out if it is not in the document:\n${misquoted
     .map(
       ({ raw, reason }) =>
@@ -141,13 +165,15 @@ export const extractClaims = async ({
     deps,
     feature: "lists.verification.extract",
     system: SYSTEM_PROMPT,
-    blocks,
+    shared: null,
     outputSchema: extractionSchema,
   });
-  const blockIndexById = new Map(blocks.map((block, index) => [block.id, index]));
-  const windows: VerificationBlock[][] = [];
-  for (let start = 0; start < blocks.length; start += WINDOW_BLOCKS) {
-    windows.push(blocks.slice(start, start + WINDOW_BLOCKS));
+  const blockIndexById = new Map(
+    blocks.map((block, index) => [block.id, index]),
+  );
+  const windows: Window[] = [];
+  for (let from = 0; from < blocks.length; from += WINDOW_BLOCKS) {
+    windows.push({ from, to: Math.min(blocks.length, from + WINDOW_BLOCKS) });
   }
 
   return await Result.tryPromise({
@@ -156,7 +182,7 @@ export const extractClaims = async ({
         items: windows,
         limit: CONCURRENCY,
         operation: async (window) => {
-          const request = call.request(windowTask(window));
+          const request = call.request(windowTask(blocks, window));
           const output = await call.generate([request]);
           const cursor = new Map<string, number>();
           const grounded: ExtractedClaim[] = [];

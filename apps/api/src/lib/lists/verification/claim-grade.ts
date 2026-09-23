@@ -26,7 +26,6 @@ import type {
   ClaimVerdict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
-import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { createVerificationCall } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 
@@ -70,7 +69,11 @@ type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
 export type ClaimGrade = ClaimVerdict & { refs: ClaimRef[] };
 
-export type GradeableClaim = { key: string; text: string };
+/** A claim to grade, with the text of the block it sits in for meaning. */
+export type GradeableClaim = { key: string; text: string; context: string };
+
+/** Characters of a claim's block shown beside it. */
+const CLAIM_CONTEXT_MAX = 1500;
 
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
 
@@ -85,7 +88,7 @@ score is how strongly the facts support the claim, 0 to 100, for supported, tens
 
 For recordconflict, fill conflict: subject (the disputed point, in a few words), factIds (exactly the two conflicting facts), values (what each of those facts says on the point, in the same order), and verdictIfGoverning (the verdict the claim would get if that fact governed, in the same order: supported, tension or contradicted). Otherwise conflict is null.
 
-A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. The document is context for what a claim means, not evidence.`;
+A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
 
 const factLine = (id: string, fact: VerificationEvidenceFact): string => {
   const detail = [
@@ -193,7 +196,6 @@ const repairMessage = (violations: readonly Violation[]) =>
 type GradeClaimsArgs = {
   claims: readonly GradeableClaim[];
   facts: readonly VerificationEvidenceFact[];
-  blocks: readonly VerificationBlock[];
   deps: VerificationModelDeps;
 };
 
@@ -205,7 +207,6 @@ export type GradeClaimsOutcome =
 export const gradeClaims = async ({
   claims,
   facts,
-  blocks,
   deps,
 }: GradeClaimsArgs): Promise<
   Result<GradeClaimsOutcome, WorkflowIntegrationError>
@@ -236,7 +237,9 @@ export const gradeClaims = async ({
     deps,
     feature: "lists.verification.grade",
     system: SYSTEM_PROMPT,
-    blocks,
+    // Every batch is graded against the same facts, so they are the part
+    // the prompt cache keeps.
+    shared: factsPart,
     outputSchema: gradingSchema,
   });
   const prompted = claims.map((claim, index) => ({
@@ -258,8 +261,11 @@ export const gradeClaims = async ({
         limit: CONCURRENCY,
         operation: async (batch) => {
           const request = call.request(
-            `${factsPart}\n\nClaims:\n${batch
-              .map(({ promptId, claim }) => `- ${promptId}: ${claim.text}`)
+            `Claims:\n${batch
+              .map(
+                ({ promptId, claim }) =>
+                  `- ${promptId}: ${claim.text}\n  passage: ${claim.context.slice(0, CLAIM_CONTEXT_MAX)}`,
+              )
               .join("\n")}`,
           );
           const graded = new Map<string, ClaimGrade>();

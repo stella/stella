@@ -70,7 +70,10 @@ const BLOCKS: VerificationBlock[] = [
 const FACT_A = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
 const FACT_B = toSafeId<"entity">("22222222-2222-4222-8222-222222222222");
 
-const fact = (factEntityId: typeof FACT_A, text: string): VerificationEvidenceFact => ({
+const fact = (
+  factEntityId: typeof FACT_A,
+  text: string,
+): VerificationEvidenceFact => ({
   factEntityId,
   text,
   occurredOn: null,
@@ -91,7 +94,10 @@ describe("locateQuote", () => {
   test("finds exact words and advances past earlier matches", () => {
     const text = "paid on time; paid on time again";
     expect(locateQuote(text, "paid on time")).toEqual({ start: 0, end: 12 });
-    expect(locateQuote(text, "paid on time", 12)).toEqual({ start: 14, end: 26 });
+    expect(locateQuote(text, "paid on time", 12)).toEqual({
+      start: 14,
+      end: 26,
+    });
   });
 
   test("matches straightened quotes and collapsed spaces, in original offsets", () => {
@@ -104,7 +110,9 @@ describe("locateQuote", () => {
   });
 
   test("a paraphrase is not a quote", () => {
-    expect(locateQuote("I first met him in March.", "I met him in March")).toBeNull();
+    expect(
+      locateQuote("I first met him in March.", "I met him in March"),
+    ).toBeNull();
   });
 });
 
@@ -113,13 +121,28 @@ describe("extractClaims", () => {
     answers.push(
       {
         claims: [
-          { blockId: "b1", quote: "I first met him on 9 March 2021", type: "fact", framing: "asserted" },
-          { blockId: "P2", quote: "the payment was proper", type: "opinion", framing: "asserted" },
+          {
+            blockId: "b1",
+            quote: "I first met him on 9 March 2021",
+            type: "fact",
+            framing: "asserted",
+          },
+          {
+            blockId: "P2",
+            quote: "the payment was proper",
+            type: "opinion",
+            framing: "asserted",
+          },
         ],
       },
       {
         claims: [
-          { blockId: "P2", quote: "The payment of \"EUR 40,000\" was proper", type: "opinion", framing: "asserted" },
+          {
+            blockId: "P2",
+            quote: 'The payment of "EUR 40,000" was proper',
+            type: "opinion",
+            framing: "asserted",
+          },
         ],
       },
     );
@@ -127,7 +150,9 @@ describe("extractClaims", () => {
     expect(Result.isOk(result)).toBe(true);
     const claims = Result.isOk(result) ? result.value : [];
     expect(captured).toHaveLength(2);
-    expect(captured.every((call) => call.tenantWorkspaceIds.includes(workspaceId))).toBe(true);
+    expect(
+      captured.every((call) => call.tenantWorkspaceIds.includes(workspaceId)),
+    ).toBe(true);
     expect(claims.map((claim) => claim.anchor)).toEqual([
       { type: "docx-block", blockId: "b1", start: 0, end: 31 },
       { type: "pdf-page", pageNumber: 2, start: 0, end: 38 },
@@ -135,9 +160,38 @@ describe("extractClaims", () => {
     expect(claims.at(0)?.text).toBe("I first met him on 9 March 2021");
   });
 
+  test("a call carries its window and neighbours, never the whole document", async () => {
+    const many: VerificationBlock[] = Array.from(
+      { length: 50 },
+      (_, index) => ({
+        id: `b${String(index)}`,
+        text: `Block ${String(index)} text.`,
+        source: { type: "docx-block", blockId: `b${String(index)}` },
+      }),
+    );
+    answers.push({ claims: [] }, { claims: [] });
+    await extractClaims({ blocks: many, deps });
+    expect(captured).toHaveLength(2);
+    const firstCall = JSON.stringify(captured.at(0)?.messages);
+    expect(firstCall).toContain("Block 42 text.");
+    expect(firstCall).not.toContain("Block 43 text.");
+    const secondCall = JSON.stringify(captured.at(1)?.messages);
+    expect(secondCall).toContain("Block 37 text.");
+    expect(secondCall).not.toContain("Block 36 text.");
+  });
+
   test("a claim that cannot be found after repair is left out", async () => {
     answers.push(
-      { claims: [{ blockId: "nope", quote: "anything", type: "fact", framing: "asserted" }] },
+      {
+        claims: [
+          {
+            blockId: "nope",
+            quote: "anything",
+            type: "fact",
+            framing: "asserted",
+          },
+        ],
+      },
       { claims: [] },
     );
     const result = await extractClaims({ blocks: BLOCKS, deps });
@@ -147,12 +201,20 @@ describe("extractClaims", () => {
 
 describe("gradeClaims", () => {
   const claims = [
-    { key: "0", text: "I first met him on 9 March 2021" },
-    { key: "1", text: "The amount was EUR 40,000" },
+    {
+      key: "0",
+      text: "I first met him on 9 March 2021",
+      context: "I first met him on 9 March 2021. We spoke briefly.",
+    },
+    {
+      key: "1",
+      text: "The amount was EUR 40,000",
+      context: "The amount was EUR 40,000 in total.",
+    },
   ];
 
   test("a list with no facts answers no coverage without a model call", async () => {
-    const result = await gradeClaims({ claims, facts: [], blocks: BLOCKS, deps });
+    const result = await gradeClaims({ claims, facts: [], deps });
     expect(captured).toHaveLength(0);
     const outcome = Result.isOk(result) ? result.value : null;
     expect(outcome?.type).toBe("graded");
@@ -168,20 +230,40 @@ describe("gradeClaims", () => {
     answers.push(
       {
         grades: [
-          { claimId: "C1", verdict: "supported", score: 91.6, refs: [{ factId: "F1", rel: "supports" }], conflict: null },
-          { claimId: "C2", verdict: "contradicted", score: 20, refs: [], conflict: null },
+          {
+            claimId: "C1",
+            verdict: "supported",
+            score: 91.6,
+            refs: [{ factId: "F1", rel: "supports" }],
+            conflict: null,
+          },
+          {
+            claimId: "C2",
+            verdict: "contradicted",
+            score: 20,
+            refs: [],
+            conflict: null,
+          },
         ],
       },
       {
         grades: [
-          { claimId: "C2", verdict: "contradicted", score: 20, refs: [{ factId: "F2", rel: "conflicts" }], conflict: null },
+          {
+            claimId: "C2",
+            verdict: "contradicted",
+            score: 20,
+            refs: [{ factId: "F2", rel: "conflicts" }],
+            conflict: null,
+          },
         ],
       },
     );
     const result = await gradeClaims({
       claims,
-      facts: [fact(FACT_A, "Meeting on 9 March 2021"), fact(FACT_B, "EUR 30,000 paid")],
-      blocks: BLOCKS,
+      facts: [
+        fact(FACT_A, "Meeting on 9 March 2021"),
+        fact(FACT_B, "EUR 30,000 paid"),
+      ],
       deps,
     });
     expect(captured).toHaveLength(2);
@@ -220,21 +302,22 @@ describe("gradeClaims", () => {
     const result = await gradeClaims({
       claims: claims.slice(0, 1),
       facts: [fact(FACT_A, "Diary: 9 March"), fact(FACT_B, "Email: 3 May")],
-      blocks: BLOCKS,
       deps,
     });
     const outcome = Result.isOk(result) ? result.value : null;
-    expect(outcome?.type === "graded" ? outcome.grades.get("0") : null).toEqual({
-      state: "recordconflict",
-      score: null,
-      recordConflict: {
-        subject: "Meeting date",
-        factEntityIds: [FACT_A, FACT_B],
-        values: ["9 March 2021", "3 May 2021"],
-        governingStates: ["supported", "contradicted"],
+    expect(outcome?.type === "graded" ? outcome.grades.get("0") : null).toEqual(
+      {
+        state: "recordconflict",
+        score: null,
+        recordConflict: {
+          subject: "Meeting date",
+          factEntityIds: [FACT_A, FACT_B],
+          values: ["9 March 2021", "3 May 2021"],
+          governingStates: ["supported", "contradicted"],
+        },
+        refs: [],
       },
-      refs: [],
-    });
+    );
   });
 
   test("a claim still unanswered after repair makes the grading incomplete", async () => {
@@ -242,7 +325,6 @@ describe("gradeClaims", () => {
     const result = await gradeClaims({
       claims: claims.slice(0, 1),
       facts: [fact(FACT_A, "Meeting on 9 March 2021")],
-      blocks: BLOCKS,
       deps,
     });
     expect(Result.isOk(result) ? result.value : null).toEqual({

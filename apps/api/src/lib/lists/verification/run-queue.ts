@@ -506,11 +506,18 @@ const executeRun = async (
   const graded = await gradeClaims({
     claims: claims.flatMap((claim, position) =>
       claim.type === "fact"
-        ? [{ key: String(position), text: claim.text }]
+        ? [
+            {
+              key: String(position),
+              text: claim.text,
+              context:
+                document.blocks.at(claim.blockIndex)?.text ??
+                panic("An extracted claim names a block outside the document"),
+            },
+          ]
         : [],
     ),
     facts: run.evidence.facts,
-    blocks: document.blocks,
     deps,
   });
   if (Result.isError(graded) || graded.value.type === "incomplete") {

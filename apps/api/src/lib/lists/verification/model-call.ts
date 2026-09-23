@@ -1,8 +1,11 @@
 /**
- * One structured model call for a verification pass, over the document
- * region both passes share. The document is serialised once per run, byte
- * for byte, and carries the cache breakpoint, so every later call (and the
- * repair round) reads it from the prompt cache.
+ * One structured model call for a verification pass.
+ *
+ * A call carries only the text it needs, never the whole document: a long
+ * document is read a window at a time, so no call grows with the document.
+ * What every call of a pass shares (the facts, for grading) goes first and
+ * carries the cache breakpoint, so later calls and the repair round read it
+ * from the prompt cache.
  */
 
 import type { ModelMessage, TextPart } from "@tanstack/ai";
@@ -38,19 +41,20 @@ export type VerificationModelDeps = {
 };
 
 /** Blocks as `[id] text` lines: the ids are what the model cites. */
-const documentRegion = (blocks: readonly VerificationBlock[]): string =>
-  `Document blocks:\n${blocks.map((block) => `[${block.id}] ${block.text}`).join("\n")}`;
+export const blocksText = (blocks: readonly VerificationBlock[]): string =>
+  blocks.map((block) => `[${block.id}] ${block.text}`).join("\n");
 
 type VerificationCallArgs<TSchema extends v.GenericSchema> = {
   deps: VerificationModelDeps;
   feature: string;
   system: string;
-  blocks: readonly VerificationBlock[];
+  /** Text every call of the pass repeats; cached after the first call. */
+  shared: string | null;
   outputSchema: TSchema;
 };
 
 export type VerificationCall<TSchema extends v.GenericSchema> = {
-  /** The first request of a pass: the document region, then `task`. */
+  /** The first request of a call: the shared text, then `task`. */
   request: (task: string) => ModelMessage;
   generate: (messages: ModelMessage[]) => Promise<v.InferOutput<TSchema>>;
   captureError: (cause: unknown) => void;
@@ -60,7 +64,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
   deps,
   feature,
   system,
-  blocks,
+  shared,
   outputSchema,
 }: VerificationCallArgs<TSchema>): VerificationCall<TSchema> => {
   const caching = resolveCaching({
@@ -79,17 +83,21 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     traceId: Bun.randomUUIDv7(),
     usageMetering: deps.usageMetering,
   });
-  const documentPart: TextPart<AnthropicTextMetadata> =
-    markTanStackCacheBreakpoint(
-      { type: "text", content: documentRegion(blocks) },
-      { decision: caching },
-    );
+  const sharedParts: TextPart<AnthropicTextMetadata>[] =
+    shared === null
+      ? []
+      : [
+          markTanStackCacheBreakpoint(
+            { type: "text", content: shared },
+            { decision: caching },
+          ),
+        ];
   const generate = deps.generateObjectForRole ?? generateTanStackObjectForRole;
 
   return {
     request: (task) => ({
       role: "user",
-      content: [documentPart, { type: "text", content: task }],
+      content: [...sharedParts, { type: "text", content: task }],
     }),
     generate: async (messages) =>
       await generate({
