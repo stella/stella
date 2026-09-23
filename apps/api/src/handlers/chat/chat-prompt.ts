@@ -17,7 +17,6 @@ import {
   type EmailCitationBlock,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
   toChatDecisionPassageHref,
-  resolveEmailMimeType,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -25,6 +24,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type {
   ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,

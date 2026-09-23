@@ -1,4 +1,7 @@
-import { USER_FILE_URL_PREFIX, userFileIdFromUrl } from "@stll/api-contract";
+import {
+  USER_FILE_URL_PREFIX,
+  userFileIdFromUrl,
+} from "@stll/api-contract/user-file-url";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";

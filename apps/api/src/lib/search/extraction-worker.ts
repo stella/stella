@@ -23,7 +23,7 @@ import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
-} from "@stll/api-contract";
+} from "@stll/api-contract/email-mime-types";
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
 import { extractText as extractDocxText } from "@/api/lib/docx/extract-text";

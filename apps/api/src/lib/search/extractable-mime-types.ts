@@ -11,7 +11,7 @@
  * module at startup, so it must stay free of side effects.
  */
 
-import { EMAIL_MIME_TYPES } from "@stll/api-contract";
+import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
 
 import {
   DOC_MIME_TYPE,

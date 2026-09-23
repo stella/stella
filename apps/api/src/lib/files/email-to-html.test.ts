@@ -1,10 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import {
-  MAX_EMAIL_CITATION_BLOCKS,
-  resolveEmailMimeType,
-} from "@stll/api-contract";
+import { MAX_EMAIL_CITATION_BLOCKS } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 
 import {
   buildEmailPreview,

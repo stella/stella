@@ -31,7 +31,7 @@ import type {
   TimeEntryStatus,
   WorkspaceContactRole,
 } from "@stll/api-contract";
-import { EML_MIME_TYPE } from "@stll/api-contract";
+import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { deriveBlockId } from "@stll/folio-core/server";
 
 import { rootDb } from "@/api/db/root";

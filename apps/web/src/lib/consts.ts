@@ -3,10 +3,12 @@ import { panic } from "better-result";
 import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
+} from "@stll/api-contract";
+import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
   resolveEmailMimeType,
-} from "@stll/api-contract";
+} from "@stll/api-contract/email-mime-types";
 
 export const DOCX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
 export const XLSX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;

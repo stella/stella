@@ -19,6 +19,7 @@
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
+    "./email-mime-types": "./src/email-mime-types.ts",
     "./entity-views": "./src/entity-views.ts",
     "./feedback": "./src/feedback.ts",
     "./entity-options": "./src/entity-options.ts",
@@ -32,6 +33,7 @@
     "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./time-entries": "./src/time-entries.ts",
+    "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./workflow-status": "./src/workflow-status.ts"

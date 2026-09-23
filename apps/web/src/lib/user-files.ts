@@ -1,4 +1,4 @@
-import { userFileIdFromUrl } from "@stll/api-contract";
+import { userFileIdFromUrl } from "@stll/api-contract/user-file-url";
 
 import { apiUrl } from "@/lib/api-url";
 

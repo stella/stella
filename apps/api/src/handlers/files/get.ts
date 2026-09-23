@@ -1,10 +1,8 @@
 import { Result } from "better-result";
 import { status } from "elysia";
 
-import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
-  resolveEmailMimeType,
-} from "@stll/api-contract";
+import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";

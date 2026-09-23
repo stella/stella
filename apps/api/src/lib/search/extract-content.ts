@@ -11,7 +11,7 @@
 
 import { Result } from "better-result";
 
-import { resolveEmailMimeType } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {

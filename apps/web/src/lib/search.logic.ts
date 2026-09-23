@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { isEmailMimeType } from "@stll/api-contract";
+import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
 
 import type {
   GlobalSearchHit,

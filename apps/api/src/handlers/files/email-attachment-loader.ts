@@ -1,10 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
-import {
-  EMAIL_CITATION_BLOCK_MODE,
-  resolveEmailMimeType,
-} from "@stll/api-contract";
+import { EMAIL_CITATION_BLOCK_MODE } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";

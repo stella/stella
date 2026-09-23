@@ -191,14 +191,6 @@ export type {
   DesktopEditFileType,
   DesktopEditMimeType,
 } from "./desktop-edit-file-types";
-export { USER_FILE_URL_PREFIX, userFileIdFromUrl } from "./user-file-url";
-export {
-  EMAIL_MIME_TYPES,
-  EML_MIME_TYPE,
-  isEmailMimeType,
-  MSG_MIME_TYPE,
-  resolveEmailMimeType,
-} from "./email-mime-types";
 export {
   EMAIL_CITATION_BLOCK_MODE,
   EMAIL_CITATION_HREF_PREFIX,

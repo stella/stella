@@ -19,7 +19,6 @@ import PostalMime, { type Address } from "postal-mime";
 import {
   EMAIL_CITATION_BLOCK_MODE,
   type EmailAttachmentDescriptor,
-  MSG_MIME_TYPE,
   EMAIL_HEADER_CITATION_ID,
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
@@ -29,6 +28,7 @@ import {
   MAX_EMAIL_CITATION_BLOCKS,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
 } from "@stll/api-contract";
+import { MSG_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
