@@ -918,6 +918,44 @@ describe("moving decisions out of the older layout", () => {
     expect(new Map(fake.versions)).toEqual(versions);
   });
 
+  test("a cancelled page stops its object-storage calls and reports nothing", async () => {
+    const sourceId = await createSource();
+    const legacy = await legacyDecision({
+      sourceId,
+      caseNumber: "VII. ÚS 3/2026",
+      listing: "{}",
+      file: "%PDF cancelled",
+    });
+    const cancel = new AbortController();
+    // The run's first call on the decision is still in flight when the run
+    // is cancelled, as a shutdown or a runtime ceiling would leave it.
+    const held = fake.holdNext({
+      method: "HEAD",
+      keyIncludes: legacy.payloadKey,
+    });
+    const page = reconcileCaseLawRawLayoutPage({
+      scopedDb,
+      cursor: null,
+      limit: 1000,
+      mode: RAW_LAYOUT_MODE.APPLY,
+      sourceId,
+      signal: cancel.signal,
+    });
+    const settled = page.then(
+      () => "resolved",
+      () => "rejected",
+    );
+    await held.reached;
+    cancel.abort();
+    held.release();
+
+    expect(await settled).toBe("rejected");
+    expect((await rowOf(legacy.decisionId))?.sourceRawS3Key).toBe(
+      legacy.payloadKey,
+    );
+    expect(keysUnder(prefixOf(sourceId, legacy.decisionId))).toEqual([]);
+  });
+
   test("a replayed envelope naming a file stored elsewhere is copied in", async () => {
     const sourceId = await createSource();
     const legacy = await legacyDecision({

@@ -542,6 +542,7 @@ export const reconcileCaseLawRawLayoutPage = async ({
       reported.push({ decisionId: row.id, outcome });
     }
   }
+  signal.throwIfAborted();
   return {
     resumeAfter: rows.length < limit ? null : (rows.at(-1)?.id ?? null),
     counts,
