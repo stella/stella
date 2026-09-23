@@ -172,6 +172,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/ssr-testkit/src/assert-document.ts",
 ] as const;
 
+// Declaration files carry no runtime code. The lint ignores them outright, so
+// only the ratchet and the enrolment check need them excluded here.
+export const DECLARATION_FILE_GLOB = "**/*.d.ts";
+
 // Non-authored source and test surfaces do not carry migration debt. Keep the
 // lint override and ratchet exclusion derived from this same list so generated
 // output cannot be enabled by one guard while skipped by the other.
@@ -185,6 +189,7 @@ export const RESULT_CONVENTION_EXCLUDE_GLOBS = [
   "**/__tests__/**",
   "**/__fixtures__/**",
   "**/*.gen.*",
+  DECLARATION_FILE_GLOB,
 ] as const;
 
 export type ResultBoundaryOptOut = {

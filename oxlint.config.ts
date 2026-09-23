@@ -21,6 +21,7 @@ import {
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
 import {
+  DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
@@ -4237,7 +4238,9 @@ export default defineConfig({
       // above so it wins even for a boundary file that lives inside an
       // otherwise-enabled directory (e.g. a `routes.ts` under a clean
       // handler directory).
-      files: [...RESULT_CONVENTION_EXCLUDE_GLOBS],
+      files: RESULT_CONVENTION_EXCLUDE_GLOBS.filter(
+        (glob) => glob !== DECLARATION_FILE_GLOB,
+      ),
       rules: {
         "no-throw-outside-boundary/no-throw-outside-boundary": "off",
         "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "off",

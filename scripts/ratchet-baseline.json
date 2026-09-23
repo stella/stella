@@ -241,7 +241,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1055,
+    "count": 1052,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -271,7 +271,6 @@
       "apps/api/src/handlers/chat/subagent-runner.ts": 3,
       "apps/api/src/handlers/chat/third-party-boundary.ts": 9,
       "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts": 8,
-      "apps/api/src/handlers/chat/tools/chat-history-tools.ts": 3,
       "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 3,
       "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts": 2,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
@@ -568,7 +567,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 416,
+    "count": 415,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -703,7 +702,6 @@
       "apps/web/src/components/chat/source-chips.logic.ts": 2,
       "apps/web/src/components/chat/source-chips.tsx": 2,
       "apps/web/src/components/chat/streamdown-mention-link.tsx": 1,
-      "apps/web/src/components/chat/tool-approval-card.tsx": 1,
       "apps/web/src/components/chat/tool-call-card.tsx": 1,
       "apps/web/src/components/dev/autocomplete-playground.tsx": 2,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 2,
@@ -1510,7 +1508,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 117,
+    "count": 115,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1577,8 +1575,6 @@
       "apps/api/src/scripts/eu-ecj-refetch.ts": 1,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,
       "apps/web/src/components/auth/sign-in-panel.tsx": 2,
-      "apps/web/src/components/chat/source-chips.tsx": 1,
-      "apps/web/src/components/chat/tool-approval-card.tsx": 1,
       "apps/web/src/components/document-icon.tsx": 4,
       "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
       "apps/web/src/components/workspaces/field-value.tsx": 1,
