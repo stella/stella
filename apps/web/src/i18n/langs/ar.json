@@ -4957,14 +4957,14 @@
       "kinds": {
         "average": "المتوسط",
         "count": "العدد",
-        "countEmpty": "عدد الفارغة",
-        "countFilled": "عدد غير الفارغة",
+        "countEmpty": "عدد القيم الفارغة",
+        "countFilled": "عدد القيم غير الفارغة",
         "countUnique": "عدد القيم الفريدة",
         "max": "الحد الأقصى",
         "median": "الوسيط",
         "min": "الحد الأدنى",
-        "percentEmpty": "نسبة الفارغة",
-        "percentFilled": "نسبة غير الفارغة",
+        "percentEmpty": "نسبة القيم الفارغة",
+        "percentFilled": "نسبة القيم غير الفارغة",
         "percentOfTotal": "النسبة من الإجمالي",
         "range": "المدى",
         "sum": "المجموع"

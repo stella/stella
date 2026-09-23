@@ -5476,7 +5476,7 @@
       "projection": "Rodyti rezultatus kaip",
       "projectionColumns": "Lentelės stulpeliai",
       "projectionNone": "Tik peržiūra",
-      "reviewStarted": "Peržiūrima {count, plural, one {# dokumentas} few {# dokumentai} many {# dokumento} other {# dokumentų}}",
+      "reviewStarted": "{count, plural, one {Peržiūrimas # dokumentas} few {Peržiūrimi # dokumentai} many {Peržiūrima # dokumento} other {Peržiūrima # dokumentų}}",
       "run": "Vykdyti peržiūros vadovą",
       "runFailed": "Nepavyko įvykdyti peržiūros vadovo",
       "runStarted": "Vykdomas peržiūros vadovas ({count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}})"
