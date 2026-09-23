@@ -111,38 +111,125 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
-test("the required result gate accepts only successful selected image smokes", () => {
+const resultStep = resultJob.steps.at(0);
+if (resultJob.steps.length !== 1 || !resultStep) {
+  throw new TypeError("CI result must have exactly one evaluation step");
+}
+
+const SUITE_DEPTH_BY_EVENT = {
+  merge_group: "full",
+  pull_request: "fast",
+  workflow_dispatch: "full",
+} as const;
+
+type EvaluateResultOptions = {
+  event: keyof typeof SUITE_DEPTH_BY_EVENT;
+  results: Record<string, string>;
+  suiteDepth?: string;
+};
+
+const evaluateResult = ({
+  event,
+  results,
+  suiteDepth = SUITE_DEPTH_BY_EVENT[event],
+}: EvaluateResultOptions) => {
+  const needs = Object.fromEntries(
+    resultJob.needs.map((job) => [
+      job,
+      { result: results[job] ?? "success", outputs: {} },
+    ]),
+  );
+  const run = Bun.spawnSync({
+    cmd: ["bash", "-eu", "-c", resultStep.run],
+    env: {
+      API_IMAGE_SMOKE_REQUIRED: "true",
+      API_IMAGE_SMOKE_RESULT: needs["api-image-smoke"]?.result ?? "",
+      EVENT: event,
+      NEEDS: JSON.stringify(needs),
+      PATH: process.env["PATH"] ?? "",
+      PLAN_RESULT: needs["ci-plan"]?.result ?? "",
+      SUITE_DEPTH: suiteDepth,
+      TRUSTED: "true",
+      WEB_IMAGE_SMOKE_REQUIRED: "true",
+      WEB_IMAGE_SMOKE_RESULT: needs["web-image-smoke"]?.result ?? "",
+    },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return run.exitCode;
+};
+
+test("the required result gate accepts only successful selected image smokes at full depth", () => {
   expect(resultJob.needs).toContain("api-image-smoke");
   expect(resultJob.needs).toContain("web-image-smoke");
-  expect(resultJob.steps).toHaveLength(1);
-  const step = resultJob.steps.at(0);
-  if (!step) {
-    throw new TypeError("CI result must have an evaluation step");
-  }
-
-  for (const event of ["pull_request", "workflow_dispatch"]) {
-    for (const image of ["API", "WEB"]) {
+  for (const event of ["merge_group", "workflow_dispatch"] as const) {
+    for (const job of ["api-image-smoke", "web-image-smoke"]) {
       for (const result of ["success", "skipped", "cancelled", "failure", ""]) {
-        const env = Object.fromEntries(
-          Object.keys(step.env).map((key) => [key, "success"]),
-        );
-        env["EVENT"] = event;
-        env["TRUSTED"] = "true";
-        env["API_IMAGE_SMOKE_REQUIRED"] = "true";
-        env["WEB_IMAGE_SMOKE_REQUIRED"] = "true";
-        env[`${image}_IMAGE_SMOKE_RESULT`] = result;
-        const run = Bun.spawnSync({
-          cmd: ["bash", "-eu", "-c", step.run],
-          env,
-          stdout: "pipe",
-          stderr: "pipe",
-        });
         expect(
-          run.exitCode,
-          `${event} ${image} ${result}: ${new TextDecoder().decode(run.stderr)}`,
+          evaluateResult({ event, results: { [job]: result } }),
+          `${event} ${job} ${result}`,
         ).toBe(result === "success" ? 0 : 1);
       }
     }
+  }
+});
+
+const workflowIf = (job: unknown) =>
+  v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
+
+const FULL_DEPTH_PREDICATE = "needs.ci-plan.outputs.suite_depth == 'full'";
+
+test("the result gate evaluates every job in the workflow", () => {
+  expect(new Set(resultJob.needs)).toEqual(
+    new Set(Object.keys(ciJobs).filter((job) => job !== "ci-result")),
+  );
+  expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...resultJob.needs.filter((job) => job !== "ci-plan")),
+      fc.constantFrom("failure", "timed_out", ""),
+      fc.constantFrom("pull_request", "merge_group", "workflow_dispatch"),
+      (job, result, event) => {
+        expect(
+          evaluateResult({ event, results: { [job]: result } }),
+          `${event} ${job} ${result}`,
+        ).toBe(1);
+      },
+    ),
+    propertyConfig({ numRuns: 100 }),
+  );
+});
+
+test("heavy suites skip on pull requests and run in the merge queue", () => {
+  const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+    workflowIf(body).includes(FULL_DEPTH_PREDICATE) ? [job] : [],
+  );
+  expect(heavyJobs.length).toBeGreaterThan(0);
+  // Both image smokes are selected here, as for a release: skipping them
+  // passes a pull request and fails any full-depth run.
+  const skippedOnPullRequest = Object.fromEntries(
+    heavyJobs.map((job) => [job, "skipped"]),
+  );
+  expect(
+    evaluateResult({ event: "pull_request", results: skippedOnPullRequest }),
+  ).toBe(0);
+  // A `ci:full` pull request runs at full depth and must run them too.
+  expect(
+    evaluateResult({
+      event: "pull_request",
+      results: skippedOnPullRequest,
+      suiteDepth: "full",
+    }),
+  ).toBe(1);
+  for (const event of ["merge_group", "workflow_dispatch"] as const) {
+    expect(evaluateResult({ event, results: skippedOnPullRequest })).toBe(1);
+    for (const suiteDepth of ["fast", ""]) {
+      expect(
+        evaluateResult({ event, results: {}, suiteDepth }),
+        `${event} at depth '${suiteDepth}'`,
+      ).toBe(1);
+    }
+    expect(evaluateResult({ event, results: {} })).toBe(0);
   }
 });
 
