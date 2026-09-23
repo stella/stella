@@ -55,7 +55,6 @@ const EXPECTED_EXEMPT_ROUTE_FILES = [
   "apps/api/src/handlers/smoke/routes.ts",
   "apps/api/src/handlers/verify/routes.ts",
   "apps/api/src/handlers/well-known/routes.ts",
-  "apps/api/src/handlers/workspaces/events.ts",
 ].toSorted();
 
 /**
