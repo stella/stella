@@ -2,9 +2,6 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Indexes no query can use any more:
--- - `authority_due_idx` ordered the authority sweep by its per-row stamp; the
---   sweep now walks by primary key and keeps its position in
---   `case_law_citation_authority_sweep`.
 -- - `indexed_idx`, `corpus_pending_idx` and `corpus_hash_pending_idx` index
 --   the retired projection markers, which nothing reads.
 -- - `document_pending_idx` is the attempt-led order that
@@ -21,10 +18,6 @@ COMMIT;
 SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
---> statement-breakpoint
-
--- stella-migration-safety: reviewed drop-object - no query orders or filters by this index any more; rollback recreates it with CREATE INDEX CONCURRENTLY.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_authority_due_idx";
 --> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-object - indexes retired columns nothing reads; rollback recreates it with CREATE INDEX CONCURRENTLY.

@@ -707,6 +707,13 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
+    // The previous authority sweep's order, kept for the length of one
+    // rollout: a task still on the previous revision sorts by it. Removal
+    // condition: that release fully rolled out; drop this declaration and the
+    // index together in a follow-up migration.
+    p
+      .index("case_law_decisions_authority_due_idx")
+      .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
     // The resolver's candidate lookup, answered entirely from the index. The
     // key alone finds the candidates; jurisdiction and date are what decide
     // between them, and the target id is what gets written. Carrying all four

@@ -156,10 +156,10 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
-  corpusContentHash,
   corpusMirrorColumns,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
+  planCorpusDocumentWrite,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -1210,9 +1210,10 @@ const rowHoldsDocument = sql<boolean>`(
 
 /**
  * The columns a refresh compares against the stored row before writing them,
- * and the SQL type each one is bound as for that comparison.
+ * and the SQL type each one is bound as for that comparison. A key that is
+ * not a decision column fails to typecheck where `storedRowDiffers` reads it
+ * off the table.
  */
-// oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- sparse by design: the keys are the decision columns a refresh writes, and a column absent here is one it never compares; `storedRowDiffers` panics on it rather than defaulting.
 const REFRESH_COMPARED_COLUMN_TYPES = {
   caseNumber: "text",
   citationKey: "text",
@@ -1236,12 +1237,7 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   normalizedS3Key: "text",
   astS3Key: "text",
   contentHash: "text",
-} as const satisfies Partial<
-  Record<
-    keyof typeof caseLawDecisions.$inferInsert,
-    "date" | "jsonb" | "smallint" | "text"
-  >
->;
+} as const;
 
 type RefreshComparedColumn = keyof typeof REFRESH_COMPARED_COLUMN_TYPES;
 
@@ -2568,15 +2564,19 @@ const processDecisionAttempt = async ({
     // A settled row that already records this exact payload in the corpus
     // keeps it: writing it back into the row as pending, only for the settle
     // to put the same pointers back, rewrites the whole document for nothing.
-    // The write is fenced on the recorded hash, so a payload replaced since
-    // the read is not taken for this one.
+    // Asked of the corpus write's own planner, which compares the keys and
+    // not the hash alone: a payload whose jurisdiction moved must still land
+    // under its new partition. The write is fenced on the recorded hash, so
+    // a payload replaced since the read is not taken for this one.
     const storedPayloadUnchanged =
       existing !== undefined &&
       modePlan.type !== "postgres-only" &&
       existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
       corpusCarriesDocument(existing.contentHash) &&
-      storedCorpusWrite(existing)?.contentHash ===
-        corpusContentHash(corpusPayload);
+      planCorpusDocumentWrite({
+        ...corpusPayload,
+        stored: storedCorpusWrite(existing),
+      }).type === "skipped-unchanged";
 
     const corpusPlan: CorpusWritePlan =
       (preserveStoredDocument && pendingMirrorPayload === null) ||
@@ -2723,6 +2723,7 @@ const processDecisionAttempt = async ({
   ): Promise<{
     citationKey: string | null;
     country: string;
+    language: string;
     decisionDate: string | null;
     metadata: Record<string, unknown> | null;
     identifiers: {
@@ -2734,6 +2735,7 @@ const processDecisionAttempt = async ({
       .select({
         citationKey: caseLawDecisions.citationKey,
         country: caseLawDecisions.country,
+        language: caseLawDecisions.language,
         decisionDate: caseLawDecisions.decisionDate,
         metadata: caseLawDecisions.metadata,
       })
@@ -2758,6 +2760,7 @@ const processDecisionAttempt = async ({
   const resolutionIdentityChanged = (previous: {
     citationKey: string | null;
     country: string;
+    language: string;
     decisionDate: string | null;
     identifiers: {
       type: (typeof identifierRows)[number]["type"];
@@ -2779,6 +2782,10 @@ const processDecisionAttempt = async ({
       identifiersChanged ||
       previous.citationKey !== incomingCitationKey ||
       previous.country !== result.country ||
+      // The citing language picks which manifestation of a multilingual
+      // target an edge lands on, and this decision's own language is what
+      // other citers' edges pick by.
+      previous.language !== result.language ||
       (persistedDecisionDate !== undefined &&
         previous.decisionDate !== persistedDecisionDate)
     );

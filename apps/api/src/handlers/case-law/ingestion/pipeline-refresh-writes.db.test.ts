@@ -302,3 +302,32 @@ test("a document arriving for a document-less decision is still written", async 
   ).at(0);
   expect(await citationHeaders(decisionRow?.id ?? "")).toHaveLength(1);
 });
+
+test("a refresh that moves the decision's language re-settles its kept citations", async () => {
+  // Kept rows keep their answer unless something reopens them, and the citing
+  // language is one of the things the answer depends on: it picks which
+  // manifestation of a multilingual target an edge lands on.
+  const caseNumber = "30 Cdo 400/2024";
+  // Identified by the publisher's id, so the language is a field of the
+  // decision rather than part of which decision it is.
+  const sourceDocumentId = "publisher-400";
+  await ingest(
+    { ...withDocument(caseNumber, "page-v1"), sourceDocumentId },
+    canonical,
+  );
+  const first = await storedRow(caseNumber);
+  const citations = await citationHeaders(first.id);
+  expect(citations).toHaveLength(1);
+
+  await ingest(
+    {
+      ...withDocument(caseNumber, "page-v2"),
+      sourceDocumentId,
+      language: "sk",
+    },
+    canonical,
+  );
+  // Still the same decision, now in the other language.
+  expect((await storedRow(caseNumber)).id).toBe(first.id);
+  expect(await citationHeaders(first.id)).not.toEqual(citations);
+});

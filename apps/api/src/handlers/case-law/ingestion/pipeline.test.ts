@@ -1145,6 +1145,7 @@ describe("processDecision — fields on an existing row", () => {
                                 {
                                   citationKey: bareCitationKey("X/1/2026"),
                                   country: "SVK",
+                                  language: "sk",
                                   decisionDate:
                                     decisionDate === undefined
                                       ? null

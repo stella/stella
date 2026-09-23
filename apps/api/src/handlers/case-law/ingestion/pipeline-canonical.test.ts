@@ -686,6 +686,50 @@ describe("processDecision — canonical storage mode", () => {
     expect(events).not.toContain("intent-reserve");
   });
 
+  test("moves an unchanged payload whose jurisdiction moved", async () => {
+    // The corpus keys carry the jurisdiction partition, so the same document
+    // restated under another country is not the write the row records: it
+    // must land under the new partition rather than be kept where it was.
+    const decisionId = createSafeId<"caseLawDecision">();
+    const recorded = recordedCorpusWrite(decisionId);
+    existingDecision = {
+      id: decisionId,
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "settled",
+      contentHash: recorded.contentHash,
+      textS3Key: recorded.textKey,
+      normalizedS3Key: recorded.sectionsKey,
+      astS3Key: recorded.astKey,
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    const moved = { ...decision, country: "CZE" };
+    // Not vacuous: the payload is the one the row records.
+    expect(
+      realCorpusStorage.corpusContentHash(
+        caseLawCanonicalPayload(sanitizeResult(moved)),
+      ),
+    ).toBe(recorded.contentHash);
+
+    await processDecision({
+      input: moved,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(transferredPacks).toHaveLength(1);
+    expect(updatedDecisionRows.at(0)).toMatchObject({
+      corpusMirrorStatus: "pending",
+    });
+  });
+
   test("a pending mirror settles once and then stops writing", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     existingDecision = {
