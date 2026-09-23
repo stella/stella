@@ -276,6 +276,24 @@ describe("moved paragraphs", () => {
     expect(locations.get(source?.key ?? "")?.provision).toBe("§ 1");
     expect(locations.get(target?.key ?? "")?.provision).toBe("§ 3");
   });
+
+  // Publishers print the caption above the designation or below it.
+  for (const [order, printed] of [
+    ["caption below", "§ 5\nDelivery"],
+    ["caption above", "Delivery\n§ 5"],
+  ] as const) {
+    test(`names a captioned provision by its designation: ${order}`, () => {
+      const blocks = [heading(printed), text("(1) The seller delivers.")];
+      const locations = locateCompareRows(
+        groupCompareRows(rowsOf(blocks, blocks)),
+      );
+
+      expect([...locations.values()].map((at) => at.provision)).toEqual([
+        "§ 5",
+        "§ 5",
+      ]);
+    });
+  }
 });
 
 describe("pairCompareSides", () => {

@@ -12,6 +12,7 @@ import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
 
+import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareShow } from "@/features/statutes/statute-compare-search";
 import {
@@ -445,6 +446,22 @@ const rowText = (row: StatuteCompareRow): string =>
   (row.after ?? row.before)?.segments.map((segment) => segment.text).join("") ??
   "";
 
+/**
+ * The provision a heading row names: the designation line, which publishers
+ * print above or below the caption. A heading that states no designation (a
+ * part or a chapter) is named by its last line.
+ */
+const rowProvision = (row: StatuteCompareRow): string | null => {
+  for (const block of (row.after ?? row.before)?.blocks ?? []) {
+    const line = block.type === "heading" ? provisionHeadingLine(block) : null;
+    if (line !== null) {
+      return line.text;
+    }
+  }
+
+  return rowText(row).trim().split("\n").at(-1)?.trim() ?? null;
+};
+
 /** Where a row sits in the listed groups, and the provision it belongs to. */
 export type CompareRowLocation = {
   groupIndex: number;
@@ -468,13 +485,7 @@ export const locateCompareRows = (
         group.rows.slice(0, index).every((above) => above.type === "heading"),
     );
     const heading = headings.at(-1);
-    // A captioned section prints its caption above the number, and a heading
-    // row split or merged between versions joins both lines; the number is
-    // the last line either way.
-    const provision =
-      heading === undefined
-        ? null
-        : (rowText(heading).trim().split("\n").at(-1)?.trim() ?? null);
+    const provision = heading === undefined ? null : rowProvision(heading);
 
     for (const row of group.rows) {
       locations.set(row.key, { groupIndex, provision });

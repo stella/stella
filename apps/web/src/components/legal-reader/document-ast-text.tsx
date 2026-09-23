@@ -152,7 +152,13 @@ const DIFF_MARK_LABEL_KEYS = {
 const DiffMarkLabel = ({ type }: { type: DiffMarkType }) => {
   const t = useTranslations();
 
-  return <span className="sr-only">{t(DIFF_MARK_LABEL_KEYS[type])}</span>;
+  // Chrome, not wording: a copied passage must not carry the label. The
+  // space keeps it from running into the first changed word when read.
+  return (
+    <span className="sr-only select-none" data-reader-chrome="">
+      {t(DIFF_MARK_LABEL_KEYS[type])}{" "}
+    </span>
+  );
 };
 
 type RenderMarkOptions = {

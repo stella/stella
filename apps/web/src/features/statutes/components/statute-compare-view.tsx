@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -597,14 +597,20 @@ const VirtualCompareGroups = ({
     null,
   );
   // The masthead scrolls with the rows, so the list starts below it; the
-  // virtualizer is told its height to place the rows after it.
+  // virtualizer is told its height to place the rows after it. Observed, not
+  // read once: the masthead rewraps as the pane narrows or widens.
   const [mastheadHeight, setMastheadHeight] = useState(0);
-  const measureMasthead = (element: HTMLDivElement | null) => {
-    const height = element?.offsetHeight ?? 0;
-    if (height !== mastheadHeight) {
-      setMastheadHeight(height);
-    }
-  };
+  const measureMasthead = useCallback((element: HTMLDivElement) => {
+    const measure = () => setMastheadHeight(element.offsetHeight);
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+
+    return () => {
+      observer.disconnect();
+      setMastheadHeight(0);
+    };
+  }, []);
   const [flashed, setFlashed] = useState<FlashedRow | null>(null);
   const locations = locateCompareRows(groups);
   const virtualizer = useVirtualizer({

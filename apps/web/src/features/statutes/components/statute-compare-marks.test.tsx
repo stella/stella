@@ -244,10 +244,10 @@ describe("reader marks", () => {
     );
 
     expect(html).toContain(
-      `<span class="sr-only">${messages.statutes.diffRemoved}</span>old</del>`,
+      `<span class="sr-only select-none" data-reader-chrome="">${messages.statutes.diffRemoved} </span>old</del>`,
     );
     expect(html).toContain(
-      `<span class="sr-only">${messages.statutes.diffInserted}</span>new</ins>`,
+      `<span class="sr-only select-none" data-reader-chrome="">${messages.statutes.diffInserted} </span>new</ins>`,
     );
     expect(html).toContain(
       `<mark class="${SEARCH_MARK_CLASS_NAME} ring-warning ring-1" data-reader-match-index="0">found</mark>`,

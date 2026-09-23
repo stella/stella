@@ -39,6 +39,10 @@ import {
 const isCalendarDate = (value: string): boolean =>
   parsePlainDate(value) !== null;
 
+const MAX_JUMP_LENGTH = 32;
+/** The API's own bound on a provision anchor. */
+const MAX_PROVISION_ANCHOR_LENGTH = 256;
+
 /**
  * `asOf` names the day whose law the reader wants. It is a lookup, not an
  * address: the loader resolves it to the consolidation that applied and sends
@@ -63,8 +67,9 @@ export const publicStatuteSearchSchema = v.object({
     v.pipe(
       v.string(),
       v.trim(),
-      v.maxLength(32),
-      v.transform((value) => (value.length > 0 ? value : undefined)),
+      v.transform((value) =>
+        value.length > 0 && value.length <= MAX_JUMP_LENGTH ? value : undefined,
+      ),
     ),
   ),
   /**
@@ -86,8 +91,11 @@ export const publicStatuteSearchSchema = v.object({
     v.pipe(
       v.string(),
       v.trim(),
-      v.maxLength(256),
-      v.transform((value) => (value.length > 0 ? value : undefined)),
+      v.transform((value) =>
+        value.length > 0 && value.length <= MAX_PROVISION_ANCHOR_LENGTH
+          ? value
+          : undefined,
+      ),
     ),
   ),
   /** Which provisions a whole-act comparison lists; changed ones by default. */
