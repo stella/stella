@@ -717,10 +717,12 @@
       "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة أو خياراته إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
       "nothingToRun": "كل خلية لديها إجابة بالفعل",
       "questionPlaceholder": "مثلًا: هل اعتبرت المحكمة الفصل صحيحًا؟",
+      "removeFromSearch": "إزالة من هذا البحث",
       "runAll": "الإجابة عن الكل",
       "runConfirm": "الإجابة الآن",
       "runEstimate": "{rows, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}} × {columns, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}} في هذه الصفحة: ستُنتَج {cells, plural, zero {لا إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}.",
       "runTitle": "الإجابة عن هذه الصفحة",
+      "savedQuestions": "الأسئلة المحفوظة",
       "title": "جداول البحث",
       "updated": "آخر تعديل {date}"
     },

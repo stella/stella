@@ -717,10 +717,12 @@
       "editQuestionHint": "Pakeitus formuluotę, atsakymo tipą ar jo parinktis, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
       "nothingToRun": "Kiekvienas langelis jau turi atsakymą",
       "questionPlaceholder": "pvz., Ar teismas pripažino atleidimą teisėtu?",
+      "removeFromSearch": "Pašalinti iš šios paieškos",
       "runAll": "Atsakyti į visus",
       "runConfirm": "Atsakyti dabar",
       "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
       "runTitle": "Atsakyti šiame puslapyje",
+      "savedQuestions": "Išsaugoti klausimai",
       "title": "Tyrimo lentelės",
       "updated": "Paskutinį kartą redaguota {date}"
     },

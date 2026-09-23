@@ -150,6 +150,11 @@ type AddColumnsTarget =
       editing?: QuestionColumn | undefined;
       /** The search the questions are asked of; grounds the suggestion. */
       suggestion: QuestionSuggestionScope;
+      /**
+       * Shows the created questions on that search. Absent where nothing is
+       * created: a rewording, and the account gate that holds the dialog shut.
+       */
+      onCreated?: ((columnIds: readonly string[]) => void) | undefined;
     };
 
 type BulkAddColumnsProps = {
@@ -336,6 +341,9 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
         dirtyRef={dirtyRef}
         {...(target.editing === undefined ? {} : { editing: target.editing })}
         onClose={onClose}
+        {...(target.onCreated === undefined
+          ? {}
+          : { onCreated: target.onCreated })}
         suggestion={target.suggestion}
       />
     );
@@ -697,10 +705,12 @@ const NO_DEFAULT_FILE_IDS: string[] = [];
 const QuestionColumnsBody = ({
   editing,
   onClose,
+  onCreated,
   dirtyRef,
   suggestion,
 }: ColumnsBodyProps & {
   editing?: QuestionColumn | undefined;
+  onCreated?: ((columnIds: readonly string[]) => void) | undefined;
   suggestion: QuestionSuggestionScope;
 }) => {
   const t = useTranslations();
@@ -713,23 +723,34 @@ const QuestionColumnsBody = ({
     );
 
   const save = useMutation({
-    mutationFn: async (inputs: readonly QuestionColumnInput[]) =>
+    mutationFn: async (inputs: readonly QuestionColumnInput[]) => {
+      // Indexed by draft, so the columns join the search in the order they
+      // were written whichever request answers first.
+      const createdIds: (string | undefined)[] = inputs.map(() => undefined);
       // The requests name disjoint columns, so they go together rather than
       // one round trip after another; they settle, so whatever committed is
       // read back before the failure is reported.
-      await settleColumnWrites({
-        writes: inputs.map(
-          (input) => async () =>
-            editing === undefined
-              ? await createQuestionColumn(input)
-              : await updateQuestionColumn({ ...input, columnId: editing.id }),
-        ),
+      const settled = await settleColumnWrites({
+        writes: inputs.map((input, index) => async () => {
+          if (editing !== undefined) {
+            await updateQuestionColumn({ ...input, columnId: editing.id });
+            return;
+          }
+          createdIds[index] = (await createQuestionColumn(input)).id;
+        }),
         refresh: async () => {
           await queryClient.invalidateQueries({
             queryKey: questionColumnKeys.all,
           });
         },
-      }),
+      });
+      // A column that landed is shown even when another draft was refused.
+      const created = createdIds.filter((columnId) => columnId !== undefined);
+      if (created.length > 0) {
+        onCreated?.(created);
+      }
+      return settled;
+    },
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 

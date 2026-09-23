@@ -717,10 +717,12 @@
       "editQuestionHint": "Sõnastuse, vastuse tüübi või selle valikute muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
       "nothingToRun": "Igal lahtril on juba vastus",
       "questionPlaceholder": "nt Kas kohus pidas ülesütlemist kehtivaks?",
+      "removeFromSearch": "Eemalda sellest otsingust",
       "runAll": "Vasta kõigile",
       "runConfirm": "Vasta nüüd",
       "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
       "runTitle": "Vasta sellel leheküljel",
+      "savedQuestions": "Salvestatud küsimused",
       "title": "Uurimistabelid",
       "updated": "Viimati muudetud {date}"
     },

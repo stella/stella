@@ -5,9 +5,10 @@ import type { PropertyContentType } from "./entity-find";
 /**
  * Question columns and their answers.
  *
- * A question column belongs to the organization: every member sees it, and an
- * answer keyed `(columnId, decisionId)` is reusable on every search that
- * surfaces the decision. Rows are the public corpus itself, addressed by
+ * The question library belongs to the organization: every member may use any
+ * of its columns, and each search picks which of them to show. An answer keyed
+ * `(columnId, decisionId)` is reusable on every search that shows the column
+ * beside the decision. Rows are the public corpus itself, addressed by
  * decision id; nothing about a decision is copied.
  */
 

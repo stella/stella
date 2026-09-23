@@ -717,10 +717,12 @@
       "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
       "nothingToRun": "Chaque cellule a déjà une réponse",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",
+      "removeFromSearch": "Retirer de cette recherche",
       "runAll": "Tout répondre",
       "runConfirm": "Répondre maintenant",
       "runEstimate": "{rows, plural, one {# décision} other {# décisions}} × {columns, plural, one {# question} other {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites}}.",
       "runTitle": "Répondre pour cette page",
+      "savedQuestions": "Questions enregistrées",
       "title": "Tableaux de recherche",
       "updated": "Dernière modification le {date}"
     },

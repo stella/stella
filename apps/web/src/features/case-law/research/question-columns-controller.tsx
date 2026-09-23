@@ -1,6 +1,6 @@
 /**
- * The organization's question columns on a decision table: what the table
- * draws, and what the reader can add, edit, remove and run.
+ * The organization's question columns on a decision table: which of them this
+ * search draws, and what the reader can add, edit, remove and run.
  *
  * The hook holds the state because two places need it — the table's own column
  * headers and the toolbar's controls — and a controller passed between them is
@@ -51,6 +51,11 @@ import type {
   QuestionRunSet,
   QuestionSuggestionSearch,
 } from "@/features/case-law/research/question-columns.logic";
+import {
+  questionsOnSearch,
+  withoutQuestionOnSearch,
+  withQuestionsOnSearch,
+} from "@/features/case-law/research/search-questions.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -76,6 +81,15 @@ type QuestionColumnsInput = {
   search: QuestionSuggestionSearch;
   /** Opens a decision at a cited passage, with the reader's highlight. */
   onShowPassage: (decision: Decision, anchorId: string) => void;
+  /** The questions this search shows, in order, as its URL names them. */
+  shownQuestionIds: readonly string[];
+  /**
+   * Rewrites that list from the one the URL holds when the write lands, so a
+   * write that settles late (a delete) cannot restore an id dropped meanwhile.
+   */
+  onShownQuestionIdsChange: (
+    update: (shownIds: readonly string[]) => string[] | undefined,
+  ) => void;
 };
 
 /** One queue request: a confirmed run, or the retry of a single failed cell. */
@@ -100,7 +114,7 @@ export type QuestionColumnsController = {
   pendingRun: PendingRun | null;
   onCancelRun: () => void;
   onConfirmRun: () => void;
-  /** Asks every question of every row on the page that lacks an answer. */
+  /** Asks every question this search shows of every row that lacks an answer. */
   onRunAll: () => void;
   removing: QuestionColumn | null;
   onCancelRemove: () => void;
@@ -110,9 +124,11 @@ export type QuestionColumnsController = {
 export const useQuestionColumns = ({
   enabled,
   onShowPassage,
+  onShownQuestionIdsChange,
   pageDecisionIds,
   search,
   selectedDecisionIds,
+  shownQuestionIds,
 }: QuestionColumnsInput): QuestionColumnsController => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -152,7 +168,12 @@ export const useQuestionColumns = ({
     enabled: enabled && activeOrganizationId !== null && decisionIds.length > 0,
   });
 
-  const asked = columns ?? NO_QUESTION_COLUMNS;
+  // Only what this search shows is drawn, run and searched; the rest of the
+  // organization's questions are offered for adding.
+  const { shown, addable } = questionsOnSearch({
+    library: columns ?? NO_QUESTION_COLUMNS,
+    shownIds: shownQuestionIds,
+  });
   const answersByKey = new Map<string, QuestionAnswer>();
   for (const answer of answers ?? NO_QUESTION_ANSWERS) {
     answersByKey.set(answerKey(answer.columnId, answer.decisionId), answer);
@@ -170,8 +191,11 @@ export const useQuestionColumns = ({
   const remove = useMutation({
     mutationFn: async (columnId: string) =>
       await deleteQuestionColumn(columnId),
-    onSuccess: async () => {
+    onSuccess: async (_deleted, columnId) => {
       setRemoving(null);
+      onShownQuestionIdsChange((shownIds) =>
+        withoutQuestionOnSearch(shownIds, columnId),
+      );
       await invalidateColumns();
     },
     onError: reportFailure,
@@ -203,7 +227,7 @@ export const useQuestionColumns = ({
     const runSet = questionRunSet({
       answersByKey,
       ...(column === null ? {} : { columnId: column.id }),
-      columns: asked,
+      columns: shown,
       pageDecisionIds,
       selectedDecisionIds,
     });
@@ -228,6 +252,11 @@ export const useQuestionColumns = ({
       case "edit":
         setEditing(column);
         break;
+      case "remove":
+        onShownQuestionIdsChange((shownIds) =>
+          withoutQuestionOnSearch(shownIds, column.id),
+        );
+        break;
       case "delete":
         setRemoving(column);
         break;
@@ -245,7 +274,13 @@ export const useQuestionColumns = ({
       activeOrganizationId,
       enabled,
       answersByKey,
-      columns: asked,
+      columns: shown,
+      addable,
+      onAddToSearch: (columnIds) => {
+        onShownQuestionIdsChange((shownIds) =>
+          withQuestionsOnSearch(shownIds, columnIds),
+        );
+      },
       grants,
       isRunning: run.isPending,
       onColumnAction,

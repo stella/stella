@@ -717,10 +717,12 @@
       "editQuestionHint": "Změna znění, typu odpovědi nebo jeho možností zahodí stávající odpovědi; sloupec poté spusťte znovu.",
       "nothingToRun": "Každá buňka už má odpověď",
       "questionPlaceholder": "např. Shledal soud výpověď platnou?",
+      "removeFromSearch": "Odebrat z tohoto vyhledávání",
       "runAll": "Odpovědět na vše",
       "runConfirm": "Odpovědět nyní",
       "runEstimate": "{rows, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázek}} na této stránce: {cells, plural, one {vznikne # odpověď} few {vzniknou # odpovědi} other {vznikne # odpovědí}}.",
       "runTitle": "Odpovědět na této stránce",
+      "savedQuestions": "Uložené otázky",
       "title": "Rešeršní tabulky",
       "updated": "Naposledy upraveno {date}"
     },

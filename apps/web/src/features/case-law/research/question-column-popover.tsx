@@ -4,13 +4,16 @@
  * The same header menu a matter's AI property column has — edit, pin, hide,
  * rerun, delete — in the same order, with the same icons and the same strings,
  * because from the reader's side it is the same extraction engine asking the
- * question. Only the run scope differs, and the item says so.
+ * question. Only the run scope differs, and the item says so; and because a
+ * search picks which of the organization's questions it shows, a question can
+ * also be taken off this search without deleting it.
  */
 
 import { useState } from "react";
 
 import {
   EyeOffIcon,
+  ListMinusIcon,
   PencilLineIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -36,9 +39,9 @@ type QuestionColumnPopoverProps = {
   column: TableColumn<DecisionRowData>;
   question: QuestionColumn;
   /**
-   * What the organization grants this reader over the question. Empty for a
-   * reader who may look but not act; the header then names the question and
-   * offers only the arrangement every column has.
+   * What this reader may do to the question. A reader the organization grants
+   * nothing may only take it off this search, beside the arrangement every
+   * column has.
    */
   actions: readonly QuestionColumnAction[];
   onAction?: (column: QuestionColumn, action: QuestionColumnAction) => void;
@@ -129,19 +132,34 @@ export const QuestionColumnPopover = ({
             </div>
           </>
         )}
-        {may("delete") && (
+        {(may("remove") || may("delete")) && (
           <>
             <Separator />
+            {/* Off this search, or out of the organization: two ends of one
+                decision, so they sit together. */}
             <div className="flex flex-col p-1">
-              <Button
-                className="text-destructive justify-start gap-1.5 font-normal"
-                onClick={() => act("delete")}
-                size="sm"
-                variant="ghost"
-              >
-                <Trash2Icon />
-                {t("workspaces.properties.deleteProperty")}
-              </Button>
+              {may("remove") && (
+                <Button
+                  className="justify-start gap-1.5 font-normal"
+                  onClick={() => act("remove")}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <ListMinusIcon />
+                  {t("caseLaw.research.removeFromSearch")}
+                </Button>
+              )}
+              {may("delete") && (
+                <Button
+                  className="text-destructive justify-start gap-1.5 font-normal"
+                  onClick={() => act("delete")}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <Trash2Icon />
+                  {t("workspaces.properties.deleteProperty")}
+                </Button>
+              )}
             </div>
           </>
         )}

@@ -302,6 +302,8 @@ describe("who is shown question columns", () => {
   const available = {
     answersByKey: new Map<string, QuestionAnswer>(),
     columns,
+    addable: [],
+    onAddToSearch: noop,
     grants: READ_ONLY_QUESTIONS,
     isRunning: false,
     onColumnAction: noop,
@@ -374,23 +376,28 @@ describe("what each role may do to a question column", () => {
       const grants = grantsFor(role);
 
       expect(grants.create).toBe(true);
-      expect(allowedColumnActions(grants)).toEqual(["edit", "run", "delete"]);
+      expect(allowedColumnActions(grants)).toEqual([
+        "edit",
+        "run",
+        "remove",
+        "delete",
+      ]);
     },
   );
 
   test.each(["intern", "external"] as const)(
-    "%s reads the answers and is offered nothing",
+    "%s reads the answers and may only take a question off the search",
     (role) => {
       const grants = grantsFor(role);
 
       expect(grants).toEqual(READ_ONLY_QUESTIONS);
-      expect(allowedColumnActions(grants)).toEqual([]);
+      expect(allowedColumnActions(grants)).toEqual(["remove"]);
     },
   );
 
-  test("a reader who may only ask again gets just that", () => {
+  test("a reader who may only ask again gets just that, beside the search", () => {
     expect(allowedColumnActions({ ...READ_ONLY_QUESTIONS, run: true })).toEqual(
-      ["run"],
+      ["run", "remove"],
     );
   });
 });

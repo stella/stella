@@ -717,10 +717,12 @@
       "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
       "nothingToRun": "Každá bunka už má odpoveď",
       "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",
+      "removeFromSearch": "Odstrániť z tohto vyhľadávania",
       "runAll": "Odpovedať na všetko",
       "runConfirm": "Odpovedať teraz",
       "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí}}.",
       "runTitle": "Odpovedať na tejto stránke",
+      "savedQuestions": "Uložené otázky",
       "title": "Rešeršné tabuľky",
       "updated": "Naposledy upravené {date}"
     },

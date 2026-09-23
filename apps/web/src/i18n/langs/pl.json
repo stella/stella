@@ -717,10 +717,12 @@
       "editQuestionHint": "Zmiana treści, rodzaju odpowiedzi lub jego opcji odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
       "nothingToRun": "Każda komórka ma już odpowiedź",
       "questionPlaceholder": "np. Czy sąd uznał wypowiedzenie za skuteczne?",
+      "removeFromSearch": "Usuń z tego wyszukiwania",
       "runAll": "Odpowiedz na wszystko",
       "runConfirm": "Odpowiedz teraz",
       "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
       "runTitle": "Odpowiedz na tej stronie",
+      "savedQuestions": "Zapisane pytania",
       "title": "Tabele badawcze",
       "updated": "Ostatnia edycja {date}"
     },

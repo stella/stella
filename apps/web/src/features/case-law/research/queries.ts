@@ -13,9 +13,10 @@ import { toSafeId } from "@/lib/safe-id";
 /**
  * The organization's question columns and their answers.
  *
- * A question column belongs to the organization, not to a search: an answer is
- * keyed by column and decision, so one answer serves every search that
- * surfaces that decision.
+ * The question library belongs to the organization; each search picks which of
+ * its questions to show (`search-questions.logic`). An answer is keyed by
+ * column and decision, so one answer serves every search that shows that
+ * question beside that decision.
  */
 
 /** How often the cells are re-read while any of them is still pending. */

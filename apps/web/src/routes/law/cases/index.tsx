@@ -116,6 +116,7 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { searchQuestionsParam } from "@/features/case-law/research/search-questions.logic";
 import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logic";
 import type {
   CaseLawEmptyState,
@@ -154,6 +155,7 @@ const MAX_QUERY_LENGTH = 256;
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
+const NO_SHOWN_QUESTIONS: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
 const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
   country: [],
@@ -210,6 +212,17 @@ const searchSchema = v.object({
   page: publicLawPageSearchSchema,
   pageSize: publicLawPageSizeSearchSchema,
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
+  // The organization's questions this search draws, in order. Read leniently
+  // like the rest; an id the reader's organization does not hold is not drawn.
+  questions: v.fallback(
+    v.optional(
+      v.pipe(
+        v.array(v.string()),
+        v.transform((columnIds) => searchQuestionsParam(columnIds)),
+      ),
+    ),
+    undefined,
+  ),
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
@@ -344,7 +357,9 @@ const shownDecisions = (
 
 export const Route = createFileRoute("/law/cases/")({
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => search,
+  // Which questions are drawn does not change the rows, so picking one must
+  // not send the loader after them again.
+  loaderDeps: ({ search: { questions, ...search } }) => search,
   // This is a results screen, not an entry screen: with nothing to show
   // results for, the reader belongs on the home. A first visit also starts in
   // the jurisdiction the UI language points at, and the URL says so, so the
@@ -591,6 +606,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       year,
     }),
   });
+  // Read apart from the search: the questions drawn are not part of what the
+  // rows, the canonical link or a decision opened from here describe.
+  const shownQuestionIds = Route.useSearch({
+    select: ({ questions }) => questions ?? NO_SHOWN_QUESTIONS,
+  });
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
 
@@ -828,6 +848,22 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       },
     },
     selectedDecisionIds: selectedIds,
+    // The organization owns the questions; this search's URL picks which to
+    // draw. A new query drops the pick (see `withQuery`); nothing else here
+    // touches it.
+    shownQuestionIds,
+    onShownQuestionIdsChange: (update) => {
+      detached(
+        navigate({
+          replace: true,
+          search: (previous) => ({
+            ...previous,
+            questions: update(previous.questions ?? NO_SHOWN_QUESTIONS),
+          }),
+        }),
+        "cases.questions-navigate",
+      );
+    },
   });
   // Find-in-table over the page on screen, beside the control that narrows the
   // search itself. Kept per jurisdiction, the way the arrangement is.
