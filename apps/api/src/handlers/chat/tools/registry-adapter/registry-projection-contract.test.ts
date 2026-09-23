@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
   countedSearchTotal,
   SEARCH_TOTAL_TYPE,
@@ -1349,6 +1350,7 @@ const CONTRACT_CORPUS = {
           documentReadFailed: false,
           documentUnavailable: false,
           id: toSafeId<"caseLawDecision">(uid(54)),
+          resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
           citationsFrom: [
             {

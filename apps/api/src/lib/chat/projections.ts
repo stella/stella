@@ -1530,6 +1530,9 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
         v.strictObject({
           decision: caseLawDecisionProjection,
           decisionId: passthroughId(),
+          // Present when the requested id was absorbed into the decision
+          // returned, so `decision.decisionId` is the id to cite from now on.
+          message: v.optional(v.string()),
           // Opaque compound `[textOffset, citationsCursor]` cursor for THIS
           // decision's remaining text and citations. A continuation takes one
           // decision id, so it is per entry and not per call.

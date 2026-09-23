@@ -37,13 +37,13 @@ import {
   PROCESS_DECISION_STATUS,
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
-import { ABSORBED_INTO_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import {
   foldStoredSupplements,
   SUPPLEMENT_FOLD_OUTCOME,
 } from "@/api/handlers/case-law/ingestion/supplement-fold";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -368,6 +368,7 @@ test("the fold merges every reasons row into the ruling it explains and keeps th
     expect(absorbed.metadata?.[ABSORBED_INTO_METADATA_KEY]).toEqual({
       decisionId: judgment.id,
       kind: "reasons",
+      sourceDocumentId: String(reasons),
     });
     expect(await citationsOf(absorbed.id)).toEqual([]);
   }

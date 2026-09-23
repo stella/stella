@@ -33,6 +33,7 @@ import type {
   IngestionResult,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
+import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
@@ -446,12 +447,6 @@ export const markSupplementsMerged = async (
     );
 };
 
-/** Anchor and block-id prefix that keeps a supplement's blocks apart. */
-const supplementBlockPrefix = ({
-  kind,
-  sourceDocumentId,
-}: StoredSupplement): string => `${kind}-${sourceDocumentId}-`;
-
 /**
  * A supplement's blocks, addressable beside the judgment's own.
  *
@@ -461,7 +456,7 @@ const supplementBlockPrefix = ({
  * composed document has one title, the judgment's.
  */
 const supplementBlocks = (supplement: StoredSupplement): Block[] => {
-  const prefix = supplementBlockPrefix(supplement);
+  const prefix = supplementAnchorPrefix(supplement);
   if (!hasUsableAst(supplement.documentAst)) {
     return paragraphsOf(supplement, prefix);
   }

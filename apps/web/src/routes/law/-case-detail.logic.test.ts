@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -53,6 +54,7 @@ const UNPUBLISHED_DECISION = {
   languageAlternates: [],
   languageGroupKey: null,
   metadata: {},
+  resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
   sections: null,
   slug: "synthetic-decision",
   source: {
@@ -172,5 +174,85 @@ describe("canonical decision redirect", () => {
       options: { params: { slug: "synthetic-decision" } },
     });
     expect(redirected).not.toHaveProperty("options.hash");
+  });
+});
+
+describe("absorbed supplement redirect", () => {
+  const ANCHOR_PREFIX = "reasons-syn-2-";
+  const JUDGMENT = {
+    ...PUBLISHED_DECISION,
+    documentAst: {
+      version: 1,
+      source: { system: "", documentId: "", webUrl: "", printUrl: "" },
+      metadata: {
+        caseNumber: null,
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [
+        {
+          id: "b1",
+          anchorId: "p-1",
+          type: "paragraph",
+          inlines: [{ type: "text", text: "Ruling." }],
+        },
+        {
+          id: `${ANCHOR_PREFIX}b1`,
+          anchorId: `${ANCHOR_PREFIX}h-1`,
+          type: "heading",
+          level: 2,
+          inlines: [{ type: "text", text: "Reasons" }],
+        },
+      ],
+    },
+    resolution: {
+      type: DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT,
+      absorbedDecisionId: toSafeId<"caseLawDecision">(
+        "00000000-0000-4000-8000-000000000003",
+      ),
+      anchorPrefix: ANCHOR_PREFIX,
+    },
+  } satisfies DecisionBySlug;
+
+  // The reasons' own slug answers with the judgment they went into.
+  const redirectFromReasons = async (hash: string): Promise<unknown> => {
+    const queryClient = new QueryClient();
+    const options = decisionBySlugOptions({
+      country: PUBLIC_COUNTRY,
+      slug: "synthetic-reasons",
+    });
+    queryClient.setQueryData(options.queryKey, JUDGMENT);
+    return await loadPublicCaseLawDecisionRoute({
+      hash,
+      params: {
+        country: "cze",
+        court: "synthetic-court",
+        slug: "synthetic-reasons",
+      },
+      queryClient,
+      search: {},
+    }).then(
+      () => panic("Expected the absorbed reasons to redirect."),
+      (error: unknown) => error,
+    );
+  };
+
+  test("moves to the judgment, at the reasons' first block", async () => {
+    const redirected = await redirectFromReasons("");
+
+    expect(redirected).toMatchObject({
+      options: { params: { slug: "synthetic-decision" }, replace: true },
+    });
+    expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}h-1`);
+  });
+
+  test("maps a passage of the reasons onto the same block in the judgment", async () => {
+    const redirected = await redirectFromReasons("p-4");
+
+    expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}p-4`);
   });
 });

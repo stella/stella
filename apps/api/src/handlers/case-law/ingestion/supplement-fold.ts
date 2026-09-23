@@ -20,7 +20,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
@@ -35,8 +35,8 @@ import {
   processSupplement,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
-import { ABSORBED_INTO_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 
 /** What folding one stored row came to. */
@@ -151,7 +151,7 @@ const selectFoldPage = async ({
           inArray(caseLawDecisions.decisionType, [...decisionTypes]),
           isNotNull(caseLawDecisions.sourceRawS3Key),
           isNull(caseLawDecisions.redactedAt),
-          sql`${caseLawDecisions.metadata} -> ${sql.raw(`'${ABSORBED_INTO_METADATA_KEY}'`)} IS NULL`,
+          isNull(decisionAbsorptionSql(caseLawDecisions.metadata)),
           after === null ? undefined : gt(caseLawDecisions.id, after),
         ),
       )

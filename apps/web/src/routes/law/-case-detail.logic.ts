@@ -3,6 +3,9 @@ import { notFound, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
@@ -198,6 +201,44 @@ const ensureRouteCountryDecision = <T extends { country: string }>(
   return decision;
 };
 
+type CanonicalDecisionHashOptions = {
+  decision: Pick<PublicCaseLawDecision, "documentAst" | "resolution">;
+  /** The fragment the requested URL carried, without its `#`. */
+  hash: string;
+};
+
+/**
+ * The fragment a canonical redirect carries.
+ *
+ * An address naming reasons that were absorbed into their judgment lands on
+ * the reasons inside it: the anchor it named, under the prefix the reasons'
+ * blocks carry there, or the reasons' first block when it named none.
+ */
+export const canonicalDecisionHash = ({
+  decision: { documentAst, resolution },
+  hash,
+}: CanonicalDecisionHashOptions): string => {
+  switch (resolution.type) {
+    case DECISION_READ_RESOLUTION.DIRECT:
+      return hash;
+    case DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT: {
+      if (hash !== "") {
+        return `${resolution.anchorPrefix}${hash}`;
+      }
+      return (
+        parseDocumentAst(documentAst)
+          ?.blocks.map(({ anchorId }) => anchorId)
+          .find((anchorId) => anchorId.startsWith(resolution.anchorPrefix)) ??
+        ""
+      );
+    }
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled decision resolution: ${String(resolution)}`);
+    }
+  }
+};
+
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
   hash,
@@ -294,7 +335,11 @@ export const loadPublicCaseLawDecisionRoute = async ({
     const canonicalPath = createCaseLawDecisionPath(canonicalParams);
     const currentPath = createCaseLawDecisionPath(params);
     if (currentPath !== canonicalPath) {
-      redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
+      redirectToCanonicalDecisionPath({
+        canonicalParams,
+        hash: canonicalDecisionHash({ decision, hash }),
+        search,
+      });
     }
 
     primeDecisionProvisions(queryClient, decision.id);
@@ -336,7 +381,11 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const canonicalPath = createCaseLawDecisionPath(canonicalParams);
   const currentPath = createCaseLawDecisionPath(params);
   if (currentPath !== canonicalPath) {
-    redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
+    redirectToCanonicalDecisionPath({
+      canonicalParams,
+      hash: canonicalDecisionHash({ decision, hash }),
+      search,
+    });
   }
 
   primeDecisionProvisions(queryClient, decision.id);

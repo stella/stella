@@ -39,10 +39,10 @@ import {
   processSupplement,
   runIngestionPipeline,
 } from "@/api/handlers/case-law/ingestion/pipeline";
-import { ABSORBED_INTO_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -368,6 +368,7 @@ describe("reasons published apart from their ruling", () => {
     expect(absorbed.metadata?.[ABSORBED_INTO_METADATA_KEY]).toEqual({
       decisionId: ruling.id,
       kind: "reasons",
+      sourceDocumentId: "339001",
     });
     expect(await citationsOf(absorbed.id)).toEqual([]);
     expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);

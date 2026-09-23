@@ -634,6 +634,12 @@ what it is, and is absorbed when the judgment's write composes it: never
 deleted, since rows outside the ingestion role's view reference decisions.
 `supplement-fold.ts` folds the rows stored before supplements existed.
 
+An absorbed row records its judgment (`lib/case-law/decision-absorption.ts`),
+and the public gate follows that record: a read of the old id or slug answers
+with the judgment, if the judgment itself passes the gate, and says so in its
+`resolution`. The reader moves to the judgment's URL at the supplement's
+blocks. Absorbed rows stay unpublished, so no list or search returns them.
+
 ## DocumentAst Conventions
 
 ```typescript

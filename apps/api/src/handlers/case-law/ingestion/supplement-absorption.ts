@@ -25,7 +25,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -41,17 +41,14 @@ import {
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  decisionAbsorptionSql,
+  metadataWithDecisionAbsorption,
+  readDecisionAbsorption,
+} from "@/api/lib/case-law/decision-absorption";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
-import { isRecord } from "@/api/lib/type-guards";
-
-/**
- * Pipeline-owned metadata key naming the judgment a standalone supplement
- * row was absorbed into. A later observation of the supplement as a decision
- * replaces the metadata and with it this key.
- */
-export const ABSORBED_INTO_METADATA_KEY = "_stellaAbsorbedInto";
 
 export type AbsorbStandaloneSupplementRowOutcome =
   /** No decision row carries the supplement's id: nothing stands beside it. */
@@ -73,15 +70,6 @@ type AbsorbStandaloneSupplementRowOptions = {
   withdraw?: typeof withdrawCaseLawDecisionDocument;
 };
 
-const absorbedInto = (
-  metadata: Record<string, unknown> | null,
-): string | undefined => {
-  const marker = metadata?.[ABSORBED_INTO_METADATA_KEY];
-  return isRecord(marker) && typeof marker["decisionId"] === "string"
-    ? marker["decisionId"]
-    : undefined;
-};
-
 export const absorbStandaloneSupplementRow = async ({
   scopedDb,
   sourceId,
@@ -98,7 +86,7 @@ export const absorbStandaloneSupplementRow = async ({
         .select({
           id: caseLawDecisions.id,
           redactedAt: caseLawDecisions.redactedAt,
-          metadata: caseLawDecisions.metadata,
+          absorption: decisionAbsorptionSql(caseLawDecisions.metadata),
           contentHash: caseLawDecisions.contentHash,
           citationKey: caseLawDecisions.citationKey,
         })
@@ -120,7 +108,7 @@ export const absorbStandaloneSupplementRow = async ({
     return Result.ok({ type: "redacted", decisionId: row.id });
   }
   if (
-    absorbedInto(row.metadata) === judgmentId &&
+    readDecisionAbsorption(row.absorption)?.decisionId === judgmentId &&
     row.contentHash === null &&
     row.citationKey === null
   ) {
@@ -181,7 +169,10 @@ export const absorbStandaloneSupplementRow = async ({
         // row a decision again carries the same publisher hash; without one
         // stored, the refresh check cannot skip it.
         sourceHash: null,
-        metadata: sql`jsonb_set(${metadataMarkedListingOnly(caseLawDecisions.metadata)}, ${sql.raw(`'{${ABSORBED_INTO_METADATA_KEY}}'`)}, jsonb_build_object('decisionId', ${judgmentId}::text, 'kind', ${kind}::text))`,
+        metadata: metadataWithDecisionAbsorption(
+          metadataMarkedListingOnly(caseLawDecisions.metadata),
+          { decisionId: judgmentId, kind, sourceDocumentId },
+        ),
         updatedAt: new Date(),
       })
       .where(eq(caseLawDecisions.id, row.id));

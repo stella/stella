@@ -16,6 +16,7 @@ import {
   agentInputNormalizationGuidance,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -388,6 +389,7 @@ const createReadDecisionResult = () => ({
   id: DECISION_ID,
   language: "cs",
   ...readDecisionTextMetadata({ panel: "29 Cdo" }),
+  resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
   slug: "stable-official-slug",
   source: {
     adapterKey: "cz-ns",
@@ -3448,6 +3450,36 @@ describe("OpenAI-compatible MCP tools", () => {
               .length,
             truncated: false,
           },
+        },
+      ],
+    });
+  });
+
+  test("read_case_law_decision answers an absorbed id with its judgment and says so", async () => {
+    // Reasons absorbed into their judgment: the gate followed the old id, so
+    // the read is the judgment's, and the entry names the id to cite.
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      resolution: {
+        type: DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT,
+        absorbedDecisionId: CITING_DECISION_ID,
+        anchorPrefix: "reasons-1-",
+      },
+    });
+
+    const result = await handleMcpToolCall({
+      args: { decision_ids: [CITING_DECISION_ID] },
+      context: createContext(),
+      toolName: "read_case_law_decision",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      items: [
+        {
+          decisionId: CITING_DECISION_ID,
+          message: `This id named written reasons that are now part of decision ${DECISION_ID}, returned here. Cite ${DECISION_ID} from now on.`,
+          status: "found",
+          decision: { decisionId: DECISION_ID },
         },
       ],
     });

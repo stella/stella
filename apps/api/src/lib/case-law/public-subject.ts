@@ -23,8 +23,13 @@
  * the gate's and the handler's — sees that one state.
  */
 import { panic } from "better-result";
+import type { SQL } from "drizzle-orm";
 import { and, eq, sql } from "drizzle-orm";
 
+import {
+  DECISION_READ_RESOLUTION,
+  type DecisionReadResolution,
+} from "@stll/api-contract/case-law-decision-resolution";
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountry,
@@ -36,12 +41,22 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  decisionAbsorptionSql,
+  readDecisionAbsorption,
+  supplementAnchorPrefix,
+} from "@/api/lib/case-law/decision-absorption";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /** Module-private, so the subject type is constructible only below. */
 const REDISTRIBUTABLE: unique symbol = Symbol("redistributableDecisionSubject");
+
+/** How the requested address reached the subject. */
+type DecisionSubjectResolution = DecisionReadResolution<
+  SafeId<"caseLawDecision">
+>;
 
 /**
  * A decision the public may read: resolved and gated in one place.
@@ -52,14 +67,27 @@ const REDISTRIBUTABLE: unique symbol = Symbol("redistributableDecisionSubject");
  */
 export type RedistributableDecisionSubject = {
   readonly id: SafeId<"caseLawDecision">;
+  readonly resolution: DecisionSubjectResolution;
   readonly tx: CaseLawPublicReadTransaction;
   readonly [REDISTRIBUTABLE]: true;
 };
 
-const subjectOf = (
-  id: SafeId<"caseLawDecision">,
-  tx: CaseLawPublicReadTransaction,
-): RedistributableDecisionSubject => ({ id, tx, [REDISTRIBUTABLE]: true });
+type SubjectOfOptions = {
+  id: SafeId<"caseLawDecision">;
+  resolution: DecisionSubjectResolution;
+  tx: CaseLawPublicReadTransaction;
+};
+
+const subjectOf = ({
+  id,
+  resolution,
+  tx,
+}: SubjectOfOptions): RedistributableDecisionSubject => ({
+  id,
+  resolution,
+  tx,
+  [REDISTRIBUTABLE]: true,
+});
 
 /** How a request names its subject. */
 export type DecisionSubjectLocator =
@@ -102,9 +130,49 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
   }
 };
 
+/** The row a condition names, whether or not it is published. */
+const selectLocatedRow = async (
+  tx: CaseLawPublicReadTransaction,
+  condition: SQL | undefined,
+) =>
+  (
+    await tx
+      .select({
+        id: caseLawDecisions.id,
+        country: caseLawDecisions.country,
+        descriptor: caseLawSources.descriptor,
+        published: sql<boolean>`${publishedCaseLawDecision}`,
+        absorption: decisionAbsorptionSql(caseLawDecisions.metadata),
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(condition)
+      .limit(1)
+  ).at(0);
+
+type LocatedRow = NonNullable<Awaited<ReturnType<typeof selectLocatedRow>>>;
+
+const isPublic = (row: LocatedRow): boolean => {
+  if (
+    !row.published ||
+    !isPublicCaseLawCountry(row.country) ||
+    !isRedistributable(row.descriptor)
+  ) {
+    return false;
+  }
+  return true;
+};
+
 /**
  * The subject a locator names within `tx`, or null when it is not public.
  * Missing and unavailable subjects deliberately have one answer.
+ *
+ * An absorbed supplement row resolves to the judgment it went into, one hop,
+ * and only when that judgment passes the same gate: the old address keeps
+ * working without exposing anything the judgment's own address would not.
  */
 const resolveSubjectIn = async (
   tx: CaseLawPublicReadTransaction,
@@ -114,25 +182,39 @@ const resolveSubjectIn = async (
   if (condition === null) {
     return null;
   }
-  const rows = await tx
-    .select({
-      id: caseLawDecisions.id,
-      country: caseLawDecisions.country,
-      descriptor: caseLawSources.descriptor,
-    })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(condition, publishedCaseLawDecision))
-    .limit(1);
-  const row = rows.at(0);
-  if (
-    row === undefined ||
-    !isPublicCaseLawCountry(row.country) ||
-    !isRedistributable(row.descriptor)
-  ) {
+  const row = await selectLocatedRow(tx, condition);
+  if (row === undefined) {
     return null;
   }
-  return subjectOf(row.id, tx);
+  if (row.published) {
+    return isPublic(row)
+      ? subjectOf({
+          id: row.id,
+          resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+          tx,
+        })
+      : null;
+  }
+  const absorption = readDecisionAbsorption(row.absorption);
+  if (absorption === null) {
+    return null;
+  }
+  const target = await selectLocatedRow(
+    tx,
+    eq(caseLawDecisions.id, absorption.decisionId),
+  );
+  if (target === undefined || !isPublic(target)) {
+    return null;
+  }
+  return subjectOf({
+    id: target.id,
+    resolution: {
+      type: DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT,
+      absorbedDecisionId: row.id,
+      anchorPrefix: supplementAnchorPrefix(absorption),
+    },
+    tx,
+  });
 };
 
 /**
