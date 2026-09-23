@@ -101,6 +101,16 @@ const createApiProgram = ({
   });
 };
 
+// A relative import specifier: forward slashes on every platform, so a
+// Windows run neither escapes `\n` into the path nor differs from the snapshot.
+const moduleSpecifier = (fromDirectory: string, target: string): string => {
+  const relative = path
+    .relative(fromDirectory, target)
+    .split(path.sep)
+    .join("/");
+  return relative.startsWith(".") ? relative : `./${relative}`;
+};
+
 const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]): string =>
   ts.formatDiagnostics(diagnostics, {
     getCanonicalFileName: (fileName) => fileName,
@@ -328,8 +338,7 @@ const printContract = ({
       (webEntry ?? "").slice(0, webRoot + packageMarker.length) +
       fileName.slice(inPackage + packageMarker.length);
     return (
-      path
-        .relative(path.dirname(OUTPUT_PATH), target)
+      moduleSpecifier(path.dirname(OUTPUT_PATH), target)
         // Import a declaration file by its JavaScript twin: `x.d.mts` as `x.mjs`.
         .replace(/\.d\.([cm]?)ts$/u, ".$1js")
         .replace(/\.tsx?$/u, "")
@@ -1000,9 +1009,10 @@ const renderOutput = (result: PrintResult): string => {
 // --- Identity check ---------------------------------------------------------------
 
 const renderIdentityCheck = (names: readonly string[]): string => {
-  const specifier = path
-    .relative(path.dirname(CHECK_PATH), OUTPUT_PATH)
-    .replace(/\.ts$/u, "");
+  const specifier = moduleSpecifier(
+    path.dirname(CHECK_PATH),
+    OUTPUT_PATH,
+  ).replace(/\.ts$/u, "");
   return [
     `import type * as Generated from "${specifier}";`,
     `import type { ${CONTRACT_TYPE} } from "./eden-contract";`,
