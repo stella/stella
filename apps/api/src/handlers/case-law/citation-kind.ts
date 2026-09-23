@@ -17,6 +17,12 @@
 
 import { panic } from "better-result";
 
+import {
+  isPolishConstitutionalDocket,
+  polishAdministrativeDocketOf,
+  polishKioDocketKey,
+} from "@stll/api-contract/decision-docket-grammar";
+
 import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -114,26 +120,6 @@ const AUTHORITY_REGISTRIES = new Set([
   "auz",
   "agz",
   "apz",
-  // Polish Supreme Administrative Court (NSA): the cassation registers of
-  // its three chambers (`OSK` general-administrative, `FSK` financial, `GSK`
-  // commercial), the resolution registers those chambers use to unify
-  // practice (`OPS`, `FPS`, `GPS`), and `ONP` for the legal questions
-  // referred to it.
-  //
-  // The regional administrative courts (WSA) are deliberately absent. Their
-  // mark is two tokens, a register and a seat ("I SA/Wa 123/20"), and the
-  // reader below stops at the slash: what it would key on is the bare `sa`,
-  // the seat dropped, which is no longer the WSA mark at all. A two-letter
-  // token keyed without the half that identifies it is what this set cannot
-  // carry, because a wrong entry promotes silently and in bulk. WSA belongs
-  // here once `registryOf` reads the slash form.
-  "osk",
-  "fsk",
-  "gsk",
-  "ops",
-  "fps",
-  "gps",
-  "onp",
   // Slovak Supreme Court. `cdo` is shared with the Czech Supreme Court and
   // is listed once, above.
   "sžo",
@@ -174,11 +160,31 @@ const HUNGARIAN_AUTHORITY_REGISTRIES = new Set([
  * citation authority. A Hungarian published designation (a reporter entry, a
  * uniformity decision, an opinion, a Constitutional Court decision) is
  * authority by being published.
+ *
+ * Polish administrative-court dockets are read by their own grammar rather
+ * than by `registryOf`: a regional court's mark is two tokens, a register and
+ * a seat ("I SA/Wa 123/20"), and an NSA mark shares its letters with
+ * common-court registers that differ only in case ("II GZ 15/04" against a
+ * regional court's "XXIII Gz 12/20"). Both tiers publish their decisions in
+ * full and are cited as authority; the judgment an NSA decision reviews is
+ * named in its recitals, where the cues below catch it first.
+ *
+ * The Constitutional Tribunal and the National Appeal Chamber (KIO) publish
+ * every ruling and have no instance below them that a citation could be
+ * naming as history, so their dockets are authority by being theirs.
  */
 const isAuthorityByRegistry = (citationText: string): boolean => {
   const hungarian = hungarianCitationForm(citationText);
   if (hungarian === null) {
-    const registry = registryOf(withoutPrefix(citationText));
+    const caseNumber = withoutPrefix(citationText);
+    if (
+      polishAdministrativeDocketOf(caseNumber) !== null ||
+      isPolishConstitutionalDocket(caseNumber) ||
+      polishKioDocketKey(caseNumber) !== null
+    ) {
+      return true;
+    }
+    const registry = registryOf(caseNumber);
     return registry !== null && AUTHORITY_REGISTRIES.has(registry);
   }
   switch (hungarian.type) {
@@ -249,7 +255,7 @@ const withoutPrefix = (text: string): string =>
   text
     .replace(/^\s*sp\.\s*zn\.:?\s*/iu, "")
     .replace(/^\s*[čc]\.\s*j\.:?\s*/iu, "")
-    .replace(/^\s*sygn\.\s*(?:akt\s+)?/iu, "")
+    .replace(/^\s*sygn\.\s*:?\s*(?:akt\.?:?\s+)?/iu, "")
     .trim();
 
 /**

@@ -3,6 +3,16 @@ import { panic } from "better-result";
 import {
   DECISION_DASH_CLASS_SOURCE,
   DECISION_DOCKET_GRAMMARS,
+  PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE,
+  PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
+  PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
+  PL_AUTHORITY_FILE_NUMBER_SOURCE,
+  PL_KIO_DOCKET_SOURCE,
+  PL_TK_DISTINCTIVE_DOCKET_SOURCE,
+  PL_TK_DOCKET_SOURCE,
+  polishAdministrativeDocketOf,
+  polishConstitutionalDocketKey,
+  polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
@@ -451,18 +461,73 @@ const PL_THREE_TOKEN_PATTERN =
 // phantom-duplicate in the first place, and the roman-numeral-glued case
 // this guard need not cover at zero spacing never satisfies the leading
 // `\b` on the symbol capture below anyway.
-// Single-letter symbols (K, P, U) require the "sygn." anchor: bare they
+// Single-letter symbols (K, P, U, W, S, T) and `Uw`/`Kw` require a
+// Tribunal cue: the "sygn." anchor here, or a nearby mention of the
+// Tribunal or a "wyrok ... z dnia" lead-in (PL_TK_CUED_PATTERN). Bare they
 // collide with ordinary prose and district-court registries (an
-// SAOS-quantified precision trade-off). Multi-letter symbols are
-// distinctive enough to match bare, still guarded against
-// phantom-duplicating a Roman-numeral-prefixed citation's tail.
+// SAOS-quantified precision trade-off). The distinctive multi-letter
+// symbols match bare, still guarded against phantom-duplicating a
+// Roman-numeral-prefixed citation's tail. The prefix lists live in the
+// shared docket grammar.
 const PL_TK_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s{0,3}\d{1,4}\/\d{2,4})(?!\d)`,
+  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
-const PL_TK_BARE_PATTERN =
-  /(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s{0,3}\d{1,4}\/\d{2,4})(?!\d)/gu;
+// Like PL_TK_CUED_PATTERN below, rejects a Roman division across any
+// whitespace run: "I SK 12/20" is a Supreme Court docket, and its tail read
+// past a wide gap would key it as the Tribunal's.
+const PL_TK_BARE_PATTERN = new RegExp(
+  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
+  "gu",
+);
+
+// The cue-gated matcher rejects a Roman division before the symbol across
+// any whitespace run, not only the 1-3 characters the combining patterns
+// accept: past that bound the whole docket goes unread, and its tail
+// ("sygn. akt II    K 12/20" -> "K 12/20") would otherwise pass the cue
+// gate as a different, Tribunal docket.
+const PL_TK_CUED_PATTERN = new RegExp(
+  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
+  "gu",
+);
+
+/**
+ * What marks a nearby bare "K 2/19" as the Tribunal's: its name or
+ * abbreviation, a "sygn." label, or a judgment introduced by its date, in
+ * any capitalisation ("Sygn.", a sentence-initial "Wyrok").
+ */
+const PL_TK_CUE_RE =
+  /\bTK\b|Trybuna(?:ł|l)\p{L}*\s+Konstytucyjn|sygn\.|\bwyrok\p{L}*[^;]{0,80}?\bz\s+dnia\b/iu;
+
+/** How far before a bare Tribunal docket a cue may sit. */
+const PL_TK_CUE_WINDOW = 120;
+
+/** Patterns whose capture only counts next to a Tribunal cue. */
+const PL_TK_CUE_GATED_PATTERNS: ReadonlySet<RegExp> = new Set([
+  PL_TK_CUED_PATTERN,
+]);
+
+// A data protection authority's file number: "znak sprawy DKN.5131.6.2024".
+// The shape is also how other bodies number their files, so it is read only
+// near its own cue (PL_AUTHORITY_FILE_NUMBER_CUE_RE).
+const PL_AUTHORITY_FILE_NUMBER_PATTERN = new RegExp(
+  String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
+  "gu",
+);
+
+// National Appeal Chamber (KIO) dockets, joined ones included, from the same
+// source the search grammar reads: "KIO 1234/24", "KIO/UZP 1188/08",
+// "KIO 2845/25, KIO 2846/25". The all-caps mark is distinctive enough to
+// read without a cue.
+const PL_KIO_PATTERN = new RegExp(
+  String.raw`(?<![\p{L}\d])(?<caseNumber>${PL_KIO_DOCKET_SOURCE})(?!\d)`,
+  "gu",
+);
+
+/** What marks a nearby authority file number as the data protection authority's. */
+const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
+  /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
@@ -477,15 +542,35 @@ const PL_BARE_SYMBOL_PATTERN = new RegExp(
 );
 
 // Polish administrative courts (NSA/WSA): the registry carries the
-// court's location joined by a slash, e.g. "II SA/Wa 2016/05" (WSA
-// Warszawa), "VI SA/Wa 1161/06", "II SA/Łd 123/20" (WSA Łódź, a
-// non-ASCII location letter), or the older undivided registry from
-// before the 2004 court reform, "SA/Po 4584/01" (no Roman division at
-// all). The registry can't just add "/" to the generic alternation above
-// without also swallowing the case number's own slash, so this is a
-// dedicated pattern anchored on the literal SA/ or SAB/ token.
+// court's seat joined by a slash, e.g. "II SA/Wa 2016/05" (WSA
+// Warszawa), "II SA/Łd 123/20" (WSA Łódź, a non-ASCII seat letter), or
+// the older undivided registry from before the 2004 court reform,
+// "SA/Po 4584/01" (no Roman division at all). The registry can't just add
+// "/" to the generic alternation above without also swallowing the case
+// number's own slash, so this is a dedicated pattern over the closed
+// register and seat lists of the shared administrative docket grammar. A
+// Roman numeral before the register that the grammar does not take as the
+// division, a ninth one ("IX SA/Wa") or one past a wide gap ("II      SA/Wa"),
+// rejects the match rather than leaving a docket with its division cut off.
 const PL_NSA_WSA_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<caseNumber>(?:[IVX]{1,4}\s+)?(?:SAB|SA)\/\p{L}{2,4}\s+\d{1,6}\/\d{2,4})(?!\d)`,
+  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
+  "gu",
+);
+
+// The pre-2004 seatless Warsaw form, including a joined range of numbers
+// the bare Polish pattern does not read ("I SA 1234-1236/98"). The range
+// stays one citation keyed with both ends, as a consolidated Czech docket
+// does ("36 Co 52,53/2023").
+const PL_NSA_SEATLESS_PATTERN = new RegExp(
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE})(?!\d)`,
+  "gu",
+);
+
+// Pre-2004 NSA resolutions cited bare, with no division: "FPS 1/99",
+// "OPS 3/98". The lookbehind leaves a divided mark ("I OPS 3/22") to the
+// bare Polish pattern, so its tail is not read as a second citation.
+const PL_NSA_PRE_REFORM_RESOLUTION_PATTERN = new RegExp(
+  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -697,8 +782,13 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_THREE_TOKEN_PATTERN,
   PL_TK_PATTERN,
   PL_TK_BARE_PATTERN,
+  PL_TK_CUED_PATTERN,
+  PL_AUTHORITY_FILE_NUMBER_PATTERN,
+  PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
+  PL_NSA_SEATLESS_PATTERN,
+  PL_NSA_PRE_REFORM_RESOLUTION_PATTERN,
 
   // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20",
   // "I CSK 379/08" (Supreme Court chambers I-VII are frequently a single
@@ -854,10 +944,12 @@ const POLISH_ROMAN_DIVISION_RE =
  * "III A/Ua 2389/02", and "III AUa 2389/02" all resolve to one dedup key.
  * The second token is a letter run, never digits, so this never matches
  * an ordinary single-token division directly followed by the docket
- * number ("CSK 123/20").
+ * number ("CSK 123/20"). The second token is any letter run, so an
+ * administrative court's non-ASCII seat folds the same way ("II SA/Łd
+ * 123/20" keys as "iisałd 123/20", like "II SA/Wa" as "iisawa").
  */
 const POLISH_TWO_WORD_DIVISION_RE =
-  /^(?<div1>[A-Za-z]{1,4})[\s/](?<div2>[A-Za-z]{1,5})(?<rest>\s\d.*)$/u;
+  /^(?<div1>[A-Za-z]{1,4})[\s/](?<div2>\p{L}{1,5})(?<rest>\s\d.*)$/u;
 
 /**
  * Matches a single-token Polish division code directly followed by the
@@ -927,7 +1019,7 @@ const hungarianDocketKey = (parts: RegExpGroups): string =>
  *    "EBH.2018.K.17"); see `hungarianSeriesKey`.
  */
 const canonicalizeDedupKey = (text: string): string => {
-  const spaced = normalizeDashes(text)
+  const normalized = normalizeDashes(text)
     // One key per case, whatever normalization form the publisher served:
     // a decomposed "Ú" is the same letter as a precomposed one, and only
     // the key folds it -- `citationText` stays verbatim so the reader can
@@ -940,6 +1032,9 @@ const canonicalizeDedupKey = (text: string): string => {
     .replace(/\s{0,4}\/\s{0,4}/gu, "/") // collapse whitespace around a slash
     .replace(/,\s{0,3}/gu, ",") // "52, 53/2023" -> "52,53/2023"
     .trim();
+  // A leading `N/` some registers print ahead of an administrative docket
+  // ("12/II SA/Po 1234/99") is not part of it.
+  const spaced = polishAdministrativeDocketOf(normalized) ?? normalized;
 
   // Read before the registry dot is stripped below: in a Hungarian docket
   // that dot is the separator ("Pfv. 20.187/2017/12").
@@ -950,6 +1045,16 @@ const canonicalizeDedupKey = (text: string): string => {
   const hungarianSeries = hungarianSeriesKey(spaced);
   if (hungarianSeries !== null) {
     return hungarianSeries;
+  }
+  // A Tribunal docket's dot is not part of it, glued ("K.2/19") or spaced.
+  // `KIO/UZP` and `KIO UZP` are one register, as the search grammar keys it.
+  const kio = polishKioDocketKey(spaced);
+  if (kio !== null) {
+    return kio;
+  }
+  const constitutional = polishConstitutionalDocketKey(spaced);
+  if (constitutional !== null) {
+    return constitutional;
   }
 
   const cleaned = spaced
@@ -1427,6 +1532,28 @@ export const extractCitations = (
           CZE_GATED_PATTERNS.has(pattern) &&
           (caseNumber === undefined ||
             DECISION_DOCKET_GRAMMARS.CZE.parse(caseNumber) === null)
+        ) {
+          continue;
+        }
+        if (
+          PL_TK_CUE_GATED_PATTERNS.has(pattern) &&
+          !PL_TK_CUE_RE.test(
+            section.text.slice(
+              Math.max(0, match.index - PL_TK_CUE_WINDOW),
+              match.index,
+            ),
+          )
+        ) {
+          continue;
+        }
+        if (
+          pattern === PL_AUTHORITY_FILE_NUMBER_PATTERN &&
+          !PL_AUTHORITY_FILE_NUMBER_CUE_RE.test(
+            section.text.slice(
+              Math.max(0, match.index - PL_TK_CUE_WINDOW),
+              match.index,
+            ),
+          )
         ) {
           continue;
         }

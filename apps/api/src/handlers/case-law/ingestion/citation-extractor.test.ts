@@ -1599,6 +1599,93 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("II SA/Łd 123/20");
   });
 
+  test("extracts Polish administrative-court citations in their cited forms", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "wyrok NSA z dnia 12 czerwca 2024 r., sygn. akt II FSK 1226/21",
+        ["sygn. akt II FSK 1226/21"],
+      ],
+      [
+        "wyrok WSA w Warszawie z 10.03.2020 r., III SA/Wa 1234/19",
+        ["III SA/Wa 1234/19"],
+      ],
+      [
+        "uchwała składu siedmiu sędziów NSA z dnia 5 czerwca 2017 r., II GPS 1/17",
+        ["II GPS 1/17"],
+      ],
+      [
+        "por. II SAB/Wa 11/04, II SPP/Wa 1/20 oraz I SO/Kr 3/21",
+        ["II SAB/Wa 11/04", "II SPP/Wa 1/20", "I SO/Kr 3/21"],
+      ],
+      [
+        "uchwały z 1999 r., FPS 1/99, i z 1998 r., OPS 3/98, a także OPK 1/97",
+        ["FPS 1/99", "OPS 3/98", "OPK 1/97"],
+      ],
+      // A divided resolution mark is one citation, not also its bare tail.
+      ["uchwała NSA, I OPS 3/22", ["I OPS 3/22"]],
+      // Pre-2004 forms: the `Ł` seat, a joined range, a glued division.
+      ["wyrok NSA z 1998 r., SA/Ł 1234/98", ["SA/Ł 1234/98"]],
+      [
+        "wyrok NSA, sygn. akt I SA 1234-1236/98",
+        ["sygn. akt I SA 1234-1236/98"],
+      ],
+      ["wyrok NSA, IISA/WR 12/01", ["IISA/WR 12/01"]],
+      // A leading register number is not part of the docket.
+      ["akta 12/II SA/Po 1234/99", ["II SA/Po 1234/99"]],
+      // Transitional forms: a seatless range, a division-less NSA mark.
+      ["wyrok WSA, IV SA 123-125/04", ["IV SA 123-125/04"]],
+      ["postanowienie NSA, sygn. akt FSK 123/04", ["sygn. akt FSK 123/04"]],
+      ["uchwały NSA z 1998 r., OPK 12-14/98", ["OPK 12-14/98"]],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("does not read common prose or unknown seats as administrative dockets", () => {
+    for (const text of [
+      // A welfare office's letters, a bare mark after the reform, a
+      // three-digit number: none is a pre-2004 resolution.
+      "pismo MOPS 12/99 oraz OPS 3/05 i OPS 123/98",
+      // No administrative court sits at `Xy`.
+      "sprawa SA/Xy 12/20",
+      // A company name ending in `SA`, with no `sygn.` label.
+      "umowa z Bank Polski SA 12/99",
+    ]) {
+      expect(extractCitations([{ index: 0, text }])).toEqual([]);
+    }
+  });
+
+  test("keys a non-ASCII seat the way it keys an ASCII one", () => {
+    expect(bareCitationKey("sygn. akt II SA/Łd 123/20")).toBe(
+      bareCitationKey("II SA / Łd 123/20"),
+    );
+    expect(bareCitationKey("II SA/Łd 123/20")).toBe("iisałd 123/20");
+    expect(bareCitationKey("II SA/Wa 123/20")).toBe("iisawa 123/20");
+  });
+
+  test("keys administrative-court spelling variants as one docket", () => {
+    const cases: [variant: string, canonical: string][] = [
+      ["IISA/WR 12/01", "II SA/Wr 12/01"],
+      ["12/II SA/Po 1234/99", "II SA/Po 1234/99"],
+      ["I SA 1234–1236/98", "I SA 1234-1236/98"],
+      ["SA/Ł 1234/98", "SA / Ł 1234/98"],
+    ];
+    for (const [variant, canonical] of cases) {
+      expect(bareCitationKey(variant)).toBe(bareCitationKey(canonical));
+    }
+    // A range is one docket, not its first number.
+    expect(bareCitationKey("I SA 1234-1236/98")).not.toBe(
+      bareCitationKey("I SA 1234/98"),
+    );
+    // A leading number stays where no administrative docket follows it.
+    expect(bareCitationKey("12/II C 1/20")).not.toBe(
+      bareCitationKey("II C 1/20"),
+    );
+  });
+
   test("extracts Polish division + proceeding-type case numbers", () => {
     // Verbatim prose quoted from a prod Polish district-court decision:
     // "GNc upr" is a two-word chamber-plus-proceeding-type code (commercial
@@ -1825,10 +1912,10 @@ describe("extractCitations", () => {
       (c) => c.citationText,
     );
     expect(texts).toContain("SK 19/02");
-    // Bare single-letter Tribunal symbols stay unextracted without a
-    // sygn. anchor (the documented precision trade-off: they collide
-    // with prose and district-court registries).
-    expect(texts).not.toContain("K 36/98");
+    // A bare single-letter symbol is read only near a Tribunal cue: the
+    // Tribunal named just before "K 36/98", but too far back for
+    // "P 13/11" (they collide with prose and district-court registries).
+    expect(texts).toContain("K 36/98");
     expect(texts).not.toContain("P 13/11");
     expect(texts).toContain("Sygn. akt P 20/03");
   });
@@ -1857,17 +1944,15 @@ describe("extractCitations", () => {
     expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
   });
 
-  test("does not phantom-duplicate a bare TK citation after a four-space gap", () => {
-    // The phantom-duplicate lookbehind's whitespace run must match
-    // exactly what the combining patterns (PL_PREFIXED_PATTERN and the
-    // bare Polish pattern) themselves accept between the roman numeral
-    // and the division code. Before this bound was mirrored, a four-space
-    // gap still combined into one ambient citation via the unbounded
-    // matcher, but the guard (capped at three) could no longer recognize
-    // the roman numeral immediately before the symbol, so the Tribunal
-    // symbol at the tail phantom-duplicated as a second citation.
+  test("does not read a bare TK citation after a four-space gap", () => {
+    // The combining patterns (PL_PREFIXED_PATTERN and the bare Polish
+    // pattern) accept at most three characters between the roman numeral
+    // and the division code, so a four-space gap leaves the docket unread.
+    // The Tribunal matchers reject the roman numeral across any run, so the
+    // tail is not read as a Tribunal docket either: "II SK" is a Supreme
+    // Court mark, and "SK 12/20" would be a different case.
     const text = "sygn. akt II    SK 12/20";
-    expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
+    expect(extractCitations([{ index: 0, text }])).toEqual([]);
   });
 
   test("extracts a bare Polish Constitutional Tribunal citation list", () => {
@@ -1900,10 +1985,12 @@ describe("extractCitations", () => {
   test("does not capture a Tribunal citation across an over-long whitespace run after 'sygn.'", () => {
     // The whitespace after "sygn." is bounded so an OCR whitespace run
     // does not get swallowed into a phantom Tribunal match; an
-    // unrealistically long run simply fails to match rather than being
-    // captured with the whitespace baked in.
+    // unrealistically long run is never captured with the whitespace baked
+    // in. The docket itself still reads bare, the label being its cue.
     const text = "orzeczenie sygn.     K 20/03 Trybunału Konstytucyjnego";
-    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+    ).toEqual(["K 20/03"]);
   });
 
   test("does not capture a Tribunal citation across an over-long whitespace run before the docket", () => {
@@ -1935,24 +2022,188 @@ describe("extractCitations", () => {
     expect(texts).toContain("sygn. SNO 45/06");
   });
 
+  test("reads a bare single-letter Tribunal docket only near a Tribunal cue", () => {
+    const cases: [text: string, expected: string[]][] = [
+      ["wyrok TK z dnia 3 marca 2026 r., K 2/26", ["K 2/26"]],
+      ["postanowienie Trybunału Konstytucyjnego, Ts 123/19", ["Ts 123/19"]],
+      ["wyrok z dnia 12 maja 2017 r., Kpt 1/17", ["Kpt 1/17"]],
+      [
+        "por. orzecznictwo TK: W 3/94, S 1/05, T 20/97",
+        ["W 3/94", "S 1/05", "T 20/97"],
+      ],
+      ["uchwała TK, Uw 7/92, oraz Kw 2/93", ["Uw 7/92", "Kw 2/93"]],
+      // No cue: a lone capital and a number are not a Tribunal docket.
+      ["pozycja K 2/26 w wykazie, punkt W 3/20", []],
+      // A common court's division keeps its docket whole.
+      [
+        "wyrok Sądu Rejonowego z dnia 1 lutego 2020 r., sygn. akt II K 12/20",
+        ["sygn. akt II K 12/20"],
+      ],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("reads KIO dockets as the search grammar does", () => {
+    const cases: [text: string, expected: string[]][] = [
+      ["wyrok KIO z dnia 3 marca 2024 r., KIO 1234/24", ["KIO 1234/24"]],
+      ["por. wyrok z 2008 r., KIO/UZP 1188/08", ["KIO/UZP 1188/08"]],
+      [
+        "wyrok w sprawach połączonych KIO 2845/25, KIO 2846/25.",
+        ["KIO 2845/25, KIO 2846/25"],
+      ],
+      // Not a KIO docket: a longer word, a four-digit year.
+      ["KIOSK 12/20 i KIO 2845/2025", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+    expect(bareCitationKey("KIO UZP 1188/08")).toBe(
+      bareCitationKey("KIO/UZP 1188/08"),
+    );
+    expect(bareCitationKey("KIO 2845/25,KIO 2846/25")).toBe(
+      bareCitationKey("KIO 2845/25, KIO 2846/25"),
+    );
+  });
+
+  test("never reads the tail of a divided docket as a Tribunal one", () => {
+    // Every whitespace run between a Roman division and a Tribunal-shaped
+    // symbol, including the ones too wide for the docket to read whole.
+    const gaps = [
+      " ",
+      "  ",
+      "   ",
+      "    ",
+      "      ",
+      "\t",
+      "\n",
+      "\n\n\n\n",
+      " ",
+      " \t \n ",
+    ];
+    for (const roman of ["II", "IV", "VIII"]) {
+      for (const gap of gaps) {
+        for (const prefix of [
+          "K",
+          "P",
+          "U",
+          "W",
+          "S",
+          "T",
+          "Uw",
+          "Kw",
+          "SK",
+          "Kp",
+          "Pp",
+          "Kpt",
+          "Ts",
+          "Tw",
+        ]) {
+          const tail = `${prefix} 12/20`;
+          const texts = extractCitations([
+            { index: 0, text: `sygn. akt ${roman}${gap}${tail}` },
+          ]).map((c) => c.citationText);
+          expect(texts).not.toContain(tail);
+        }
+      }
+    }
+  });
+
+  test("never reads an administrative docket with its division cut off", () => {
+    // A division too wide from its register, or one the court does not
+    // have ("IX", "XII"), leaves no docket read from the register onward.
+    const gaps = [" ", "   ", "    ", "      ", "\t", "\n\n\n\n", " "];
+    for (const roman of ["II", "IX", "XII"]) {
+      for (const gap of gaps) {
+        for (const tail of [
+          "SA/Wa 1/20",
+          "SAB/Wa 1/20",
+          "SO/Kr 3/21",
+          "OPS 3/98",
+        ]) {
+          for (const lead of ["", "sygn. akt "]) {
+            const texts = extractCitations([
+              { index: 0, text: `${lead}${roman}${gap}${tail}` },
+            ]).map((c) => c.citationText);
+            expect(texts).not.toContain(tail);
+            expect(texts).not.toContain(`sygn. akt ${tail}`);
+          }
+        }
+      }
+    }
+    // The division in range and in reach still reads whole.
+    expect(
+      extractCitations([{ index: 0, text: "wyrok WSA, VIII SA/Wa 5/20" }]).map(
+        (c) => c.citationText,
+      ),
+    ).toEqual(["VIII SA/Wa 5/20"]);
+  });
+
+  test("reads Tribunal cues in any capitalisation", () => {
+    const cases: [text: string, expected: string[]][] = [
+      ["Sygn.: P. 12/98, P. 8/99", ["Sygn.: P. 12/98", "P. 8/99"]],
+      // An all-caps label is no citation prefix, but it is still a cue.
+      ["SYGN. AKT K 1/20, oraz U 2/20", ["K 1/20", "U 2/20"]],
+      ["Wyrok z dnia 1 maja 2020 r., K 2/19", ["K 2/19"]],
+      ["WYROK Z DNIA 1 MAJA 2020 R., W 3/19", ["W 3/19"]],
+      ["TRYBUNAŁ KONSTYTUCYJNY orzekł, S 1/05", ["S 1/05"]],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("reads an authority file number only after its cue", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "decyzja Prezesa UODO z dnia 5 marca 2024 r., DKN.5131.6.2024.",
+        ["DKN.5131.6.2024"],
+      ],
+      ["znak sprawy: ZSOŚS.440.82.2019", ["ZSOŚS.440.82.2019"]],
+      // No cue: another body numbers its files the same way.
+      ["pismo nr DKE.561.1.2020 w aktach", []],
+      // A statute reference and a tax-ruling signature, even when cued.
+      ["UODO, Dz.U.2024.1061 oraz art. 5.1", []],
+      ["znak sprawy 0114-KDIP1-2.4012.123.2024.1.AB", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("keys a Tribunal docket with its dot and letter case ignored", () => {
+    for (const [variant, canonical] of [
+      ["U. 4/86", "U 4/86"],
+      ["U.4/86", "U 4/86"],
+      ["KPT 1/17", "Kpt 1/17"],
+      ["sygn. akt K. 2/26", "K 2/26"],
+    ] as const) {
+      expect(bareCitationKey(variant)).toBe(bareCitationKey(canonical));
+    }
+    expect(bareCitationKey("K 2/26")).not.toBe(bareCitationKey("II K 2/26"));
+  });
+
   test("extracts a Polish Constitutional Tribunal citation after 'sygn.:'", () => {
     // Verbatim from a prod decision: "sygn.: P. 12/98" has a colon
     // directly after the period. The second, comma-joined case number ("P.
-    // 8/99") has no "sygn." of its own, but the "P" symbol is captured
-    // bare too since it is not immediately preceded by a Roman-numeral
-    // division (the only phantom-duplicate risk the lookbehind guards
-    // against).
+    // 8/99") has no "sygn." of its own; the label just before it is the
+    // Tribunal cue that lets the bare single-letter symbol read.
     const text =
       "ustalona linia orzecznicza (wyroki o sygn.: P. 12/98, P. 8/99.";
     const texts = extractCitations([{ index: 0, text }]).map(
       (c) => c.citationText,
     );
     expect(texts).toContain("sygn.: P. 12/98");
-    // The second item of the enumeration is lexically bare; the
-    // anchor-mandatory rule for single-letter symbols drops it. If the
-    // recall gate shows list continuations matter, revisit with a
-    // dedicated enumeration pattern rather than loosening the anchor.
-    expect(texts).not.toContain("P. 8/99");
+    expect(texts).toContain("P. 8/99");
   });
 
   test("extracts a Polish Constitutional Tribunal case number split across sygn. akt/bare spellings", () => {

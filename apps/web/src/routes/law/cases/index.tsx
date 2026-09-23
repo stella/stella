@@ -84,6 +84,7 @@ import type {
   DecisionDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
 import {
+  caseLawCountryScope,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
@@ -102,7 +103,6 @@ import { decisionFilterFacets } from "@/features/case-law/decision-filter-facets
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
-  caseLawCountryScope,
   createDecisionFiltersFromSearch,
   openDecisionMatch,
   readDecisionIntent,
@@ -297,6 +297,15 @@ const formatIsoDate = (
     { dateStyle: "medium", timeZone: "UTC" },
   );
 
+/**
+ * The search helpers, fetched when a route hook first needs them rather than
+ * with the route: the docket grammars they parse a query with then stay out
+ * of the chunks every page preloads. The page component imports them
+ * directly, since it already loads on demand.
+ */
+const loadDecisionSearch = async () =>
+  await import("@/features/case-law/open-decision-match");
+
 const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
   const range = decisionDateRange(search);
   const scope = [
@@ -404,7 +413,9 @@ export const Route = createFileRoute("/law/cases/")({
     // chain to the page it names, and only a page the results themselves do
     // not reach falls back to the deepest one that does. One redirect for
     // both, so the reader is corrected once.
-    const filters = createDecisionFiltersFromSearch(
+    const { createDecisionFiltersFromSearch: filtersFromSearch } =
+      await loadDecisionSearch();
+    const filters = filtersFromSearch(
       { ...search, country: countryParam },
       // The excerpt length lives in the reader's browser, which the router
       // cannot reach here. Priming the default keeps this walk on the entry
@@ -452,11 +463,13 @@ export const Route = createFileRoute("/law/cases/")({
     const scope =
       publicCaseLawCountryFromParam(deps.country) ??
       panic("The case-law route loaded without a launch-ready country.");
+    const { createDecisionFiltersFromSearch: filtersFromSearch } =
+      await loadDecisionSearch();
     const decisionsOptions = decisionsInfiniteOptions(
       // The default again: a loader has no browser storage to read the
       // reader's length from, and a reader who never changed it lands on the
       // entry this primes.
-      createDecisionFiltersFromSearch(deps, {
+      filtersFromSearch(deps, {
         excerpt: DEFAULT_SEARCH_EXCERPT,
       }),
       publicLawPageSize(deps.pageSize),

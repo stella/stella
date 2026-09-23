@@ -80,6 +80,305 @@ const createDecisionDocketGrammar = <const TJurisdiction extends string>({
 });
 
 /**
+ * Docket grammar of the Polish administrative courts, as the NSA's internal
+ * rules prescribe it (Zarządzenie nr 14 Prezesa NSA z 6 sierpnia 2015 r.,
+ * §§ 69, 78, 79), plus the forms the NSA used before the 2004 reform. Shared
+ * by the search grammar below and the citation extractor.
+ *
+ * - Regional courts (WSA): `<division> <register>/<seat> <number>/<yy>`,
+ *   "I SA/Wa 123/20", "II SAB/Wa 11/04".
+ * - Supreme Administrative Court (NSA): `<division> <chamber><register>
+ *   <number>/<yy>`, "II FSK 1226/21", "I OZ 45/23", "II GPS 1/17".
+ * - Before 2004 the NSA sat in Warsaw and in branch seats and wrote the same
+ *   slash form, often without a division ("SA/Wr 1234/98"), a seatless one
+ *   for Warsaw ("III SA 1234/01"), and bare resolution marks ("FPS 1/99").
+ *
+ * Registers and marks are matched in capitals only: a common court's
+ * registers are title case ("XXIII Gz 12/20" is a regional commercial
+ * court), and only the all-caps spelling is the administrative court's.
+ */
+
+const alternation = (items: readonly string[]): string =>
+  `(?:${items.toSorted((a, b) => b.length - a.length).join("|")})`;
+
+/**
+ * Seats as the registers abbreviate them. `Ka` (Katowice) and `Ł` (Łódź)
+ * are pre-2004 branch seats.
+ */
+const PL_ADMINISTRATIVE_SEATS = [
+  "Bk",
+  "Bd",
+  "Gd",
+  "Gl",
+  "Go",
+  "Ke",
+  "Kr",
+  "Lu",
+  "Łd",
+  "Ol",
+  "Op",
+  "Po",
+  "Rz",
+  "Sz",
+  "Wa",
+  "Wr",
+  "Ka",
+  "Ł",
+] as const;
+
+/** Each seat as written and in capitals ("SA/WR"), never lower case. */
+const PL_ADMINISTRATIVE_SEAT_SPELLINGS = PL_ADMINISTRATIVE_SEATS.flatMap(
+  (seat) => [seat, seat.toUpperCase()],
+);
+
+/** Regional-court registers that carry a seat (§ 69). */
+const PL_WSA_REGISTERS = ["SA", "SAB", "SPP", "SO"] as const;
+
+/** Regional courts have up to eight divisions (Warsaw); the NSA has three. */
+const PL_WSA_DIVISIONS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+const PL_NSA_DIVISIONS = ["I", "II", "III"];
+
+/**
+ * Divisions that wrote the seatless Warsaw form: the NSA's three before
+ * 2004, and the Warsaw regional court's first six through 2006.
+ */
+const PL_SEATLESS_DIVISIONS = ["I", "II", "III", "IV", "V", "VI"];
+
+/** NSA chambers: financial, commercial, general-administrative. */
+const PL_NSA_CHAMBERS = ["F", "G", "O"] as const;
+
+/**
+ * NSA registers, each written after the chamber letter (§ 78): `SK`
+ * cassation appeals, `Z` interlocutory complaints, `W` applications, `PP`
+ * complaints of delay, `NP` complaints that a final judgment is unlawful,
+ * `OK` appeals against resolutions of the National Council of the
+ * Judiciary ("II GOK 2/18"), `KW` complaints against decisions of the
+ * State Electoral Commission ("II OKW 1/24"), and `PS` resolutions.
+ */
+const PL_NSA_REGISTERS = [
+  "SK",
+  "Z",
+  "W",
+  "PP",
+  "NP",
+  "OK",
+  "KW",
+  "PS",
+] as const;
+
+const PL_NSA_MARKS = PL_NSA_CHAMBERS.flatMap((chamber) =>
+  PL_NSA_REGISTERS.map((register) => `${chamber}${register}`),
+);
+
+/** Pre-2004 resolution registers, cited with no division. */
+const PL_PRE_REFORM_RESOLUTION_MARKS = ["FPS", "OPS", "FPK", "OPK"] as const;
+
+/**
+ * Chamber-prefixed `SA` marks the NSA wrote with no division around the
+ * reform ("FSA 12/03"); its bare `SA` ("SA 123/98") is pre-2004 only.
+ */
+const PL_TRANSITIONAL_BARE_MARKS = ["OSA", "FSA"] as const;
+
+/** Two-digit years before the 1 January 2004 reform. */
+const PL_PRE_REFORM_YEAR = String.raw`(?:[89]\d|0[0-3])`;
+
+/** The same, through the 2004-2006 transition. */
+const PL_TRANSITIONAL_YEAR = String.raw`(?:[89]\d|0[0-6])`;
+
+/** The first two years of the reformed NSA, when its marks carried no division. */
+const PL_UNDIVIDED_NSA_YEAR = String.raw`0[45]`;
+
+/** A number, or a joined range of numbers ("1234-1236"), before the year. */
+const PL_ADMINISTRATIVE_ORDINAL = String.raw`\d{1,6}(?:[${DECISION_DASH_CLASS_SOURCE}]\d{1,6})?`;
+
+const PL_ADMINISTRATIVE_NUMBER = String.raw`${PL_ADMINISTRATIVE_ORDINAL}\/\d{2}(?:\d{2})?`;
+
+/**
+ * The seated form, with or without a division, which may be glued to the
+ * register: "III SA/Gl 1234/19", "SA/Wr 1234/98", "IISA/WR 12/01".
+ */
+export const PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE = String.raw`(?:${alternation(PL_WSA_DIVISIONS)}\s{0,3})?${alternation(PL_WSA_REGISTERS)}\s{0,3}\/\s{0,3}${alternation(PL_ADMINISTRATIVE_SEAT_SPELLINGS)}\s{1,3}${PL_ADMINISTRATIVE_NUMBER}`;
+
+/**
+ * The seatless Warsaw form before and through the transition: "III SA
+ * 1234/01", "IV SA 123/04", "IV SAB 12/05", "I SA 1234-1236/98".
+ */
+export const PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE = String.raw`${alternation(PL_SEATLESS_DIVISIONS)}\s{0,3}SAB?\s{1,3}${PL_ADMINISTRATIVE_ORDINAL}\/${PL_TRANSITIONAL_YEAR}`;
+
+/** The registers the NSA wrote with no division in 2004 and 2005. */
+const PL_UNDIVIDED_NSA_MARKS = PL_NSA_CHAMBERS.flatMap((chamber) =>
+  ["SK", "Z", "W", "PP", "PS"].map((register) => `${chamber}${register}`),
+);
+
+/**
+ * NSA marks with no division, as written in 2004 and 2005: "FSK 123/04",
+ * "OZ 12/05", "OPP 3/04", "FPS 1/04".
+ */
+const PL_UNDIVIDED_NSA_DOCKET_SOURCE = String.raw`${alternation(PL_UNDIVIDED_NSA_MARKS)}\s{1,3}${PL_ADMINISTRATIVE_ORDINAL}\/${PL_UNDIVIDED_NSA_YEAR}`;
+
+/**
+ * The bare pre-reform marks: "SA 123/98", "FSA 12/03". `SA` is also how a
+ * company name ends ("Bank SA"), so the extractor reads these only after a
+ * `sygn.` label; as a whole case number they are unambiguous.
+ */
+const PL_PRE_REFORM_BARE_DOCKET_SOURCE = String.raw`(?:SA\s{1,3}${PL_ADMINISTRATIVE_ORDINAL}\/${PL_PRE_REFORM_YEAR}|${alternation(PL_TRANSITIONAL_BARE_MARKS)}\s{1,3}${PL_ADMINISTRATIVE_ORDINAL}\/${PL_TRANSITIONAL_YEAR})`;
+
+/**
+ * A pre-2004 resolution cited bare: "FPS 1/99", "OPS 3/98", "OPK 12-14/98".
+ * The year is held to the pre-reform range and each number to two digits,
+ * which is what keeps
+ * the same letters in ordinary prose from reading as a docket.
+ */
+export const PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE = String.raw`${alternation(PL_PRE_REFORM_RESOLUTION_MARKS)}\s{1,3}\d{1,2}(?:[${DECISION_DASH_CLASS_SOURCE}]\d{1,2})?\/${PL_PRE_REFORM_YEAR}`;
+
+const PL_ADMINISTRATIVE_DOCKET_RES = [
+  new RegExp(`^${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE}$`, "u"),
+  new RegExp(`^${PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE}$`, "u"),
+  new RegExp(
+    String.raw`^${alternation(PL_NSA_DIVISIONS)} ${alternation(PL_NSA_MARKS)} ${PL_ADMINISTRATIVE_NUMBER}$`,
+    "u",
+  ),
+  new RegExp(`^${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE}$`, "u"),
+  new RegExp(`^${PL_UNDIVIDED_NSA_DOCKET_SOURCE}$`, "u"),
+  new RegExp(`^${PL_PRE_REFORM_BARE_DOCKET_SOURCE}$`, "u"),
+] as const;
+
+/** A number and a slash some registers print ahead of the docket. */
+const PL_ADMINISTRATIVE_LEAD_RE = /^\d{1,4} ?\/ ?(?=[IVX])/u;
+
+/**
+ * The Polish administrative-court docket a case number spells, with a
+ * leading `N/` dropped ("12/II SA/Po 1234/99"), or null when it is not one.
+ * The lead is dropped only when what follows is a whole docket.
+ */
+export const polishAdministrativeDocketOf = (
+  caseNumber: string,
+): string | null => {
+  const folded = caseNumber.normalize("NFC").replace(/\s+/gu, " ").trim();
+  for (const candidate of [
+    folded,
+    folded.replace(PL_ADMINISTRATIVE_LEAD_RE, ""),
+  ]) {
+    if (PL_ADMINISTRATIVE_DOCKET_RES.some((re) => re.test(candidate))) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+/**
+ * Krajowa Izba Odwoławcza (public-procurement appeals) dockets: "KIO
+ * 1234/24", the earlier "KIO/UZP 1188/08", and appeals decided together
+ * ("KIO 2845/25, KIO 2846/25").
+ */
+const POL_KIO_SINGLE_DOCKET_SOURCE = String.raw`KIO(?:(?: ?\/ ?| )UZP)? \d{1,6}\/\d{2}`;
+
+/** A KIO docket, joined ones included. Exported for the citation extractor. */
+export const PL_KIO_DOCKET_SOURCE = String.raw`${POL_KIO_SINGLE_DOCKET_SOURCE}(?:, ?${POL_KIO_SINGLE_DOCKET_SOURCE})*`;
+
+const POL_KIO_DOCKET_RE = new RegExp(`^${PL_KIO_DOCKET_SOURCE}$`, "iu");
+
+/**
+ * A KIO docket's comparison spelling, `KIO/UZP` and `KIO UZP` alike and the
+ * joins spaced one way ("kio/uzp 1188/08", "kio 2845/25,kio 2846/25"), or
+ * null when the text is not one.
+ */
+export const polishKioDocketKey = (caseNumber: string): string | null => {
+  const folded = caseNumber.replace(/\s+/gu, " ").trim();
+  return POL_KIO_DOCKET_RE.test(folded)
+    ? folded
+        .toLowerCase()
+        .replace(/kio(?: ?\/ ?| )uzp/gu, "kio/uzp")
+        .replace(/, ?/gu, ",")
+    : null;
+};
+
+/**
+ * A Polish authority's file number ("znak sprawy") in the form the data
+ * protection authority (UODO) uses: an all-caps cell code, dot-separated
+ * numeric groups, the year last ("DKN.5131.6.2024", "ZSOŚS.440.82.2019").
+ * At least two groups before the year, and nothing but digits after the
+ * code, which keeps out statute references ("Dz.U.2024.1061") and tax
+ * rulings' signatures, whose code carries digits and dashes.
+ */
+export const PL_AUTHORITY_FILE_NUMBER_SOURCE = String.raw`\p{Lu}{2,6}(?:\.\d{1,6}){2,}\.(?:19|20)\d{2}`;
+
+const PL_AUTHORITY_FILE_NUMBER_RE = new RegExp(
+  `^${PL_AUTHORITY_FILE_NUMBER_SOURCE}$`,
+  "u",
+);
+
+/**
+ * Constitutional Tribunal (TK) case prefixes, as the Tribunal prints them:
+ * "K 2/26", "SK 12/20", "Kpt 1/17", "Ts 123/19". There is no division, which
+ * is what tells "K 12/20" from a common court's "II K 12/20".
+ */
+const PL_TK_PREFIXES = [
+  "K",
+  "SK",
+  "P",
+  "U",
+  "W",
+  "S",
+  "Kp",
+  "Pp",
+  "Kpt",
+  "Uw",
+  "Kw",
+  "Ts",
+  "Tw",
+  "T",
+] as const;
+
+/**
+ * Prefixes distinctive enough to read without a cue. A lone capital, and
+ * `Uw` or `Kw`, is also a common-court register or an ordinary abbreviation,
+ * so the extractor reads those only near a Tribunal cue.
+ */
+const PL_TK_DISTINCTIVE_PREFIXES = ["SK", "Kp", "Pp", "Kpt", "Ts", "Tw"];
+
+/** Each prefix as printed and in capitals ("KPT"), never lower case. */
+const PL_TK_PREFIX_SPELLINGS = PL_TK_PREFIXES.flatMap((prefix) => [
+  prefix,
+  prefix.toUpperCase(),
+]);
+
+const PL_TK_NUMBER = String.raw`\.?\s{0,3}\d{1,4}\/\d{2}(?:\d{2})?`;
+
+/** A TK docket under any prefix: "K 2/26", "U. 4/86". */
+export const PL_TK_DOCKET_SOURCE = String.raw`${alternation(PL_TK_PREFIX_SPELLINGS)}${PL_TK_NUMBER}`;
+
+/** A TK docket under a prefix that reads as one without a cue. */
+export const PL_TK_DISTINCTIVE_DOCKET_SOURCE = String.raw`${alternation(PL_TK_DISTINCTIVE_PREFIXES)}${PL_TK_NUMBER}`;
+
+const PL_TK_DOCKET_RE = new RegExp(`^${PL_TK_DOCKET_SOURCE}$`, "u");
+
+/** Whether a bare case number is a TK docket, prefix as printed or in capitals. */
+export const isPolishConstitutionalDocket = (caseNumber: string): boolean =>
+  PL_TK_DOCKET_RE.test(caseNumber.trim());
+
+const PL_TK_KEY_RE = new RegExp(
+  String.raw`^(?<prefix>${alternation(PL_TK_PREFIXES)})\.?\s{0,3}(?<number>\d{1,4}\/\d{2}(?:\d{2})?)$`,
+  "iu",
+);
+
+/**
+ * A TK docket's comparison spelling, with the dot after the prefix and the
+ * letter case ignored, as the Tribunal's own sources differ on both ("U. 4/86"
+ * and "U 4/86"): `u 4/86`. Null for anything else.
+ */
+export const polishConstitutionalDocketKey = (
+  caseNumber: string,
+): string | null => {
+  const groups = PL_TK_KEY_RE.exec(caseNumber.trim())?.groups;
+  const prefix = groups?.["prefix"];
+  const number = groups?.["number"];
+  return prefix === undefined || number === undefined
+    ? null
+    : `${prefix} ${number}`.toLowerCase();
+};
+
+/**
  * A Czech docket introduced by a senate number or a chamber numeral: `21 Cdo
  * 1234/2020`, `29 NSČR 55/2013`, `IV. ÚS 23/05`. Case-insensitive, because the
  * registry mark is written all-caps (`NSČR`, `ÚS`) and title-case (`Cdo`,
@@ -129,7 +428,15 @@ const HUN_DOCKET_RE =
 const HUN_DOCKET_PATTERNS = [HUN_DOCKET_RE] as const;
 const POL_DOCKET_RE =
   /^(?<chamber>[ivx]{1,5}) (?<division1>\p{L}{1,5})(?:[ /](?<division2>\p{L}{1,5}))? (?<ordinal>\d{1,6})\/(?<year>\d{2}(?:\d{2})?)$/iu;
-const POL_DOCKET_PATTERNS = [POL_DOCKET_RE] as const;
+const POL_DOCKET_PATTERNS = [
+  POL_DOCKET_RE,
+  // A reader types an administrative docket in any case.
+  ...PL_ADMINISTRATIVE_DOCKET_RES.map((re) => new RegExp(re.source, "iu")),
+  POL_KIO_DOCKET_RE,
+  // As printed, never lower case: "k 2/26" is not a Tribunal docket.
+  PL_TK_DOCKET_RE,
+  PL_AUTHORITY_FILE_NUMBER_RE,
+] as const;
 const EU_DOCKET_PATTERNS = [
   /^(?:(?:case|vec|věc|sprawa|affaire|rechtssache|causa|asunto) )?[ctf]-\d{1,4}\/\d{2}(?: p)?$/iu,
 ] as const;
@@ -183,24 +490,18 @@ const canonicalHungarianDocketKey = (formatted: string): string => {
   );
 };
 
-const canonicalPolishDocketKey = (formatted: string): string => {
-  const groups = POL_DOCKET_RE.exec(formatted)?.groups;
-  const chamber = groups?.["chamber"];
-  const division1 = groups?.["division1"];
-  const ordinal = groups?.["ordinal"];
-  const year = groups?.["year"];
-  if (
-    chamber === undefined ||
-    division1 === undefined ||
-    ordinal === undefined ||
-    year === undefined
-  ) {
-    return panic("Accepted Polish docket is missing a canonical component");
-  }
-  return canonicalDocketKey(
-    `${chamber}${division1}${groups?.["division2"] ?? ""}${ordinal}/${year}`,
-  );
-};
+/**
+ * One key for every accepted Polish form: division, register and seat run
+ * together, so "III A/Ua 1/20" and "iii a ua 1/20" share one, "IISA/WR 12/01"
+ * keys as "II SA/Wr 12/01" does, "KIO/UZP 1/08" as "KIO UZP 1/08", and
+ * "U. 4/86" as "U 4/86". Only a Tribunal prefix's dot goes; an authority
+ * file number keeps the dots that separate its groups ("DKN.5131.6.2024" is
+ * not "DKN.513.16.2024").
+ */
+const canonicalPolishDocketKey = (formatted: string): string =>
+  canonicalDocketKey(formatted)
+    .replace(/\/(?=\p{L})/gu, "")
+    .replace(/^(\p{L}{1,3})\.(?=\d{1,4}\/)/u, "$1");
 
 export const DECISION_DOCKET_GRAMMARS = {
   AUT: createDecisionDocketGrammar({

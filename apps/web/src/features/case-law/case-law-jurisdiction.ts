@@ -55,3 +55,12 @@ export const toCaseLawCountryParam = (country: string): string =>
 
 export const fromCaseLawCountryParam = (param: string): string =>
   param.toUpperCase();
+
+/**
+ * The corpus country the pill names. A URL without a country is scoped by
+ * `beforeLoad` before public search calls this helper.
+ */
+export const caseLawCountryScope = (
+  country: string | undefined,
+): string | undefined =>
+  country === undefined ? undefined : fromCaseLawCountryParam(country);
