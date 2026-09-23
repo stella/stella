@@ -120,6 +120,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -985,8 +986,8 @@ const describeTemplateDetail = async ({
 }: {
   templateId: string;
   context: McpRequestContext;
-}): ReturnType<
-  TypedMcpToolHandler<v.InferInput<typeof LIST_TEMPLATES_PROJECTION>>
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_TEMPLATES_PROJECTION>>
 > => {
   const payload = await describeTemplateForAgent({
     context,

@@ -94,7 +94,7 @@ const HANDLER_KINDS = [
   "session",
   "token",
   "public",
-] as const satisfies readonly McpToolDefinition[];
+] as const;
 
 type HandlerKind = (typeof HANDLER_KINDS)[number];
 

@@ -16,10 +16,7 @@ import { filenameForContext, isAstNode } from "./utils.ts";
 type RangedAstNode = Ranged & { type: string } & Record<string, unknown>;
 
 const isRangedAstNode = (node: unknown): node is RangedAstNode =>
-  isAstNode(node) &&
-  Array.isArray(node.range) &&
-  node.range.length === 2 &&
-  node.range.every((offset) => typeof offset === "number");
+  isAstNode(node) && Array.isArray(node.range);
 
 const getJsxName = (node: unknown): string | null => {
   if (!isAstNode(node)) {

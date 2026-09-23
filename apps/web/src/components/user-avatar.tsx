@@ -1,5 +1,3 @@
-import type { ComponentProps } from "react";
-
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   ReviewAuthorAvatar,
@@ -19,9 +17,7 @@ import { getDisplayName } from "@/lib/get-display-name";
  * identity (`no-hand-rolled-user-identity` points every call site here), so
  * the name and the app's unknown-user label are bound in one place.
  */
-export const UserIdentityAvatar = (
-  props: ComponentProps<typeof ReviewAuthorAvatar>,
-) => <ReviewAuthorAvatar {...props} />;
+export const UserIdentityAvatar = ReviewAuthorAvatar;
 
 type UserIdentityProps = {
   as?: "div" | "span";
