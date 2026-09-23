@@ -241,6 +241,21 @@ export const envApiServerSchema = {
   STELLA_TRUSTED_PROXY_CIDRS: v.optional(v.string()),
 
   /**
+   * Name of a header the trusted edge sets to the viewer's address with its
+   * port, e.g. `cloudfront-viewer-address`. Read only from peers in
+   * `STELLA_TRUSTED_PROXY_CIDRS`, ahead of the `x-forwarded-for` chain. Set it
+   * only when every route to the API adds this header.
+   */
+  STELLA_CLIENT_ADDRESS_HEADER: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.toLowerCase(),
+      v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+    ),
+  ),
+
+  /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
    * every member of their active organization. Announcements are an operator
    * capability, not a role: the deployment operator names the accounts here,

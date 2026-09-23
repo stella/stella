@@ -61,6 +61,7 @@ import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fiel
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { desktopRegistryKeyConfig } from "@/api/lib/business-registries/desktop/config";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
@@ -910,6 +911,9 @@ const createAuth = () => {
       freshAge: 0,
     },
     advanced: {
+      // server.ts resolves the client address once per request and sets this
+      // header, so rate limits and session addresses use the same value.
+      ipAddress: { ipAddressHeaders: [AUTH_CLIENT_ADDRESS_HEADER] },
       cookiePrefix,
       database: AUTH_DATABASE_ID_OPTIONS,
       useSecureCookies,

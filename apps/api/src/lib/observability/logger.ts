@@ -25,6 +25,7 @@ type LoggerAttributeValue = boolean | number | string;
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
 type RequestLogOptions = {
+  clientAddressSource?: string | undefined;
   durationMs: number;
   errorFingerprint?: ErrorFingerprint | undefined;
   elysiaCode?: string | undefined;
@@ -147,6 +148,7 @@ const REQUEST_SEVERITY = {
 } as const;
 
 const emitRequest = ({
+  clientAddressSource,
   durationMs,
   elysiaCode,
   errorFingerprint,
@@ -171,6 +173,9 @@ const emitRequest = ({
     // leaves out is a field no reader of this sink can get back.
     ...sanitizeLogAttributes(errorFingerprint),
     ...(requestId === undefined ? {} : { "request.id": requestId }),
+    ...(clientAddressSource === undefined
+      ? {}
+      : { "client.address_source": clientAddressSource }),
   };
 
   if (recordSink !== null) {
