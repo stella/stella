@@ -2,14 +2,15 @@
 //
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
 // local `no-raw-overflow-scroll` and `no-imported-class-constant`, and the API
-// size-bound rule `require-bounded-request-schema`) for every file in their
-// scope except the ones this baseline lists per rule
-// (scripts/design-lint-policy.ts turns the rule off there). Those files carry
-// merged-code debt; this guard holds each file's count at its baseline by
-// running the rule-only pass (`oxlint.design.config.ts`) over them. A rise
-// fails, a file that reaches zero fails until it is pruned (an override on a
-// clean file would hide the next finding), and a fall just prompts a
-// regeneration so the list keeps shrinking.
+// size-bound rules `require-bounded-request-schema` and
+// `no-unbounded-response-body`) for every file in their scope except the ones
+// this baseline lists per rule (scripts/design-lint-policy.ts turns the rule
+// off there). Those files carry merged-code debt; this guard holds each file's
+// count at its baseline by running the rule-only pass
+// (`oxlint.design.config.ts`) over them. A rise fails, a file that reaches
+// zero fails until it is pruned (an override on a clean file would hide the
+// next finding), and a fall just prompts a regeneration so the list keeps
+// shrinking.
 //
 // Modes:
 //   bun scripts/design-lint-baseline.ts          report per-rule counts vs baseline
@@ -75,6 +76,7 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
+  "no-unbounded-response-body/no-unbounded-response-body": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>

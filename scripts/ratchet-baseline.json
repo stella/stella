@@ -991,6 +991,10 @@
     "count": 0,
     "files": {}
   },
+  "no-unbounded-response-body-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-raw-use-effect-suppressions": {
     "count": 0,
     "files": {}

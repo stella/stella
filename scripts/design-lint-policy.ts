@@ -33,9 +33,9 @@ export const SHADCN_LINT_JS_PLUGINS = [
 /**
  * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
  *
- * The last one is not a design rule: it is an API size-bound guard whose
+ * The last two are not design rules: they are API size-bound guards whose
  * findings need scope analysis, so no lexical `scripts/ratchet.ts` counter can
- * measure it. It rides this per-file, oxlint-measured backlog because it is
+ * measure them. They ride this per-file, oxlint-measured backlog because it is
  * the one debt mechanism that counts with the rule itself.
  */
 export const DESIGN_LINT_BACKLOG_RULES = [
@@ -44,6 +44,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-raw-overflow-scroll/no-raw-overflow-scroll",
   "no-imported-class-constant/no-imported-class-constant",
   "require-bounded-request-schema/require-bounded-request-schema",
+  "no-unbounded-response-body/no-unbounded-response-body",
 ] as const;
 
 export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
@@ -257,6 +258,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
   "no-imported-class-constant/no-imported-class-constant": "off",
   "require-bounded-request-schema/require-bounded-request-schema": "off",
+  "no-unbounded-response-body/no-unbounded-response-body": "off",
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

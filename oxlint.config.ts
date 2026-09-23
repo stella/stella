@@ -300,6 +300,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
     "require-bounded-request-schema/require-bounded-request-schema",
   ]),
+  fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
+    "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
   ]),
@@ -1213,6 +1216,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
+    "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -3757,6 +3761,24 @@ export default defineConfig({
       rules: {
         "require-bounded-request-schema/require-bounded-request-schema":
           "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/tests/**",
+        // Operator scripts, not request-serving code; the same carve-out
+        // require-fetch-timeout makes.
+        "apps/api/src/scripts/**",
+        // The owners of the bounded readers the rule points to. s3.ts also
+        // defines the unbounded storage readers whose callers are reported.
+        "apps/api/src/lib/s3.ts",
+        "apps/api/src/lib/safe-outbound-fetch.ts",
+      ],
+      rules: {
+        "no-unbounded-response-body/no-unbounded-response-body": "error",
       },
     },
     {
