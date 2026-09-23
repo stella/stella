@@ -528,8 +528,6 @@
     "apps/api/src/handlers/uploads/update.ts": 1,
     "apps/api/src/lib/bbox/generate-b-boxes-shared.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 3,
-    "apps/api/src/lib/entity-versions/compute-version-diff.ts": 2,
-    "apps/api/src/lib/entity-versions/load-entity-version-file-buffer.ts": 1,
     "apps/api/src/lib/file-derivative-queue.ts": 1,
     "apps/api/src/lib/file-scan/stored-file.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 2,
@@ -542,7 +540,6 @@
     "apps/api/src/lib/templates/template-fill-service.ts": 1,
     "apps/api/src/lib/web-search/jina.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 2,
-    "apps/api/src/lib/workflow/generate-batch.ts": 2,
-    "apps/api/src/mcp/stella-tools.ts": 1
+    "apps/api/src/lib/workflow/generate-batch.ts": 2
   }
 }
