@@ -193,6 +193,7 @@ import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   FILE_SIZE_LIMIT_BYTES,
@@ -2714,7 +2715,9 @@ const readActiveFileFallbackForModel = async ({
     }
 
     if (source.type === "extracted-text") {
-      const extracted = await extractFileTextResult(buffer, source.mimeType);
+      const extracted = await extractFileTextResult(
+        storedFile({ key: s3Key, bytes: buffer, mimeType: source.mimeType }),
+      );
       if (Result.isError(extracted)) {
         return Result.err(
           new HandlerError({

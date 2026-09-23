@@ -40,8 +40,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { scanFile } from "@/api/lib/file-scan/scan";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scanned-file";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
@@ -464,42 +466,29 @@ const runFinalize = async function* ({
   }
 
   // 4. Scan — same pipeline the legacy upload handler ran inline.
-  const scanResult = await scanFile({
-    buffer: new Uint8Array(fileBuffer),
+  const scanResult = await scanUpload({
+    bytes: fileBuffer,
     declaredMimeType: claimed.declaredMime,
     fileName: claimed.declaredName,
   });
   if (Result.isError(scanResult)) {
+    const scanError = scanResult.error;
     return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "File security scan failed",
-        rejectReason: "scan-error",
-      }),
+      FileScanRejectedError.is(scanError)
+        ? new UploadFinalizeError({
+            ...scanError.rejection,
+            status: 422,
+            rejectReason: scanError.rejection.message,
+          })
+        : new UploadFinalizeError({
+            status: 500,
+            message: "File security scan failed",
+            rejectReason: "scan-error",
+          }),
     );
   }
-  if (scanResult.value.verdict === "reject") {
-    const rejection = fileSecurityRejection(scanResult.value);
-    if (rejection === null) {
-      panic("Rejecting scan had no rejecting findings");
-    }
-    return Result.err(
-      new UploadFinalizeError({
-        ...rejection,
-        status: 422,
-        rejectReason: rejection.message,
-      }),
-    );
-  }
-  let scanWarnings: string[] | undefined;
-  if (scanResult.value.verdict === "warn") {
-    scanWarnings = [];
-    for (const finding of scanResult.value.findings) {
-      if (finding.severity === "warn") {
-        scanWarnings.push(finding.message);
-      }
-    }
-  }
+  const scanned = scanResult.value;
+  const scanWarnings = scanned.scanWarnings ?? undefined;
 
   // 4b. Reference removal, after the scan judged what the client actually
   //     sent. Every presigned purpose promotes through the same object and
@@ -575,7 +564,11 @@ const runFinalize = async function* ({
       : never;
   let purposeOk: RunAnyPurpose;
   if (purposeData.type === "entity_create") {
-    purposeOk = yield* finalizeEntityCreate({ ...domainArgs, purposeData });
+    purposeOk = yield* finalizeEntityCreate({
+      ...domainArgs,
+      purposeData,
+      scanned,
+    });
   } else if (purposeData.type === "entity_version") {
     purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
   } else {

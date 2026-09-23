@@ -28,6 +28,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
+import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   allocateFileObject,
   resolveQueuedFileObject,
@@ -426,9 +427,12 @@ const processPdfDerivativeJob = async ({
   });
   const sourceBuffer = await getS3File(sourceKey);
   const conversionResult = await convertToPdf(
-    sourceBuffer,
-    content.fileName,
-    content.mimeType,
+    storedFile({
+      key: sourceKey,
+      bytes: sourceBuffer,
+      mimeType: content.mimeType,
+      fileName: content.fileName,
+    }),
   );
 
   if (Result.isError(conversionResult)) {

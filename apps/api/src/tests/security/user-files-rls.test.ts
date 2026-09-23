@@ -7,6 +7,7 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import {
   getRlsFixture,
@@ -64,7 +65,7 @@ const insertFile = async (
     mimeType: "text/plain",
     sizeBytes: 3,
     sha256Hex: "1".repeat(64),
-    s3Key: `user-files/${id}`,
+    s3Key: testFileKey(`user-files/${id}`),
     threadId,
   });
 

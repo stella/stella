@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { recognizePdfTextLocally } from "@/api/lib/ocr-local/recognize-local";
 
@@ -14,7 +16,12 @@ import { recognizePdfTextLocally } from "@/api/lib/ocr-local/recognize-local";
 
 const baseOptions = {
   signal: new AbortController().signal,
-  sourceKey: "org/ws/file",
+  sourceKey: createFileKey({
+    organizationId: toSafeId<"organization">("org"),
+    workspaceId: toSafeId<"workspace">("ws"),
+    fileId: "file",
+    mimeType: "application/pdf",
+  }),
   // The configuration gate sits before the behavior under test.
   resolveModelDir: () => "/tmp/ocr-models-test-env",
 };

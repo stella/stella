@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 
@@ -205,11 +206,11 @@ img { display: block; width: ${size.width}px; height: ${size.height}px; }
   });
 };
 
-export const convertToPdf = async (
-  fileBuffer: ArrayBuffer,
-  fileName: string,
-  mimeType: string,
-): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
+export const convertToPdf = async ({
+  bytes: fileBuffer,
+  fileName,
+  mimeType,
+}: ScannedFile): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
   const imageSize = IMAGE_MIME_TYPES.has(mimeType)
     ? getImageSize(fileBuffer, mimeType)
     : null;

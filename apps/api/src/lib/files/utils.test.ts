@@ -157,7 +157,7 @@ describe("getFileExtension", () => {
 
 describe("S3 object-key tenant scoping", () => {
   test("createFileKey is prefixed by organization then workspace", () => {
-    const key = createFileKey({
+    const key: string = createFileKey({
       organizationId: toSafeId<"organization">("org_1"),
       workspaceId: toSafeId<"workspace">("ws_1"),
       fileId: "file_1",
@@ -169,7 +169,7 @@ describe("S3 object-key tenant scoping", () => {
   });
 
   test("createUserFileKey is prefixed by the owning user", () => {
-    const key = createUserFileKey({
+    const key: string = createUserFileKey({
       userId: toSafeId<"user">("user_1"),
       fileId: "file_1",
       mimeType: "text/markdown",

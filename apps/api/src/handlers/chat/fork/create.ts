@@ -31,6 +31,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
@@ -99,7 +100,7 @@ type SourceUserFileRow = {
   id: SafeId<"userFile">;
   mimeType: string;
   placeholder: string | null;
-  s3Key: string;
+  s3Key: FileKey;
   scanWarnings: string[] | null;
   sha256Hex: string;
   sizeBytes: number;
@@ -107,7 +108,7 @@ type SourceUserFileRow = {
 };
 
 type UserFileCopy = {
-  copiedS3Key: string;
+  copiedS3Key: FileKey;
   copiedThumbnailFileId: string | null;
   newFileId: SafeId<"userFile">;
   source: SourceUserFileRow;

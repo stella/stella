@@ -25,9 +25,11 @@ import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
@@ -250,10 +252,17 @@ const prefillTemplate = createSafeRootHandler(
           }),
         );
       }
+      const scanned = yield* Result.await(
+        scanUploadForHandler({
+          bytes: await file.arrayBuffer(),
+          declaredMimeType: file.type,
+          fileName: sanitizeFilename(file.name),
+        }),
+      );
       const text = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await extractFileText(await file.arrayBuffer(), file.type, {
+            await extractFileText(scanned, {
               source: "template-prefill",
             }),
           catch: (cause) =>

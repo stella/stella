@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
@@ -263,9 +264,12 @@ export const printPdfHandler = async ({
   }
 
   const conversionResult = await convertToPdf(
-    sourceBuffer,
-    content.fileName,
-    content.mimeType,
+    storedFile({
+      key: sourceKey,
+      bytes: sourceBuffer,
+      mimeType: content.mimeType,
+      fileName: content.fileName,
+    }),
   );
 
   if (Result.isError(conversionResult)) {

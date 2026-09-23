@@ -12,6 +12,7 @@ import {
   EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
 } from "@/api/lib/errors/tagged-errors";
+import { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
@@ -82,8 +83,7 @@ const updateSetMock = mock(() => ({ where: updateWhereMock }));
 const updateMock = mock(() => ({ set: updateSetMock }));
 const extractFileTextResultMock = mock(
   async (
-    _buffer: ArrayBuffer,
-    _mimeType: string,
+    _file: ScannedFile,
     _options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
@@ -370,17 +370,19 @@ describe("processExtraction", () => {
     // The extractor is handed the object the run's file identity names, read
     // from storage rather than handed in by the test.
     expect(objectReadKeys()).toEqual([key]);
-    expect(extractFileTextResultMock).toHaveBeenCalledWith(
-      expect.any(ArrayBuffer),
-      fileContent.mimeType,
-      {
-        signal: lifecycleSignal,
-        timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
-      },
-    );
+    expect(extractFileTextResultMock).toHaveBeenCalledWith(expect.anything(), {
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+    });
     const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
+    // The bytes reach the extractor as a stored file under the run's key.
+    expect(extracted?.mimeType).toBe(fileContent.mimeType);
+    expect(extracted instanceof ScannedFile).toBe(true);
+    expect(extracted?.source.type).toBe("stored");
     expect(
-      extracted === undefined ? null : new TextDecoder().decode(extracted),
+      extracted === undefined
+        ? null
+        : new TextDecoder().decode(extracted.bytes),
     ).toBe(SOURCE_BYTES);
     // A sandbox failure is terminal: nothing is encrypted and nothing is
     // written, so no projection statement runs at all.

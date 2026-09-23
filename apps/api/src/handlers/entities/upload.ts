@@ -45,8 +45,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
-import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { scanFile } from "@/api/lib/file-scan/scan";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scanned-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -854,40 +853,16 @@ const uploadEntityHandler = async function* ({
   }
 
   // Security scan before S3 upload
-  const scanResult = await scanFile({
-    buffer: new Uint8Array(fileBuffer),
+  const scanResult = await scanUploadForHandler({
+    bytes: fileBuffer,
     declaredMimeType: file.type,
     fileName: name,
   });
-
   if (Result.isError(scanResult)) {
-    return Result.err(
-      new HandlerError({ status: 422, message: "File security scan failed" }),
-    );
+    return scanResult;
   }
-
-  if (scanResult.value.verdict === "reject") {
-    const rejection = fileSecurityRejection(scanResult.value);
-    if (rejection === null) {
-      panic("Rejecting scan had no rejecting findings");
-    }
-    return Result.err(
-      new HandlerError({
-        ...rejection,
-        status: 422,
-      }),
-    );
-  }
-
-  let scanWarnings: string[] | undefined;
-  if (scanResult.value.verdict === "warn") {
-    scanWarnings = [];
-    for (const f of scanResult.value.findings) {
-      if (f.severity === "warn") {
-        scanWarnings.push(f.message);
-      }
-    }
-  }
+  const scanned = scanResult.value;
+  const scanWarnings = scanned.scanWarnings ?? undefined;
 
   // Scanning and the draft-content check above judge what the client sent, so
   // they run on the submitted bytes. Everything from here describes the stored
@@ -902,7 +877,7 @@ const uploadEntityHandler = async function* ({
 
   let encrypted = false;
   if (file.type === PDF_MIME_TYPE) {
-    const result = await isEncryptedPdf(fileBuffer);
+    const result = await isEncryptedPdf(scanned);
 
     if (Result.isError(result)) {
       captureError(result.error, {

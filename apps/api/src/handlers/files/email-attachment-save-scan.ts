@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scanned-file";
 
 export const scanEmailAttachmentForSave = async ({
   bytes,
@@ -21,19 +24,19 @@ export const scanEmailAttachmentForSave = async ({
     );
   }
 
-  const scanResult = await scanFile({
-    buffer: bytes,
+  const scanResult = await scanUpload({
+    bytes,
     declaredMimeType: mimeType,
     fileName,
   });
   if (Result.isError(scanResult)) {
-    return Result.err(
-      new HandlerError({ status: 422, message: "File security scan failed" }),
-    );
-  }
-  if (scanResult.value.verdict === "reject") {
-    const reasons = scanResult.value.findings.flatMap((finding) =>
-      finding.severity === "reject" ? [finding.message] : [],
+    if (!FileScanRejectedError.is(scanResult.error)) {
+      return Result.err(
+        new HandlerError({ status: 422, message: "File security scan failed" }),
+      );
+    }
+    const reasons = scanResult.error.rejection.issues.map(
+      ({ message }) => message,
     );
     return Result.err(
       new HandlerError({
@@ -43,6 +46,7 @@ export const scanEmailAttachmentForSave = async ({
     );
   }
   return Result.ok({
-    scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
+    scanned: scanResult.value,
+    scanWarnings: scanResult.value.scanWarnings ?? undefined,
   });
 };

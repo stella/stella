@@ -25,6 +25,7 @@ import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -105,7 +106,7 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "a".repeat(64),
-      s3Key: `chat/${ids.userA1}/${ownFileId}`,
+      s3Key: testFileKey(`chat/${ids.userA1}/${ownFileId}`),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -115,7 +116,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "c".repeat(64),
-      s3Key: `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`,
+      s3Key: testFileKey(`chat/${ids.userA1}/${ownXlsxFileId}.xlsx`),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -125,7 +126,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "d".repeat(64),
-      s3Key: `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`,
+      s3Key: testFileKey(`chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -135,7 +136,7 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "b".repeat(64),
-      s3Key: `chat/${ids.userB1}/${foreignFileId}`,
+      s3Key: testFileKey(`chat/${ids.userB1}/${foreignFileId}`),
       threadId: ids.chatThreadWorkspaceB1,
     },
   ]);

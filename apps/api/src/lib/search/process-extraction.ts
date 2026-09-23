@@ -20,6 +20,7 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
+import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -371,10 +372,13 @@ export const executeNativeExtraction = async ({
     },
   );
   lifecycleSignal.throwIfAborted();
-  const extraction = await extractText(buffer, source.extractionMimeType, {
-    signal: lifecycleSignal,
-    timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
-  });
+  const extraction = await extractText(
+    storedFile({ key, bytes: buffer, mimeType: source.extractionMimeType }),
+    {
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+    },
+  );
   if (Result.isError(extraction)) {
     throw extraction.error;
   }

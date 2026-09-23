@@ -112,7 +112,7 @@ export default createSafeHandler(
       );
     }
 
-    const { scanWarnings } = yield* Result.await(
+    const { scanned, scanWarnings } = yield* Result.await(
       scanEmailAttachmentForSave({
         bytes: attachment.bytes,
         fileName: attachment.fileName,
@@ -122,9 +122,7 @@ export default createSafeHandler(
 
     let encrypted = false;
     if (attachment.mimeType === PDF_MIME_TYPE) {
-      const pdfBuffer = new ArrayBuffer(attachment.bytes.byteLength);
-      new Uint8Array(pdfBuffer).set(attachment.bytes);
-      const encryptedResult = await isEncryptedPdf(pdfBuffer);
+      const encryptedResult = await isEncryptedPdf(scanned);
       if (Result.isError(encryptedResult)) {
         captureError(encryptedResult.error, {
           mimeType: PDF_MIME_TYPE,

@@ -45,7 +45,13 @@ import {
   toDataUrl,
 } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import type { FileKey } from "@/api/lib/file-key";
+import {
+  FileScanRejectedError,
+  scanUpload,
+  storedFile,
+} from "@/api/lib/file-scan/scanned-file";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   generateImageThumbnail,
   shouldGenerateImageThumbnail,
@@ -95,7 +101,7 @@ type UploadMessageFilesReturn = Result<
 
 export type UploadedChatFile = {
   id: SafeId<"userFile">;
-  s3Key: string;
+  s3Key: FileKey;
   thumbnailS3Key: string | null;
 };
 
@@ -260,7 +266,7 @@ type HydrateFilePartProps = {
   fileName: string;
   mimeType: string;
   sendMode: ChatSendMode;
-  s3Key: string;
+  s3Key: FileKey;
 };
 
 export type HydratedFilePart =
@@ -366,11 +372,13 @@ const attachmentText = ({
   content: string;
 }): string => `Attached file "${fileName}":\n\n${content}`;
 
-const extractXlsxAttachmentText = async (buffer: ArrayBuffer) =>
-  (await extractFileTextResult(buffer, XLSX_MIME_TYPE)).map((extracted) => {
-    const text = extracted?.trim();
-    return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
-  });
+const extractXlsxAttachmentText = async (file: ScannedFile) =>
+  (await extractFileTextResult(file.withMimeType(XLSX_MIME_TYPE))).map(
+    (extracted) => {
+      const text = extracted?.trim();
+      return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
+    },
+  );
 
 export const hydrateFilePart = async ({
   extractedText,
@@ -487,7 +495,9 @@ export const hydrateFilePart = async ({
 
     if (mimeType === XLSX_MIME_TYPE) {
       const extracted = yield* Result.await(
-        extractXlsxAttachmentText(buffer).then((result) =>
+        extractXlsxAttachmentText(
+          storedFile({ key: s3Key, bytes: buffer, mimeType, fileName }),
+        ).then((result) =>
           Result.mapError(
             result,
             (cause) =>
@@ -667,48 +677,43 @@ export const uploadUserFile = async ({
       userId,
     });
 
-    const scanResult = await scanFile({
-      buffer: file.bytes,
+    const scanResult = await scanUpload({
+      bytes: file.bytes,
       declaredMimeType: file.mimeType,
       fileName: sanitizedFileName,
     });
 
     if (Result.isError(scanResult)) {
       return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to scan chat attachment",
-          cause: scanResult.error,
-        }),
+        FileScanRejectedError.is(scanResult.error)
+          ? new HandlerError({
+              status: 422,
+              message: "Chat attachment was rejected by the security scan",
+            })
+          : new HandlerError({
+              status: 500,
+              message: "Failed to scan chat attachment",
+              cause: scanResult.error,
+            }),
       );
     }
 
-    if (scanResult.value.verdict === "reject") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Chat attachment was rejected by the security scan",
-        }),
-      );
-    }
-
-    const scanWarnings = getScanWarnings(scanResult.value);
+    const scanned = scanResult.value;
+    const scanWarnings = scanned.scanWarnings;
 
     const extractedText =
       file.mimeType === XLSX_MIME_TYPE
         ? yield* Result.await(
-            extractXlsxAttachmentText(new Uint8Array(file.bytes).buffer).then(
-              (result) =>
-                Result.mapError(
-                  result,
-                  (cause) =>
-                    new HandlerError({
-                      status: 500,
-                      message:
-                        "Failed to extract text from chat XLSX attachment",
-                      cause,
-                    }),
-                ),
+            extractXlsxAttachmentText(scanned).then((result) =>
+              Result.mapError(
+                result,
+                (cause) =>
+                  new HandlerError({
+                    status: 500,
+                    message: "Failed to extract text from chat XLSX attachment",
+                    cause,
+                  }),
+              ),
             ),
           )
         : null;

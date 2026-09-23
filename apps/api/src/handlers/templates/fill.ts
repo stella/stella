@@ -16,7 +16,7 @@ import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
-import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
+import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -198,13 +198,11 @@ export const fillHandler = async ({
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
-    const docxBytes = new Uint8Array(result.buffer);
-    if (
-      !(await isTemplateOutputValid({
-        buffer: docxBytes,
-        fileName: sourceName,
-      }))
-    ) {
+    const scannedOutput = await scanTemplateOutput({
+      buffer: new Uint8Array(result.buffer),
+      fileName: sourceName,
+    });
+    if (scannedOutput === null) {
       return new Response(
         JSON.stringify({ error: "Template output invalid" }),
         {
@@ -213,14 +211,7 @@ export const fillHandler = async ({
         },
       );
     }
-    const pdfResult = await convertToPdf(
-      docxBytes.buffer.slice(
-        docxBytes.byteOffset,
-        docxBytes.byteOffset + docxBytes.byteLength,
-      ),
-      sourceName,
-      DOCX_MIME_TYPE,
-    );
+    const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
       return new Response(JSON.stringify({ error: "PDF conversion failed" }), {
         status: 502,

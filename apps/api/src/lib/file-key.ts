@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 const fileExtensionMap: Record<string, string> = {
@@ -37,13 +39,27 @@ type CreateFileKeyProps = {
   mimeType: string;
 };
 
+/**
+ * An object key under which only scanned uploads or server-built output are
+ * stored. Reading one back is how `storedFile` proves bytes may reach a
+ * parser, so presigned staging keys must never be minted as a `FileKey`. The
+ * key builders below and `tests/helpers/file-key.ts` are the only modules the
+ * `scanned-file-boundary` lint rule lets parse with this schema.
+ */
+export const fileKeySchema = v.pipe(v.string(), v.brand("FileKey"));
+
+export type FileKey = v.InferOutput<typeof fileKeySchema>;
+
 export const createFileKey = ({
   organizationId,
   workspaceId,
   fileId,
   mimeType,
-}: CreateFileKeyProps) =>
-  `${organizationId}/${workspaceId}/${fileId}.${getFileExtension(mimeType)}`;
+}: CreateFileKeyProps): FileKey =>
+  v.parse(
+    fileKeySchema,
+    `${organizationId}/${workspaceId}/${fileId}.${getFileExtension(mimeType)}`,
+  );
 
 type CreateOcrDerivativeKeyProps = {
   organizationId: SafeId<"organization">;
@@ -69,5 +85,7 @@ export const createUserFileKey = ({
   fileId,
   mimeType,
   userId,
-}: CreateUserFileKeyProps) =>
-  `${userId}/${fileId}.${getFileExtension(mimeType)}`;
+}: CreateUserFileKeyProps): FileKey =>
+  // Chat attachments are scanned before they are written here
+  // (`uploadMessageFiles`), so the key addresses scanned bytes.
+  v.parse(fileKeySchema, `${userId}/${fileId}.${getFileExtension(mimeType)}`);

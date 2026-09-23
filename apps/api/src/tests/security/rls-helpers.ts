@@ -65,6 +65,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -1158,28 +1159,28 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       ...userFileFixture,
       id: ids.userFileGlobalA1,
       userId: ids.userA1,
-      s3Key: `user-files/${ids.userFileGlobalA1}`,
+      s3Key: testFileKey(`user-files/${ids.userFileGlobalA1}`),
       threadId: ids.chatThreadGlobalA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceA1,
       userId: ids.userA1,
-      s3Key: `user-files/${ids.userFileWorkspaceA1}`,
+      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceA1}`),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileGlobalB1UserA1,
       userId: ids.userA1,
-      s3Key: `user-files/${ids.userFileGlobalB1UserA1}`,
+      s3Key: testFileKey(`user-files/${ids.userFileGlobalB1UserA1}`),
       threadId: ids.chatThreadGlobalB1UserA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceB1UserA1,
       userId: ids.userA1,
-      s3Key: `user-files/${ids.userFileWorkspaceB1UserA1}`,
+      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceB1UserA1}`),
       threadId: ids.chatThreadWorkspaceB1UserA1,
       thumbnailFileId: Bun.randomUUIDv7(),
     },

@@ -18,6 +18,7 @@ import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -1098,7 +1099,7 @@ describe("send message turn persistence", () => {
   test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
-      s3Key: "chat/thread/input.png",
+      s3Key: testFileKey("chat/thread/input.png"),
       thumbnailS3Key: "chat/thread/input-thumbnail.png",
     } satisfies UploadedChatFile;
     uploadMessageFilesWithRollbackMock.mockImplementationOnce(
@@ -1156,7 +1157,7 @@ describe("send message turn persistence", () => {
   test("rolls back every uploaded file when a running turn rejects the message", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
-      s3Key: "chat/thread/input.png",
+      s3Key: testFileKey("chat/thread/input.png"),
       thumbnailS3Key: "chat/thread/input-thumbnail.png",
     } satisfies UploadedChatFile;
     uploadMessageFilesWithRollbackMock.mockImplementationOnce(

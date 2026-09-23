@@ -10,6 +10,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { rollbackUnpersistedChatSideEffects } from "./send-message-side-effects";
@@ -140,7 +141,7 @@ describe("send-message side-effect rollback", () => {
     const { safeDb } = createScopedDbMock({ delete: deleteRows });
     const uploadedFile: UploadedChatFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000004"),
-      s3Key: "chat/thread/attachment.txt",
+      s3Key: testFileKey("chat/thread/attachment.txt"),
       thumbnailS3Key: null,
     };
     fake.put(bucket, uploadedFile.s3Key, "attachment body");
