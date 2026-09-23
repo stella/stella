@@ -77,6 +77,7 @@
     "check:test-input-coverage": "bun scripts/check-test-input-coverage.ts",
     "check:desktop-rust-inputs": "bun scripts/check-desktop-rust-inputs.ts",
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
+    "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
     "check:module-ownership": "bun scripts/ownership.ts --check",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
