@@ -23301,7 +23301,7 @@ export type WebRoutes = {
                   items: Array<{
                     columnId: T82d2fa2fc8;
                     decisionId: Tf4b485f2ea;
-                    state: ("pending" | "failed" | "answered" | "not_allowed");
+                    state: ("pending" | "failed" | "answered" | "not_stated" | "not_allowed");
                     answer: (null | T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369);
                     run: (null | {
                       version: 1;
@@ -23311,7 +23311,7 @@ export type WebRoutes = {
                       rationale: string;
                       justification: Tb8d6cfe011;
                     });
-                    failureReason: T432e07d100;
+                    failureReason: (null | "decision_unavailable" | "no_text" | "model_error" | "missing_answer" | "wrong_type" | "run_error");
                     updatedAt: string;
                     stale: T1bdf39f14a;
                   }>;
