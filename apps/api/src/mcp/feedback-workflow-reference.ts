@@ -108,10 +108,11 @@ const STEPS = [
     title: "Send",
     detail:
       `Call ${SUBMIT} with exactly the \`report\` object ${PREPARE} returned, ` +
-      "plus `confirm: true`. Without `confirm` the call is refused with " +
-      "`confirmation_required`; that refusal means ask the human, not retry " +
-      "with the flag set. Editing the report between the two calls means the " +
-      "human approved text that was not sent.",
+      "its `approval_token`, and `confirm: true`. The token covers that " +
+      "exact report for one hour: a report edited between the two calls, or " +
+      "one without its token, is refused with `confirmation_required`. That " +
+      "refusal means prepare again and ask the human, not retry with the " +
+      "flag set.",
   },
 ] as const;
 

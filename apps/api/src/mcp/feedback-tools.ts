@@ -6,8 +6,10 @@
  * The split exists because the human approval is the real control on what
  * leaves the workspace. A one-call tool would have the model deciding, alone,
  * that a paragraph of matter text is safe to publish. `prepare_feedback`
- * returns the report in exactly the shape `submit_feedback` accepts, so the
- * approved bytes and the submitted bytes are the same bytes.
+ * returns the report in exactly the shape `submit_feedback` accepts, plus an
+ * approval token signed over it (`feedback-approval.ts`); `submit_feedback`
+ * refuses any report the token does not cover, so the approved bytes and the
+ * submitted bytes are the same bytes.
  */
 
 import { Result } from "better-result";
@@ -23,11 +25,17 @@ import type {
   FeedbackReportContext,
   FeedbackReportInput,
 } from "@stll/api-contract/feedback";
+import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { sanitizeFeedbackReport } from "@/api/handlers/feedback/sanitize-report";
 import type { SanitizableFeedbackField } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
+import {
+  checkFeedbackApproval,
+  createFeedbackApproval,
+} from "@/api/mcp/feedback-approval";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -48,6 +56,7 @@ const SUBMIT_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const SUBMIT_RATE_LIMIT_BUCKET = "feedback:org";
 
 const FEEDBACK_REQUEST_ID_MAX_CHARS = 64;
+const FEEDBACK_APPROVAL_TOKEN_MAX_CHARS = 128;
 
 const capped = (description: string, max: number) =>
   v.pipe(v.string(), v.maxLength(max), v.description(description));
@@ -141,6 +150,11 @@ const prepareArgsSchema = nullAsAbsent(v.strictObject(reportProperties));
 const submitArgsSchema = nullAsAbsent(
   v.strictObject({
     ...reportProperties,
+    approval_token: v.pipe(
+      v.string(),
+      v.maxLength(FEEDBACK_APPROVAL_TOKEN_MAX_CHARS),
+      v.description("From prepare_feedback; covers only that report."),
+    ),
     confirm: v.optional(
       v.pipe(
         v.boolean(),
@@ -176,6 +190,7 @@ const REPORT_WIRE_SCHEMA = v.strictObject({
 
 const PREPARE_FEEDBACK_OUTPUT_SCHEMA = v.strictObject({
   report: REPORT_WIRE_SCHEMA,
+  approval_token: v.string(),
   redactions: v.pipe(v.number(), v.integer()),
   redacted_fields: v.array(v.string()),
   next_step: v.string(),
@@ -305,7 +320,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       "maintainers and get it back sanitized. Sends nothing: " +
       `${REDACTION_SUMMARY}, and the result is the report for you to show ` +
       "the human verbatim. Once they approve it, call submit_feedback with " +
-      `that same report and confirm: true. ${DRAFTING_RULES} The reporter's ` +
+      "that same report, its approval_token and confirm: true. " +
+      `${DRAFTING_RULES} The reporter's ` +
       "identity is stored privately and is never published.",
     inputSchema: prepareArgsSchema,
     jsonSchemaProjectionWaiver: {
@@ -329,7 +345,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       "File the report prepared by prepare_feedback with the stella " +
       "maintainers. This sends the content out of the workspace: it is " +
       "stored, emailed to the maintainers, and may be posted as a public " +
-      `issue, so it is refused without confirm: true. ${REDACTION_SUMMARY} ` +
+      "issue, so it is refused without confirm: true and the report's " +
+      `approval_token. ${REDACTION_SUMMARY} ` +
       "again here, and the reporter's identity is stored privately and never " +
       "published. Returns a receipt to give the human. Re-sending identical " +
       "content within a day returns the original receipt and sends nothing.",
@@ -363,9 +380,13 @@ const VALIDATION_HINT =
   `(${FEEDBACK_AREAS.join(", ")}), a title (<= ${FEEDBACK_LIMITS.title} ` +
   `chars) and what_happened (<= ${FEEDBACK_LIMITS.whatHappened} chars).`;
 
+const SUBMIT_VALIDATION_HINT =
+  `${VALIDATION_HINT} Also pass the approval_token prepare_feedback returned ` +
+  "with this report; without one, call prepare_feedback first.";
+
 const handlePrepareFeedbackTool: McpToolHandler<
   v.InferInput<typeof PREPARE_FEEDBACK_OUTPUT_SCHEMA>
-> = ({ args }) => {
+> = ({ args, context }) => {
   const parsed = v.safeParse(prepareArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues, VALIDATION_HINT);
@@ -377,12 +398,20 @@ const handlePrepareFeedbackTool: McpToolHandler<
 
   return toolDataResult({
     report: toWireReport(report),
+    approval_token: createFeedbackApproval({
+      now: Temporal.Now.instant().epochMilliseconds,
+      organizationId: context.organizationId,
+      report,
+      secret: env.BETTER_AUTH_SECRET,
+      userId: context.userId,
+    }),
     redactions,
     redacted_fields: redactedFields.map((field) => MCP_FIELD_NAME[field]),
     next_step:
       "Show this report to the human verbatim and ask whether to send it. " +
       "Only once they approve, call submit_feedback with exactly this " +
-      "report plus confirm: true. Nothing has been sent or stored yet.",
+      "report, this approval_token, and confirm: true. Nothing has been " +
+      "sent or stored yet.",
   });
 };
 
@@ -391,7 +420,31 @@ const handleSubmitFeedbackTool: McpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(submitArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues, VALIDATION_HINT);
+    return validationErrorResult(parsed.issues, SUBMIT_VALIDATION_HINT);
+  }
+
+  const report = toReportInput(parsed.output);
+  const approval = checkFeedbackApproval({
+    approval: parsed.output.approval_token,
+    now: Temporal.Now.instant().epochMilliseconds,
+    organizationId: context.organizationId,
+    report,
+    secret: env.BETTER_AUTH_SECRET,
+    userId: context.userId,
+  });
+  if (approval !== "valid") {
+    return structuredErrorResult({
+      code: "confirmation_required",
+      message:
+        approval === "expired"
+          ? "The approval for this report has expired"
+          : "This report does not match a report prepared for you",
+      hint:
+        "Call prepare_feedback, show the returned report to the human, and " +
+        "once they approve, submit exactly that report with its " +
+        "approval_token.",
+      retryable: false,
+    });
   }
 
   const withinRate = await feedbackIntakeGuards.consumeCounter({
@@ -410,7 +463,7 @@ const handleSubmitFeedbackTool: McpToolHandler<
   }
 
   const submitted = await submitFeedbackReport({
-    input: toReportInput(parsed.output),
+    input: report,
     reporter: {
       via: "mcp",
       userId: context.userId,

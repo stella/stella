@@ -343,8 +343,12 @@ const renderKeyValue = (
   return entries
     .map(([key, value]) => {
       const cell = formatCell(value);
+      // A value with no whitespace is an identifier, token, or URL: cut short
+      // it cannot be copied into the next command, so it may wrap instead.
       const shown =
-        valueWidth === undefined ? cell : truncate(cell, valueWidth);
+        valueWidth === undefined || !/\s/u.test(cell)
+          ? cell
+          : truncate(cell, valueWidth);
       return `${padToWidth(key, keyWidth)}${" ".repeat(COLUMN_GUTTER)}${shown}`.trimEnd();
     })
     .join("\n");

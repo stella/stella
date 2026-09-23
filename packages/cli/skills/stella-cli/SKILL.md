@@ -243,6 +243,7 @@ are omitted here.
   - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
   - `--title` — One line naming the problem, not the symptom's location. (string)
   - `--what-happened` — What stella actually did. (string)
+  - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
@@ -393,8 +394,10 @@ and ULIDs, secret-looking tokens, non-allowlisted URLs, and IP addresses are
 redacted server-side, and the sanitized report comes back in the shape the
 next step accepts. Show it to the human. After they approve,
 `stella feedback submit` stores the report, delivers it to the maintainers,
-and returns a receipt (`FB-XXXX-XXXX`) to pass on. `submit` asks for
-confirmation; `--yes` skips the prompt once the human has approved.
+and returns a receipt (`FB-XXXX-XXXX`) to pass on. `submit` takes the
+`approval_token` that `prepare` returned and refuses any other report;
+it asks for confirmation, and `--yes` skips the prompt once the human
+has approved.
 
 Describe the problem, the steps, and expected versus actual behaviour. Put
 the request id of a failed call in the context rather than in free text,

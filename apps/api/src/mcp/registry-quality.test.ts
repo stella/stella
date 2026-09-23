@@ -310,8 +310,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // output schema, and its description was shortened to pay for most of it.
 // A value the column can hold has to be a value the schema admits, so this
 // is not compressible; the anonymized and law surfaces keep their headroom.
+// The feedback approval token then measures 163_588 default: submit_feedback
+// takes the approval_token prepare_feedback signs over the report, so the
+// report the human approved and the one that is sent cannot diverge. Both
+// descriptions were shortened to pay for part of it; feedback tools are not on
+// the anonymized or law surfaces.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 163_400,
+  default: 163_600,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -388,8 +393,10 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // column holds would have the tool answer outside its own schema, so the
 // member is not optional and the ceiling moves rather than the enum. The
 // anonymized and law surfaces carry the same schema inside their headroom.
+// prepare_feedback returns the approval_token submit_feedback requires:
+// measured 53_509 default. The anonymized and law surfaces are unchanged.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 53_500,
+  default: 53_550,
   anonymized: 32_850,
   law: 10_050,
 };

@@ -272,6 +272,28 @@ describe("renderResult: table fitting and flattening", () => {
     expect(lines.at(-1)).toContain("\u2026");
   });
 
+  test("a key-value view keeps opaque values whole at any width", () => {
+    const { out, writers } = capture();
+    const token = `fb1.1800000000000.${"A".repeat(43)}`;
+    renderResult({
+      plan: buildRenderPlan({
+        payload: { approval_token: token, next_step: "y ".repeat(100) },
+        itemsKey: undefined,
+        textPath: undefined,
+        singleReadActive: true,
+        columns: undefined,
+      }),
+      format: "table",
+      writers,
+      allActive: false,
+      width: 40,
+    });
+    const text = out.join("");
+    expect(text).toContain(token);
+    // Prose is still fitted to the terminal.
+    expect(text).toContain("\u2026");
+  });
+
   test("without a width nothing is truncated", () => {
     const { out, writers } = capture();
     renderResult({
