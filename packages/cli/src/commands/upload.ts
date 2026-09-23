@@ -175,11 +175,18 @@ export const uploadCommand: Command<Context> = buildCommand<
       setExit(this, EXIT_CODES.validation);
       return;
     }
-    const requiredScope =
-      flags.entityId === undefined ? "matters_write" : "documents_write";
-    if (!scopeGranted({ token: this.token, scope: requiredScope })) {
+    // A new document spends both the uploads domain consent and the
+    // documents consent its purpose requires server-side.
+    const requiredScopes =
+      flags.entityId === undefined
+        ? ["matters_write", "documents_write"]
+        : ["documents_write"];
+    const missingScope = requiredScopes.find(
+      (scope) => !scopeGranted({ token: this.token, scope }),
+    );
+    if (missingScope !== undefined) {
       writers.stderr(
-        `Missing scope stella:${requiredScope}. Re-run 'stella auth login' to grant stella:${requiredScope}.\n`,
+        `Missing scope stella:${missingScope}. Re-run 'stella auth login' to grant stella:${missingScope}.\n`,
       );
       setExit(this, EXIT_CODES.auth);
       return;

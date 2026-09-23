@@ -1731,9 +1731,6 @@ ${domainSections.join("\n")}
 ${renderWaivedInternalSection(internalWaiverCounts)}`;
 };
 
-const VALUE_IMPORT_PATTERN =
-  /import\s+(?!type\b)(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/gu;
-
 type WritePrimitive = { module: string; name: string; scope: string };
 
 /**
@@ -1751,17 +1748,31 @@ export const writePrimitivesImportedBy = <T extends WritePrimitive>({
   source: string;
 }): T[] => {
   const found: T[] = [];
-  for (const match of source.matchAll(VALUE_IMPORT_PATTERN)) {
-    const specifiers = match[1] ?? "";
-    const module = match[2] ?? "";
+  for (const statement of source.split(";")) {
+    const trimmed = statement.trimStart();
+    if (!trimmed.startsWith("import ") || trimmed.startsWith("import type ")) {
+      continue;
+    }
+    const open = trimmed.indexOf("{");
+    const close = trimmed.indexOf("}", open);
+    const from = trimmed.indexOf(" from ", close);
+    if (open === -1 || close === -1 || from === -1) {
+      continue;
+    }
+    const module = trimmed
+      .slice(from + " from ".length)
+      .trim()
+      .replaceAll('"', "")
+      .replaceAll("'", "");
     const names = new Set(
-      specifiers
+      trimmed
+        .slice(open + 1, close)
         .split(",")
         .map((specifier) => specifier.trim())
         .filter(
           (specifier) => specifier !== "" && !specifier.startsWith("type "),
         )
-        .map((specifier) => specifier.split(/\s+as\s+/u).at(0) ?? specifier),
+        .map((specifier) => specifier.split(" as ").at(0)?.trim() ?? specifier),
     );
     for (const primitive of primitives) {
       if (primitive.module === module && names.has(primitive.name)) {
