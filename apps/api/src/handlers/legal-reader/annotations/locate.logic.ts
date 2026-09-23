@@ -15,8 +15,11 @@ import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 export type AnnotationPassage = {
-  /** The block anchor the document text prints in square brackets. */
-  anchor: string;
+  /**
+   * The block anchor the document text prints in square brackets. Absent,
+   * the whole document is searched and the quote must occur once in it.
+   */
+  anchor?: string | undefined;
   /** The words to mark, as they read in that block. */
   quote: string;
 };
@@ -50,59 +53,45 @@ export type LocatePassagesResult =
   | { status: "located"; spans: LocatedSpan[] }
   | { status: "rejected"; issues: AnnotationLocateIssue[] };
 
-type NormalizedText = {
+type CompactText = {
   text: string;
-  /** Raw index of every normalized character. */
+  /** UTF-16 offset in the raw text of every compact code unit. */
   rawIndex: number[];
 };
 
 const WHITESPACE = /\s/u;
 
 /**
- * Every whitespace run as one space, so a quote a model re-typed with a
- * plain space still finds text the source set with a non-breaking one or a
- * line break. The map keeps the offsets on the raw axis.
+ * The text with every whitespace character dropped, one entry per UTF-16
+ * code unit (the unit a browser selection measures, and the unit `indexOf`
+ * returns). Matching here finds a quote however its spaces were typed: a
+ * plain space for a non-breaking one or a line break, and the collapsed
+ * form of a letter-spaced heading ("R O Z S U D E K" as "ROZSUDEK"), which
+ * is how the agent-facing text prints it. Every whitespace character is in
+ * the BMP, so dropping one never splits a surrogate pair.
  */
-const normalizeWhitespace = (raw: string): NormalizedText => {
+const compact = (raw: string): CompactText => {
   let text = "";
   const rawIndex: number[] = [];
-  let previousWasSpace = false;
-  for (const [index, char] of [...raw].entries()) {
-    const isSpace = WHITESPACE.test(char);
-    if (isSpace && previousWasSpace) {
+  for (let index = 0; index < raw.length; index += 1) {
+    const unit = raw.charAt(index);
+    if (WHITESPACE.test(unit)) {
       continue;
     }
-    text += isSpace ? " " : char;
+    text += unit;
     rawIndex.push(index);
-    previousWasSpace = isSpace;
   }
   return { text, rawIndex };
 };
 
 type Occurrence = { startOffset: number; endOffset: number };
 
-/**
- * Offsets are UTF-16 indices, the unit a browser selection measures, so the
- * raw index above (a code-point index) is converted back before it is stored.
- */
-const codePointToUtf16Offsets = (raw: string): number[] => {
-  const offsets: number[] = [];
-  let utf16 = 0;
-  for (const char of raw) {
-    offsets.push(utf16);
-    utf16 += char.length;
-  }
-  offsets.push(utf16);
-  return offsets;
-};
-
 const findOccurrences = (raw: string, quote: string): Occurrence[] => {
-  const haystack = normalizeWhitespace(raw);
-  const needle = normalizeWhitespace(quote.trim()).text;
+  const haystack = compact(raw);
+  const needle = compact(quote).text;
   if (needle.length === 0) {
     return [];
   }
-  const utf16 = codePointToUtf16Offsets(raw);
   const occurrences: Occurrence[] = [];
   let from = 0;
   for (;;) {
@@ -110,16 +99,12 @@ const findOccurrences = (raw: string, quote: string): Occurrence[] => {
     if (at === -1) {
       return occurrences;
     }
-    const start = haystack.rawIndex[at];
+    const startOffset = haystack.rawIndex[at];
     const last = haystack.rawIndex[at + needle.length - 1];
-    if (start === undefined || last === undefined) {
-      return occurrences;
+    if (startOffset === undefined || last === undefined) {
+      return panic("A compact match lies outside its own text");
     }
-    const startOffset = utf16[start];
-    const endOffset = utf16[last + 1];
-    if (startOffset !== undefined && endOffset !== undefined) {
-      occurrences.push({ startOffset, endOffset });
-    }
+    occurrences.push({ startOffset, endOffset: last + 1 });
     from = at + 1;
   }
 };
@@ -151,7 +136,10 @@ const piecesOf = (block: Block): TextPiece[] => {
   }
 };
 
-type PieceMatch = { piece: TextPiece; occurrence: Occurrence };
+type LocateContext = {
+  blocks: readonly Block[];
+  blocksByAnchor: ReadonlyMap<string, Block>;
+};
 
 type LocateOneResult =
   | { type: "span"; span: LocatedSpan }
@@ -162,51 +150,76 @@ const issue = (value: AnnotationLocateIssue): LocateOneResult => ({
   issue: value,
 });
 
+const quoteNotFoundMessage = (block: Block | undefined): string => {
+  if (block === undefined) {
+    return "The quote does not occur in this document. Copy the words exactly as the document reads them; a passage over several paragraphs is one passage per paragraph.";
+  }
+  return block.type === "table"
+    ? `The quote is not in any one cell of table "${block.anchorId}". Quote words from a single cell, or send one passage per cell.`
+    : `The quote is not in block "${block.anchorId}". Copy the words exactly as that block reads; a passage over several paragraphs is one passage per paragraph.`;
+};
+
+/** How many candidate anchors an ambiguity issue names. */
+const AMBIGUITY_ANCHORS_SHOWN = 8;
+
+const matchesIn = (blocks: readonly Block[], quote: string) =>
+  blocks.flatMap((block) =>
+    piecesOf(block).flatMap((piece) =>
+      findOccurrences(piece.text, quote).map((occurrence) => ({
+        block,
+        occurrence,
+        piece,
+      })),
+    ),
+  );
+
 const locateOne = (
-  blocksByAnchor: ReadonlyMap<string, Block>,
+  { blocks, blocksByAnchor }: LocateContext,
   { anchor, quote }: AnnotationPassage,
   passageIndex: number,
 ): LocateOneResult => {
-  const block = blocksByAnchor.get(anchor);
-  if (block === undefined) {
+  const block = anchor === undefined ? undefined : blocksByAnchor.get(anchor);
+  if (anchor !== undefined && block === undefined) {
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.anchorNotFound,
       passageIndex,
       message: /^\[.*\]$/u.test(anchor)
         ? `No block is anchored "${anchor}". Pass the anchor without its square brackets.`
-        : `No block is anchored "${anchor}" in this document. Use an anchor the document text prints in square brackets.`,
+        : `No block is anchored "${anchor}" in this document. Use an anchor the document text prints in square brackets, or omit the anchor to search the whole document.`,
     });
   }
-  const pieces = piecesOf(block);
-  if (pieces.length === 0) {
+  if (block?.type === "image") {
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.blockHasNoText,
       passageIndex,
-      message: `Block "${anchor}" is an image and has no text to mark.`,
+      message: `Block "${block.anchorId}" is an image and has no text to mark.`,
     });
   }
-  const matches: PieceMatch[] = pieces.flatMap((piece) =>
-    findOccurrences(piece.text, quote).map((occurrence) => ({
-      occurrence,
-      piece,
-    })),
-  );
+  const matches = matchesIn(block === undefined ? blocks : [block], quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.quoteNotFound,
       passageIndex,
-      message:
-        block.type === "table"
-          ? `The quote is not in any one cell of table "${anchor}". Quote words from a single cell, or send one passage per cell.`
-          : `The quote is not in block "${anchor}". Copy the words exactly as that block reads; a passage over several paragraphs is one passage per paragraph.`,
+      message: quoteNotFoundMessage(block),
     });
   }
   if (others.length > 0) {
+    const anchors = [
+      ...new Set(matches.map((candidate) => candidate.block.anchorId)),
+    ];
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.quoteAmbiguous,
       passageIndex,
-      message: `The quote occurs ${String(matches.length)} times in block "${anchor}". Quote more of the surrounding words so it occurs once.`,
+      message:
+        anchors.length > 1
+          ? `The quote occurs ${String(matches.length)} times, in blocks ${anchors
+              .slice(0, AMBIGUITY_ANCHORS_SHOWN)
+              .map((candidate) => `"${candidate}"`)
+              .join(
+                ", ",
+              )}${anchors.length > AMBIGUITY_ANCHORS_SHOWN ? " and more" : ""}. Pass the anchor of the one to mark, or quote more of the surrounding words.`
+          : `The quote occurs ${String(matches.length)} times in block "${match.block.anchorId}". Quote more of the surrounding words so it occurs once.`,
     });
   }
   const { occurrence, piece } = match;
@@ -215,7 +228,7 @@ const locateOne = (
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.quoteTooLong,
       passageIndex,
-      message: `The passage in block "${anchor}" runs to ${String(stored.length)} characters; a mark holds at most ${String(READER_ANNOTATION_QUOTE_MAX_LENGTH)}. Mark a shorter passage.`,
+      message: `The passage in block "${match.block.anchorId}" runs to ${String(stored.length)} characters; a mark holds at most ${String(READER_ANNOTATION_QUOTE_MAX_LENGTH)}. Mark a shorter passage.`,
     });
   }
   return {
@@ -238,13 +251,16 @@ export const locatePassages = (
   blocks: readonly Block[],
   passages: readonly AnnotationPassage[],
 ): LocatePassagesResult => {
-  const blocksByAnchor = new Map(
-    blocks.map((block) => [block.anchorId, block] as const),
-  );
+  const context: LocateContext = {
+    blocks,
+    blocksByAnchor: new Map(
+      blocks.map((block) => [block.anchorId, block] as const),
+    ),
+  };
   const spans: LocatedSpan[] = [];
   const issues: AnnotationLocateIssue[] = [];
   for (const [index, passage] of passages.entries()) {
-    const located = locateOne(blocksByAnchor, passage, index);
+    const located = locateOne(context, passage, index);
     switch (located.type) {
       case "span":
         spans.push(located.span);

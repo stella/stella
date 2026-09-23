@@ -21,22 +21,22 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
+type AnnotationTarget = {
+  targetId: string;
+  targetType: ReaderAnnotationTargetType;
+};
+
 /**
- * What an agent may mark on: the blocks of a document the public reader
- * shows and whose source permits derived AI use. A source that forbids it
- * never reached the model's context, so a mark placed "from" it would be
- * one the model could only have guessed.
+ * Whether an agent may read or write marks on a document: the public reader
+ * shows it and its source permits derived AI use. A source that forbids AI
+ * use keeps both its wording and the marks quoting it away from an agent, as
+ * the chat prompt does. The block read rides along so a caller that places a
+ * mark does not resolve the document twice.
  */
-export type AnnotationTargetBlocks =
-  | { status: "available"; blocks: readonly Block[] }
+type AnnotationTargetAccess =
   | { status: "not_found" }
   | { status: "withheld" }
-  | { status: "unstructured" };
-
-const withBlocks = (blocks: readonly Block[]): AnnotationTargetBlocks =>
-  blocks.length === 0
-    ? { status: "unstructured" }
-    : { status: "available", blocks };
+  | { status: "available"; readBlocks: () => Promise<readonly Block[]> };
 
 const DECISION_AST_COLUMNS = {
   astS3Key: true,
@@ -45,9 +45,9 @@ const DECISION_AST_COLUMNS = {
   id: true,
 } as const;
 
-const readDecisionBlocks = async (
+const resolveDecision = async (
   decisionId: string,
-): Promise<AnnotationTargetBlocks> => {
+): Promise<AnnotationTargetAccess> => {
   const row = await withRedistributableSubject(
     caseLawPublicReadDb,
     { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
@@ -66,14 +66,17 @@ const readDecisionBlocks = async (
   if (!allowsDerivedAi(source.descriptor)) {
     return { status: "withheld" };
   }
-  // Outside the gate's transaction: the AST lives in object storage.
-  const ast = await readDecisionAnalysisAst(row, readCorpusTombstones);
-  return withBlocks(ast?.blocks ?? []);
+  return {
+    status: "available",
+    // Outside the gate's transaction: the AST lives in object storage.
+    readBlocks: async () =>
+      (await readDecisionAnalysisAst(row, readCorpusTombstones))?.blocks ?? [],
+  };
 };
 
-const readStatuteBlocks = async (
+const resolveStatute = async (
   documentId: string,
-): Promise<AnnotationTargetBlocks> => {
+): Promise<AnnotationTargetAccess> => {
   const [version] = await legislationPublicReadDb(
     async (tx) =>
       await tx
@@ -103,28 +106,27 @@ const readStatuteBlocks = async (
   if (!allowsDerivedAi(version.descriptor)) {
     return { status: "withheld" };
   }
-  return withBlocks(
-    await readVersionBlocks({
-      row: version,
-      legislationDb: legislationPublicReadDb,
-      step: "readerAnnotations.statuteBlocks",
-      purpose: "derived-ai",
-    }),
-  );
+  return {
+    status: "available",
+    readBlocks: async () =>
+      await readVersionBlocks({
+        row: version,
+        legislationDb: legislationPublicReadDb,
+        step: "readerAnnotations.statuteBlocks",
+        purpose: "derived-ai",
+      }),
+  };
 };
 
-export const readAnnotationTargetBlocks = async ({
+export const resolveAnnotationTarget = async ({
   targetId,
   targetType,
-}: {
-  targetId: string;
-  targetType: ReaderAnnotationTargetType;
-}): Promise<AnnotationTargetBlocks> => {
+}: AnnotationTarget): Promise<AnnotationTargetAccess> => {
   switch (targetType) {
     case "decision":
-      return await readDecisionBlocks(targetId);
+      return await resolveDecision(targetId);
     case "statute":
-      return await readStatuteBlocks(targetId);
+      return await resolveStatute(targetId);
     default:
       targetType satisfies never;
       return panic(`Unhandled annotation target type: ${String(targetType)}`);

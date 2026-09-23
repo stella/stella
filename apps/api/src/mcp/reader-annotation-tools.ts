@@ -23,10 +23,12 @@ import {
   READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
 import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
-import { readAnnotationTargetBlocks } from "@/api/handlers/legal-reader/annotations/document-blocks";
+import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import { listReaderAnnotationsHandler } from "@/api/handlers/legal-reader/annotations/list";
 import { locatePassages } from "@/api/handlers/legal-reader/annotations/locate.logic";
 import type {
@@ -42,8 +44,10 @@ import {
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
+  InternalToolErrorResult,
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
@@ -106,6 +110,65 @@ const commentBodySchema = v.pipe(
   v.description("The comment's words."),
 );
 
+const TARGET_REFUSAL_HINT =
+  "Tell the user; they can highlight or comment on it in the reader themselves.";
+
+type TargetAccessResult =
+  | { status: "available"; readBlocks: () => Promise<readonly Block[]> }
+  | { status: "refused"; result: InternalToolErrorResult };
+
+/**
+ * The document gate both the read and the writes pass: a mark quotes its
+ * document, so a document an agent may not read is one whose marks it may
+ * not read either.
+ */
+const resolveTargetForAgent = async ({
+  context,
+  targetId,
+  targetType,
+}: {
+  context: McpRequestContext;
+  targetId: string;
+  targetType: ReaderAnnotationTargetType;
+}): Promise<TargetAccessResult> => {
+  const resolve =
+    context.testDependencies?.resolveAnnotationTarget ??
+    resolveAnnotationTarget;
+  const access = await Result.tryPromise(
+    async () => await resolve({ targetId, targetType }),
+  );
+  if (Result.isError(access)) {
+    return { status: "refused", result: internalFailureResult(access.error) };
+  }
+  switch (access.value.status) {
+    case "available":
+      return access.value;
+    case "not_found":
+      return {
+        status: "refused",
+        result: notFoundResult(
+          `No published ${targetType} has id ${targetId}`,
+          targetType === "decision"
+            ? "Pass the decisionId from read_case_law_decision or search_case_law."
+            : "Pass the documentId of the consolidated version from read_statute.",
+        ),
+      };
+    case "withheld":
+      return {
+        status: "refused",
+        result: structuredErrorResult({
+          code: "permission_denied",
+          message:
+            "This document's source does not permit derived AI use, so an agent cannot read or write marks on it.",
+          hint: TARGET_REFUSAL_HINT,
+        }),
+      };
+    default:
+      access.value satisfies never;
+      return panic("Unhandled annotation target access");
+  }
+};
+
 // --- list_reader_annotations --------------------------------------------------
 
 const listArgsSchema = nullAsAbsent(
@@ -144,6 +207,15 @@ const handleListTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, limit, target_id, target_type } = parsed.output;
+
+  const target = await resolveTargetForAgent({
+    context,
+    targetId: target_id,
+    targetType: target_type,
+  });
+  if (target.status === "refused") {
+    return target.result;
+  }
 
   const listed = await Result.gen(() =>
     listReaderAnnotationsHandler({
@@ -209,13 +281,16 @@ const markSchema = v.variant("kind", [
 ]);
 
 const passageSchema = v.strictObject({
-  anchor: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(64),
-    v.description(
-      "The block anchor the document text prints in square brackets, " +
-        "without the brackets (e.g. p-12, par_9).",
+  anchor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(64),
+      v.description(
+        "The block anchor the document text prints in square brackets, " +
+          "without the brackets (e.g. p-12, par_9). Omit it to search the " +
+          "whole document; an ambiguous quote's error names the candidates.",
+      ),
     ),
   ),
   quote: v.pipe(
@@ -261,9 +336,17 @@ const UUID_VARIANT_DIGITS = ["8", "9", "a", "b"] as const;
  * mark is, shaped as a UUID; the create handler compares the stored rows
  * with the request before it treats a present id as a replay.
  */
-const createRequestIdFor = (userId: string, request: unknown) => {
+const createRequestIdFor = ({
+  organizationId,
+  request,
+  userId,
+}: {
+  organizationId: string;
+  request: unknown;
+  userId: string;
+}) => {
   const hex = new CryptoHasher("sha256")
-    .update(JSON.stringify([userId, request]))
+    .update(JSON.stringify([organizationId, userId, request]))
     .digest("hex")
     .slice(0, UUID_HEX_LENGTH);
   // Version 8 (custom) and the RFC 9562 variant (10xx: 8, 9, a or b).
@@ -287,46 +370,28 @@ const handleCreateTool: TypedMcpToolHandler<
   }
   const { mark, passages, target_id, target_type, visibility } = parsed.output;
 
-  const document = await Result.tryPromise(
-    async () =>
-      await readAnnotationTargetBlocks({
-        targetId: target_id,
-        targetType: target_type,
-      }),
-  );
-  if (Result.isError(document)) {
-    return internalFailureResult(document.error);
+  const target = await resolveTargetForAgent({
+    context,
+    targetId: target_id,
+    targetType: target_type,
+  });
+  if (target.status === "refused") {
+    return target.result;
   }
-  switch (document.value.status) {
-    case "not_found":
-      return notFoundResult(
-        `No published ${target_type} has id ${target_id}`,
-        target_type === "decision"
-          ? "Pass the decisionId from read_case_law_decision or search_case_law."
-          : "Pass the documentId of the consolidated version from read_statute.",
-      );
-    case "withheld":
-      return structuredErrorResult({
-        code: "permission_denied",
-        message:
-          "This document's source does not permit derived AI use, so an agent cannot mark its text.",
-        hint: "Tell the user; they can highlight or comment on it in the reader themselves.",
-      });
-    case "unstructured":
-      return structuredErrorResult({
-        code: "validation_error",
-        message:
-          "This document is stored as flat text without anchored blocks, so a mark cannot be placed on it.",
-        hint: "Tell the user; they can highlight or comment on it in the reader themselves.",
-      });
-    case "available":
-      break;
-    default:
-      document.value satisfies never;
-      return panic("Unhandled annotation target state");
+  const blocks = await Result.tryPromise(target.readBlocks);
+  if (Result.isError(blocks)) {
+    return internalFailureResult(blocks.error);
+  }
+  if (blocks.value.length === 0) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message:
+        "This document is stored as flat text without anchored blocks, so a mark cannot be placed on it.",
+      hint: TARGET_REFUSAL_HINT,
+    });
   }
 
-  const located = locatePassages(document.value.blocks, passages);
+  const located = locatePassages(blocks.value, passages);
   if (located.status === "rejected") {
     return structuredErrorResult({
       code: "validation_error",
@@ -342,18 +407,26 @@ const handleCreateTool: TypedMcpToolHandler<
     });
   }
 
+  // The id is the primary key, unique across organizations, so the
+  // organization is part of it; visibility is hashed as stored, so an omitted
+  // one and "private" name the same mark.
+  const storedVisibility = visibility ?? "private";
   const shared = {
-    requestId: createRequestIdFor(context.userId, {
-      mark,
-      spans: located.spans,
-      target_id,
-      target_type,
-      visibility,
+    requestId: createRequestIdFor({
+      organizationId: context.organizationId,
+      request: {
+        mark,
+        spans: located.spans,
+        target_id,
+        target_type,
+        visibility: storedVisibility,
+      },
+      userId: context.userId,
     }),
     spans: located.spans,
     targetId: target_id,
     targetType: target_type,
-    visibility: visibility ?? "private",
+    visibility: storedVisibility,
   } as const;
   const body: CreateAnnotationBody =
     mark.kind === "highlight"
@@ -551,8 +624,8 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     },
     description:
       "Highlight or comment on a passage of a case-law decision or a statute " +
-      "version, as the user. Name each paragraph by the anchor the document " +
-      "text prints in square brackets and quote the words to mark; the mark " +
+      "version, as the user. Quote the words to mark, one passage per " +
+      "paragraph, with its anchor when the document text shows one; the mark " +
       "appears in the user's reader. Private unless visibility is shared. " +
       "Resending the same call returns the mark it already made.",
     inputSchema: createArgsSchema,

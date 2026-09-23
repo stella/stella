@@ -99,6 +99,77 @@ describe("locatePassages", () => {
     });
   });
 
+  test("offsets stay on the UTF-16 axis past a character outside the BMP", () => {
+    const raw = "A\u{1D400} target";
+    const result = locatePassages(
+      [paragraph("p-1", raw)],
+      [{ anchor: "p-1", quote: "target" }],
+    );
+
+    expect(result).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "p-1",
+          startOffset: 4,
+          endOffset: 10,
+          quote: "target",
+        },
+      ],
+    });
+  });
+
+  test("finds a letter-spaced heading by the collapsed form the prompt prints", () => {
+    const result = locatePassages(
+      [paragraph("h-1", "R O Z S U D E K")],
+      [{ anchor: "h-1", quote: "ROZSUDEK" }],
+    );
+
+    expect(result).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "h-1",
+          startOffset: 0,
+          endOffset: 15,
+          quote: "R O Z S U D E K",
+        },
+      ],
+    });
+  });
+
+  test("without an anchor, searches the document and names the candidates", () => {
+    const blocks = [
+      paragraph("p-1", "The appeal is dismissed."),
+      paragraph("p-2", "Costs follow the event."),
+      paragraph("p-3", "The appeal is dismissed with costs."),
+    ];
+
+    expect(
+      locatePassages(blocks, [{ quote: "Costs follow the event" }]),
+    ).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "p-2",
+          startOffset: 0,
+          endOffset: 22,
+          quote: "Costs follow the event",
+        },
+      ],
+    });
+
+    const ambiguous = locatePassages(blocks, [
+      { quote: "The appeal is dismissed" },
+    ]);
+    expect(ambiguous.status).toBe("rejected");
+    expect(
+      ambiguous.status === "rejected"
+        ? ambiguous.issues.at(0)?.message
+        : undefined,
+    ).toContain('"p-1", "p-3"');
+  });
+
   test("any unique substring round-trips to its raw offsets, however its spaces are typed", () => {
     const word = fc.stringMatching(/^[a-zčřžáé§0-9]{1,8}$/u);
     const gap = fc.constantFrom(" ", " ", "\n", "  ");
@@ -130,7 +201,8 @@ describe("locatePassages", () => {
             located !== undefined &&
             text.slice(located.startOffset, located.endOffset) ===
               located.quote &&
-            located.quote.replaceAll(/\s+/gu, " ") === quote
+            located.quote.replaceAll(/\s/gu, "") ===
+              quote.replaceAll(/\s/gu, "")
           );
         },
       ),

@@ -3853,7 +3853,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "create_reader_annotation",
     "scope": "stella:knowledge_write",
     "access": "write",
-    "description": "Highlight or comment on a passage of a case-law decision or a statute version, as the user. Name each paragraph by the anchor the document text prints in square brackets and quote the words to mark; the mark appears in the user's reader. Private unless visibility is shared. Resending the same call returns the mark it already made.",
+    "description": "Highlight or comment on a passage of a case-law decision or a statute version, as the user. Quote the words to mark, one passage per paragraph, with its anchor when the document text shows one; the mark appears in the user's reader. Private unless visibility is shared. Resending the same call returns the mark it already made.",
     "annotations": {
       "title": "Create reader annotation",
       "destructiveHint": false,
@@ -3958,7 +3958,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
-                "description": "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9)."
+                "description": "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9). Omit it to search the whole document; an ambiguous quote's error names the candidates."
               },
               "quote": {
                 "type": "string",
@@ -3968,7 +3968,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               }
             },
             "required": [
-              "anchor",
               "quote"
             ],
             "additionalProperties": false

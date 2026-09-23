@@ -6002,7 +6002,7 @@ export const generatedRouteMap: RouteNode = {
                         minLength: 1,
                         maxLength: 64,
                         description:
-                          "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9).",
+                          "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9). Omit it to search the whole document; an ambiguous quote's error names the candidates.",
                       },
                       quote: {
                         type: "string",
@@ -6012,7 +6012,7 @@ export const generatedRouteMap: RouteNode = {
                           "The words to mark, copied from that block. Differences in whitespace are tolerated; the words must occur exactly once in the block.",
                       },
                     },
-                    required: ["anchor", "quote"],
+                    required: ["quote"],
                     additionalProperties: false,
                   },
                   minItems: 1,
@@ -24469,6 +24469,8 @@ export const generatedRouteMap: RouteNode = {
                   "annotations-create",
                 ],
                 capabilityId: "legal-reader.annotations.create",
+                description:
+                  "Leave a highlight or comment on a passage of a case-law decision or a statute version; private unless shared.",
                 access: "write",
                 flags: [],
                 inputOnly: ["body"],
@@ -24696,6 +24698,8 @@ export const generatedRouteMap: RouteNode = {
                   "annotations-delete",
                 ],
                 capabilityId: "legal-reader.annotations.delete",
+                description:
+                  "Permanently delete one of the caller's highlights or comments.",
                 access: "write",
                 flags: [
                   {
@@ -24738,6 +24742,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legal-reader", "annotations-list"],
                 capabilityId: "legal-reader.annotations.list",
+                description:
+                  "List the highlights and comments on one decision or statute version: the caller's own and those colleagues shared.",
                 access: "read",
                 flags: [
                   {
@@ -24809,6 +24815,8 @@ export const generatedRouteMap: RouteNode = {
                   "annotations-update",
                 ],
                 capabilityId: "legal-reader.annotations.update",
+                description:
+                  "Change one of the caller's highlights or comments: its words, colour, style, or visibility.",
                 access: "write",
                 flags: [
                   {

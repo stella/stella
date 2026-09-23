@@ -20,6 +20,7 @@ import type {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
@@ -136,6 +137,7 @@ export type McpRequestContext = {
     readProvisionHistoryHandler?: typeof readProvisionHistoryHandler;
     readLegislationProvisionVersions?: typeof readLegislationProvisionVersions;
     readVersionBlocks?: typeof readVersionBlocks;
+    resolveAnnotationTarget?: typeof resolveAnnotationTarget;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;

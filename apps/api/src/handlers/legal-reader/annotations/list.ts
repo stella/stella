@@ -3,8 +3,11 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
+
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import { pageLengthKeepingMarksWhole } from "@/api/handlers/legal-reader/annotations/page.logic";
 import {
   annotationTargetTypeSchema,
   requireAnnotationTargetType,
@@ -169,19 +172,22 @@ export const listReaderAnnotationsHandler = async function* ({
           asc(legalReaderAnnotations.createdAt),
           asc(legalReaderAnnotations.id),
         )
-        .limit(limit + 1),
+        // Room to finish the last mark on the page: a mark's rows are
+        // contiguous in this order and number at most the span cap.
+        .limit(limit + READER_ANNOTATION_MAX_SPANS),
     ),
   );
 
   const page = createCursorPage({
     rows,
-    limit,
+    limit: pageLengthKeepingMarksWhole(rows, limit),
     cursorForItem: (item) =>
       annotationCursor.encode(item.createdAtCursor, item.id),
   });
 
   return Result.ok({
     ...page,
+    limit,
     items: page.items.map(({ createdAtCursor: _, ...item }) => item),
   });
 };

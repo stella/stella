@@ -3672,7 +3672,7 @@
       "scope": "knowledge_write"
     },
     "name": "create_reader_annotation",
-    "description": "Highlight or comment on a passage of a case-law decision or a statute version, as the user. Name each paragraph by the anchor the document text prints in square brackets and quote the words to mark; the mark appears in the user's reader. Private unless visibility is shared. Resending the same call returns the mark it already made.",
+    "description": "Highlight or comment on a passage of a case-law decision or a statute version, as the user. Quote the words to mark, one passage per paragraph, with its anchor when the document text shows one; the mark appears in the user's reader. Private unless visibility is shared. Resending the same call returns the mark it already made.",
     "inputSchema": {
       "type": "object",
       "required": ["target_type", "target_id", "mark", "passages"],
@@ -3747,7 +3747,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
-                "description": "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9)."
+                "description": "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9). Omit it to search the whole document; an ambiguous quote's error names the candidates."
               },
               "quote": {
                 "type": "string",
@@ -3756,7 +3756,7 @@
                 "description": "The words to mark, copied from that block. Differences in whitespace are tolerated; the words must occur exactly once in the block."
               }
             },
-            "required": ["anchor", "quote"],
+            "required": ["quote"],
             "additionalProperties": false
           },
           "minItems": 1,

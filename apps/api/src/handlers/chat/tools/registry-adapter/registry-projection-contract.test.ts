@@ -205,6 +205,12 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
       readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
       readVersionBlocks: readVersionBlocksMock,
+      // The corpus gate has its own tests; here a document is reachable.
+      resolveAnnotationTarget: async () =>
+        await Promise.resolve({
+          status: "available" as const,
+          readBlocks: async () => await Promise.resolve([]),
+        }),
       searchConsolidatedLegislation: searchConsolidatedLegislationMock,
       getLawTextBlock: getLawTextBlockMock,
       executeRegistryLookup: executeRegistryLookupMock,
