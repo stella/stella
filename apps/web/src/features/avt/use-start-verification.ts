@@ -8,7 +8,11 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
-import { avtKeys, latestVerificationsOptions } from "@/features/avt/queries";
+import {
+  avtKeys,
+  documentFileKey,
+  latestVerificationsOptions,
+} from "@/features/avt/queries";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -77,13 +81,13 @@ export const useStartVerification = ({
             await queryClient.fetchQuery(
               latestVerificationsOptions({
                 workspaceId,
-                entityIds: [target.entityId],
+                documents: [target],
               }),
             ),
         );
         const active = Result.isError(latest)
           ? null
-          : (latest.value.get(target.entityId) ?? null);
+          : (latest.value.get(documentFileKey(target)) ?? null);
         if (active?.status === "queued" || active?.status === "running") {
           onStarted(active.id);
           return;

@@ -5,7 +5,7 @@
  */
 
 import { Result } from "better-result";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
@@ -21,47 +21,71 @@ import {
 
 const config = {
   description:
-    "Read the latest list verification of each named document, in one call: " +
-    "its status, failure code, the list it checked against, when it started " +
-    "and finished, and claim counts per verdict state. A document never " +
-    "verified is absent from the answer. Earlier runs are in " +
-    "lists.verifications.list.",
+    "Read the latest list verification of each named document file (entity " +
+    "id and file field id), in one call: its status, failure code, the list " +
+    "it checked against, when it started and finished, and claim counts per " +
+    "verdict state. A file never verified is absent from the answer. Earlier " +
+    "runs are in lists.verifications.list.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "document_processing" },
   body: t.Object({
-    entityIds: t.Array(tSafeId("entity"), {
-      minItems: 1,
-      maxItems: VERIFICATION_LIMITS.LATEST_READ_DOCUMENTS_MAX,
-      uniqueItems: true,
-    }),
+    documents: t.Array(
+      t.Object(
+        { entityId: tSafeId("entity"), fileFieldId: tSafeId("field") },
+        { additionalProperties: false },
+      ),
+      {
+        minItems: 1,
+        maxItems: VERIFICATION_LIMITS.LATEST_READ_DOCUMENTS_MAX,
+        uniqueItems: true,
+      },
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 
 const readLatestVerifications = createSafeHandler(
   config,
-  async function* ({ body: { entityIds }, safeDb, workspaceId }) {
+  async function* ({ body: { documents }, safeDb, workspaceId }) {
+    // A run belongs to one file of a document, so two files of one document
+    // each have their own latest run.
+    const entityIds = [...new Set(documents.map((doc) => doc.entityId))];
+    const namedFiles = or(
+      ...documents.map((doc) =>
+        and(
+          eq(legalListVerificationRuns.entityId, doc.entityId),
+          eq(legalListVerificationRuns.fileFieldId, doc.fileFieldId),
+        ),
+      ),
+    );
     const runs = yield* Result.await(
       safeDb(async (tx) => {
-        // Newest run per document: DISTINCT ON walks the document index
-        // `(workspace_id, entity_id, …, created_at DESC)` once per entity.
+        // Newest run per file: DISTINCT ON walks the document index
+        // `(workspace_id, entity_id, file_field_id, created_at DESC)` once
+        // per named file.
         const latest = await tx
-          .selectDistinctOn([legalListVerificationRuns.entityId], {
-            ...RUN_SUMMARY_COLUMNS,
-          })
+          .selectDistinctOn(
+            [
+              legalListVerificationRuns.entityId,
+              legalListVerificationRuns.fileFieldId,
+            ],
+            { ...RUN_SUMMARY_COLUMNS },
+          )
           .from(legalListVerificationRuns)
           .where(
             and(
               eq(legalListVerificationRuns.workspaceId, workspaceId),
               inArray(legalListVerificationRuns.entityId, entityIds),
+              namedFiles,
             ),
           )
           .orderBy(
             asc(legalListVerificationRuns.entityId),
+            asc(legalListVerificationRuns.fileFieldId),
             desc(legalListVerificationRuns.createdAt),
             desc(legalListVerificationRuns.id),
           )
-          .limit(entityIds.length);
+          .limit(documents.length);
         if (latest.length === 0) {
           return [];
         }

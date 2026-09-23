@@ -29,9 +29,19 @@ export const runPollInterval = (
   }
 };
 
+/** One file of one document: a verification belongs to a file field. */
+export type DocumentFile = {
+  entityId: string;
+  fileFieldId: string;
+};
+
+/** Lookup key of a document file in the latest-verification map. */
+export const documentFileKey = ({ entityId, fileFieldId }: DocumentFile) =>
+  `${entityId}:${fileFieldId}`;
+
 type LatestVerificationsKey = {
   workspaceId: string;
-  entityIds: readonly string[];
+  documents: readonly DocumentFile[];
 };
 
 export const avtKeys = {
@@ -40,8 +50,11 @@ export const avtKeys = {
     [...avtKeys.all(workspaceId), "run", runId] as const,
   latestAll: (workspaceId: string) =>
     [...avtKeys.all(workspaceId), "latest"] as const,
-  latest: ({ workspaceId, entityIds }: LatestVerificationsKey) =>
-    [...avtKeys.latestAll(workspaceId), [...entityIds].toSorted()] as const,
+  latest: ({ workspaceId, documents }: LatestVerificationsKey) =>
+    [
+      ...avtKeys.latestAll(workspaceId),
+      documents.map(documentFileKey).toSorted(),
+    ] as const,
 };
 
 /** Documents per latest-verification request, the endpoint's cap. */
@@ -71,22 +84,25 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
   queryOptions({
     queryKey: avtKeys.latest(key),
     queryFn: async ({ signal }) => {
-      const chunks: string[][] = [];
+      const chunks: DocumentFile[][] = [];
       for (
         let start = 0;
-        start < key.entityIds.length;
+        start < key.documents.length;
         start += LATEST_READ_CHUNK
       ) {
-        chunks.push(key.entityIds.slice(start, start + LATEST_READ_CHUNK));
+        chunks.push(key.documents.slice(start, start + LATEST_READ_CHUNK));
       }
       const pages = await Promise.all(
-        chunks.map(async (entityIds) =>
+        chunks.map(async (documents) =>
           unwrapEden(
             await api
               .lists({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
               .verifications.latest.post(
                 {
-                  entityIds: entityIds.map((id) => toSafeId<"entity">(id)),
+                  documents: documents.map((doc) => ({
+                    entityId: toSafeId<"entity">(doc.entityId),
+                    fileFieldId: toSafeId<"field">(doc.fileFieldId),
+                  })),
                 },
                 { fetch: { signal } },
               ),
@@ -94,10 +110,12 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
         ),
       );
       return new Map(
-        pages.flatMap((page) => page.runs).map((run) => [run.entityId, run]),
+        pages
+          .flatMap((page) => page.runs)
+          .map((run) => [documentFileKey(run), run]),
       );
     },
-    enabled: key.entityIds.length > 0,
+    enabled: key.documents.length > 0,
     refetchInterval: (query) => {
       const runs = query.state.data;
       if (runs === undefined) {

@@ -28611,7 +28611,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "lists.verifications.latest.list",
                 description:
-                  "Read the latest list verification of each named document, in one call: its status, failure code, the list it checked against, when it started and finished, and claim counts per verdict state. A document never verified is absent from the answer. Earlier runs are in lists.verifications.list.",
+                  "Read the latest list verification of each named document file (entity id and file field id), in one call: its status, failure code, the list it checked against, when it started and finished, and claim counts per verdict state. A file never verified is absent from the answer. Earlier runs are in lists.verifications.list.",
                 access: "read",
                 flags: [
                   {
@@ -28623,17 +28623,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "matterId",
                   },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids",
-                    prop: "entityIds",
-                    required: true,
-                    part: "body",
-                    partPath: "entityIds",
-                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.documents"],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -28643,19 +28634,33 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["entityIds"],
+                      required: ["documents"],
                       properties: {
-                        entityIds: {
+                        documents: {
                           minItems: 1,
                           maxItems: 200,
                           uniqueItems: true,
                           type: "array",
                           items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
+                            additionalProperties: false,
+                            type: "object",
+                            required: ["entityId", "fileFieldId"],
+                            properties: {
+                              entityId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              fileFieldId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                            },
                           },
                         },
                       },

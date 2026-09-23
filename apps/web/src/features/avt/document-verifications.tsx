@@ -12,7 +12,10 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
-import { latestVerificationsOptions } from "@/features/avt/queries";
+import {
+  documentFileKey,
+  latestVerificationsOptions,
+} from "@/features/avt/queries";
 import type {
   VerificationRunStatus,
   VerificationRunSummary,
@@ -45,10 +48,13 @@ export const DocumentVerifications = ({
     onStarted: onOpenRun,
   });
   const confirmation = verification.sizeConfirmation;
-  const { data: latestByEntity, isPending } = useQuery(
+  const { data: latestByFile, isPending } = useQuery(
     latestVerificationsOptions({
       workspaceId,
-      entityIds: [...new Set(files.map((file) => file.entityId))],
+      documents: files.map((file) => ({
+        entityId: file.entityId,
+        fileFieldId: file.fieldId,
+      })),
     }),
   );
 
@@ -67,7 +73,14 @@ export const DocumentVerifications = ({
           <DocumentRow
             file={file}
             key={`${file.entityId}:${file.fieldId}`}
-            latest={latestByEntity?.get(file.entityId) ?? null}
+            latest={
+              latestByFile?.get(
+                documentFileKey({
+                  entityId: file.entityId,
+                  fileFieldId: file.fieldId,
+                }),
+              ) ?? null
+            }
             loading={isPending}
             listId={listId}
             onOpenRun={onOpenRun}

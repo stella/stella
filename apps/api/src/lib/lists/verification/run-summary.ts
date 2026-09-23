@@ -28,6 +28,7 @@ export const CLAIM_COUNT_COLUMNS = {
 export const RUN_SUMMARY_COLUMNS = {
   id: legalListVerificationRuns.id,
   entityId: legalListVerificationRuns.entityId,
+  fileFieldId: legalListVerificationRuns.fileFieldId,
   status: legalListVerificationRuns.status,
   errorCode: legalListVerificationRuns.errorCode,
   entityVersionId: legalListVerificationRuns.entityVersionId,
@@ -41,6 +42,7 @@ export const RUN_SUMMARY_COLUMNS = {
 type RunSummaryRow = {
   id: SafeId<"legalListVerificationRun">;
   entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
   status: (typeof legalListVerificationRuns.$inferSelect)["status"];
   errorCode: (typeof legalListVerificationRuns.$inferSelect)["errorCode"];
   entityVersionId: SafeId<"entityVersion">;
@@ -52,6 +54,7 @@ type RunSummaryRow = {
 export const serializeRunSummary = (run: RunSummaryRow) => ({
   id: run.id,
   entityId: run.entityId,
+  fileFieldId: run.fileFieldId,
   status: run.status,
   errorCode: run.errorCode,
   entityVersionId: run.entityVersionId,
