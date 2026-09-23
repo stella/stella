@@ -108,6 +108,8 @@ export const DecisionCitations = ({
           decision={decision}
           decisionId={decisionId}
           direction="incoming"
+          // A decision tab reuses this component; a new decision starts collapsed.
+          key={`${decisionId}-incoming`}
         />
       )}
       {outgoingTotal > 0 && (
@@ -116,6 +118,7 @@ export const DecisionCitations = ({
           decision={decision}
           decisionId={decisionId}
           direction="outgoing"
+          key={`${decisionId}-outgoing`}
         />
       )}
     </>
