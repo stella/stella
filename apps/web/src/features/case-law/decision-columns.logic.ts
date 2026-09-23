@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
+import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 /**
  * The decision column model as data: which columns exist, what they are
@@ -167,11 +168,10 @@ export const decisionColumnWidthClassNames = (
 /**
  * How much of a prose cell a row shows: two lines, so a page of rows can be
  * scanned, or all of it, so one row can be read. The same two modes the
- * workspace table's density control offers, under the same words.
+ * workspace table's density control offers, under the same words, and the
+ * same type, so the public tables and a matter's cannot offer different ones.
  */
-export const DECISION_CONTENT_MODES = ["tight", "fit-content"] as const;
-
-export type DecisionContentMode = (typeof DECISION_CONTENT_MODES)[number];
+export type DecisionContentMode = TableContentMode;
 
 const DECISION_CLAMP_CLASS_NAMES = {
   tight: "line-clamp-2",

@@ -6,12 +6,15 @@ import {
 } from "@/features/case-law/country-scope.logic";
 
 describe("where the top bar offers a jurisdiction", () => {
-  test("on the two screens whose URL carries the country, and names which", () => {
+  test("on the listing screens whose URL carries the country, and names which", () => {
     expect(countryScopedLawRoute(COUNTRY_SCOPED_LAW_ROUTE_IDS.home)).toBe(
       "home",
     );
     expect(countryScopedLawRoute(COUNTRY_SCOPED_LAW_ROUTE_IDS.cases)).toBe(
       "cases",
+    );
+    expect(countryScopedLawRoute(COUNTRY_SCOPED_LAW_ROUTE_IDS.statutes)).toBe(
+      "statutes",
     );
   });
 
@@ -19,7 +22,6 @@ describe("where the top bar offers a jurisdiction", () => {
     for (const routeId of [
       "/law/$country/cases/$court/$slug",
       "/law/$country/cases/$court/$language/$slug",
-      "/law/$country/statutes/",
       "/law/$country/statutes/$slug/",
       "/law/$country/statutes/$slug/v/$version",
       "/law/cases/research/",

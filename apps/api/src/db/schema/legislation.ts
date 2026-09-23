@@ -245,6 +245,16 @@ export const legislationDocuments = p.pgTable(
         sql`coalesce(${t.versionValidFrom}, DATE '0001-01-01')`,
         t.id,
       ),
+    // The same walk narrowed to one kind of act: without the type in the key
+    // a rare kind (`ústavní zákon`) walks the whole jurisdiction to fill a page.
+    p
+      .index("legislation_documents_country_type_valid_from_id_idx")
+      .on(
+        t.country,
+        t.documentType,
+        sql`coalesce(${t.versionValidFrom}, DATE '0001-01-01')`,
+        t.id,
+      ),
     p.index("legislation_documents_status_idx").on(t.status),
     p.index("legislation_documents_effective_date_idx").on(t.effectiveDate),
     p.index("legislation_documents_created_at_idx").on(t.createdAt),

@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Was ändert sich?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nicht geändert} one {Einmal geändert} other {# Mal geändert}}",
     "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",
     "citingDecisionsFilterPlaceholder": "Geladene Entscheidungen filtern",
+    "columns": {
+      "act": "Rechtsakt",
+      "amendments": "Änderungen",
+      "firstVersion": "Erste Fassung",
+      "lastAmended": "Zuletzt geändert"
+    },
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
-    "recentlyAmended": "Zuletzt geändert",
     "resolvedAlias": "Erkannt als {label}",
     "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "In Kraft",
       "draft": "Im Entwurf",
+      "ended": "Nicht mehr in Kraft",
       "future": "Zukünftig",
       "historical": "Überholt",
       "repealed": "Aufgehoben"

@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Kas mainās?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nav grozīts} zero {Grozīts # reižu} one {Grozīts # reizi} other {Grozīts # reizes}}",
     "asOf": "Teksts, kas bija spēkā",
     "backToList": "Visi tiesību akti",
     "citingDecisionsFilterPlaceholder": "Filtrēt ielādētos nolēmumus",
+    "columns": {
+      "act": "Tiesību akts",
+      "amendments": "Grozījumi",
+      "firstVersion": "Pirmā redakcija",
+      "lastAmended": "Pēdējoreiz grozīts"
+    },
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
-    "recentlyAmended": "Nesen grozītie",
     "resolvedAlias": "Atpazīts kā {label}",
     "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "Spēkā",
       "draft": "Projektā",
+      "ended": "Vairs nav spēkā",
       "future": "Nākotnes",
       "historical": "Aizstāts",
       "repealed": "Zaudējis spēku"

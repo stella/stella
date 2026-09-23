@@ -140,9 +140,12 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
 
   let headerContent: ReactNode = null;
   if (header.column.id === selectColId) {
-    headerContent = (
-      <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
-    );
+    // A table whose rows cannot be picked keeps the column for the row
+    // numbers alone, so there is nothing for a select-all to act on.
+    headerContent =
+      header.table.options.enableRowSelection === false ? null : (
+        <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
+      );
   } else if (!header.isPlaceholder) {
     headerContent = flexRender(
       header.column.columnDef.header,

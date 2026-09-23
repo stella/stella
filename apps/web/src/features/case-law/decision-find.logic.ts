@@ -14,7 +14,6 @@ import { panic } from "better-result";
 import { PROPERTY_FIND_SUPPORT } from "@stll/api-contract";
 import { decisionHeadnoteText } from "@stll/api-contract/case-law-text-field";
 
-import { tableFindMatches } from "@/components/workspaces/table/table-find.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
@@ -141,38 +140,4 @@ export const decisionFindRowText = ({
     );
   }
   return text;
-};
-
-type FindDecisionsInput = {
-  answersByKey: ReadonlyMap<string, QuestionAnswer>;
-  /** The columns the find reaches; empty while no term is applied. */
-  columnIds: readonly string[];
-  decisions: readonly Decision[];
-  questionColumns: readonly QuestionColumn[];
-  /** The submitted term once it clears the floor; null below it. */
-  term: string | null;
-};
-
-/**
- * The rows a find leaves on screen. The same list, by identity, when no term
- * is applied: the table compares its rows by identity, and a list rebuilt per
- * render loops a controlled table.
- */
-export const findDecisions = ({
-  answersByKey,
-  columnIds,
-  decisions,
-  questionColumns,
-  term,
-}: FindDecisionsInput): readonly Decision[] => {
-  if (term === null) {
-    return decisions;
-  }
-  return decisions.filter((decision) =>
-    tableFindMatches({
-      columnIds,
-      term,
-      text: decisionFindRowText({ answersByKey, decision, questionColumns }),
-    }),
-  );
 };

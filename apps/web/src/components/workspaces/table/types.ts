@@ -12,6 +12,7 @@ import type {
 import type { EntityViewRow } from "@/components/entity-views/types";
 import type { WorkspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import type { WorkspaceEntity } from "@/lib/types";
 
 export type TableTreeNode = WorkspaceEntity & {
@@ -26,16 +27,29 @@ export type DecisionRowData = {
   children: [];
 };
 
+/** One statute, at its latest wording: the public statute list's row kind. */
+export type StatuteRowData = {
+  kind: "statute";
+  statute: StatuteListItem;
+  /** Statutes never nest; the table reads children for every row kind. */
+  children: [];
+};
+
 /**
  * What a row of a workspace table holds.
  *
  * The kinds discriminate on `kind`: an entity row carries its entity kind
- * (`document`, `folder`, `task`, …) and a decision row carries `"decision"`,
- * which is not an entity kind. A host binds the table to one of them — the
- * aliases below default to the entity row, so entity code reads unchanged —
- * and supplies the behaviours that kind has through a `TableRowHost`.
+ * (`document`, `folder`, `task`, …) and a decision or statute row carries
+ * `"decision"` or `"statute"`, which are not entity kinds. A host binds the
+ * table to one of them — the aliases below default to the entity row, so
+ * entity code reads unchanged — and supplies the behaviours that kind has
+ * through a `TableRowHost`.
  */
-export type TableRowData = TableTreeNode | DecisionRowData | EntityViewRow;
+export type TableRowData =
+  | TableTreeNode
+  | DecisionRowData
+  | StatuteRowData
+  | EntityViewRow;
 
 // Keep the feature-set generic centralized so table consumers cannot drift from
 // the capabilities registered in `table-features.ts`.

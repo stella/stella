@@ -1,10 +1,9 @@
 /**
- * Which columns the results table shows.
+ * Which columns of the decision table the chooser offers.
  *
- * The workspace table's own chooser, over two groups: the decision columns and
- * the organization's questions. The menu knows only that a column has a name,
- * an icon and an id that is either hidden or not, so a question is hidden the
- * same way a court is.
+ * Two groups: the decision columns and the organization's questions. The
+ * chooser knows only that a column has a name, an icon and an id that is
+ * either hidden or not, so a question is hidden the same way a court is.
  */
 
 import { TagIcon } from "lucide-react";
@@ -12,9 +11,7 @@ import { useTranslations } from "use-intl";
 
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
-import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
-import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import type {
   DecisionColumnId,
   DecisionExtraColumn,
@@ -29,19 +26,15 @@ import type { QuestionColumnSurface } from "@/features/case-law/research/questio
 const isDecisionColumnId = (id: string): id is DecisionColumnId =>
   Object.hasOwn(DECISION_COLUMN_ICONS, id);
 
-type DecisionColumnToggleProps = {
+type UseDecisionColumnGroupsOptions = {
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
-  layout: DecisionTableLayout;
-  onLayoutChange: (layout: DecisionTableLayout) => void;
   questions: QuestionColumnSurface;
 };
 
-export const DecisionColumnToggle = ({
+export const useDecisionColumnGroups = ({
   extraColumns,
-  layout,
-  onLayoutChange,
   questions,
-}: DecisionColumnToggleProps) => {
+}: UseDecisionColumnGroupsOptions): ColumnToggleGroup[] => {
   const t = useTranslations();
   const schema = useDecisionTableSchema({ extraColumns, questions });
 
@@ -81,7 +74,7 @@ export const DecisionColumnToggle = ({
         }))
       : [];
 
-  const groups: ColumnToggleGroup[] = [
+  return [
     {
       id: "decision",
       label: t("common.caseLaw"),
@@ -93,14 +86,6 @@ export const DecisionColumnToggle = ({
       columns: questionColumns,
     },
   ];
-
-  return (
-    <ColumnToggle
-      groups={groups}
-      hidden={layout.hidden}
-      onChange={(hidden) => onLayoutChange({ ...layout, hidden })}
-    />
-  );
 };
 
 const DecisionColumnIcon = ({ columnId }: { columnId: DecisionColumnId }) => {

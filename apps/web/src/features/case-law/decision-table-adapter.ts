@@ -8,7 +8,7 @@
  * matter's case-law panel cannot drift into fetching rows a third way.
  */
 
-import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
+import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
 import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
 import {
   decisionOptions,
@@ -18,7 +18,7 @@ import type { WorkspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 
 /** The arguments the decision table's own entry points take. */
 export type DecisionTableAdapterKeys = {
-  listPage: [filters: DecisionListFilters, pageSize: DecisionPageSize];
+  listPage: [filters: DecisionListFilters, pageSize: PublicLawPageSize];
   detail: [decisionId: string];
 };
 

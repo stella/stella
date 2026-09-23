@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Co się zmienia?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Bez nowelizacji} one {Nowelizowany raz} few {Nowelizowany # razy} many {Nowelizowany # razy} other {Nowelizowany # razy}}",
     "asOf": "Tekst obowiązujący na dzień",
     "backToList": "Wszystkie akty prawne",
     "citingDecisionsFilterPlaceholder": "Filtruj wczytane orzeczenia",
+    "columns": {
+      "act": "Akt",
+      "amendments": "Nowelizacje",
+      "firstVersion": "Pierwsza wersja",
+      "lastAmended": "Ostatnia nowelizacja"
+    },
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
     "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
-    "recentlyAmended": "Ostatnio zmienione",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "Obowiązujący",
       "draft": "Projektowany",
+      "ended": "Nieobowiązujący",
       "future": "Przyszły",
       "historical": "Zastąpiony",
       "repealed": "Uchylony"

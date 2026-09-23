@@ -1,5 +1,9 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+
+import { DEFAULT_PUBLIC_LAW_PAGE_SIZE } from "@/components/public-law-table/public-law-pagination.logic";
+import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { APIError } from "@/lib/errors/api";
@@ -9,7 +13,6 @@ import { toPublicLawError, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
-const DEFAULT_PAGE_SIZE = 50;
 const NOT_FOUND_STATUS = 404;
 const VERSIONS_PAGE_SIZE = 200;
 /**
@@ -23,11 +26,17 @@ export type StatuteListFilters = {
   /** Narrows an act-number lookup to one publisher collection (`sb`, `zz`). */
   collection?: string;
   country: string;
+  /** The kind of act, exactly as the publisher names it (`zákon`). */
+  documentType?: string;
   language?: string;
   /** An act number, `<number>/<year>`: the list resolves that work. */
   number?: string;
   query?: string;
+  /** Works in force, or works no longer in force; both when absent. */
+  validity?: LegislationListValidity;
 };
+
+type StatuteListKey = StatuteListFilters & { pageSize: PublicLawPageSize };
 
 /**
  * A Work addressed the way its public URL addresses it: a jurisdiction and
@@ -42,18 +51,22 @@ export type StatuteSlugKey = {
 
 export const statuteKeys = {
   all: ["statutes"],
-  list: (filters: StatuteListFilters) => [
+  list: (key: StatuteListKey) => [
     ...statuteKeys.all,
     "list",
     {
-      collection: filters.collection,
-      country: filters.country,
-      language: filters.language,
-      number: filters.number,
-      query: filters.query,
+      collection: key.collection,
+      country: key.country,
+      documentType: key.documentType,
+      language: key.language,
+      number: key.number,
+      pageSize: key.pageSize,
+      query: key.query,
+      validity: key.validity,
     },
   ],
   shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
+  facets: (country: string) => [...statuteKeys.all, "facets", { country }],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
   publicById: (documentId: string) => [
     ...statuteKeys.all,
@@ -73,31 +86,83 @@ export const statuteKeys = {
   ],
 };
 
-export const statutesInfiniteOptions = (filters: StatuteListFilters) =>
+type ReadStatutesPageOptions = {
+  cursor: string | null;
+  filters: StatuteListFilters;
+  pageSize: PublicLawPageSize;
+  signal: AbortSignal;
+};
+
+const readStatutesPage = async ({
+  cursor,
+  filters,
+  pageSize,
+  signal,
+}: ReadStatutesPageOptions) => {
+  const response = await api.law.statutes.get({
+    query: {
+      country: filters.country,
+      limit: pageSize,
+      ...(cursor !== null && { cursor }),
+      ...(filters.collection !== undefined && {
+        collection: filters.collection,
+      }),
+      ...(filters.documentType !== undefined && {
+        documentType: filters.documentType,
+      }),
+      ...(filters.language !== undefined && { language: filters.language }),
+      ...(filters.number !== undefined && { number: filters.number }),
+      ...(filters.query !== undefined && { query: filters.query }),
+      ...(filters.validity !== undefined && { validity: filters.validity }),
+    },
+    fetch: { signal },
+  });
+
+  const data = unwrapPublicLawEden(response, "listPublicStatutes");
+
+  return data;
+};
+
+/** One Work as the statute list shows it: its latest wording, summarised. */
+export type StatuteListItem = Awaited<
+  ReturnType<typeof readStatutesPage>
+>["items"][number];
+
+export const statutesInfiniteOptions = (
+  filters: StatuteListFilters,
+  pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+) =>
   infiniteQueryOptions({
-    queryKey: statuteKeys.list(filters),
-    queryFn: async ({ pageParam, signal }) => {
-      const response = await api.law.statutes.get({
-        query: {
-          country: filters.country,
-          limit: DEFAULT_PAGE_SIZE,
-          ...(pageParam !== null && { cursor: pageParam }),
-          ...(filters.collection !== undefined && {
-            collection: filters.collection,
-          }),
-          ...(filters.language !== undefined && { language: filters.language }),
-          ...(filters.number !== undefined && { number: filters.number }),
-          ...(filters.query !== undefined && { query: filters.query }),
-        },
+    queryKey: statuteKeys.list({ ...filters, pageSize }),
+    queryFn: async ({ pageParam, signal }) =>
+      await readStatutesPage({
+        cursor: pageParam,
+        filters,
+        pageSize,
+        signal,
+      }),
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * The kinds of act a jurisdiction holds, with how many Works each has: the
+ * statute list's type filter.
+ */
+export const statuteFacetsOptions = (country: string) =>
+  queryOptions({
+    queryKey: statuteKeys.facets(country),
+    queryFn: async ({ signal }) => {
+      const response = await api.law.statutes.facets.get({
+        query: { country },
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "listPublicStatutes");
+      const data = unwrapPublicLawEden(response, "readPublicStatuteFacets");
 
       return data;
     },
-    initialPageParam: nullableStringCursorSeed(),
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

@@ -6,7 +6,7 @@ import { readStoredJson } from "@/lib/stored-json";
 
 export const TABLE_STORE_VERSION = 1;
 
-const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
+export const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 
 export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 

@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Co se mění?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nenovelizováno} one {Novelizováno #×} few {Novelizováno #×} many {Novelizováno #×} other {Novelizováno #×}}",
     "asOf": "Znění účinné k",
     "backToList": "Všechny předpisy",
     "citingDecisionsFilterPlaceholder": "Filtrovat načtená rozhodnutí",
+    "columns": {
+      "act": "Předpis",
+      "amendments": "Novelizace",
+      "firstVersion": "První znění",
+      "lastAmended": "Naposledy novelizováno"
+    },
     "diffInserted": "Vloženo:",
     "diffRemoved": "Vypuštěno:",
     "emptyDocument": "Toto znění nemá dostupný text.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
-    "recentlyAmended": "Naposledy novelizované",
     "resolvedAlias": "Rozpoznáno jako {label}",
     "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
+      "ended": "Neúčinné",
       "future": "Budoucí",
       "historical": "Nahrazené",
       "repealed": "Zrušené"

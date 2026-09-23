@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Mi változik?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nem módosították} one {# alkalommal módosították} other {# alkalommal módosították}}",
     "asOf": "Ezen a napon hatályos szöveg",
     "backToList": "Összes jogszabály",
     "citingDecisionsFilterPlaceholder": "Betöltött határozatok szűrése",
+    "columns": {
+      "act": "Jogszabály",
+      "amendments": "Módosítások",
+      "firstVersion": "Első változat",
+      "lastAmended": "Utoljára módosítva"
+    },
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
     "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
-    "recentlyAmended": "Legutóbb módosított",
     "resolvedAlias": "Felismerve: {label}",
     "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "Hatályos",
       "draft": "Tervezetben",
+      "ended": "Már nem hatályos",
       "future": "Jövőbeli",
       "historical": "Felváltott",
       "repealed": "Hatályon kívül helyezett"

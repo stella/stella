@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Qu'est-ce qui change ?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Jamais modifié} one {Modifié # fois} other {Modifié # fois}}",
     "asOf": "Version en vigueur au",
     "backToList": "Tous les textes",
     "citingDecisionsFilterPlaceholder": "Filtrer les décisions chargées",
+    "columns": {
+      "act": "Texte",
+      "amendments": "Modifications",
+      "firstVersion": "Première version",
+      "lastAmended": "Dernière modification"
+    },
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
     "emptyDocument": "Aucun texte disponible pour cette version.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
-    "recentlyAmended": "Modifiés récemment",
     "resolvedAlias": "Reconnu comme {label}",
     "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "En vigueur",
       "draft": "En projet",
+      "ended": "N'est plus en vigueur",
       "future": "À venir",
       "historical": "Remplacé",
       "repealed": "Abrogé"

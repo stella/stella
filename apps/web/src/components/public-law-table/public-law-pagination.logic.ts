@@ -13,48 +13,50 @@
  * not in the route.
  */
 
-export const DECISION_PAGE_SIZES = [25, 50, 100] as const;
+import * as v from "valibot";
 
-export type DecisionPageSize = (typeof DECISION_PAGE_SIZES)[number];
+export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
 
-export const DEFAULT_DECISION_PAGE_SIZE = 50 satisfies DecisionPageSize;
+export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
+
+export const DEFAULT_PUBLIC_LAW_PAGE_SIZE = 50 satisfies PublicLawPageSize;
 
 /**
  * How deep a link may reach. Every page beyond the first costs one request the
  * reader has to walk, so a hand-typed or crawled `page=100000` is not a page,
  * it is a request to make a hundred thousand of them.
  */
-export const DECISION_MAX_PAGE = 40;
+export const PUBLIC_LAW_MAX_PAGE = 40;
 
-const isDecisionPageSize = (value: number): value is DecisionPageSize =>
-  DECISION_PAGE_SIZES.some((size) => size === value);
+const isPublicLawPageSize = (value: number): value is PublicLawPageSize =>
+  PUBLIC_LAW_PAGE_SIZES.some((size) => size === value);
 
 /** The size a URL asks for, or the default when it asks for one we do not offer. */
-export const decisionPageSize = (
+export const publicLawPageSize = (
   value: number | undefined,
-): DecisionPageSize =>
-  value !== undefined && isDecisionPageSize(value)
+): PublicLawPageSize =>
+  value !== undefined && isPublicLawPageSize(value)
     ? value
-    : DEFAULT_DECISION_PAGE_SIZE;
+    : DEFAULT_PUBLIC_LAW_PAGE_SIZE;
 
 /** The page a URL asks for; anything that is not one of ours is the first. */
-export const decisionPageNumber = (value: number | undefined): number =>
+export const publicLawPageNumber = (value: number | undefined): number =>
   value !== undefined &&
   Number.isInteger(value) &&
   value >= 1 &&
-  value <= DECISION_MAX_PAGE
+  value <= PUBLIC_LAW_MAX_PAGE
     ? value
     : 1;
 
 /** What the URL carries for a page: nothing, when it is the first. */
-export const decisionPageSearchValue = (page: number): number | undefined =>
+export const publicLawPageSearchValue = (page: number): number | undefined =>
   page <= 1 ? undefined : page;
 
 /** What the URL carries for a size: nothing, when it is the default. */
-export const decisionPageSizeSearchValue = (
-  pageSize: DecisionPageSize,
-): DecisionPageSize | undefined =>
-  pageSize === DEFAULT_DECISION_PAGE_SIZE ? undefined : pageSize;
+export const publicLawPageSizeSearchValue = (
+  pageSize: PublicLawPageSize,
+): PublicLawPageSize | undefined =>
+  pageSize === DEFAULT_PUBLIC_LAW_PAGE_SIZE ? undefined : pageSize;
 
 /**
  * How many pages of the chain the loader asks for.
@@ -63,34 +65,34 @@ export const decisionPageSizeSearchValue = (
  * all, so the loader walks one to the page the URL names instead of dropping
  * the reader on the first: the pager's links are real addresses, which is the
  * whole reason they are links. The walk is bounded by the depth limit, which
- * `decisionPageNumber` has already applied. A browser that walked further on
+ * `publicLawPageNumber` has already applied. A browser that walked further on
  * its own keeps what it holds, so a refresh never shortens the chain.
  */
-export const decisionPagesToWalk = (
+export const publicLawPagesToWalk = (
   page: number,
   walkedPageCount: number,
-): number => Math.max(decisionPageNumber(page), walkedPageCount, 1);
+): number => Math.max(publicLawPageNumber(page), walkedPageCount, 1);
 
 /**
  * The deepest page this browser can show, given the cursors it has walked. A
  * link to a page past the chain resolves to the last one in it rather than to
  * an empty table.
  */
-export const reachableDecisionPage = (
+export const reachablePublicLawPage = (
   page: number,
   walkedPageCount: number,
 ): number => {
   const deepest = Math.max(walkedPageCount, 1);
-  return Math.min(decisionPageNumber(page), deepest);
+  return Math.min(publicLawPageNumber(page), deepest);
 };
 
 /** Which of the walked pages is on screen. */
-export const decisionPageIndex = (
+export const publicLawPageIndex = (
   page: number,
   walkedPageCount: number,
-): number => reachableDecisionPage(page, walkedPageCount) - 1;
+): number => reachablePublicLawPage(page, walkedPageCount) - 1;
 
-export type DecisionPagerModel = {
+export type PublicLawPagerModel = {
   currentPage: number;
   /** Every page already walked, in order: each one is a direct link. */
   pages: number[];
@@ -99,7 +101,7 @@ export type DecisionPagerModel = {
   nextPage: number | null;
 };
 
-type DecisionPagerInput = {
+type PublicLawPagerInput = {
   page: number;
   walkedPageCount: number;
   /** Whether the last walked page named a cursor after it. */
@@ -110,7 +112,7 @@ type DecisionPagerInput = {
  * What the pager offers: the pages behind the reader as links, the one after
  * the last walked page as a step forward, and nothing beyond the depth limit.
  */
-const nextDecisionPage = (
+const nextPublicLawPage = (
   currentPage: number,
   walked: number,
   hasNextPage: boolean,
@@ -118,23 +120,51 @@ const nextDecisionPage = (
   if (currentPage < walked) {
     return currentPage + 1;
   }
-  if (hasNextPage && walked < DECISION_MAX_PAGE) {
+  if (hasNextPage && walked < PUBLIC_LAW_MAX_PAGE) {
     return walked + 1;
   }
   return null;
 };
 
-export const decisionPagerModel = ({
+export const publicLawPagerModel = ({
   hasNextPage,
   page,
   walkedPageCount,
-}: DecisionPagerInput): DecisionPagerModel => {
+}: PublicLawPagerInput): PublicLawPagerModel => {
   const walked = Math.max(walkedPageCount, 1);
-  const currentPage = reachableDecisionPage(page, walked);
+  const currentPage = reachablePublicLawPage(page, walked);
   return {
     currentPage,
     pages: Array.from({ length: walked }, (_, index) => index + 1),
     previousPage: currentPage > 1 ? currentPage - 1 : null,
-    nextPage: nextDecisionPage(currentPage, walked, hasNextPage),
+    nextPage: nextPublicLawPage(currentPage, walked, hasNextPage),
   };
 };
+
+/**
+ * Which page of the results, and how large a page is, as a route's search
+ * schema reads them. Both are dropped from the URL at their default, and both
+ * are read leniently: a public link may be typed or crawled, and a page number
+ * nobody can reach is the first page, not an error screen.
+ */
+export const publicLawPageSearchSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.union([v.number(), v.string()]),
+      v.transform((value) => publicLawPageNumber(Number(value))),
+      v.transform((page) => publicLawPageSearchValue(page)),
+    ),
+  ),
+  undefined,
+);
+
+export const publicLawPageSizeSearchSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.union([v.number(), v.string()]),
+      v.transform((value) => publicLawPageSize(Number(value))),
+      v.transform((pageSize) => publicLawPageSizeSearchValue(pageSize)),
+    ),
+  ),
+  undefined,
+);

@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "Čo sa mení?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nenovelizované} one {Novelizované #×} few {Novelizované #×} many {Novelizované #×} other {Novelizované #×}}",
     "asOf": "Znenie účinné k",
     "backToList": "Všetky predpisy",
     "citingDecisionsFilterPlaceholder": "Filtrovať načítané rozhodnutia",
+    "columns": {
+      "act": "Predpis",
+      "amendments": "Novely",
+      "firstVersion": "Prvé znenie",
+      "lastAmended": "Naposledy novelizované"
+    },
     "diffInserted": "Vložené:",
     "diffRemoved": "Vypustené:",
     "emptyDocument": "Toto znenie nemá dostupný text.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
-    "recentlyAmended": "Naposledy novelizované",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
+      "ended": "Neúčinné",
       "future": "Budúce",
       "historical": "Nahradené",
       "repealed": "Zrušené"

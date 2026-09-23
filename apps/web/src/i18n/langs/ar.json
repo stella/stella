@@ -4252,9 +4252,16 @@
     "summaryPlaceholder": "ما الذي يتغيّر؟"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {لم يُعدَّل} zero {لم يُعدَّل} one {عُدِّل مرة واحدة} two {عُدِّل مرتين} few {عُدِّل # مرات} many {عُدِّل # مرة} other {عُدِّل # مرة}}",
     "asOf": "النص النافذ في",
     "backToList": "جميع التشريعات",
     "citingDecisionsFilterPlaceholder": "تصفية الأحكام المحمَّلة",
+    "columns": {
+      "act": "التشريع",
+      "amendments": "التعديلات",
+      "firstVersion": "الصيغة الأولى",
+      "lastAmended": "آخر تعديل"
+    },
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
     "emptyDocument": "لا يتوفر نص لهذه النسخة.",
@@ -4279,7 +4286,6 @@
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
-    "recentlyAmended": "المعدَّلة مؤخرًا",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
@@ -4288,6 +4294,7 @@
     "status": {
       "current": "نافذ",
       "draft": "مقترح",
+      "ended": "لم يعد ساريًا",
       "future": "مستقبلي",
       "historical": "مُستبدَل",
       "repealed": "مُلغى"
