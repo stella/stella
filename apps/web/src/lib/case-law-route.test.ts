@@ -24,6 +24,9 @@ const caseLawHit = ({
   decisionDate: "2024-01-31",
   decisionId,
   ecli: null,
+  language: "cs",
+  languageAlternates: [],
+  slug: null,
 });
 
 describe("case-law decision routes", () => {

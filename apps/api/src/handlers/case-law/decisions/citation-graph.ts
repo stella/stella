@@ -16,6 +16,7 @@ import {
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
   CITATION_DIRECTIONS,
   CITATION_TREATMENTS,
@@ -24,6 +25,8 @@ import type {
   CitationDirection,
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
+import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
@@ -73,6 +76,8 @@ type RelatedDecision = {
   decisionType: string | null;
   ecli: string | null;
   language: string;
+  /** Every language version, which decides whether its route names one. */
+  languageAlternates: readonly PublicDecisionLanguageAlternate[];
   slug: string | null;
 };
 
@@ -85,6 +90,30 @@ type RelatedDecision = {
  * to invent a number.
  */
 type RankedRelatedDecision = RelatedDecision & { citationAuthority: number };
+
+/** The far decision as a graph query selects it, before its versions are read. */
+type RankedRelatedDecisionRow = Omit<
+  RankedRelatedDecision,
+  "languageAlternates"
+> & { languageGroupKey: string | null };
+
+/**
+ * The far decisions' language versions, one read for the whole page, so a
+ * row's route carries the language segment the decision's own page uses.
+ */
+const withLanguageAlternates = async (
+  tx: CaseLawPublicReadTransaction,
+  decisions: readonly (RankedRelatedDecisionRow | null)[],
+): Promise<(row: RankedRelatedDecisionRow) => RankedRelatedDecision> => {
+  const alternates = await readPublicDecisionLanguageAlternatesInTx(
+    tx,
+    decisions.map((decision) => decision?.languageGroupKey ?? null),
+  );
+  return ({ languageGroupKey, ...decision }) =>
+    Object.assign(decision, {
+      languageAlternates: alternates.alternatesFor(languageGroupKey),
+    });
+};
 
 export type DecisionCitationRow = {
   id: SafeId<"caseLawCitation">;
@@ -125,7 +154,13 @@ type ScannedRow = {
   sectionIndex: number | null;
   polarity: string | null;
   visible: boolean;
-  decision: RankedRelatedDecision | null;
+  decision: RankedRelatedDecisionRow | null;
+};
+
+type CreateScannedPageOptions = {
+  rows: readonly ScannedRow[];
+  limit: number;
+  toRelatedDecision: (row: RankedRelatedDecisionRow) => RankedRelatedDecision;
 };
 
 /**
@@ -133,10 +168,11 @@ type ScannedRow = {
  * examined row, visible or not, so a run of hidden rows can never stall it,
  * and a page may legitimately hold fewer than `limit` items.
  */
-const createScannedPage = (
-  rows: readonly ScannedRow[],
-  limit: number,
-): Page<DecisionCitationRow> => {
+const createScannedPage = ({
+  rows,
+  limit,
+  toRelatedDecision,
+}: CreateScannedPageOptions): Page<DecisionCitationRow> => {
   const scanned = rows.slice(0, limit);
   const items: DecisionCitationRow[] = [];
   for (const row of scanned) {
@@ -148,7 +184,7 @@ const createScannedPage = (
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
-      decision: row.decision,
+      decision: row.decision === null ? null : toRelatedDecision(row.decision),
     });
   }
   const lastScanned = scanned.at(-1);
@@ -283,6 +319,7 @@ export const listDecisionCitationsHandler = async ({
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,
         language: relatedDecision.language,
+        languageGroupKey: relatedDecision.languageGroupKey,
         slug: relatedDecision.slug,
         citationAuthority: relatedDecision.citationAuthority,
       },
@@ -292,8 +329,12 @@ export const listDecisionCitationsHandler = async ({
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(pageSize + 1);
+  const toRelatedDecision = await withLanguageAlternates(
+    tx,
+    rows.map((row) => (row.visible ? row.decision : null)),
+  );
 
-  return createScannedPage(rows, pageSize);
+  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
 };
 
 export type CitationTreatmentCounts = Record<CitationTreatment, number>;
@@ -556,6 +597,7 @@ export const listLeadingCitationsHandler = async ({
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,
         language: relatedDecision.language,
+        languageGroupKey: relatedDecision.languageGroupKey,
         slug: relatedDecision.slug,
         citationAuthority: relatedDecision.citationAuthority,
       },
@@ -568,6 +610,10 @@ export const listLeadingCitationsHandler = async ({
     .where(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`)
     .orderBy(asc(ranked.rank), asc(ranked.id))
     .limit(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT);
+  const toRelatedDecision = await withLanguageAlternates(
+    tx,
+    rows.map((row) => row.decision),
+  );
 
   return {
     items: rows.map((row) => ({
@@ -575,7 +621,7 @@ export const listLeadingCitationsHandler = async ({
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
-      decision: row.decision,
+      decision: toRelatedDecision(row.decision),
     })),
   };
 };

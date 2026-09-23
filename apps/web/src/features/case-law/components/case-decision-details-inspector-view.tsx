@@ -126,6 +126,7 @@ export const CaseDecisionDetailsInspectorView = ({
                       ecli: decision.ecli,
                       id: decision.id,
                       language: decision.language,
+                      languageAlternates: decision.languageAlternates,
                       slug: decision.slug,
                     }}
                     decisionId={decisionId}

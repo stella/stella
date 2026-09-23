@@ -23,6 +23,8 @@ describe("case decision inspector", () => {
         country: "CZ",
         court: "Nejvyšší správní soud",
         decisionId: "d4f1bfe6-f7e4-42a2-9d4f-fd121ea90b34",
+        language: null,
+        languageAlternates: null,
         slug: "4-as-3-2008",
       }),
     ).toEqual({
@@ -83,6 +85,8 @@ describe("case decision inspector", () => {
         country: "CZ",
         court: "NSS",
         decisionId: "decision-id",
+        language: null,
+        languageAlternates: null,
         slug: "4-as-3-2008",
       }).payload,
     };
@@ -112,6 +116,8 @@ describe("case decision inspector", () => {
       country: "CZ",
       court: "Nejvyšší správní soud",
       decisionId: "decision-id",
+      language: null,
+      languageAlternates: null,
       slug: "4-as-3-2008",
     }).payload;
     void navigateToCaseDecisionMain(navigate, base);
@@ -171,7 +177,8 @@ describe("case decision inspector", () => {
 
   // Every tab factory takes a decision record. A payload handed back in (a
   // details tab opened from a reader tab) must name the same decision the
-  // same way, never its URL segments, and route to the same decision.
+  // same way, never its URL segments, and route to the same decision. It
+  // carries no route identity of its own, so a rebuild states that as nulls.
   test("a tab rebuilt from its own payload names and routes the same decision", () => {
     fc.assert(
       fc.property(
@@ -184,13 +191,20 @@ describe("case decision inspector", () => {
             "Court of Justice",
           ),
           decisionId: fc.uuid(),
+          language: fc.constant(null),
+          languageAlternates: fc.constant(null),
           slug: fc.option(fc.stringMatching(/^[a-z0-9-]{1,40}$/u), {
             nil: null,
           }),
         }),
         (decision) => {
           const first = createCaseDecisionViewTab(decision);
-          const again = createCaseDecisionViewTab(first.payload);
+          const again = createCaseDecisionViewTab({
+            ...first.payload,
+            language: null,
+            languageAlternates: null,
+            slug: null,
+          });
 
           expect(again.label).toBe(first.label);
           expect(again.payload.court).toBe(decision.court);

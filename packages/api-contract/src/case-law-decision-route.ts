@@ -82,7 +82,8 @@ const encodeCaseLawDecisionIdForRoute = (decisionId: string): string => {
 type CaseLawDecisionRouteIdentityInput = {
   caseNumber: string;
   decisionId: string;
-  slug?: string | null | undefined;
+  /** Required: a caller that omits a stored slug gets a different URL. */
+  slug: string | null;
 };
 
 /**
@@ -181,11 +182,16 @@ export type CaseLawDecisionRouteParams = {
   slug: string;
 };
 
+/**
+ * Every field that can change the URL is required, null when the caller has
+ * none: omitting the language alternates drops the language segment, so an
+ * omission has to be a compile error rather than a different page.
+ */
 export type CaseLawDecisionRouteInput = CaseLawDecisionRouteIdentityInput & {
   country: string;
   court: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
+  language: string | null;
+  languageAlternates: readonly unknown[] | null;
 };
 
 /** A language segment only for decisions published in several languages. */

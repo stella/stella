@@ -1,7 +1,10 @@
 import type { useNavigate } from "@tanstack/react-router";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
-import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import type {
+  CaseLawDecisionRouteInput,
+  CaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 
 import type {
   GenericTab,
@@ -31,16 +34,9 @@ export type CaseDecisionViewPayload = {
   searchQuery?: string | undefined;
 };
 
-type CaseDecisionTarget = {
+type CaseDecisionTarget = CaseLawDecisionRouteInput & {
   anchorId?: string | undefined;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionId: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
   searchQuery?: string | undefined;
-  slug?: string | null | undefined;
 };
 
 const isNonEmptyString = (value: unknown): value is string =>

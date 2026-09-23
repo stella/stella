@@ -1283,17 +1283,19 @@ export const SearchDialog = ({
         return;
       }
 
-      const slug =
-        "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
       navigateAfterClose(async () => {
         await navigate({
           to: "/law/$country/cases/$court/$slug",
+          // A global-search hit carries no slug or language versions, so it
+          // opens by the id form; the decision page canonicalises the path.
           params: createCaseLawDecisionRouteParams({
             caseNumber: hit.caseNumber,
             country: hit.country,
             court: hit.court,
             decisionId: hit.decisionId,
-            slug,
+            language: null,
+            languageAlternates: null,
+            slug: null,
           }),
           search: {
             ...(hit.headline && {

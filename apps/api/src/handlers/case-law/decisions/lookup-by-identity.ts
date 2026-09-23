@@ -46,6 +46,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
+import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -70,6 +72,8 @@ export type DecisionIdentityRow = {
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { value: string }[];
   language: string;
+  /** Every language version, which decides whether its route names one. */
+  languageAlternates: readonly PublicDecisionLanguageAlternate[];
   slug: string | null;
 };
 
@@ -177,6 +181,7 @@ export const lookupDecisionsByIdentity = async ({
         ecli: caseLawDecisions.ecli,
         id: caseLawDecisions.id,
         language: caseLawDecisions.language,
+        languageGroupKey: caseLawDecisions.languageGroupKey,
         slug: caseLawDecisions.slug,
       })
       .from(caseLawDecisions)
@@ -232,12 +237,19 @@ export const lookupDecisionsByIdentity = async ({
       values.push({ value: row.value });
     }
 
-    return decisions.map((decision) =>
-      Object.assign(decision, {
-        identifiers:
-          identifiersByDecision.get(String(decision.id)) ??
-          panic("Lost a decision's identifier list"),
-      }),
+    const alternates = await readPublicDecisionLanguageAlternatesInTx(
+      tx,
+      decisions.map((decision) => decision.languageGroupKey),
+    );
+
+    return decisions.map(
+      ({ languageGroupKey, ...decision }): DecisionIdentityRow =>
+        Object.assign(decision, {
+          identifiers:
+            identifiersByDecision.get(String(decision.id)) ??
+            panic("Lost a decision's identifier list"),
+          languageAlternates: alternates.alternatesFor(languageGroupKey),
+        }),
     );
   });
 

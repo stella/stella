@@ -38,6 +38,7 @@
     "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
+    "./statute-route": "./src/statute-route.ts",
     "./workflow-status": "./src/workflow-status.ts"
   },
   "scripts": {

@@ -174,9 +174,9 @@ export const ProvisionInspectorView = ({
                   {...createStatuteLinkTarget({
                     country: selectedVersion?.country ?? payload.jurisdiction,
                     documentId: payload.documentId,
-                    eli: selectedVersion?.eli,
-                    slug: selectedVersion?.slug,
-                    versionValidFrom: selectedVersion?.versionValidFrom,
+                    eli: selectedVersion?.eli ?? null,
+                    slug: selectedVersion?.slug ?? null,
+                    versionValidFrom: selectedVersion?.versionValidFrom ?? null,
                   })}
                 >
                   {t("statutes.showInText")}

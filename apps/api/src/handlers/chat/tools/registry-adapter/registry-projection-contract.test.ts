@@ -1333,6 +1333,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"caseLawDecision">(uid(53)),
             identifiers: [{ value: "22 Cdo 1000/2020" }],
             language: "cs",
+            languageAlternates: [],
             slug: "ns-22-cdo-1000-2020",
           },
         ] satisfies Awaited<ReturnType<typeof lookupDecisionsByIdentity>>);
@@ -1446,6 +1447,7 @@ const CONTRACT_CORPUS = {
                   decisionType: "judgment",
                   ecli: "ECLI:CZ:NS:2021:23.CDO.200.2021.1",
                   language: "cs",
+                  languageAlternates: [],
                   slug: "ns-23-cdo-200-2021",
                 },
                 passage: {

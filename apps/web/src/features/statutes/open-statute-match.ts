@@ -2,6 +2,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+
 import {
   statutesInfiniteOptions,
   type StatuteListFilters,
@@ -11,11 +13,7 @@ import {
   type StatuteQueryIntent,
 } from "@/features/statutes/statute-query-intent";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import {
-  createStatuteRouteParams,
-  isStatuteCountry,
-  type StatuteCountry,
-} from "@/lib/statute-route";
+import { isStatuteCountry, type StatuteCountry } from "@/lib/statute-route";
 
 /**
  * What an entry asks for in this jurisdiction. A country the grammar does
@@ -100,6 +98,7 @@ export const openStatuteMatch = async ({
     documentId: only.id,
     eli: only.eli,
     slug: only.slug,
+    version: null,
   });
 
   await navigate({

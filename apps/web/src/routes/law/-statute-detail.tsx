@@ -4,6 +4,11 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
+  createStatuteRouteParams,
+  normalizeStatuteStoredSlug,
+  type StatuteRouteParams,
+} from "@stll/api-contract/statute-route";
+import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
@@ -38,11 +43,6 @@ import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks"
 import { useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import {
-  createStatuteRouteParams,
-  normalizeStatuteStoredSlug,
-  type StatuteRouteParams,
-} from "@/lib/statute-route";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 
 // The comparison runs Folio's content diff over two whole consolidations;
@@ -179,6 +179,7 @@ export const PublicStatuteViewer = ({
           documentId: work.id,
           eli: work.eli,
           slug: work.slug,
+          version: null,
         }),
         value === null || value === "" ? undefined : value,
       );

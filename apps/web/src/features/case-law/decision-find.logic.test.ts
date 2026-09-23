@@ -40,6 +40,7 @@ const decision = ({
   id,
   language: "cs",
   languageAlternates: [],
+  slug: null,
 });
 
 const TERMINATION = decision({

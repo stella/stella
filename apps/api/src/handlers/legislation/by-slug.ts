@@ -3,13 +3,13 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
-
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   isStatuteSlug,
   STATUTE_SLUG_MAX_LENGTH,
-} from "@/api/handlers/legislation/slug";
+} from "@stll/api-contract/statute-route";
+
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   selectDefaultVersionId,
   workKeyConditions,

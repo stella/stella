@@ -77,6 +77,8 @@ import {
 type LegislationHit = {
   documentId: string;
   eli: string;
+  /** The persisted public slug; null until the corpus mints one. */
+  slug: string | null;
   title: string;
   country: string;
   language: string;
@@ -163,6 +165,7 @@ const pgSearch = async (
     SELECT
       sd.document_id,
       d.eli,
+      d.slug,
       d.title,
       d.country,
       d.language,
@@ -213,6 +216,7 @@ const mapRowHit = (row: RawRow): LegislationHit => {
   return {
     documentId: String(row["document_id"]),
     eli: String(row["eli"]),
+    slug: toNullableString(row["slug"]),
     title: String(row["title"]),
     country: String(row["country"]),
     language: String(row["language"]),
@@ -332,6 +336,7 @@ export const rehydrateLegislationCandidates = async ({
             .select({
               id: legislationDocuments.id,
               eli: legislationDocuments.eli,
+              slug: legislationDocuments.slug,
               title: legislationDocuments.title,
               country: legislationDocuments.country,
               language: legislationDocuments.language,
@@ -437,6 +442,7 @@ const corpusIndexSearch = async (
       {
         documentId: row.id,
         eli: row.eli,
+        slug: row.slug,
         title: row.title,
         country: row.country,
         language: row.language,

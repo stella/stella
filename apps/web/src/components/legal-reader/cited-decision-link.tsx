@@ -43,9 +43,9 @@ type CitedDecisionTarget = {
   decisionDate: string | null;
   decisionType?: string | null | undefined;
   id: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-  slug?: string | null | undefined;
+  language: string | null;
+  languageAlternates: readonly unknown[] | null;
+  slug: string | null;
 };
 
 /** Where the citing text names the decision, when a passage can be quoted. */

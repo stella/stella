@@ -1,6 +1,7 @@
 import type { SQLWrapper } from "drizzle-orm";
 
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
+import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
 import {
   globalCaseLawPolicies,
@@ -40,13 +41,6 @@ import type {
  */
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
-
-/**
- * The shape a public statute slug may take. The column CHECK below, the
- * slug generator and the by-slug route param all read this one declaration,
- * so nothing can persist a segment the resolver would refuse.
- */
-export const STATUTE_SLUG_SQL_PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
 /** Sitemap shards a jurisdiction splits into once it outgrows one file. */
 export const STATUTE_SITEMAP_BUCKET_COUNT = 64;
@@ -284,7 +278,7 @@ export const legislationDocuments = p.pgTable(
     // the resolver and the route param accept may land here.
     p.check(
       "legislation_documents_slug_shape",
-      sql`${t.slug} IS NULL OR ${t.slug} ~ ${sql.raw(`'${STATUTE_SLUG_SQL_PATTERN}'`)}`,
+      sql`${t.slug} IS NULL OR ${t.slug} ~ ${sql.raw(`'${STATUTE_SLUG_PATTERN}'`)}`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),

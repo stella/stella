@@ -58,9 +58,9 @@ export type CaseLawDecisionSearchHit = {
   decisionDate: string | null;
   decisionId: string;
   ecli: string | null;
-  language?: string | null;
-  languageAlternates?: readonly unknown[] | null;
-  slug?: string | null;
+  language: string | null;
+  languageAlternates: readonly unknown[] | null;
+  slug: string | null;
 };
 
 export const decodeCaseLawDecisionRef = (value: string): string =>

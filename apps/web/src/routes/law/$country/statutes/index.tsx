@@ -18,6 +18,11 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import {
+  createStatuteIndexPath,
+  createStatutePath,
+  createStatuteRouteParams,
+} from "@stll/api-contract/statute-route";
 
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
@@ -84,12 +89,7 @@ import {
   ensureRouteInfiniteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import {
-  createStatuteIndexPath,
-  createStatutePath,
-  createStatuteRouteParams,
-  isPublicStatuteCountry,
-} from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
@@ -299,6 +299,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
                     documentId: statute.id,
                     eli: statute.eli,
                     slug: statute.slug,
+                    version: null,
                   }),
                 ),
               ),
@@ -524,6 +525,7 @@ function PublicStatutesIndex({
           documentId: statute.id,
           eli: statute.eli,
           slug: statute.slug,
+          version: null,
         });
         await navigate({
           params: { country: params.country, slug: params.slug },

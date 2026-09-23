@@ -43,6 +43,7 @@ export const searchLegislationSuccessResponseSchema = t.Object(
         {
           documentId: t.String(),
           eli: t.String(),
+          slug: nullableStringSchema,
           title: t.String(),
           country: t.String(),
           language: t.String(),

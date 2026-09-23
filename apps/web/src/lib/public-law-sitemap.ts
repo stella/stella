@@ -86,7 +86,7 @@ const sitemapShardPageSchema = v.strictObject({
 type SitemapDecision = v.InferOutput<typeof sitemapDecisionSchema>;
 type SitemapShard = v.InferOutput<typeof sitemapShardSchema>;
 type SitemapDecisionUrlInput = Omit<SitemapDecision, "languageAlternates"> & {
-  languageAlternates?: readonly unknown[];
+  languageAlternates: readonly unknown[];
 };
 
 type FetchSitemapDecisionsOptions = {

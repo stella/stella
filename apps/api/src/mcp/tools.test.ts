@@ -1792,6 +1792,7 @@ describe("OpenAI-compatible MCP tools", () => {
     id: toSafeId<"caseLawDecision">(decisionId),
     identifiers: [],
     language: "cs",
+    languageAlternates: [],
     slug: `slug-${decisionId}`,
   });
 
@@ -1836,6 +1837,24 @@ describe("OpenAI-compatible MCP tools", () => {
       locator: { kind: "docket", value: CZ_DOCKET },
     });
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("lookup_case_law names the language of a multilingual decision in its appUrl", async () => {
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        languageAlternates: [
+          { language: "cs", id: DECISION_ID },
+          { language: "en", id: CITING_DECISION_ID },
+        ],
+      },
+    ]);
+
+    const payload = await lookup([CZ_DOCKET]);
+
+    expect(payload.items.at(0)?.appUrl).toBe(
+      `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/slug-${DECISION_ID}`,
+    );
   });
 
   test("lookup_case_law reports several courts as ambiguous", async () => {
@@ -2433,6 +2452,11 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: "ECLI:CZ:NS:2025:31.CDO.900.2025.1",
               language: "cs",
+              // Multilingual: the appUrl names the version, as the web route does.
+              languageAlternates: [
+                { language: "cs", id: CITING_DECISION_ID },
+                { language: "en", id: DECISION_ID },
+              ],
               slug: "ns-31-cdo-900-2025",
             },
             passage: {
@@ -2482,7 +2506,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationText: "29 Cdo 123/2024",
           polarity: "negative",
           decision: {
-            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-900-2025`,
+            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
             citationAuthority: 2.5,
             court: "Nejvyšší soud",
@@ -2737,6 +2761,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headline: "nahrada <mark>skody</mark>",
           language: "cs",
           score: 1.5,
+          slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://example.test/89-2012",
           status: "in_force",
           title: STATUTE_TITLE,
@@ -2763,8 +2788,6 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: "legislation_cursor_2",
       results: [
         {
-          // Derived from the ELI and title, because a search hit carries no
-          // persisted slug.
           appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
           country: "CZE",
           documentId: STATUTE_ID,

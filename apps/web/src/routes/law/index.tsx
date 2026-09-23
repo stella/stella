@@ -27,6 +27,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -73,7 +74,6 @@ import {
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { createStatuteRouteParams } from "@/lib/statute-route";
 import {
   type LawScope,
   lawHomeDescriptor,
@@ -508,6 +508,7 @@ function LawHome() {
                 documentId: item.id,
                 eli: item.eli,
                 slug: item.slug,
+                version: null,
               })}
               to="/law/$country/statutes/$slug"
             >

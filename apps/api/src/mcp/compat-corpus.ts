@@ -361,14 +361,15 @@ const searchStatutes = async ({
     }
     page.cursors[jurisdiction] = result.nextCursor;
     for (const hit of result.items) {
-      // A statute whose ELI mints no slug has no address in the app; the
+      // With the public-law surface off there is no address in the app; the
       // publisher's own is then the one address there is, and a hit with
       // neither is dropped rather than answered with an empty url.
       const url =
         buildLegislationDocumentAppUrl({
           country: hit.country,
+          documentId: hit.documentId,
           eli: hit.eli,
-          title: hit.title,
+          slug: hit.slug,
         }) ?? hit.sourceUrl;
       if (url === null) {
         continue;
@@ -540,9 +541,9 @@ export const readCompatStatute = async ({
   const url =
     buildLegislationDocumentAppUrl({
       country: document.country,
+      documentId: document.id,
       eli: document.eli,
       slug: document.slug,
-      title: document.title,
     }) ?? document.sourceUrl;
   if (!document.allowsDerivedAi) {
     return { type: "withheld", url: url ?? "" };

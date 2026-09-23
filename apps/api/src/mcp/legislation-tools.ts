@@ -526,12 +526,11 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   return toolDataResult({
     nextCursor: result.nextCursor,
     results: result.items.map((hit) => ({
-      // A search hit carries no persisted slug, so the address is derived
-      // from the ELI and title the corpus minted it from.
       appUrl: buildLegislationDocumentAppUrl({
         country: hit.country,
+        documentId: hit.documentId,
         eli: hit.eli,
-        title: hit.title,
+        slug: hit.slug,
       }),
       country: hit.country,
       documentId: hit.documentId,
@@ -667,9 +666,9 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     statute: {
       appUrl: buildLegislationDocumentAppUrl({
         country: document.country,
+        documentId: document.id,
         eli: document.eli,
         slug: document.slug,
-        title: document.title,
       }),
       charCount: window?.charCount ?? null,
       country: document.country,

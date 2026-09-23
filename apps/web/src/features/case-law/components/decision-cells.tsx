@@ -64,7 +64,7 @@ const NO_QUERY_TOKENS: readonly string[] = [];
 export type Decision = {
   id: string;
   caseNumber: string;
-  slug?: string | null;
+  slug: string | null;
   ecli: string | null;
   court: string;
   /**

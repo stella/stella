@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  createStatutePath,
+  normalizeStatuteStoredSlug,
+} from "@stll/api-contract/statute-route";
+
 import { apiUrl } from "@/lib/api-url";
 import { ClientOperationError } from "@/lib/errors/client";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
@@ -9,11 +14,7 @@ import {
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/lib/public-sitemap";
-import {
-  createStatutePath,
-  isPublicStatuteCountry,
-  normalizeStatuteStoredSlug,
-} from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 const LAW_STATUTES_SITEMAP_BASE_PATH = "/sitemaps/law-statutes";
 const STATUTE_SITEMAP_ALL_BUCKET = "all";

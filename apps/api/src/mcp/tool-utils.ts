@@ -15,9 +15,13 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
+import {
+  createStatutePath,
+  createStatuteRouteParams,
+} from "@stll/api-contract/statute-route";
+import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 
 import { env } from "@/api/env";
-import { createStatuteSlug } from "@/api/handlers/legislation/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -1247,43 +1251,30 @@ export const toPlainCorpusText = ({
     .join("\n\n");
 };
 
-type LegislationDocumentUrlInput = {
-  country: string;
-  eli: string;
-  title: string;
-  /** The persisted slug where a read carries one; a search hit does not. */
-  slug?: string | null | undefined;
-};
-
 /**
- * A statute's canonical public address: `/law/<country>/statutes/<slug>`,
- * which always names the latest consolidation of the Work.
- *
- * Null when the public-law surface is off, and null when the ELI carries no
- * citation tail for a slug to be minted from: such a statute has no readable
- * address, exactly as a case-law decision without a slug does. The slug is
- * derived through the corpus's own minting function rather than re-spelled
- * here, so the address a tool reports and the address the corpus stored
- * cannot diverge.
+ * A statute's canonical public address, always the latest consolidation of
+ * the Work: its stored slug, or the id form when the corpus holds none. The
+ * route shape is owned by `@stll/api-contract/statute-route`, so the address
+ * a tool reports and the page the web serves cannot diverge. Null only when
+ * the public-law surface is off.
  */
 export const buildLegislationDocumentAppUrl = ({
   country,
+  documentId,
   eli,
   slug,
-  title,
-}: LegislationDocumentUrlInput): string | null => {
-  if (!isPublicLawAppUrlEnabled()) {
-    return null;
-  }
-  const stored = slug?.trim() ?? "";
-  const segment =
-    stored.length > 0 ? stored : createStatuteSlug({ eli, title });
-  if (segment === null) {
-    return null;
-  }
-
-  return `${getAppBaseUrl()}/law/${country.toLowerCase()}/statutes/${segment}`;
-};
+}: Omit<StatuteRouteInput, "version">): string | null =>
+  isPublicLawAppUrlEnabled()
+    ? `${getAppBaseUrl()}${createStatutePath(
+        createStatuteRouteParams({
+          country,
+          documentId,
+          eli,
+          slug,
+          version: null,
+        }),
+      )}`
+    : null;
 
 export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
   args,

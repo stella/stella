@@ -41,7 +41,7 @@ export type PublicCaseLawDecision = {
   metadata: Record<string, unknown>;
   /** Whether the requested address named this decision or a part absorbed into it. */
   resolution: DecisionReadResolution;
-  slug?: string | null;
+  slug: string | null;
   source: { name: string | null } | null;
   sourceAttributionUrl: string | null;
   sourceUrl: string | null;

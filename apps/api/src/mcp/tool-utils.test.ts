@@ -99,6 +99,8 @@ describe("buildCaseLawDecisionUrl", () => {
         country: "CZE",
         court: "Nejvyšší soud",
         decisionId: DECISION_ID,
+        language: null,
+        languageAlternates: null,
         slug: "official-stable-slug",
       }),
     ).toBe(`${BASE}/law/cze/cases/nejvyssi-soud/official-stable-slug`);
@@ -112,6 +114,8 @@ describe("buildCaseLawDecisionUrl", () => {
         country: "CZE",
         court: "Nejvyšší soud",
         decisionId: DECISION_ID,
+        language: null,
+        languageAlternates: null,
         slug: null,
       }),
     ).toBe(
@@ -129,6 +133,8 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     country: "CZE",
     court: "NS",
     decisionId: DECISION_ID,
+    language: null,
+    languageAlternates: null,
     slug: "s",
   };
 

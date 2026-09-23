@@ -17,6 +17,7 @@ const validResponse = {
     {
       documentId: "document-id",
       eli: "eli",
+      slug: null,
       title: "title",
       country: "XX",
       language: "xx",

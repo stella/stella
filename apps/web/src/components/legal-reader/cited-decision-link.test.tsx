@@ -17,6 +17,7 @@ const decision = {
   decisionType: "Nález",
   id: "2c1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
   language: "cs",
+  languageAlternates: [],
   slug: "pl-us-36-08",
 };
 

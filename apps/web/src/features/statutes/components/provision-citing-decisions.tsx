@@ -22,6 +22,8 @@ export type CitingDecisionRow = {
   court: string;
   decisionDate: string | null;
   decisionId: string;
+  language: string;
+  languageAlternates: readonly unknown[];
   sentenceText: string | null;
   slug: string | null;
 };
@@ -44,6 +46,8 @@ export const CitingDecisionItem = ({
         court: decision.court,
         decisionDate: decision.decisionDate,
         id: decision.decisionId,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
         slug: decision.slug,
       }}
     >

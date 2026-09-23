@@ -25,6 +25,9 @@ const routeParams = (
     country: "CZE",
     court: "Nejvyšší soud",
     decisionId: DECISION_ID,
+    language: null,
+    languageAlternates: null,
+    slug: null,
     ...overrides,
   });
 
@@ -165,7 +168,7 @@ describe("createCaseLawDecisionRouteParams", () => {
   });
 
   test("a slug-less decision's param carries its id; a stored slug is the param", () => {
-    const blankSlug = fc.constantFrom(null, undefined, "", "   ", "\t\n");
+    const blankSlug = fc.constantFrom(null, "", "   ", "\t\n");
     const storedSlug = fc
       .string({ minLength: 1, maxLength: 300 })
       .filter((slug) => slug.trim() !== "");

@@ -64,9 +64,9 @@ const toResolvedDecision = ({
   country: string;
   court: string;
   id: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-  slug?: string | null | undefined;
+  language: string | null;
+  languageAlternates: readonly unknown[] | null;
+  slug: string | null;
 }): ResolvedDecision => ({
   caseNumber,
   country,
