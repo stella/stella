@@ -204,7 +204,9 @@ CREATE POLICY "workspace_delete"
   END));--> statement-breakpoint
 
 ALTER TABLE "legal_list_claim_review_events" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-GRANT SELECT, INSERT ON TABLE "legal_list_claim_review_events" TO "stella";--> statement-breakpoint
+-- Full DML like every request-role table; the restrictive policies below
+-- are what keep review history append-only.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legal_list_claim_review_events" TO "stella";--> statement-breakpoint
 CREATE POLICY "workspace_select"
   ON "legal_list_claim_review_events" AS PERMISSIVE FOR SELECT TO stella
   USING ((CASE
