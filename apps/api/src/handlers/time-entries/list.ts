@@ -1,24 +1,18 @@
 import { Result } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  gte,
-  inArray,
-  isNotNull,
-  lte,
-  or,
-} from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNotNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { member, user } from "@/api/db/auth-schema";
 import {
   timeEntrySourceSchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
+import { timeEntryReadColumns } from "@/api/handlers/time-entries/read-columns";
+import {
+  selectTimekeeperNames,
+  timekeeperIdsOf,
+} from "@/api/handlers/time-entries/timekeeper-names";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -221,29 +215,7 @@ const readTimeEntries = createSafeHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            id: timeEntries.id,
-            userId: timeEntries.userId,
-            workItemId: timeEntries.workItemId,
-            dateWorked: timeEntries.dateWorked,
-            timezoneId: timeEntries.timezoneId,
-            durationMinutes: timeEntries.durationMinutes,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-            currency: timeEntries.currency,
-            narrative: timeEntries.narrative,
-            invoiceNarrative: timeEntries.invoiceNarrative,
-            billable: timeEntries.billable,
-            noCharge: timeEntries.noCharge,
-            status: timeEntries.status,
-            source: timeEntries.source,
-            taskCode: timeEntries.taskCode,
-            activityCode: timeEntries.activityCode,
-            timerStartedAt: timeEntries.timerStartedAt,
-            timerStoppedAt: timeEntries.timerStoppedAt,
-            createdAt: timeEntries.createdAt,
-            updatedAt: timeEntries.updatedAt,
-          })
+          .select(timeEntryReadColumns)
           .from(timeEntries)
           .where(and(...conditions))
           .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
@@ -258,28 +230,16 @@ const readTimeEntries = createSafeHandler(
         encodePaginationCursor([item.dateWorked, item.id]),
     });
 
-    // Batch-fetch user names
-    const userIds = new Set<string>();
-    for (const row of page.items) {
-      if (row.userId) {
-        userIds.add(row.userId);
-      }
-    }
-
+    const userIds = timekeeperIdsOf(page.items);
     const usersResult =
       userIds.size > 0
         ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ id: user.id, name: user.name })
-                .from(member)
-                .innerJoin(user, eq(member.userId, user.id))
-                .where(
-                  and(
-                    eq(member.organizationId, session.activeOrganizationId),
-                    inArray(member.userId, [...userIds]),
-                  ),
-                ),
+            safeDb(
+              async (tx) =>
+                await selectTimekeeperNames(tx, {
+                  organizationId: session.activeOrganizationId,
+                  userIds,
+                }),
             ),
           )
         : [];

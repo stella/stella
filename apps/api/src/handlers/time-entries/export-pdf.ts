@@ -1,38 +1,21 @@
 import { Result } from "better-result";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and } from "drizzle-orm";
 
 import { MoneyTotals, prorateHourlyCents } from "@stll/money";
 import { Temporal } from "@stll/time";
 
-import { member, user } from "@/api/db/auth-schema";
-import { timeEntryStatusSchema } from "@/api/db/billing-validators";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
+import {
+  loadTimekeeperNames,
+  timeEntryExportConditions,
+  timeEntryExportQuerySchema,
+} from "@/api/handlers/time-entries/export-query";
+import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-export const exportPdfQuerySchema = t.Object({
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  status: t.Optional(timeEntryStatusSchema),
-  workItemId: t.Optional(tSafeId("entity")),
-});
-
-type ExportPdfQuerySchema = Static<typeof exportPdfQuerySchema>;
-
-type ExportPdfHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  query: ExportPdfQuerySchema;
-};
 
 /**
  * Generates a minimal PDF timesheet report using raw PDF syntax.
@@ -43,21 +26,8 @@ export const exportPdfHandler = async ({
   workspaceId,
   organizationId,
   query,
-}: ExportPdfHandlerProps) => {
-  const conditions = [eq(timeEntries.workspaceId, workspaceId)];
-
-  if (query.dateFrom) {
-    conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
-  }
-  if (query.dateTo) {
-    conditions.push(lte(timeEntries.dateWorked, query.dateTo));
-  }
-  if (query.status) {
-    conditions.push(eq(timeEntries.status, query.status));
-  }
-  if (query.workItemId) {
-    conditions.push(eq(timeEntries.workItemId, query.workItemId));
-  }
+}: TimeEntryExportHandlerProps) => {
+  const conditions = timeEntryExportConditions({ workspaceId, query });
 
   const rows = await scopedDb((tx) =>
     tx
@@ -79,31 +49,11 @@ export const exportPdfHandler = async ({
       .limit(LIMITS.exportPdfRowLimit),
   );
 
-  // Batch-fetch user names
-  const userIds = new Set<string>();
-  for (const row of rows) {
-    if (row.userId) {
-      userIds.add(row.userId);
-    }
-  }
-
-  const usersResult =
-    userIds.size > 0
-      ? await scopedDb((tx) =>
-          tx
-            .select({ id: user.id, name: user.name })
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id))
-            .where(
-              and(
-                eq(member.organizationId, organizationId),
-                inArray(member.userId, [...userIds]),
-              ),
-            ),
-        )
-      : [];
-
-  const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
+  const userMap = await loadTimekeeperNames({
+    scopedDb,
+    organizationId,
+    rows,
+  });
 
   // Build text content for the PDF
   const dateRange =
@@ -303,7 +253,7 @@ const config = {
         "returns the same entries as CSV text (time-entries.export-ledes returns LEDES instead); the rendered PDF is not produced",
     },
   },
-  query: exportPdfQuerySchema,
+  query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;
 
 const exportPdf = createSafeHandler(

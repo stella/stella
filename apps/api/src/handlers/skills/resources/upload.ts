@@ -1,9 +1,8 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
+import { agentSkillResources } from "@/api/db/schema";
+import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -101,90 +100,16 @@ const uploadSkillResource = createSafeRootHandler(
       );
     }
 
-    const skillRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: agentSkills.id,
-            origin: agentSkills.origin,
-            scope: agentSkills.scope,
-            userId: agentSkills.userId,
-            slug: agentSkills.slug,
-          })
-          .from(agentSkills)
-          .where(
-            and(
-              eq(agentSkills.id, params.skillId),
-              eq(agentSkills.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .limit(1),
-      ),
+    const skill = yield* Result.await(
+      loadSkillForNewResource({
+        safeDb,
+        skillId: params.skillId,
+        organizationId: session.activeOrganizationId,
+        memberRole,
+        userId: user.id,
+        path,
+      }),
     );
-    const skill = skillRows.at(0);
-    if (!skill) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Skill not found" }),
-      );
-    }
-
-    if (
-      skill.scope === "team" &&
-      !["admin", "owner"].includes(memberRole.role)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Only admins and owners can edit team skills",
-        }),
-      );
-    }
-    if (skill.scope === "private" && skill.userId !== user.id) {
-      return Result.err(
-        new HandlerError({ status: 403, message: "Forbidden" }),
-      );
-    }
-    const editableOrigin = requireEditableSkillOrigin(skill.origin);
-    if (Result.isError(editableOrigin)) {
-      return Result.err(editableOrigin.error);
-    }
-
-    const existingCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
-          agentSkillResources,
-          eq(agentSkillResources.skillId, params.skillId),
-        ),
-      ),
-    );
-    if (existingCount >= LIMITS.agentSkillResourcesPerSkill) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Skill has reached the maximum number of files",
-        }),
-      );
-    }
-
-    const duplicateRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ id: agentSkillResources.id })
-          .from(agentSkillResources)
-          .where(
-            and(
-              eq(agentSkillResources.skillId, params.skillId),
-              eq(agentSkillResources.path, path),
-            ),
-          )
-          .limit(1),
-      ),
-    );
-    if (duplicateRows.length > 0) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "File already exists" }),
-      );
-    }
 
     const buffer = await body.file.arrayBuffer();
     const binaryMimeType = inferBinaryUploadMimeType({ file: body.file, path });

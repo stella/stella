@@ -11,12 +11,17 @@ import {
 } from "@/api/lib/folio-collab-room-contract";
 
 import {
+  deletionCleanupConstraints,
+  deletionCleanupRetryColumns,
+  destructiveEffectChunkColumns,
+  destructiveEffectChunkConstraints,
+} from "./cleanup-ledgers";
+import {
   AGENDA_AVAILABILITIES,
   AGENDA_ITEM_KINDS,
   AGENDA_ITEM_SOURCES,
   AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
-  DESTRUCTIVE_EFFECT_CHUNK_STATUSES,
   ENTITY_KINDS,
   LIST_ITEM_TYPES,
   TASK_ASSIGNEE_ROLES,
@@ -45,7 +50,6 @@ import type {
   AnyPgColumn,
   BoundingBoxes,
   CellMetadata,
-  DestructiveEffectChunkStatus,
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
@@ -62,8 +66,6 @@ const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
 
 const ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES =
   ENTITY_DELETION_CLEANUP_STATUSES.map((status) => sql.raw(`'${status}'`));
-const DESTRUCTIVE_EFFECT_CHUNK_STATUS_SQL_VALUES =
-  DESTRUCTIVE_EFFECT_CHUNK_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 export const entities = p.pgTable(
   "entities",
@@ -239,37 +241,14 @@ export const entityDeletionCleanupRequests = p.pgTable(
       .$type<EntityDeletionCleanupStatus>()
       .notNull()
       .default("pending"),
-    attemptCount: p.integer("attempt_count").notNull().default(0),
-    errorMessage: p.text("error_message"),
-    nextAttemptAt: timestamptz("next_attempt_at"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at")
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    completedAt: timestamptz("completed_at"),
+    ...deletionCleanupRetryColumns(),
   },
   (table) => [
-    p
-      .index("entity_deletion_cleanup_pending_schedule_idx")
-      .on(table.createdAt, table.id)
-      .where(sql`${table.status} = 'pending'`),
-    p
-      .index("entity_deletion_cleanup_failed_schedule_idx")
-      .on(table.nextAttemptAt, table.id)
-      .where(sql`${table.status} = 'failed'`),
-    p
-      .index("entity_deletion_cleanup_processing_lease_idx")
-      .on(table.updatedAt, table.id)
-      .where(sql`${table.status} = 'processing'`),
-    p.check(
-      "entity_deletion_cleanup_status_values_check",
-      sql`${table.status} IN (${sql.join(ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "entity_deletion_cleanup_attempt_count_nonnegative_check",
-      sql`${table.attemptCount} >= 0`,
-    ),
+    ...deletionCleanupConstraints({
+      table,
+      prefix: "entity_deletion_cleanup",
+      statusSqlValues: ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES,
+    }),
     // The delete request may create this outbox row through its scoped
     // transaction; all later reads and state transitions are root-worker only.
     p.pgPolicy("entity_deletion_cleanup_insert", {
@@ -289,86 +268,14 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
   {
     id: pUuid<"entityDeletionEffectChunk">().primaryKey(),
     requestId: safeUuid<"entityDeletionCleanupRequest">("request_id").notNull(),
-    chunkIndex: p.integer("chunk_index").notNull(),
-    effectType: p
-      .text("effect_type", { enum: ["s3_delete"] })
-      .notNull()
-      .default("s3_delete"),
-    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
-    s3Keys: p.text("s3_keys").array().notNull(),
-    status: p
-      .text("status", { enum: DESTRUCTIVE_EFFECT_CHUNK_STATUSES })
-      .$type<DestructiveEffectChunkStatus>()
-      .notNull()
-      .default("pending"),
-    attemptCount: p.integer("attempt_count").notNull().default(0),
-    leaseToken: safeUuid<"effectLease">("lease_token"),
-    leaseExpiresAt: timestamptz("lease_expires_at"),
-    nextAttemptAt: timestamptz("next_attempt_at"),
-    errorMessage: p.text("error_message"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at")
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    completedAt: timestamptz("completed_at"),
+    ...destructiveEffectChunkColumns(),
   },
-  (table) => [
-    p
-      .foreignKey({
-        columns: [table.requestId],
-        foreignColumns: [entityDeletionCleanupRequests.id],
-        name: "entity_deletion_effect_chunks_request_fk",
-      })
-      .onDelete("cascade"),
-    p
-      .uniqueIndex("entity_deletion_effect_chunks_request_index_uidx")
-      .on(table.requestId, table.chunkIndex),
-    p
-      .index("entity_deletion_effect_chunks_pending_claim_idx")
-      .on(table.requestId, table.chunkIndex)
-      .where(sql`${table.status} = 'pending'`),
-    p
-      .index("entity_deletion_effect_chunks_failed_claim_idx")
-      .on(table.nextAttemptAt, table.requestId, table.chunkIndex)
-      .where(sql`${table.status} = 'failed'`),
-    p
-      .index("entity_deletion_effect_chunks_lease_expiry_idx")
-      .on(table.leaseExpiresAt, table.requestId, table.chunkIndex)
-      .where(sql`${table.status} = 'processing'`),
-    p.check(
-      "entity_deletion_effect_chunks_status_check",
-      sql`${table.status} IN (${sql.join(DESTRUCTIVE_EFFECT_CHUNK_STATUS_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_effect_type_check",
-      sql`${table.effectType} = 's3_delete'`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_attempt_nonnegative_check",
-      sql`${table.attemptCount} >= 0`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_index_nonnegative_check",
-      sql`${table.chunkIndex} >= 0`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_payload_hash_check",
-      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_payload_bound_check",
-      sql`(${table.status} = 'completed' AND cardinality(${table.s3Keys}) = 0) OR (${table.status} <> 'completed' AND cardinality(${table.s3Keys}) BETWEEN 1 AND 50)`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_lease_state_check",
-      sql`(${table.status} = 'processing') = (${table.leaseToken} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)`,
-    ),
-    p.check(
-      "entity_deletion_effect_chunks_retry_state_check",
-      sql`(${table.status} = 'failed') = (${table.nextAttemptAt} IS NOT NULL)`,
-    ),
-  ],
+  (table) =>
+    destructiveEffectChunkConstraints({
+      table,
+      requestIdColumn: entityDeletionCleanupRequests.id,
+      prefix: "entity_deletion_effect_chunks",
+    }),
 );
 
 export const taskAssignees = p.pgTable(

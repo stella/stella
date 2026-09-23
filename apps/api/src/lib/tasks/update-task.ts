@@ -40,7 +40,7 @@ import {
   decideGateForTask,
   gateDecisionForTransition,
 } from "@/api/lib/flows/review-gate-task";
-import { LIMITS } from "@/api/lib/limits";
+import { agendaBodyFields } from "@/api/lib/tasks/agenda-body-schema";
 import { validateAgendaFields } from "@/api/lib/tasks/agenda-fields";
 import {
   deployedTaskFeatures,
@@ -61,23 +61,6 @@ import {
 } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
 
-const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
-const agendaParticipantSchema = t.Object({
-  email: t.Nullable(t.String({ format: "email", maxLength: 320 })),
-  name: t.Nullable(t.String({ maxLength: 512 })),
-});
-const agendaAttendeeSchema = t.Object({
-  email: t.Nullable(t.String({ format: "email", maxLength: 320 })),
-  name: t.Nullable(t.String({ maxLength: 512 })),
-  optional: t.Optional(t.Boolean()),
-  responseStatus: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  type: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-});
-const agendaRecurrenceSchema = t.Object({
-  pattern: t.Nullable(t.String({ maxLength: 2000 })),
-  range: t.Nullable(t.String({ maxLength: 2000 })),
-});
-
 export const updateTaskBodySchema = t.Object({
   taskId: tSafeId("entity"),
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
@@ -86,25 +69,7 @@ export const updateTaskBodySchema = t.Object({
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   listItemType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  startAt: t.Optional(agendaDateTimeSchema),
-  endAt: t.Optional(agendaDateTimeSchema),
-  occurredAt: t.Optional(agendaDateTimeSchema),
-  remindAt: t.Optional(agendaDateTimeSchema),
-  allDay: t.Optional(t.Boolean()),
-  timeZone: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  location: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-  onlineMeetingUrl: t.Optional(t.Nullable(t.String({ maxLength: 2048 }))),
-  availability: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  sensitivity: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  organizer: t.Optional(t.Nullable(agendaParticipantSchema)),
-  attendees: t.Optional(
-    t.Nullable(
-      t.Array(agendaAttendeeSchema, {
-        maxItems: LIMITS.agendaAttendeesMax,
-      }),
-    ),
-  ),
-  recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
+  ...agendaBodyFields,
   sortOrder: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   workflowReason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
 });

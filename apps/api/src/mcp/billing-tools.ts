@@ -7,6 +7,7 @@ import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
@@ -1187,37 +1188,7 @@ const readInvoiceDetail = async ({
   await context.scopedDb((tx) =>
     tx.query.invoices.findFirst({
       where: { id: { eq: invoiceId }, workspaceId: { eq: workspaceId } },
-      with: {
-        timeEntries: {
-          columns: {
-            id: true,
-            workItemId: true,
-            dateWorked: true,
-            billedMinutes: true,
-            rateAtEntry: true,
-            currency: true,
-            narrative: true,
-            invoiceNarrative: true,
-            status: true,
-          },
-          with: { workItem: { columns: { id: true, name: true } } },
-        },
-        expenses: {
-          columns: {
-            id: true,
-            matterId: true,
-            dateIncurred: true,
-            amount: true,
-            currency: true,
-            category: true,
-            description: true,
-            invoiceDescription: true,
-            billable: true,
-            markup: true,
-          },
-          with: { matter: { columns: { id: true, name: true } } },
-        },
-      },
+      with: INVOICE_DETAIL_RELATIONS,
     }),
   );
 
