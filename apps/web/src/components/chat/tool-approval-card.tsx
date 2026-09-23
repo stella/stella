@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import {
   CheckIcon,
@@ -40,10 +40,15 @@ import {
 } from "@/components/chat/tool-approval-card.logic";
 import {
   buildRegistryWriteSummaryRows,
+  findCachedReaderAnnotationRows,
+  findReaderAnnotationMark,
   formatReadableInputValue,
+  getReaderAnnotationEditTargetId,
   getReadableInputRows,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
+import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
+import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
@@ -678,6 +683,36 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   return byId;
 };
 
+/**
+ * The mark an annotation edit or delete names, read from whichever reader has
+ * it loaded, so the approver sees the words rather than an id. The chat that
+ * runs these tools is bound to that reader, so a miss (the reader closed, or a
+ * guest's marks, which live outside the query cache) is rare and falls back to
+ * the generic summary. Subscribed to the cache so a reader list that arrives
+ * after the card renders still fills it in.
+ */
+const useCachedReaderAnnotationMark = (
+  annotationId: string | null,
+): ReaderAnnotationMark | null => {
+  const queryClient = useQueryClient();
+  const rows = useSyncExternalStore(
+    (onStoreChange) => queryClient.getQueryCache().subscribe(onStoreChange),
+    () =>
+      annotationId === null
+        ? undefined
+        : findCachedReaderAnnotationRows({
+            annotationId,
+            cachedLists: queryClient
+              .getQueriesData({ queryKey: readerAnnotationKeys.all })
+              .map(([, data]) => data),
+          }),
+  );
+  if (annotationId === null || rows === undefined) {
+    return null;
+  }
+  return findReaderAnnotationMark({ annotationId, rows });
+};
+
 const getToolApprovalState = ({
   blockedApprovalTools,
   defaultLabel,
@@ -794,10 +829,26 @@ const RegistryWriteSummary = ({
 }) => {
   const t = useTranslations();
   const mattersById = useMattersById();
+  const readerAnnotationMark = useCachedReaderAnnotationMark(
+    getReaderAnnotationEditTargetId({ input, toolName }),
+  );
   const rows = buildRegistryWriteSummaryRows({
     documentLabel: t("common.document"),
     emptyLabel: t("common.empty"),
     input,
+    readerAnnotation:
+      readerAnnotationMark === null
+        ? null
+        : {
+            labels: {
+              commentText: t("legalReader.annotations.commentText"),
+              passage: {
+                comment: t("legalReader.annotations.commentedPassage"),
+                highlight: t("legalReader.annotations.highlightedPassage"),
+              },
+            },
+            mark: readerAnnotationMark,
+          },
     toolName,
     uploadPlaceholder: t("chat.approval.uploadedDocumentPlaceholder"),
   });

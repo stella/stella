@@ -3447,6 +3447,8 @@ type Messages = {
       "colorViolet": "Violet";
       "colorYellow": "Yellow";
       "commentPlaceholder": "Write a comment…";
+      "commentText": "Comment text";
+      "commentedPassage": "Commented passage";
       "guestAuthor": "You";
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.";
       "guestMigrationComplete": "Highlights and notes saved.";
@@ -3454,6 +3456,7 @@ type Messages = {
       "guestSavePrompt": "Your highlights and notes will be saved when you create a free account.";
       "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.";
       "highlight": "Highlight";
+      "highlightedPassage": "Highlighted passage";
       "removeHighlight": "Remove highlight";
       "sharedBadge": "Shared";
       "styleHighlight": "Highlight";
