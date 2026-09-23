@@ -865,6 +865,8 @@
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
       "externalMcpQuestion": "Darf stella diese Anfrage an {provider} senden?",
+      "searchAllPastChatsDescription": "Es werden auch Ihre Chats zu anderen Akten durchsucht.",
+      "searchAllPastChatsQuestion": "Alle Ihre Chats durchsuchen?",
       "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },
     "askAnything": "Beliebige Frage stellen",
@@ -1174,7 +1176,9 @@
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
       "search-across-matters": "Aktenübergreifend suchen",
+      "search-all-past-chats": "Alle Chats durchsuchen",
       "search-chat-history": "Chatverlauf durchsuchen",
+      "search-past-chats": "Frühere Chats durchsuchen",
       "set_field_value": "Feldwert festlegen",
       "set_practice_jurisdictions": "Jurisdiktionen festlegen",
       "show_in_document": "Im Dokument anzeigen",

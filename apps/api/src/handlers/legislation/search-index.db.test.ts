@@ -146,9 +146,6 @@ beforeAll(
     client = await createTestPglite();
     db = drizzle({ client });
     await db.execute(
-      sql`CREATE FUNCTION public.unaccent(input text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS 'SELECT input'`,
-    );
-    await db.execute(
       sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
     );
 

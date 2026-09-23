@@ -6,6 +6,8 @@ export const CHAT_TOOL_POLICY_KIND = {
   mutation: "mutation",
   publicOfficial: "public_official",
   publicUnofficial: "public_unofficial",
+  /** Reads the user's own data beyond the chat's current scope. */
+  scopeExpansion: "scope_expansion",
 } as const;
 
 export type ChatToolPolicyKind =
@@ -17,6 +19,7 @@ export const CHAT_TOOL_POLICY_REQUIRES_APPROVAL = {
   mutation: true,
   public_official: false,
   public_unofficial: true,
+  scope_expansion: true,
 } as const satisfies Record<ChatToolPolicyKind, boolean>;
 
 /** Approval-gated kinds derived from the same map the API consumes at runtime. */
@@ -85,6 +88,10 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   remember: CHAT_TOOL_POLICY_KIND.mutation,
   "search-chat-history": CHAT_TOOL_POLICY_KIND.internal,
+  "search-past-chats": CHAT_TOOL_POLICY_KIND.internal,
+  // Crosses from this chat's matters into every chat the user has, so the
+  // user approves each widening.
+  "search-all-past-chats": CHAT_TOOL_POLICY_KIND.scopeExpansion,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,

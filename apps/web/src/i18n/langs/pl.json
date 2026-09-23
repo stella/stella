@@ -865,6 +865,8 @@
       "deny": "Odmów",
       "externalMcpDescription": "Wysłane zostaną tylko informacje niezbędne do tego wywołania narzędzia.",
       "externalMcpQuestion": "Czy stella może wysłać to żądanie do {provider}?",
+      "searchAllPastChatsDescription": "Przeszukane zostaną także Twoje czaty dotyczące innych spraw.",
+      "searchAllPastChatsQuestion": "Przeszukać wszystkie Twoje czaty?",
       "uploadedDocumentPlaceholder": "(przesłany dokument)"
     },
     "askAnything": "Zapytaj o cokolwiek",
@@ -1174,7 +1176,9 @@
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
       "search-across-matters": "Wyszukiwanie w różnych sprawach",
+      "search-all-past-chats": "Przeszukaj wszystkie czaty",
       "search-chat-history": "Przeszukiwanie historii czatu",
+      "search-past-chats": "Przeszukiwanie poprzednich czatów",
       "set_field_value": "Ustaw wartość pola",
       "set_practice_jurisdictions": "Ustaw jurysdykcje praktyki",
       "show_in_document": "Pokazywanie w dokumencie",

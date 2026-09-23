@@ -104,19 +104,6 @@ const createProjectionDb = (pglite: TestPglite) =>
 let client: TestPglite;
 let db: ReturnType<typeof createProjectionDb>;
 
-/**
- * PGlite ships no `unaccent`, so the projection's own SQL cannot run without
- * a stand-in. References are ASCII, where the extension is the identity, and
- * the real extension's Latin fold is pinned separately by the `foldToAscii` /
- * `unaccent` parity test; the fixture assertion below keeps this double from
- * covering anything it is not exact for.
- */
-const installUnaccentDouble = async (): Promise<void> => {
-  await db.execute(
-    sql`CREATE FUNCTION public.unaccent(input text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS 'SELECT input'`,
-  );
-};
-
 type ProjectionDatabase = NonNullable<IndexEntityDependencies["database"]>;
 
 /**
@@ -169,7 +156,6 @@ const matchesReferenceExactly = async (query: string): Promise<boolean> =>
 beforeAll(async () => {
   client = await createTestPglite();
   db = createProjectionDb(client);
-  await installUnaccentDouble();
 
   await db.insert(organization).values({
     createdAt: SEED_AT,

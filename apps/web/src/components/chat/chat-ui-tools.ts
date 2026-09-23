@@ -269,7 +269,9 @@ const CHAT_TOOL_TITLE_KEYS = {
   reply_comment: "chat.tool.reply_comment",
   resolve_comment: "chat.tool.resolve_comment",
   "read-skill-resource": "chat.tool.read-skill-resource",
+  "search-all-past-chats": "chat.tool.search-all-past-chats",
   "search-chat-history": "chat.tool.search-chat-history",
+  "search-past-chats": "chat.tool.search-past-chats",
   show_in_document: "chat.tool.show_in_document",
   suggest_changes: "chat.tool.suggest_changes",
   "update-current-skill-body": "common.edit",
@@ -411,6 +413,7 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   remember: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   spawn_subagents: CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
@@ -492,6 +495,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   create_template: true,
   configure_template_fields: true,
   save_time_entry: true,
+  "search-all-past-chats": false,
   set_field_value: true,
   set_practice_jurisdictions: true,
   spawn_subagents: false,

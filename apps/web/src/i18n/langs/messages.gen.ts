@@ -868,6 +868,8 @@ type Messages = {
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
       "externalMcpQuestion": "Can stella send this request to {provider}?";
+      "searchAllPastChatsDescription": "This search also covers your chats about other matters.";
+      "searchAllPastChatsQuestion": "Search all your chats?";
       "uploadedDocumentPlaceholder": "(uploaded document)";
     };
     "askAnything": "Ask anything";
@@ -1177,7 +1179,9 @@ type Messages = {
       "save_template": "Save template";
       "save_time_entry": "Save time entry";
       "search-across-matters": "Searching across matters";
+      "search-all-past-chats": "Search all chats";
       "search-chat-history": "Searching chat history";
+      "search-past-chats": "Searching past chats";
       "set_field_value": "Set field value";
       "set_practice_jurisdictions": "Set practice jurisdictions";
       "show_in_document": "Showing in document";

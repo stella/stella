@@ -865,6 +865,8 @@
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
       "externalMcpQuestion": "Ar stella gali siųsti šią užklausą teikėjui {provider}?",
+      "searchAllPastChatsDescription": "Bus ieškoma ir jūsų pokalbiuose apie kitas bylas.",
+      "searchAllPastChatsQuestion": "Ieškoti visuose jūsų pokalbiuose?",
       "uploadedDocumentPlaceholder": "(įkeltas dokumentas)"
     },
     "askAnything": "Klauskite bet ko",
@@ -1174,7 +1176,9 @@
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
       "search-across-matters": "Ieškoma keliose bylose",
+      "search-all-past-chats": "Ieškoti visuose pokalbiuose",
       "search-chat-history": "Ieškoma pokalbio istorijoje",
+      "search-past-chats": "Ieškoma ankstesniuose pokalbiuose",
       "set_field_value": "Nustatyti lauko reikšmę",
       "set_practice_jurisdictions": "Nustatyti praktikos jurisdikcijas",
       "show_in_document": "Rodoma dokumente",

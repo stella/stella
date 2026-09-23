@@ -865,6 +865,8 @@
       "deny": "Zamítnout",
       "externalMcpDescription": "Odešlou se jen informace potřebné pro tento dotaz.",
       "externalMcpQuestion": "Může stella odeslat tento dotaz do {provider}?",
+      "searchAllPastChatsDescription": "Prohledají se i vaše chaty k jiným spisům.",
+      "searchAllPastChatsQuestion": "Prohledat všechny vaše chaty?",
       "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },
     "askAnything": "Zeptejte se na cokoli",
@@ -1174,7 +1176,9 @@
       "save_template": "Uložit vzor",
       "save_time_entry": "Uložit časový záznam",
       "search-across-matters": "Vyhledávání napříč spisy",
+      "search-all-past-chats": "Prohledat všechny chaty",
       "search-chat-history": "Prohledávání historie chatu",
+      "search-past-chats": "Prohledávání předchozích chatů",
       "set_field_value": "Nastavit hodnotu pole",
       "set_practice_jurisdictions": "Nastavit jurisdikce",
       "show_in_document": "Zobrazení v dokumentu",

@@ -59,6 +59,7 @@ import {
   SHOW_IN_DOCUMENT_TOOL_NAME,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
+import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
@@ -272,6 +273,7 @@ const buildFullCoverageChatTools = (
     safeDb: unusedSafeDb,
     scopedDb: unusedScopedDb,
     threadId,
+    pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
     workspaceId: null,
     userId,
     toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -330,6 +332,7 @@ const autoApplyBaseArgs = {
   safeDb: unusedSafeDb,
   scopedDb: unusedScopedDb,
   threadId,
+  pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
   userId,
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
@@ -818,6 +821,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -873,6 +877,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -910,6 +915,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1069,6 +1075,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1126,6 +1133,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1169,6 +1177,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -2169,6 +2178,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       userId,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
@@ -2414,6 +2424,7 @@ describe("registry write tool approval policy", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -2500,6 +2511,7 @@ describe("registry write tool approval policy", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({

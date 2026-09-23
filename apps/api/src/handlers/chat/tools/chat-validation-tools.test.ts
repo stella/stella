@@ -15,6 +15,11 @@ import {
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
+import {
+  PAST_CHAT_SCOPE_TYPE,
+  SEARCH_ALL_PAST_CHATS_TOOL_NAME,
+} from "@/api/handlers/chat/tools/past-chat-tools";
+import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import {
@@ -133,6 +138,11 @@ const DOCX_SURFACES = {
   >
 >;
 
+const PAST_CHAT_SCOPES = [
+  { type: PAST_CHAT_SCOPE_TYPE.allChats },
+  { type: PAST_CHAT_SCOPE_TYPE.matters, workspaceIds: [workspaceId] },
+] as const satisfies readonly PastChatScope[];
+
 const THIRD_PARTY_BOUNDARIES = [
   { type: "raw" },
   asTestRaw<ChatThirdPartyBoundary>({ type: "anonymized" }),
@@ -153,37 +163,40 @@ const buildRunScenarios = (): RunToolsProps[] => {
                   editableActiveSkillContext,
                 ]) {
                   for (const memberRole of ["owner", "intern"] as const) {
-                    scenarios.push({
-                      ...surface,
-                      activeFile,
-                      activeSkillContext,
-                      editApplyMode,
-                      memberRole,
-                      memoryEnabled,
-                      organizationId,
-                      orgAIConfig: null,
-                      pinServerValidatedWorkspaceId: () => true,
-                      recordAuditEvent: noopAuditRecorder,
-                      refRegistry: createChatRefRegistry(),
-                      registryDispatch: BUSINESS_REGISTRY_DISPATCH,
-                      requestWorkspaceId: workspaceId,
-                      resolveMemorySourceWorkspaceIds: () => [],
-                      safeDb: unusedSafeDb,
-                      scopedDb: unusedScopedDb,
-                      skillMetadata,
-                      thirdPartyBoundary,
-                      threadId,
-                      toolDefectMemo: createChatToolDefectMemo(),
-                      toolWorkspaceIds: resolveToolWorkspaceIds({
-                        pinnedIds: [],
-                        accessibleWorkspaceIds: [workspaceId],
-                      }),
-                      userId,
-                      webSearchEnabled,
-                      webSearchProviders: { webSearchProvider, urlFetcher },
-                      workspaceId,
-                      workspaceStatusById: new Map([[workspaceId, "active"]]),
-                    });
+                    for (const pastChatScope of PAST_CHAT_SCOPES) {
+                      scenarios.push({
+                        ...surface,
+                        activeFile,
+                        activeSkillContext,
+                        editApplyMode,
+                        memberRole,
+                        memoryEnabled,
+                        organizationId,
+                        orgAIConfig: null,
+                        pinServerValidatedWorkspaceId: () => true,
+                        recordAuditEvent: noopAuditRecorder,
+                        refRegistry: createChatRefRegistry(),
+                        registryDispatch: BUSINESS_REGISTRY_DISPATCH,
+                        requestWorkspaceId: workspaceId,
+                        resolveMemorySourceWorkspaceIds: () => [],
+                        safeDb: unusedSafeDb,
+                        scopedDb: unusedScopedDb,
+                        skillMetadata,
+                        thirdPartyBoundary,
+                        threadId,
+                        toolDefectMemo: createChatToolDefectMemo(),
+                        toolWorkspaceIds: resolveToolWorkspaceIds({
+                          pinnedIds: [],
+                          accessibleWorkspaceIds: [workspaceId],
+                        }),
+                        userId,
+                        webSearchEnabled,
+                        webSearchProviders: { webSearchProvider, urlFetcher },
+                        workspaceId,
+                        workspaceStatusById: new Map([[workspaceId, "active"]]),
+                        pastChatScope,
+                      });
+                    }
                   }
                 }
               }
@@ -247,6 +260,7 @@ describe("chat validation tool set", () => {
       READ_DOCUMENT_TOOL_NAME,
       REMEMBER_TOOL_NAME,
       REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+      SEARCH_ALL_PAST_CHATS_TOOL_NAME,
       SPAWN_SUBAGENTS_TOOL_NAME,
       SUGGEST_CHANGES_TOOL_NAME,
       WEB_SEARCH_TOOL_NAME,

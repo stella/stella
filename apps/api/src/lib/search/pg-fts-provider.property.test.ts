@@ -24,23 +24,17 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
  * suite pins that invariant against the *real* Postgres parser (a regex-only
  * check would miss how `to_tsquery` actually tokenizes).
  *
- * The builders wrap their arguments in `unaccent(...)`. PGlite ships no
- * `unaccent` extension, so we install an identity stub: `unaccent` only folds
- * accented characters to their base letters and can never introduce a tsquery
- * operator, so an identity function is sound for a *syntax-validity* property
- * (it exercises the exact same `to_tsquery`/`plainto_tsquery` parse path). The
- * repo's `arabic_normalize` SQL function is installed by `getTestDb`.
+ * The builders wrap their arguments in `unaccent(...)` and
+ * `arabic_normalize(...)`; `getTestDb` installs PGlite doubles for both.
+ * `unaccent` only folds accented characters to their base letters and can
+ * never introduce a tsquery operator, so the double exercises the exact same
+ * `to_tsquery`/`plainto_tsquery` parse path.
  */
 
 let db: TestDatabase;
 
 beforeAll(async () => {
   db = await getTestDb();
-  await db.execute(
-    sql.raw(
-      "CREATE OR REPLACE FUNCTION unaccent(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$",
-    ),
-  );
 });
 
 afterAll(async () => {

@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -16,6 +17,10 @@ import {
 } from "./chat-history-tools";
 
 const threadId = toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111");
+const organizationId = toSafeId<"organization">(
+  "33333333-3333-4333-8333-333333333333",
+);
+const userId = toSafeId<"user">("44444444-4444-4444-8444-444444444444");
 const hiddenMessageId = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222222",
 );
@@ -40,8 +45,11 @@ describe("chat history tools", () => {
     const tools = createChatHistoryTools({
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
+      organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       safeDb,
       threadId,
+      userId,
     });
     const searchTool = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
 
@@ -66,8 +74,11 @@ describe("chat history tools", () => {
     const tools = createChatHistoryTools({
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
+      organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       safeDb,
       threadId,
+      userId,
     });
     const expandTool = tools[EXPAND_CHAT_HISTORY_TOOL_NAME];
 

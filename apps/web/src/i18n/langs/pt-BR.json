@@ -865,6 +865,8 @@
       "deny": "Negar",
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
       "externalMcpQuestion": "A stella pode enviar esta solicitação para {provider}?",
+      "searchAllPastChatsDescription": "A pesquisa também abrange seus chats sobre outros casos.",
+      "searchAllPastChatsQuestion": "Pesquisar em todos os seus chats?",
       "uploadedDocumentPlaceholder": "(documento enviado)"
     },
     "askAnything": "Pergunte qualquer coisa",
@@ -1174,7 +1176,9 @@
       "save_template": "Salvar modelo",
       "save_time_entry": "Salvar entrada de tempo",
       "search-across-matters": "Pesquisando casos",
+      "search-all-past-chats": "Pesquisar em todos os chats",
       "search-chat-history": "Pesquisando no histórico do chat",
+      "search-past-chats": "Pesquisando chats anteriores",
       "set_field_value": "Definir valor do campo",
       "set_practice_jurisdictions": "Definir jurisdições de atuação",
       "show_in_document": "Mostrando no documento",
