@@ -78,11 +78,17 @@ describe("normalizeLegalAlternatives", () => {
   });
 
   test("the answer always fits the wire schema the search accepts", () => {
-    const words = Array.from({ length: 12 }, (_, index) => `slovo${String(index)}`);
+    const words = Array.from(
+      { length: 12 },
+      (_, index) => `slovo${String(index)}`,
+    );
     const normalized = normalizeLegalAlternatives(
       words.map((term) => ({
         term,
-        alternatives: Array.from({ length: 6 }, (_, index) => `${term}x${String(index)}`),
+        alternatives: Array.from(
+          { length: 6 },
+          (_, index) => `${term}x${String(index)}`,
+        ),
       })),
       { functionWords: null, query: words.join(" ") },
     );
@@ -125,9 +131,10 @@ describe("withLegalAlternativesIdentity", () => {
   });
 
   test("pins the alternatives, so another set is a different ranking", () => {
-    const one = withLegalAlternativesIdentity(NO_EXPANSION_DICTIONARY_IDENTITY, [
-      { term: "kauce", alternatives: ["jistota"] },
-    ]);
+    const one = withLegalAlternativesIdentity(
+      NO_EXPANSION_DICTIONARY_IDENTITY,
+      [{ term: "kauce", alternatives: ["jistota"] }],
+    );
     const other = withLegalAlternativesIdentity(
       NO_EXPANSION_DICTIONARY_IDENTITY,
       [{ term: "kauce", alternatives: ["záloha"] }],

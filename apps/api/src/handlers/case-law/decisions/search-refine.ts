@@ -37,7 +37,9 @@ const config = {
     "jurisdiction use, in the corpus language: statutory terms for everyday " +
     "ones, question words dropped. Returns plain words the case-law search " +
     "requires, never boolean syntax. Stores nothing. Consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  // The grant AI chat carries: one AI spend, withheld from roles that may
+  // not start a chat.
+  permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object({
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
@@ -69,7 +71,9 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
     const country = publicCaseLawCountry(countryRead.country);
     if (country === null) {
-      return Result.err(new HandlerError({ status: 404, message: "Not Found" }));
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not Found" }),
+      );
     }
 
     yield* requireTanStackAIAvailableForRole({
@@ -109,6 +113,14 @@ const refineCaseLawSearch = createSafeRootHandler(
     ) {
       // Sequential by construction: the next attempt's prompt carries this
       // attempt's rejection.
+      const prompt = JSON.stringify({
+        attempt,
+        jurisdiction: country,
+        corpusLanguage,
+        locale: body.locale ?? null,
+        query: body.query,
+        previousValidationError: lastValidationError,
+      });
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
@@ -125,14 +137,7 @@ const refineCaseLawSearch = createSafeRootHandler(
               scopeKey: null,
             }),
             system: CASE_LAW_SEARCH_REFINE_SYSTEM,
-            prompt: JSON.stringify({
-              attempt,
-              jurisdiction: country,
-              corpusLanguage,
-              locale: body.locale ?? null,
-              query: body.query,
-              previousValidationError: lastValidationError,
-            }),
+            prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
             abortSignal: AbortSignal.any([

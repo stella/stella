@@ -46,6 +46,8 @@ type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
  * as the corpus's fault instead of the new filter's.
  */
 const SEARCH_OPTION_EFFECT = {
+  // Alternatives only widen: an empty page is never theirs to blame.
+  alternatives: "shapes",
   court: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
@@ -126,11 +128,11 @@ export const interpretDecisionQuery = (
   const functionWords = verbatim
     ? null
     : functionWordsFor(
-          caseLawQueryLanguage({
-            jurisdiction: body.country,
-            language: body.language,
-          }),
-        );
+        caseLawQueryLanguage({
+          jurisdiction: body.country,
+          language: body.language,
+        }),
+      );
   const { dropped, required } = partitionCorpusFunctionWords(
     tokenizeCorpusFreeText(body.query),
     functionWords,

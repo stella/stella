@@ -125,7 +125,9 @@ const config = {
     "search as `alternatives`, which ORs them beside each word. Empty when " +
     "the organization has no AI available, the query is an identifier, or " +
     "the model does not answer in time. Consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  // The grant AI chat carries: one AI spend, withheld from roles that may
+  // not start a chat.
+  permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object({
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),

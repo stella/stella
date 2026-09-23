@@ -101,7 +101,10 @@ export const normalizeLegalAlternatives = (
     const kept = byKey.get(key) ?? [];
     for (const alternative of entry.alternatives) {
       const words = corpusTokens(alternative);
-      if (words.length === 0 || words.length > LEGAL_ALTERNATIVES_LIMITS.words) {
+      if (
+        words.length === 0 ||
+        words.length > LEGAL_ALTERNATIVES_LIMITS.words
+      ) {
         continue;
       }
       const normalized = functionWordKey(words.join(" "));
