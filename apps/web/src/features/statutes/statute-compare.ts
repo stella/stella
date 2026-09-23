@@ -442,9 +442,14 @@ export const groupCompareRows = (
   return groups;
 };
 
+/** The newer side of a row, or the older one when the block was removed. */
+const rowSide = (row: StatuteCompareRow): StatuteCompareSide =>
+  row.after ?? row.before ?? panic(`Compare row ${row.key} has no side`);
+
 const rowText = (row: StatuteCompareRow): string =>
-  (row.after ?? row.before)?.segments.map((segment) => segment.text).join("") ??
-  "";
+  rowSide(row)
+    .segments.map((segment) => segment.text)
+    .join("");
 
 /**
  * The provision a heading row names: the designation line, which publishers
@@ -452,7 +457,7 @@ const rowText = (row: StatuteCompareRow): string =>
  * part or a chapter) is named by its last line.
  */
 const rowProvision = (row: StatuteCompareRow): string | null => {
-  for (const block of (row.after ?? row.before)?.blocks ?? []) {
+  for (const block of rowSide(row).blocks) {
     const line = block.type === "heading" ? provisionHeadingLine(block) : null;
     if (line !== null) {
       return line.text;
