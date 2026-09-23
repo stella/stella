@@ -2,7 +2,10 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk, TokenUsage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import {
+  addTokenUsage,
+  tokenUsageFromRunFinishedChunk,
+} from "@/api/lib/tanstack-ai-usage";
 
 type RunFinishedChunkOptions = Pick<
   Extract<StreamChunk, { type: "RUN_FINISHED" }>,
@@ -83,5 +86,50 @@ describe("TanStack run usage normalization", () => {
       totalTokens: 0,
       providerUsageDetails: { cacheWriteTokens: 4 },
     });
+  });
+});
+
+describe("usage across the steps of one run", () => {
+  test("sums counts, breakdowns and cost, keeping the latest provider details", () => {
+    const toolStep = {
+      promptTokens: 100,
+      completionTokens: 5,
+      totalTokens: 105,
+      promptTokensDetails: { cachedTokens: 60 },
+      completionTokensDetails: { reasoningTokens: 3 },
+      providerUsageDetails: { step: 1 },
+      cost: 0.25,
+    } satisfies TokenUsage;
+    const answerStep = {
+      promptTokens: 130,
+      completionTokens: 40,
+      totalTokens: 170,
+      promptTokensDetails: { cachedTokens: 100, cacheWriteTokens: 20 },
+      completionTokensDetails: { reasoningTokens: 7 },
+      providerUsageDetails: { step: 2 },
+      cost: 0.5,
+    } satisfies TokenUsage;
+
+    expect(
+      addTokenUsage(addTokenUsage(undefined, toolStep), answerStep),
+    ).toEqual({
+      promptTokens: 230,
+      completionTokens: 45,
+      totalTokens: 275,
+      promptTokensDetails: { cachedTokens: 160, cacheWriteTokens: 20 },
+      completionTokensDetails: { reasoningTokens: 10 },
+      providerUsageDetails: { step: 2 },
+      cost: 0.75,
+    });
+  });
+
+  test("keeps the running total when a step reports no usage", () => {
+    const step = {
+      promptTokens: 1,
+      completionTokens: 2,
+      totalTokens: 3,
+    } satisfies TokenUsage;
+
+    expect(addTokenUsage(step, undefined)).toEqual(step);
   });
 });

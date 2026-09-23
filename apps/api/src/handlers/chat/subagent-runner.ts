@@ -1,6 +1,6 @@
 import { EventType, maxIterations, StreamProcessor } from "@tanstack/ai";
 import type { TokenUsage, UIMessage } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
@@ -28,15 +28,21 @@ import {
   redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
-import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
-import { ChatEmptyCompletionError } from "@/api/lib/errors/tagged-errors";
+import {
+  finishReasonOf,
+  streamChatChunks,
+} from "@/api/lib/chat/tanstack-chat-runtime";
+import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import {
+  addTokenUsage,
+  tokenUsageFromRunFinishedChunk,
+} from "@/api/lib/tanstack-ai-usage";
 
 type RunSubagentMetering = {
   safeDb: SafeDb;
@@ -69,9 +75,77 @@ export type RunSubagentOptions = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
 };
 
-export type RunSubagentResult = {
-  text: string;
-  usage: TokenUsage | undefined;
+/**
+ * Why a subagent run produced no usable answer. `run-error` is a provider
+ * failure the run reported; the finish reasons name a final model step that
+ * did not end in a complete answer; `empty` is a run that ended with no
+ * assistant message at all.
+ */
+export type SubagentFailureReason =
+  | "content_filter"
+  | "empty"
+  | "length"
+  | "run-error"
+  | "tool_calls";
+
+/**
+ * `usage` is the whole run's, summed over every model step, on both branches:
+ * a failed run still spent the tokens of the steps before it ended.
+ */
+export type RunSubagentResult =
+  | { outcome: "completed"; text: string; usage: TokenUsage | undefined }
+  | {
+      message: string;
+      outcome: "failed";
+      reason: SubagentFailureReason;
+      usage: TokenUsage | undefined;
+    };
+
+type SubagentFinalStep =
+  | { type: "answered" }
+  | {
+      message: string;
+      reason: Extract<
+        SubagentFailureReason,
+        "content_filter" | "length" | "tool_calls"
+      >;
+      type: "incomplete";
+    };
+
+/** How the run's last model step ended decides whether its text is a result. */
+const subagentFinalStep = (
+  finishReason: TanStackTextFinishReason,
+): SubagentFinalStep => {
+  switch (finishReason) {
+    // A provider that reports no reason still produced the text it streamed.
+    case null:
+    case "stop":
+      return { type: "answered" };
+    case "length":
+      return {
+        message:
+          "The subagent's answer was cut off at the model's output limit.",
+        reason: "length",
+        type: "incomplete",
+      };
+    case "content_filter":
+      return {
+        message:
+          "The provider's content filter withheld the subagent's answer.",
+        reason: "content_filter",
+        type: "incomplete",
+      };
+    case "tool_calls":
+      return {
+        message:
+          "The subagent used every step on tool calls without answering.",
+        reason: "tool_calls",
+        type: "incomplete",
+      };
+    default:
+      finishReason satisfies never;
+      return panic(`Unhandled finish reason: ${String(finishReason)}`);
+  }
 };
 
 type UIMessagePart = UIMessage["parts"][number];
@@ -86,10 +160,19 @@ const textFromUIMessage = (message: UIMessage): string =>
     .flatMap((part) => (isTextPart(part) ? [part.content] : []))
     .join("");
 
+export type RunSubagentDependencies = {
+  resolveModel: typeof resolveTanStackTextModel;
+};
+
+const defaultRunSubagentDependencies = {
+  resolveModel: resolveTanStackTextModel,
+} satisfies RunSubagentDependencies;
+
 /**
  * Runs a nested TanStack AI `chat()` agentic tool loop to completion inside a
- * server-tool handler (e.g. a `spawn_subagents` tool) and returns the final
- * assistant text plus token usage.
+ * server-tool handler (e.g. a `spawn_subagents` tool) and returns its outcome:
+ * the final assistant text, or why the run ended without one, plus the token
+ * usage of every model step.
  *
  * This fully consumes the nested stream itself — it never re-streams chunks
  * to a client. Token usage IS metered via `createTanStackAIAnalyticsCallbacks`
@@ -102,8 +185,9 @@ const textFromUIMessage = (message: UIMessage): string =>
  */
 export const runSubagent = async (
   options: RunSubagentOptions,
+  dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
-  const model = resolveTanStackTextModel({
+  const model = dependencies.resolveModel({
     modelId: options.modelId,
     organizationId: options.organizationId,
     orgAIConfig: options.orgAIConfig,
@@ -223,10 +307,18 @@ export const runSubagent = async (
     context: { delegationDepth: options.delegationDepth },
   });
 
+  // One RUN_FINISHED per model step: a tool round trip is its own provider
+  // call, so the run's usage is the sum and its outcome is the last step's.
   let usage: TokenUsage | undefined;
+  let finishReason: TanStackTextFinishReason = null;
+  let runErrorMessage: string | null = null;
   for await (const chunk of stream) {
     if (chunk.type === EventType.RUN_FINISHED) {
-      usage = tokenUsageFromRunFinishedChunk(chunk);
+      usage = addTokenUsage(usage, tokenUsageFromRunFinishedChunk(chunk));
+      finishReason = finishReasonOf(chunk);
+    }
+    if (chunk.type === EventType.RUN_ERROR) {
+      runErrorMessage = chunk.message;
     }
     processor.processChunk(chunk);
   }
@@ -237,13 +329,42 @@ export const runSubagent = async (
     throw abortError;
   }
 
+  if (runErrorMessage !== null) {
+    return {
+      message: `The subagent run failed: ${runErrorMessage}`,
+      outcome: "failed",
+      reason: "run-error",
+      usage,
+    };
+  }
+
+  const finalStep = subagentFinalStep(finishReason);
+  switch (finalStep.type) {
+    case "incomplete":
+      return {
+        message: finalStep.message,
+        outcome: "failed",
+        reason: finalStep.reason,
+        usage,
+      };
+    case "answered":
+      break;
+    default:
+      finalStep satisfies never;
+      return panic(`Unhandled final step: ${String(finalStep)}`);
+  }
+
   if (captured.message === null) {
-    throw new ChatEmptyCompletionError({
-      message: "Subagent stream ended without producing an assistant message.",
-    });
+    return {
+      message: "The subagent ended without producing an answer.",
+      outcome: "failed",
+      reason: "empty",
+      usage,
+    };
   }
 
   return {
+    outcome: "completed",
     text: deanonymizeFromBoundary({
       boundary: options.thirdPartyBoundary,
       text: textFromUIMessage(captured.message),

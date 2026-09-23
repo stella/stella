@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -391,7 +391,7 @@ export const createSpawnSubagentsTool = (
         const proposalBuffer = createSubagentProposalBuffer();
         const tools = props.buildSubagentToolset(proposalBuffer.sink);
         try {
-          const { text } = await dependencies.runSubagent({
+          const run = await dependencies.runSubagent({
             organizationId: props.organizationId,
             orgAIConfig: props.orgAIConfig,
             role: "fast",
@@ -424,11 +424,23 @@ export const createSpawnSubagentsTool = (
             },
             thirdPartyBoundary: props.thirdPartyBoundary,
           });
-          return {
-            index,
-            status: "completed" as const,
-            result: appendProposedWrites(text, proposalBuffer.list()),
-          };
+          switch (run.outcome) {
+            case "completed":
+              return {
+                index,
+                status: "completed" as const,
+                result: appendProposedWrites(run.text, proposalBuffer.list()),
+              };
+            case "failed":
+              return {
+                index,
+                status: "failed" as const,
+                error: appendProposedWrites(run.message, proposalBuffer.list()),
+              };
+            default:
+              run satisfies never;
+              return panic(`Unhandled subagent outcome: ${String(run)}`);
+          }
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
             throw error;
