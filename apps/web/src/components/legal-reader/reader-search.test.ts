@@ -11,7 +11,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 0, end: 7, matchIndex: 0 },
+      { type: "search", start: 0, end: 7, matchIndex: 0 },
     ]);
   });
 
@@ -58,7 +58,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 10, end: 18, matchIndex: 0 },
+      { type: "search", start: 10, end: 18, matchIndex: 0 },
     ]);
   });
 
@@ -70,9 +70,9 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(3);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 6, end: 10, matchIndex: 0 },
-      { start: 15, end: 18, matchIndex: 1 },
-      { start: 20, end: 23, matchIndex: 2 },
+      { type: "search", start: 6, end: 10, matchIndex: 0 },
+      { type: "search", start: 15, end: 18, matchIndex: 1 },
+      { type: "search", start: 20, end: 23, matchIndex: 2 },
     ]);
   });
 
@@ -87,8 +87,8 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(2);
     expect(result.rangesByPieceId).toEqual({
-      p1: [{ start: 0, end: 5, matchIndex: 0 }],
-      p2: [{ start: 12, end: 17, matchIndex: 1 }],
+      p1: [{ type: "search", start: 0, end: 5, matchIndex: 0 }],
+      p2: [{ type: "search", start: 12, end: 17, matchIndex: 1 }],
     });
   });
 
@@ -110,7 +110,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 0, end: 5, matchIndex: 0 },
+      { type: "search", start: 0, end: 5, matchIndex: 0 },
     ]);
   });
 
@@ -138,7 +138,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 0, end: 5, matchIndex: 0 },
+      { type: "search", start: 0, end: 5, matchIndex: 0 },
     ]);
   });
 
@@ -150,8 +150,8 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(2);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 0, end: 4, matchIndex: 0 },
-      { start: 5, end: 9, matchIndex: 1 },
+      { type: "search", start: 0, end: 4, matchIndex: 0 },
+      { type: "search", start: 5, end: 9, matchIndex: 1 },
     ]);
   });
 
@@ -163,7 +163,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 4, end: 8, matchIndex: 0 },
+      { type: "search", start: 4, end: 8, matchIndex: 0 },
     ]);
   });
 
@@ -190,7 +190,7 @@ describe("buildSearchResults", () => {
 
     expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { start: 3, end: 6, matchIndex: 0 },
+      { type: "search", start: 3, end: 6, matchIndex: 0 },
     ]);
   });
 });

@@ -1,3 +1,4 @@
+import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
   provisionHeadingChain,
@@ -34,8 +35,11 @@ const previewBlock = (block: Block) => ({
 
 /**
  * One provision's wording, small enough to hover over: the consolidation it
- * was read from, the headings enclosing it, and only the blocks the citation
- * points at. The consolidation's own metadata stays on the reads that address
+ * was read from, the headings enclosing it, the provision's own heading, and
+ * only the blocks the citation points at. The own heading travels apart from
+ * the blocks, which never repeat it: a preview card names the provision
+ * itself, while a comparison of two consolidations reads the heading too, as
+ * an amendment may change only the designation or the caption. The consolidation's own metadata stays on the reads that address
  * it; a preview carries only the language its text renders in.
  *
  * `blocks` is empty when the consolidation does not carry the anchor, which
@@ -49,6 +53,7 @@ export const buildProvisionPreview = ({
 }: ProvisionPreviewInput) => {
   const cited = provisionPreviewBlocks(blocks, anchor, citedAnchor);
   const chain = provisionHeadingChain(blocks, anchor);
+  const own = resolveDocumentHeadingAnchor(blocks, anchor);
 
   return {
     documentId: version.id,
@@ -63,6 +68,15 @@ export const buildProvisionPreview = ({
             level: heading.level,
             text: heading.plainText,
           })),
+    heading:
+      own === null
+        ? null
+        : {
+            id: own.id,
+            anchorId: own.anchorId,
+            level: own.level,
+            text: own.plainText,
+          },
     blocks: cited === null ? [] : cited.map(previewBlock),
   };
 };

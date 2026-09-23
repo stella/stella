@@ -1,8 +1,13 @@
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
@@ -52,6 +57,11 @@ const rowStatusLabel = ({
 
 type StatuteVersionMenuProps = {
   currentVersionId: string;
+  /**
+   * Sets another version beside the one on screen, named by the day its
+   * window opened: the comparison's address spells it that way.
+   */
+  onCompare: (versionValidFrom: string) => void;
   onVersionChange: (documentId: string) => void;
   versions: readonly PublicStatuteVersion[];
 };
@@ -62,6 +72,7 @@ type StatuteVersionMenuProps = {
  */
 export const StatuteVersionMenu = ({
   currentVersionId,
+  onCompare,
   onVersionChange,
   versions,
 }: StatuteVersionMenuProps) => {
@@ -134,6 +145,7 @@ export const StatuteVersionMenu = ({
           {rows.map(({ displayStatus, version }) => {
             const selected = version.id === currentVersionId;
             const inForce = version.isDefault;
+            const compareFrom = selected ? null : version.versionValidFrom;
             // The dot's colour says future or past; only the version in
             // force, and a status the colour cannot tell apart, get a label.
             const rowLabel = rowStatusLabel({
@@ -151,6 +163,7 @@ export const StatuteVersionMenu = ({
                     "hover:bg-muted focus-visible:ring-ring grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none",
                     inForce ? "py-3" : "py-2",
                     selected && "bg-muted/60",
+                    compareFrom !== null && "pe-12",
                   )}
                   disabled={selected}
                   onClick={() => onVersionChange(version.id)}
@@ -184,6 +197,26 @@ export const StatuteVersionMenu = ({
                     )}
                   </span>
                 </button>
+                {/* Opening a version replaces the text; this sets it beside
+                    the one on screen instead. */}
+                {compareFrom === null ? null : (
+                  <PopoverClose
+                    render={
+                      <Button
+                        aria-label={t("statutes.compareWithVersion", {
+                          version: versionLabel(version),
+                        })}
+                        className="absolute end-2 top-1/2 -translate-y-1/2"
+                        onClick={() => onCompare(compareFrom)}
+                        size="icon-sm"
+                        title={t("statutes.compareSideBySide")}
+                        variant="ghost"
+                      />
+                    }
+                  >
+                    <Columns2Icon className="size-3.5" />
+                  </PopoverClose>
+                )}
               </li>
             );
           })}

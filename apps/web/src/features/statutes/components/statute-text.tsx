@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -9,7 +11,13 @@ import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
+import type {
+  AnchorPresentation,
+  TextAnchor,
+} from "@/components/legal-reader/document-ast-text";
 import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
+import type { ProvisionHeadingLine } from "@/components/legal-reader/reader-outline";
+import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 
@@ -59,7 +67,11 @@ const NO_ACTIVE_MATCH = -1;
  * anchors over, and the masthead is lifted out of the block list, so a
  * highlight left here would have nowhere to be drawn.
  */
-const StatuteMasthead = ({ masthead }: { masthead: StatuteMastheadData }) => (
+export const StatuteMasthead = ({
+  masthead,
+}: {
+  masthead: StatuteMastheadData;
+}) => (
   <header
     className="group relative mb-12 scroll-mt-[var(--reader-anchor-offset)] text-center"
     id={masthead.anchorId}
@@ -116,10 +128,8 @@ export const StatuteText = ({
         {blocks.map((block) => {
           // The unit case law cites and a drafting history is about: the
           // designation the heading states, wherever the publisher put it.
-          const provision =
-            block.type === "heading" ? provisionHeadingLine(block) : null;
-          const detailsAction =
-            provision !== null && citationWork !== null ? (
+          const detailsAction = (provision: ProvisionHeadingLine) =>
+            citationWork === null ? undefined : (
               <ProvisionDetailsAction
                 citationCount={provisionCitationCounts.get(block.anchorId)}
                 onOpen={() => {
@@ -138,30 +148,16 @@ export const StatuteText = ({
                 }}
                 provision={provision.text}
               />
-            ) : undefined;
+            );
 
           return (
-            <BlockRenderer
-              activeMatchIndex={NO_ACTIVE_MATCH}
+            <StatuteBlock
+              anchorPresentation="document"
               anchorsByPieceId={anchorsByPieceId}
               block={block}
-              headingPresentation={
-                provision === null
-                  ? undefined
-                  : {
-                      accessory: detailsAction,
-                      designationLine: provision.index,
-                      type: "provision",
-                    }
-              }
               key={block.id}
-              noteBackJumpTo={
-                block.type === "paragraph" && block.note?.type === "footnote"
-                  ? block.anchorId
-                  : undefined
-              }
+              provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
-              variant="statute"
             />
           );
         })}
@@ -195,6 +191,63 @@ export const StatuteText = ({
         {t("statutes.emptyDocument")}
       </p>
     </div>
+  );
+};
+
+type StatuteBlockProps = {
+  /** A comparison cell is an excerpt: `embedded`. */
+  anchorPresentation: AnchorPresentation;
+  anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
+  block: Block;
+  /** What a provision heading offers beside its designation. */
+  provisionAccessory?:
+    | ((provision: ProvisionHeadingLine) => ReactNode)
+    | undefined;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
+};
+
+/**
+ * One block as the statute reader prints it: a provision's designation on a
+ * row of its own, the containers centred above it. The comparison renders
+ * its cells through this too, so the two cannot set a statute differently.
+ */
+export const StatuteBlock = ({
+  anchorPresentation,
+  anchorsByPieceId,
+  block,
+  provisionAccessory,
+  rangesByPieceId,
+}: StatuteBlockProps) => {
+  // The unit case law cites and a drafting history is about: the
+  // designation the heading states, wherever the publisher put it.
+  const provision =
+    block.type === "heading" ? provisionHeadingLine(block) : null;
+
+  return (
+    <BlockRenderer
+      activeMatchIndex={NO_ACTIVE_MATCH}
+      anchorPresentation={anchorPresentation}
+      anchorsByPieceId={anchorsByPieceId}
+      block={block}
+      headingPresentation={
+        provision === null
+          ? undefined
+          : {
+              accessory: provisionAccessory?.(provision),
+              designationLine: provision.index,
+              type: "provision",
+            }
+      }
+      noteBackJumpTo={
+        anchorPresentation === "document" &&
+        block.type === "paragraph" &&
+        block.note?.type === "footnote"
+          ? block.anchorId
+          : undefined
+      }
+      rangesByPieceId={rangesByPieceId}
+      variant="statute"
+    />
   );
 };
 

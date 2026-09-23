@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   publicStatuteOptions,
@@ -13,7 +14,10 @@ import type {
 } from "@/features/statutes/queries/statutes";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { loadPublicStatuteRoute } from "@/routes/law/-statute-detail.logic";
+import {
+  loadPublicStatuteRoute,
+  publicStatuteSearchSchema,
+} from "@/routes/law/-statute-detail.logic";
 
 const SLUG = "89-2012-sb-obcansky-zakonik";
 const COUNTRY_SEGMENT = "cze";
@@ -140,7 +144,7 @@ const load = async (
     version: versionSegment,
   }: {
     hash?: string;
-    search?: { asOf?: string; jump?: string };
+    search?: Parameters<typeof loadPublicStatuteRoute>[0]["search"];
     slug: string;
     version?: string;
   },
@@ -283,5 +287,61 @@ describe("the address a statute consolidation is canonical at", () => {
         to: "/law/$country/statutes/$slug/v/$version",
       },
     });
+  });
+
+  test("a comparison travels with the reader to the canonical address", async () => {
+    const queryClient = new QueryClient();
+    seedWork(queryClient);
+    seedDay(queryClient, "2024-01-01", CURRENT);
+
+    // A deep link names the version it was minted on; when that version turns
+    // out to be the latest, the comparison must still open at the bare slug.
+    expect(
+      await canonicalRedirect(
+        load(queryClient, {
+          search: {
+            compare: "2020-01-01",
+            provision: "sec-2079",
+            show: "all",
+          },
+          slug: SLUG,
+          version: "2024-01-01",
+        }),
+      ),
+    ).toMatchObject({
+      options: {
+        search: {
+          compare: "2020-01-01",
+          provision: "sec-2079",
+          show: "all",
+        },
+        to: "/law/$country/statutes/$slug",
+      },
+    });
+  });
+});
+
+describe("the search a statute address carries", () => {
+  // A hand-edited or truncated link must still open the act: a value the
+  // reader cannot use is dropped, never a route error.
+  test("drops an over-long provision or jump instead of rejecting the address", () => {
+    const parsed = v.safeParse(publicStatuteSearchSchema, {
+      compare: "2024-01-01",
+      jump: "§".repeat(33),
+      provision: "a".repeat(257),
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toMatchObject({
+      compare: "2024-01-01",
+      jump: undefined,
+      provision: undefined,
+    });
+  });
+
+  test("keeps a provision anchor within the bound", () => {
+    expect(
+      v.parse(publicStatuteSearchSchema, { provision: " par_5 " }).provision,
+    ).toBe("par_5");
   });
 });

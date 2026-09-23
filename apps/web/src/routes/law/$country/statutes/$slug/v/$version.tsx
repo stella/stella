@@ -34,9 +34,13 @@ export const Route = createFileRoute("/law/$country/statutes/$slug/v/$version")(
 function PublicStatuteVersionRoute() {
   const { statute, versions, work } = Route.useLoaderData();
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
+  const compare = Route.useSearch({ select: (search) => search.compare });
+  const provision = Route.useSearch({ select: (search) => search.provision });
+  const show = Route.useSearch({ select: (search) => search.show });
 
   return (
     <PublicStatuteViewer
+      comparison={{ compare, provision, show }}
       asOf={undefined}
       requestedJump={requestedJump}
       statute={statute}

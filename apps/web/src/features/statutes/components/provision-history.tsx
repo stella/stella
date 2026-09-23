@@ -1,34 +1,37 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
-import {
-  ReviewDiffDeletion,
-  ReviewDiffInsertion,
-} from "@stll/ui/review-diff-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { HighlightedText } from "@/components/legal-reader/document-ast-text";
 import {
-  diffProvisionText,
   resolveSelectedVersion,
   selectChangedVersions,
 } from "@/features/statutes/provision-diff";
-import type { ProvisionDiffSegment } from "@/features/statutes/provision-diff";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
+import { diffMarkRanges } from "@/features/statutes/statute-diff-marks";
 import {
   EM_DASH,
   formatValidityDate,
 } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { createStatuteLinkTarget } from "@/lib/statute-route";
+
+// The history marks its diff only; it carries no find.
+const NO_ACTIVE_MATCH = -1;
 
 type ProvisionHistoryProps = {
   /** The provision heading's anchor, the id the history is filed under. */
@@ -108,6 +111,17 @@ export const ProvisionHistory = ({
   }
 
   const previous = versions.at(versions.indexOf(selected) + 1);
+  // The comparison sets a past wording beside the consolidation this tab
+  // shows. When the selected wording is that consolidation's own, the past
+  // one is the wording it replaced.
+  const onScreenText = consolidations.find(
+    (version) => version.documentId === documentId,
+  )?.text;
+  const compareWith =
+    selected.documentId === documentId || selected.text === onScreenText
+      ? previous
+      : selected;
+  const compareFrom = compareWith?.versionValidFrom ?? null;
   const label = (validFrom: string | null): string =>
     formatValidityDate(validFrom, format) ?? EM_DASH;
 
@@ -154,6 +168,31 @@ export const ProvisionHistory = ({
       {/* With no older wording loaded there is nothing to diff against, so
           the panel shows the wording itself and says why. */}
       <ProvisionDiff after={selected.text} before={previous?.text ?? null} />
+      {compareFrom !== null && (
+        <Button
+          className="self-start"
+          render={
+            <Link
+              {...createStatuteLinkTarget({
+                country: statute.country,
+                documentId,
+                eli: statute.eli,
+                slug: statute.slug,
+                versionValidFrom: statute.versionValidFrom,
+              })}
+              search={{
+                compare: compareFrom,
+                provision: resolvedAnchor ?? anchorId,
+              }}
+            />
+          }
+          size="sm"
+          variant="outline"
+        >
+          <Columns2Icon className="size-3.5" />
+          {t("statutes.compareSideBySide")}
+        </Button>
+      )}
       {previous === undefined && (
         <p className="text-muted-foreground text-xs">
           {hasNextPage
@@ -176,60 +215,18 @@ const ProvisionDiff = ({ after, before }: ProvisionDiffProps) => {
     return <p className="text-sm leading-6 whitespace-pre-wrap">{after}</p>;
   }
 
+  const segments = diffWordSegments(before, after);
+
+  // Deletions and insertions inline in one wording, marked the way the
+  // comparison and the reader mark them.
   return (
     <p className="text-sm leading-6 whitespace-pre-wrap">
-      {withOffsets(diffProvisionText(before, after)).map(
-        ({ offset, segment }) => (
-          <ProvisionDiffRun key={offset} segment={segment} />
-        ),
-      )}
+      <HighlightedText
+        activeMatchIndex={NO_ACTIVE_MATCH}
+        pieceId="provision-diff"
+        ranges={diffMarkRanges(segments)}
+        text={segments.map((segment) => segment.text).join("")}
+      />
     </p>
   );
-};
-
-type OffsetSegment = {
-  offset: number;
-  segment: ProvisionDiffSegment;
-};
-
-/**
- * Segments carry no identity of their own, but their position in the
- * concatenated text is unique and stable for a given pair of wordings.
- */
-const withOffsets = (
-  segments: readonly ProvisionDiffSegment[],
-): OffsetSegment[] => {
-  const positioned: OffsetSegment[] = [];
-  let offset = 0;
-
-  for (const segment of segments) {
-    positioned.push({ offset, segment });
-    offset += segment.text.length;
-  }
-
-  return positioned;
-};
-
-const ProvisionDiffRun = ({ segment }: { segment: ProvisionDiffSegment }) => {
-  const t = useTranslations();
-
-  if (segment.kind === "inserted") {
-    return (
-      <ReviewDiffInsertion>
-        <span className="sr-only">{t("statutes.diffInserted")}</span>
-        {segment.text}
-      </ReviewDiffInsertion>
-    );
-  }
-
-  if (segment.kind === "removed") {
-    return (
-      <ReviewDiffDeletion>
-        <span className="sr-only">{t("statutes.diffRemoved")}</span>
-        {segment.text}
-      </ReviewDiffDeletion>
-    );
-  }
-
-  return <span>{segment.text}</span>;
 };

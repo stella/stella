@@ -6,6 +6,7 @@ import type { Inline } from "@stll/legal-ast/document-ast";
 
 import { InlineContent } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
 import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 
 /**
@@ -38,7 +39,7 @@ const render = ({
 }: {
   activeMatchIndex?: number;
   anchors: TextAnchor[];
-  ranges: { start: number; end: number; matchIndex: number }[];
+  ranges: SearchMatchRange[];
 }) =>
   renderToStaticMarkup(
     <InlineContent
@@ -79,7 +80,7 @@ describe("InlineContent anchors", () => {
     const end = plainText.indexOf("I.") + 2;
     const html = render({
       anchors: [anchor],
-      ranges: [{ end, matchIndex: 0, start }],
+      ranges: [{ end, matchIndex: 0, start, type: "search" }],
     });
 
     const marks = html.match(/<mark[^>]*data-reader-match-index="0"[^>]*>/gu);
@@ -134,7 +135,9 @@ describe("InlineContent anchors", () => {
     const start = plainText.indexOf("nález");
     const marked = render({
       anchors: [],
-      ranges: [{ end: start + "nález".length, matchIndex: 0, start }],
+      ranges: [
+        { end: start + "nález".length, matchIndex: 0, start, type: "search" },
+      ],
     });
     expect(
       marked.match(/<mark[^>]*data-reader-match-index="0"[^>]*>/gu),
