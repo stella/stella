@@ -15,6 +15,9 @@ import {
   LIST_INVOICES_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
+  LIST_READER_ANNOTATIONS_PROJECTION,
+  CREATE_READER_ANNOTATION_PROJECTION,
+  UPDATE_READER_ANNOTATION_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
   LIST_TASKS_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
@@ -235,6 +238,13 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     projection: LIST_PLAYBOOKS_PROJECTION,
+  },
+
+  // --- Reader annotations: corpus document ids and org-scoped mark ids ------
+  list_reader_annotations: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: LIST_READER_ANNOTATIONS_PROJECTION,
   },
 
   // --- Billing: entity refs on line items, rest are billing handles ---------
@@ -496,6 +506,25 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // `playbook_id` is an org-scoped library handle: passes through.
     inputRefs: [{ kind: "matter", param: "matter_id" }],
     projection: RUN_PLAYBOOK_PROJECTION,
+  },
+
+  // --- Reader annotations ---------------------------------------------------
+  // `target_id` names a public corpus document and `annotation_id` an
+  // org-scoped mark: neither is a tenant ref, both pass through.
+  create_reader_annotation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: CREATE_READER_ANNOTATION_PROJECTION,
+  },
+  update_reader_annotation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: UPDATE_READER_ANNOTATION_PROJECTION,
+  },
+  delete_reader_annotation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: DELETED_TRUE_PROJECTION,
   },
 
   // --- Organization ---------------------------------------------------------

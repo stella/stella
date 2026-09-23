@@ -1117,11 +1117,13 @@
       "configure_template_fields": "Configurar campos de la plantilla",
       "create-document": "Preparando documento",
       "create_matter_document": "Creando documento",
+      "create_reader_annotation": "Añadir resaltado o comentario",
       "create_template": "Crear plantilla",
       "delete_clause": "Eliminar cláusula",
       "delete_contact": "Eliminar contacto",
       "delete_document": "Eliminar documento",
       "delete_matter": "Eliminar asunto",
+      "delete_reader_annotation": "Eliminar resaltado o comentario",
       "delete_task": "Eliminar tarea",
       "delete_time_entry": "Eliminar registro de tiempo",
       "describe-stella-api": "Preparando búsqueda de datos",
@@ -1197,6 +1199,7 @@
       "suggest_template_fields": "Sugiriendo campos de la plantilla",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
+      "update_reader_annotation": "Editar resaltado o comentario",
       "web_search": "Buscando en la web"
     },
     "toolCall": {

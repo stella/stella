@@ -16,6 +16,7 @@ import {
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
+import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
@@ -70,6 +71,12 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   save_playbook: KNOWLEDGE_TOOL_HANDLERS.save_playbook,
   delete_clause: KNOWLEDGE_TOOL_HANDLERS.delete_clause,
   run_playbook: KNOWLEDGE_TOOL_HANDLERS.run_playbook,
+  create_reader_annotation:
+    READER_ANNOTATION_TOOL_HANDLERS.create_reader_annotation,
+  update_reader_annotation:
+    READER_ANNOTATION_TOOL_HANDLERS.update_reader_annotation,
+  delete_reader_annotation:
+    READER_ANNOTATION_TOOL_HANDLERS.delete_reader_annotation,
   manage_organization: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
   set_practice_jurisdictions: STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
   fill_template: TEMPLATE_TOOL_HANDLERS.fill_template,

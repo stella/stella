@@ -1,7 +1,20 @@
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditResourceType } from "@/api/lib/audit-log";
+import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
+
+/**
+ * Who a mark belongs to, from the session and never from the request: the
+ * HTTP routes and the agent tools pass the same scope to the same handlers.
+ */
+export type AnnotationAuthorScope = {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+};
 
 /**
  * The trail names the thing a reader acted on, which is a note on a decision

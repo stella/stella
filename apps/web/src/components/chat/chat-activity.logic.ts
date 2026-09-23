@@ -24,10 +24,12 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",
   create_matter_document: "artifact",
+  create_reader_annotation: "mutation",
   delete_clause: "mutation",
   delete_contact: "mutation",
   delete_document: "mutation",
   delete_matter: "mutation",
+  delete_reader_annotation: "mutation",
   delete_task: "mutation",
   delete_time_entry: "mutation",
   describe_template: "research",
@@ -75,6 +77,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   "update-current-skill-body": "mutation",
   "update-current-skill-resource": "mutation",
   "update-entity-fields": "mutation",
+  update_reader_annotation: "mutation",
   web_search: "research",
 } as const satisfies Record<keyof ChatUITools, ChatToolActivityCategory>;
 

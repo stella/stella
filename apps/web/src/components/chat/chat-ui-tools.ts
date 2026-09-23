@@ -222,11 +222,13 @@ const CHAT_TOOL_TITLE_KEYS = {
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
   create_matter_document: "chat.tool.create_matter_document",
+  create_reader_annotation: "chat.tool.create_reader_annotation",
   "create-current-skill-resource": "common.edit",
   delete_clause: "chat.tool.delete_clause",
   delete_contact: "chat.tool.delete_contact",
   delete_document: "chat.tool.delete_document",
   delete_matter: "chat.tool.delete_matter",
+  delete_reader_annotation: "chat.tool.delete_reader_annotation",
   delete_task: "chat.tool.delete_task",
   delete_time_entry: "chat.tool.delete_time_entry",
   describe_template: "chat.tool.describe_template",
@@ -277,6 +279,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   "update-current-skill-body": "common.edit",
   "update-current-skill-resource": "common.edit",
   "update-entity-fields": "chat.tool.update-entity-fields",
+  update_reader_annotation: "chat.tool.update_reader_annotation",
   web_search: "chat.tool.web_search",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;
 
@@ -472,10 +475,12 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   boe_search_legislation: false,
   "create-current-skill-resource": false,
   create_matter_document: false,
+  create_reader_annotation: true,
   delete_clause: true,
   delete_contact: true,
   delete_document: true,
   delete_matter: true,
+  delete_reader_annotation: true,
   delete_task: true,
   delete_time_entry: true,
   fetch_url: false,
@@ -503,6 +508,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-body": false,
   "update-current-skill-resource": false,
   "update-entity-fields": false,
+  update_reader_annotation: true,
   web_search: false,
 } as const satisfies Record<
   Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
@@ -1168,6 +1174,71 @@ export const consumePlaybookSaveToolCalls = ({
   }
 
   return hasSave;
+};
+
+type ReaderAnnotationWriteToolName = Extract<
+  BuiltInChatToolName,
+  `${string}_reader_annotation`
+>;
+
+// Keyed by the backend's tool names, so a new reader-annotation write tool
+// fails typecheck here until it states what its success looks like. A refused
+// write returns an error envelope instead, and wrote nothing.
+const READER_ANNOTATION_WRITE_SUCCEEDED = {
+  create_reader_annotation: (output) =>
+    typeof output["annotationId"] === "string",
+  update_reader_annotation: (output) => output["updated"] === true,
+  delete_reader_annotation: (output) => output["deleted"] === true,
+} as const satisfies Record<
+  ReaderAnnotationWriteToolName,
+  (output: Record<string, unknown>) => boolean
+>;
+
+const isReaderAnnotationWriteToolName = (
+  toolName: unknown,
+): toolName is ReaderAnnotationWriteToolName =>
+  typeof toolName === "string" &&
+  Object.hasOwn(READER_ANNOTATION_WRITE_SUCCEEDED, toolName);
+
+export type ReaderAnnotationWriteMessage = DocumentDeletionMessage;
+
+/**
+ * Consume the successful reader-annotation writes (create, update, delete)
+ * this session has not handled.
+ */
+export const consumeReaderAnnotationWriteToolCalls = ({
+  handledToolCallIds,
+  messages,
+}: {
+  handledToolCallIds: Set<string>;
+  messages: readonly ReaderAnnotationWriteMessage[];
+}): boolean => {
+  let hasWrite = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (
+        !isJsonObject(part) ||
+        part["type"] !== "tool-call" ||
+        !isReaderAnnotationWriteToolName(part["name"]) ||
+        part["state"] !== "complete" ||
+        typeof part["id"] !== "string" ||
+        !isJsonObject(part["output"]) ||
+        !READER_ANNOTATION_WRITE_SUCCEEDED[part["name"]](part["output"]) ||
+        handledToolCallIds.has(part["id"])
+      ) {
+        continue;
+      }
+
+      handledToolCallIds.add(part["id"]);
+      hasWrite = true;
+    }
+  }
+
+  return hasWrite;
 };
 
 export const getUserMessageHtmlHistory = (

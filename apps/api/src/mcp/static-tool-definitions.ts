@@ -15,6 +15,7 @@ import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
 import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
+import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
@@ -34,6 +35,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
   DOCUMENT_TOOL_SET,
   MATTER_TOOL_SET,
   KNOWLEDGE_TOOL_SET,
+  READER_ANNOTATION_TOOL_SET,
   BILLING_TOOL_SET,
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
@@ -53,6 +55,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...DOCUMENT_TOOL_SET.definitions,
   ...MATTER_TOOL_SET.definitions,
   ...KNOWLEDGE_TOOL_SET.definitions,
+  ...READER_ANNOTATION_TOOL_SET.definitions,
   ...BILLING_TOOL_SET.definitions,
   ...RESEARCH_ADMIN_TOOL_SET.definitions,
   ...FEEDBACK_TOOL_SET.definitions,

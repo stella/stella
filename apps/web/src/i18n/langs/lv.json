@@ -1117,11 +1117,13 @@
       "configure_template_fields": "Konfigurēt veidnes laukus",
       "create-document": "Dokumenta sagatavošana",
       "create_matter_document": "Dokumenta izveide",
+      "create_reader_annotation": "Pievienot izcēlumu vai komentāru",
       "create_template": "Izveidot veidni",
       "delete_clause": "Dzēst klauzulu",
       "delete_contact": "Dzēst kontaktu",
       "delete_document": "Dzēst dokumentu",
       "delete_matter": "Dzēst lietu",
+      "delete_reader_annotation": "Dzēst izcēlumu vai komentāru",
       "delete_task": "Dzēst uzdevumu",
       "delete_time_entry": "Dzēst laika ierakstu",
       "describe-stella-api": "Datu meklēšanas sagatavošana",
@@ -1197,6 +1199,7 @@
       "suggest_template_fields": "Iesaka veidnes laukus",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
+      "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {

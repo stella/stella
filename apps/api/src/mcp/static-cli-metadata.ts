@@ -139,6 +139,24 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     save_playbook: { command: ["playbook", "save"], scope: "knowledge_write" },
     run_playbook: { command: ["playbook", "run"], scope: "knowledge_write" },
 
+    list_reader_annotations: {
+      command: ["annotation", "list"],
+      scope: "read",
+      itemsKey: "annotations",
+    },
+    create_reader_annotation: {
+      command: ["annotation", "create"],
+      scope: "knowledge_write",
+    },
+    update_reader_annotation: {
+      command: ["annotation", "update"],
+      scope: "knowledge_write",
+    },
+    delete_reader_annotation: {
+      command: ["annotation", "delete"],
+      scope: "knowledge_write",
+    },
+
     search_across_matters: {
       command: ["search", "matters"],
       scope: "search",

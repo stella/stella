@@ -1117,11 +1117,13 @@
       "configure_template_fields": "Sablonmezők beállítása",
       "create-document": "Dokumentum előkészítése",
       "create_matter_document": "Dokumentum létrehozása",
+      "create_reader_annotation": "Kiemelés vagy megjegyzés hozzáadása",
       "create_template": "Sablon létrehozása",
       "delete_clause": "Kikötés törlése",
       "delete_contact": "Kapcsolat törlése",
       "delete_document": "Dokumentum törlése",
       "delete_matter": "Ügy törlése",
+      "delete_reader_annotation": "Kiemelés vagy megjegyzés törlése",
       "delete_task": "Feladat törlése",
       "delete_time_entry": "Időbejegyzés törlése",
       "describe-stella-api": "Adatlekérés előkészítése",
@@ -1197,6 +1199,7 @@
       "suggest_template_fields": "Sablonmezők javaslása",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
+      "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {

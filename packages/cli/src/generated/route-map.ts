@@ -5810,6 +5810,389 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
+    annotation: {
+      kind: "route",
+      children: {
+        list: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["annotation", "list"],
+            toolName: "list_reader_annotations",
+            description:
+              "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared.",
+            flags: [
+              {
+                flag: "--target-type",
+                prop: "target_type",
+                kind: "enum",
+                enum: ["decision", "statute"],
+                repeatable: false,
+                description: "decision (case law) or statute (legislation).",
+                required: true,
+              },
+              {
+                flag: "--target-id",
+                prop: "target_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version.",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            followable: true,
+            windowedText: false,
+            itemsKey: "annotations",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["target_type", "target_id"],
+              additionalProperties: false,
+              properties: {
+                target_type: {
+                  enum: ["decision", "statute"],
+                  type: "string",
+                  description: "decision (case law) or statute (legislation).",
+                },
+                target_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version.",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100,
+                  description:
+                    "Max rows to read (a mark over several paragraphs is several rows).",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous list_reader_annotations call to fetch the next page",
+                },
+              },
+            },
+          },
+        },
+        create: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["annotation", "create"],
+            toolName: "create_reader_annotation",
+            description:
+              "Highlight or comment on a passage of a case-law decision or a statute version, as the user.",
+            flags: [
+              {
+                flag: "--target-type",
+                prop: "target_type",
+                kind: "enum",
+                enum: ["decision", "statute"],
+                repeatable: false,
+                description: "decision (case law) or statute (legislation).",
+                required: true,
+              },
+              {
+                flag: "--target-id",
+                prop: "target_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version.",
+                required: true,
+              },
+              {
+                flag: "--visibility",
+                prop: "visibility",
+                kind: "enum",
+                enum: ["private", "shared"],
+                repeatable: false,
+                description:
+                  "private (only the user sees it) or shared (visible to the whole organization).",
+                required: false,
+              },
+            ],
+            inputOnly: ["mark", "passages"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: false,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              required: ["target_type", "target_id", "mark", "passages"],
+              additionalProperties: false,
+              properties: {
+                target_type: {
+                  enum: ["decision", "statute"],
+                  type: "string",
+                  description: "decision (case law) or statute (legislation).",
+                },
+                target_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version.",
+                },
+                mark: {
+                  description:
+                    "What to leave: { kind: highlight, color?, style? } or { kind: comment, body }.",
+                  anyOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        kind: {
+                          enum: ["highlight"],
+                          type: "string",
+                        },
+                        color: {
+                          enum: ["yellow", "green", "sky", "violet", "red"],
+                          type: "string",
+                          description: "Highlight colour.",
+                          default: "yellow",
+                        },
+                        style: {
+                          enum: [
+                            "highlight",
+                            "underline",
+                            "squiggly",
+                            "strikethrough",
+                          ],
+                          type: "string",
+                          description:
+                            "How the highlight is drawn: highlight (a background), underline, squiggly, or strikethrough.",
+                          default: "highlight",
+                        },
+                      },
+                      required: ["kind"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        kind: {
+                          enum: ["comment"],
+                          type: "string",
+                        },
+                        body: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 10000,
+                          description: "The comment's words.",
+                        },
+                      },
+                      required: ["kind", "body"],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+                passages: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      anchor: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 64,
+                        description:
+                          "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9).",
+                      },
+                      quote: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 2000,
+                        description:
+                          "The words to mark, copied from that block. Differences in whitespace are tolerated; the words must occur exactly once in the block.",
+                      },
+                    },
+                    required: ["anchor", "quote"],
+                    additionalProperties: false,
+                  },
+                  minItems: 1,
+                  maxItems: 40,
+                  description:
+                    "Where the mark sits: one passage per paragraph it covers, in document order. Several passages make one mark.",
+                },
+                visibility: {
+                  enum: ["private", "shared"],
+                  type: "string",
+                  description:
+                    "private (only the user sees it) or shared (visible to the whole organization).",
+                },
+              },
+            },
+          },
+        },
+        update: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["annotation", "update"],
+            toolName: "update_reader_annotation",
+            description:
+              "Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it.",
+            flags: [
+              {
+                flag: "--annotation-id",
+                prop: "annotation_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks.",
+                required: true,
+              },
+            ],
+            inputOnly: ["change"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: false,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              required: ["annotation_id", "change"],
+              additionalProperties: false,
+              properties: {
+                annotation_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks.",
+                },
+                change: {
+                  description:
+                    "One change: { type: body, body } rewrites a comment; { type: color, color } and { type: style, style } restyle a highlight; { type: visibility, visibility } shares or unshares either.",
+                  anyOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["body"],
+                          type: "string",
+                        },
+                        body: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 10000,
+                          description: "The comment's words.",
+                        },
+                      },
+                      required: ["type", "body"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["color"],
+                          type: "string",
+                        },
+                        color: {
+                          enum: ["yellow", "green", "sky", "violet", "red"],
+                          type: "string",
+                          description: "Highlight colour.",
+                        },
+                      },
+                      required: ["type", "color"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["style"],
+                          type: "string",
+                        },
+                        style: {
+                          enum: [
+                            "highlight",
+                            "underline",
+                            "squiggly",
+                            "strikethrough",
+                          ],
+                          type: "string",
+                          description:
+                            "How the highlight is drawn: highlight (a background), underline, squiggly, or strikethrough.",
+                        },
+                      },
+                      required: ["type", "style"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["visibility"],
+                          type: "string",
+                        },
+                        visibility: {
+                          enum: ["private", "shared"],
+                          type: "string",
+                          description:
+                            "private (only the user sees it) or shared (visible to the whole organization).",
+                        },
+                      },
+                      required: ["type", "visibility"],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        delete: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["annotation", "delete"],
+            toolName: "delete_reader_annotation",
+            description:
+              "Permanently delete one of the user's highlights or comments, every passage of it.",
+            flags: [
+              {
+                flag: "--annotation-id",
+                prop: "annotation_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks.",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: true,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              required: ["annotation_id"],
+              additionalProperties: false,
+              properties: {
+                annotation_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks.",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     "time-entry": {
       kind: "route",
       children: {
@@ -24060,6 +24443,502 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "legal-reader": {
+          kind: "route",
+          children: {
+            "annotations-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "legal-reader",
+                  "annotations-create",
+                ],
+                capabilityId: "legal-reader.annotations.create",
+                access: "write",
+                flags: [],
+                inputOnly: ["body"],
+                paginated: false,
+                destructive: false,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: [
+                            "targetType",
+                            "targetId",
+                            "kind",
+                            "color",
+                            "style",
+                            "spans",
+                          ],
+                          properties: {
+                            targetType: {
+                              anyOf: [
+                                {
+                                  const: "decision",
+                                  type: "string",
+                                },
+                                {
+                                  const: "statute",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            targetId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            kind: {
+                              const: "highlight",
+                              type: "string",
+                            },
+                            color: {
+                              anyOf: [
+                                {
+                                  const: "yellow",
+                                  type: "string",
+                                },
+                                {
+                                  const: "green",
+                                  type: "string",
+                                },
+                                {
+                                  const: "sky",
+                                  type: "string",
+                                },
+                                {
+                                  const: "violet",
+                                  type: "string",
+                                },
+                                {
+                                  const: "red",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            style: {
+                              anyOf: [
+                                {
+                                  const: "highlight",
+                                  type: "string",
+                                },
+                                {
+                                  const: "underline",
+                                  type: "string",
+                                },
+                                {
+                                  const: "squiggly",
+                                  type: "string",
+                                },
+                                {
+                                  const: "strikethrough",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            requestId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            visibility: {
+                              anyOf: [
+                                {
+                                  const: "private",
+                                  type: "string",
+                                },
+                                {
+                                  const: "shared",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            spans: {
+                              $ref: "#/$defs/s_e6d21e492b93",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: [
+                            "targetType",
+                            "targetId",
+                            "kind",
+                            "body",
+                            "spans",
+                          ],
+                          properties: {
+                            targetType: {
+                              anyOf: [
+                                {
+                                  const: "decision",
+                                  type: "string",
+                                },
+                                {
+                                  const: "statute",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            targetId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            kind: {
+                              const: "comment",
+                              type: "string",
+                            },
+                            body: {
+                              minLength: 1,
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            requestId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            visibility: {
+                              anyOf: [
+                                {
+                                  const: "private",
+                                  type: "string",
+                                },
+                                {
+                                  const: "shared",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            spans: {
+                              $ref: "#/$defs/s_e6d21e492b93",
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  $defs: {
+                    s_e6d21e492b93: {
+                      minItems: 1,
+                      maxItems: 40,
+                      type: "array",
+                      items: {
+                        type: "object",
+                        required: [
+                          "blockAnchorId",
+                          "startOffset",
+                          "endOffset",
+                          "quote",
+                        ],
+                        properties: {
+                          blockAnchorId: {
+                            minLength: 1,
+                            maxLength: 64,
+                            type: "string",
+                          },
+                          startOffset: {
+                            minimum: 0,
+                            type: "integer",
+                          },
+                          endOffset: {
+                            minimum: 1,
+                            type: "integer",
+                          },
+                          quote: {
+                            minLength: 1,
+                            maxLength: 2000,
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "annotations-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "legal-reader",
+                  "annotations-delete",
+                ],
+                capabilityId: "legal-reader.annotations.delete",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--annotation-id",
+                    prop: "annotationId",
+                    required: true,
+                    part: "params",
+                    partPath: "annotationId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["annotationId"],
+                      properties: {
+                        annotationId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "annotations-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "legal-reader", "annotations-list"],
+                capabilityId: "legal-reader.annotations.list",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--target-id",
+                    prop: "targetId",
+                    required: true,
+                    part: "query",
+                    partPath: "targetId",
+                  },
+                ],
+                inputOnly: ["query.targetType"],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      required: ["targetType", "targetId"],
+                      properties: {
+                        targetType: {
+                          anyOf: [
+                            {
+                              const: "decision",
+                              type: "string",
+                            },
+                            {
+                              const: "statute",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        targetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "annotations-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "legal-reader",
+                  "annotations-update",
+                ],
+                capabilityId: "legal-reader.annotations.update",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--annotation-id",
+                    prop: "annotationId",
+                    required: true,
+                    part: "params",
+                    partPath: "annotationId",
+                  },
+                ],
+                inputOnly: ["body"],
+                paginated: false,
+                destructive: false,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["change", "body"],
+                          properties: {
+                            change: {
+                              const: "body",
+                              type: "string",
+                            },
+                            body: {
+                              minLength: 1,
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["change", "color"],
+                          properties: {
+                            change: {
+                              const: "color",
+                              type: "string",
+                            },
+                            color: {
+                              anyOf: [
+                                {
+                                  const: "yellow",
+                                  type: "string",
+                                },
+                                {
+                                  const: "green",
+                                  type: "string",
+                                },
+                                {
+                                  const: "sky",
+                                  type: "string",
+                                },
+                                {
+                                  const: "violet",
+                                  type: "string",
+                                },
+                                {
+                                  const: "red",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["change", "style"],
+                          properties: {
+                            change: {
+                              const: "style",
+                              type: "string",
+                            },
+                            style: {
+                              anyOf: [
+                                {
+                                  const: "highlight",
+                                  type: "string",
+                                },
+                                {
+                                  const: "underline",
+                                  type: "string",
+                                },
+                                {
+                                  const: "squiggly",
+                                  type: "string",
+                                },
+                                {
+                                  const: "strikethrough",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["change", "visibility"],
+                          properties: {
+                            change: {
+                              const: "visibility",
+                              type: "string",
+                            },
+                            visibility: {
+                              anyOf: [
+                                {
+                                  const: "private",
+                                  type: "string",
+                                },
+                                {
+                                  const: "shared",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    params: {
+                      type: "object",
+                      required: ["annotationId"],
+                      properties: {
+                        annotationId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:

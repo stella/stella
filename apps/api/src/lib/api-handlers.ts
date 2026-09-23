@@ -202,9 +202,7 @@ export type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent"
-  /** A reader's own highlights and comments: personal marks, not a capability an agent acts through. */
-  | "reader_annotations";
+  | "compound_consent";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

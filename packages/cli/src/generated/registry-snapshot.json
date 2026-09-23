@@ -3624,6 +3624,295 @@
   },
   {
     "cli": {
+      "command": ["annotation", "list"],
+      "scope": "read",
+      "itemsKey": "annotations"
+    },
+    "name": "list_reader_annotations",
+    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["target_type", "target_id"],
+      "additionalProperties": false,
+      "properties": {
+        "target_type": {
+          "enum": ["decision", "statute"],
+          "type": "string",
+          "description": "decision (case law) or statute (legislation)."
+        },
+        "target_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max rows to read (a mark over several paragraphs is several rows)."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_reader_annotations call to fetch the next page"
+        }
+      }
+    },
+    "annotations": {
+      "title": "List reader annotations",
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "cli": {
+      "command": ["annotation", "create"],
+      "scope": "knowledge_write"
+    },
+    "name": "create_reader_annotation",
+    "description": "Highlight or comment on a passage of a case-law decision or a statute version, as the user. Name each paragraph by the anchor the document text prints in square brackets and quote the words to mark; the mark appears in the user's reader. Private unless visibility is shared. Resending the same call returns the mark it already made.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["target_type", "target_id", "mark", "passages"],
+      "additionalProperties": false,
+      "properties": {
+        "target_type": {
+          "enum": ["decision", "statute"],
+          "type": "string",
+          "description": "decision (case law) or statute (legislation)."
+        },
+        "target_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version."
+        },
+        "mark": {
+          "description": "What to leave: { kind: highlight, color?, style? } or { kind: comment, body }.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": ["highlight"],
+                  "type": "string"
+                },
+                "color": {
+                  "enum": ["yellow", "green", "sky", "violet", "red"],
+                  "type": "string",
+                  "description": "Highlight colour.",
+                  "default": "yellow"
+                },
+                "style": {
+                  "enum": [
+                    "highlight",
+                    "underline",
+                    "squiggly",
+                    "strikethrough"
+                  ],
+                  "type": "string",
+                  "description": "How the highlight is drawn: highlight (a background), underline, squiggly, or strikethrough.",
+                  "default": "highlight"
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": ["comment"],
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000,
+                  "description": "The comment's words."
+                }
+              },
+              "required": ["kind", "body"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "passages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "anchor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "The block anchor the document text prints in square brackets, without the brackets (e.g. p-12, par_9)."
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "The words to mark, copied from that block. Differences in whitespace are tolerated; the words must occur exactly once in the block."
+              }
+            },
+            "required": ["anchor", "quote"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 40,
+          "description": "Where the mark sits: one passage per paragraph it covers, in document order. Several passages make one mark."
+        },
+        "visibility": {
+          "enum": ["private", "shared"],
+          "type": "string",
+          "description": "private (only the user sees it) or shared (visible to the whole organization)."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Create reader annotation",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["annotation", "update"],
+      "scope": "knowledge_write"
+    },
+    "name": "update_reader_annotation",
+    "description": "Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it. Only the user's own marks can be changed; a colleague's shared mark reads as not found.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["annotation_id", "change"],
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks."
+        },
+        "change": {
+          "description": "One change: { type: body, body } rewrites a comment; { type: color, color } and { type: style, style } restyle a highlight; { type: visibility, visibility } shares or unshares either.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["body"],
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000,
+                  "description": "The comment's words."
+                }
+              },
+              "required": ["type", "body"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["color"],
+                  "type": "string"
+                },
+                "color": {
+                  "enum": ["yellow", "green", "sky", "violet", "red"],
+                  "type": "string",
+                  "description": "Highlight colour."
+                }
+              },
+              "required": ["type", "color"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["style"],
+                  "type": "string"
+                },
+                "style": {
+                  "enum": [
+                    "highlight",
+                    "underline",
+                    "squiggly",
+                    "strikethrough"
+                  ],
+                  "type": "string",
+                  "description": "How the highlight is drawn: highlight (a background), underline, squiggly, or strikethrough."
+                }
+              },
+              "required": ["type", "style"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["visibility"],
+                  "type": "string"
+                },
+                "visibility": {
+                  "enum": ["private", "shared"],
+                  "type": "string",
+                  "description": "private (only the user sees it) or shared (visible to the whole organization)."
+                }
+              },
+              "required": ["type", "visibility"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Update reader annotation",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["annotation", "delete"],
+      "scope": "knowledge_write"
+    },
+    "name": "delete_reader_annotation",
+    "description": "Permanently delete one of the user's highlights or comments, every passage of it. Only the user's own marks can be changed; a colleague's shared mark reads as not found.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["annotation_id"],
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Delete reader annotation",
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["time-entry", "list"],
       "scope": "read",
       "itemsKey": "entries",

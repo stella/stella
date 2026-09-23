@@ -91,6 +91,10 @@ requires (request it at `stella auth login --scopes`).
 
 | Domain       | Command                                         | Access                      | Notes                                   |
 | ------------ | ----------------------------------------------- | --------------------------- | --------------------------------------- |
+| annotation   | `stella annotation create`                      | knowledge_write             |                                         |
+| annotation   | `stella annotation delete`                      | knowledge_write             | destructive (needs `--yes` off a TTY)   |
+| annotation   | `stella annotation list`                        | read                        | paginated                               |
+| annotation   | `stella annotation update`                      | knowledge_write             |                                         |
 | audit-log    | `stella audit-log list`                         | admin_read                  | paginated                               |
 | capability   | `stella capability describe`                    | read                        |                                         |
 | capability   | `stella capability invoke`                      | read                        |                                         |
@@ -160,6 +164,17 @@ Required: `--flag — description (type)`. Optional: one `optional: --a,
 Global flags (output/cursor/limit/all/yes/input; see Conventions above)
 are omitted here.
 
+- `stella annotation create`
+  - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
+  - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
+  - optional: --visibility (private|shared)
+- `stella annotation delete`
+  - `--annotation-id` — The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
+- `stella annotation list`
+  - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
+  - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
+- `stella annotation update`
+  - `--annotation-id` — The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
 - `stella audit-log list`
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
@@ -352,7 +367,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 341
+Beyond the curated commands above, the CLI generates 345
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;
@@ -375,7 +390,7 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.

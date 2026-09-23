@@ -1117,11 +1117,13 @@
       "configure_template_fields": "Vorlagenfelder konfigurieren",
       "create-document": "Dokument vorbereiten",
       "create_matter_document": "Dokument erstellen",
+      "create_reader_annotation": "Hervorhebung oder Kommentar hinzufügen",
       "create_template": "Vorlage erstellen",
       "delete_clause": "Klausel löschen",
       "delete_contact": "Kontakt löschen",
       "delete_document": "Dokument löschen",
       "delete_matter": "Akte löschen",
+      "delete_reader_annotation": "Hervorhebung oder Kommentar löschen",
       "delete_task": "Aufgabe löschen",
       "delete_time_entry": "Zeiteintrag löschen",
       "describe-stella-api": "Datensuche vorbereiten",
@@ -1197,6 +1199,7 @@
       "suggest_template_fields": "Vorlagenfelder werden vorgeschlagen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",
+      "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {

@@ -18,6 +18,7 @@ import {
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
+import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
@@ -69,6 +70,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   lookup_business_registry: MATTER_TOOL_HANDLERS.lookup_business_registry,
   list_clauses: KNOWLEDGE_TOOL_HANDLERS.list_clauses,
   list_playbooks: KNOWLEDGE_TOOL_HANDLERS.list_playbooks,
+  list_reader_annotations:
+    READER_ANNOTATION_TOOL_HANDLERS.list_reader_annotations,
   list_time_entries: BILLING_TOOL_HANDLERS.list_time_entries,
   resolve_rate: BILLING_TOOL_HANDLERS.resolve_rate,
   list_invoices: BILLING_TOOL_HANDLERS.list_invoices,

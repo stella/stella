@@ -1117,11 +1117,13 @@
       "configure_template_fields": "Configurer les champs du modèle",
       "create-document": "Préparation du document",
       "create_matter_document": "Création du document",
+      "create_reader_annotation": "Ajouter un surlignage ou un commentaire",
       "create_template": "Créer le modèle",
       "delete_clause": "Supprimer la clause",
       "delete_contact": "Supprimer le contact",
       "delete_document": "Supprimer le document",
       "delete_matter": "Supprimer le dossier",
+      "delete_reader_annotation": "Supprimer le surlignage ou le commentaire",
       "delete_task": "Supprimer la tâche",
       "delete_time_entry": "Supprimer l’entrée de temps",
       "describe-stella-api": "Préparation de la recherche de données",
@@ -1197,6 +1199,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "web_search": "Recherche web"
     },
     "toolCall": {

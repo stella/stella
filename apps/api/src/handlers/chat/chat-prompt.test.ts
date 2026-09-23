@@ -73,14 +73,52 @@ const SKILL_METADATA = [
 ] as const;
 
 describe("reader marks in the prompt", () => {
-  const mark = (index: number, quoteChars: number, bodyChars: number) => ({
-    body: "n".repeat(bodyChars),
-    color: null,
-    groupId: null,
-    id: `annotation-${String(index)}`,
-    kind: "comment",
-    mine: true,
-    quote: "q".repeat(quoteChars),
+  const mark = (index: number, quoteChars: number, bodyChars: number) =>
+    ({
+      blockAnchorId: `p-${String(index)}`,
+      body: "n".repeat(bodyChars),
+      color: null,
+      groupId: null,
+      id: `annotation-${String(index)}`,
+      kind: "comment",
+      mine: true,
+      quote: "q".repeat(quoteChars),
+      style: null,
+      visibility: "private",
+    }) as const;
+
+  test("ties a mark to the anchors, style and audience of its rows", () => {
+    const formatted = formatAnnotationsForPrompt([
+      {
+        blockAnchorId: "p-3",
+        body: null,
+        color: "red",
+        groupId: "group-1",
+        id: "annotation-a",
+        kind: "highlight",
+        mine: true,
+        quote: "first half",
+        style: "strikethrough",
+        visibility: "shared",
+      },
+      {
+        blockAnchorId: "p-4",
+        body: null,
+        color: "red",
+        groupId: "group-1",
+        id: "annotation-b",
+        kind: "highlight",
+        mine: true,
+        quote: "second half",
+        style: "strikethrough",
+        visibility: "shared",
+      },
+    ]);
+
+    expect(formatted).toContain(
+      "Highlight by the user, shared with the organization (red, strikethrough), at [p-3], [p-4] (mark id annotation-a)",
+    );
+    expect(formatted).toContain("first half second half");
   });
 
   test("lists every mark when the whole set fits", () => {
@@ -112,6 +150,9 @@ describe("reader marks in the prompt", () => {
 describe("active statute prompt", () => {
   const ACT = {
     country: "CZ",
+    documentId: toSafeId<"legislationDocument">(
+      "00000000-0000-4000-8000-000000000089",
+    ),
     documentType: "zákon",
     eli: "/eli/cz/sb/2012/89",
     language: "cs",

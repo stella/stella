@@ -99,6 +99,7 @@ import {
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
@@ -959,6 +960,7 @@ export const useChatSession = ({
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
   const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
+  const handledReaderAnnotationWriteToolCallIdsRef = useRef(new Set<string>());
 
   // Chat registry writes run outside the workspace route's HTTP mutation, so
   // they cannot directly name the deleted entity in this browser: tool inputs
@@ -998,6 +1000,19 @@ export const useChatSession = ({
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
   }, [messages, organizationId, queryClient]);
+
+  // A chat highlight or comment on the open decision or statute writes outside
+  // the reader's own mutations, so its margin refetches once per completed write.
+  useExternalSyncEffect(() => {
+    detached(
+      reconcileReaderAnnotationWriteToolCalls({
+        handledToolCallIds: handledReaderAnnotationWriteToolCallIdsRef.current,
+        messages,
+        queryClient,
+      }),
+      "use-chat-session.reconcile-reader-annotation-write-tool-calls",
+    );
+  }, [messages, queryClient]);
 
   // Server-side automatic DOCX edits (the apply variant of `suggest_changes`)
   // replace the entity's file field. Follow that replacement immediately in

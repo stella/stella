@@ -8,6 +8,12 @@ import {
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
+  READER_ANNOTATION_COLORS,
+  READER_ANNOTATION_KINDS,
+  READER_ANNOTATION_STYLES,
+  READER_ANNOTATION_VISIBILITIES,
+} from "@stll/api-contract/legal-reader-annotations";
+import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -2170,6 +2176,45 @@ export const SAVE_MATTER_PROJECTION = v.strictObject({
 
 export const DELETED_TRUE_PROJECTION = v.strictObject({
   deleted: v.literal(true),
+});
+
+/**
+ * Where a reader's mark sits: the block anchor the document text prints and
+ * the words there. Annotation ids are org-scoped handles, not chat refs.
+ */
+const readerAnnotationPassageProjection = v.strictObject({
+  anchor: v.string(),
+  quote: v.string(),
+});
+
+/** list_reader_annotations: one entry per mark, its passages grouped. */
+export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
+  annotations: v.array(
+    v.strictObject({
+      annotationId: passthroughId(),
+      kind: v.picklist(READER_ANNOTATION_KINDS),
+      color: v.nullable(v.picklist(READER_ANNOTATION_COLORS)),
+      style: v.nullable(v.picklist(READER_ANNOTATION_STYLES)),
+      body: v.nullable(v.string()),
+      visibility: v.picklist(READER_ANNOTATION_VISIBILITIES),
+      mine: v.boolean(),
+      authorName: v.string(),
+      createdAt: v.string(),
+      passages: v.array(readerAnnotationPassageProjection),
+    }),
+  ),
+  nextCursor: v.nullable(v.string()),
+});
+
+/** create_reader_annotation: the mark's id and the passages as stored. */
+export const CREATE_READER_ANNOTATION_PROJECTION = v.strictObject({
+  annotationId: passthroughId(),
+  passages: v.array(readerAnnotationPassageProjection),
+});
+
+export const UPDATE_READER_ANNOTATION_PROJECTION = v.strictObject({
+  annotationId: passthroughId(),
+  updated: v.literal(true),
 });
 
 /** save_contact: both branches return `{ contactId }`. */
