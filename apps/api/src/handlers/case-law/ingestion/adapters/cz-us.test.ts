@@ -579,6 +579,54 @@ describe("czUsAdapter.fetchPage", () => {
     ]);
   });
 
+  test("spells a built plenary ECLI the way NALUS prints it", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "2011",
+          sz: "Pl-18-24_1",
+          caseNumber: "Pl.ÚS 18/24",
+          date: "5. 3. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions.map(({ ecli }) => ecli)).toEqual([
+      "ECLI:CZ:US:2024:Pl.US.18.24.1",
+    ]);
+  });
+
+  test("names the counted ECLI an earlier release built when NALUS lists one without a counter", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "2012",
+          sz: "2-1030-25_1",
+          caseNumber: "II.ÚS 1030/25",
+          date: "6. 5. 2025",
+          ecli: "ECLI:CZ:US:2025:2.US.1030.25",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2025), {}),
+    );
+
+    expect(
+      page.decisions.map(({ ecli, legacyEcli }) => ({ ecli, legacyEcli })),
+    ).toEqual([
+      {
+        ecli: "ECLI:CZ:US:2025:2.US.1030.25",
+        legacyEcli: "ECLI:CZ:US:2025:2.US.1030.25.1",
+      },
+    ]);
+  });
+
   test("stores the court the decision's own identifier names", async () => {
     const rows = [
       {

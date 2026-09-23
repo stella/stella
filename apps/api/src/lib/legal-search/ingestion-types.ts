@@ -115,6 +115,14 @@ export type IngestionResult = {
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**
+   * The ECLI an older adapter version derived for this same publisher
+   * document, where it differs from `ecli` in more than case or punctuation
+   * (for example a counter segment the publisher's own spelling omits). Like
+   * `legacySourceUrls`, it only lets the pipeline recognise the legacy
+   * null-id row this document produced; it is never stored.
+   */
+  legacyEcli?: string | undefined;
+  /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
    * `caseNumber`: a citation names the docket alone, so a number carrying a
