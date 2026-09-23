@@ -645,21 +645,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         <div className="flex items-start gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <input
-              aria-label={tSkills("formName")}
+              aria-label={t("common.name")}
               className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
               dir={contentDir(name)}
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
-              placeholder={tSkills("formName")}
+              placeholder={t("common.name")}
               value={name}
             />
             <textarea
-              aria-label={tSkills("formDescription")}
+              aria-label={t("common.description")}
               className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
               dir={contentDir(description)}
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder={tSkills("formDescription")}
+              placeholder={t("common.description")}
               rows={2}
               value={description}
             />

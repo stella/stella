@@ -59,7 +59,7 @@ export const DeepLKeyCard = () => {
 
   const isConfigured = deeplConfig?.configured === true;
   const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
-  const removeLabel = t("remove");
+  const removeLabel = tCommon("remove");
 
   return (
     <div className="flex flex-col gap-4">
@@ -118,7 +118,7 @@ export const DeepLKeyCard = () => {
         onClick={() => saveMutation.mutate()}
         size="sm"
       >
-        {isConfigured ? tCommon("saveChanges") : t("save")}
+        {isConfigured ? tCommon("saveChanges") : tCommon("save")}
       </Button>
     </div>
   );

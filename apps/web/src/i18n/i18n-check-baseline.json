@@ -15,12 +15,8 @@
     "folio.showDetails",
     "folio.somethingWentWrong",
     "folio.undo",
-    "knowledge.agentSkills.formDescription",
-    "knowledge.agentSkills.formName",
     "knowledge.agentSkills.renameFile",
     "knowledge.playbooks.optionsLabel",
-    "knowledge.skills.form.description",
-    "knowledge.skills.form.name",
     "onboarding.stepTeam",
     "organization.invitations.emailAddressLabel",
     "publicTools.contribute.form.slugLabel",
@@ -30,17 +26,12 @@
     "settings.organization.auditLogsActionDelete",
     "settings.organization.auditLogsActionDownload",
     "tasks.assigneeRoles.assignee",
-    "tasks.clearDate",
     "tasks.priorityValues.none",
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
-    "templates.conditionAnd",
-    "templates.conditionOr",
     "templates.fieldOptions",
     "templates.studio.filledByPerson",
-    "translate.settings.remove",
-    "translate.settings.save",
     "workspaces.properties.optionsLabel",
     "workspaces.properties.person",
     "workspaces.views.filter"
@@ -199,7 +190,6 @@
     "organization.matterNumber.description",
     "organization.matterNumber.title",
     "organization.members.noMembersFound",
-    "organization.roles.owner",
     "publicTools.contribute.form.costLabel",
     "publicTools.contribute.form.jurisdictionsLabel",
     "publicTools.contribute.form.licenseLabel",
@@ -212,7 +202,6 @@
     "search.updatedWithin",
     "search.updatedWithinOptions.month",
     "search.updatedWithinOptions.week",
-    "selfhost.dismissUpdate",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
     "settings.organization.ai",
@@ -237,7 +226,6 @@
     "tasks.activity",
     "tasks.dueDate",
     "tasks.myTasksTitle",
-    "tasks.owner",
     "tasks.priorityValues.high",
     "tasks.priorityValues.low",
     "tasks.priorityValues.medium",
@@ -309,36 +297,8 @@
       "pt-BR",
       "sk"
     ],
-    "appearance.flexoki": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "appearance.neutral": [
       "de"
-    ],
-    "appearance.nord": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "appearance.palette": [
       "de",
@@ -380,10 +340,6 @@
       "pl",
       "pt-BR",
       "sk"
-    ],
-    "billing.decimalHours": [
-      "fr",
-      "pt-BR"
     ],
     "billing.total": [
       "es",
@@ -505,13 +461,6 @@
     "common.type": [
       "fr"
     ],
-    "common.urlIdentifier": [
-      "cs",
-      "es",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "common.urlIdentifierPlaceholder": [
       "ar"
     ],
@@ -533,36 +482,8 @@
     "contacts.communication.title": [
       "fr"
     ],
-    "contacts.create.icoPlaceholder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "contacts.emailTypes.personal": [
       "es"
-    ],
-    "contacts.fields.bankAccountBic": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "contacts.fields.color": [
       "es"
@@ -632,12 +553,6 @@
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
     ],
-    "inspector.review.export.docx": [
-      "cs"
-    ],
-    "inspector.review.export.xlsx": [
-      "cs"
-    ],
     "inspector.review.passagesCount": [
       "fr"
     ],
@@ -658,12 +573,6 @@
     ],
     "inspector.review.standardColumnFrom": [
       "cs"
-    ],
-    "knowledge.agentSkills.formDescription": [
-      "fr"
-    ],
-    "knowledge.agentSkills.formName": [
-      "de"
     ],
     "knowledge.agentSkills.newFileFilenamePlaceholder": [
       "ar",
@@ -695,20 +604,6 @@
     ],
     "knowledge.mcp.auth.bearer": [
       "cs",
-      "sk"
-    ],
-    "knowledge.mcp.auth.oauth2": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
       "sk"
     ],
     "knowledge.mcp.tokenLabel": [
@@ -765,12 +660,6 @@
     "knowledge.sections.tools.title": [
       "de"
     ],
-    "knowledge.skills.form.description": [
-      "fr"
-    ],
-    "knowledge.skills.form.name": [
-      "de"
-    ],
     "memory.kinds.instruction": [
       "fr"
     ],
@@ -784,7 +673,6 @@
       "cs",
       "de",
       "es",
-      "fr",
       "pt-BR",
       "sk"
     ],
@@ -829,7 +717,6 @@
       "cs",
       "de",
       "es",
-      "fr",
       "pt-BR",
       "sk"
     ],
@@ -877,7 +764,6 @@
       "cs",
       "de",
       "es",
-      "fr",
       "pt-BR",
       "sk"
     ],
@@ -996,215 +882,16 @@
       "pt-BR",
       "sk"
     ],
-    "workspaces.calculations.choose": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.average": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.count": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.countEmpty": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.countFilled": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.countUnique": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.calculations.kinds.max": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
+      "fr"
     ],
     "workspaces.calculations.kinds.median": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
+      "de"
     ],
     "workspaces.calculations.kinds.min": [
-      "ar",
-      "cs",
-      "de",
-      "es",
       "et",
       "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.percentEmpty": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.percentFilled": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.percentOfTotal": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.range": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.kinds.sum": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.calculations.noProperties": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
+      "pl"
     ],
     "workspaces.files.defaultPropertyName": [
       "fr"
@@ -1225,33 +912,6 @@
     ],
     "workspaces.filters.team.leadActive": [
       "de"
-    ],
-    "workspaces.infosoud.spisZn": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.infosoud.title": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "workspaces.lead": [
       "de"
@@ -1283,62 +943,6 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
-    "workspaces.playbooks.projection": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.playbooks.projectionColumns": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.playbooks.projectionNone": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.playbooks.reviewStarted": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -1353,36 +957,11 @@
     "workspaces.properties.documentsLabel": [
       "fr"
     ],
-    "workspaces.properties.money": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.properties.optionsLabel": [
       "fr"
     ],
     "workspaces.properties.person": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
+      "de"
     ],
     "workspaces.properties.returnsLabel": [
       "de",
@@ -1411,19 +990,6 @@
     ],
     "workspaces.views.calendar.additionalDates": [
       "fr"
-    ],
-    "workspaces.views.layouts.kanban": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "workspaces.views.reportExport.formatLabel": [
       "de",
