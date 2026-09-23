@@ -17,15 +17,16 @@ import type { McpRequestContext } from "@/api/mcp/context";
  * `uploads.*` takes one domain scope in the capability catalog, but its
  * purposes do not finalize into the same resource: `agent_skill` installs a
  * skill, which is what `stella:skills` is the consent for, while the document
- * purposes write workspace content. Without this the domain scope would let a
- * matters-write consent install a skill.
+ * purposes create a document or a document version, the consent the named
+ * document tools spend (`WRITE_PRIMITIVE_SCOPES`). Without this the domain
+ * scope would let a matters-write consent install a skill or write a document.
  *
  * Total over the purpose union, so a new purpose cannot be added without
  * deciding which consent covers it.
  */
 export const UPLOAD_PURPOSE_SCOPE = {
-  entity_create: "stella:matters_write",
-  entity_version: "stella:matters_write",
+  entity_create: "stella:documents_write",
+  entity_version: "stella:documents_write",
   agent_skill: "stella:skills",
 } as const satisfies Record<UploadPurpose, McpOAuthScope>;
 

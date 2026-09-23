@@ -205,6 +205,8 @@ afterEach(async () => {
 
 const READ = makeToken(["read"]);
 const WRITE = makeToken(["read", "matters_write"]);
+// A new document spends the uploads domain consent and the documents consent.
+const DOCUMENT_UPLOAD = makeToken(["read", "matters_write", "documents_write"]);
 
 describe("--server (every command)", () => {
   test("a generated command targets the origin the flag names", async () => {
@@ -303,7 +305,7 @@ describe("one-command document upload", () => {
         "--json",
       ],
       url: server.url,
-      token: WRITE,
+      token: DOCUMENT_UPLOAD,
     });
     server.stop();
 
@@ -340,7 +342,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: ["upload", "--help"],
       url: server.url,
-      token: WRITE,
+      token: DOCUMENT_UPLOAD,
     });
     server.stop();
 
@@ -387,7 +389,7 @@ describe("one-command document upload", () => {
         "property-file",
       ],
       url: server.url,
-      token: WRITE,
+      token: DOCUMENT_UPLOAD,
     });
     server.stop();
 

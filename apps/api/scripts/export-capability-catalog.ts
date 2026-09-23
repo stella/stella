@@ -59,6 +59,7 @@ import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpToolDefinition } from "../src/mcp/tool-types";
+import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
   type CapabilityDispatchRecord,
   type AccessResolution,
@@ -90,6 +91,7 @@ import {
   serializeCoverageDoc,
   serializeDispatchModule,
   WRITE_ONLY_SCOPES,
+  writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
 import {
   type CompactedCapabilityInputSchema,
@@ -291,19 +293,61 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // Document writes that reach storage through helpers shared with other
+  // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
+  // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
   "entities.create-blank-document": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.delete-version": "stella:documents_write",
   "entities.move": "stella:documents_write",
   "entities.rename": "stella:documents_write",
+  "entities.restore-version": "stella:documents_write",
   "entities.update-version-description": "stella:documents_write",
   "entities.update-version-label": "stella:documents_write",
+  "entities.upload": "stella:documents_write",
   "fields.upsert-by-id": "stella:documents_write",
+  // Creates a translated document from a queued run; the document write
+  // happens in the worker, out of sight of the handler's imports.
+  "document-translations.runs.create": "stella:documents_write",
   // Filling is template-domain work, but this endpoint persists a new matter
   // entity and is covered by save_filled_template. Generic invocation must
   // therefore require the same document-write consent as the named tool.
   "templates.fill-to-matter": "stella:documents_write",
+};
+
+/**
+ * Consents a capability requires on top of its scope. For endpoints that copy
+ * whole entity trees, which may hold documents alongside tasks, links, and
+ * messages: they keep the matters consent their domain gives them and also
+ * spend the documents consent, so neither a matters-only nor a documents-only
+ * credential reaches them.
+ */
+const ENTRY_ADDITIONAL_SCOPES: Record<string, readonly string[]> = {
+  "entities.copy-to-matter": ["stella:documents_write"],
+  "entities.duplicate": ["stella:documents_write"],
+};
+
+/** `additionalScopes` plus the entry's ENTRY_ADDITIONAL_SCOPES, minus its scope. */
+const withEntryAdditionalScopes = ({
+  additionalScopes,
+  id,
+  scope,
+  uses,
+}: {
+  additionalScopes: readonly string[];
+  id: string;
+  scope: string;
+  uses: Set<string>;
+}): readonly string[] => {
+  const extraScopes = ENTRY_ADDITIONAL_SCOPES[id];
+  if (extraScopes === undefined) {
+    return additionalScopes;
+  }
+  uses.add(id);
+  return [...new Set([...additionalScopes, ...extraScopes])].filter(
+    (requiredScope) => requiredScope !== scope,
+  );
 };
 
 /**
@@ -687,6 +731,59 @@ const resolveEntryScopeAgainstTool = ({
   };
 };
 
+/**
+ * A capability that calls a document-write primitive spends that primitive's
+ * consent, whatever its route domain maps to. A scope derived from the domain
+ * is raised to it; an explicit pin or covering tool that disagrees, a read
+ * capability, or primitives needing different scopes fail the export instead
+ * of being silently overridden.
+ */
+const resolveScopeAgainstPrimitives = ({
+  derivedFromDomain,
+  id,
+  isRead,
+  scope,
+  source,
+}: {
+  derivedFromDomain: boolean;
+  id: string;
+  isRead: boolean;
+  scope: string;
+  source: string;
+}): EntryScopeResult => {
+  const primitiveScopes = [
+    ...new Set(
+      writePrimitivesImportedBy({
+        primitives: WRITE_PRIMITIVE_SCOPES,
+        source,
+      }).map((primitive) => primitive.scope),
+    ),
+  ];
+  const primitiveScope = primitiveScopes.at(0);
+  if (primitiveScopes.length > 1) {
+    return {
+      status: "error",
+      message: `capability "${id}" calls write primitives requiring different scopes (${primitiveScopes.join(", ")}); declare additionalScopes on a covering tool or split the endpoint`,
+    };
+  }
+  if (primitiveScope === undefined || primitiveScope === scope) {
+    return { status: "resolved", scope };
+  }
+  if (isRead) {
+    return {
+      status: "error",
+      message: `capability "${id}" is read-only but calls a write primitive requiring "${primitiveScope}"; declare it a write`,
+    };
+  }
+  if (!derivedFromDomain) {
+    return {
+      status: "error",
+      message: `capability "${id}" resolves to "${scope}" but calls a write primitive requiring "${primitiveScope}" (WRITE_PRIMITIVE_SCOPES); fix the ENTRY_SCOPE_OVERRIDES pin or the covering tool's scope`,
+    };
+  }
+  return { status: "resolved", scope: primitiveScope };
+};
+
 type BuildResult = {
   entries: CapabilityEntry[];
   dispatchRecords: CapabilityDispatchRecord[];
@@ -1026,6 +1123,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const kindOverrideUses: string[] = [];
   const optOutUses = new Set<string>();
   const scopeOverrideUses = new Set<string>();
+  const additionalScopeUses = new Set<string>();
 
   // Enumerable `capability` endpoints per file, for the inline-capability
   // invariant: any textual `capability` disposition beyond these is an inline
@@ -1318,6 +1416,26 @@ const buildCatalog = async (): Promise<BuildResult> => {
       scopeOverrideUses.add(id);
     }
 
+    const primitiveResolution = resolveScopeAgainstPrimitives({
+      derivedFromDomain:
+        override === undefined && endpoint.exposure.type === "capability",
+      id,
+      isRead,
+      scope,
+      source: sourceByFile.get(endpoint.file) ?? "",
+    });
+    if (primitiveResolution.status === "error") {
+      errors.push(primitiveResolution.message);
+      return;
+    }
+    scope = primitiveResolution.scope;
+    additionalScopes = withEntryAdditionalScopes({
+      additionalScopes,
+      id,
+      scope,
+      uses: additionalScopeUses,
+    });
+
     const inputSchema = buildInputSchema(endpoint.config);
     const compactedInputSchema = compactInputSchemaGuarded({
       errors,
@@ -1412,6 +1530,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (!optOutUses.has(id)) {
       errors.push(
         `stale DESTRUCTIVE_NAME_OPT_OUTS entry "${id}": the delete/remove name heuristic would not escalate it (remove it)`,
+      );
+    }
+  }
+  for (const id of Object.keys(ENTRY_ADDITIONAL_SCOPES)) {
+    if (!additionalScopeUses.has(id)) {
+      errors.push(
+        `stale ENTRY_ADDITIONAL_SCOPES entry "${id}": no catalog capability has that id (remove it)`,
       );
     }
   }

@@ -12553,7 +12553,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: ["body"],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -13349,7 +13349,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: ["body.borders"],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -13610,6 +13610,7 @@ export const generatedRouteMap: RouteNode = {
                 paginated: false,
                 destructive: true,
                 scope: "matters_write",
+                additionalScopes: ["documents_write"],
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -13918,7 +13919,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -14144,6 +14145,7 @@ export const generatedRouteMap: RouteNode = {
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
+                additionalScopes: ["documents_write"],
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -16893,7 +16895,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -20651,7 +20653,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: ["body.fields"],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
