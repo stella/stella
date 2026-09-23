@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import type { CompareResult } from "@stll/folio-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
+import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import type {
   ScanFinding,
   ScanResult,
@@ -12,6 +14,7 @@ import type {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { runFileComparison } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunDependencies } from "@/api/mcp/file-comparison-run";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -198,8 +201,26 @@ const createHarness = ({
       return await Promise.resolve(new Uint8Array(stored).buffer);
     },
     resolveDocxEditAuthorName: async () => await Promise.resolve("Jane Doe"),
-    scanFile: async () =>
-      await Promise.resolve(Result.ok(scanResult(scanVerdict))),
+    scanUpload: async ({ bytes: scannedBytes, declaredMimeType }) => {
+      const scan = scanResult(scanVerdict);
+      const rejection = fileSecurityRejection(scan);
+      return await Promise.resolve(
+        rejection === null
+          ? Result.ok(
+              testScannedFile({
+                bytes: new Uint8Array(scannedBytes).buffer,
+                mimeType: declaredMimeType,
+                scan,
+              }),
+            )
+          : Result.err(
+              new FileScanRejectedError({
+                message: rejection.message,
+                rejection,
+              }),
+            ),
+      );
+    },
   };
 
   return {

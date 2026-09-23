@@ -71,6 +71,7 @@ const scanParagraphs = (
 export const discoverPlaceholders = async (
   docxBuffer: Buffer,
 ): Promise<DiscoveredPlaceholder[]> => {
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(docxBuffer);
   const counts = new Map<string, number>();
 

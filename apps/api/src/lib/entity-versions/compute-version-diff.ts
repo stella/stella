@@ -1,14 +1,13 @@
 import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 
-import { compareDocxVersions } from "@stll/folio-core/server";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { countVersionDiffWords } from "@/api/lib/entity-versions/version-diff-word-counts";
+import { compareScannedDocxVersions } from "@/api/lib/file-scan/document-parsers";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const VERSION_DIFF_STATS_SCOPES = ["text"] as const;
@@ -115,26 +114,28 @@ export const computeVersionDiffStats = async ({
   }
 
   // Download both DOCX files
-  const [newBuffer, prevBuffer] = await Promise.all([
-    readS3ArrayBuffer(
-      createFileKey({
+  const [newStored, prevStored] = await Promise.all([
+    readStoredFile({
+      key: createFileKey({
         organizationId,
         workspaceId,
         fileId: newFile.id,
         mimeType: DOCX_MIME_TYPE,
       }),
-    ),
-    readS3ArrayBuffer(
-      createFileKey({
+      mimeType: DOCX_MIME_TYPE,
+    }),
+    readStoredFile({
+      key: createFileKey({
         organizationId,
         workspaceId,
         fileId: prevFile.id,
         mimeType: DOCX_MIME_TYPE,
       }),
-    ),
+      mimeType: DOCX_MIME_TYPE,
+    }),
   ]);
 
-  const diff = await compareDocxVersions(prevBuffer, newBuffer, {
+  const diff = await compareScannedDocxVersions(prevStored, newStored, {
     include: VERSION_DIFF_STATS_SCOPES,
   });
   const { wordsAdded, wordsRemoved } = countVersionDiffWords(diff);

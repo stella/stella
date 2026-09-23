@@ -88,6 +88,7 @@ export const adaptAiFields = async ({
     return unchanged;
   }
 
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.

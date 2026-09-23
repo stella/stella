@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { materializeYjsDocx } from "@stll/folio-core/server";
 import { Temporal } from "@stll/time";
 
 import {
@@ -32,7 +31,9 @@ import {
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -202,11 +203,15 @@ const checkpointFolioCollabRoom = createSafeHandler(
       workspaceId,
     });
     const [sourceDocx, yjsUpdate] = await Promise.all([
-      readS3ArrayBuffer(sourceKey, request.signal),
+      readStoredFile({
+        key: sourceKey,
+        mimeType: DOCX_MIME_TYPE,
+        signal: request.signal,
+      }),
       readS3ArrayBuffer(snapshotKey, request.signal),
     ]);
-    const materialized = await materializeYjsDocx({
-      sourceDocx,
+    const materialized = await materializeYjsOverScannedDocx({
+      source: sourceDocx,
       yjsUpdate: new Uint8Array(yjsUpdate),
     });
     if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {

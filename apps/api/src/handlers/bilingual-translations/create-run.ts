@@ -8,8 +8,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { readBilingualDocx } from "@stll/folio-core/server";
-
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
@@ -30,6 +28,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 
 const config = {
   description:
@@ -74,7 +73,7 @@ const createBilingualRun = createSafeHandler(
     }
 
     const manifest = await Result.tryPromise({
-      try: async () => await readBilingualDocx(loaded.buffer),
+      try: async () => await readScannedBilingualDocx(loaded.scanned),
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {

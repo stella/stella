@@ -69,6 +69,7 @@ const scanParagraphs = (
 export const discoverClauseSlots = async (
   docxBuffer: Buffer,
 ): Promise<ClauseSlot[]> => {
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(docxBuffer);
   const slots = new Map<string, ClauseSlot>();
 

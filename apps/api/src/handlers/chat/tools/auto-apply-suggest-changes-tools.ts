@@ -19,7 +19,6 @@ import type {
   FolioSuggestChangesOptions,
 } from "@stll/folio-agents";
 import type { FolioAgentToolInputByName } from "@stll/folio-agents/tool-contract";
-import { FolioDocxReviewer } from "@stll/folio-core/server";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -39,7 +38,9 @@ import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-enti
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
+import { scanFile } from "@/api/lib/file-scan/scan";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -351,7 +352,7 @@ export const createAutoApplySuggestChangesTools = ({
         });
       }
 
-      const reviewer = await FolioDocxReviewer.fromBuffer(loaded.value.buffer, {
+      const reviewer = await openScannedDocxReviewer(loaded.value.scanned, {
         author: authorName ?? "",
       });
       // The reviewer bridge has no version notion of its own; the loaded

@@ -137,6 +137,7 @@ const removeManifestSlot = async (
  * buffers that never had one: the same bytes come back.
  */
 export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(docxBuffer);
 
   const found = await findManifestSlot(zip);

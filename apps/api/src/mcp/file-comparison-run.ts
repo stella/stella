@@ -7,7 +7,7 @@
  * content, and every object and row is deleted or expires.
  */
 
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq, gt, inArray } from "drizzle-orm";
 
 import type { CompareResult } from "@stll/folio-core";
@@ -29,8 +29,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
-import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { deleteS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
@@ -69,7 +72,7 @@ export type FileComparisonRunDependencies = {
   headObject: typeof headObject;
   readObject: typeof readS3ArrayBuffer;
   resolveDocxEditAuthorName: typeof resolveDocxEditAuthorName;
-  scanFile: typeof scanFile;
+  scanUpload: typeof scanUpload;
 } & DeliverTemporaryRedlineDependencies;
 
 const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
@@ -80,7 +83,7 @@ const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
     headObject,
     readObject: readS3ArrayBuffer,
     resolveDocxEditAuthorName,
-    scanFile,
+    scanUpload,
   };
 
 export type FileComparisonRunOptions = {
@@ -103,7 +106,7 @@ type InputRow = {
 };
 
 type LoadedInput = {
-  buffer: ArrayBuffer;
+  file: ScannedFile;
   /** Null is the scanner's "nothing to warn about". */
   warnings: string[] | null;
 };
@@ -313,22 +316,27 @@ const loadInput = async ({
     }
   }
 
-  const scanned = await dependencies.scanFile({
-    buffer: new Uint8Array(buffer),
+  const scanned = await dependencies.scanUpload({
+    bytes: buffer,
     declaredMimeType: DOCX_MIME_TYPE,
     fileName: row.declaredName,
   });
   if (Result.isError(scanned)) {
-    return await refuse(
-      "One of the files to compare could not be scanned",
-      "Retry the comparison; if it repeats, stage the files again.",
-    );
-  }
-  if (scanned.value.verdict === "reject") {
-    const rejection = fileSecurityRejection(scanned.value);
-    if (rejection === null) {
-      panic("Rejecting scan had no rejecting findings");
+    const scanError = scanned.error;
+    // A scanner failure says nothing about the bytes: keep the staged input
+    // so the retry the hint suggests can still find it.
+    if (!FileScanRejectedError.is(scanError)) {
+      return {
+        status: "error",
+        response: structuredErrorResult({
+          code: "internal_error",
+          message: "One of the files to compare could not be scanned",
+          hint: "Retry the comparison; if it repeats, stage the files again.",
+          retryable: true,
+        }),
+      };
     }
+    const { rejection } = scanError;
     await discardInput({
       context,
       deleteObject: dependencies.deleteObject,
@@ -352,7 +360,7 @@ const loadInput = async ({
 
   return {
     status: "ok",
-    loaded: { buffer, warnings: getScanWarnings(scanned.value) },
+    loaded: { file: scanned.value, warnings: scanned.value.scanWarnings },
   };
 };
 
@@ -600,14 +608,14 @@ export const runFileComparison = async (
   const compared = await dependencies.compareDocxBuffers({
     author,
     base: {
-      buffer: loadedBase.loaded.buffer,
+      file: loadedBase.loaded.file,
       trackedChanges: baseTrackedChanges,
     },
     granularity,
     mode,
     signal,
     target: {
-      buffer: loadedTarget.loaded.buffer,
+      file: loadedTarget.loaded.file,
       trackedChanges: targetTrackedChanges,
     },
     // The files are not versions, so there is no stored timestamp to stamp the

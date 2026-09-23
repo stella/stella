@@ -114,6 +114,7 @@ export const createChatExportDocx = async (
     return bytes;
   }
 
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(bytes);
   const contentTypes = await requiredZipText(zip, CONTENT_TYPES_PATH);
   const relationships = await requiredZipText(zip, DOCUMENT_RELATIONSHIPS_PATH);

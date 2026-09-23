@@ -52,6 +52,7 @@ export const prepareTemplateFromDocument = async ({
     return { buffer, fields: [], unapplied: [] };
   }
 
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   if (!zip.file(MAIN_DOCUMENT_PART_PATH)) {
     return { buffer, fields: [], unapplied: suggestions };

@@ -1056,6 +1056,7 @@ const analyzeHeadersAndFooters = async (
 export const discoverTemplate = async (
   docxBuffer: Buffer,
 ): Promise<DiscoveredTemplate> => {
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(docxBuffer);
   const emptyResult: DiscoveredTemplate = {
     placeholders: [],

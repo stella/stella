@@ -10,6 +10,8 @@ import {
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 // The blank-create handler's only logic on top of the shared
 // `createStoredTemplate` recipe is generating the source buffer from a
@@ -57,7 +59,10 @@ describe("blank template buffer", () => {
 
     const buffer = await createTemplateBuffer({
       type: "style-source",
-      buffer: source,
+      file: testScannedFile({
+        bytes: new Uint8Array(source).buffer,
+        mimeType: DOCX_MIME_TYPE,
+      }),
       name: "Imported styles",
     });
     const zip = await JSZip.loadAsync(buffer);

@@ -216,6 +216,7 @@ export const writeFieldFilters = async (
   const conditions = new Map(
     conditionRewrites.map((rewrite) => [rewrite.path, rewrite] as const),
   );
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(docxBuffer);
   let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two

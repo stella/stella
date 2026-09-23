@@ -410,6 +410,11 @@ export const OWNERSHIP = [
           reason:
             "Scoring harness: compiles the model's legal source to read the compiler's own diagnostics (errors, fixes, warnings) and never writes a document.",
         },
+        {
+          path: "apps/api/src/lib/file-scan/document-parsers.ts",
+          reason:
+            "Parse boundary: wraps applyFolioAIEditsToBuffer so its input must be a ScannedFile; applyAiEditsToDocx in the owner calls the wrapper, so edit attribution stays with the owner.",
+        },
       ],
     },
   },

@@ -119,6 +119,28 @@
       "count": 1,
       "reason": "actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends.",
       "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
+    },
+    {
+      "id": "SW-0013",
+      "kind": "temporary",
+      "expires": "2026-12-31",
+      "rule": "scanned-file-boundary/scanned-file-boundary",
+      "file": "apps/api/src/lib/docx/extract-text.ts",
+      "symbol": "import @stll/folio-core/server",
+      "count": 1,
+      "reason": "Template packages and filled template output are read from template storage, which has no scan boundary yet; this parser input moves to a ScannedFile once template storage gets one.",
+      "evidence": "apps/api/src/lib/docx/extract-text.test.ts"
+    },
+    {
+      "id": "SW-0014",
+      "kind": "temporary",
+      "expires": "2026-12-31",
+      "rule": "scanned-file-boundary/scanned-file-boundary",
+      "file": "apps/api/src/lib/style-set-editor.ts",
+      "symbol": "readStyleSetEditorPreset",
+      "count": 1,
+      "reason": "Style-set packages are server-built from extracted styles and read from style-set storage, which has no scan boundary yet; this parser input moves to a ScannedFile once that storage gets one.",
+      "evidence": "apps/api/src/lib/style-set-editor.test.ts"
     }
   ]
 }

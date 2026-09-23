@@ -68,6 +68,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -181,7 +182,7 @@ type CompareDocumentDependencies = NonNullable<
 >;
 
 const compareDocumentDependencies = {
-  applyDisposition: async (buffer) => buffer,
+  applyDisposition: async (file) => file,
   compareDocx: async () =>
     Result.ok({
       buffer: new ArrayBuffer(1),
@@ -198,7 +199,10 @@ const compareDocumentDependencies = {
       fileName: "comparison.docx",
       versionNumber: 3,
     }),
-  readEntityVersionFile: async () => Result.ok(new ArrayBuffer(1)),
+  readEntityVersionFile: async () =>
+    Result.ok(
+      testScannedFile({ bytes: new ArrayBuffer(1), mimeType: DOCX_MIME_TYPE }),
+    ),
   readFileHandler: async () => ({
     fileId: compareTargetFileB,
     mimeType: DOCX_MIME_TYPE,

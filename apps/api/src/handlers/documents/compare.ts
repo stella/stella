@@ -2,13 +2,11 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import {
-  compareDocx,
-  type CompareChange,
-  type CompareDocxError,
-  type CompareResult,
+import type {
+  CompareChange,
+  CompareDocxError,
+  CompareResult,
 } from "@stll/folio-core";
-import { FolioDocxReviewer } from "@stll/folio-core/server";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -30,6 +28,11 @@ import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-ve
 import { readEntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  compareScannedDocx,
+  resolveScannedTrackedChanges,
+} from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   FILE_READ_URL_EXPIRY_SECONDS,
   readFileHandler,
@@ -319,22 +322,15 @@ export const mapCompareDocxError = (
 };
 
 const applyDisposition = async (
-  buffer: ArrayBuffer,
+  file: ScannedFile,
   disposition: TrackedChangeDisposition,
-): Promise<ArrayBuffer> => {
+): Promise<ScannedFile> => {
   switch (disposition) {
     case "keep":
-      return buffer;
-    case "accept": {
-      const reviewer = await FolioDocxReviewer.fromBuffer(buffer);
-      reviewer.acceptAll();
-      return await reviewer.toBuffer();
-    }
-    case "reject": {
-      const reviewer = await FolioDocxReviewer.fromBuffer(buffer);
-      reviewer.rejectAll();
-      return await reviewer.toBuffer();
-    }
+      return file;
+    case "accept":
+    case "reject":
+      return await resolveScannedTrackedChanges(file, disposition);
     default:
       disposition satisfies never;
       return panic("Unhandled tracked-change disposition");
@@ -343,7 +339,7 @@ const applyDisposition = async (
 
 export type CompareDocxBuffersDependencies = {
   applyDisposition: typeof applyDisposition;
-  compareDocx: typeof compareDocx;
+  compareDocx: typeof compareScannedDocx;
   withTimeout: typeof withTimeout;
 };
 
@@ -357,19 +353,19 @@ type DocumentCompareDependencies = CompareDocxBuffersDependencies & {
 
 type CompareDocxBuffersOptions = {
   author: string;
-  base: { buffer: ArrayBuffer; trackedChanges: TrackedChangeDisposition };
+  base: { file: ScannedFile; trackedChanges: TrackedChangeDisposition };
   granularity: CompareGranularity;
   mode: CompareMode;
   /** The caller's cancellation, already ANDed with its own deadline. */
   signal: AbortSignal;
-  target: { buffer: ArrayBuffer; trackedChanges: TrackedChangeDisposition };
+  target: { file: ScannedFile; trackedChanges: TrackedChangeDisposition };
   /** Stamped on every revision the redline carries. */
   timestamp: string;
 };
 
 const DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES: DocumentCompareDependencies = {
   applyDisposition,
-  compareDocx,
+  compareDocx: compareScannedDocx,
   createEntityVersionFromBuffer,
   deliverTemporaryRedline,
   readEntityVersionFile,
@@ -402,8 +398,8 @@ export const compareDocxBuffers = async (
       await dependencies.withTimeout(
         async () => {
           const [preparedBase, preparedTarget] = await Promise.all([
-            dependencies.applyDisposition(base.buffer, base.trackedChanges),
-            dependencies.applyDisposition(target.buffer, target.trackedChanges),
+            dependencies.applyDisposition(base.file, base.trackedChanges),
+            dependencies.applyDisposition(target.file, target.trackedChanges),
           ]);
           return await dependencies.compareDocx(preparedBase, preparedTarget, {
             author,
@@ -727,17 +723,17 @@ export const createDocumentCompareGenerator = (
 
     const rawBufferCache = new Map<
       SafeId<"entityVersion">,
-      Promise<Result<ArrayBuffer, CompareFailure>>
+      Promise<Result<ScannedFile, CompareFailure>>
     >();
     const loadBuffer = async (
       version: ResolvedVersion,
-    ): Promise<Result<ArrayBuffer, CompareFailure>> => {
+    ): Promise<Result<ScannedFile, CompareFailure>> => {
       const cached = rawBufferCache.get(version.id);
       if (cached !== undefined) {
         return await cached;
       }
       const loading = (async (): Promise<
-        Result<ArrayBuffer, CompareFailure>
+        Result<ScannedFile, CompareFailure>
       > => {
         const readAttempt = await Result.tryPromise({
           try: async () =>
@@ -963,14 +959,14 @@ export const createDocumentCompareGenerator = (
         {
           author,
           base: {
-            buffer: baseBuffer.value,
+            file: baseBuffer.value,
             trackedChanges: body.baseTrackedChanges,
           },
           granularity,
           mode,
           signal: comparisonSignal,
           target: {
-            buffer: targetBuffer.value,
+            file: targetBuffer.value,
             trackedChanges: body.targetTrackedChanges,
           },
           timestamp: target.createdAt.toISOString(),

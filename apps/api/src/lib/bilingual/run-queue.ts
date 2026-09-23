@@ -58,7 +58,8 @@ import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanFile } from "@/api/lib/file-scan/scan";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -625,7 +626,7 @@ const executeRun = async (
   }
 
   const operations = buildOperations(rows, translated);
-  const applied = await applyAiEditsToDocx(loaded.value.buffer, operations);
+  const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, {
       runId: actor.runId,

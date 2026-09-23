@@ -14,6 +14,7 @@ import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buff
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -67,6 +68,7 @@ const loadEntityVersionDocxBufferMock = mock(async () =>
     entityVersionId,
     fileId: toSafeId<"userFile">("00000000-0000-0000-0000-000000000008"),
     buffer: sourceDocx,
+    scanned: testScannedFile({ bytes: sourceDocx, mimeType: DOCX_MIME_TYPE }),
     fileName: "Smlouva.docx",
     mimeType: DOCX_MIME_TYPE,
     sizeBytes: sourceDocx.byteLength,
