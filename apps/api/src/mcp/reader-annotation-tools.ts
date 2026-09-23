@@ -46,8 +46,14 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
   InternalToolErrorResult,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
@@ -196,6 +202,47 @@ type ListedMark = v.InferInput<
   typeof LIST_READER_ANNOTATIONS_PROJECTION
 >["annotations"][number];
 
+type ListedMarks = { annotations: readonly ListedMark[] };
+
+/**
+ * The tenant-authored text a listing carries: the quoted passages (the
+ * public document's words, but chosen by a reader), comment bodies, and
+ * author names. The anonymized surface redacts exactly these, and the
+ * tool's declared `textFields` are derived from the same list.
+ */
+const readerAnnotationTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<ListedMarks>[] => [
+  defineTextFieldSpec({
+    path: "annotations[].passages[].quote",
+    items: (payload: ListedMarks) =>
+      payload.annotations.flatMap((mark) => mark.passages),
+    scope: () => organizationId,
+    read: (passage) => passage.quote,
+    apply: (passage, value) => {
+      passage.quote = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "annotations[].body",
+    items: (payload: ListedMarks) => payload.annotations,
+    scope: () => organizationId,
+    read: (mark) => mark.body,
+    apply: (mark, value) => {
+      mark.body = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "annotations[].authorName",
+    items: (payload: ListedMarks) => payload.annotations,
+    scope: () => organizationId,
+    read: (mark) => mark.authorName,
+    apply: (mark, value) => {
+      mark.authorName = value;
+    },
+  }),
+];
+
 const handleListTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_READER_ANNOTATIONS_PROJECTION>
 > = async ({ args, context }) => {
@@ -260,10 +307,18 @@ const handleListTool: TypedMcpToolHandler<
     });
   }
 
-  return toolDataResult({
+  const payload = {
     annotations: [...marks.values()],
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_READER_ANNOTATIONS_PROJECTION>);
+  } satisfies v.InferInput<typeof LIST_READER_ANNOTATIONS_PROJECTION>;
+  return {
+    egress: "structured",
+    payload,
+    textFields: runTextFieldSpecs(
+      readerAnnotationTextFieldSpecs(context.organizationId),
+      payload,
+    ),
+  };
 };
 
 // --- create_reader_annotation -------------------------------------------------
@@ -605,11 +660,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: {
       exposure: "anonymize",
-      textFields: [
-        "annotations[].passages[].quote",
-        "annotations[].body",
-        "annotations[].authorName",
-      ],
+      textFields: deriveTextFieldPaths(readerAnnotationTextFieldSpecs("")),
     },
     name: "list_reader_annotations",
     scope: "stella:read",

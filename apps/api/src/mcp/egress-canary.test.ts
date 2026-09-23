@@ -130,6 +130,8 @@ const { MATTER_TOOL_HANDLERS } = await import("@/api/mcp/matter-tools");
 const { TEMPLATE_TOOL_HANDLERS } = await import("@/api/mcp/template-tools");
 const { BILLING_TOOL_HANDLERS } = await import("@/api/mcp/billing-tools");
 const { KNOWLEDGE_TOOL_HANDLERS } = await import("@/api/mcp/knowledge-tools");
+const { READER_ANNOTATION_TOOL_HANDLERS } =
+  await import("@/api/mcp/reader-annotation-tools");
 
 // --- Fixture harness ----------------------------------------------------
 
@@ -268,6 +270,12 @@ const buildContext = ({
       describeStoredTemplate: describeStoredTemplateMock,
       templateDecideConditionsLogic: templateDecideConditionsLogicMock,
       loadOrgAIConfig: loadOrgAIConfigMock,
+      // The corpus gate has its own tests; here the document is reachable.
+      resolveAnnotationTarget: async () =>
+        await Promise.resolve({
+          status: "available" as const,
+          readBlocks: async () => await Promise.resolve([]),
+        }),
     },
     safeDb,
     scopedDb,
@@ -1456,6 +1464,62 @@ describe("MCP anonymization canary corpus", () => {
         exInvoiceDescriptionSeed,
         exEntityNameSeed,
       ];
+      expectNoSeedLeak(result, seeds);
+      expectSeedsQueuedForAnonymization(seeds);
+    },
+  );
+
+  // --- reader-annotation-tools ------------------------------------------------
+
+  const readerAnnotationsCanary = canaryTestsFor("list_reader_annotations");
+
+  readerAnnotationsCanary(
+    "list_reader_annotations anonymizes quotes, comment bodies and author names",
+    async (tool) => {
+      const quoteSeed = mkSeed(tool, 0);
+      const secondQuoteSeed = mkSeed(tool, 1);
+      const bodySeed = mkSeed(tool, 2);
+      const authorSeed = mkSeed(tool, 3);
+      const row = (index: number, quote: string, body: string | null) => ({
+        id: `00000000-0000-4000-8000-0000000c000${String(index)}`,
+        groupId: "00000000-0000-4000-8000-0000000c0009",
+        kind: "comment",
+        visibility: "shared",
+        color: null,
+        style: null,
+        blockAnchorId: `p-${String(index)}`,
+        startOffset: 0,
+        endOffset: 5,
+        quote,
+        body,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+        authorId: "user_2",
+        authorName: authorSeed,
+        authorImage: null,
+        mine: false,
+        createdAtCursor: "2026-01-01T00:00:00.000000Z",
+      });
+      const tx = {
+        select: () =>
+          chainableRows([
+            row(1, quoteSeed, bodySeed),
+            row(2, secondQuoteSeed, null),
+          ]),
+      };
+      const context = buildContext({ tx });
+
+      const response =
+        await READER_ANNOTATION_TOOL_HANDLERS.list_reader_annotations({
+          args: {
+            target_type: "decision",
+            target_id: "00000000-0000-4000-8000-0000000c0010",
+          },
+          context,
+        });
+      const result = await finalize(context, response);
+
+      const seeds = [quoteSeed, secondQuoteSeed, bodySeed, authorSeed];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
     },
