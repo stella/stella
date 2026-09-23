@@ -30,8 +30,8 @@ currently in beta.
 ### Data infrastructure
 
 **Case law and public legal sources.** [Legal Atlas](packages/legal-atlas)
-collects and parses official legal material with source adapters, structure
-preserving parsers, and ingestion primitives.
+holds the corpus runner registry, corpus document kinds, and per-jurisdiction
+provision-citation grammars.
 
 **Business registries.** [Business Registries](packages/business-registries)
 provides typed clients for national company and commercial registries, including

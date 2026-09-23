@@ -2,7 +2,7 @@
   "name": "@stll/legal-atlas",
   "version": "0.0.0",
   "private": true,
-  "description": "Public legal corpus adapters, parsers, and ingestion primitives",
+  "description": "Legal corpus runner registry, corpus document kinds, and provision-citation grammars",
   "keywords": [
     "case-law",
     "corpus",
