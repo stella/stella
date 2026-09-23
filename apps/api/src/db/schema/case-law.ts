@@ -642,6 +642,15 @@ export const caseLawDecisions = p.pgTable(
         sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
         t.id,
       ),
+    // The same walk with no court chosen, which is how the browse page opens.
+    // Court sits between country and the sort key above, so that index orders
+    // a country's rows by court first and cannot serve this walk's ORDER BY;
+    // it would fall back to the corpus-wide date index and skip every other
+    // country's rows. Same expression, direction and tiebreaker, led by
+    // country alone.
+    p
+      .index("case_law_decisions_country_date_idx")
+      .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
