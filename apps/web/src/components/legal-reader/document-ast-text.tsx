@@ -1021,20 +1021,26 @@ export const BlockRenderer = ({
               </span>
             )}
             {/* Two equal side tracks keep the designation on the column's
-                axis however wide the accessory is; the accessory stays in
-                flow and wraps, so a narrow pane never clips its actions. */}
-            <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-              <span aria-hidden="true" />
-              <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
-                <InlineContent
-                  {...sharedInlineProps}
-                  initialOffset={provision.designation.initialOffset}
-                  inlines={provision.designation.inlines}
+                axis however wide the accessory is. A column too narrow for
+                a localized action beside it stacks the actions below, so
+                they never overlap the designation or leave the pane. */}
+            <span className="@container/provision block">
+              <span className="grid grid-cols-1 justify-items-center gap-2 @lg/provision:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @lg/provision:gap-3">
+                <span
+                  aria-hidden="true"
+                  className="hidden @lg/provision:block"
                 />
-              </span>
-              <span className="flex min-w-0 flex-wrap items-center gap-2 justify-self-start text-base">
-                {provision.accessory}
-                {headingPermalink}
+                <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
+                  <InlineContent
+                    {...sharedInlineProps}
+                    initialOffset={provision.designation.initialOffset}
+                    inlines={provision.designation.inlines}
+                  />
+                </span>
+                <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-base @lg/provision:justify-self-start">
+                  {provision.accessory}
+                  {headingPermalink}
+                </span>
               </span>
             </span>
             {provision.below.inlines.length > 0 && (
