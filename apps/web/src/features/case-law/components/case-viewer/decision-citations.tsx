@@ -108,6 +108,8 @@ export const DecisionCitations = ({
           decision={decision}
           decisionId={decisionId}
           direction="incoming"
+          // A decision tab reuses this component; a new decision starts collapsed.
+          key={`${decisionId}-incoming`}
         />
       )}
       {outgoingTotal > 0 && (
@@ -116,6 +118,7 @@ export const DecisionCitations = ({
           decision={decision}
           decisionId={decisionId}
           direction="outgoing"
+          key={`${decisionId}-outgoing`}
         />
       )}
     </>
@@ -132,7 +135,9 @@ const CitationDirectionSection = ({
   direction: CitationDirection;
 }) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(direction === "incoming");
+  // Collapsed on arrival: the decision opens beside a chat or a results list
+  // to be read, and the header already carries the count and the treatments.
+  const [open, setOpen] = useState(false);
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
