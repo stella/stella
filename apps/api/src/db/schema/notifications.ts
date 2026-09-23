@@ -14,7 +14,7 @@ import {
   sql,
   timestamptz,
   user,
-  userOrganizationPolicies,
+  notificationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -35,7 +35,8 @@ const NOTIFICATION_ENTITY_TYPE_SQL_VALUES = NOTIFICATION_ENTITY_TYPES.map(
  * endpoint filters to the caller's ACTIVE organization so a user who belongs
  * to several firms does not see one firm's activity while working in another,
  * and RLS pins both recipient and organization so that separation survives a
- * handler that forgets the filter.
+ * handler that forgets the filter. RLS also requires access to the matter a
+ * row points into.
  *
  * `idempotencyKey` makes producers replay-safe: a retried worker job, a BullMQ
  * redelivery, or two workers racing the same run insert the same key and the
@@ -58,8 +59,8 @@ export const notifications = p.pgTable(
      * Null for a kind that points at nothing, and null again once the matter
      * is deleted: `ON DELETE SET NULL` keeps matter deletion unblocked and
      * leaves the row as a linkless message rather than removing the history.
-     * Authorization is unaffected — the recipient and organization pins are
-     * what admit the row, and this column is never read as a permission.
+     * While set, the recipient must still be able to access the matter for
+     * the row to be read or marked read (`notificationPolicies`).
      */
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
@@ -103,6 +104,6 @@ export const notifications = p.pgTable(
       "notifications_entity_pointer_check",
       sql`(${table.entityType} IS NULL) = (${table.entityId} IS NULL)`,
     ),
-    ...userOrganizationPolicies(),
+    ...notificationPolicies(),
   ],
 );

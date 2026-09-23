@@ -12,7 +12,11 @@ import { eq, inArray } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import { notifications } from "@/api/db/schema";
-import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+  createScopedDb,
+} from "@/api/db/scoped";
 import publishAnnouncement, {
   createPublishAnnouncementEndpoint,
 } from "@/api/handlers/notifications/announce";
@@ -60,12 +64,14 @@ const seedNotification = async ({
   kind = NOTIFICATION_KIND.MENTION,
   idempotencyKey,
   readAt = null,
+  workspaceId,
 }: {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   kind?: NewNotification["kind"];
   idempotencyKey: string;
   readAt?: Date | null;
+  workspaceId?: SafeId<"workspace">;
 }) => {
   const id = createSafeId<"notification">();
   await testDb.insert(notifications).values({
@@ -76,7 +82,8 @@ const seedNotification = async ({
     metadata: kind === NOTIFICATION_KIND.MENTION ? { actorName: "Ada" } : {},
     entityType: kind === NOTIFICATION_KIND.MENTION ? "entity" : null,
     entityId: kind === NOTIFICATION_KIND.MENTION ? ids.entityA1 : null,
-    workspaceId: kind === NOTIFICATION_KIND.MENTION ? ids.wsA1 : null,
+    workspaceId:
+      workspaceId ?? (kind === NOTIFICATION_KIND.MENTION ? ids.wsA1 : null),
     idempotencyKey,
     readAt,
   });
@@ -93,8 +100,18 @@ const contextFor = ({
 }) => {
   const recordAuditEvent = async () => undefined;
   return {
-    safeDb: createSafeDb(testDb, [], organizationId, userId),
-    scopedDb: createScopedDb(testDb, [], organizationId, userId),
+    // Membership mode, as request authentication builds it: notification
+    // visibility depends on the recipient's live matter access.
+    safeDb: createMembershipSafeDb(testDb, {
+      organizationId,
+      serverValidatedWorkspaceIds: [],
+      userId,
+    }),
+    scopedDb: createMembershipScopedDb(testDb, {
+      organizationId,
+      serverValidatedWorkspaceIds: [],
+      userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     memberRole: { role: "owner" },
@@ -150,12 +167,14 @@ beforeAll(async () => {
     userId: ids.userA1,
     organizationId: ids.orgB,
     idempotencyKey: "test:other-org-a1",
+    workspaceId: ids.wsB1,
   });
   // Somebody else entirely, in the same firm.
   otherUser = await seedNotification({
     userId: ids.userA2,
     organizationId: ids.orgA,
     idempotencyKey: "test:other-user",
+    workspaceId: ids.wsA2,
   });
 });
 
@@ -597,5 +616,44 @@ describe("announcements", () => {
         },
       },
     ]);
+  });
+});
+
+describe("notifications follow matter access", () => {
+  // userA2 is an ordinary member of wsA2 only, so wsA1 stands for a matter the
+  // recipient is not (or no longer) a member of.
+  const actor = () => ({ userId: ids.userA2, organizationId: ids.orgA });
+
+  test("a row pointing into an inaccessible matter is not listed, counted, or marked read", async () => {
+    const hidden = await seedNotification({
+      userId: ids.userA2,
+      organizationId: ids.orgA,
+      idempotencyKey: "test:matter-access-hidden",
+      workspaceId: ids.wsA1,
+    });
+    const visible = await seedNotification({
+      userId: ids.userA2,
+      organizationId: ids.orgA,
+      idempotencyKey: "test:matter-access-visible",
+      workspaceId: ids.wsA2,
+    });
+
+    const before = await listAs(actor());
+    const listedIds = before.items.map(({ id }) => id);
+    expect(listedIds).toContain(visible);
+    expect(listedIds).not.toContain(hidden);
+
+    await markAllNotificationsRead.handler(
+      asTestRaw<ReadAllContext>(contextFor(actor())),
+    );
+
+    const rows = await testDb
+      .select({ id: notifications.id, readAt: notifications.readAt })
+      .from(notifications)
+      .where(inArray(notifications.id, [hidden, visible]));
+    const readAtById = new Map(rows.map(({ id, readAt }) => [id, readAt]));
+    expect(readAtById.get(visible)).not.toBeNull();
+    // Marking everything read does not reach a row the recipient cannot see.
+    expect(readAtById.get(hidden)).toBeNull();
   });
 });
