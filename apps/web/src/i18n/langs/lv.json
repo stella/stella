@@ -111,6 +111,7 @@
       "askInChat": "Izveidojiet bezmaksas kontu, lai jautātu to tērzēšanā",
       "description": "Kad konts būs gatavs, atgriezīsieties šajā lapā.",
       "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai AI sagatavotu kopsavilkumus",
+      "refineSearch": "Izveidojiet bezmaksas kontu, lai uzlabotu meklēšanu ar AI",
       "writeResearchQuestion": "Izveidojiet bezmaksas kontu, lai uzdotu jautājumu šiem rezultātiem"
     },
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",

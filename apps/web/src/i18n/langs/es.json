@@ -111,6 +111,7 @@
       "askInChat": "Cree una cuenta gratuita para preguntar esto en el chat",
       "description": "Volverá a esta página en cuanto su cuenta esté lista.",
       "generateHeadnotes": "Cree una cuenta gratuita para generar sumarios con IA",
+      "refineSearch": "Cree una cuenta gratuita para mejorar su búsqueda con IA",
       "writeResearchQuestion": "Cree una cuenta gratuita para hacer una pregunta a estos resultados"
     },
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",

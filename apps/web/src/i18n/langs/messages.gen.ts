@@ -114,6 +114,7 @@ type Messages = {
       "askInChat": "Create a free account to ask this in chat";
       "description": "You'll come back to this page once your account is ready.";
       "generateHeadnotes": "Create a free account to generate AI headnotes";
+      "refineSearch": "Create a free account to improve your search with AI";
       "writeResearchQuestion": "Create a free account to ask a question of these results";
     };
     "resendCode": "Send code again to <email>{emailAddress}</email>";

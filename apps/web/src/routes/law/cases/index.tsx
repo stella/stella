@@ -949,6 +949,18 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     );
   };
 
+  // The AI rewrite replaces the entry and runs at once, the way a typed edit
+  // would after its debounce: the field shows the words the search required,
+  // and the URL, not the field, is what searches.
+  const searchRefinedQuery = (refined: string) => {
+    setQueryInput(refined);
+    setRequestedQuery(refined);
+    detached(
+      searchNavigation((previous) => withQuery(previous, refined)),
+      "cases.refine-navigate",
+    );
+  };
+
   // No sort control where no order applies: a browse listing is newest-first
   // by definition, and an identifier lookup is answered by the identity path,
   // which ranks by relevance whatever the URL asks for. Offering a choice the
@@ -974,6 +986,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         country={countryParam}
         maxLength={MAX_QUERY_LENGTH}
         onQueryChange={handleQueryChange}
+        onRefined={searchRefinedQuery}
         onSubmit={openSingleMatch}
         query={queryInput}
       />

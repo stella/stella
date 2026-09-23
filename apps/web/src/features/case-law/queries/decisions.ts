@@ -16,6 +16,7 @@ import {
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -326,6 +327,20 @@ export const decisionsInfiniteOptions = (
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+type RefineCaseLawQueryOptions = {
+  country: string;
+  locale: string;
+  query: string;
+};
+
+/**
+ * The reader's search rewritten by the model into the words the
+ * jurisdiction's decisions use. Plain words the case-law search requires,
+ * never boolean syntax. Authenticated and metered, unlike the reads above.
+ */
+export const refineCaseLawQuery = async (body: RefineCaseLawQueryOptions) =>
+  unwrapEden(await api.case.decisions.search.refine.post(body));
 
 export const decisionOptions = (decisionId: string) =>
   queryOptions({
