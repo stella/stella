@@ -247,7 +247,7 @@ describe("reader annotation approval lookup", () => {
       body: "Check the notice period.",
       kind: "comment",
       quote: "First paragraph. Second paragraph.",
-    };
+    } as const;
     expect(lookUpMark("cm-1")).toEqual(expected);
     expect(lookUpMark("cm-2")).toEqual(expected);
   });
