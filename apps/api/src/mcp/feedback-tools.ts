@@ -153,10 +153,7 @@ const submitArgsSchema = nullAsAbsent(
     approval_token: v.pipe(
       v.string(),
       v.maxLength(FEEDBACK_APPROVAL_TOKEN_MAX_CHARS),
-      v.description(
-        "The approval_token prepare_feedback returned with this report. It " +
-          "only covers that exact report, for one hour.",
-      ),
+      v.description("From prepare_feedback; covers only that report."),
     ),
     confirm: v.optional(
       v.pipe(
@@ -323,7 +320,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       "maintainers and get it back sanitized. Sends nothing: " +
       `${REDACTION_SUMMARY}, and the result is the report for you to show ` +
       "the human verbatim. Once they approve it, call submit_feedback with " +
-      "that same report, its approval_token, and confirm: true. " +
+      "that same report, its approval_token and confirm: true. " +
       `${DRAFTING_RULES} The reporter's ` +
       "identity is stored privately and is never published.",
     inputSchema: prepareArgsSchema,
@@ -348,9 +345,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       "File the report prepared by prepare_feedback with the stella " +
       "maintainers. This sends the content out of the workspace: it is " +
       "stored, emailed to the maintainers, and may be posted as a public " +
-      "issue, so it is refused without confirm: true and without the " +
-      "approval_token prepare_feedback returned for exactly this report. " +
-      `${REDACTION_SUMMARY} ` +
+      "issue, so it is refused without confirm: true and the report's " +
+      `approval_token. ${REDACTION_SUMMARY} ` +
       "again here, and the reporter's identity is stored privately and never " +
       "published. Returns a receipt to give the human. Re-sending identical " +
       "content within a day returns the original receipt and sends nothing.",
@@ -383,6 +379,10 @@ const VALIDATION_HINT =
   `Provide kind (${FEEDBACK_KINDS.join(", ")}), area ` +
   `(${FEEDBACK_AREAS.join(", ")}), a title (<= ${FEEDBACK_LIMITS.title} ` +
   `chars) and what_happened (<= ${FEEDBACK_LIMITS.whatHappened} chars).`;
+
+const SUBMIT_VALIDATION_HINT =
+  `${VALIDATION_HINT} Also pass the approval_token prepare_feedback returned ` +
+  "with this report; without one, call prepare_feedback first.";
 
 const handlePrepareFeedbackTool: McpToolHandler<
   v.InferInput<typeof PREPARE_FEEDBACK_OUTPUT_SCHEMA>
@@ -420,7 +420,7 @@ const handleSubmitFeedbackTool: McpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(submitArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues, VALIDATION_HINT);
+    return validationErrorResult(parsed.issues, SUBMIT_VALIDATION_HINT);
   }
 
   const report = toReportInput(parsed.output);

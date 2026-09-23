@@ -243,6 +243,9 @@ describe("submit_feedback approval binding", () => {
     const error = await submitError({ ...MINIMAL_ARGS });
 
     expect(error).toMatchObject({ code: "validation_error" });
+    expect(error?.type === "structured" ? error.hint : "").toContain(
+      "prepare_feedback",
+    );
   });
 });
 

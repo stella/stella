@@ -1649,6 +1649,7 @@ describe("feedback (S4)", () => {
     title: "Fill drops a repeated row",
     what_happened: "The second row of a repeated table is blank.",
   };
+  const APPROVAL_TOKEN = `fb1.1800000000000.${"A".repeat(43)}`;
   const reportArgs = [
     "--kind",
     report.kind,
@@ -1664,6 +1665,7 @@ describe("feedback (S4)", () => {
     const server = startMockServer(() => ({
       toolPayload: {
         report,
+        approval_token: APPROVAL_TOKEN,
         redactions: 0,
         redacted_fields: [],
         next_step: "Show the report to the human, then call submit_feedback.",
@@ -1692,7 +1694,14 @@ describe("feedback (S4)", () => {
       },
     }));
     const result = await runCli({
-      args: ["feedback", "submit", ...reportArgs, "--yes"],
+      args: [
+        "feedback",
+        "submit",
+        ...reportArgs,
+        "--approval-token",
+        APPROVAL_TOKEN,
+        "--yes",
+      ],
       url: server.url,
       token: makeToken(["feedback"]),
     });
@@ -1701,6 +1710,7 @@ describe("feedback (S4)", () => {
     expect(server.requests.at(0)?.params.name).toBe("submit_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       ...report,
+      approval_token: APPROVAL_TOKEN,
       confirm: true,
     });
     expect(JSON.parse(result.stdout).receipt).toBe("FB-7K2M-9QXA");

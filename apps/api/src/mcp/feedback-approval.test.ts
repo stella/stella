@@ -94,8 +94,8 @@ describe("feedback approval", () => {
   });
 
   test("rejects a forged expiry and malformed tokens", () => {
-    const [prefix, , mac] = approval.split(".");
-    const extended = `${prefix}.${String(NOW + 10 * FEEDBACK_APPROVAL_TTL_MS)}.${mac}`;
+    const mac = approval.slice(approval.lastIndexOf(".") + 1);
+    const extended = `fb1.${String(NOW + 10 * FEEDBACK_APPROVAL_TTL_MS)}.${mac}`;
 
     for (const token of [extended, "", "fb1", "fb1.x.y", `${approval}x`]) {
       expect(
