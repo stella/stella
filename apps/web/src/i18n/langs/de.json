@@ -865,7 +865,7 @@
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
       "externalMcpQuestion": "Darf stella diese Anfrage an {provider} senden?",
-      "searchAllPastChatsDescription": "Bisher wurden nur Chats zu den Akten dieses Chats durchsucht. Jetzt werden auch Ihre Chats zu anderen Akten durchsucht.",
+      "searchAllPastChatsDescription": "Es werden auch Ihre Chats zu anderen Akten durchsucht.",
       "searchAllPastChatsQuestion": "Alle Ihre Chats durchsuchen?",
       "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },

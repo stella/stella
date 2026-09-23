@@ -865,7 +865,7 @@
       "deny": "Zamietnuť",
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
       "externalMcpQuestion": "Môže stella odoslať tento dotaz do {provider}?",
-      "searchAllPastChatsDescription": "Doteraz sa prehľadávali len chaty k spisom tohto chatu. Teraz sa prehľadajú aj vaše chaty k iným spisom.",
+      "searchAllPastChatsDescription": "Prehľadajú sa aj vaše chaty k iným spisom.",
       "searchAllPastChatsQuestion": "Prehľadať všetky vaše chaty?",
       "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },

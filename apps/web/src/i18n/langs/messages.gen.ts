@@ -868,7 +868,7 @@ type Messages = {
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
       "externalMcpQuestion": "Can stella send this request to {provider}?";
-      "searchAllPastChatsDescription": "So far only chats about this chat's matters were searched. This also searches your chats about other matters.";
+      "searchAllPastChatsDescription": "This search also covers your chats about other matters.";
       "searchAllPastChatsQuestion": "Search all your chats?";
       "uploadedDocumentPlaceholder": "(uploaded document)";
     };

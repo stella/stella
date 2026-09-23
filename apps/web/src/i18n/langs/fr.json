@@ -865,7 +865,7 @@
       "deny": "Refuser",
       "externalMcpDescription": "Seules les informations nécessaires à cet appel d’outil seront envoyées.",
       "externalMcpQuestion": "stella peut-elle envoyer cette requête à {provider} ?",
-      "searchAllPastChatsDescription": "Jusqu’ici, seules les conversations liées aux dossiers de la conversation en cours ont été consultées. Cette recherche couvre aussi vos conversations liées à d’autres dossiers.",
+      "searchAllPastChatsDescription": "Cette recherche couvre aussi vos conversations liées à d’autres dossiers.",
       "searchAllPastChatsQuestion": "Rechercher dans toutes vos conversations ?",
       "uploadedDocumentPlaceholder": "(document importé)"
     },

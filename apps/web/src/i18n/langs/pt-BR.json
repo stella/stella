@@ -865,7 +865,7 @@
       "deny": "Negar",
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
       "externalMcpQuestion": "A stella pode enviar esta solicitação para {provider}?",
-      "searchAllPastChatsDescription": "Até agora, a pesquisa abrangeu apenas os chats sobre os casos deste chat. Agora ela também abrange seus chats sobre outros casos.",
+      "searchAllPastChatsDescription": "A pesquisa também abrange seus chats sobre outros casos.",
       "searchAllPastChatsQuestion": "Pesquisar em todos os seus chats?",
       "uploadedDocumentPlaceholder": "(documento enviado)"
     },

@@ -865,7 +865,7 @@
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
       "externalMcpQuestion": "Kas stella tohib selle päringu saata teenusepakkujale {provider}?",
-      "searchAllPastChatsDescription": "Seni otsiti ainult selle vestluse toimikutega seotud vestlustest. Nüüd otsitakse ka teie vestlustest, mis puudutavad teisi toimikuid.",
+      "searchAllPastChatsDescription": "Otsitakse ka teie vestlustest, mis puudutavad teisi toimikuid.",
       "searchAllPastChatsQuestion": "Kas otsida kõigist teie vestlustest?",
       "uploadedDocumentPlaceholder": "(üles laaditud dokument)"
     },

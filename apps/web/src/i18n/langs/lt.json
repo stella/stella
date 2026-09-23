@@ -865,7 +865,7 @@
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
       "externalMcpQuestion": "Ar stella gali siųsti šią užklausą teikėjui {provider}?",
-      "searchAllPastChatsDescription": "Iki šiol buvo ieškoma tik pokalbiuose apie šio pokalbio bylas. Dabar bus ieškoma ir jūsų pokalbiuose apie kitas bylas.",
+      "searchAllPastChatsDescription": "Bus ieškoma ir jūsų pokalbiuose apie kitas bylas.",
       "searchAllPastChatsQuestion": "Ieškoti visuose jūsų pokalbiuose?",
       "uploadedDocumentPlaceholder": "(įkeltas dokumentas)"
     },

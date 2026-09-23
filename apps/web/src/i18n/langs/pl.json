@@ -865,7 +865,7 @@
       "deny": "Odmów",
       "externalMcpDescription": "Wysłane zostaną tylko informacje niezbędne do tego wywołania narzędzia.",
       "externalMcpQuestion": "Czy stella może wysłać to żądanie do {provider}?",
-      "searchAllPastChatsDescription": "Dotąd przeszukiwano tylko czaty dotyczące spraw tego czatu. Teraz zostaną przeszukane także Twoje czaty dotyczące innych spraw.",
+      "searchAllPastChatsDescription": "Przeszukane zostaną także Twoje czaty dotyczące innych spraw.",
       "searchAllPastChatsQuestion": "Przeszukać wszystkie Twoje czaty?",
       "uploadedDocumentPlaceholder": "(przesłany dokument)"
     },
