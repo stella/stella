@@ -55,6 +55,32 @@ export const parseWorkspaceRealtimeMessage = (
   }
 };
 
+const keyPartMentions = (part: unknown, workspaceId: string): boolean => {
+  if (part === workspaceId) {
+    return true;
+  }
+  if (Array.isArray(part)) {
+    return part.some((item) => keyPartMentions(item, workspaceId));
+  }
+  if (typeof part === "object" && part !== null) {
+    return Object.values(part).some((value) =>
+      keyPartMentions(value, workspaceId),
+    );
+  }
+  return false;
+};
+
+/**
+ * Whether a cached query holds data from one matter. Query key factories
+ * place the matter id at different depths (a path segment, a field of a key
+ * object), and matter ids are UUIDs, so any key naming the id anywhere is
+ * that matter's data.
+ */
+export const isWorkspaceQueryKey = (
+  queryKey: QueryKey,
+  workspaceId: string,
+): boolean => keyPartMentions(queryKey, workspaceId);
+
 export const WORKSPACE_REALTIME_QUERY_ACTION = {
   INVALIDATE: "invalidate",
   REMOVE_PREFIX: "remove_prefix",

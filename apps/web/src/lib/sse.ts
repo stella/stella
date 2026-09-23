@@ -1,7 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { useNavigate } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
 
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -10,29 +14,25 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import {
   getWorkspaceRealtimeQueryActions,
+  isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
+import {
+  connectWorkspaceStream,
+  WORKSPACE_STREAM_ACCESS,
+  workspaceStreamAccessFromStatus,
+} from "@/lib/workspace-sse-connection.logic";
+import type { WorkspaceStreamAccess } from "@/lib/workspace-sse-connection.logic";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
 } satisfies EventSourceInit;
 
-// The browser stops reconnecting (readyState CLOSED) on a non-2xx response,
-// a wrong content type, or a network change — states a fresh EventSource
-// usually recovers from. Re-establish with capped exponential backoff and
-// escalate to telemetry once per outage episode, only after several
-// consecutive failures while the browser reports itself online: a laptop
-// waking from sleep should reconnect quietly, not page.
-const SSE_RECONNECT_BASE_DELAY_MS = 1000;
-const SSE_RECONNECT_MAX_DELAY_MS = 30_000;
-const SSE_ESCALATE_AFTER_FAILURES = 5;
-
-const sseReconnectDelayMs = (failures: number): number =>
-  Math.min(
-    SSE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(0, failures - 1),
-    SSE_RECONNECT_MAX_DELAY_MS,
-  );
+// Long enough for the stream's access check, short enough that a hung probe
+// only delays the next reconnect attempt.
+const WORKSPACE_STREAM_PROBE_TIMEOUT_MS = 10_000;
 
 type UseWorkspaceSSEOptions = {
   onEvent?: (event: WorkspaceRealtimeEvent) => void;
@@ -42,12 +42,38 @@ const getWorkspaceSSEUrl = (workspaceId: string) =>
   apiUrl(`/workspaces/${workspaceId}/events`);
 
 /**
+ * Ask the stream URL why the browser gave up on it. The response headers are
+ * all this needs: the request is aborted as soon as they arrive, so a stream
+ * that would have opened is never read.
+ */
+const probeWorkspaceStreamAccess = async (
+  workspaceId: string,
+): Promise<WorkspaceStreamAccess> => {
+  const controller = new AbortController();
+  const response = await Result.tryPromise(
+    async () =>
+      await fetchWithTimeout(getWorkspaceSSEUrl(workspaceId), {
+        credentials: "include",
+        headers: { accept: "text/event-stream" },
+        signal: controller.signal,
+        timeoutMs: WORKSPACE_STREAM_PROBE_TIMEOUT_MS,
+      }),
+  );
+  controller.abort();
+  // A request that never got an answer says nothing about access, so it is
+  // treated as the outage it most likely is.
+  return response.isOk()
+    ? workspaceStreamAccessFromStatus(response.value.status)
+    : WORKSPACE_STREAM_ACCESS.AVAILABLE;
+};
+
+/**
  * Subscribe to workspace-scoped SSE events and apply their validated React
  * Query cache actions.
  *
- * The native EventSource retry covers transient drops; once the browser
- * gives up (readyState CLOSED) a new source is created with capped backoff.
- * Cleans up on unmount or when workspaceId changes.
+ * When the matter refuses the stream (the caller's access to it ended), the
+ * hook stops reconnecting, drops the matter's cached data, and leaves for the
+ * matter list. Cleans up on unmount or when workspaceId changes.
  */
 export const useWorkspaceSSE = (
   workspaceId: string,
@@ -55,6 +81,8 @@ export const useWorkspaceSSE = (
 ) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
+  const navigate = useNavigate();
+  const t = useTranslations();
 
   const handleParsedEvent = useLatestCallback(
     (event: WorkspaceRealtimeEvent) => {
@@ -89,73 +117,61 @@ export const useWorkspaceSSE = (
       new Error("SSE connection failed to re-establish"),
     );
   });
+  const leaveEndedMatter = useLatestCallback(async () => {
+    stellaToast.add({ title: t("errors.matterNotFound"), type: "error" });
+    // Leave first: dropping the cache while the matter's views are still
+    // mounted would only make them refetch into the same refusal.
+    await navigate({ to: "/workspaces", replace: true });
+    queryClient.removeQueries({
+      predicate: (query) => isWorkspaceQueryKey(query.queryKey, workspaceId),
+    });
+    await queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+  });
 
-  useExternalSyncEffect(() => {
-    let source: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let consecutiveFailures = 0;
-    // Offline failures back off but never count toward the outage capture:
-    // they would either trip it on the first failure after coming back
-    // online, or overshoot the threshold so a real outage never equals it.
-    let consecutiveOnlineFailures = 0;
-    let disposed = false;
-
-    const handleMessage = (event: MessageEvent) => {
-      const parsed = parseWorkspaceRealtimeMessage(String(event.data));
-      if (!parsed) {
-        return;
-      }
-
-      handleParsedEvent(parsed);
-    };
-
-    const connect = () => {
-      const stream = new EventSource(
-        getWorkspaceSSEUrl(workspaceId),
-        WORKSPACE_SSE_EVENT_SOURCE_INIT,
-      );
-      source = stream;
-
-      const handleOpen = () => {
-        consecutiveFailures = 0;
-        consecutiveOnlineFailures = 0;
-      };
-
-      const handleError = () => {
-        // readyState CONNECTING means the browser is retrying on its own;
-        // only a fully closed source needs our reconnect loop.
-        if (stream.readyState !== EventSource.CLOSED || disposed) {
-          return;
-        }
-        stream.close();
-        consecutiveFailures += 1;
-        if (navigator.onLine) {
-          consecutiveOnlineFailures += 1;
-          if (consecutiveOnlineFailures === SSE_ESCALATE_AFTER_FAILURES) {
-            captureConnectionOutage();
+  useExternalSyncEffect(
+    () =>
+      connectWorkspaceStream({
+        openSource: ({ onOpen, onMessage, onError }) => {
+          const stream = new EventSource(
+            getWorkspaceSSEUrl(workspaceId),
+            WORKSPACE_SSE_EVENT_SOURCE_INIT,
+          );
+          stream.addEventListener("open", onOpen);
+          stream.addEventListener("message", (event: MessageEvent) => {
+            onMessage(String(event.data));
+          });
+          stream.addEventListener("error", onError);
+          return {
+            isClosed: () => stream.readyState === EventSource.CLOSED,
+            close: () => {
+              stream.close();
+            },
+          };
+        },
+        isOnline: () => navigator.onLine,
+        schedule: (callback, delayMs) => {
+          const timer = setTimeout(callback, delayMs);
+          return () => {
+            clearTimeout(timer);
+          };
+        },
+        probeAccess: (settle) => {
+          detached(
+            probeWorkspaceStreamAccess(workspaceId).then(settle),
+            "workspace-stream.probe-access",
+          );
+        },
+        onMessage: (data) => {
+          const parsed = parseWorkspaceRealtimeMessage(data);
+          if (parsed) {
+            handleParsedEvent(parsed);
           }
-        } else {
-          consecutiveOnlineFailures = 0;
-        }
-        reconnectTimer = setTimeout(() => {
-          reconnectTimer = null;
-          connect();
-        }, sseReconnectDelayMs(consecutiveFailures));
-      };
-
-      stream.addEventListener("open", handleOpen);
-      stream.addEventListener("message", handleMessage);
-      stream.addEventListener("error", handleError);
-    };
-
-    connect();
-
-    return () => {
-      disposed = true;
-      if (reconnectTimer !== null) {
-        clearTimeout(reconnectTimer);
-      }
-      source?.close();
-    };
-  }, [workspaceId, captureConnectionOutage, handleParsedEvent]);
+        },
+        onOutage: captureConnectionOutage,
+        onAccessEnded: () => {
+          detached(leaveEndedMatter(), "workspace-stream.leave-ended-matter");
+        },
+      }),
+    [workspaceId, captureConnectionOutage, handleParsedEvent, leaveEndedMatter],
+  );
 };

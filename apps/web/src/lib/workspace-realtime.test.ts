@@ -1,9 +1,19 @@
+import { hashKey, QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
+import { fileContentByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
+import {
+  contactsQueryRoot,
+  workspaceMembersQueryRoot,
+} from "@/lib/resource-query-roots.logic";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+
 import {
   getWorkspaceRealtimeQueryActions,
+  isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "./workspace-realtime";
@@ -294,5 +304,44 @@ describe("workspace realtime policy", () => {
       return;
     }
     expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([]);
+  });
+});
+
+describe("matter query ownership", () => {
+  test("selects every cached query naming the matter and no other", () => {
+    const matter = "01975d0c-0000-7000-8000-00000000000a";
+    const otherMatter = "01975d0c-0000-7000-8000-00000000000b";
+    const queryClient = new QueryClient();
+    const keysOf = (workspaceId: string) => [
+      entitiesKeys.all(workspaceId),
+      workspacesKeys.byId(workspaceId),
+      workspacesKeys.overview(workspaceId),
+      workspaceMembersQueryRoot(workspaceId),
+      fileContentByFieldQueryRoot({ workspaceId, fieldId: "field-1" }),
+    ];
+    const organizationWide = [
+      workspacesKeys.list("organization-1"),
+      contactsQueryRoot(),
+    ];
+    for (const queryKey of [
+      ...keysOf(matter),
+      ...keysOf(otherMatter),
+      ...organizationWide,
+    ]) {
+      queryClient.setQueryData(queryKey, { cached: true });
+    }
+
+    queryClient.removeQueries({
+      predicate: (query) => isWorkspaceQueryKey(query.queryKey, matter),
+    });
+
+    const remaining = queryClient
+      .getQueryCache()
+      .getAll()
+      .map((query) => hashKey(query.queryKey))
+      .toSorted();
+    expect(remaining).toEqual(
+      [...keysOf(otherMatter), ...organizationWide].map(hashKey).toSorted(),
+    );
   });
 });
