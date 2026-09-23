@@ -45,10 +45,8 @@ const cellKey = (
 /**
  * Whether a cell has to be answered again.
  *
- * The state policy is `answerNeedsRun`, shared with the client so the cells a
- * lawyer confirms are the cells that run. `force` is the caller's decision
- * rather than the cell's state: it reopens an answered cell, which is the one
- * the policy keeps for the sake of paging back to an answered page free.
+ * The policy is `answerNeedsRun`, shared with the client so the cells a
+ * lawyer confirms are the cells that run.
  */
 const needsAnswer = ({
   cell,
@@ -58,18 +56,16 @@ const needsAnswer = ({
   cell: ExistingCell | undefined;
   force: boolean;
   staleBefore: number;
-}): boolean => {
-  if (cell === undefined) {
-    return answerNeedsRun({ state: null, stale: false });
-  }
-  if (force && cell.state === "answered") {
-    return true;
-  }
-  return answerNeedsRun({
-    state: cell.state,
-    stale: cell.updatedAt.getTime() < staleBefore,
-  });
-};
+}): boolean =>
+  answerNeedsRun(
+    cell === undefined
+      ? { state: null, stale: false, force }
+      : {
+          state: cell.state,
+          stale: cell.updatedAt.getTime() < staleBefore,
+          force,
+        },
+  );
 
 /**
  * Claim every (column, decision) cell the run has to produce: mark it pending

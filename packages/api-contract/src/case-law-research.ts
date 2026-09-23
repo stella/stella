@@ -23,8 +23,8 @@ import type { PropertyContentType } from "./entity-find";
  * they are exactly the kinds the workspace extractor never schedules.
  *
  * There is no boolean kind in the property model, so a yes/no question is a
- * single-select over two options; the text not settling the question is the
- * null value every single-select already has.
+ * single-select over two options. The text not settling a question is the
+ * `not_stated` cell state, the same for every kind.
  */
 type HandEnteredType = "file" | "money" | "person";
 
@@ -56,18 +56,34 @@ export const CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH = 500;
 
 /**
  * Where one cell stands. A cell is never silently empty: `pending` while a run
- * is queued or working, `not_allowed` when the source's terms withhold derived
- * AI use, `failed` when the model or the corpus refused.
+ * is queued or working, `not_stated` when the decision does not say (any kind
+ * of column can end there), `not_allowed` when the source's terms withhold
+ * derived AI use, `failed` when the model or the corpus refused.
  */
 export const CASE_LAW_RESEARCH_ANSWER_STATES = [
   "pending",
   "answered",
+  "not_stated",
   "not_allowed",
   "failed",
 ] as const;
 
 export type CaseLawResearchAnswerState =
   (typeof CASE_LAW_RESEARCH_ANSWER_STATES)[number];
+
+/** Why a cell ended `failed`; a class, never the provider's wording. */
+export const CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS = [
+  "decision_unavailable",
+  "no_text",
+  "model_error",
+  "missing_answer",
+  "wrong_type",
+  /** The run itself failed before it could classify the cell. */
+  "run_error",
+] as const;
+
+export type CaseLawResearchAnswerFailureReason =
+  (typeof CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS)[number];
 
 /** A cell as the run policy reads it. */
 export type ResearchAnswerRunCheck = {
@@ -78,20 +94,23 @@ export type ResearchAnswerRunCheck = {
    * the server's clock. Meaningless for every other state.
    */
   stale: boolean;
+  /** The caller asked to answer again where an answer already stands. */
+  force: boolean;
 };
 
 /**
- * Whether a run has to produce this cell, before an explicit re-answer.
+ * Whether a run has to produce this cell.
  *
  * One policy for both sides: the queue skips the cells this refuses, and the
  * client counts the cells it accepts, so the number a lawyer confirms is the
  * number that runs. A live `pending` cell belongs to another run; a stale one
  * is a run that died and may be claimed. `not_allowed` is the source's terms,
- * which a re-run cannot change, and `answered` is the cache that makes paging
- * back to an answered page free — only `force` reopens that one, which is the
- * caller's decision rather than the cell's state.
+ * which a re-run cannot change, and `answered` and `not_stated` are the cache
+ * that makes paging back to an answered page free; only `force` reopens them,
+ * which is the caller's decision rather than the cell's state.
  */
 export const answerNeedsRun = ({
+  force,
   state,
   stale,
 }: ResearchAnswerRunCheck): boolean => {
@@ -103,6 +122,8 @@ export const answerNeedsRun = ({
     case "failed":
       return true;
     case "answered":
+    case "not_stated":
+      return force;
     case "not_allowed":
       return false;
     default: {

@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
+import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
@@ -34,7 +35,6 @@ import {
 } from "@/api/lib/case-law/research-answers";
 import type {
   CaseLawResearchAnswerRun,
-  ResearchAnswerFailureReason,
   ResearchPassage,
   ResearchQuestion,
 } from "@/api/lib/case-law/research-answers";
@@ -252,7 +252,7 @@ const answerDecision = async (
   const questions = input.columns.filter((column) =>
     pendingColumnIds.includes(column.columnId),
   );
-  const fail = async (failureReason: ResearchAnswerFailureReason) =>
+  const fail = async (failureReason: CaseLawResearchAnswerFailureReason) =>
     await writeOutcomes(
       safeDb,
       input,
@@ -422,12 +422,13 @@ const answerDecision = async (
     if (columnId === undefined) {
       continue;
     }
-    if (entry.outcome.state === "failed") {
+    const parsedOutcome = entry.outcome;
+    if (parsedOutcome.state === "failed") {
       outcomes.push({
         columnId,
         outcome: {
           state: "failed",
-          failureReason: entry.outcome.failureReason,
+          failureReason: parsedOutcome.failureReason,
         },
       });
       continue;
@@ -437,15 +438,18 @@ const answerDecision = async (
       model: generated.value.modelId,
       completedAt,
       retrieved: text.retrieved,
-      rationale: entry.outcome.rationale,
+      rationale: parsedOutcome.rationale,
       justification: buildAnswerJustification(
-        entry.outcome.anchorIds,
+        parsedOutcome.anchorIds,
         excerptByAnchor,
       ),
     };
     outcomes.push({
       columnId,
-      outcome: { state: "answered", answer: entry.outcome.answer, run },
+      outcome:
+        parsedOutcome.state === "answered"
+          ? { state: "answered", answer: parsedOutcome.answer, run }
+          : { state: "not_stated", run },
     });
   }
   await writeOutcomes(safeDb, input, decisionId, outcomes);
@@ -765,12 +769,50 @@ type AnswerOutcome =
       answer: FieldContent;
       run: CaseLawResearchAnswerRun;
     }
+  | { state: "not_stated"; run: CaseLawResearchAnswerRun }
   | { state: "not_allowed" }
-  | { state: "failed"; failureReason: ResearchAnswerFailureReason };
+  | { state: "failed"; failureReason: CaseLawResearchAnswerFailureReason };
 
 type ColumnOutcome = {
   columnId: SafeId<"caseLawResearchColumn">;
   outcome: AnswerOutcome;
+};
+
+const answerRowValues = (outcome: AnswerOutcome) => {
+  switch (outcome.state) {
+    case "answered":
+      return {
+        state: outcome.state,
+        answer: outcome.answer,
+        run: outcome.run,
+        failureReason: null,
+      };
+    case "not_stated":
+      return {
+        state: outcome.state,
+        answer: null,
+        run: outcome.run,
+        failureReason: null,
+      };
+    case "not_allowed":
+      return {
+        state: outcome.state,
+        answer: null,
+        run: null,
+        failureReason: null,
+      };
+    case "failed":
+      return {
+        state: outcome.state,
+        answer: null,
+        run: null,
+        failureReason: outcome.failureReason,
+      };
+    default: {
+      outcome satisfies never;
+      return panic(`Unhandled answer outcome: ${String(outcome)}`);
+    }
+  }
 };
 
 /**
@@ -798,21 +840,7 @@ const writeOutcomes = async (
       if (asked === undefined) {
         continue;
       }
-      const values =
-        outcome.state === "answered"
-          ? {
-              state: outcome.state,
-              answer: outcome.answer,
-              run: outcome.run,
-              failureReason: null,
-            }
-          : {
-              state: outcome.state,
-              answer: null,
-              run: null,
-              failureReason:
-                outcome.state === "failed" ? outcome.failureReason : null,
-            };
+      const values = answerRowValues(outcome);
       // SAFETY: bounded by the columns an organization may hold, inside one
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.

@@ -5,7 +5,6 @@ import {
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
 } from "@stll/api-contract";
-import type { ResearchAnswerRunCheck } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import {
@@ -28,8 +27,7 @@ import type {
 
 /**
  * A yes/no question, which the property model spells as a two-option select:
- * there is no boolean content type, and the null value a select already has is
- * the decision not settling the question.
+ * there is no boolean content type.
  */
 const YES_NO_CONTENT = {
   version: 1,
@@ -71,6 +69,7 @@ const answer = (
       state === "answered"
         ? { version: 1, type: "single-select", value: "yes" }
         : null,
+    failureReason: state === "failed" ? "model_error" : null,
   },
 ];
 
@@ -124,34 +123,23 @@ describe("what a run covers", () => {
    * and a cell it would retry is never left out of it.
    */
   test("a cell runs exactly when the queue's own policy says it does", () => {
-    const cases = [
-      // A failure is retried; a refusal is the source's terms, which a re-run
-      // cannot change; an answer is the cache that makes paging back free.
-      { state: "failed", stale: false },
-      { state: "not_allowed", stale: false },
-      { state: "answered", stale: false },
-      // A live pending cell belongs to another run; a quiet one is a run that
-      // died and may be claimed.
-      { state: "pending", stale: false },
-      { state: "pending", stale: true },
-    ] as const satisfies readonly ResearchAnswerRunCheck[];
+    for (const state of CASE_LAW_RESEARCH_ANSWER_STATES) {
+      for (const stale of [false, true]) {
+        for (const force of [false, true]) {
+          const runSet = questionRunSet({
+            answersByKey: new Map([answer("c1", "d1", state, stale)]),
+            columnId: "c1",
+            columns,
+            force,
+            pageDecisionIds: ["d1"],
+            selectedDecisionIds: [],
+          });
 
-    expect(
-      CASE_LAW_RESEARCH_ANSWER_STATES.every((state) =>
-        cases.some((entry) => entry.state === state),
-      ),
-    ).toBe(true);
-
-    for (const { stale, state } of cases) {
-      const runSet = questionRunSet({
-        answersByKey: new Map([answer("c1", "d1", state, stale)]),
-        columnId: "c1",
-        columns,
-        pageDecisionIds: ["d1"],
-        selectedDecisionIds: [],
-      });
-
-      expect(runSet.cells).toBe(answerNeedsRun({ state, stale }) ? 1 : 0);
+          expect(runSet.cells).toBe(
+            answerNeedsRun({ state, stale, force }) ? 1 : 0,
+          );
+        }
+      }
     }
   });
 
@@ -222,11 +210,13 @@ describe("what a run covers", () => {
     }
   });
 
-  test("forcing asks every cell again", () => {
+  test("forcing reopens settled cells, never a refusal or a live run", () => {
     const runSet = questionRunSet({
       answersByKey: new Map([
         answer("c1", "d1", "answered"),
-        answer("c2", "d1", "answered"),
+        answer("c2", "d1", "not_stated"),
+        answer("c1", "d2", "not_allowed"),
+        answer("c2", "d2", "pending"),
       ]),
       columns,
       force: true,
@@ -234,17 +224,11 @@ describe("what a run covers", () => {
       selectedDecisionIds: [],
     });
 
-    expect(runSet.cells).toBe(6);
+    expect(runSet.cells).toBe(4);
   });
 
   test("a run never covers more cells than rows times columns", () => {
-    const states: QuestionAnswer["state"][] = [
-      "answered",
-      "pending",
-      "failed",
-      "not_allowed",
-    ];
-    for (const state of states) {
+    for (const state of CASE_LAW_RESEARCH_ANSWER_STATES) {
       const runSet = questionRunSet({
         answersByKey: new Map([answer("c1", "d2", state)]),
         columns,

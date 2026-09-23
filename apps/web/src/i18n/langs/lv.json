@@ -705,10 +705,18 @@
     "research": {
       "answering": "{count, plural, zero {Atbild uz # šūnām…} one {Atbild uz # šūnu…} other {Atbild uz # šūnām…}}",
       "answers": {
-        "failed": "Neatbildēts",
+        "failureReasons": {
+          "decisionUnavailable": "Nolēmums nav pieejams",
+          "missingAnswer": "Modelis neatbildēja",
+          "modelError": "Modeļa kļūda",
+          "noText": "Nav nolēmuma teksta",
+          "runError": "Izpilde pārtrūka",
+          "wrongType": "Atbilde nepareizā formātā"
+        },
         "no": "Nē",
         "notAllowed": "Avota noteikumi to neatļauj",
         "notRun": "Nav palaists",
+        "notStated": "Nolēmumā nav norādīts",
         "pending": "Atbild…",
         "showSource": "Rādīt avotu",
         "yes": "Jā"

@@ -71,6 +71,7 @@ const answer = (columnId: string, decisionId: string, value: string) =>
       answer: { version: 1, type: "text", value },
       columnId,
       decisionId,
+      failureReason: null,
       stale: false,
       state: "answered",
     } satisfies QuestionAnswer,

@@ -705,10 +705,18 @@
     "research": {
       "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…}}",
       "answers": {
-        "failed": "Non répondu",
+        "failureReasons": {
+          "decisionUnavailable": "Décision indisponible",
+          "missingAnswer": "Le modèle n'a pas répondu",
+          "modelError": "Erreur du modèle",
+          "noText": "Texte de la décision absent",
+          "runError": "Exécution interrompue",
+          "wrongType": "Réponse au mauvais format"
+        },
         "no": "Non",
         "notAllowed": "Non autorisé par les conditions de la source",
         "notRun": "Non exécuté",
+        "notStated": "Non précisé dans la décision",
         "pending": "Réponse en cours…",
         "showSource": "Afficher la source",
         "yes": "Oui"

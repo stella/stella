@@ -1,9 +1,12 @@
 import { Value } from "@sinclair/typebox/value";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH } from "@stll/api-contract";
-import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import type {
+  CaseLawResearchAnswerFailureReason,
+  CaseLawResearchColumnTool,
+} from "@stll/api-contract";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
@@ -23,6 +26,7 @@ import {
   fieldContentFromValidated,
   validateAnswerForContent,
 } from "@/api/lib/workflow/ai-validators";
+import type { ValidatedAnswer } from "@/api/lib/workflow/ai-validators";
 
 /**
  * What a question column asks for, and what a cell holds.
@@ -39,28 +43,6 @@ export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
   role: "fast",
 });
-
-/** Why a cell ended `failed`; a class, never the provider's wording. */
-export const RESEARCH_ANSWER_FAILURE_REASONS = [
-  "decision_unavailable",
-  "no_text",
-  "ai_unavailable",
-  "model_error",
-  "missing_answer",
-  "wrong_type",
-  /**
-   * The decision does not state the value, and the column's kind has no way to
-   * say so: a select answers null and a date answers null, but text and int
-   * have no "answered: absent" content, so the cell reports why it is empty
-   * instead of holding a fabricated one.
-   */
-  "not_stated",
-  /** The run itself failed before it could classify the cell. */
-  "run_error",
-] as const;
-
-export type ResearchAnswerFailureReason =
-  (typeof RESEARCH_ANSWER_FAILURE_REASONS)[number];
 
 export type ResearchQuestion = {
   columnId: string;
@@ -218,6 +200,34 @@ export const buildResearchAnswersSchema = (
   return v.strictObject(shape);
 };
 
+/**
+ * A validated answer as a cell's content, or null when the decision does not
+ * state it. Every kind has an empty value (a null, or an empty selection), and
+ * each one means the same `not_stated` cell rather than an answer holding
+ * nothing.
+ */
+export const statedAnswerContent = (
+  validated: ValidatedAnswer,
+): FieldContent | null => {
+  switch (validated.type) {
+    case "multi-select":
+      return validated.value.length === 0
+        ? null
+        : fieldContentFromValidated(validated);
+    case "text":
+    case "single-select":
+    case "date":
+    case "int":
+      return validated.value === null
+        ? null
+        : fieldContentFromValidated(validated);
+    default: {
+      validated satisfies never;
+      return panic(`Unhandled answer kind: ${String(validated)}`);
+    }
+  }
+};
+
 export type ParsedResearchAnswer = {
   columnId: string;
   outcome:
@@ -228,10 +238,15 @@ export type ParsedResearchAnswer = {
         anchorIds: string[];
       }
     | {
+        state: "not_stated";
+        rationale: string;
+        anchorIds: string[];
+      }
+    | {
         state: "failed";
         failureReason: Extract<
-          ResearchAnswerFailureReason,
-          "missing_answer" | "wrong_type" | "not_stated"
+          CaseLawResearchAnswerFailureReason,
+          "missing_answer" | "wrong_type"
         >;
       };
 };
@@ -253,10 +268,10 @@ const normalizeAnswer = (answer: Answer): Answer => {
 };
 
 /**
- * One outcome per question, whatever the model returned: a question the model
- * skipped, answered in the wrong shape, or could not answer from the text fails
- * by name instead of vanishing. Anchors are kept only when they were in the
- * prompt, and in prompt order.
+ * One outcome per question, whatever the model returned: a question the text
+ * does not settle is `not_stated`, one the model skipped or answered in the
+ * wrong shape fails by name instead of vanishing. Anchors are kept only when
+ * they were in the prompt, and in prompt order.
  */
 export const parseResearchAnswers = ({
   knownAnchorIds,
@@ -283,24 +298,18 @@ export const parseResearchAnswers = ({
         outcome: { state: "failed", failureReason: "wrong_type" },
       };
     }
-    const answer = fieldContentFromValidated(validated.value);
-    if (answer === null) {
-      return {
-        columnId,
-        outcome: { state: "failed", failureReason: "not_stated" },
-      };
-    }
     const cited = new Set(entry.anchorIds);
+    const rationale = entry.rationale
+      .trim()
+      .slice(0, LIMITS.caseLawResearchAnswerRationaleChars);
+    const anchorIds = anchorOrder.filter((anchorId) => cited.has(anchorId));
+    const answer = statedAnswerContent(validated.value);
     return {
       columnId,
-      outcome: {
-        state: "answered",
-        answer,
-        rationale: entry.rationale
-          .trim()
-          .slice(0, LIMITS.caseLawResearchAnswerRationaleChars),
-        anchorIds: anchorOrder.filter((anchorId) => cited.has(anchorId)),
-      },
+      outcome:
+        answer === null
+          ? { state: "not_stated", rationale, anchorIds }
+          : { state: "answered", answer, rationale, anchorIds },
     };
   });
 };

@@ -705,10 +705,18 @@
     "research": {
       "answering": "{count, plural, one {# cella megválaszolása…} other {# cella megválaszolása…}}",
       "answers": {
-        "failed": "Megválaszolatlan",
+        "failureReasons": {
+          "decisionUnavailable": "A határozat nem érhető el",
+          "missingAnswer": "A modell nem válaszolt",
+          "modelError": "Modellhiba",
+          "noText": "Nincs határozatszöveg",
+          "runError": "A futás megszakadt",
+          "wrongType": "Hibás formátumú válasz"
+        },
         "no": "Nem",
         "notAllowed": "A forrás feltételei nem engedik",
         "notRun": "Nem futott",
+        "notStated": "A határozat nem tartalmazza",
         "pending": "Válaszolás…",
         "showSource": "Forrás megjelenítése",
         "yes": "Igen"

@@ -20,18 +20,15 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import {
   buildAnswerJustification,
   selectPassagesWithinBudget,
+  statedAnswerContent,
 } from "@/api/lib/case-law/research-answers";
 import type {
   CaseLawResearchAnswerRun,
-  ResearchAnswerFailureReason,
   ResearchPassage,
   ResearchQuestion,
 } from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  fieldContentFromValidated,
-  validateAnswerForContent,
-} from "@/api/lib/workflow/ai-validators";
+import { validateAnswerForContent } from "@/api/lib/workflow/ai-validators";
 import {
   isSystemOneAnswerable,
   SYSTEM_ONE_SOURCE_BUDGET_CHARS,
@@ -94,10 +91,7 @@ export const systemOneSourcesFromPassages = (
 
 type SystemOneResearchOutcome =
   | { state: "answered"; answer: FieldContent; run: CaseLawResearchAnswerRun }
-  | {
-      state: "failed";
-      failureReason: Extract<ResearchAnswerFailureReason, "not_stated">;
-    };
+  | { state: "not_stated"; run: CaseLawResearchAnswerRun };
 
 type SystemOneColumnOutcome = {
   columnId: string;
@@ -105,7 +99,7 @@ type SystemOneColumnOutcome = {
 };
 
 export type SystemOneResolution = {
-  /** Cells the tier settled: an answer, or the kind's own "not stated". */
+  /** Cells the tier settled: an answer, or "not stated". */
   settled: SystemOneColumnOutcome[];
   /** Columns the generative model has to answer after all. */
   fallbackColumnIds: string[];
@@ -128,8 +122,7 @@ type ResolveSystemOneOutcomesOptions = {
 /**
  * One cell decision per question: written, said to be unstated, or handed on.
  * An answer becomes `FieldContent` through the same validators the generative
- * parser uses, so a select or a date that is not stated writes an answered
- * null cell while an int reports why it is empty.
+ * parser uses, and an empty one is `not_stated` whatever the column's kind.
  */
 export const resolveSystemOneOutcomes = ({
   excerptByAnchor,
@@ -159,35 +152,28 @@ export const resolveSystemOneOutcomes = ({
       fallbackColumnIds.push(question.id);
       continue;
     }
-    const answer = fieldContentFromValidated(validated.value);
-    if (answer === null) {
-      settled.push({
-        columnId: question.id,
-        outcome: { state: "failed", failureReason: "not_stated" },
-      });
-      continue;
-    }
     const sourceId = outcome.state === "answered" ? outcome.sourceId : null;
+    const cellRun: CaseLawResearchAnswerRun = {
+      version: 1,
+      model: run.model,
+      completedAt: run.completedAt,
+      retrieved: run.retrieved,
+      rationale: outcome.rationale.slice(
+        0,
+        LIMITS.caseLawResearchAnswerRationaleChars,
+      ),
+      justification: buildAnswerJustification(
+        sourceId === null ? [] : [sourceId],
+        excerptByAnchor,
+      ),
+    };
+    const answer = statedAnswerContent(validated.value);
     settled.push({
       columnId: question.id,
-      outcome: {
-        state: "answered",
-        answer,
-        run: {
-          version: 1,
-          model: run.model,
-          completedAt: run.completedAt,
-          retrieved: run.retrieved,
-          rationale: outcome.rationale.slice(
-            0,
-            LIMITS.caseLawResearchAnswerRationaleChars,
-          ),
-          justification: buildAnswerJustification(
-            sourceId === null ? [] : [sourceId],
-            excerptByAnchor,
-          ),
-        },
-      },
+      outcome:
+        answer === null
+          ? { state: "not_stated", run: cellRun }
+          : { state: "answered", answer, run: cellRun },
     });
   }
   return { settled, fallbackColumnIds };

@@ -708,10 +708,18 @@ type Messages = {
     "research": {
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
-        "failed": "Not answered";
+        "failureReasons": {
+          "decisionUnavailable": "Decision unavailable";
+          "missingAnswer": "Model gave no answer";
+          "modelError": "Model error";
+          "noText": "No decision text";
+          "runError": "Run interrupted";
+          "wrongType": "Answer in the wrong format";
+        };
         "no": "No";
         "notAllowed": "Not allowed by the source's terms";
         "notRun": "Not run";
+        "notStated": "Not stated in the decision";
         "pending": "Answering…";
         "showSource": "Show source";
         "yes": "Yes";

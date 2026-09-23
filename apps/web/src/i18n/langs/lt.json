@@ -705,10 +705,18 @@
     "research": {
       "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
       "answers": {
-        "failed": "Neatsakyta",
+        "failureReasons": {
+          "decisionUnavailable": "Sprendimas nepasiekiamas",
+          "missingAnswer": "Modelis neatsakė",
+          "modelError": "Modelio klaida",
+          "noText": "Nėra sprendimo teksto",
+          "runError": "Vykdymas nutrūko",
+          "wrongType": "Atsakymas netinkamo formato"
+        },
         "no": "Ne",
         "notAllowed": "Neleidžia šaltinio sąlygos",
         "notRun": "Nepaleista",
+        "notStated": "Sprendime nenurodyta",
         "pending": "Atsakoma…",
         "showSource": "Rodyti šaltinį",
         "yes": "Taip"

@@ -4,6 +4,7 @@ import {
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
 } from "@stll/api-contract";
 import type {
+  CaseLawResearchAnswerFailureReason,
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
 } from "@stll/api-contract";
@@ -84,6 +85,8 @@ export type QuestionAnswer = {
   stale: boolean;
   answer: WorkspaceFieldContent | null;
   run?: QuestionAnswerRun | null;
+  /** Why a `failed` cell failed; null in every other state. */
+  failureReason: CaseLawResearchAnswerFailureReason | null;
 };
 
 /** Stable empties: an organization with no questions hands out the same one. */
@@ -99,11 +102,14 @@ export const answerKey = (columnId: string, decisionId: string): string =>
  * what the queue applies, so the count the reader confirms is the count that
  * runs rather than a second opinion that drifts from it.
  */
-const needsRun = (answer: QuestionAnswer | undefined): boolean =>
+const needsRun = (
+  answer: QuestionAnswer | undefined,
+  force: boolean,
+): boolean =>
   answerNeedsRun(
     answer === undefined
-      ? { state: null, stale: false }
-      : { state: answer.state, stale: answer.stale },
+      ? { state: null, stale: false, force }
+      : { state: answer.state, stale: answer.stale, force },
   );
 
 type RunSetInput = {
@@ -162,10 +168,7 @@ export const questionRunSet = ({
   for (const decisionId of visible) {
     let missing = 0;
     for (const column of chosen) {
-      if (
-        force ||
-        needsRun(answersByKey.get(answerKey(column.id, decisionId)))
-      ) {
+      if (needsRun(answersByKey.get(answerKey(column.id, decisionId)), force)) {
         missing += 1;
       }
     }

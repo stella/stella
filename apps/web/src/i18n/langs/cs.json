@@ -705,10 +705,18 @@
     "research": {
       "answering": "{count, plural, one {Odpovídám na # buňku…} few {Odpovídám na # buňky…} many {Odpovídám na # buňky…} other {Odpovídám na # buněk…}}",
       "answers": {
-        "failed": "Nezodpovězeno",
+        "failureReasons": {
+          "decisionUnavailable": "Rozhodnutí není dostupné",
+          "missingAnswer": "Model neodpověděl",
+          "modelError": "Chyba modelu",
+          "noText": "Rozhodnutí nemá text",
+          "runError": "Zpracování se přerušilo",
+          "wrongType": "Odpověď v nesprávném formátu"
+        },
         "no": "Ne",
         "notAllowed": "Podmínky zdroje to nedovolují",
         "notRun": "Nespuštěno",
+        "notStated": "Rozhodnutí neuvádí",
         "pending": "Odpovídám…",
         "showSource": "Zobrazit zdroj",
         "yes": "Ano"
