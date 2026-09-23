@@ -3546,8 +3546,6 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
-              required: [],
-              additionalProperties: false,
               properties: {
                 template_id: {
                   type: "string",
@@ -3557,12 +3555,12 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
-                  minLength: 1,
-                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_templates call to fetch the next page",
+                  maxLength: 512,
                 },
               },
+              additionalProperties: false,
             },
           },
         },
@@ -3620,8 +3618,6 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
-              required: ["template_id", "values"],
-              additionalProperties: false,
               properties: {
                 template_id: {
                   type: "string",
@@ -3630,8 +3626,8 @@ export const generatedRouteMap: RouteNode = {
                 },
                 values: {
                   type: "object",
-                  additionalProperties: {},
                   description: "Map of field path to value.",
+                  additionalProperties: true,
                 },
                 allow_unused_values: {
                   type: "boolean",
@@ -3639,20 +3635,22 @@ export const generatedRouteMap: RouteNode = {
                     "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
                 },
                 completion_mode: {
-                  enum: ["require_complete", "allow_partial"],
                   type: "string",
+                  enum: ["require_complete", "allow_partial"],
                   description:
                     "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                   default: "require_complete",
                 },
                 output_mode: {
-                  enum: ["text", "docx"],
                   type: "string",
+                  enum: ["text", "docx"],
                   description:
                     "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
                   default: "text",
                 },
               },
+              required: ["template_id", "values"],
+              additionalProperties: false,
             },
           },
         },
@@ -3734,18 +3732,10 @@ export const generatedRouteMap: RouteNode = {
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
-                  required: [
-                    "action",
-                    "template_id",
-                    "matter_id",
-                    "idempotency_key",
-                    "values",
-                  ],
-                  additionalProperties: false,
                   properties: {
                     action: {
-                      enum: ["create_document", "create_version"],
                       type: "string",
+                      enum: ["create_document", "create_version"],
                       description: "Persistence destination",
                     },
                     template_id: {
@@ -3772,31 +3762,37 @@ export const generatedRouteMap: RouteNode = {
                     },
                     name: {
                       type: "string",
-                      minLength: 1,
-                      maxLength: 255,
                       description:
                         "Optional DOCX file name; defaults to the template file name",
+                      maxLength: 255,
                     },
                     idempotency_key: {
                       type: "string",
-                      minLength: 1,
-                      maxLength: 128,
                       description:
                         "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                      maxLength: 128,
                     },
                     values: {
                       type: "object",
-                      additionalProperties: {},
                       description: "Map of template field path to value",
+                      additionalProperties: true,
                     },
                     completion_mode: {
-                      enum: ["require_complete", "allow_partial"],
                       type: "string",
+                      enum: ["require_complete", "allow_partial"],
                       description:
                         "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                       default: "require_complete",
                     },
                   },
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
+                  additionalProperties: false,
                 },
               },
             },
@@ -3875,18 +3871,10 @@ export const generatedRouteMap: RouteNode = {
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
-                  required: [
-                    "action",
-                    "template_id",
-                    "matter_id",
-                    "idempotency_key",
-                    "values",
-                  ],
-                  additionalProperties: false,
                   properties: {
                     action: {
-                      enum: ["create_document", "create_version"],
                       type: "string",
+                      enum: ["create_document", "create_version"],
                       description: "Persistence destination",
                     },
                     template_id: {
@@ -3913,31 +3901,37 @@ export const generatedRouteMap: RouteNode = {
                     },
                     name: {
                       type: "string",
-                      minLength: 1,
-                      maxLength: 255,
                       description:
                         "Optional DOCX file name; defaults to the template file name",
+                      maxLength: 255,
                     },
                     idempotency_key: {
                       type: "string",
-                      minLength: 1,
-                      maxLength: 128,
                       description:
                         "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                      maxLength: 128,
                     },
                     values: {
                       type: "object",
-                      additionalProperties: {},
                       description: "Map of template field path to value",
+                      additionalProperties: true,
                     },
                     completion_mode: {
-                      enum: ["require_complete", "allow_partial"],
                       type: "string",
+                      enum: ["require_complete", "allow_partial"],
                       description:
                         "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                       default: "require_complete",
                     },
                   },
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
+                  additionalProperties: false,
                 },
               },
             },
@@ -7458,8 +7452,6 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: [],
-              additionalProperties: false,
               properties: {
                 domain: {
                   type: "string",
@@ -7467,26 +7459,23 @@ export const generatedRouteMap: RouteNode = {
                     'Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices").',
                 },
                 access: {
-                  enum: ["all", "read", "write"],
                   type: "string",
+                  enum: ["all", "read", "write"],
                   description: "Filter by access level.",
-                  default: "all",
                 },
                 cursor: {
                   type: "string",
-                  minLength: 1,
-                  maxLength: 512,
                   description:
                     "Opaque pagination cursor from a previous page; omit for the first page.",
                 },
                 limit: {
                   type: "integer",
+                  description: "Maximum capabilities to return.",
                   minimum: 1,
                   maximum: 100,
-                  description: "Maximum capabilities to return.",
-                  default: 25,
                 },
               },
+              additionalProperties: false,
             },
           },
         },
@@ -7516,16 +7505,15 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["capability"],
-              additionalProperties: false,
               properties: {
                 capability: {
                   type: "string",
-                  minLength: 1,
                   description:
                     'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
                 },
               },
+              required: ["capability"],
+              additionalProperties: false,
             },
           },
         },
@@ -7565,41 +7553,37 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["capability"],
-              additionalProperties: false,
               properties: {
                 capability: {
                   type: "string",
-                  minLength: 1,
                   description:
                     "Capability id to invoke, as returned by list_capabilities.",
                 },
                 input: {
                   type: "object",
+                  description:
+                    "The capability's input, split into the parts its schema declares.",
                   properties: {
                     body: {
                       type: "object",
-                      additionalProperties: {},
                       description:
                         "Request body fields, per the capability's body schema.",
+                      additionalProperties: true,
                     },
                     params: {
                       type: "object",
-                      additionalProperties: {},
                       description:
                         "Path parameters; matter-scoped capabilities require matterId here.",
+                      additionalProperties: true,
                     },
                     query: {
                       type: "object",
-                      additionalProperties: {},
                       description:
                         "Query parameters, per the capability's query schema.",
+                      additionalProperties: true,
                     },
                   },
-                  required: [],
                   additionalProperties: false,
-                  description:
-                    "The capability's input, split into the parts its schema declares.",
                 },
                 validate_only: {
                   type: "boolean",
@@ -7612,6 +7596,8 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
                 },
               },
+              required: ["capability"],
+              additionalProperties: false,
             },
           },
         },
@@ -8216,11 +8202,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "ingestion-get": {
+            "ingestion-status": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "case-law", "ingestion-get"],
-                capabilityId: "case-law.ingestion.get",
+                commandPath: ["capability", "case-law", "ingestion-status"],
+                capabilityId: "case-law.ingestion.status",
                 description:
                   "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
                 access: "read",
@@ -8506,11 +8492,11 @@ export const generatedRouteMap: RouteNode = {
         catalogue: {
           kind: "route",
           children: {
-            install: {
+            "install-skill": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "catalogue", "install"],
-                capabilityId: "catalogue.install",
+                commandPath: ["capability", "catalogue", "install-skill"],
+                capabilityId: "catalogue.install-skill",
                 description:
                   "Install one catalogue skill into the organization by slug, at team scope (the default) or private scope. Team scope requires admin or owner. The skill is stored as bundled content, so it cannot be edited afterwards. Refused when that slug is already installed at the same scope, or when the scope's skill limit is reached.",
                 access: "write",
@@ -8559,11 +8545,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            list: {
+            "list-catalogue": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "catalogue", "list"],
-                capabilityId: "catalogue.list",
+                commandPath: ["capability", "catalogue", "list-catalogue"],
+                capabilityId: "catalogue.list-catalogue",
                 description:
                   "List the tool catalogue for the signed-in user's organization: curated skills, MCP connectors, and native tools, plus the organization's own custom skills and custom MCP connectors as synthetic entries. Each entry reports its install state, whether it is enabled, whether it is locked (a baseline capability that cannot be toggled), whether it is recommended for the organization's practice jurisdictions, and the handles the uninstall paths need. The practice jurisdictions behind those recommendations are returned alongside.",
                 access: "read",
@@ -8583,6 +8569,71 @@ export const generatedRouteMap: RouteNode = {
         chat: {
           kind: "route",
           children: {
+            "delete-thread": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "chat", "delete-thread"],
+                capabilityId: "chat.delete-thread",
+                description:
+                  "Permanently delete one of your own chat threads with its messages and the files uploaded to it; the stored file objects are deleted, not just dereferenced. Succeeds silently when the thread does not exist or belongs to someone else.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--thread-id",
+                    prop: "threadId",
+                    required: true,
+                    part: "params",
+                    partPath: "threadId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "query",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "chat",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["threadId"],
+                      properties: {
+                        threadId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "export-create": {
               kind: "capability-leaf",
               spec: {
@@ -8802,13 +8853,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "messages-list": {
+            "get-messages": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "chat", "messages-list"],
-                capabilityId: "chat.messages.list",
+                commandPath: ["capability", "chat", "get-messages"],
+                capabilityId: "chat.get-messages",
                 description:
-                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass matterId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.older-messages.list.",
+                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass matterId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.get-older-messages.",
                 access: "read",
                 flags: [
                   {
@@ -8879,13 +8930,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "older-messages-list": {
+            "get-older-messages": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "chat", "older-messages-list"],
-                capabilityId: "chat.older-messages.list",
+                commandPath: ["capability", "chat", "get-older-messages"],
+                capabilityId: "chat.get-older-messages",
                 description:
-                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.messages.list carries. The thread must be yours and the matterId scope must match the one it was created in.",
+                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.get-messages carries. The thread must be yours and the matterId scope must match the one it was created in.",
                 access: "read",
                 flags: [
                   {
@@ -8957,76 +9008,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "threads-delete": {
+            "get-threads": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "chat", "threads-delete"],
-                capabilityId: "chat.threads.delete",
-                description:
-                  "Permanently delete one of your own chat threads with its messages and the files uploaded to it; the stored file objects are deleted, not just dereferenced. Succeeds silently when the thread does not exist or belongs to someone else.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--thread-id",
-                    prop: "threadId",
-                    required: true,
-                    part: "params",
-                    partPath: "threadId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: false,
-                    part: "query",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "chat",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["threadId"],
-                      properties: {
-                        threadId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "threads-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "chat", "threads-list"],
-                capabilityId: "chat.threads.list",
+                commandPath: ["capability", "chat", "get-threads"],
+                capabilityId: "chat.get-threads",
                 description:
                   "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. search matches the thread title or the matter name; paginate with limit and cursor.",
                 access: "read",
@@ -9075,11 +9061,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "threads-rename": {
+            "rename-thread": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "chat", "threads-rename"],
-                capabilityId: "chat.threads.rename",
+                commandPath: ["capability", "chat", "rename-thread"],
+                capabilityId: "chat.rename-thread",
                 description:
                   "Set the title of one of your own chat threads. The new title is marked as user-chosen, so automatic title generation can never overwrite it afterwards. A thread that does not exist in the requested scope is a 404: this never creates one.",
                 access: "write",
@@ -9160,13 +9146,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "threads-update": {
+            "update-thread": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "chat", "threads-update"],
-                capabilityId: "chat.threads.update",
+                commandPath: ["capability", "chat", "update-thread"],
+                capabilityId: "chat.update-thread",
                 description:
-                  "Turn web search on or off for one of your own chat threads. Unlike chat.threads.rename this is an upsert: when no thread exists under that id it is created as an empty placeholder carrying the flag, so a draft can record the setting before its first message is sent.",
+                  "Turn web search on or off for one of your own chat threads. Unlike chat.rename-thread this is an upsert: when no thread exists under that id it is created as an empty placeholder carrying the flag, so a draft can record the setting before its first message is sent.",
                 access: "write",
                 flags: [
                   {
@@ -9252,7 +9238,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "categories-create"],
-                capabilityId: "clauses.categories.create",
+                capabilityId: "clauses.categories-create",
                 description:
                   "Create a category in the organization's clause library taxonomy, optionally under a parent category. Refused once the organization holds its maximum number of categories, or when the named parent does not exist.",
                 access: "write",
@@ -9323,7 +9309,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "categories-delete"],
-                capabilityId: "clauses.categories.delete",
+                capabilityId: "clauses.categories-delete",
                 description:
                   "Delete one category from the organization's clause library taxonomy. No clause is deleted: clauses filed under the category become uncategorized, and its child categories are re-parented to its own parent.",
                 access: "write",
@@ -9367,7 +9353,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "categories-list"],
-                capabilityId: "clauses.categories.list",
+                capabilityId: "clauses.categories-list",
                 description:
                   "List the organization's clause categories in sort order, each with its id, parent, name, description, and sort order. The taxonomy is capped per organization and comes back whole; there is no pagination.",
                 access: "read",
@@ -9387,7 +9373,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "categories-update"],
-                capabilityId: "clauses.categories.update",
+                capabilityId: "clauses.categories-update",
                 description:
                   "Rename or re-describe one clause category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written. A category cannot become its own parent, and a move that would make the tree circular is refused.",
                 access: "write",
@@ -9750,7 +9736,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "clauses", "get"],
                 capabilityId: "clauses.get",
                 description:
-                  "Read one clause in full: its body, category, language, description, usage notes, metadata, and current version number, plus every variant in sort order and the list of its stored versions. Use clauses.versions.get for the body of a particular version.",
+                  "Read one clause in full: its body, category, language, description, usage notes, metadata, and current version number, plus every variant in sort order and the list of its stored versions. Use clauses.read-version for the body of a particular version.",
                 access: "read",
                 flags: [
                   {
@@ -9858,6 +9844,66 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 512,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-version": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "clauses", "read-version"],
+                capabilityId: "clauses.read-version",
+                description:
+                  "Read the stored body of one specific clause version, with its version number and creation time. Use clauses.get for the clause's current body and its version list, and clauses.versions-restore to bring an old version back into use.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--clause-id",
+                    prop: "clauseId",
+                    required: true,
+                    part: "params",
+                    partPath: "clauseId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["clauseId", "versionId"],
+                      properties: {
+                        clauseId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -10036,15 +10082,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "template-slots-preview": {
+            "template-slot-preview": {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "capability",
-                  "clauses",
-                  "template-slots-preview",
-                ],
-                capabilityId: "clauses.template-slots.preview",
+                commandPath: ["capability", "clauses", "template-slot-preview"],
+                capabilityId: "clauses.template-slot-preview",
                 description:
                   "Resolve one template's clause slots to the plain text of the clauses linked to them, keyed by slot name, using the same version and variant rules the fill path applies, so the preview matches the filled document. Slots that are unlinked, or whose target version cannot be resolved, are left out and keep their marker visible.",
                 access: "read",
@@ -10350,7 +10392,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "variants-create"],
-                capabilityId: "clauses.variants.create",
+                capabilityId: "clauses.variants-create",
                 description:
                   "Add a variant, an alternative wording of a clause carrying its own label, to one clause. Refused when the clause does not exist in this organization or already holds its maximum number of variants.",
                 access: "write",
@@ -10500,7 +10542,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "variants-delete"],
-                capabilityId: "clauses.variants.delete",
+                capabilityId: "clauses.variants-delete",
                 description:
                   "Permanently delete one variant (an alternative wording) of a clause, leaving the clause and its other variants in place. Templates that used the variant fall back to the clause itself and keep only a stale label snapshot of what was removed.",
                 access: "write",
@@ -10560,7 +10602,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "variants-list"],
-                capabilityId: "clauses.variants.list",
+                capabilityId: "clauses.variants-list",
                 description:
                   "List one clause's variants in sort order, each with its label, body, and position. A clause that does not belong to this organization is a 404.",
                 access: "read",
@@ -10604,7 +10646,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "variants-update"],
-                capabilityId: "clauses.variants.update",
+                capabilityId: "clauses.variants-update",
                 description:
                   "Change one variant's label, body, or position within its clause; only the fields you pass are written.",
                 access: "write",
@@ -10783,69 +10825,9 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "versions-diff"],
-                capabilityId: "clauses.versions.diff",
+                capabilityId: "clauses.versions-diff",
                 description:
                   "Return a plain-text, line-level diff between one stored clause version and the clause's current body. An empty segment list means the two are identical. This is what backs the what-changed disclosure shown on a template link pointing at an outdated version.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--clause-id",
-                    prop: "clauseId",
-                    required: true,
-                    part: "params",
-                    partPath: "clauseId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["clauseId", "versionId"],
-                      properties: {
-                        clauseId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "clauses", "versions-get"],
-                capabilityId: "clauses.versions.get",
-                description:
-                  "Read the stored body of one specific clause version, with its version number and creation time. Use clauses.get for the clause's current body and its version list, and clauses.versions.restore to bring an old version back into use.",
                 access: "read",
                 flags: [
                   {
@@ -10903,7 +10885,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "versions-restore"],
-                capabilityId: "clauses.versions.restore",
+                capabilityId: "clauses.versions-restore",
                 description:
                   "Restore a stored clause version by copying its body onto the clause as a new version. History is append-only: the older versions stay and the version number moves forward rather than back. The body is read server-side from the version id, never supplied by the caller. Refused when the clause is at its version limit.",
                 access: "write",
@@ -10963,9 +10945,9 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "clauses", "versions-summarize"],
-                capabilityId: "clauses.versions.summarize",
+                capabilityId: "clauses.versions-summarize",
                 description:
-                  "Summarize in prose what changed between one stored clause version and the clause's current body, over the same diff clauses.versions.diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
+                  "Summarize in prose what changed between one stored clause version and the clause's current body, over the same diff clauses.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -11032,7 +11014,7 @@ export const generatedRouteMap: RouteNode = {
                   "contacts",
                   "business-registries-lookup",
                 ],
-                capabilityId: "contacts.business-registries.lookup",
+                capabilityId: "contacts.business-registries-lookup",
                 description:
                   "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
                 access: "read",
@@ -13837,94 +13819,6 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "blank-document-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "entities",
-                  "blank-document-create",
-                ],
-                capabilityId: "entities.blank-document.create",
-                description:
-                  "Create a document in a matter whose file is a fresh empty DOCX built from the stella template, optionally inside a parent folder. Returns the entity, its file field, and the file name, so it can be opened in the editor straight away. Use entities.create for a document with no file at all.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--parent-id",
-                    prop: "parentId",
-                    required: false,
-                    part: "body",
-                    partPath: "parentId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["name"],
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                        parentId: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              minLength: 36,
-                              maxLength: 36,
-                              pattern:
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
             clip: {
               kind: "capability-leaf",
               spec: {
@@ -14051,11 +13945,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            copy: {
+            "copy-to-matter": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "copy"],
-                capabilityId: "entities.copy",
+                commandPath: ["capability", "entities", "copy-to-matter"],
+                capabilityId: "entities.copy-to-matter",
                 description:
                   "Copy a document or folder subtree into another matter, or move it with deleteSource, which permanently deletes the source documents and their no-longer-referenced files. A copy starts a new version history; a move carries the existing one across, so every printed reference keeps resolving. Fields whose property has no counterpart in the target matter are dropped rather than remapped, so a move can lose column values; read-only entities are refused.",
                 access: "write",
@@ -14193,7 +14087,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "create"],
                 capabilityId: "entities.create",
                 description:
-                  "Create an empty document, folder, or task in a matter (kind defaults to document) with a name and an optional parent folder. Nothing is attached: use entities.upload or the uploads flow to bring in a file, and entities.blank-document.create for a document that starts from an empty DOCX. Refused when the matter is at its entity limit or the parent is not a usable folder in this matter.",
+                  "Create an empty document, folder, or task in a matter (kind defaults to document) with a name and an optional parent folder. Nothing is attached: use entities.upload or the uploads flow to bring in a file, and entities.create-blank-document for a document that starts from an empty DOCX. Refused when the matter is at its entity limit or the parent is not a usable folder in this matter.",
                 access: "write",
                 flags: [
                   {
@@ -14296,13 +14190,178 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "create-blank-document": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "entities",
+                  "create-blank-document",
+                ],
+                capabilityId: "entities.create-blank-document",
+                description:
+                  "Create a document in a matter whose file is a fresh empty DOCX built from the stella template, optionally inside a parent folder. Returns the entity, its file field, and the file name, so it can be opened in the editor straight away. Use entities.create for a document with no file at all.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: false,
+                    part: "body",
+                    partPath: "parentId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        parentId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "create-from-legal-source": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "entities",
+                  "create-from-legal-source",
+                ],
+                capabilityId: "entities.create-from-legal-source",
+                description:
+                  "Compile a plain-text legal draft written in stella's legal-source markup into a DOCX and store it as a new document in the current matter. Returns the new entity and its file field plus a ready-made link and mention for chat. Refused with a structural-repair error when the source cannot be compiled, and when the generated file exceeds the document size limit or the matter is at its entity limit.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source",
+                    prop: "source",
+                    required: true,
+                    part: "body",
+                    partPath: "source",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name", "source"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        source: {
+                          minLength: 1,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             delete: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "entities", "delete"],
                 capabilityId: "entities.delete",
                 description:
-                  "Permanently delete documents, folders, or tasks from one matter, together with their versions, field values, and stored files. Refused while any of them is read-only or has a document-processing run in flight; unlike entities.versions.delete this is a real delete, not a tombstone.",
+                  "Permanently delete documents, folders, or tasks from one matter, together with their versions, field values, and stored files. Refused while any of them is read-only or has a document-processing run in flight; unlike entities.delete-version this is a real delete, not a tombstone.",
                 access: "write",
                 flags: [
                   {
@@ -14363,13 +14422,89 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "delete-version": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "delete-version"],
+                capabilityId: "entities.delete-version",
+                description:
+                  "Tombstone one version of a document: it disappears from listings, downloads, and restores, but the row and its stored file are retained for chain of custody. Deleting the current version promotes the next surviving one; the last remaining version, a read-only document, and a version still being processed are refused.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             duplicate: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "entities", "duplicate"],
                 capabilityId: "entities.duplicate",
                 description:
-                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy to copy into a different matter.",
+                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy-to-matter to copy into a different matter.",
                 access: "write",
                 flags: [
                   {
@@ -14456,766 +14591,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "files-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "files-list"],
-                capabilityId: "entities.files.list",
-                description:
-                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: true,
-                paginationPart: "query",
-                itemsKey: "items",
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        limit: {
-                          minimum: 1,
-                          maximum: 500,
-                          type: "integer",
-                        },
-                        cursor: {
-                          maxLength: 512,
-                          description:
-                            "Opaque cursor from a previous page to fetch the next page",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "filesystem-tree-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "filesystem-tree-get"],
-                capabilityId: "entities.filesystem-tree.get",
-                description:
-                  "Read a matter's folders and documents as one unpaginated tree, using the same filters, sorts, and search as the table listings; tasks are excluded. When a filter or search hides intermediate folders, their parent links come back separately as ancestorLinks, so a matched row's full path can still be resolved without those folders entering the tree itself.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--search",
-                    prop: "search",
-                    required: false,
-                    part: "body",
-                    partPath: "search",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--field-ids",
-                    prop: "fieldIds",
-                    required: false,
-                    part: "body",
-                    partPath: "fieldIds",
-                  },
-                ],
-                inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        filters: {
-                          maxItems: 32,
-                          type: "array",
-                          items: {
-                            anyOf: [
-                              {
-                                $ref: "#/$defs/s_81f0360286f1",
-                              },
-                              {
-                                $ref: "#/$defs/s_58ff7eb0d8f6",
-                              },
-                              {
-                                type: "object",
-                                required: ["type", "combinator", "children"],
-                                properties: {
-                                  type: {
-                                    const: "group",
-                                    type: "string",
-                                  },
-                                  combinator: {
-                                    default: "and",
-                                    type: "string",
-                                    enum: ["and", "or"],
-                                  },
-                                  negated: {
-                                    anyOf: [
-                                      {
-                                        type: "boolean",
-                                      },
-                                      {
-                                        type: "undefined",
-                                      },
-                                    ],
-                                  },
-                                  children: {
-                                    maxItems: 32,
-                                    type: "array",
-                                    items: {
-                                      anyOf: [
-                                        {
-                                          $ref: "#/$defs/s_81f0360286f1",
-                                        },
-                                        {
-                                          $ref: "#/$defs/s_58ff7eb0d8f6",
-                                        },
-                                        {
-                                          type: "object",
-                                          required: [
-                                            "type",
-                                            "combinator",
-                                            "children",
-                                          ],
-                                          properties: {
-                                            type: {
-                                              const: "group",
-                                              type: "string",
-                                            },
-                                            combinator: {
-                                              default: "and",
-                                              type: "string",
-                                              enum: ["and", "or"],
-                                            },
-                                            negated: {
-                                              anyOf: [
-                                                {
-                                                  type: "boolean",
-                                                },
-                                                {
-                                                  type: "undefined",
-                                                },
-                                              ],
-                                            },
-                                            children: {
-                                              maxItems: 32,
-                                              type: "array",
-                                              items: {
-                                                anyOf: [
-                                                  {
-                                                    $ref: "#/$defs/s_81f0360286f1",
-                                                  },
-                                                  {
-                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                  },
-                                                  {
-                                                    type: "object",
-                                                    required: [
-                                                      "type",
-                                                      "combinator",
-                                                      "children",
-                                                    ],
-                                                    properties: {
-                                                      type: {
-                                                        const: "group",
-                                                        type: "string",
-                                                      },
-                                                      combinator: {
-                                                        default: "and",
-                                                        type: "string",
-                                                        enum: ["and", "or"],
-                                                      },
-                                                      negated: {
-                                                        anyOf: [
-                                                          {
-                                                            type: "boolean",
-                                                          },
-                                                          {
-                                                            type: "undefined",
-                                                          },
-                                                        ],
-                                                      },
-                                                      children: {
-                                                        maxItems: 32,
-                                                        type: "array",
-                                                        items: {
-                                                          anyOf: [
-                                                            {
-                                                              $ref: "#/$defs/s_81f0360286f1",
-                                                            },
-                                                            {
-                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                            },
-                                                            {
-                                                              type: "object",
-                                                              required: [
-                                                                "type",
-                                                                "combinator",
-                                                                "children",
-                                                              ],
-                                                              properties: {
-                                                                type: {
-                                                                  const:
-                                                                    "group",
-                                                                  type: "string",
-                                                                },
-                                                                combinator: {
-                                                                  default:
-                                                                    "and",
-                                                                  type: "string",
-                                                                  enum: [
-                                                                    "and",
-                                                                    "or",
-                                                                  ],
-                                                                },
-                                                                negated: {
-                                                                  anyOf: [
-                                                                    {
-                                                                      type: "boolean",
-                                                                    },
-                                                                    {
-                                                                      type: "undefined",
-                                                                    },
-                                                                  ],
-                                                                },
-                                                                children: {
-                                                                  maxItems: 32,
-                                                                  type: "array",
-                                                                  items: {
-                                                                    anyOf: [
-                                                                      {
-                                                                        $ref: "#/$defs/s_81f0360286f1",
-                                                                      },
-                                                                      {
-                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                      },
-                                                                      {
-                                                                        type: "object",
-                                                                        required:
-                                                                          [
-                                                                            "type",
-                                                                            "combinator",
-                                                                            "children",
-                                                                          ],
-                                                                        properties:
-                                                                          {
-                                                                            type: {
-                                                                              const:
-                                                                                "group",
-                                                                              type: "string",
-                                                                            },
-                                                                            combinator:
-                                                                              {
-                                                                                default:
-                                                                                  "and",
-                                                                                type: "string",
-                                                                                enum: [
-                                                                                  "and",
-                                                                                  "or",
-                                                                                ],
-                                                                              },
-                                                                            negated:
-                                                                              {
-                                                                                anyOf:
-                                                                                  [
-                                                                                    {
-                                                                                      type: "boolean",
-                                                                                    },
-                                                                                    {
-                                                                                      type: "undefined",
-                                                                                    },
-                                                                                  ],
-                                                                              },
-                                                                            children:
-                                                                              {
-                                                                                maxItems: 32,
-                                                                                type: "array",
-                                                                                items:
-                                                                                  {
-                                                                                    anyOf:
-                                                                                      [
-                                                                                        {
-                                                                                          $ref: "#/$defs/s_81f0360286f1",
-                                                                                        },
-                                                                                        {
-                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                                        },
-                                                                                        {
-                                                                                          type: "object",
-                                                                                          required:
-                                                                                            [
-                                                                                              "type",
-                                                                                              "combinator",
-                                                                                              "children",
-                                                                                            ],
-                                                                                          properties:
-                                                                                            {
-                                                                                              type: {
-                                                                                                const:
-                                                                                                  "group",
-                                                                                                type: "string",
-                                                                                              },
-                                                                                              combinator:
-                                                                                                {
-                                                                                                  default:
-                                                                                                    "and",
-                                                                                                  type: "string",
-                                                                                                  enum: [
-                                                                                                    "and",
-                                                                                                    "or",
-                                                                                                  ],
-                                                                                                },
-                                                                                              negated:
-                                                                                                {
-                                                                                                  anyOf:
-                                                                                                    [
-                                                                                                      {
-                                                                                                        type: "boolean",
-                                                                                                      },
-                                                                                                      {
-                                                                                                        type: "undefined",
-                                                                                                      },
-                                                                                                    ],
-                                                                                                },
-                                                                                              children:
-                                                                                                {
-                                                                                                  maxItems: 32,
-                                                                                                  type: "array",
-                                                                                                  items:
-                                                                                                    {
-                                                                                                      anyOf:
-                                                                                                        [
-                                                                                                          {
-                                                                                                            $ref: "#/$defs/s_81f0360286f1",
-                                                                                                          },
-                                                                                                          {
-                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                                                          },
-                                                                                                        ],
-                                                                                                    },
-                                                                                                },
-                                                                                            },
-                                                                                        },
-                                                                                      ],
-                                                                                  },
-                                                                              },
-                                                                          },
-                                                                      },
-                                                                    ],
-                                                                  },
-                                                                },
-                                                              },
-                                                            },
-                                                          ],
-                                                        },
-                                                      },
-                                                    },
-                                                  },
-                                                ],
-                                              },
-                                            },
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                },
-                              },
-                            ],
-                          },
-                        },
-                        sorts: {
-                          maxItems: 8,
-                          type: "array",
-                          items: {
-                            additionalProperties: false,
-                            type: "object",
-                            required: ["propertyId", "desc"],
-                            properties: {
-                              propertyId: {
-                                minLength: 1,
-                                type: "string",
-                              },
-                              desc: {
-                                type: "boolean",
-                              },
-                            },
-                          },
-                        },
-                        search: {
-                          maxLength: 500,
-                          type: "string",
-                        },
-                        fieldMode: {
-                          anyOf: [
-                            {
-                              const: "full",
-                              type: "string",
-                            },
-                            {
-                              const: "visible",
-                              type: "string",
-                            },
-                          ],
-                        },
-                        fieldIds: {
-                          maxItems: 300,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                  $defs: {
-                    s_58ff7eb0d8f6: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    s_81f0360286f1: {
-                      type: "object",
-                      required: ["type", "left", "op", "right"],
-                      properties: {
-                        type: {
-                          const: "compare",
-                          type: "string",
-                        },
-                        left: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                        op: {
-                          default: "eq",
-                          type: "string",
-                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
-                        },
-                        right: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                      },
-                    },
-                    s_bbc23394f552: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          required: ["type", "propertyId"],
-                          properties: {
-                            type: {
-                              const: "property",
-                              type: "string",
-                            },
-                            propertyId: {
-                              minLength: 1,
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "field"],
-                          properties: {
-                            type: {
-                              const: "builtin",
-                              type: "string",
-                            },
-                            field: {
-                              default: "status",
-                              type: "string",
-                              enum: ["status", "priority", "agendaKind"],
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type"],
-                          properties: {
-                            type: {
-                              const: "kind",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "path"],
-                          properties: {
-                            type: {
-                              const: "path",
-                              type: "string",
-                            },
-                            path: {
-                              minLength: 1,
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "value"],
-                          properties: {
-                            type: {
-                              const: "literal",
-                              type: "string",
-                            },
-                            value: {
-                              anyOf: [
-                                {
-                                  type: "string",
-                                },
-                                {
-                                  type: "number",
-                                },
-                                {
-                                  type: "boolean",
-                                },
-                                {
-                                  type: "array",
-                                  items: {
-                                    type: "string",
-                                  },
-                                },
-                              ],
-                            },
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-            "folders-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "folders-list"],
-                capabilityId: "entities.folders.list",
-                description:
-                  "List the folders of a matter, oldest first with cursor pagination, each with its id, name, and parent folder. Documents and tasks are left out; use entities.filesystem-tree.get for the folder tree with the documents in it.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: true,
-                paginationPart: "query",
-                itemsKey: "items",
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        limit: {
-                          minimum: 1,
-                          maximum: 500,
-                          type: "integer",
-                        },
-                        cursor: {
-                          maxLength: 512,
-                          description:
-                            "Opaque cursor from a previous page to fetch the next page",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "from-legal-source-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "entities",
-                  "from-legal-source-create",
-                ],
-                capabilityId: "entities.from-legal-source.create",
-                description:
-                  "Compile a plain-text legal draft written in stella's legal-source markup into a DOCX and store it as a new document in the current matter. Returns the new entity and its file field plus a ready-made link and mention for chat. Refused with a structural-repair error when the source cannot be compiled, and when the generated file exceeds the document size limit or the matter is at its entity limit.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--source",
-                    prop: "source",
-                    required: true,
-                    part: "body",
-                    partPath: "source",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["name", "source"],
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                        source: {
-                          minLength: 1,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
             get: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "entities", "get"],
                 capabilityId: "entities.get",
                 description:
-                  "Read one document, folder, or task in a matter: its kind, name, current version id, creation time and document reference, that version's field values, and which field is the current text-extraction source. Use entities.versions.get to read a historical version, and entities.versions.list for the version list.",
+                  "Read one document, folder, or task in a matter: its kind, name, current version id, creation time and document reference, that version's field values, and which field is the current text-extraction source. Use entities.read-version-by-id to read a historical version, and entities.read-versions for the version list.",
                 access: "read",
                 flags: [
                   {
@@ -15277,7 +14659,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "list"],
                 capabilityId: "entities.list",
                 description:
-                  "List a matter's documents, folders, and tasks as table rows, using the same filters, sorts, and search the matter's views use, with cursor pagination. fieldMode and fieldIds choose which column values come back, excludedKinds drops kinds you do not want, and previewableForAi keeps only documents whose content a model can read. Use entities.filesystem-tree.get for the same query shaped as a folder tree, and entities.get to read one row in full.",
+                  "List a matter's documents, folders, and tasks as table rows, using the same filters, sorts, and search the matter's views use, with cursor pagination. fieldMode and fieldIds choose which column values come back, excludedKinds drops kinds you do not want, and previewableForAi keeps only documents whose content a model can read. Use entities.read-filesystem-tree for the same query shaped as a folder tree, and entities.get to read one row in full.",
                 access: "read",
                 flags: [
                   {
@@ -15882,6 +15264,122 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "list-files": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "list-files"],
+                capabilityId: "entities.list-files",
+                description:
+                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 500,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "list-folders": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "list-folders"],
+                capabilityId: "entities.list-folders",
+                description:
+                  "List the folders of a matter, oldest first with cursor pagination, each with its id, name, and parent folder. Documents and tasks are left out; use entities.read-filesystem-tree for the folder tree with the documents in it.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 500,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             move: {
               kind: "capability-leaf",
               spec: {
@@ -16050,11 +15548,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "placements-suggest": {
+            "organize-suggestions": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "placements-suggest"],
-                capabilityId: "entities.placements.suggest",
+                commandPath: ["capability", "entities", "organize-suggestions"],
+                capabilityId: "entities.organize-suggestions",
                 description:
                   "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
                 access: "write",
@@ -16179,89 +15677,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            rename: {
+            "read-filesystem-tree": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "rename"],
-                capabilityId: "entities.rename",
+                commandPath: ["capability", "entities", "read-filesystem-tree"],
+                capabilityId: "entities.read-filesystem-tree",
                 description:
-                  "Rename one document, folder, or task in a matter. For a document the stored file name is renamed to match, so the table's file column stays in step with the entity name. A read-only entity is refused.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "body",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["entityId", "name"],
-                      properties: {
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        name: {
-                          minLength: 1,
-                          maxLength: 255,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "summaries-count": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "summaries-count"],
-                capabilityId: "entities.summaries.count",
-                description:
-                  "Count all documents, folders, and tasks in a matter. The companion total for entities.summaries.list, whose pages carry no count of their own.",
+                  "Read a matter's folders and documents as one unpaginated tree, using the same filters, sorts, and search as the table listings; tasks are excluded. When a filter or search hides intermediate folders, their parent links come back separately as ancestorLinks, so a matched row's full path can still be resolved without those folders entering the tree itself.",
                 access: "read",
                 flags: [
                   {
@@ -16273,8 +15695,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "matterId",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--search",
+                    prop: "search",
+                    required: false,
+                    part: "body",
+                    partPath: "search",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--field-ids",
+                    prop: "fieldIds",
+                    required: false,
+                    part: "body",
+                    partPath: "fieldIds",
+                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -16282,6 +15722,355 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        filters: {
+                          maxItems: 32,
+                          type: "array",
+                          items: {
+                            anyOf: [
+                              {
+                                $ref: "#/$defs/s_81f0360286f1",
+                              },
+                              {
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
+                              },
+                              {
+                                type: "object",
+                                required: ["type", "combinator", "children"],
+                                properties: {
+                                  type: {
+                                    const: "group",
+                                    type: "string",
+                                  },
+                                  combinator: {
+                                    default: "and",
+                                    type: "string",
+                                    enum: ["and", "or"],
+                                  },
+                                  negated: {
+                                    anyOf: [
+                                      {
+                                        type: "boolean",
+                                      },
+                                      {
+                                        type: "undefined",
+                                      },
+                                    ],
+                                  },
+                                  children: {
+                                    maxItems: 32,
+                                    type: "array",
+                                    items: {
+                                      anyOf: [
+                                        {
+                                          $ref: "#/$defs/s_81f0360286f1",
+                                        },
+                                        {
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                        },
+                                        {
+                                          type: "object",
+                                          required: [
+                                            "type",
+                                            "combinator",
+                                            "children",
+                                          ],
+                                          properties: {
+                                            type: {
+                                              const: "group",
+                                              type: "string",
+                                            },
+                                            combinator: {
+                                              default: "and",
+                                              type: "string",
+                                              enum: ["and", "or"],
+                                            },
+                                            negated: {
+                                              anyOf: [
+                                                {
+                                                  type: "boolean",
+                                                },
+                                                {
+                                                  type: "undefined",
+                                                },
+                                              ],
+                                            },
+                                            children: {
+                                              maxItems: 32,
+                                              type: "array",
+                                              items: {
+                                                anyOf: [
+                                                  {
+                                                    $ref: "#/$defs/s_81f0360286f1",
+                                                  },
+                                                  {
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                  },
+                                                  {
+                                                    type: "object",
+                                                    required: [
+                                                      "type",
+                                                      "combinator",
+                                                      "children",
+                                                    ],
+                                                    properties: {
+                                                      type: {
+                                                        const: "group",
+                                                        type: "string",
+                                                      },
+                                                      combinator: {
+                                                        default: "and",
+                                                        type: "string",
+                                                        enum: ["and", "or"],
+                                                      },
+                                                      negated: {
+                                                        anyOf: [
+                                                          {
+                                                            type: "boolean",
+                                                          },
+                                                          {
+                                                            type: "undefined",
+                                                          },
+                                                        ],
+                                                      },
+                                                      children: {
+                                                        maxItems: 32,
+                                                        type: "array",
+                                                        items: {
+                                                          anyOf: [
+                                                            {
+                                                              $ref: "#/$defs/s_81f0360286f1",
+                                                            },
+                                                            {
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                            },
+                                                            {
+                                                              type: "object",
+                                                              required: [
+                                                                "type",
+                                                                "combinator",
+                                                                "children",
+                                                              ],
+                                                              properties: {
+                                                                type: {
+                                                                  const:
+                                                                    "group",
+                                                                  type: "string",
+                                                                },
+                                                                combinator: {
+                                                                  default:
+                                                                    "and",
+                                                                  type: "string",
+                                                                  enum: [
+                                                                    "and",
+                                                                    "or",
+                                                                  ],
+                                                                },
+                                                                negated: {
+                                                                  anyOf: [
+                                                                    {
+                                                                      type: "boolean",
+                                                                    },
+                                                                    {
+                                                                      type: "undefined",
+                                                                    },
+                                                                  ],
+                                                                },
+                                                                children: {
+                                                                  maxItems: 32,
+                                                                  type: "array",
+                                                                  items: {
+                                                                    anyOf: [
+                                                                      {
+                                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                                      },
+                                                                      {
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                      },
+                                                                      {
+                                                                        type: "object",
+                                                                        required:
+                                                                          [
+                                                                            "type",
+                                                                            "combinator",
+                                                                            "children",
+                                                                          ],
+                                                                        properties:
+                                                                          {
+                                                                            type: {
+                                                                              const:
+                                                                                "group",
+                                                                              type: "string",
+                                                                            },
+                                                                            combinator:
+                                                                              {
+                                                                                default:
+                                                                                  "and",
+                                                                                type: "string",
+                                                                                enum: [
+                                                                                  "and",
+                                                                                  "or",
+                                                                                ],
+                                                                              },
+                                                                            negated:
+                                                                              {
+                                                                                anyOf:
+                                                                                  [
+                                                                                    {
+                                                                                      type: "boolean",
+                                                                                    },
+                                                                                    {
+                                                                                      type: "undefined",
+                                                                                    },
+                                                                                  ],
+                                                                              },
+                                                                            children:
+                                                                              {
+                                                                                maxItems: 32,
+                                                                                type: "array",
+                                                                                items:
+                                                                                  {
+                                                                                    anyOf:
+                                                                                      [
+                                                                                        {
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
+                                                                                        },
+                                                                                        {
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                        },
+                                                                                        {
+                                                                                          type: "object",
+                                                                                          required:
+                                                                                            [
+                                                                                              "type",
+                                                                                              "combinator",
+                                                                                              "children",
+                                                                                            ],
+                                                                                          properties:
+                                                                                            {
+                                                                                              type: {
+                                                                                                const:
+                                                                                                  "group",
+                                                                                                type: "string",
+                                                                                              },
+                                                                                              combinator:
+                                                                                                {
+                                                                                                  default:
+                                                                                                    "and",
+                                                                                                  type: "string",
+                                                                                                  enum: [
+                                                                                                    "and",
+                                                                                                    "or",
+                                                                                                  ],
+                                                                                                },
+                                                                                              negated:
+                                                                                                {
+                                                                                                  anyOf:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        type: "boolean",
+                                                                                                      },
+                                                                                                      {
+                                                                                                        type: "undefined",
+                                                                                                      },
+                                                                                                    ],
+                                                                                                },
+                                                                                              children:
+                                                                                                {
+                                                                                                  maxItems: 32,
+                                                                                                  type: "array",
+                                                                                                  items:
+                                                                                                    {
+                                                                                                      anyOf:
+                                                                                                        [
+                                                                                                          {
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
+                                                                                                          },
+                                                                                                          {
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                          },
+                                                                                                        ],
+                                                                                                    },
+                                                                                                },
+                                                                                            },
+                                                                                        },
+                                                                                      ],
+                                                                                  },
+                                                                              },
+                                                                          },
+                                                                      },
+                                                                    ],
+                                                                  },
+                                                                },
+                                                              },
+                                                            },
+                                                          ],
+                                                        },
+                                                      },
+                                                    },
+                                                  },
+                                                ],
+                                              },
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        sorts: {
+                          maxItems: 8,
+                          type: "array",
+                          items: {
+                            additionalProperties: false,
+                            type: "object",
+                            required: ["propertyId", "desc"],
+                            properties: {
+                              propertyId: {
+                                minLength: 1,
+                                type: "string",
+                              },
+                              desc: {
+                                type: "boolean",
+                              },
+                            },
+                          },
+                        },
+                        search: {
+                          maxLength: 500,
+                          type: "string",
+                        },
+                        fieldMode: {
+                          anyOf: [
+                            {
+                              const: "full",
+                              type: "string",
+                            },
+                            {
+                              const: "visible",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        fieldIds: {
+                          maxItems: 300,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
                       properties: {
@@ -16291,21 +16080,170 @@ export const generatedRouteMap: RouteNode = {
                       },
                       required: ["matterId"],
                     },
-                    query: {
+                  },
+                  $defs: {
+                    s_58ff7eb0d8f6: {
                       type: "object",
-                      properties: {},
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type", "propertyId"],
+                          properties: {
+                            type: {
+                              const: "property",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "field"],
+                          properties: {
+                            type: {
+                              const: "builtin",
+                              type: "string",
+                            },
+                            field: {
+                              default: "status",
+                              type: "string",
+                              enum: ["status", "priority", "agendaKind"],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "kind",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "path"],
+                          properties: {
+                            type: {
+                              const: "path",
+                              type: "string",
+                            },
+                            path: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "value"],
+                          properties: {
+                            type: {
+                              const: "literal",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "number",
+                                },
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
                     },
                   },
                 },
               },
             },
-            "summaries-list": {
+            "read-summaries": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "summaries-list"],
-                capabilityId: "entities.summaries.list",
+                commandPath: ["capability", "entities", "read-summaries"],
+                capabilityId: "entities.read-summaries",
                 description:
-                  "List a matter's documents, folders, and tasks as bare id and name pairs, newest first with cursor pagination. The cheapest listing available: no column values, no file metadata, no filters. Use entities.summaries.count for the total and entities.list when you need column values or filtering.",
+                  "List a matter's documents, folders, and tasks as bare id and name pairs, newest first with cursor pagination. The cheapest listing available: no column values, no file metadata, no filters. Use entities.read-summaries-count for the total and entities.list when you need column values or filtering.",
                 access: "read",
                 flags: [
                   {
@@ -16357,195 +16295,57 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "versions-delete": {
+            "read-summaries-count": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "versions-delete"],
-                capabilityId: "entities.versions.delete",
+                commandPath: ["capability", "entities", "read-summaries-count"],
+                capabilityId: "entities.read-summaries-count",
                 description:
-                  "Tombstone one version of a document: it disappears from listings, downloads, and restores, but the row and its stored file are retained for chain of custody. Deleting the current version promotes the next surviving one; the last remaining version, a read-only document, and a version still being processed are refused.",
-                access: "write",
+                  "Count all documents, folders, and tasks in a matter. The companion total for entities.read-summaries, whose pages carry no count of their own.",
+                access: "read",
                 flags: [
                   {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
+                    kind: "string",
                     required: true,
+                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId", "versionId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-description-update": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "entities",
-                  "versions-description-update",
-                ],
-                capabilityId: "entities.versions.description.update",
-                description:
-                  "Set or clear the free-text description on one version of a document, up to 1024 characters. An annotation only: no file and no field value changes. A version tombstoned by entities.versions.delete is refused. Use entities.versions.label.update for the short label instead.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--description",
-                    prop: "description",
-                    required: true,
-                    part: "body",
-                    partPath: "description",
                   },
                 ],
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "documents_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
-                    body: {
-                      type: "object",
-                      required: ["description"],
-                      properties: {
-                        description: {
-                          anyOf: [
-                            {
-                              maxLength: 1024,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
                     params: {
                       type: "object",
-                      required: ["matterId", "entityId", "versionId"],
                       properties: {
                         matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {},
                     },
                   },
                 },
               },
             },
-            "versions-diff": {
+            "read-version-by-id": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "versions-diff"],
-                capabilityId: "entities.versions.diff",
+                commandPath: ["capability", "entities", "read-version-by-id"],
+                capabilityId: "entities.read-version-by-id",
                 description:
-                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use documents.compare for a DOCX redline between versions you choose.",
+                  "Read one specific version of a document in a matter: its version number, stamp, creation time, and the field values stored on that version. A version tombstoned by entities.delete-version reads as not found. Use entities.get for the current version.",
                 access: "read",
                 flags: [
                   {
@@ -16615,193 +16415,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "versions-get": {
+            "read-versions": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "versions-get"],
-                capabilityId: "entities.versions.get",
-                description:
-                  "Read one specific version of a document in a matter: its version number, stamp, creation time, and the field values stored on that version. A version tombstoned by entities.versions.delete reads as not found. Use entities.get for the current version.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId", "versionId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-label-update": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "entities",
-                  "versions-label-update",
-                ],
-                capabilityId: "entities.versions.label.update",
-                description:
-                  "Set or clear the short label on one version of a document, up to 128 characters, for marking a version as a draft, an execution copy, and so on. An annotation only, like entities.versions.description.update, which carries the longer note. A tombstoned version is refused.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--label",
-                    prop: "label",
-                    required: true,
-                    part: "body",
-                    partPath: "label",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["label"],
-                      properties: {
-                        label: {
-                          anyOf: [
-                            {
-                              maxLength: 128,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId", "versionId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "versions-list"],
-                capabilityId: "entities.versions.list",
+                commandPath: ["capability", "entities", "read-versions"],
+                capabilityId: "entities.read-versions",
                 description:
                   "List one document's version history, newest first, with a before cursor for older pages. Each version carries its number, stamp, label, description, the words added and removed against its predecessor, its author, and the file attached to it; tombstoned versions are left out. The response also names the entity's current version.",
                 access: "read",
@@ -16890,163 +16508,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "versions-restore": {
+            "read-window": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "versions-restore"],
-                capabilityId: "entities.versions.restore",
-                description:
-                  "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId", "versionId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-summarize": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "versions-summarize"],
-                capabilityId: "entities.versions.summarize",
-                description:
-                  "Summarize in prose what changed between one document version and its predecessor, over the same server-resolved text diff entities.versions.diff returns. Returns summary null for identical versions, skipping the model call entirely. Consumes AI usage.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--version-id",
-                    prop: "versionId",
-                    required: true,
-                    part: "params",
-                    partPath: "versionId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId", "versionId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        versionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "window-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "window-list"],
-                capabilityId: "entities.window.list",
+                commandPath: ["capability", "entities", "read-window"],
+                capabilityId: "entities.read-window",
                 description:
                   "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, plus the find filter, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
                 access: "read",
@@ -17716,6 +17182,518 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            rename: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "rename"],
+                capabilityId: "entities.rename",
+                description:
+                  "Rename one document, folder, or task in a matter. For a document the stored file name is renamed to match, so the table's file column stays in step with the entity name. A read-only entity is refused.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityId", "name"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 255,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "restore-version": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "restore-version"],
+                capabilityId: "entities.restore-version",
+                description:
+                  "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "update-version-description": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "entities",
+                  "update-version-description",
+                ],
+                capabilityId: "entities.update-version-description",
+                description:
+                  "Set or clear the free-text description on one version of a document, up to 1024 characters. An annotation only: no file and no field value changes. A version tombstoned by entities.delete-version is refused. Use entities.update-version-label for the short label instead.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: true,
+                    part: "body",
+                    partPath: "description",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["description"],
+                      properties: {
+                        description: {
+                          anyOf: [
+                            {
+                              maxLength: 1024,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "update-version-label": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "update-version-label"],
+                capabilityId: "entities.update-version-label",
+                description:
+                  "Set or clear the short label on one version of a document, up to 128 characters, for marking a version as a draft, an execution copy, and so on. An annotation only, like entities.update-version-description, which carries the longer note. A tombstoned version is refused.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--label",
+                    prop: "label",
+                    required: true,
+                    part: "body",
+                    partPath: "label",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["label"],
+                      properties: {
+                        label: {
+                          anyOf: [
+                            {
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "version-diff": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "version-diff"],
+                capabilityId: "entities.version-diff",
+                description:
+                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use documents.compare for a DOCX redline between versions you choose.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "version-summarize": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "version-summarize"],
+                capabilityId: "entities.version-summarize",
+                description:
+                  "Summarize in prose what changed between one document version and its predecessor, over the same server-resolved text diff entities.version-diff returns. Returns summary null for identical versions, skipping the model call entirely. Consumes AI usage.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--version-id",
+                    prop: "versionId",
+                    required: true,
+                    part: "params",
+                    partPath: "versionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entityId", "versionId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        versionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         "entity-views": {
@@ -18071,6 +18049,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },
@@ -19825,6 +19854,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                               },
                             },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
                           ],
                         },
                       },
@@ -21034,13 +21114,17 @@ export const generatedRouteMap: RouteNode = {
         fields: {
           kind: "route",
           children: {
-            "cell-metadata-update": {
+            "kanban-placement-update": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "fields", "cell-metadata-update"],
-                capabilityId: "fields.cell-metadata.update",
+                commandPath: [
+                  "capability",
+                  "fields",
+                  "kanban-placement-update",
+                ],
+                capabilityId: "fields.kanban-placement.update",
                 description:
-                  "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. Use fields.upsert to change the cell's value itself, and fields.column-flag.update to flag a whole column at once.",
+                  "Move one entity across writable Kanban axes in one transaction. The request may change a task status, up to two property values, or both.",
                 access: "write",
                 flags: [
                   {
@@ -21055,15 +21139,6 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--property-id",
-                    prop: "propertyId",
-                    required: true,
-                    part: "body",
-                    partPath: "propertyId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--entity-id",
                     prop: "entityId",
                     required: true,
@@ -21071,66 +21146,27 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "entityId",
                   },
                   {
-                    kind: "enum-array",
-                    enum: [
-                      "needs-review",
-                      "important",
-                      "follow-up",
-                      "contradiction",
-                      "verified",
-                    ],
-                    repeatable: true,
-                    flag: "--base-manual-flags",
-                    prop: "baseManualFlags",
-                    required: false,
-                    part: "body",
-                    partPath: "baseManualFlags",
-                  },
-                  {
-                    kind: "enum-array",
-                    enum: [
-                      "needs-review",
-                      "important",
-                      "follow-up",
-                      "contradiction",
-                      "verified",
-                    ],
-                    repeatable: true,
-                    flag: "--manual-flags",
-                    prop: "manualFlags",
-                    required: true,
-                    part: "body",
-                    partPath: "manualFlags",
-                  },
-                  {
-                    kind: "boolean",
+                    kind: "string",
                     repeatable: false,
-                    flag: "--locked",
-                    prop: "locked",
+                    flag: "--status",
+                    prop: "status",
                     required: false,
                     part: "body",
-                    partPath: "locked",
+                    partPath: "status",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.fields"],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "documents_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
                     body: {
                       type: "object",
-                      required: ["propertyId", "entityId", "manualFlags"],
+                      required: ["entityId", "fields"],
                       properties: {
-                        propertyId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
                         entityId: {
                           minLength: 36,
                           maxLength: 36,
@@ -21138,38 +21174,322 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        baseManualFlags: {
-                          maxItems: 5,
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                        fields: {
+                          maxItems: 2,
                           type: "array",
                           items: {
-                            default: "needs-review",
-                            type: "string",
-                            enum: [
-                              "needs-review",
-                              "important",
-                              "follow-up",
-                              "contradiction",
-                              "verified",
-                            ],
+                            type: "object",
+                            required: ["propertyId", "content"],
+                            properties: {
+                              propertyId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              content: {
+                                description:
+                                  "The value to set; 'type' must match the property.",
+                                anyOf: [
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "text",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "single-select",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "multi-select",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        type: "array",
+                                        items: {
+                                          minLength: 1,
+                                          type: "string",
+                                        },
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "date",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            format: "date",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "value",
+                                      "currency",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "int",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        type: "integer",
+                                      },
+                                      currency: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 3,
+                                            maxLength: 3,
+                                            pattern: "^[A-Za-z]{3}$",
+                                            description:
+                                              "For int values only: 3-letter ISO currency code, or null",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "amountCents",
+                                      "currency",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "money",
+                                        type: "string",
+                                      },
+                                      amountCents: {
+                                        description:
+                                          "Amount in the currency's minor units",
+                                        type: "integer",
+                                      },
+                                      currency: {
+                                        minLength: 3,
+                                        maxLength: 3,
+                                        pattern: "^[A-Za-z]{3}$",
+                                        description:
+                                          "3-letter ISO currency code",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "userId",
+                                      "name",
+                                      "image",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Empty person sentinel that clears the property value",
+                                        const: "person",
+                                        type: "string",
+                                      },
+                                      userId: {
+                                        type: "null",
+                                      },
+                                      name: {
+                                        const: "",
+                                        type: "string",
+                                      },
+                                      image: {
+                                        type: "null",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "userId",
+                                      "name",
+                                      "image",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "person",
+                                        type: "string",
+                                      },
+                                      userId: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 1,
+                                            maxLength: 128,
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                      name: {
+                                        minLength: 1,
+                                        maxLength: 256,
+                                        type: "string",
+                                      },
+                                      image: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            maxLength: 2048,
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "url"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "clip",
+                                        type: "string",
+                                      },
+                                      url: {
+                                        maxLength: 2048,
+                                        type: "string",
+                                      },
+                                      snippet: {
+                                        maxLength: 10000,
+                                        type: "string",
+                                      },
+                                      citation: {
+                                        maxLength: 1000,
+                                        type: "string",
+                                      },
+                                      jurisdiction: {
+                                        maxLength: 128,
+                                        type: "string",
+                                      },
+                                      sourceType: {
+                                        maxLength: 64,
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            },
                           },
-                        },
-                        manualFlags: {
-                          maxItems: 5,
-                          type: "array",
-                          items: {
-                            default: "needs-review",
-                            type: "string",
-                            enum: [
-                              "needs-review",
-                              "important",
-                              "follow-up",
-                              "contradiction",
-                              "verified",
-                            ],
-                          },
-                        },
-                        locked: {
-                          type: "boolean",
                         },
                       },
                     },
@@ -21186,11 +21506,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "column-flag-update": {
+            "mark-column-flag": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "fields", "column-flag-update"],
-                capabilityId: "fields.column-flag.update",
+                commandPath: ["capability", "fields", "mark-column-flag"],
+                capabilityId: "fields.mark-column-flag",
                 description:
                   "Set or clear the verified or locked flag on one column's cells across every document a filter selects in a matter, working in batches until the whole selection is covered. Folders and tasks are never touched. Returns how many cells changed plus an addedAt stamp: pass that stamp back as onlyAddedAt with set false to undo exactly this mark and leave flags from other marks alone. Pass groupByPropertyId and groupValue to restrict the batch to one group of a grouped view.",
                 access: "write",
@@ -21795,17 +22115,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "kanban-placement-update": {
+            "update-cell-metadata": {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "capability",
-                  "fields",
-                  "kanban-placement-update",
-                ],
-                capabilityId: "fields.kanban-placement.update",
+                commandPath: ["capability", "fields", "update-cell-metadata"],
+                capabilityId: "fields.update-cell-metadata",
                 description:
-                  "Move one entity across writable Kanban axes in one transaction. The request may change a task status, up to two property values, or both.",
+                  "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. Use fields.upsert-by-id to change the cell's value itself, and fields.mark-column-flag to flag a whole column at once.",
                 access: "write",
                 flags: [
                   {
@@ -21820,6 +22136,15 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    flag: "--property-id",
+                    prop: "propertyId",
+                    required: true,
+                    part: "body",
+                    partPath: "propertyId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--entity-id",
                     prop: "entityId",
                     required: true,
@@ -21827,27 +22152,66 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "entityId",
                   },
                   {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--status",
-                    prop: "status",
+                    kind: "enum-array",
+                    enum: [
+                      "needs-review",
+                      "important",
+                      "follow-up",
+                      "contradiction",
+                      "verified",
+                    ],
+                    repeatable: true,
+                    flag: "--base-manual-flags",
+                    prop: "baseManualFlags",
                     required: false,
                     part: "body",
-                    partPath: "status",
+                    partPath: "baseManualFlags",
+                  },
+                  {
+                    kind: "enum-array",
+                    enum: [
+                      "needs-review",
+                      "important",
+                      "follow-up",
+                      "contradiction",
+                      "verified",
+                    ],
+                    repeatable: true,
+                    flag: "--manual-flags",
+                    prop: "manualFlags",
+                    required: true,
+                    part: "body",
+                    partPath: "manualFlags",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--locked",
+                    prop: "locked",
+                    required: false,
+                    part: "body",
+                    partPath: "locked",
                   },
                 ],
-                inputOnly: ["body.fields"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "documents_write",
+                scope: "matters_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
                     body: {
                       type: "object",
-                      required: ["entityId", "fields"],
+                      required: ["propertyId", "entityId", "manualFlags"],
                       properties: {
+                        propertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
                         entityId: {
                           minLength: 36,
                           maxLength: 36,
@@ -21855,322 +22219,38 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        status: {
-                          minLength: 1,
-                          maxLength: 32,
-                          type: "string",
-                        },
-                        fields: {
-                          maxItems: 2,
+                        baseManualFlags: {
+                          maxItems: 5,
                           type: "array",
                           items: {
-                            type: "object",
-                            required: ["propertyId", "content"],
-                            properties: {
-                              propertyId: {
-                                minLength: 36,
-                                maxLength: 36,
-                                pattern:
-                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                                type: "string",
-                              },
-                              content: {
-                                description:
-                                  "The value to set; 'type' must match the property.",
-                                anyOf: [
-                                  {
-                                    type: "object",
-                                    required: ["version", "type", "value"],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "text",
-                                        type: "string",
-                                      },
-                                      value: {
-                                        type: "string",
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: ["version", "type", "value"],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "single-select",
-                                        type: "string",
-                                      },
-                                      value: {
-                                        nullable: true,
-                                        anyOf: [
-                                          {
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "null",
-                                          },
-                                        ],
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: ["version", "type", "value"],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "multi-select",
-                                        type: "string",
-                                      },
-                                      value: {
-                                        type: "array",
-                                        items: {
-                                          minLength: 1,
-                                          type: "string",
-                                        },
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: ["version", "type", "value"],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "date",
-                                        type: "string",
-                                      },
-                                      value: {
-                                        nullable: true,
-                                        anyOf: [
-                                          {
-                                            format: "date",
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "null",
-                                          },
-                                        ],
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "version",
-                                      "type",
-                                      "value",
-                                      "currency",
-                                    ],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "int",
-                                        type: "string",
-                                      },
-                                      value: {
-                                        type: "integer",
-                                      },
-                                      currency: {
-                                        nullable: true,
-                                        anyOf: [
-                                          {
-                                            minLength: 3,
-                                            maxLength: 3,
-                                            pattern: "^[A-Za-z]{3}$",
-                                            description:
-                                              "For int values only: 3-letter ISO currency code, or null",
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "null",
-                                          },
-                                        ],
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "version",
-                                      "type",
-                                      "amountCents",
-                                      "currency",
-                                    ],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "money",
-                                        type: "string",
-                                      },
-                                      amountCents: {
-                                        description:
-                                          "Amount in the currency's minor units",
-                                        type: "integer",
-                                      },
-                                      currency: {
-                                        minLength: 3,
-                                        maxLength: 3,
-                                        pattern: "^[A-Za-z]{3}$",
-                                        description:
-                                          "3-letter ISO currency code",
-                                        type: "string",
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "version",
-                                      "type",
-                                      "userId",
-                                      "name",
-                                      "image",
-                                    ],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Empty person sentinel that clears the property value",
-                                        const: "person",
-                                        type: "string",
-                                      },
-                                      userId: {
-                                        type: "null",
-                                      },
-                                      name: {
-                                        const: "",
-                                        type: "string",
-                                      },
-                                      image: {
-                                        type: "null",
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "version",
-                                      "type",
-                                      "userId",
-                                      "name",
-                                      "image",
-                                    ],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        description:
-                                          "Value type; must match the property's value type",
-                                        const: "person",
-                                        type: "string",
-                                      },
-                                      userId: {
-                                        nullable: true,
-                                        anyOf: [
-                                          {
-                                            minLength: 1,
-                                            maxLength: 128,
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "null",
-                                          },
-                                        ],
-                                      },
-                                      name: {
-                                        minLength: 1,
-                                        maxLength: 256,
-                                        type: "string",
-                                      },
-                                      image: {
-                                        nullable: true,
-                                        anyOf: [
-                                          {
-                                            maxLength: 2048,
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "null",
-                                          },
-                                        ],
-                                      },
-                                    },
-                                  },
-                                  {
-                                    type: "object",
-                                    required: ["version", "type", "url"],
-                                    properties: {
-                                      version: {
-                                        const: 1,
-                                        type: "number",
-                                      },
-                                      type: {
-                                        const: "clip",
-                                        type: "string",
-                                      },
-                                      url: {
-                                        maxLength: 2048,
-                                        type: "string",
-                                      },
-                                      snippet: {
-                                        maxLength: 10000,
-                                        type: "string",
-                                      },
-                                      citation: {
-                                        maxLength: 1000,
-                                        type: "string",
-                                      },
-                                      jurisdiction: {
-                                        maxLength: 128,
-                                        type: "string",
-                                      },
-                                      sourceType: {
-                                        maxLength: 64,
-                                        type: "string",
-                                      },
-                                    },
-                                  },
-                                ],
-                              },
-                            },
+                            default: "needs-review",
+                            type: "string",
+                            enum: [
+                              "needs-review",
+                              "important",
+                              "follow-up",
+                              "contradiction",
+                              "verified",
+                            ],
                           },
+                        },
+                        manualFlags: {
+                          maxItems: 5,
+                          type: "array",
+                          items: {
+                            default: "needs-review",
+                            type: "string",
+                            enum: [
+                              "needs-review",
+                              "important",
+                              "follow-up",
+                              "contradiction",
+                              "verified",
+                            ],
+                          },
+                        },
+                        locked: {
+                          type: "boolean",
                         },
                       },
                     },
@@ -22187,11 +22267,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            upsert: {
+            "upsert-by-id": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "fields", "upsert"],
-                capabilityId: "fields.upsert",
+                commandPath: ["capability", "fields", "upsert-by-id"],
+                capabilityId: "fields.upsert-by-id",
                 description:
                   "Set a document's value for a property (a cell in the matter's table). Pass the document entityId, the propertyId (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
                 access: "write",
@@ -22874,7 +22954,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "flows", "get"],
                 capabilityId: "flows.get",
                 description:
-                  "Read one flow definition: its name, description, steps, trigger, and enabled flag. Use flows.list to browse the organization's flows and flows.runs.get to read a run of one.",
+                  "Read one flow definition: its name, description, steps, trigger, and enabled flag. Use flows.list to browse the organization's flows and flows.run-detail to read a run of one.",
                 access: "read",
                 flags: [
                   {
@@ -22951,11 +23031,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "runs-cancel": {
+            "run-cancel": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "flows", "runs-cancel"],
-                capabilityId: "flows.runs.cancel",
+                commandPath: ["capability", "flows", "run-cancel"],
+                capabilityId: "flows.run-cancel",
                 description:
                   "Cancel a flow run that is still in progress in a matter, returning the run id and the status it settled on. Work already committed by steps that finished is not undone.",
                 access: "write",
@@ -23011,11 +23091,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "runs-get": {
+            "run-detail": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "flows", "runs-get"],
-                capabilityId: "flows.runs.get",
+                commandPath: ["capability", "flows", "run-detail"],
+                capabilityId: "flows.run-detail",
                 description:
                   "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
                 access: "read",
@@ -23071,11 +23151,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "runs-list": {
+            "run-list": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "flows", "runs-list"],
-                capabilityId: "flows.runs.list",
+                commandPath: ["capability", "flows", "run-list"],
+                capabilityId: "flows.run-list",
                 description:
                   "List flow runs in a matter, including lifecycle state and pagination metadata.",
                 access: "read",
@@ -23161,11 +23241,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "runs-review": {
+            "run-review": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "flows", "runs-review"],
-                capabilityId: "flows.runs.review",
+                commandPath: ["capability", "flows", "run-review"],
+                capabilityId: "flows.run-review",
                 description:
                   "Resolve a flow run waiting at a review gate: pass decision approved or rejected, with an optional note. The run continues or stops accordingly, and its id and new status come back.",
                 access: "write",
@@ -23262,11 +23342,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "runs-start": {
+            "run-start": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "flows", "runs-start"],
-                capabilityId: "flows.runs.start",
+                commandPath: ["capability", "flows", "run-start"],
+                capabilityId: "flows.run-start",
                 description:
                   "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
                 access: "write",
@@ -23644,13 +23724,120 @@ export const generatedRouteMap: RouteNode = {
         invoices: {
           kind: "route",
           children: {
+            "add-entries": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "invoices", "add-entries"],
+                capabilityId: "invoices.add-entries",
+                description:
+                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice, marking them billed and recomputing the invoice total. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--invoice-id",
+                    prop: "invoiceId",
+                    required: true,
+                    part: "params",
+                    partPath: "invoiceId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--time-entry-ids",
+                    prop: "timeEntryIds",
+                    required: false,
+                    part: "body",
+                    partPath: "timeEntryIds",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--expense-ids",
+                    prop: "expenseIds",
+                    required: false,
+                    part: "body",
+                    partPath: "expenseIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        timeEntryIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        expenseIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "invoiceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             create: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
                 description:
-                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.entries.add.",
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.add-entries.",
                 access: "write",
                 flags: [
                   {
@@ -23881,220 +24068,6 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "entries-add": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "invoices", "entries-add"],
-                capabilityId: "invoices.entries.add",
-                description:
-                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice, marking them billed and recomputing the invoice total. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--invoice-id",
-                    prop: "invoiceId",
-                    required: true,
-                    part: "params",
-                    partPath: "invoiceId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--time-entry-ids",
-                    prop: "timeEntryIds",
-                    required: false,
-                    part: "body",
-                    partPath: "timeEntryIds",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--expense-ids",
-                    prop: "expenseIds",
-                    required: false,
-                    part: "body",
-                    partPath: "expenseIds",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "billing_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        timeEntryIds: {
-                          minItems: 1,
-                          maxItems: 500,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                        expenseIds: {
-                          minItems: 1,
-                          maxItems: 500,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["matterId", "invoiceId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        invoiceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "entries-remove": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "invoices", "entries-remove"],
-                capabilityId: "invoices.entries.remove",
-                description:
-                  "Detach time entries and expenses from a draft invoice, returning them to approved, unbilled status and recomputing the invoice total. Reversible: the same entries can be attached again with invoices.entries.add, and nothing is deleted. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--invoice-id",
-                    prop: "invoiceId",
-                    required: true,
-                    part: "params",
-                    partPath: "invoiceId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--time-entry-ids",
-                    prop: "timeEntryIds",
-                    required: false,
-                    part: "body",
-                    partPath: "timeEntryIds",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--expense-ids",
-                    prop: "expenseIds",
-                    required: false,
-                    part: "body",
-                    partPath: "expenseIds",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "billing_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        timeEntryIds: {
-                          minItems: 1,
-                          maxItems: 500,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                        expenseIds: {
-                          minItems: 1,
-                          maxItems: 500,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["matterId", "invoiceId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        invoiceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
             get: {
               kind: "capability-leaf",
               spec: {
@@ -24206,6 +24179,113 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 512,
                           description:
                             "Opaque cursor from a previous list_invoices call to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "remove-entries": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "invoices", "remove-entries"],
+                capabilityId: "invoices.remove-entries",
+                description:
+                  "Detach time entries and expenses from a draft invoice, returning them to approved, unbilled status and recomputing the invoice total. Reversible: the same entries can be attached again with invoices.add-entries, and nothing is deleted. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--invoice-id",
+                    prop: "invoiceId",
+                    required: true,
+                    part: "params",
+                    partPath: "invoiceId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--time-entry-ids",
+                    prop: "timeEntryIds",
+                    required: false,
+                    part: "body",
+                    partPath: "timeEntryIds",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--expense-ids",
+                    prop: "expenseIds",
+                    required: false,
+                    part: "body",
+                    partPath: "expenseIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        timeEntryIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        expenseIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "invoiceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -24986,56 +25066,11 @@ export const generatedRouteMap: RouteNode = {
         legislation: {
           kind: "route",
           children: {
-            "boe-law-structure-get": {
+            "boe-get-law": {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "capability",
-                  "legislation",
-                  "boe-law-structure-get",
-                ],
-                capabilityId: "legislation.boe.law-structure.get",
-                description:
-                  "Read the block outline of one consolidated Spanish BOE law: its parts, articles, and provisions with the block ids that address them. Use legislation.boe.text-block.get to fetch the text of a single block.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--law-id",
-                    prop: "lawId",
-                    required: true,
-                    part: "params",
-                    partPath: "lawId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["lawId"],
-                      properties: {
-                        lawId: {
-                          pattern: "^BOE-[A-Z]-\\d{4}-\\d+$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "boe-laws-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "legislation", "boe-laws-get"],
-                capabilityId: "legislation.boe.laws.get",
+                commandPath: ["capability", "legislation", "boe-get-law"],
+                capabilityId: "legislation.boe-get-law",
                 description:
                   "Read one consolidated Spanish law from the BOE by its BOE-X-YYYY-N identifier. The metadata, analysis, fullText, and eli flags select which blocks the BOE returns; this queries the BOE service directly rather than the stella legislation corpus.",
                 access: "read",
@@ -25125,15 +25160,52 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "boe-related-laws-list": {
+            "boe-law-structure": {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "capability",
-                  "legislation",
-                  "boe-related-laws-list",
+                commandPath: ["capability", "legislation", "boe-law-structure"],
+                capabilityId: "legislation.boe-law-structure",
+                description:
+                  "Read the block outline of one consolidated Spanish BOE law: its parts, articles, and provisions with the block ids that address them. Use legislation.boe-text-block to fetch the text of a single block.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--law-id",
+                    prop: "lawId",
+                    required: true,
+                    part: "params",
+                    partPath: "lawId",
+                  },
                 ],
-                capabilityId: "legislation.boe.related-laws.list",
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["lawId"],
+                      properties: {
+                        lawId: {
+                          pattern: "^BOE-[A-Z]-\\d{4}-\\d+$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "boe-related-laws": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "legislation", "boe-related-laws"],
+                capabilityId: "legislation.boe-related-laws",
                 description:
                   "List the Spanish BOE laws related to one law, narrowed by relationType: modifies, modifiedBy, derogates, derogatedBy, or all (the default).",
                 access: "read",
@@ -25203,7 +25275,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "legislation", "boe-search"],
-                capabilityId: "legislation.boe.search",
+                capabilityId: "legislation.boe-search",
                 description:
                   "Search Spanish consolidated legislation on the BOE. At least one filter is required: free text, title, department code, legal-range code (law rank), subject-matter code, or a publication date range as YYYYMMDD. Paginate with limit and the opaque cursor. This queries the BOE service live; use the search_legislation tool to search the stella legislation corpus instead.",
                 access: "read",
@@ -25361,17 +25433,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "boe-text-block-get": {
+            "boe-text-block": {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "capability",
-                  "legislation",
-                  "boe-text-block-get",
-                ],
-                capabilityId: "legislation.boe.text-block.get",
+                commandPath: ["capability", "legislation", "boe-text-block"],
+                capabilityId: "legislation.boe-text-block",
                 description:
-                  "Read the text of one block of a consolidated Spanish BOE law, addressed by the law identifier and a block id taken from legislation.boe.law-structure.get.",
+                  "Read the text of one block of a consolidated Spanish BOE law, addressed by the law identifier and a block id taken from legislation.boe-law-structure.",
                 access: "read",
                 flags: [
                   {
@@ -25420,11 +25488,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "borme-summary-get": {
+            "borme-summary": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "legislation", "borme-summary-get"],
-                capabilityId: "legislation.borme.summary.get",
+                commandPath: ["capability", "legislation", "borme-summary"],
+                capabilityId: "legislation.borme-summary",
                 description:
                   "Read the BORME summary the Spanish commercial registry gazette published on one date, given as YYYYMMDD.",
                 access: "read",
@@ -25511,7 +25579,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
                 description:
-                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions. Only admitted jurisdictions and sources cleared for redistribution are searched. Read a hit in full with legislation.read; use legislation.boe.search to query the Spanish BOE service directly instead.",
+                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions. Only admitted jurisdictions and sources cleared for redistribution are searched. Read a hit in full with legislation.read; use legislation.boe-search to query the Spanish BOE service directly instead.",
                 access: "read",
                 flags: [
                   {
@@ -27058,7 +27126,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
                 description:
-                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns.",
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set.",
                 access: "read",
                 flags: [
                   {
@@ -28533,6 +28601,101 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "verifications-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "verifications-list"],
+                capabilityId: "lists.verifications.list",
+                description:
+                  "List the list verifications of one document, newest first with cursor pagination: each run's status, failure code, the list it checked against, when it was started and finished, and how many claims landed in each verdict state. Read one run in full with lists.verifications.get.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "query",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-field-id",
+                    prop: "fileFieldId",
+                    required: true,
+                    part: "query",
+                    partPath: "fileFieldId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      required: ["entityId", "fileFieldId"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fileFieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 50,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         matters: {
@@ -28930,7 +29093,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "matters.anonymization-terms.list",
                 description:
-                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.anonymization-blacklist.get.",
+                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.read-anonymization-blacklist.",
                 access: "read",
                 flags: [
                   {
@@ -29004,11 +29167,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "cells-retry": {
+            "cell-retry": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "matters", "cells-retry"],
-                capabilityId: "matters.cells.retry",
+                commandPath: ["capability", "matters", "cell-retry"],
+                capabilityId: "matters.cell-retry",
                 description:
                   "Re-run the AI extraction for one cell, meaning one document's value for one AI column, in a matter. Refused when the property is not AI-extracted, when the document is read-only, when the cell is locked, and while another workflow is already running in the matter.",
                 access: "write",
@@ -29077,201 +29240,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "contacts-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "matters", "contacts-create"],
-                capabilityId: "matters.contacts.create",
-                description:
-                  "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other). Pass contactId with role to link.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description: "Contact ID: with role to link the contact",
-                    flag: "--contact-id",
-                    prop: "contactId",
-                    required: true,
-                    part: "body",
-                    partPath: "contactId",
-                  },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "opposing_party",
-                      "opposing_counsel",
-                      "co_counsel",
-                      "witness",
-                      "expert_witness",
-                      "third_party",
-                      "judge",
-                      "mediator",
-                      "other",
-                    ],
-                    repeatable: false,
-                    description: "Party role for the linked contact",
-                    flag: "--role",
-                    prop: "role",
-                    required: true,
-                    part: "body",
-                    partPath: "role",
-                  },
-                  {
-                    kind: "boolean",
-                    repeatable: false,
-                    flag: "--is-primary",
-                    prop: "isPrimary",
-                    required: false,
-                    part: "body",
-                    partPath: "isPrimary",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--notes",
-                    prop: "notes",
-                    required: false,
-                    part: "body",
-                    partPath: "notes",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["contactId", "role"],
-                      properties: {
-                        contactId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                          description:
-                            "Contact ID: with role to link the contact",
-                        },
-                        role: {
-                          default: "opposing_party",
-                          description: "Party role for the linked contact",
-                          type: "string",
-                          enum: [
-                            "opposing_party",
-                            "opposing_counsel",
-                            "co_counsel",
-                            "witness",
-                            "expert_witness",
-                            "third_party",
-                            "judge",
-                            "mediator",
-                            "other",
-                          ],
-                        },
-                        isPrimary: {
-                          type: "boolean",
-                        },
-                        notes: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 10000,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "contacts-delete": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "matters", "contacts-delete"],
-                capabilityId: "matters.contacts.delete",
-                description:
-                  "Remove one contact from a matter's party list, deleting the link with the party role and notes recorded on it. The contact stays in the organization address book; use contacts.delete to remove it from there.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-contact-id",
-                    prop: "matterContactId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterContactId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "matterContactId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        matterContactId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
                     },
                   },
                 },
@@ -29485,11 +29453,351 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "justifications-list": {
+            list: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "matters", "justifications-list"],
-                capabilityId: "matters.justifications.list",
+                commandPath: ["capability", "matters", "list"],
+                capabilityId: "matters.list",
+                description: "List the matters you can access.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            "matter-contacts-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "matter-contacts-create",
+                ],
+                capabilityId: "matters.matter-contacts-create",
+                description:
+                  "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other). Pass contactId with role to link.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Contact ID: with role to link the contact",
+                    flag: "--contact-id",
+                    prop: "contactId",
+                    required: true,
+                    part: "body",
+                    partPath: "contactId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "opposing_party",
+                      "opposing_counsel",
+                      "co_counsel",
+                      "witness",
+                      "expert_witness",
+                      "third_party",
+                      "judge",
+                      "mediator",
+                      "other",
+                    ],
+                    repeatable: false,
+                    description: "Party role for the linked contact",
+                    flag: "--role",
+                    prop: "role",
+                    required: true,
+                    part: "body",
+                    partPath: "role",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--is-primary",
+                    prop: "isPrimary",
+                    required: false,
+                    part: "body",
+                    partPath: "isPrimary",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["contactId", "role"],
+                      properties: {
+                        contactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                          description:
+                            "Contact ID: with role to link the contact",
+                        },
+                        role: {
+                          default: "opposing_party",
+                          description: "Party role for the linked contact",
+                          type: "string",
+                          enum: [
+                            "opposing_party",
+                            "opposing_counsel",
+                            "co_counsel",
+                            "witness",
+                            "expert_witness",
+                            "third_party",
+                            "judge",
+                            "mediator",
+                            "other",
+                          ],
+                        },
+                        isPrimary: {
+                          type: "boolean",
+                        },
+                        notes: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "matter-contacts-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "matter-contacts-delete",
+                ],
+                capabilityId: "matters.matter-contacts-delete",
+                description:
+                  "Remove one contact from a matter's party list, deleting the link with the party role and notes recorded on it. The contact stays in the organization address book; use contacts.delete to remove it from there.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-contact-id",
+                    prop: "matterContactId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterContactId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "matterContactId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        matterContactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "matter-members-add": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "matter-members-add"],
+                capabilityId: "matters.matter-members-add",
+                description:
+                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with matters.matter-members-remove.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "body",
+                    partPath: "userId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["userId"],
+                      properties: {
+                        userId: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "matter-members-remove": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "matter-members-remove"],
+                capabilityId: "matters.matter-members-remove",
+                description:
+                  "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "params",
+                    partPath: "userId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "userId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        userId: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-justifications": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "read-justifications"],
+                capabilityId: "matters.read-justifications",
                 description:
                   "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
                 access: "read",
@@ -29552,33 +29860,14 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            list: {
+            "read-workflow-status": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "matters", "list"],
-                capabilityId: "matters.list",
-                description: "List the matters you can access.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
-            "members-add": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "matters", "members-add"],
-                capabilityId: "matters.members.add",
+                commandPath: ["capability", "matters", "read-workflow-status"],
+                capabilityId: "matters.read-workflow-status",
                 description:
-                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with matters.members.remove.",
-                access: "write",
+                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
+                access: "read",
                 flags: [
                   {
                     flag: "--matter-id",
@@ -29589,35 +29878,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "matterId",
                   },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--user-id",
-                    prop: "userId",
-                    required: true,
-                    part: "body",
-                    partPath: "userId",
-                  },
                 ],
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "admin_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
-                    body: {
-                      type: "object",
-                      required: ["userId"],
-                      properties: {
-                        userId: {
-                          minLength: 1,
-                          maxLength: 128,
-                          type: "string",
-                        },
-                      },
-                    },
                     params: {
                       type: "object",
                       properties: {
@@ -29631,59 +29900,70 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "members-remove": {
+            "read-workflow-target-count": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "matters", "members-remove"],
-                capabilityId: "matters.members.remove",
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "read-workflow-target-count",
+                ],
+                capabilityId: "matters.read-workflow-target-count",
                 description:
-                  "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
-                access: "write",
+                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before matters.workflow-start to size the run.",
+                access: "read",
                 flags: [
                   {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
+                    kind: "string",
                     required: true,
+                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
                   {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--user-id",
-                    prop: "userId",
-                    required: true,
-                    part: "params",
-                    partPath: "userId",
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: false,
+                    part: "body",
+                    partPath: "entityIds",
                   },
                 ],
                 inputOnly: [],
                 paginated: false,
-                destructive: true,
-                scope: "admin_write",
+                destructive: false,
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        entityIds: {
+                          maxItems: 10000,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
-                      required: ["matterId", "userId"],
                       properties: {
                         matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        userId: {
-                          minLength: 1,
-                          maxLength: 128,
                           type: "string",
                         },
                       },
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -29942,51 +30222,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "workflow-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "matters", "workflow-get"],
-                capabilityId: "matters.workflow.get",
-                description:
-                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
             "workflow-start": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "matters", "workflow-start"],
-                capabilityId: "matters.workflow.start",
+                capabilityId: "matters.workflow-start",
                 description:
                   "Start an extraction workflow in a matter, filling the AI columns of the documents that need it. Narrow it with entityIds and propertyIds, set the processing order with entityIdsOrder, and choose serviceTier standard or flex, where flex is the cheaper deferred tier and is refused when the configured provider does not offer it. Returns the run's status, including already-running when one is in flight.",
                 access: "write",
@@ -30099,217 +30339,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "workflow-targets-count": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "matters",
-                  "workflow-targets-count",
-                ],
-                capabilityId: "matters.workflow.targets.count",
-                description:
-                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before matters.workflow.start to size the run.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids",
-                    prop: "entityIds",
-                    required: false,
-                    part: "body",
-                    partPath: "entityIds",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        entityIds: {
-                          maxItems: 10000,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
           },
         },
         "organization-settings": {
           kind: "route",
           children: {
-            "ai-availability-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "organization-settings",
-                  "ai-availability-get",
-                ],
-                capabilityId: "organization-settings.ai-availability.get",
-                description:
-                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "admin_read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
-            "anonymization-blacklist-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "organization-settings",
-                  "anonymization-blacklist-get",
-                ],
-                capabilityId:
-                  "organization-settings.anonymization-blacklist.get",
-                description:
-                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with matters.anonymization-terms.list.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "admin_read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
-            "anonymization-blacklist-update": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "organization-settings",
-                  "anonymization-blacklist-update",
-                ],
-                capabilityId:
-                  "organization-settings.anonymization-blacklist.update",
-                description:
-                  "Replace the organization-wide always-mask list with the entries you pass: terms not in the list are deleted, terms already present are updated, and the rest are inserted, so this is a whole-list replacement rather than a merge, and an empty list clears every organization-wide term. Matter-scoped terms in the same table are left untouched.",
-                access: "write",
-                flags: [],
-                inputOnly: ["body.entries"],
-                paginated: false,
-                destructive: false,
-                scope: "admin_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["entries"],
-                      properties: {
-                        entries: {
-                          maxItems: 1000,
-                          type: "array",
-                          items: {
-                            type: "object",
-                            required: ["canonical", "label"],
-                            properties: {
-                              canonical: {
-                                minLength: 1,
-                                maxLength: 512,
-                                type: "string",
-                              },
-                              enabled: {
-                                type: "boolean",
-                              },
-                              label: {
-                                minLength: 1,
-                                maxLength: 64,
-                                type: "string",
-                              },
-                              variants: {
-                                maxItems: 20,
-                                type: "array",
-                                items: {
-                                  minLength: 1,
-                                  maxLength: 512,
-                                  type: "string",
-                                },
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "deepl-availability-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "organization-settings",
-                  "deepl-availability-get",
-                ],
-                capabilityId: "organization-settings.deepl-availability.get",
-                description:
-                  "Report whether the organization has a translation provider key configured, as a single boolean. Nothing about the key itself, not even a masked preview, is returned here.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "admin_read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
             "document-ocr-availability-get": {
               kind: "capability-leaf",
               spec: {
@@ -30352,62 +30386,6 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {},
-                },
-              },
-            },
-            "practice-jurisdictions-update": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "organization-settings",
-                  "practice-jurisdictions-update",
-                ],
-                capabilityId:
-                  "organization-settings.practice-jurisdictions.update",
-                description:
-                  "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
-                access: "write",
-                flags: [],
-                inputOnly: ["body.practiceJurisdictions"],
-                paginated: false,
-                destructive: false,
-                scope: "admin_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["practiceJurisdictions"],
-                      properties: {
-                        practiceJurisdictions: {
-                          maxItems: 12,
-                          description:
-                            "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
-                          type: "array",
-                          items: {
-                            type: "object",
-                            required: ["countryCode", "isPrimary"],
-                            properties: {
-                              countryCode: {
-                                minLength: 2,
-                                maxLength: 2,
-                                pattern: "^[A-Za-z]{2}$",
-                                description: "ISO 3166-1 alpha-2 country code",
-                                type: "string",
-                              },
-                              isPrimary: {
-                                description:
-                                  "Whether this is the organization's primary jurisdiction",
-                                type: "boolean",
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
                 },
               },
             },
@@ -30469,13 +30447,86 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "read-ai-availability": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "read-ai-availability",
+                ],
+                capabilityId: "organization-settings.read-ai-availability",
+                description:
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            "read-anonymization-blacklist": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "read-anonymization-blacklist",
+                ],
+                capabilityId:
+                  "organization-settings.read-anonymization-blacklist",
+                description:
+                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with matters.anonymization-terms.list.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            "read-deepl-availability": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "read-deepl-availability",
+                ],
+                capabilityId: "organization-settings.read-deepl-availability",
+                description:
+                  "Report whether the organization has a translation provider key configured, as a single boolean. Nothing about the key itself, not even a masked preview, is returned here.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
             update: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "organization-settings", "update"],
                 capabilityId: "organization-settings.update",
                 description:
-                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, and memory extraction. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
+                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, and memory extraction. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.update-practice-jurisdictions.",
                 access: "write",
                 flags: [
                   {
@@ -30562,48 +30613,63 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-          },
-        },
-        playbooks: {
-          kind: "route",
-          children: {
-            "applicable-run": {
+            "update-anonymization-blacklist": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "playbooks", "applicable-run"],
-                capabilityId: "playbooks.applicable.run",
-                description:
-                  "Run every applicable playbook over a matter in one pass and materialize their columns onto its table: a playbook with no document-type scope always applies, one scoped to a document type only when that type is present among the matter's classified documents. Each playbook pins its own latest approved version and opens its own per-document runs; a playbook that hits a limit is skipped while the rest continue. Returns how many playbooks ran, how many columns were materialized, and how many document runs opened. Use playbooks.run for a single playbook.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "update-anonymization-blacklist",
                 ],
-                inputOnly: [],
+                capabilityId:
+                  "organization-settings.update-anonymization-blacklist",
+                description:
+                  "Replace the organization-wide always-mask list with the entries you pass: terms not in the list are deleted, terms already present are updated, and the rest are inserted, so this is a whole-list replacement rather than a merge, and an empty list clears every organization-wide term. Matter-scoped terms in the same table are left untouched.",
+                access: "write",
+                flags: [],
+                inputOnly: ["body.entries"],
                 paginated: false,
                 destructive: false,
-                scope: "knowledge_write",
+                scope: "admin_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
-                    params: {
+                    body: {
                       type: "object",
-                      required: ["matterId"],
+                      required: ["entries"],
                       properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
+                        entries: {
+                          maxItems: 1000,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["canonical", "label"],
+                            properties: {
+                              canonical: {
+                                minLength: 1,
+                                maxLength: 512,
+                                type: "string",
+                              },
+                              enabled: {
+                                type: "boolean",
+                              },
+                              label: {
+                                minLength: 1,
+                                maxLength: 64,
+                                type: "string",
+                              },
+                              variants: {
+                                maxItems: 20,
+                                type: "array",
+                                items: {
+                                  minLength: 1,
+                                  maxLength: 512,
+                                  type: "string",
+                                },
+                              },
+                            },
+                          },
                         },
                       },
                     },
@@ -30611,6 +30677,67 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "update-practice-jurisdictions": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "update-practice-jurisdictions",
+                ],
+                capabilityId:
+                  "organization-settings.update-practice-jurisdictions",
+                description:
+                  "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
+                access: "write",
+                flags: [],
+                inputOnly: ["body.practiceJurisdictions"],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["practiceJurisdictions"],
+                      properties: {
+                        practiceJurisdictions: {
+                          maxItems: 12,
+                          description:
+                            "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["countryCode", "isPrimary"],
+                            properties: {
+                              countryCode: {
+                                minLength: 2,
+                                maxLength: 2,
+                                pattern: "^[A-Za-z]{2}$",
+                                description: "ISO 3166-1 alpha-2 country code",
+                                type: "string",
+                              },
+                              isPrimary: {
+                                description:
+                                  "Whether this is the organization's primary jurisdiction",
+                                type: "boolean",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        playbooks: {
+          kind: "route",
+          children: {
             approve: {
               kind: "capability-leaf",
               spec: {
@@ -30662,6 +30789,50 @@ export const generatedRouteMap: RouteNode = {
                       required: ["playbookId"],
                       properties: {
                         playbookId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "auto-run": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "auto-run"],
+                capabilityId: "playbooks.auto-run",
+                description:
+                  "Run every applicable playbook over a matter in one pass and materialize their columns onto its table: a playbook with no document-type scope always applies, one scoped to a document type only when that type is present among the matter's classified documents. Each playbook pins its own latest approved version and opens its own per-document runs; a playbook that hits a limit is skipped while the rest continue. Returns how many playbooks ran, how many columns were materialized, and how many document runs opened. Use playbooks.run for a single playbook.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -31912,11 +32083,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "from-run-create": {
+            "from-run": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "playbooks", "from-run-create"],
-                capabilityId: "playbooks.from-run.create",
+                commandPath: ["capability", "playbooks", "from-run"],
+                capabilityId: "playbooks.from-run",
                 description:
                   "Save the position list a completed document review ran against as a new draft playbook in the organization, taking the same create path a hand-authored playbook takes (validation, the per-organization limit, the draft status). Position ids are preserved, so decisions already taken on those positions stay attached to them.",
                 access: "write",
@@ -31986,13 +32157,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "from-starter-create": {
+            "from-starter": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "playbooks", "from-starter-create"],
-                capabilityId: "playbooks.from-starter.create",
+                commandPath: ["capability", "playbooks", "from-starter"],
+                capabilityId: "playbooks.from-starter",
                 description:
-                  "Create or reopen the organization's playbook from a bundled starter, cloning its positions with fresh ids on first use and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Repeated use of one starter returns the existing playbook instead of creating a copy. Browse the starters with playbooks.starters.list.",
+                  "Create or reopen the organization's playbook from a bundled starter, cloning its positions with fresh ids on first use and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Repeated use of one starter returns the existing playbook instead of creating a copy. Browse the starters with playbooks.list-starters.",
                 access: "write",
                 flags: [
                   {
@@ -32113,6 +32284,91 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "list-starters": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "list-starters"],
+                capabilityId: "playbooks.list-starters",
+                description:
+                  "List the bundled starter playbooks available to instantiate: each starter's id, name, description, target document type, and how many positions it holds. Metadata only, enough to render a picker; create one with playbooks.from-starter.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            "list-versions": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "list-versions"],
+                capabilityId: "playbooks.list-versions",
+                description:
+                  "List one playbook's approval history, newest version first: the version number, the name it carried at that version, when it was created, and by whom. A version is only written when a playbook is approved, so the list is capped rather than cursor-paginated.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--playbook-id",
+                    prop: "playbookId",
+                    required: true,
+                    part: "params",
+                    partPath: "playbookId",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 50,
+                    repeatable: false,
+                    flag: "--query-limit",
+                    prop: "query.limit",
+                    required: false,
+                    part: "query",
+                    partPath: "limit",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["playbookId"],
+                      properties: {
+                        playbookId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 50,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "recent-list": {
               kind: "capability-leaf",
               spec: {
@@ -32151,6 +32407,64 @@ export const generatedRouteMap: RouteNode = {
                           maximum: 10,
                           description: "Max recently used playbooks to return",
                           type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "restore-version": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "restore-version"],
+                capabilityId: "playbooks.restore-version",
+                description:
+                  "Restore a stored playbook version by copying its name, description, scope, and positions back onto the definition. A restore counts as an edit: the playbook returns to draft with its approval metadata cleared, so it must be approved again before runs pick it up, and the stored version itself is left untouched.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--playbook-id",
+                    prop: "playbookId",
+                    required: true,
+                    part: "params",
+                    partPath: "playbookId",
+                  },
+                  {
+                    kind: "number",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--params-version",
+                    prop: "params.version",
+                    required: true,
+                    part: "params",
+                    partPath: "version",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["playbookId", "version"],
+                      properties: {
+                        playbookId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        version: {
+                          minimum: 1,
+                          type: "number",
                         },
                       },
                     },
@@ -32242,26 +32556,6 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                   },
-                },
-              },
-            },
-            "starters-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "playbooks", "starters-list"],
-                capabilityId: "playbooks.starters.list",
-                description:
-                  "List the bundled starter playbooks available to instantiate: each starter's id, name, description, target document type, and how many positions it holds. Metadata only, enough to render a picker; create one with playbooks.from-starter.create.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
                 },
               },
             },
@@ -33494,788 +33788,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "versions-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "playbooks", "versions-list"],
-                capabilityId: "playbooks.versions.list",
-                description:
-                  "List one playbook's approval history, newest version first: the version number, the name it carried at that version, when it was created, and by whom. A version is only written when a playbook is approved, so the list is capped rather than cursor-paginated.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--playbook-id",
-                    prop: "playbookId",
-                    required: true,
-                    part: "params",
-                    partPath: "playbookId",
-                  },
-                  {
-                    kind: "int",
-                    min: 1,
-                    max: 50,
-                    repeatable: false,
-                    flag: "--query-limit",
-                    prop: "query.limit",
-                    required: false,
-                    part: "query",
-                    partPath: "limit",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["playbookId"],
-                      properties: {
-                        playbookId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        limit: {
-                          minimum: 1,
-                          maximum: 50,
-                          type: "integer",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "versions-restore": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "playbooks", "versions-restore"],
-                capabilityId: "playbooks.versions.restore",
-                description:
-                  "Restore a stored playbook version by copying its name, description, scope, and positions back onto the definition. A restore counts as an edit: the playbook returns to draft with its approval metadata cleared, so it must be approved again before runs pick it up, and the stored version itself is left untouched.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--playbook-id",
-                    prop: "playbookId",
-                    required: true,
-                    part: "params",
-                    partPath: "playbookId",
-                  },
-                  {
-                    kind: "number",
-                    min: 1,
-                    repeatable: false,
-                    flag: "--params-version",
-                    prop: "params.version",
-                    required: true,
-                    part: "params",
-                    partPath: "version",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "knowledge_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["playbookId", "version"],
-                      properties: {
-                        playbookId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        version: {
-                          minimum: 1,
-                          type: "number",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
           },
         },
         properties: {
           kind: "route",
           children: {
-            "batch-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "properties", "batch-create"],
-                capabilityId: "properties.batch.create",
-                description:
-                  "Add up to ten properties (columns) to a matter in a single transaction, under the same rules as properties.create: all of them land or none do, the resulting count must stay within the matter's property limit, every dependency must be a property of this matter, and at most one document-type classifier may exist. Returns the new property ids.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: ["body.items"],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["items"],
-                      properties: {
-                        items: {
-                          minItems: 1,
-                          maxItems: 10,
-                          type: "array",
-                          items: {
-                            type: "object",
-                            required: ["name", "contentType"],
-                            properties: {
-                              name: {
-                                minLength: 1,
-                                maxLength: 256,
-                                type: "string",
-                              },
-                              contentType: {
-                                anyOf: [
-                                  {
-                                    const: "file",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "text",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "single-select",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "multi-select",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "date",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "int",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "money",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "person",
-                                    type: "string",
-                                  },
-                                ],
-                              },
-                              toolType: {
-                                anyOf: [
-                                  {
-                                    const: "ai-model",
-                                    type: "string",
-                                  },
-                                  {
-                                    const: "manual-input",
-                                    type: "string",
-                                  },
-                                ],
-                              },
-                              prompt: {
-                                maxLength: 1000,
-                                type: "string",
-                              },
-                              dependencies: {
-                                maxItems: 16,
-                                type: "array",
-                                items: {
-                                  type: "object",
-                                  required: [
-                                    "dependsOnPropertyId",
-                                    "condition",
-                                  ],
-                                  properties: {
-                                    dependsOnPropertyId: {
-                                      minLength: 36,
-                                      maxLength: 36,
-                                      pattern:
-                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                                      type: "string",
-                                    },
-                                    condition: {
-                                      nullable: true,
-                                      anyOf: [
-                                        {
-                                          anyOf: [
-                                            {
-                                              $ref: "#/$defs/s_81f0360286f1",
-                                            },
-                                            {
-                                              $ref: "#/$defs/s_58ff7eb0d8f6",
-                                            },
-                                            {
-                                              type: "object",
-                                              required: [
-                                                "type",
-                                                "combinator",
-                                                "children",
-                                              ],
-                                              properties: {
-                                                type: {
-                                                  const: "group",
-                                                  type: "string",
-                                                },
-                                                combinator: {
-                                                  default: "and",
-                                                  type: "string",
-                                                  enum: ["and", "or"],
-                                                },
-                                                negated: {
-                                                  anyOf: [
-                                                    {
-                                                      type: "boolean",
-                                                    },
-                                                    {
-                                                      type: "undefined",
-                                                    },
-                                                  ],
-                                                },
-                                                children: {
-                                                  maxItems: 32,
-                                                  type: "array",
-                                                  items: {
-                                                    anyOf: [
-                                                      {
-                                                        $ref: "#/$defs/s_81f0360286f1",
-                                                      },
-                                                      {
-                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                      },
-                                                      {
-                                                        type: "object",
-                                                        required: [
-                                                          "type",
-                                                          "combinator",
-                                                          "children",
-                                                        ],
-                                                        properties: {
-                                                          type: {
-                                                            const: "group",
-                                                            type: "string",
-                                                          },
-                                                          combinator: {
-                                                            default: "and",
-                                                            type: "string",
-                                                            enum: ["and", "or"],
-                                                          },
-                                                          negated: {
-                                                            anyOf: [
-                                                              {
-                                                                type: "boolean",
-                                                              },
-                                                              {
-                                                                type: "undefined",
-                                                              },
-                                                            ],
-                                                          },
-                                                          children: {
-                                                            maxItems: 32,
-                                                            type: "array",
-                                                            items: {
-                                                              anyOf: [
-                                                                {
-                                                                  $ref: "#/$defs/s_81f0360286f1",
-                                                                },
-                                                                {
-                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                },
-                                                                {
-                                                                  type: "object",
-                                                                  required: [
-                                                                    "type",
-                                                                    "combinator",
-                                                                    "children",
-                                                                  ],
-                                                                  properties: {
-                                                                    type: {
-                                                                      const:
-                                                                        "group",
-                                                                      type: "string",
-                                                                    },
-                                                                    combinator:
-                                                                      {
-                                                                        default:
-                                                                          "and",
-                                                                        type: "string",
-                                                                        enum: [
-                                                                          "and",
-                                                                          "or",
-                                                                        ],
-                                                                      },
-                                                                    negated: {
-                                                                      anyOf: [
-                                                                        {
-                                                                          type: "boolean",
-                                                                        },
-                                                                        {
-                                                                          type: "undefined",
-                                                                        },
-                                                                      ],
-                                                                    },
-                                                                    children: {
-                                                                      maxItems: 32,
-                                                                      type: "array",
-                                                                      items: {
-                                                                        anyOf: [
-                                                                          {
-                                                                            $ref: "#/$defs/s_81f0360286f1",
-                                                                          },
-                                                                          {
-                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                          },
-                                                                          {
-                                                                            type: "object",
-                                                                            required:
-                                                                              [
-                                                                                "type",
-                                                                                "combinator",
-                                                                                "children",
-                                                                              ],
-                                                                            properties:
-                                                                              {
-                                                                                type: {
-                                                                                  const:
-                                                                                    "group",
-                                                                                  type: "string",
-                                                                                },
-                                                                                combinator:
-                                                                                  {
-                                                                                    default:
-                                                                                      "and",
-                                                                                    type: "string",
-                                                                                    enum: [
-                                                                                      "and",
-                                                                                      "or",
-                                                                                    ],
-                                                                                  },
-                                                                                negated:
-                                                                                  {
-                                                                                    anyOf:
-                                                                                      [
-                                                                                        {
-                                                                                          type: "boolean",
-                                                                                        },
-                                                                                        {
-                                                                                          type: "undefined",
-                                                                                        },
-                                                                                      ],
-                                                                                  },
-                                                                                children:
-                                                                                  {
-                                                                                    maxItems: 32,
-                                                                                    type: "array",
-                                                                                    items:
-                                                                                      {
-                                                                                        anyOf:
-                                                                                          [
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_81f0360286f1",
-                                                                                            },
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                                            },
-                                                                                            {
-                                                                                              type: "object",
-                                                                                              required:
-                                                                                                [
-                                                                                                  "type",
-                                                                                                  "combinator",
-                                                                                                  "children",
-                                                                                                ],
-                                                                                              properties:
-                                                                                                {
-                                                                                                  type: {
-                                                                                                    const:
-                                                                                                      "group",
-                                                                                                    type: "string",
-                                                                                                  },
-                                                                                                  combinator:
-                                                                                                    {
-                                                                                                      default:
-                                                                                                        "and",
-                                                                                                      type: "string",
-                                                                                                      enum: [
-                                                                                                        "and",
-                                                                                                        "or",
-                                                                                                      ],
-                                                                                                    },
-                                                                                                  negated:
-                                                                                                    {
-                                                                                                      anyOf:
-                                                                                                        [
-                                                                                                          {
-                                                                                                            type: "boolean",
-                                                                                                          },
-                                                                                                          {
-                                                                                                            type: "undefined",
-                                                                                                          },
-                                                                                                        ],
-                                                                                                    },
-                                                                                                  children:
-                                                                                                    {
-                                                                                                      maxItems: 32,
-                                                                                                      type: "array",
-                                                                                                      items:
-                                                                                                        {
-                                                                                                          anyOf:
-                                                                                                            [
-                                                                                                              {
-                                                                                                                $ref: "#/$defs/s_81f0360286f1",
-                                                                                                              },
-                                                                                                              {
-                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                                                              },
-                                                                                                              {
-                                                                                                                type: "object",
-                                                                                                                required:
-                                                                                                                  [
-                                                                                                                    "type",
-                                                                                                                    "combinator",
-                                                                                                                    "children",
-                                                                                                                  ],
-                                                                                                                properties:
-                                                                                                                  {
-                                                                                                                    type: {
-                                                                                                                      const:
-                                                                                                                        "group",
-                                                                                                                      type: "string",
-                                                                                                                    },
-                                                                                                                    combinator:
-                                                                                                                      {
-                                                                                                                        default:
-                                                                                                                          "and",
-                                                                                                                        type: "string",
-                                                                                                                        enum: [
-                                                                                                                          "and",
-                                                                                                                          "or",
-                                                                                                                        ],
-                                                                                                                      },
-                                                                                                                    negated:
-                                                                                                                      {
-                                                                                                                        anyOf:
-                                                                                                                          [
-                                                                                                                            {
-                                                                                                                              type: "boolean",
-                                                                                                                            },
-                                                                                                                            {
-                                                                                                                              type: "undefined",
-                                                                                                                            },
-                                                                                                                          ],
-                                                                                                                      },
-                                                                                                                    children:
-                                                                                                                      {
-                                                                                                                        maxItems: 32,
-                                                                                                                        type: "array",
-                                                                                                                        items:
-                                                                                                                          {
-                                                                                                                            anyOf:
-                                                                                                                              [
-                                                                                                                                {
-                                                                                                                                  $ref: "#/$defs/s_81f0360286f1",
-                                                                                                                                },
-                                                                                                                                {
-                                                                                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
-                                                                                                                                },
-                                                                                                                              ],
-                                                                                                                          },
-                                                                                                                      },
-                                                                                                                  },
-                                                                                                              },
-                                                                                                            ],
-                                                                                                        },
-                                                                                                    },
-                                                                                                },
-                                                                                            },
-                                                                                          ],
-                                                                                      },
-                                                                                  },
-                                                                              },
-                                                                          },
-                                                                        ],
-                                                                      },
-                                                                    },
-                                                                  },
-                                                                },
-                                                              ],
-                                                            },
-                                                          },
-                                                        },
-                                                      },
-                                                    ],
-                                                  },
-                                                },
-                                              },
-                                            },
-                                          ],
-                                        },
-                                        {
-                                          type: "null",
-                                        },
-                                      ],
-                                    },
-                                  },
-                                },
-                              },
-                              options: {
-                                type: "array",
-                                items: {
-                                  type: "object",
-                                  required: ["color", "value"],
-                                  properties: {
-                                    color: {
-                                      minLength: 1,
-                                      maxLength: 64,
-                                      type: "string",
-                                    },
-                                    value: {
-                                      minLength: 1,
-                                      maxLength: 1000,
-                                      type: "string",
-                                    },
-                                  },
-                                },
-                              },
-                              currency: {
-                                nullable: true,
-                                anyOf: [
-                                  {
-                                    minLength: 3,
-                                    maxLength: 3,
-                                    pattern: "^[A-Za-z]{3}$",
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "null",
-                                  },
-                                ],
-                              },
-                              fallback: {
-                                nullable: true,
-                                anyOf: [
-                                  {
-                                    minLength: 1,
-                                    maxLength: 1000,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "null",
-                                  },
-                                ],
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                  $defs: {
-                    s_58ff7eb0d8f6: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    s_81f0360286f1: {
-                      type: "object",
-                      required: ["type", "left", "op", "right"],
-                      properties: {
-                        type: {
-                          const: "compare",
-                          type: "string",
-                        },
-                        left: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                        op: {
-                          default: "eq",
-                          type: "string",
-                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
-                        },
-                        right: {
-                          $ref: "#/$defs/s_bbc23394f552",
-                        },
-                      },
-                    },
-                    s_bbc23394f552: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          required: ["type", "propertyId"],
-                          properties: {
-                            type: {
-                              const: "property",
-                              type: "string",
-                            },
-                            propertyId: {
-                              minLength: 1,
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "field"],
-                          properties: {
-                            type: {
-                              const: "builtin",
-                              type: "string",
-                            },
-                            field: {
-                              default: "status",
-                              type: "string",
-                              enum: ["status", "priority", "agendaKind"],
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type"],
-                          properties: {
-                            type: {
-                              const: "kind",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "path"],
-                          properties: {
-                            type: {
-                              const: "path",
-                              type: "string",
-                            },
-                            path: {
-                              minLength: 1,
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "value"],
-                          properties: {
-                            type: {
-                              const: "literal",
-                              type: "string",
-                            },
-                            value: {
-                              anyOf: [
-                                {
-                                  type: "string",
-                                },
-                                {
-                                  type: "number",
-                                },
-                                {
-                                  type: "boolean",
-                                },
-                                {
-                                  type: "array",
-                                  items: {
-                                    type: "string",
-                                  },
-                                },
-                              ],
-                            },
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            },
             create: {
               kind: "capability-leaf",
               spec: {
@@ -34954,6 +34471,660 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "create-batch": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "properties", "create-batch"],
+                capabilityId: "properties.create-batch",
+                description:
+                  "Add up to ten properties (columns) to a matter in a single transaction, under the same rules as properties.create: all of them land or none do, the resulting count must stay within the matter's property limit, every dependency must be a property of this matter, and at most one document-type classifier may exist. Returns the new property ids.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: ["body.items"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["items"],
+                      properties: {
+                        items: {
+                          minItems: 1,
+                          maxItems: 10,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["name", "contentType"],
+                            properties: {
+                              name: {
+                                minLength: 1,
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              contentType: {
+                                anyOf: [
+                                  {
+                                    const: "file",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "text",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "single-select",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "multi-select",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "date",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "int",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "money",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "person",
+                                    type: "string",
+                                  },
+                                ],
+                              },
+                              toolType: {
+                                anyOf: [
+                                  {
+                                    const: "ai-model",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "manual-input",
+                                    type: "string",
+                                  },
+                                ],
+                              },
+                              prompt: {
+                                maxLength: 1000,
+                                type: "string",
+                              },
+                              dependencies: {
+                                maxItems: 16,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: [
+                                    "dependsOnPropertyId",
+                                    "condition",
+                                  ],
+                                  properties: {
+                                    dependsOnPropertyId: {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    condition: {
+                                      nullable: true,
+                                      anyOf: [
+                                        {
+                                          anyOf: [
+                                            {
+                                              $ref: "#/$defs/s_81f0360286f1",
+                                            },
+                                            {
+                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                            },
+                                            {
+                                              type: "object",
+                                              required: [
+                                                "type",
+                                                "combinator",
+                                                "children",
+                                              ],
+                                              properties: {
+                                                type: {
+                                                  const: "group",
+                                                  type: "string",
+                                                },
+                                                combinator: {
+                                                  default: "and",
+                                                  type: "string",
+                                                  enum: ["and", "or"],
+                                                },
+                                                negated: {
+                                                  anyOf: [
+                                                    {
+                                                      type: "boolean",
+                                                    },
+                                                    {
+                                                      type: "undefined",
+                                                    },
+                                                  ],
+                                                },
+                                                children: {
+                                                  maxItems: 32,
+                                                  type: "array",
+                                                  items: {
+                                                    anyOf: [
+                                                      {
+                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                      },
+                                                      {
+                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                      },
+                                                      {
+                                                        type: "object",
+                                                        required: [
+                                                          "type",
+                                                          "combinator",
+                                                          "children",
+                                                        ],
+                                                        properties: {
+                                                          type: {
+                                                            const: "group",
+                                                            type: "string",
+                                                          },
+                                                          combinator: {
+                                                            default: "and",
+                                                            type: "string",
+                                                            enum: ["and", "or"],
+                                                          },
+                                                          negated: {
+                                                            anyOf: [
+                                                              {
+                                                                type: "boolean",
+                                                              },
+                                                              {
+                                                                type: "undefined",
+                                                              },
+                                                            ],
+                                                          },
+                                                          children: {
+                                                            maxItems: 32,
+                                                            type: "array",
+                                                            items: {
+                                                              anyOf: [
+                                                                {
+                                                                  $ref: "#/$defs/s_81f0360286f1",
+                                                                },
+                                                                {
+                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                },
+                                                                {
+                                                                  type: "object",
+                                                                  required: [
+                                                                    "type",
+                                                                    "combinator",
+                                                                    "children",
+                                                                  ],
+                                                                  properties: {
+                                                                    type: {
+                                                                      const:
+                                                                        "group",
+                                                                      type: "string",
+                                                                    },
+                                                                    combinator:
+                                                                      {
+                                                                        default:
+                                                                          "and",
+                                                                        type: "string",
+                                                                        enum: [
+                                                                          "and",
+                                                                          "or",
+                                                                        ],
+                                                                      },
+                                                                    negated: {
+                                                                      anyOf: [
+                                                                        {
+                                                                          type: "boolean",
+                                                                        },
+                                                                        {
+                                                                          type: "undefined",
+                                                                        },
+                                                                      ],
+                                                                    },
+                                                                    children: {
+                                                                      maxItems: 32,
+                                                                      type: "array",
+                                                                      items: {
+                                                                        anyOf: [
+                                                                          {
+                                                                            $ref: "#/$defs/s_81f0360286f1",
+                                                                          },
+                                                                          {
+                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                          },
+                                                                          {
+                                                                            type: "object",
+                                                                            required:
+                                                                              [
+                                                                                "type",
+                                                                                "combinator",
+                                                                                "children",
+                                                                              ],
+                                                                            properties:
+                                                                              {
+                                                                                type: {
+                                                                                  const:
+                                                                                    "group",
+                                                                                  type: "string",
+                                                                                },
+                                                                                combinator:
+                                                                                  {
+                                                                                    default:
+                                                                                      "and",
+                                                                                    type: "string",
+                                                                                    enum: [
+                                                                                      "and",
+                                                                                      "or",
+                                                                                    ],
+                                                                                  },
+                                                                                negated:
+                                                                                  {
+                                                                                    anyOf:
+                                                                                      [
+                                                                                        {
+                                                                                          type: "boolean",
+                                                                                        },
+                                                                                        {
+                                                                                          type: "undefined",
+                                                                                        },
+                                                                                      ],
+                                                                                  },
+                                                                                children:
+                                                                                  {
+                                                                                    maxItems: 32,
+                                                                                    type: "array",
+                                                                                    items:
+                                                                                      {
+                                                                                        anyOf:
+                                                                                          [
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_81f0360286f1",
+                                                                                            },
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                            },
+                                                                                            {
+                                                                                              type: "object",
+                                                                                              required:
+                                                                                                [
+                                                                                                  "type",
+                                                                                                  "combinator",
+                                                                                                  "children",
+                                                                                                ],
+                                                                                              properties:
+                                                                                                {
+                                                                                                  type: {
+                                                                                                    const:
+                                                                                                      "group",
+                                                                                                    type: "string",
+                                                                                                  },
+                                                                                                  combinator:
+                                                                                                    {
+                                                                                                      default:
+                                                                                                        "and",
+                                                                                                      type: "string",
+                                                                                                      enum: [
+                                                                                                        "and",
+                                                                                                        "or",
+                                                                                                      ],
+                                                                                                    },
+                                                                                                  negated:
+                                                                                                    {
+                                                                                                      anyOf:
+                                                                                                        [
+                                                                                                          {
+                                                                                                            type: "boolean",
+                                                                                                          },
+                                                                                                          {
+                                                                                                            type: "undefined",
+                                                                                                          },
+                                                                                                        ],
+                                                                                                    },
+                                                                                                  children:
+                                                                                                    {
+                                                                                                      maxItems: 32,
+                                                                                                      type: "array",
+                                                                                                      items:
+                                                                                                        {
+                                                                                                          anyOf:
+                                                                                                            [
+                                                                                                              {
+                                                                                                                $ref: "#/$defs/s_81f0360286f1",
+                                                                                                              },
+                                                                                                              {
+                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                              },
+                                                                                                              {
+                                                                                                                type: "object",
+                                                                                                                required:
+                                                                                                                  [
+                                                                                                                    "type",
+                                                                                                                    "combinator",
+                                                                                                                    "children",
+                                                                                                                  ],
+                                                                                                                properties:
+                                                                                                                  {
+                                                                                                                    type: {
+                                                                                                                      const:
+                                                                                                                        "group",
+                                                                                                                      type: "string",
+                                                                                                                    },
+                                                                                                                    combinator:
+                                                                                                                      {
+                                                                                                                        default:
+                                                                                                                          "and",
+                                                                                                                        type: "string",
+                                                                                                                        enum: [
+                                                                                                                          "and",
+                                                                                                                          "or",
+                                                                                                                        ],
+                                                                                                                      },
+                                                                                                                    negated:
+                                                                                                                      {
+                                                                                                                        anyOf:
+                                                                                                                          [
+                                                                                                                            {
+                                                                                                                              type: "boolean",
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                              type: "undefined",
+                                                                                                                            },
+                                                                                                                          ],
+                                                                                                                      },
+                                                                                                                    children:
+                                                                                                                      {
+                                                                                                                        maxItems: 32,
+                                                                                                                        type: "array",
+                                                                                                                        items:
+                                                                                                                          {
+                                                                                                                            anyOf:
+                                                                                                                              [
+                                                                                                                                {
+                                                                                                                                  $ref: "#/$defs/s_81f0360286f1",
+                                                                                                                                },
+                                                                                                                                {
+                                                                                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                                                },
+                                                                                                                              ],
+                                                                                                                          },
+                                                                                                                      },
+                                                                                                                  },
+                                                                                                              },
+                                                                                                            ],
+                                                                                                        },
+                                                                                                    },
+                                                                                                },
+                                                                                            },
+                                                                                          ],
+                                                                                      },
+                                                                                  },
+                                                                              },
+                                                                          },
+                                                                        ],
+                                                                      },
+                                                                    },
+                                                                  },
+                                                                },
+                                                              ],
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    ],
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          ],
+                                        },
+                                        {
+                                          type: "null",
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                              options: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["color", "value"],
+                                  properties: {
+                                    color: {
+                                      minLength: 1,
+                                      maxLength: 64,
+                                      type: "string",
+                                    },
+                                    value: {
+                                      minLength: 1,
+                                      maxLength: 1000,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              currency: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    minLength: 3,
+                                    maxLength: 3,
+                                    pattern: "^[A-Za-z]{3}$",
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                              fallback: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    minLength: 1,
+                                    maxLength: 1000,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                  $defs: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type", "propertyId"],
+                          properties: {
+                            type: {
+                              const: "property",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "field"],
+                          properties: {
+                            type: {
+                              const: "builtin",
+                              type: "string",
+                            },
+                            field: {
+                              default: "status",
+                              type: "string",
+                              enum: ["status", "priority", "agendaKind"],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "kind",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "path"],
+                          properties: {
+                            type: {
+                              const: "path",
+                              type: "string",
+                            },
+                            path: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "value"],
+                          properties: {
+                            type: {
+                              const: "literal",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "number",
+                                },
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
             delete: {
               kind: "capability-leaf",
               spec: {
@@ -35194,11 +35365,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "prompt-suggest": {
+            "suggest-prompt": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "properties", "prompt-suggest"],
-                capabilityId: "properties.prompt.suggest",
+                commandPath: ["capability", "properties", "suggest-prompt"],
+                capabilityId: "properties.suggest-prompt",
                 description:
                   "Draft or refine a column's extraction prompt with the model, from the column name, value type, select options, a free-text instruction, and optionally the prompt as it stands. Returns one single-line prompt of at most 280 characters and stores nothing. Consumes AI usage.",
                 access: "write",
@@ -36150,7 +36321,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "create"],
                 capabilityId: "rates.create",
                 description:
-                  "Create a rate table, a named set of hourly rates in a single currency, in a matter. Pass isDefault to make it the matter's default, which clears the flag on the previous default; matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries.create.",
+                  "Create a rate table, a named set of hourly rates in a single currency, in a matter. Pass isDefault to make it the matter's default, which clears the flag on the previous default; matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries-create.",
                 access: "write",
                 flags: [
                   {
@@ -36297,7 +36468,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "rates", "entries-create"],
-                capabilityId: "rates.entries.create",
+                capabilityId: "rates.entries-create",
                 description:
                   "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate or omit it for the table's fallback rate. Refused when the date range overlaps an existing line for the same user, when userId is not a member of the organization, or when the table is at its line limit.",
                 access: "write",
@@ -36435,7 +36606,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "rates", "entries-delete"],
-                capabilityId: "rates.entries.delete",
+                capabilityId: "rates.entries-delete",
                 description:
                   "Delete a single user's rate line (hourly rate and effective dates) from a rate table, leaving the table and its other lines in place. Use rates.delete to remove the whole table instead.",
                 access: "write",
@@ -36513,11 +36684,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "entries-list": {
+            "entries-read": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "rates", "entries-list"],
-                capabilityId: "rates.entries.list",
+                commandPath: ["capability", "rates", "entries-read"],
+                capabilityId: "rates.entries-read",
                 description:
                   "List the rate lines of one rate table, earliest effective-from first, with cursor pagination. Each line carries the hourly rate in minor currency units, its effective dates, and the user it applies to (null for the table's fallback rate). A rate table that does not exist in this matter returns an empty page rather than an error.",
                 access: "read",
@@ -36595,7 +36766,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "rates", "entries-update"],
-                capabilityId: "rates.entries.update",
+                capabilityId: "rates.entries-update",
                 description:
                   "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same user and is refused on a conflict; the user a line applies to cannot be changed here.",
                 access: "write",
@@ -36729,7 +36900,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "list"],
                 capabilityId: "rates.list",
                 description:
-                  "List a matter's rate tables oldest first with cursor pagination, returning each table's name, currency, default flag, and how many rate lines it holds. Use rates.entries.list for the lines themselves and rates.resolve for the rate that actually applies to a user on a date.",
+                  "List a matter's rate tables oldest first with cursor pagination, returning each table's name, currency, default flag, and how many rate lines it holds. Use rates.entries-read for the lines themselves and rates.resolve for the rate that actually applies to a user on a date.",
                 access: "read",
                 flags: [
                   {
@@ -36967,11 +37138,11 @@ export const generatedRouteMap: RouteNode = {
         reports: {
           kind: "route",
           children: {
-            "builtins-clone": {
+            "clone-builtin": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "reports", "builtins-clone"],
-                capabilityId: "reports.builtins.clone",
+                commandPath: ["capability", "reports", "clone-builtin"],
+                capabilityId: "reports.clone-builtin",
                 description:
                   "Copy one built-in report template into the organization so it can be edited in Template Studio and picked like any other template. Pass the built-in's key. The clone keeps the built-in's fill manifest verbatim, so it fills identically, and its name gains a (copy) suffix when a template of that name already exists.",
                 access: "write",
@@ -37030,177 +37201,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "exports-get": {
+            "export-view": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "reports", "exports-get"],
-                capabilityId: "reports.exports.get",
-                description:
-                  "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--export-id",
-                    prop: "exportId",
-                    required: true,
-                    part: "params",
-                    partPath: "exportId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "exportId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        exportId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "exports-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "reports", "exports-list"],
-                capabilityId: "reports.exports.list",
-                description:
-                  "List report exports requested by the current user in a matter, newest first with cursor pagination.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: true,
-                paginationPart: "query",
-                itemsKey: "items",
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        cursor: {
-                          maxLength: 512,
-                          description:
-                            "Opaque cursor from a previous page to fetch the next page",
-                          type: "string",
-                        },
-                        limit: {
-                          minimum: 1,
-                          maximum: 100,
-                          type: "integer",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "templates-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "reports", "templates-list"],
-                capabilityId: "reports.templates.list",
-                description:
-                  "List built-in and organization report templates available for exporting a matter view.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "views-export": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "reports", "views-export"],
-                capabilityId: "reports.views.export",
+                commandPath: ["capability", "reports", "export-view"],
+                capabilityId: "reports.export-view",
                 description:
                   "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
                 access: "write",
@@ -37321,6 +37326,172 @@ export const generatedRouteMap: RouteNode = {
                       required: ["matterId"],
                       properties: {
                         matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "list-exports": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "reports", "list-exports"],
+                capabilityId: "reports.list-exports",
+                description:
+                  "List report exports requested by the current user in a matter, newest first with cursor pagination.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "list-templates": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "reports", "list-templates"],
+                capabilityId: "reports.list-templates",
+                description:
+                  "List built-in and organization report templates available for exporting a matter view.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-export": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "reports", "read-export"],
+                capabilityId: "reports.read-export",
+                description:
+                  "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--export-id",
+                    prop: "exportId",
+                    required: true,
+                    part: "params",
+                    partPath: "exportId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "exportId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        exportId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -37949,25 +38120,6 @@ export const generatedRouteMap: RouteNode = {
         skills: {
           kind: "route",
           children: {
-            "commands-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "skills", "commands-list"],
-                capabilityId: "skills.commands.list",
-                description:
-                  "List the enabled skills that carry a slash command, shaped for the chat composer's command menu: id, scope, name, description, command, and the full instruction body to insert on pick. Capped at 250 rows and not paginated; use skills.list for the whole catalogue.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
             "comments-create": {
               kind: "capability-leaf",
               spec: {
@@ -38276,7 +38428,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "create"],
                 capabilityId: "skills.create",
                 description:
-                  "Author an agent skill from text: name, description, instruction body, and an optional slash command. Team scope requires admin or owner, private scope is your own. A command must be lowercase letters, digits, hyphens, or underscores, must not be one of the reserved commands, and must be free in the organization, as must the skill name. Refused once the per-user or per-organization skill limit is reached. Use skills.upload or skills.from-url.import for a packaged skill instead.",
+                  "Author an agent skill from text: name, description, instruction body, and an optional slash command. Team scope requires admin or owner, private scope is your own. A command must be lowercase letters, digits, hyphens, or underscores, must not be one of the reserved commands, and must be free in the organization, as must the skill name. Refused once the per-user or per-organization skill limit is reached. Use skills.upload or skills.import-url for a packaged skill instead.",
                 access: "write",
                 flags: [
                   {
@@ -38452,11 +38604,78 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "drafts-generate": {
+            "from-blueprint": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "skills", "drafts-generate"],
-                capabilityId: "skills.drafts.generate",
+                commandPath: ["capability", "skills", "from-blueprint"],
+                capabilityId: "skills.from-blueprint",
+                description:
+                  "Create an editable draft skill from one of the bundled blueprints, a SKILL.md skeleton with placeholder resource files. The draft is installed disabled and under a fresh slug, so the same blueprint can be used more than once, and stays fully editable afterwards. Team scope requires admin or owner.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["team", "private"],
+                    repeatable: false,
+                    flag: "--scope",
+                    prop: "scope",
+                    required: true,
+                    part: "body",
+                    partPath: "scope",
+                  },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "check-against-rules",
+                      "intake-to-draft",
+                      "answer-from-sources",
+                      "blank",
+                    ],
+                    repeatable: false,
+                    flag: "--blueprint-id",
+                    prop: "blueprintId",
+                    required: true,
+                    part: "body",
+                    partPath: "blueprintId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["scope", "blueprintId"],
+                      properties: {
+                        scope: {
+                          default: "team",
+                          type: "string",
+                          enum: ["team", "private"],
+                        },
+                        blueprintId: {
+                          default: "check-against-rules",
+                          type: "string",
+                          enum: [
+                            "check-against-rules",
+                            "intake-to-draft",
+                            "answer-from-sources",
+                            "blank",
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "generate-draft": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "generate-draft"],
+                capabilityId: "skills.generate-draft",
                 description:
                   "Draft a skill bundle with the model: returns SKILL.md markdown plus up to eight companion files under references/, prompts/, or knowledge/. Pass intent, optionally examples, and, to revise an existing draft, previousDraft with previousResources and feedback. Nothing is stored: pass the result to skills.create and the resource endpoints to keep it. Consumes AI usage.",
                 access: "write",
@@ -38543,129 +38762,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                         feedback: {
                           maxLength: 2000,
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "from-blueprint-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "skills", "from-blueprint-create"],
-                capabilityId: "skills.from-blueprint.create",
-                description:
-                  "Create an editable draft skill from one of the bundled blueprints, a SKILL.md skeleton with placeholder resource files. The draft is installed disabled and under a fresh slug, so the same blueprint can be used more than once, and stays fully editable afterwards. Team scope requires admin or owner.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "enum",
-                    enum: ["team", "private"],
-                    repeatable: false,
-                    flag: "--scope",
-                    prop: "scope",
-                    required: true,
-                    part: "body",
-                    partPath: "scope",
-                  },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "check-against-rules",
-                      "intake-to-draft",
-                      "answer-from-sources",
-                      "blank",
-                    ],
-                    repeatable: false,
-                    flag: "--blueprint-id",
-                    prop: "blueprintId",
-                    required: true,
-                    part: "body",
-                    partPath: "blueprintId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["scope", "blueprintId"],
-                      properties: {
-                        scope: {
-                          default: "team",
-                          type: "string",
-                          enum: ["team", "private"],
-                        },
-                        blueprintId: {
-                          default: "check-against-rules",
-                          type: "string",
-                          enum: [
-                            "check-against-rules",
-                            "intake-to-draft",
-                            "answer-from-sources",
-                            "blank",
-                          ],
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "from-url-import": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "skills", "from-url-import"],
-                capabilityId: "skills.from-url.import",
-                description:
-                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "enum",
-                    enum: ["team", "private"],
-                    repeatable: false,
-                    flag: "--scope",
-                    prop: "scope",
-                    required: true,
-                    part: "body",
-                    partPath: "scope",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--url",
-                    prop: "url",
-                    required: true,
-                    part: "body",
-                    partPath: "url",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["scope", "url"],
-                      properties: {
-                        scope: {
-                          default: "team",
-                          type: "string",
-                          enum: ["team", "private"],
-                        },
-                        url: {
-                          minLength: 1,
-                          maxLength: 2048,
                           type: "string",
                         },
                       },
@@ -38830,6 +38926,62 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "import-url": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "import-url"],
+                capabilityId: "skills.import-url",
+                description:
+                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["team", "private"],
+                    repeatable: false,
+                    flag: "--scope",
+                    prop: "scope",
+                    required: true,
+                    part: "body",
+                    partPath: "scope",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--url",
+                    prop: "url",
+                    required: true,
+                    part: "body",
+                    partPath: "url",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["scope", "url"],
+                      properties: {
+                        scope: {
+                          default: "team",
+                          type: "string",
+                          enum: ["team", "private"],
+                        },
+                        url: {
+                          minLength: 1,
+                          maxLength: 2048,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             list: {
               kind: "capability-leaf",
               spec: {
@@ -38865,6 +39017,25 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                   },
+                },
+              },
+            },
+            "list-commands": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "list-commands"],
+                capabilityId: "skills.list-commands",
+                description:
+                  "List the enabled skills that carry a slash command, shaped for the chat composer's command menu: id, scope, name, description, command, and the full instruction body to insert on pick. Capped at 250 rows and not paginated; use skills.list for the whole catalogue.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
                 },
               },
             },
@@ -40059,143 +40230,11 @@ export const generatedRouteMap: RouteNode = {
         "style-sets": {
           kind: "route",
           children: {
-            delete: {
+            "create-from-editor": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "style-sets", "delete"],
-                capabilityId: "style-sets.delete",
-                description:
-                  "Permanently delete an organization style set and the stored package file behind it. Documents and templates already created from the style set are unaffected, because they copied its styles at creation time.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--style-set-id",
-                    prop: "styleSetId",
-                    required: true,
-                    part: "params",
-                    partPath: "styleSetId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["styleSetId"],
-                      properties: {
-                        styleSetId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            download: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "download"],
-                capabilityId: "style-sets.download",
-                description:
-                  "Mint a short-lived download URL for one organization style set's stored DOCX package, recording the download in the audit trail. A style set that is unknown or already deleted is a 404.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--style-set-id",
-                    prop: "styleSetId",
-                    required: true,
-                    part: "params",
-                    partPath: "styleSetId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["styleSetId"],
-                      properties: {
-                        styleSetId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "editor-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "editor-get"],
-                capabilityId: "style-sets.editor.get",
-                description:
-                  "Read one organization style set as editor settings: its name, updatedAt, and the style settings parsed out of the stored DOCX package. Pass that updatedAt back to style-sets.from-editor.update as expectedUpdatedAt so a concurrent edit is not silently overwritten.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--style-set-id",
-                    prop: "styleSetId",
-                    required: true,
-                    part: "params",
-                    partPath: "styleSetId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["styleSetId"],
-                      properties: {
-                        styleSetId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "from-editor-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "from-editor-create"],
-                capabilityId: "style-sets.from-editor.create",
+                commandPath: ["capability", "style-sets", "create-from-editor"],
+                capabilityId: "style-sets.create-from-editor",
                 description:
                   "Create an organization style set from explicit editor settings applied to the built-in stella preset, with no DOCX involved. Returns the new style set's id, name, and updatedAt.",
                 access: "write",
@@ -40476,13 +40515,268 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "from-editor-update": {
+            delete: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "style-sets", "from-editor-update"],
-                capabilityId: "style-sets.from-editor.update",
+                commandPath: ["capability", "style-sets", "delete"],
+                capabilityId: "style-sets.delete",
                 description:
-                  "Rewrite one style set's package from explicit editor settings, using its current package as the base, and set its name at the same time. Pass expectedUpdatedAt from style-sets.editor.get so an edit made in the meantime is rejected instead of overwritten.",
+                  "Permanently delete an organization style set and the stored package file behind it. Documents and templates already created from the style set are unaffected, because they copied its styles at creation time.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            download: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "download"],
+                capabilityId: "style-sets.download",
+                description:
+                  "Mint a short-lived download URL for one organization style set's stored DOCX package, recording the download in the audit trail. A style set that is unknown or already deleted is a 404.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "list"],
+                capabilityId: "style-sets.list",
+                description:
+                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, and timestamps, and the response also reports the maximum number of style sets the organization may hold.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-editor": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "read-editor"],
+                capabilityId: "style-sets.read-editor",
+                description:
+                  "Read one organization style set as editor settings: its name, updatedAt, and the style settings parsed out of the stored DOCX package. Pass that updatedAt back to style-sets.update-from-editor as expectedUpdatedAt so a concurrent edit is not silently overwritten.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-stella-editor": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "read-stella-editor"],
+                capabilityId: "style-sets.read-stella-editor",
+                description:
+                  "Read the built-in stella style preset as editor settings, the starting point for a new style set. Takes no arguments and reads no stored data.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "update"],
+                capabilityId: "style-sets.update",
+                description:
+                  "Rename one organization style set; its export file name follows the new name. The stored style package is untouched, so use style-sets.replace or style-sets.update-from-editor to change the styles themselves.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "update-from-editor": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "update-from-editor"],
+                capabilityId: "style-sets.update-from-editor",
+                description:
+                  "Rewrite one style set's package from explicit editor settings, using its current package as the base, and set its name at the same time. Pass expectedUpdatedAt from style-sets.read-editor so an edit made in the meantime is rejected instead of overwritten.",
                 access: "write",
                 flags: [
                   {
@@ -40796,129 +41090,6 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            list: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "list"],
-                capabilityId: "style-sets.list",
-                description:
-                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, and timestamps, and the response also reports the maximum number of style sets the organization may hold.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: true,
-                paginationPart: "query",
-                itemsKey: "items",
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    query: {
-                      type: "object",
-                      properties: {
-                        limit: {
-                          minimum: 1,
-                          maximum: 100,
-                          type: "integer",
-                        },
-                        cursor: {
-                          maxLength: 512,
-                          description:
-                            "Opaque cursor from a previous page to fetch the next page",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "stella-editor-get": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "stella-editor-get"],
-                capabilityId: "style-sets.stella-editor.get",
-                description:
-                  "Read the built-in stella style preset as editor settings, the starting point for a new style set. Takes no arguments and reads no stored data.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
-            update: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "style-sets", "update"],
-                capabilityId: "style-sets.update",
-                description:
-                  "Rename one organization style set; its export file name follows the new name. The stored style package is untouched, so use style-sets.replace or style-sets.from-editor.update to change the styles themselves.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--style-set-id",
-                    prop: "styleSetId",
-                    required: true,
-                    part: "params",
-                    partPath: "styleSetId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["name"],
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["styleSetId"],
-                      properties: {
-                        styleSetId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
           },
         },
         tasks: {
@@ -40928,9 +41099,9 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "tasks", "assignees-add"],
-                capabilityId: "tasks.assignees.add",
+                capabilityId: "tasks.assignees-add",
                 description:
-                  "Assign one member of the matter to a task, in a role that defaults to assignee. Repeating an assignment updates that user's role instead of duplicating it. Refused when the user is not a member of this matter and when the task is read-only. Remove an assignment with tasks.assignees.remove.",
+                  "Assign one member of the matter to a task, in a role that defaults to assignee. Repeating an assignment updates that user's role instead of duplicating it. Refused when the user is not a member of this matter and when the task is read-only. Remove an assignment with tasks.assignees-remove.",
                 access: "write",
                 flags: [
                   {
@@ -40997,6 +41168,82 @@ export const generatedRouteMap: RouteNode = {
                         role: {
                           minLength: 1,
                           maxLength: 16,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "assignees-remove": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "tasks", "assignees-remove"],
+                capabilityId: "tasks.assignees-remove",
+                description:
+                  "Unassign one user from a task. Idempotent: removing a user who is not assigned still succeeds, and nothing stops a task from ending up with no assignee; a read-only task is refused.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--task-id",
+                    prop: "taskId",
+                    required: true,
+                    part: "body",
+                    partPath: "taskId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "body",
+                    partPath: "userId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["taskId", "userId"],
+                      properties: {
+                        taskId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        userId: {
+                          minLength: 1,
+                          maxLength: 128,
                           type: "string",
                         },
                       },
@@ -41120,87 +41367,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "assignees-remove": {
+            calendar: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "tasks", "assignees-remove"],
-                capabilityId: "tasks.assignees.remove",
-                description:
-                  "Unassign one user from a task. Idempotent: removing a user who is not assigned still succeeds, and nothing stops a task from ending up with no assignee; a read-only task is refused.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--task-id",
-                    prop: "taskId",
-                    required: true,
-                    part: "body",
-                    partPath: "taskId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--user-id",
-                    prop: "userId",
-                    required: true,
-                    part: "body",
-                    partPath: "userId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["taskId", "userId"],
-                      properties: {
-                        taskId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        userId: {
-                          minLength: 1,
-                          maxLength: 128,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "calendar-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "tasks", "calendar-list"],
-                capabilityId: "tasks.calendar.list",
+                commandPath: ["capability", "tasks", "calendar"],
+                capabilityId: "tasks.calendar",
                 description:
                   "Read a matter's tasks that fall inside a date-time window, shaped for a calendar. datePropertyIds chooses which date fields place an item, including the built-in created, updated, due, and start dates; endDatePropertyId supplies the end of a range. Filters and sorts follow the same contract as the table views.",
                 access: "read",
@@ -42454,9 +42625,9 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-create"],
-                capabilityId: "tasks.entity-links.create",
+                capabilityId: "tasks.entity-links-create",
                 description:
-                  "Link a task to another document, folder, or task, with a link type that defaults to related. Both ends must be in this matter, an entity cannot be linked to itself, and a read-only entity is refused. Remove the link with tasks.entity-links.delete.",
+                  "Link a task to another document, folder, or task, with a link type that defaults to related. Both ends must be in this matter, an entity cannot be linked to itself, and a read-only entity is refused. Remove the link with tasks.entity-links-delete.",
                 access: "write",
                 flags: [
                   {
@@ -42546,7 +42717,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-delete"],
-                capabilityId: "tasks.entity-links.delete",
+                capabilityId: "tasks.entity-links-delete",
                 description:
                   "Remove one link between a task and another document, folder, or task, addressed by the link id. Both linked items survive; a link with a task on neither end, and a read-only task, are refused.",
                 access: "write",
@@ -42604,13 +42775,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "entity-links-list": {
+            "entity-links-read": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "tasks", "entity-links-list"],
-                capabilityId: "tasks.entity-links.list",
+                commandPath: ["capability", "tasks", "entity-links-read"],
+                capabilityId: "tasks.entity-links-read",
                 description:
-                  "List every link one task has, in both directions, each with the entity at the other end and its kind. Change them with tasks.entity-links.create and tasks.entity-links.delete.",
+                  "List every link one task has, in both directions, each with the entity at the other end and its kind. Change them with tasks.entity-links-create and tasks.entity-links-delete.",
                 access: "read",
                 flags: [
                   {
@@ -43670,11 +43841,11 @@ export const generatedRouteMap: RouteNode = {
         templates: {
           kind: "route",
           children: {
-            "bindings-list": {
+            "binding-catalog": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "bindings-list"],
-                capabilityId: "templates.bindings.list",
+                commandPath: ["capability", "templates", "binding-catalog"],
+                capabilityId: "templates.binding-catalog",
                 description:
                   "List the data-binding options a template field can be bound to: every (source, field) pair in the binding taxonomy with its label key. The catalog is static and identical for every matter in the organization; it takes no arguments and reads no stored data.",
                 access: "read",
@@ -43690,69 +43861,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "blank-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "templates", "blank-create"],
-                capabilityId: "templates.blank.create",
-                description:
-                  "Create an empty template from the stella base DOCX, with a name and an optional category. It carries no fields yet: add markers by editing the document and storing it with templates.document.update. Use templates.create to upload a DOCX that already has {{field}} markers.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--category-id",
-                    prop: "categoryId",
-                    required: false,
-                    part: "body",
-                    partPath: "categoryId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["name"],
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                        categoryId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
             "categories-create": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "categories-create"],
-                capabilityId: "templates.categories.create",
+                capabilityId: "templates.categories-create",
                 description:
                   "Create a category in the organization's template category tree, optionally under a parent category.",
                 access: "write",
@@ -43823,7 +43936,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "categories-delete"],
-                capabilityId: "templates.categories.delete",
+                capabilityId: "templates.categories-delete",
                 description:
                   "Delete one category from the organization's template category tree. No template is deleted: templates filed under the category become uncategorized, and its child categories are promoted to its own parent.",
                 access: "write",
@@ -43867,7 +43980,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "categories-list"],
-                capabilityId: "templates.categories.list",
+                capabilityId: "templates.categories-list",
                 description:
                   "List the organization's template categories with their parents, descriptions, and sort order, enough to render the whole tree. The set is bounded per organization and returned whole, without a cursor.",
                 access: "read",
@@ -43887,7 +44000,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "categories-update"],
-                capabilityId: "templates.categories.update",
+                capabilityId: "templates.categories-update",
                 description:
                   "Rename or re-describe one template category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written, and a move that would make the tree circular is refused.",
                 access: "write",
@@ -44049,11 +44162,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "clause-slots-list": {
+            "clause-slots": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "clause-slots-list"],
-                capabilityId: "templates.clause-slots.list",
+                commandPath: ["capability", "templates", "clause-slots"],
+                capabilityId: "templates.clause-slots",
                 description:
                   "List the clause slots of one template together with the resolved body of the clause linked to each, using the same resolution the fill path runs, so a fill form can show what will be inserted and adjust it for that fill. Slots with no linked clause are left out; those fill as unmatched placeholders.",
                 access: "read",
@@ -44093,98 +44206,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "clause-slots-update": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "templates", "clause-slots-update"],
-                capabilityId: "templates.clause-slots.update",
-                description:
-                  "Assign one clause link of a template to a named clause slot, or clear the assignment by passing null. The clause, its pinned version, and its variant are untouched: only which slot the link fills changes.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--template-id",
-                    prop: "templateId",
-                    required: true,
-                    part: "params",
-                    partPath: "templateId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--link-id",
-                    prop: "linkId",
-                    required: true,
-                    part: "params",
-                    partPath: "linkId",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--slot-name",
-                    prop: "slotName",
-                    required: true,
-                    part: "body",
-                    partPath: "slotName",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["slotName"],
-                      properties: {
-                        slotName: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 128,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["templateId", "linkId"],
-                      properties: {
-                        templateId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        linkId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
             "clauses-link": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "clauses-link"],
-                capabilityId: "templates.clauses.link",
+                capabilityId: "templates.clauses-link",
                 description:
                   "Link a clause from the library into a template, optionally pinning one of its variants and naming the clause slot it fills. The link records the clause's version as it is now, so later edits to the clause do not reach the template until it is synced. Refused once the template holds its maximum number of clause links.",
                 access: "write",
@@ -44279,7 +44305,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "clauses-list"],
-                capabilityId: "templates.clauses.list",
+                capabilityId: "templates.clauses-list",
                 description:
                   "List the clauses linked to one template: each link's id, clause, pinned variant and version, slot name, sort order, and whether the pinned version has fallen behind the clause's current one.",
                 access: "read",
@@ -44319,13 +44345,100 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "clauses-slot-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "clauses-slot-update"],
+                capabilityId: "templates.clauses-slot-update",
+                description:
+                  "Assign one clause link of a template to a named clause slot, or clear the assignment by passing null. The clause, its pinned version, and its variant are untouched: only which slot the link fills changes.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--template-id",
+                    prop: "templateId",
+                    required: true,
+                    part: "params",
+                    partPath: "templateId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--link-id",
+                    prop: "linkId",
+                    required: true,
+                    part: "params",
+                    partPath: "linkId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--slot-name",
+                    prop: "slotName",
+                    required: true,
+                    part: "body",
+                    partPath: "slotName",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["slotName"],
+                      properties: {
+                        slotName: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["templateId", "linkId"],
+                      properties: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        linkId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "clauses-sync": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "clauses-sync"],
-                capabilityId: "templates.clauses.sync",
+                capabilityId: "templates.clauses-sync",
                 description:
-                  "Re-pin one clause link of a template to its clause's current version, so the next fill inserts the newest wording. The link's slot and variant stay as they are. Use templates.outdated-clauses.sync to do this for every outdated link at once.",
+                  "Re-pin one clause link of a template to its clause's current version, so the next fill inserts the newest wording. The link's slot and variant stay as they are. Use templates.clauses-sync-all to do this for every outdated link at once.",
                 access: "write",
                 flags: [
                   {
@@ -44379,13 +44492,57 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "clauses-sync-all": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "clauses-sync-all"],
+                capabilityId: "templates.clauses-sync-all",
+                description:
+                  "Re-pin every outdated clause link of one template to its clause's current version in a single transaction, auditing each link as if it had been synced on its own. Links already on the current version are left untouched.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--template-id",
+                    prop: "templateId",
+                    required: true,
+                    part: "params",
+                    partPath: "templateId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["templateId"],
+                      properties: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "clauses-unlink": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "clauses-unlink"],
-                capabilityId: "templates.clauses.unlink",
+                capabilityId: "templates.clauses-unlink",
                 description:
-                  "Remove one clause link from a template, with its pinned version, variant, and slot assignment. Reversible: nothing leaves the clause library and the same clause can be linked again with templates.clauses.link. The template's own document is not rewritten, so the slot marker stays in it.",
+                  "Remove one clause link from a template, with its pinned version, variant, and slot assignment. Reversible: nothing leaves the clause library and the same clause can be linked again with templates.clauses-link. The template's own document is not rewritten, so the slot marker stays in it.",
                 access: "write",
                 flags: [
                   {
@@ -44508,6 +44665,142 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "create-blank": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "create-blank"],
+                capabilityId: "templates.create-blank",
+                description:
+                  "Create an empty template from the stella base DOCX, with a name and an optional category. It carries no fields yet: add markers by editing the document and storing it with templates.save-document. Use templates.create to upload a DOCX that already has {{field}} markers.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--category-id",
+                    prop: "categoryId",
+                    required: false,
+                    part: "body",
+                    partPath: "categoryId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        categoryId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "create-from-style-set": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "create-from-style-set",
+                ],
+                capabilityId: "templates.create-from-style-set",
+                description:
+                  "Create an empty template whose document is built from one of the organization's style sets, so it starts in that house style, with a name and an optional category. Like templates.create-blank it carries no fields until a document is saved onto it.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "body",
+                    partPath: "styleSetId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--category-id",
+                    prop: "categoryId",
+                    required: false,
+                    part: "body",
+                    partPath: "categoryId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name", "styleSetId"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        categoryId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             delete: {
               kind: "capability-leaf",
               spec: {
@@ -44552,35 +44845,26 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "fields-suggest": {
+            "fill-preview": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "fields-suggest"],
-                capabilityId: "templates.fields.suggest",
+                commandPath: ["capability", "templates", "fill-preview"],
+                capabilityId: "templates.fill-preview",
                 description:
-                  "Ask the model which literal values in a slice of template text (a whole document or just a selection) should become fillable fields, with optional extra instructions. Returns raw suggestions of literal text, proposed field path, and input type for a human to accept or reject; unlike templates.prepare it never rewrites the document. Consumes AI usage.",
-                access: "write",
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. values is an object mapping each field path to its value. Use templates.fill-by-id to download the document.",
+                access: "read",
                 flags: [
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--text",
-                    prop: "text",
+                    flag: "--template-id",
+                    prop: "templateId",
                     required: true,
-                    part: "body",
-                    partPath: "text",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--instructions",
-                    prop: "instructions",
-                    required: false,
-                    part: "body",
-                    partPath: "instructions",
+                    part: "params",
+                    partPath: "templateId",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.values"],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -44590,14 +44874,34 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["text"],
+                      required: ["values"],
                       properties: {
-                        text: {
-                          maxLength: 200000,
-                          type: "string",
+                        values: {
+                          allOf: [
+                            {
+                              additionalProperties: true,
+                              type: "object",
+                              properties: {},
+                            },
+                            {
+                              type: "object",
+                              patternProperties: {
+                                "^(.*)$": {},
+                              },
+                            },
+                          ],
                         },
-                        instructions: {
-                          maxLength: 2000,
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["templateId"],
+                      properties: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -44606,13 +44910,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "fills-create": {
+            "fill-to-matter": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "fills-create"],
-                capabilityId: "templates.fills.create",
+                commandPath: ["capability", "templates", "fill-to-matter"],
+                capabilityId: "templates.fill-to-matter",
                 description:
-                  "Fill a stored template and save the result as a new document in a matter rather than returning bytes. Same values and clauseOverrides contract as templates.fills.download, plus an optional document name (the .docx extension is appended when missing) and a parent folder; the created entity is returned.",
+                  "Fill a stored template and save the result as a new document in a matter rather than returning bytes. Same values and clauseOverrides contract as templates.fill-by-id, plus an optional document name (the .docx extension is appended when missing) and a parent folder; the created entity is returned.",
                 access: "write",
                 flags: [
                   {
@@ -44797,149 +45101,6 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         templateId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "fills-preview": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "templates", "fills-preview"],
-                capabilityId: "templates.fills.preview",
-                description:
-                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. values is an object mapping each field path to its value. Use templates.fills.download to download the document.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--template-id",
-                    prop: "templateId",
-                    required: true,
-                    part: "params",
-                    partPath: "templateId",
-                  },
-                ],
-                inputOnly: ["body.values"],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["values"],
-                      properties: {
-                        values: {
-                          allOf: [
-                            {
-                              additionalProperties: true,
-                              type: "object",
-                              properties: {},
-                            },
-                            {
-                              type: "object",
-                              patternProperties: {
-                                "^(.*)$": {},
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["templateId"],
-                      properties: {
-                        templateId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "from-style-set-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "templates",
-                  "from-style-set-create",
-                ],
-                capabilityId: "templates.from-style-set.create",
-                description:
-                  "Create an empty template whose document is built from one of the organization's style sets, so it starts in that house style, with a name and an optional category. Like templates.blank.create it carries no fields until a document is saved onto it.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--style-set-id",
-                    prop: "styleSetId",
-                    required: true,
-                    part: "body",
-                    partPath: "styleSetId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--category-id",
-                    prop: "categoryId",
-                    required: false,
-                    part: "body",
-                    partPath: "categoryId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["name", "styleSetId"],
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                        styleSetId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        categoryId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -45468,11 +45629,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "lookups-preview": {
+            "lookup-preview": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "lookups-preview"],
-                capabilityId: "templates.lookups.preview",
+                commandPath: ["capability", "templates", "lookup-preview"],
+                capabilityId: "templates.lookup-preview",
                 description:
                   "Preview a registry-lookup field: resolve a company number against the chosen public register and render the field's format string over the hit, returning the text with its bold and italic markers left in place for the client to interpret. Refused when the number is not plausible for that register or required credentials are missing, and a 404 when the company is not found. Outcomes are cached per register and number, and no model is involved.",
                 access: "read",
@@ -45562,54 +45723,6 @@ export const generatedRouteMap: RouteNode = {
                               type: "null",
                             },
                           ],
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "outdated-clauses-sync": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "templates",
-                  "outdated-clauses-sync",
-                ],
-                capabilityId: "templates.outdated-clauses.sync",
-                description:
-                  "Re-pin every outdated clause link of one template to its clause's current version in a single transaction, auditing each link as if it had been synced on its own. Links already on the current version are left untouched.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--template-id",
-                    prop: "templateId",
-                    required: true,
-                    part: "params",
-                    partPath: "templateId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["templateId"],
-                      properties: {
-                        templateId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
                         },
                       },
                     },
@@ -45750,13 +45863,67 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "suggest-fields": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "suggest-fields"],
+                capabilityId: "templates.suggest-fields",
+                description:
+                  "Ask the model which literal values in a slice of template text (a whole document or just a selection) should become fillable fields, with optional extra instructions. Returns raw suggestions of literal text, proposed field path, and input type for a human to accept or reject; unlike templates.prepare it never rewrites the document. Consumes AI usage.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--text",
+                    prop: "text",
+                    required: true,
+                    part: "body",
+                    partPath: "text",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--instructions",
+                    prop: "instructions",
+                    required: false,
+                    part: "body",
+                    partPath: "instructions",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["text"],
+                      properties: {
+                        text: {
+                          maxLength: 200000,
+                          type: "string",
+                        },
+                        instructions: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             update: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "update"],
                 capabilityId: "templates.update",
                 description:
-                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance. Only the fields you pass are written. The fields a template asks for live in its document, so change those by storing a new body with templates.document.update or by calling configure_template_fields.",
+                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance. Only the fields you pass are written. The fields a template asks for live in its document, so change those by storing a new body with templates.save-document or by calling configure_template_fields.",
                 access: "write",
                 flags: [
                   {
@@ -45918,7 +46085,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "versions-diff"],
-                capabilityId: "templates.versions.diff",
+                capabilityId: "templates.versions-diff",
                 description:
                   "Return a plain-text, line-level diff of one template version against its predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed.",
                 access: "read",
@@ -45978,7 +46145,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "versions-get"],
-                capabilityId: "templates.versions.get",
+                capabilityId: "templates.versions-get",
                 description:
                   "Read one stored template version: its number, field count, creation time, and a short-lived presigned URL to download that version's DOCX. The download grant is recorded in the audit trail.",
                 access: "read",
@@ -46038,7 +46205,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "versions-list"],
-                capabilityId: "templates.versions.list",
+                capabilityId: "templates.versions-list",
                 description:
                   "List one template's versions, newest first, with cursor pagination. Each entry carries its version number, field count, creation time, and the author's name and image, which are blank for a version saved by someone who has left the organization.",
                 access: "read",
@@ -46100,9 +46267,9 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "versions-summarize"],
-                capabilityId: "templates.versions.summarize",
+                capabilityId: "templates.versions-summarize",
                 description:
-                  "Summarize in prose what changed in one template version compared with its predecessor, over the same diff templates.versions.diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
+                  "Summarize in prose what changed in one template version compared with its predecessor, over the same diff templates.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -46165,7 +46332,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "batch-delete"],
-                capabilityId: "time-entries.batch.delete",
+                capabilityId: "time-entries.batch-delete",
                 description:
                   "Delete or write off many time entries in one matter at once: draft entries are permanently deleted and every other unbilled entry is written off. Billed, already written-off, and unknown ids are skipped without an error and there is no per-entry ownership check, so the returned count is the only report of what happened.",
                 access: "write",
@@ -46232,7 +46399,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "batch-update"],
-                capabilityId: "time-entries.batch.update",
+                capabilityId: "time-entries.batch-update",
                 description:
                   "Apply one action to up to 200 time entries in a matter at once: approve, revert_to_draft, mark_billable, or mark_non_billable. Entries that are not in the action's starting state are skipped and only the number of changed rows is returned. Approval is refused while any selected entry has a running timer or a billable entry has no rate; mark_billable re-resolves each entry's rate and is refused when one of them has no effective rate.",
                 access: "write",
@@ -46524,11 +46691,75 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "csv-export": {
+            delete: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "time-entries", "csv-export"],
-                capabilityId: "time-entries.csv.export",
+                commandPath: ["capability", "time-entries", "delete"],
+                capabilityId: "time-entries.delete",
+                description:
+                  "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Time entry ID to delete or write off",
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                          description: "Time entry ID to delete or write off",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "export-csv": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "export-csv"],
+                capabilityId: "time-entries.export-csv",
                 description:
                   "Export a matter's time entries as CSV text, one row per entry with date, timekeeper name, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
                 access: "read",
@@ -46626,135 +46857,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            delete: {
+            "export-ledes": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "time-entries", "delete"],
-                capabilityId: "time-entries.delete",
-                description:
-                  "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description: "Time entry ID to delete or write off",
-                    flag: "--id",
-                    prop: "id",
-                    required: true,
-                    part: "body",
-                    partPath: "id",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "billing_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["id"],
-                      properties: {
-                        id: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                          description: "Time entry ID to delete or write off",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        matterId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            get: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "time-entries", "get"],
-                capabilityId: "time-entries.get",
-                description:
-                  "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--id",
-                    prop: "id",
-                    required: true,
-                    part: "params",
-                    partPath: "id",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["matterId", "id"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        id: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "ledes-export": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "time-entries", "ledes-export"],
-                capabilityId: "time-entries.ledes.export",
+                commandPath: ["capability", "time-entries", "export-ledes"],
+                capabilityId: "time-entries.export-ledes",
                 description:
                   "Export a matter's time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
                 access: "read",
@@ -46840,6 +46947,66 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["draft", "approved", "billed", "written_off"],
                         },
                         workItemId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "get"],
+                capabilityId: "time-entries.get",
+                description:
+                  "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "id"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        id: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -47494,7 +47661,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "timer-start"],
-                capabilityId: "time-entries.timer.start",
+                capabilityId: "time-entries.timer-start",
                 description:
                   "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. Refused when the user already has a running timer.",
                 access: "write",
@@ -47591,7 +47758,7 @@ export const generatedRouteMap: RouteNode = {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "time-entries", "timer-stop"],
-                capabilityId: "time-entries.timer.stop",
+                capabilityId: "time-entries.timer-stop",
                 description:
                   "Stop the signed-in user's running timer in the current matter, writing the elapsed minutes onto its draft time entry and rounding the billed minutes up to the billing increment. Fails when that user has no running timer in this matter.",
                 access: "write",
@@ -48174,11 +48341,11 @@ export const generatedRouteMap: RouteNode = {
         usage: {
           kind: "route",
           children: {
-            "entitlement-get": {
+            "get-entitlement": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "usage", "entitlement-get"],
-                capabilityId: "usage.entitlement.get",
+                commandPath: ["capability", "usage", "get-entitlement"],
+                capabilityId: "usage.get-entitlement",
                 description:
                   "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
                 access: "read",
@@ -48558,6 +48725,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },
@@ -49189,7 +49407,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
                 description:
-                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, or timeline), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
@@ -49219,6 +49437,7 @@ export const generatedRouteMap: RouteNode = {
                       "kanban",
                       "calendar",
                       "timeline",
+                      "avt",
                     ],
                     repeatable: false,
                     flag: "--target-type",
@@ -49250,6 +49469,7 @@ export const generatedRouteMap: RouteNode = {
                             "kanban",
                             "calendar",
                             "timeline",
+                            "avt",
                           ],
                         },
                       },
@@ -49653,6 +49873,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },
@@ -50992,6 +51263,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },

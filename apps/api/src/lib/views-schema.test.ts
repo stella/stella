@@ -380,6 +380,11 @@ const arbLayout = fc.oneof(
       ],
     },
   ),
+  fc.record({
+    type: fc.constant("avt" as const),
+    ...baseLayoutFields,
+    listId: fc.option(fc.uuid(), { nil: null }),
+  }),
 );
 
 const declaredLayoutKeys = new Set([
@@ -399,6 +404,7 @@ const declaredLayoutKeys = new Set([
   "startDatePropertyId",
   "zoom",
   "showTable",
+  "listId",
 ]);
 
 // Valibot 1.4.0's strictObject uses `key in this.entries` to detect extra keys,

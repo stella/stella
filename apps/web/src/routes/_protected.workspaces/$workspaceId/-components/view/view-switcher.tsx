@@ -6,6 +6,7 @@ import {
   BookmarkPlusIcon,
   CalendarIcon,
   CopyIcon,
+  FileCheckIcon,
   FolderTreeIcon,
   GanttChartIcon,
   KanbanIcon,
@@ -52,12 +53,17 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
+import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import {
+  EMPTY_AVT_LAYOUT,
+  switcherViews,
+} from "@/lib/workspaces/view-layout";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
@@ -77,6 +83,7 @@ const layoutIcons = {
   kanban: KanbanIcon,
   calendar: CalendarIcon,
   timeline: GanttChartIcon,
+  avt: FileCheckIcon,
 } as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 const LAYOUT_LABEL_KEYS = {
@@ -86,6 +93,7 @@ const LAYOUT_LABEL_KEYS = {
   kanban: "workspaces.views.layouts.kanban",
   calendar: "workspaces.views.layouts.calendar",
   timeline: "workspaces.views.layouts.timeline",
+  avt: "workspaces.views.layouts.avt",
 } as const satisfies Record<ViewLayoutType, TranslationKey>;
 
 const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
@@ -136,6 +144,7 @@ const defaultLayouts = {
     zoom: "month",
     showTable: false,
   },
+  avt: EMPTY_AVT_LAYOUT,
 } as const satisfies Record<ViewLayoutType, ViewLayout>;
 
 const LAYOUT_OPTIONS = DIRECTLY_CREATABLE_VIEW_LAYOUTS;
@@ -155,7 +164,9 @@ export const ViewSwitcher = ({
   const canCreateView = usePermissions({ view: ["create"] });
   const canUpdateView = usePermissions({ view: ["update"] });
   const direction = useI18nStore((state) => getLangDir(state.lang));
-  const { data: views = [] } = useQuery(viewsOptions(workspaceId));
+  const avtEnabled = useAvtPreviewEnabled();
+  const { data: allViews = [] } = useQuery(viewsOptions(workspaceId));
+  const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
   const [renamingViewId, setRenamingViewId] = useState<string | null>(null);
@@ -168,12 +179,18 @@ export const ViewSwitcher = ({
   const createLayoutOptions = hasOverviewView
     ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
     : LAYOUT_OPTIONS;
-  const disallowedTemplateLayouts = new Set<ViewLayoutType>(
-    hasOverviewView ? ["overview"] : [],
-  );
+  const disallowedTemplateLayouts = new Set<ViewLayoutType>([
+    ...(hasOverviewView ? ["overview" as const] : []),
+    ...(avtEnabled ? [] : ["avt" as const]),
+  ]);
+  // Views hidden from the switcher keep their place after the shown ones:
+  // the server takes a reorder only when it names every view.
+  const hiddenViewIds = allViews
+    .filter((view) => !views.includes(view))
+    .map((view) => view.id);
   const handleReorder = (reordered: string[]) => {
     reorderViews.mutate(
-      { viewIds: reordered },
+      { viewIds: [...reordered, ...hiddenViewIds] },
       {
         onError: () => {
           stellaToast.add({

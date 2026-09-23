@@ -4003,6 +4003,8 @@
   "settings": {
     "account": {
       "beta": "Beta-Funktionen",
+      "betaAvt": "AVT-Dokumentprüfung",
+      "betaAvtDescription": "Die Dokumente einer Akte Aussage für Aussage mit den Fakten einer Liste abgleichen",
       "betaCaseLawDescription": "Öffentliche Rechtsprechungssuche und -ansicht in der Seitenleiste anzeigen",
       "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
       "betaInbox": "Posteingang und Benachrichtigungen",
@@ -5697,6 +5699,7 @@
       "groupItemCount": "{count, plural, one {# Element} other {# Elemente}}",
       "hideColumn": "Spalte ausblenden",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalender",
         "grid": "Raster",
         "kanban": "Kanban",

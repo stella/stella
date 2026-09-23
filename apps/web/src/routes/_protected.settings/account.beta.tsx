@@ -5,6 +5,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
+import { env } from "@/env";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useDevStore } from "@/lib/dev-store";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -28,6 +29,8 @@ function BetaFeaturesPage() {
   const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
   const inboxPreview = useDevStore((s) => s.inboxPreview);
   const setInboxPreview = useDevStore((s) => s.setInboxPreview);
+  const avtPreview = useDevStore((s) => s.avtPreview);
+  const setAvtPreview = useDevStore((s) => s.setAvtPreview);
 
   return (
     <>
@@ -122,6 +125,31 @@ function BetaFeaturesPage() {
             </Field>
           </div>
         </FramePanel>
+        {env.VITE_FEATURE_LEGAL_LISTS && (
+          <FramePanel>
+            <div className="flex flex-col gap-3 p-1">
+              <h2 className="text-sm font-medium">
+                {t("settings.account.betaAvt")}
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                {t("settings.account.betaAvtDescription")}
+              </p>
+              <Field className="flex-row items-center gap-2">
+                <Checkbox
+                  checked={avtPreview}
+                  onCheckedChange={(next) => {
+                    if (next === avtPreview) {
+                      return;
+                    }
+
+                    setAvtPreview(next);
+                  }}
+                />
+                <FieldLabel>{t("settings.account.betaAvt")}</FieldLabel>
+              </Field>
+            </div>
+          </FramePanel>
+        )}
       </Frame>
     </>
   );

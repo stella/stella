@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  VIEW_LAYOUT_TYPES,
+} from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -15,27 +19,19 @@ import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
 
-const VIEW_LAYOUT_TYPES = [
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-  "calendar",
-  "timeline",
-] as const;
-
 const config = {
   description:
     "Convert one view of a matter to another layout type (table, filesystem, " +
-    "kanban, calendar, or timeline), carrying over as much of its filters " +
-    "and sorts as the target layout supports. Converting to overview, or to " +
+    "kanban, calendar, timeline, or avt: document verification against a " +
+    "list's facts), carrying over as much of its filters and sorts as the " +
+    "target layout supports. Converting to overview, or to " +
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: t.Object({
-    targetType: t.UnionEnum(VIEW_LAYOUT_TYPES),
+    targetType: t.UnionEnum([...VIEW_LAYOUT_TYPES]),
   }),
 } satisfies WorkspaceHandlerConfig;
 

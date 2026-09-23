@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { AvtRoute } from "@/features/avt/avt-route";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-import { isTableView } from "@/lib/workspaces/view-layout";
+import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
@@ -114,6 +115,9 @@ export const Route = createFileRoute(
       timeline: async () => {
         // Not yet implemented — RouteComponent renders null.
       },
+      avt: async () => {
+        // AvtRoute loads its own data once the preview gate lets it render.
+      },
     };
 
     await prefetchByViewType[activeView.layout.type]();
@@ -155,7 +159,13 @@ function RouteComponent() {
       return <CalendarView view={activeView} workspaceId={workspaceId} />;
     case "timeline":
       return null;
+    case "avt":
+      if (!isAvtView(activeView)) {
+        return null;
+      }
+      return <AvtRoute view={activeView} workspaceId={workspaceId} />;
     default: {
+      activeView.layout.type satisfies never;
       return null;
     }
   }

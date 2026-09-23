@@ -5,6 +5,7 @@ export const VIEW_LAYOUT_TYPES = [
   "kanban",
   "calendar",
   "timeline",
+  "avt",
 ] as const;
 
 export type ViewLayoutType = (typeof VIEW_LAYOUT_TYPES)[number];
@@ -16,6 +17,7 @@ const VIEW_LAYOUT_POLICY = {
   kanban: { provisioning: "required", creation: "direct" },
   calendar: { provisioning: "optional", creation: "direct" },
   timeline: { provisioning: "optional", creation: "template-only" },
+  avt: { provisioning: "optional", creation: "template-only" },
 } as const satisfies Record<
   ViewLayoutType,
   {

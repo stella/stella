@@ -4003,6 +4003,8 @@
   "settings": {
     "account": {
       "beta": "Beta funkcijos",
+      "betaAvt": "AVT dokumentų tikrinimas",
+      "betaAvtDescription": "Tikrinti bylos dokumentus teiginys po teiginio pagal sąrašo faktus",
       "betaCaseLawDescription": "Rodyti viešą teismų praktikos paiešką ir skaityklę šoninėje juostoje",
       "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "betaInbox": "Gautieji ir pranešimai",
@@ -5697,6 +5699,7 @@
       "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalendorius",
         "grid": "Tinklelis",
         "kanban": "Kanban",

@@ -4003,6 +4003,8 @@
   "settings": {
     "account": {
       "beta": "Beetafunktsioonid",
+      "betaAvt": "AVT dokumentide kontroll",
+      "betaAvtDescription": "Kontrolli toimiku dokumente väide väite haaval loendi faktide vastu",
       "betaCaseLawDescription": "Kuva avalik kohtupraktika otsing ja lugeja külgribal",
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "betaInbox": "Postkast ja teavitused",
@@ -5697,6 +5699,7 @@
       "groupItemCount": "{count, plural, one {# üksus} other {# üksust}}",
       "hideColumn": "Peida veerg",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalender",
         "grid": "Ruudustik",
         "kanban": "Kanban",

@@ -386,7 +386,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
           className={cn(
             "flex min-w-0 items-center",
             TOOLBAR_ROW_HEIGHT,
-            activeView.layout.type !== "overview" && "border-b md:border-b-0",
+            hasViewToolbar(activeView) && "border-b md:border-b-0",
           )}
         >
           <ViewSwitcher
@@ -404,7 +404,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
             workspaceId={workspaceId}
           />
         </div>
-        {activeView.layout.type !== "overview" && (
+        {hasViewToolbar(activeView) && (
           <ViewToolbar
             paneRef={paneRef}
             view={activeView}
@@ -432,6 +432,11 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
     </div>
   );
 }
+
+// Overview and AVT do not show the matter's entities through filters, sorts
+// and columns, so the toolbar that edits those has nothing to act on.
+const hasViewToolbar = (view: WorkspaceView): boolean =>
+  view.layout.type !== "overview" && view.layout.type !== "avt";
 
 const PENDING_TABLE_ROW_KEYS = [
   "r1",

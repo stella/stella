@@ -192,6 +192,23 @@ export const convertLayout = (
     };
   }
 
+  if (targetType === "avt") {
+    return {
+      version: 1,
+      type: "avt",
+      ...base,
+      listId: source.type === "avt" ? source.listId : null,
+    };
+  }
+
   // overview, filesystem
   return { version: 1, type: targetType, ...base };
 };
+
+/**
+ * A layout carried out of its matter (a view template, a duplicated matter)
+ * drops the references only that matter can resolve: an AVT view's list
+ * belongs to the matter it was picked in.
+ */
+export const portableLayout = (layout: ViewLayout): ViewLayout =>
+  layout.type === "avt" ? { ...layout, listId: null } : layout;

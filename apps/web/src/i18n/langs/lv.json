@@ -4003,6 +4003,8 @@
   "settings": {
     "account": {
       "beta": "Beta funkcijas",
+      "betaAvt": "AVT dokumentu pārbaude",
+      "betaAvtDescription": "Pārbaudīt lietas dokumentus apgalvojumu pa apgalvojumam pret saraksta faktiem",
       "betaCaseLawDescription": "Rādīt publisko tiesu prakses meklēšanu un lasītāju sānjoslā",
       "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "betaInbox": "Iesūtne un paziņojumi",
@@ -5697,6 +5699,7 @@
       "groupItemCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
       "hideColumn": "Paslēpt kolonnu",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalendārs",
         "grid": "Režģis",
         "kanban": "Kanban",

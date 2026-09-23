@@ -4006,6 +4006,8 @@ type Messages = {
   "settings": {
     "account": {
       "beta": "Beta Features";
+      "betaAvt": "AVT document verification";
+      "betaAvtDescription": "Check a matter's documents claim by claim against the facts of a list";
       "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
       "betaDescription": "Try features that are still in development";
       "betaInbox": "Inbox & notifications";
@@ -5700,6 +5702,7 @@ type Messages = {
       "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
       "layouts": {
+        "avt": "AVT";
         "calendar": "Calendar";
         "grid": "Grid";
         "kanban": "Kanban";
