@@ -141,7 +141,11 @@ describe("API dependency readiness", () => {
     });
     const signal = new AbortController().signal;
 
-    await expect(probe(signal)).rejects.toThrow("Access denied");
+    const refused = await probe(signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refused).toMatchObject({ message: "Access denied" });
     mayDelete = true;
     await probe(signal);
     // Proven once, then not asked again: every delete adds a marker.

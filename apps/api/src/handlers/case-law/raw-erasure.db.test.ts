@@ -858,7 +858,7 @@ describe("the raw object census", () => {
         mode: RAW_CENSUS_MODE.APPLY,
         signal: signal(),
       });
-      if (page.next !== null && page.next.sourceId === sourceId) {
+      if (page.next?.sourceId === sourceId) {
         await walk(page.next);
       }
     };
