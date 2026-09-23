@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { status, t } from "elysia";
 
 import type {
@@ -68,11 +69,11 @@ const deliverSessionEventLocal = (
   if (isDesktopEditSessionCloseSignal(event)) {
     for (const conn of conns) {
       conn.cleanup();
-      try {
+      // `close()` throws for a controller already closed; the stream is
+      // being torn down either way.
+      Result.try(() => {
         conn.controller.close();
-      } catch {
-        // Already closed.
-      }
+      }).unwrapOr(undefined);
     }
     connections.delete(sessionId);
     return;
@@ -80,9 +81,10 @@ const deliverSessionEventLocal = (
 
   const encoded = formatSSE(event);
   for (const conn of conns) {
-    try {
+    const enqueued = Result.try(() => {
       conn.controller.enqueue(encoded);
-    } catch {
+    });
+    if (Result.isError(enqueued)) {
       conn.cleanup();
       conns.delete(conn);
     }

@@ -616,6 +616,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     if ("error" in result) {
       await Promise.all(uploadedKeys.map(deleteUploadedKey));
+      shouldRollbackUploadedKeys = false;
 
       await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
@@ -675,11 +676,10 @@ export const finalizeDesktopEditSessionHandler = async ({
     }
 
     return result;
-  } catch (error) {
+  } finally {
+    // Reached with the flag still set only when something above threw.
     if (shouldRollbackUploadedKeys) {
       await Promise.all(uploadedKeys.map(deleteUploadedKey));
     }
-
-    throw error;
   }
 };

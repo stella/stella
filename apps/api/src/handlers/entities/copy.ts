@@ -19,7 +19,6 @@ import {
   type EntitySnapshot,
   type EntityTransfer,
   EVERY_LIVE_VERSION_SELECT,
-  type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
@@ -501,18 +500,15 @@ const copyToWorkspaceHandler = async function* ({
 
   // S3 copy phase: copy all files before DB transaction
   const copiedS3Keys: string[] = [];
-  let fileMappings: FileMapping[];
-
-  try {
-    fileMappings = await copyFileObjects({
-      sources: fileCopySources,
-      organizationId,
-      targetWorkspaceId,
-      copiedS3Keys,
-    });
-  } catch (error) {
+  const fileMappings = await copyFileObjects({
+    sources: fileCopySources,
+    organizationId,
+    targetWorkspaceId,
+    copiedS3Keys,
+  });
+  if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(error, {
+    captureError(fileMappings.error, {
       sourceWorkspaceId,
       targetWorkspaceId,
       sourceEntityId,
@@ -523,7 +519,10 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Remap file IDs in source entities to reference the new S3 copies
-  const remappedEntities = remapFileIds(propertyRemappedEntities, fileMappings);
+  const remappedEntities = remapFileIds(
+    propertyRemappedEntities,
+    fileMappings.value,
+  );
 
   // DB transaction phase: copy (and delete for moves) in a single transaction
   // to ensure atomicity — either both succeed or neither does.
@@ -546,6 +545,10 @@ const copyToWorkspaceHandler = async function* ({
           : { type: "single", sourceFieldId },
       dependencies,
     });
+    // Rejected before its first write, so returning commits nothing.
+    if (Result.isError(copyResult)) {
+      return copyResult;
+    }
 
     // For move operations, delete source entities in the same transaction.
     if (deleteSource) {
@@ -562,7 +565,7 @@ const copyToWorkspaceHandler = async function* ({
 
       await recordSourceAuditEvent(
         tx,
-        copyResult.copiedEntities.map((entity) => ({
+        copyResult.value.copiedEntities.map((entity) => ({
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: entity.sourceId,
@@ -582,12 +585,15 @@ const copyToWorkspaceHandler = async function* ({
   // An aborted copy leaves no rows in the target and no deletions in the
   // source, so every object copied for it is an orphan and the whole set
   // goes back.
-  if (Result.isError(txResultResult)) {
+  const copied = txResultResult
+    .mapError(transactionAbortError)
+    .andThen((copyResult) => copyResult);
+  if (Result.isError(copied)) {
     await rollbackS3Copies(copiedS3Keys);
-    return Result.err(transactionAbortError(txResultResult.error));
+    return Result.err(copied.error);
   }
 
-  const txResult = txResultResult.value;
+  const txResult = copied.value;
 
   if (deleteSource) {
     await cleanupMovedSourceFiles({

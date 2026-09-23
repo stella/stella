@@ -13,7 +13,6 @@ import {
   CURRENT_VERSION_SELECT,
   ENTITY_SNAPSHOT_COLUMNS,
   type EntitySnapshot,
-  type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
@@ -181,45 +180,46 @@ const duplicateEntityHandler = async function* ({
   });
 
   const copiedS3Keys: string[] = [];
-  let fileMappings: FileMapping[];
-
-  try {
-    fileMappings = await copyFileObjects({
-      sources: fileCopySources,
-      organizationId,
-      targetWorkspaceId: workspaceId,
-      copiedS3Keys,
-    });
-  } catch (error) {
+  const fileMappings = await copyFileObjects({
+    sources: fileCopySources,
+    organizationId,
+    targetWorkspaceId: workspaceId,
+    copiedS3Keys,
+  });
+  if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(error, { workspaceId, sourceEntityId });
+    captureError(fileMappings.error, { workspaceId, sourceEntityId });
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
   }
 
-  const remappedEntities = remapFileIds(sourceEntities, fileMappings);
+  const remappedEntities = remapFileIds(sourceEntities, fileMappings.value);
 
-  const txResultResult = await safeDb(
-    async (tx) =>
-      await copyEntities({
-        organizationId,
-        tx,
-        targetWorkspaceId: workspaceId,
-        targetParentId: source.parentId,
-        userId,
-        recordAuditEvent,
-        sourceEntityId,
-        sourceEntities: remappedEntities,
-        targetRootEntityId: targetEntityId,
-        targetRootName: name,
-        // A duplicate is a new document in the same matter: its own
-        // version 1, its own stamp and code.
-        transfer: { type: "copy" },
-        fieldMapping: { type: "omit" },
-        dependencies,
-      }),
-  );
+  const txResultResult = (
+    await safeDb(
+      async (tx) =>
+        await copyEntities({
+          organizationId,
+          tx,
+          targetWorkspaceId: workspaceId,
+          targetParentId: source.parentId,
+          userId,
+          recordAuditEvent,
+          sourceEntityId,
+          sourceEntities: remappedEntities,
+          targetRootEntityId: targetEntityId,
+          targetRootName: name,
+          // A duplicate is a new document in the same matter: its own
+          // version 1, its own stamp and code.
+          transfer: { type: "copy" },
+          fieldMapping: { type: "omit" },
+          dependencies,
+        }),
+    )
+  )
+    .mapError(transactionAbortError)
+    .andThen((copied) => copied);
 
   if (Result.isError(txResultResult)) {
     if (targetEntityId) {
@@ -228,7 +228,7 @@ const duplicateEntityHandler = async function* ({
         // The transaction outcome and the ownership of its objects are both
         // unknown. Retain them until a replay can prove whether they are
         // referenced; deleting here could corrupt a committed duplicate.
-        return Result.err(transactionAbortError(txResultResult.error));
+        return Result.err(txResultResult.error);
       }
       if (replayed.value) {
         return Result.ok(duplicateReplayPayload(replayed.value));
@@ -236,7 +236,7 @@ const duplicateEntityHandler = async function* ({
     }
     // The transaction is confirmed absent, so every copied object is orphaned.
     await rollbackS3Copies(copiedS3Keys);
-    return Result.err(transactionAbortError(txResultResult.error));
+    return Result.err(txResultResult.error);
   }
 
   const txResult = txResultResult.value;

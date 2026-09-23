@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -317,11 +317,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
           data: checkpointBytes,
           key: checkpointKey,
         }),
-      catch: (cause) => cause,
+      catch: (cause) => new UnhandledException({ cause }),
     });
     if (Result.isError(written)) {
       await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
-      throw written.error;
+      return Result.err(written.error);
     }
     const writeCertainty = written.value;
 

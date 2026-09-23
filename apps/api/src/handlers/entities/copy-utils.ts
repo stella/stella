@@ -33,6 +33,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
+import type { S3PresignError } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   nativeExtractionRunRequestForFields,
@@ -332,7 +333,7 @@ export const copyFileObject = async ({
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
-}: CopyFileObjectOptions): Promise<FileMapping> => {
+}: CopyFileObjectOptions): Promise<Result<FileMapping, S3PresignError>> => {
   const newFileId = allocateFileObject();
   const targetKey = createFileKey({
     organizationId,
@@ -345,18 +346,14 @@ export const copyFileObject = async ({
   // when the client never observes a successful response.
   copiedS3Keys.push(targetKey);
   const copied = await copyObject(sourceKey, targetKey);
-  if (Result.isError(copied)) {
-    throw copied.error;
-  }
-
-  return {
+  return copied.map(() => ({
     sourceEntityId,
     sourceFileId,
     sourceKey,
     targetKey,
     newFileId,
     mimeType,
-  };
+  }));
 };
 
 type CopyFileObjectsOptions = {
@@ -376,7 +373,9 @@ export const copyFileObjects = async ({
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
-}: CopyFileObjectsOptions): Promise<FileMapping[]> => {
+}: CopyFileObjectsOptions): Promise<
+  Result<FileMapping[], FileObjectCopyError>
+> => {
   const results = await Promise.allSettled(
     sources.map(
       async (source) =>
@@ -390,29 +389,30 @@ export const copyFileObjects = async ({
   );
 
   const mappings: FileMapping[] = [];
-  let firstError: unknown;
-  let hasError = false;
+  const failures: unknown[] = [];
 
   for (const result of results) {
-    if (result.status === "fulfilled") {
-      mappings.push(result.value);
+    if (result.status === "rejected") {
+      failures.push(result.reason);
       continue;
     }
-
-    if (!hasError) {
-      firstError = result.reason;
-      hasError = true;
+    if (Result.isError(result.value)) {
+      failures.push(result.value.error);
+      continue;
     }
+    mappings.push(result.value.value);
   }
 
-  if (hasError) {
-    throw new FileObjectCopyError({
-      message: "Failed to copy file object",
-      cause: firstError,
-    });
+  if (failures.length > 0) {
+    return Result.err(
+      new FileObjectCopyError({
+        message: "Failed to copy file object",
+        cause: failures.at(0),
+      }),
+    );
   }
 
-  return mappings;
+  return Result.ok(mappings);
 };
 
 /**
@@ -802,18 +802,66 @@ const resolveRootCopyName = async ({
         name: targetRootName ?? rootSource.name,
       });
 
+type ValidateCopySourcesOptions = {
+  sourceEntities: WritableEntitySnapshot[];
+  sourceEntityId: SafeId<"entity">;
+};
+
+/**
+ * Every rejection the copy loop could raise, checked in the loop's own order
+ * before anything is written. Sources arrive parents first, so a child whose
+ * parent has not been seen yet would have no copied parent to attach to.
+ */
+const validateCopySources = ({
+  sourceEntities,
+  sourceEntityId,
+}: ValidateCopySourcesOptions): Result<void, HandlerError> => {
+  const seen = new Set<SafeId<"entity">>();
+  for (const source of sourceEntities) {
+    if (
+      !source.versions.some((version) => version.id === source.currentVersionId)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Entity has no current version",
+        }),
+      );
+    }
+    if (
+      source.id !== sourceEntityId &&
+      (source.parentId === null || !seen.has(source.parentId))
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Copy parent was not created",
+        }),
+      );
+    }
+    seen.add(source.id);
+  }
+
+  if (!seen.has(sourceEntityId)) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Copy root was not created",
+      }),
+    );
+  }
+  return Result.ok();
+};
+
 /**
  * Copy entities to a target workspace. Used by both duplicate
  * (same workspace) and copy-to-workspace (cross-workspace).
  *
- * Every rejection throws a `HandlerError` rather than returning one. This runs
- * inside the caller's transaction, and returning from a transaction callback
- * commits whatever it has already written: a rejection raised part-way through
- * the loop would persist a partially copied subtree, and the caller would then
- * delete the copied objects those committed rows point at. Throwing aborts the
- * transaction, so no copy survives and every copied object is an orphan the
- * caller cleans up. Callers recover the thrown error with
- * `transactionAbortError` and answer with it unchanged.
+ * This runs inside the caller's transaction, and returning from a transaction
+ * callback commits whatever it has already written. Every rejection is
+ * therefore decided before the first write (the stamp allocation), so an
+ * `Err` leaves nothing behind: no partially copied subtree survives, and every
+ * copied object is an orphan the caller cleans up.
  */
 export const copyEntities = async ({
   organizationId,
@@ -830,7 +878,7 @@ export const copyEntities = async ({
   transfer,
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
-}: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
+}: CopyEntitiesProps): Promise<Result<CopyEntitiesResult, HandlerError>> => {
   // Same-workspace duplicate and cross-workspace copy both lock the
   // target only: a pure copy never mutates the source workspace's
   // rows or its cap, so locking the source would only add unrelated
@@ -855,10 +903,12 @@ export const copyEntities = async ({
   );
 
   if (entityCount + sourceEntities.length > LIMITS.entitiesCount) {
-    throw new HandlerError({
-      status: 400,
-      message: "Entities limit reached",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entities limit reached",
+      }),
+    );
   }
 
   // Validate target parent for cross-workspace copy only.
@@ -873,18 +923,27 @@ export const copyEntities = async ({
     });
 
     if (!parent) {
-      throw new HandlerError({
-        status: 400,
-        message: "Target parent folder not found",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Target parent folder not found",
+        }),
+      );
     }
 
     if (parent.kind !== "folder") {
-      throw new HandlerError({
-        status: 400,
-        message: "Target parent must be a folder",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Target parent must be a folder",
+        }),
+      );
     }
+  }
+
+  const validated = validateCopySources({ sourceEntities, sourceEntityId });
+  if (Result.isError(validated)) {
+    return validated;
   }
 
   const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
@@ -927,15 +986,10 @@ export const copyEntities = async ({
   });
 
   for (const source of sourceEntities) {
-    const currentVersion = source.versions.find(
-      (version) => version.id === source.currentVersionId,
-    );
-    if (!currentVersion) {
-      throw new HandlerError({
-        status: 400,
-        message: "Entity has no current version",
-      });
-    }
+    const currentVersion =
+      source.versions.find(
+        (version) => version.id === source.currentVersionId,
+      ) ?? panic("Copy source current version was not validated");
 
     const newEntityId =
       source.id === sourceEntityId && targetRootEntityId
@@ -951,10 +1005,7 @@ export const copyEntities = async ({
       source.id === sourceEntityId ? targetParentId : mappedParentId;
 
     if (source.id !== sourceEntityId && newParentId === undefined) {
-      throw new HandlerError({
-        status: 500,
-        message: "Copy parent was not created",
-      });
+      panic("Copy source parent order was not validated");
     }
 
     const copyName =
@@ -1140,13 +1191,8 @@ export const copyEntities = async ({
     })),
   );
 
-  const rootEntityId = idMap.get(sourceEntityId);
-  if (!rootEntityId) {
-    throw new HandlerError({
-      status: 500,
-      message: "Copy root was not created",
-    });
-  }
+  const rootEntityId =
+    idMap.get(sourceEntityId) ?? panic("Copy root was not validated");
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
@@ -1161,12 +1207,12 @@ export const copyEntities = async ({
     },
   );
 
-  return {
+  return Result.ok({
     entityId: rootEntityId,
     entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
     copiedField,
     fileFields,
     nativeExtractionRunIds,
-  };
+  });
 };
