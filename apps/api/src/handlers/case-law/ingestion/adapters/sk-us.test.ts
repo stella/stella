@@ -18,7 +18,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/error-tag";
+import {
+  AdapterFetchError,
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
@@ -1037,6 +1042,124 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
   });
+});
+
+/**
+ * The service answers every key on every row and sends `null` for an empty
+ * one, and the three list-valued keys arrive as one value on some rows and
+ * several on others. The crawl and the reconciliation build through the same
+ * function, and both are driven here: the crawl drops an item it cannot build,
+ * so only a count of what it kept shows a build that fails on every row.
+ */
+describe("sk-us rows as the court sends them", () => {
+  const originalFetch = globalThis.fetch;
+  const FIXTURES = new URL("__fixtures__/", import.meta.url);
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const recordedRows = async (): Promise<Record<string, unknown>[]> => {
+    const page = await readGzipJson(new URL("sk-us-listing.json.gz", FIXTURES));
+    const documents = isRecord(page) ? page["documents"] : undefined;
+    if (!Array.isArray(documents)) {
+      throw new TypeError("the recorded listing carries no documents");
+    }
+    return documents.filter(isRecord);
+  };
+
+  const LIST_FIELDS = [
+    ["mkComplainedLegalRegulation", "challengedLegislation"],
+    ["mkClarificationOfLegalRegulation", "clarificationOfLegalRegulation"],
+    ["mkTypeOfProposer", "typeOfProposer"],
+  ] as const;
+
+  const withListFields = (value: unknown): Record<string, unknown> => ({
+    ...PLENARY_OPINION,
+    ...Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value])),
+  });
+
+  test("every recorded row builds on the reconciliation path", async () => {
+    mockFetch({ search: [] });
+    const rows = await recordedRows();
+    // The recording states `null` for a rapporteur and for every list key on
+    // some row, which is what the fixture has to carry to reach the fault.
+    expect(rows.some((row) => row["mkJudgeReporter"] === null)).toBe(true);
+    expect(rows.every((row) => row["mkTypeOfProposer"] === null)).toBe(true);
+
+    const types: string[] = [];
+    for (const row of rows) {
+      types.push((await reconciliation.buildDecision(row)).type);
+    }
+
+    expect(types).toEqual(rows.map(() => "built"));
+  });
+
+  test("every recorded row builds on the crawl", async () => {
+    const rows = await recordedRows();
+    mockFetch({
+      search: [{ type: "page", documents: rows, numFound: rows.length }],
+    });
+
+    const result = await skUsAdapter.fetchPage("2021:0", {});
+
+    expect(result.unwrap().decisions).toHaveLength(rows.length);
+  });
+
+  test.each([
+    ["absent", undefined, []],
+    ["null", null, []],
+    ["one value", "Fyzická osoba", ["Fyzická osoba"]],
+    [
+      "several values",
+      ["Iná", "Skupina poslancov NR SR"],
+      ["Iná", "Skupina poslancov NR SR"],
+    ],
+  ])("a list key sent %s reads as a list", async (_shape, value, expected) => {
+    mockFetch({ search: [] });
+
+    const built = await buildSkUsDecision(withListFields(value));
+    const reconciled = await reconciliation.buildDecision(
+      withListFields(value),
+    );
+
+    if (built.type !== "built" || reconciled.type !== "built") {
+      throw new Error("expected both paths to build");
+    }
+    for (const [, stored] of LIST_FIELDS) {
+      expect(built.decision.metadata[stored]).toEqual(expected);
+      expect(reconciled.decision.metadata[stored]).toEqual(expected);
+    }
+  });
+
+  // The reconciliation engine parks a failed item under `errorTag(error)`; a
+  // shape the adapter cannot read must name the field, not a spread.
+  test.each([
+    ["an object", { value: "Fyzická osoba" }],
+    ["a number", 7],
+    ["a list holding a non-string", ["Iná", null]],
+  ])(
+    "a list key sent as %s is refused as that field",
+    async (_shape, value) => {
+      mockFetch({ search: [] });
+
+      for (const [key] of LIST_FIELDS) {
+        const row = { ...PLENARY_OPINION, [key]: value };
+        for (const thrown of [
+          await rejectionOf(buildSkUsDecision(row)),
+          await rejectionOf(reconciliation.buildDecision(row)),
+        ]) {
+          expect(thrown).toBeInstanceOf(UnpersistableDecisionFieldError);
+          expect(errorTag(thrown)).toBe("UnpersistableDecisionFieldError");
+          expect(
+            thrown instanceof UnpersistableDecisionFieldError
+              ? thrown.field
+              : undefined,
+          ).toBe(UNPERSISTABLE_DECISION_FIELDS.VALUE_LIST);
+        }
+      }
+    },
+  );
 });
 
 /**
