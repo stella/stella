@@ -4,6 +4,9 @@
 // same rule).
 
 import { panic } from "better-result";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { isRecord } from "./oxlint-config-scopes.ts";
 
@@ -14,14 +17,20 @@ export type BuiltinRule = {
 };
 
 export const builtinRules = (): BuiltinRule[] => {
+  // The listing goes to a file: a piped stdout from the Node shim can be cut
+  // short when the process exits before the pipe drains.
+  const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rules-"));
+  const output = path.join(directory, "rules.json");
   const result = Bun.spawnSync(
     ["bun", "--bun", "oxlint", "--rules", "-f", "json"],
-    { cwd: import.meta.dir },
+    { cwd: import.meta.dir, stdout: Bun.file(output) },
   );
-  if (!result.success) {
+  const text = result.success ? readFileSync(output, "utf-8") : undefined;
+  rmSync(directory, { recursive: true, force: true });
+  if (text === undefined) {
     return panic("oxlint --rules failed; cannot resolve built-in rules");
   }
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(result.stdout));
+  const parsed: unknown = JSON.parse(text);
   if (!Array.isArray(parsed)) {
     return panic("oxlint --rules returned an unexpected shape");
   }
