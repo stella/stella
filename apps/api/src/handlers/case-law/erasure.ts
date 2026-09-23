@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawIndexJobs,
 } from "@/api/db/schema";
@@ -58,6 +59,9 @@ const RAW_SWEEP_FOLLOW_UP_MS = 5 * 60 * 1000;
  *   4. The Postgres canonical columns (fulltext/sections/document_ast).
  *   5. The publisher's raw payloads and files, under the decision's own
  *      raw prefix (see `case-law-raw-sweeps.ts`).
+ *   6. The supplements merged into it (such as written reasons published
+ *      apart from their ruling): their rows, and their raw payloads, which
+ *      the decision owns under the same prefix.
  *
  * The decision row itself is kept (citation-graph node) but stripped of
  * personal text. `content_hash` is nulled so nothing re-projects the body.
@@ -344,6 +348,13 @@ export const redactCaseLawDecision = async ({
         sourceRaw: null,
       })
       .where(eq(caseLawDecisions.id, decisionId));
+    // Merged supplements carry the same personal text; their payloads sit
+    // under this decision's prefix and go with the sweep below. A supplement
+    // observed after this point finds its judgment redacted and is not kept.
+    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+    await tx
+      .delete(caseLawDecisionSupplements)
+      .where(eq(caseLawDecisionSupplements.decisionId, decisionId));
     // The raw prefix is swept below and again once every write that could
     // have started before this fence is over.
     await enqueueCaseLawRawSweepTx(tx, {

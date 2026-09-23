@@ -22,6 +22,7 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -46,8 +47,13 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  RAW_SOURCE_FAMILY,
+  rawDocumentPrefix,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -227,6 +233,7 @@ const decisionRows = async (sourceId: SafeId<"caseLawSource">) =>
       sourceHash: caseLawDecisions.sourceHash,
       citationKey: caseLawDecisions.citationKey,
       metadata: caseLawDecisions.metadata,
+      sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       updatedAt: caseLawDecisions.updatedAt,
     })
     .from(caseLawDecisions)
@@ -271,6 +278,7 @@ const supplementRow = async (
         decisionId: caseLawDecisionSupplements.decisionId,
         sourceHash: caseLawDecisionSupplements.sourceHash,
         mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        sourceRawS3Key: caseLawDecisionSupplements.sourceRawS3Key,
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -280,6 +288,23 @@ const supplementRow = async (
         ),
       )
   ).at(0) ?? panic(`no supplement ${sourceDocumentId}`);
+
+/** The raw object keys stored under one decision's own prefix. */
+const rawKeysUnder = (
+  sourceId: SafeId<"caseLawSource">,
+  documentId: SafeId<"caseLawDecision">,
+): string[] => {
+  const bucket = `${envBase.S3_BUCKET}/`;
+  const prefix = rawDocumentPrefix({
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId,
+    documentId,
+  });
+  return [...fake.objects.keys()]
+    .filter((id) => id.startsWith(`${bucket}${prefix}`))
+    .map((id) => id.slice(bucket.length))
+    .toSorted(byCodeUnit);
+};
 
 const RULING = saosRow({
   id: 339_002,
@@ -715,4 +740,145 @@ test("the crawl places a page's reasons after its decisions, from the payload it
   expect((await supplementRow(sourceId, "339001")).decisionId).toBe(
     rows.at(0)?.id ?? null,
   );
+});
+
+describe("the reasons' stored payload", () => {
+  test("stands under their own row while they stand alone", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    const stored = await supplementRow(fixture.sourceId, "339001");
+    expect(stored.sourceRawS3Key).not.toBeNull();
+    expect(stored.sourceRawS3Key).toBe(standalone.sourceRawS3Key);
+    expect(rawKeysUnder(fixture.sourceId, standalone.id)).toContain(
+      stored.sourceRawS3Key ?? panic("no pointer"),
+    );
+  });
+
+  test("moves under their ruling when they join it, and the row's copy goes", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+
+    await ingestDecision(fixture, decisionOf(RULING));
+
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    const stored = await supplementRow(fixture.sourceId, "339001");
+    expect(stored.decisionId).toBe(ruling.id);
+    expect(rawKeysUnder(fixture.sourceId, ruling.id)).toContain(
+      stored.sourceRawS3Key ?? panic("no pointer"),
+    );
+    expect(rawKeysUnder(fixture.sourceId, standalone.id)).toEqual([]);
+    expect(
+      (await decisionBy(fixture.sourceId, "339001")).sourceRawS3Key,
+    ).toBeNull();
+  });
+
+  test("merged on arrival are stored under their ruling alone", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestSupplement(fixture, supplementOf(REASONS));
+
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    const stored = await supplementRow(fixture.sourceId, "339001");
+    expect(rawKeysUnder(fixture.sourceId, ruling.id)).toContain(
+      stored.sourceRawS3Key ?? panic("no pointer"),
+    );
+  });
+
+  test("moved by a correction leave nothing under their former ruling", async () => {
+    const fixture = await newSource();
+    const OTHER_DOCKET = "IV Ka 96/18";
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestDecision(
+      fixture,
+      decisionOf(
+        saosRow({
+          id: 339_003,
+          judgmentType: "SENTENCE",
+          judgmentDate: "2018-03-22",
+          caseNumber: OTHER_DOCKET,
+          body: RULING_TEXT,
+        }),
+      ),
+    );
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const former = await decisionBy(fixture.sourceId, "339002");
+    const before = rawKeysUnder(fixture.sourceId, former.id);
+
+    await ingestSupplement(
+      fixture,
+      supplementOf(
+        saosRow({
+          id: 339_001,
+          judgmentType: "REASONS",
+          judgmentDate: "2018-04-19",
+          caseNumber: OTHER_DOCKET,
+          body: REASONS_TEXT,
+        }),
+      ),
+    );
+
+    const corrected = await decisionBy(fixture.sourceId, "339003");
+    const stored = await supplementRow(fixture.sourceId, "339001");
+    expect(stored.decisionId).toBe(corrected.id);
+    expect(rawKeysUnder(fixture.sourceId, corrected.id)).toContain(
+      stored.sourceRawS3Key ?? panic("no pointer"),
+    );
+    // Only the former ruling's own payload stays under its prefix.
+    const formerOwn =
+      (await decisionBy(fixture.sourceId, "339002")).sourceRawS3Key ??
+      panic("the former ruling lost its payload");
+    expect(before.length).toBeGreaterThan(1);
+    expect(rawKeysUnder(fixture.sourceId, former.id)).toEqual([formerOwn]);
+  });
+
+  test("go with an erasure of their ruling, and stay gone", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    const supplementKey =
+      (await supplementRow(fixture.sourceId, "339001")).sourceRawS3Key ??
+      panic("no pointer");
+
+    const erased = await redactCaseLawDecision({
+      decisionId: ruling.id,
+      scopedDb,
+    });
+
+    expect(Result.isOk(erased) && erased.value.type).toBe("redacted");
+    const remaining = await db
+      .select({ id: caseLawDecisionSupplements.sourceDocumentId })
+      .from(caseLawDecisionSupplements)
+      .where(eq(caseLawDecisionSupplements.sourceId, fixture.sourceId));
+    expect(remaining).toEqual([]);
+    expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
+
+    // A write that landed after the erasure's own sweep is caught by the
+    // follow-up sweep of the same prefix.
+    fake.put(envBase.S3_BUCKET, supplementKey, "late");
+    await sweepCaseLawRawDecision({
+      decisionId: ruling.id,
+      sourceId: fixture.sourceId,
+      scopedDb,
+      signal: AbortSignal.timeout(10_000),
+    });
+    expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
+
+    // Observed again, the reasons of an erased ruling are not kept.
+    const again = await ingestSupplement(fixture, supplementOf(REASONS));
+    expect(again).toEqual({
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "withheld", judgmentId: ruling.id },
+    });
+    expect(
+      await db
+        .select({ id: caseLawDecisionSupplements.sourceDocumentId })
+        .from(caseLawDecisionSupplements)
+        .where(eq(caseLawDecisionSupplements.sourceId, fixture.sourceId)),
+    ).toEqual([]);
+    expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
+  });
 });
