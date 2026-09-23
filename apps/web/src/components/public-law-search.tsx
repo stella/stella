@@ -1,8 +1,9 @@
-import { MessageSquareTextIcon } from "lucide-react";
+import { MessageSquareTextIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
@@ -15,6 +16,11 @@ type PublicLawSearchProps = {
   onSubmit: () => void;
   placeholder: string;
   query: string;
+  /**
+   * The AI rewrite of the entry into the words the corpus uses. Omitted where
+   * the surface offers none, which draws nothing.
+   */
+  refine?: PublicLawSearchRefine | undefined;
   searchLabel: string;
   /**
    * The chat prompt for the current entry, scoped the way the page is. Null
@@ -40,6 +46,7 @@ export const PublicLawSearch = ({
   onSubmit,
   placeholder,
   query,
+  refine,
   searchLabel,
 }: PublicLawSearchProps) => {
   const trimmed = query.trim();
@@ -63,10 +70,63 @@ export const PublicLawSearch = ({
         type="search"
         value={query}
       />
+      {refine !== undefined && (
+        <PublicLawRefine
+          disabled={trimmed.length === 0}
+          isPending={refine.isPending}
+          onRefine={refine.onRefine}
+        />
+      )}
       {prompt !== null && (
         <PublicLawAskInChat label={trimmed} prompt={prompt} />
       )}
     </form>
+  );
+};
+
+type PublicLawSearchRefine = {
+  isPending: boolean;
+  /** Rewrite the entry; called only once the reader may spend AI on it. */
+  onRefine: () => void;
+};
+
+/**
+ * The wand beside the box. Drawn for every reader, like the chat button: a
+ * visitor is asked for an account when they press it, because the rewrite
+ * reaches an AI endpoint.
+ */
+const PublicLawRefine = ({
+  disabled,
+  isPending,
+  onRefine,
+}: PublicLawSearchRefine & { disabled: boolean }) => {
+  const t = useTranslations();
+  const { accountDialog, ensureAccount } = useRequireAccount();
+
+  return (
+    <>
+      <Button
+        aria-label={t("search.aiRefine")}
+        disabled={disabled || isPending}
+        onClick={() => {
+          if (ensureAccount("refineSearch") !== ACCOUNT_GATE_OUTCOME.allowed) {
+            return;
+          }
+          onRefine();
+        }}
+        size="icon-sm"
+        title={t("search.aiRefine")}
+        type="button"
+        variant="muted"
+      >
+        {isPending ? (
+          <Loader label={t("search.aiRefine")} size="sm" />
+        ) : (
+          <WandSparklesIcon aria-hidden="true" className="size-4" />
+        )}
+      </Button>
+      {accountDialog}
+    </>
   );
 };
 

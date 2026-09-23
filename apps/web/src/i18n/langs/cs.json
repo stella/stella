@@ -111,6 +111,7 @@
       "askInChat": "Vytvořte si bezplatný účet a zeptejte se na to v chatu",
       "description": "Až bude účet hotový, vrátíte se na tuto stránku.",
       "generateHeadnotes": "Vytvořte si bezplatný účet a nechte AI sestavit právní věty",
+      "refineSearch": "Vytvořte si bezplatný účet a vylepšete hledání pomocí AI",
       "writeResearchQuestion": "Vytvořte si bezplatný účet a položte těmto výsledkům otázku"
     },
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",

@@ -300,6 +300,41 @@ const expansionLeaves = (
 };
 
 /**
+ * The legal-vocabulary alternatives a term stands for, each as a surface leaf
+ * plus its own stem leaves, so "kauce" also finds "jistoty" and "jistotu". A
+ * phrase gets none, under the same policy that keeps it from morphological
+ * expansion: adding words to a phrase would change what it asked to match
+ * adjacently.
+ */
+const legalAlternativeLeaves = (
+  token: CorpusQueryToken,
+  legalAlternatives: CorpusTermExpander | null,
+  stemming: CorpusStemming | null,
+): string[] => {
+  if (legalAlternatives === null) {
+    return [];
+  }
+  const policy = TOKEN_EXPANSION_POLICY[token.type];
+  switch (policy) {
+    case "verbatim":
+      return [];
+    case "expandable": {
+      const leaves: string[] = [];
+      for (const alternative of legalAlternatives(token.value)) {
+        leaves.push(
+          quoteCorpusValue(alternative),
+          ...stemLeaves(alternative, stemming),
+        );
+      }
+      return leaves;
+    }
+    default:
+      policy satisfies never;
+      return panic(`Unhandled policy: ${String(policy)}`);
+  }
+};
+
+/**
  * The order the budget is spent in, which is deliberately not the order a
  * group is written in.
  *
@@ -319,6 +354,11 @@ const expansionLeaves = (
  * selectivity means retaining that column at load and exposing it on the
  * expander.
  *
+ * Legal-vocabulary alternatives come right after the stems, for the same
+ * reason: a reader who typed the everyday word ("kauce") matches almost
+ * nothing when the corpus writes the statutory one ("jistota"), so that
+ * alternative is what keeps the AND clause from emptying.
+ *
  * The classification field comes last, and being last is the point: it is a
  * generation's newest field and the weakest match on it — the terms a
  * publisher filed a decision under, not what the decision says — so it may
@@ -326,14 +366,15 @@ const expansionLeaves = (
  * A generation that maps no such field contributes an empty group, so its
  * clause is what it was before the field existed, leaf for leaf.
  */
-const LEAF_BUDGET_PASSES = ["stem", "surface", "keywords"] as const;
+const LEAF_BUDGET_PASSES = ["stem", "legal", "surface", "keywords"] as const;
 
 /**
  * How the budget pays for one token's alternatives. `stem` is the
  * generation's stem fields, one leaf each; `surface` is every alternative
  * spelling of the word as written — the dictionary's other inflections and
- * the extra surface fields; `keywords` is the publisher's classification
- * field, a different kind of match and the one paid for last.
+ * the extra surface fields; `legal` is the legal-vocabulary alternatives
+ * the term stands for, each with its own stems; `keywords` is the publisher's
+ * classification field, a different kind of match and the one paid for last.
  *
  * Derived from the passes rather than declared beside them: a group exists
  * because a pass spends it, so there is no way to add one the budget never
@@ -350,12 +391,15 @@ type LeafGroup = (typeof LEAF_BUDGET_PASSES)[number];
  * the first: the map is total over `LeafGroup`, so a new group has to choose
  * its place rather than inherit one. The classification leaves are written
  * after both, so the group a generation without that field writes stays a
- * prefix of the one it writes with it.
+ * prefix of the one it writes with it. Legal alternatives are written last
+ * for the same reason: a query that carries none keeps its groups byte for
+ * byte.
  */
 const LEAF_EMIT_RANK = {
   stem: 1,
   surface: 0,
   keywords: 2,
+  legal: 3,
 } as const satisfies Record<LeafGroup, number>;
 
 const LEAF_EMIT_ORDER = [...LEAF_BUDGET_PASSES].toSorted(
@@ -384,7 +428,7 @@ type BudgetedToken = {
  */
 const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
   const budgeted: BudgetedToken[] = tokens.map((token) => ({
-    granted: { stem: [], surface: [], keywords: [] },
+    granted: { stem: [], surface: [], keywords: [], legal: [] },
     token,
   }));
   let leaves = tokens.length;
@@ -427,6 +471,12 @@ export type CorpusFreeTextOptions = {
    * resolved language, an identifier, or `strict` asks for.
    */
   functionWords?: ReadonlySet<string> | null | undefined;
+  /**
+   * The words the jurisdiction's statutes and courts use for what the reader
+   * typed, ORed in beside each term with their own stems. Null adds none,
+   * which is what `strict`, an identifier, and a reader with no AI ask for.
+   */
+  legalAlternatives?: CorpusTermExpander | null | undefined;
 };
 
 /**
@@ -463,6 +513,7 @@ export const corpusFreeTextClause = (
     surfaceFields = [],
     keywordFields = [],
     functionWords = null,
+    legalAlternatives = null,
   }: CorpusFreeTextOptions = {},
 ): string | null => {
   const { required } = partitionCorpusFunctionWords(
@@ -482,6 +533,7 @@ export const corpusFreeTextClause = (
           ...surfaceFieldLeaves(token.value, surfaceFields),
         ],
         keywords: surfaceFieldLeaves(token.value, keywordFields),
+        legal: legalAlternativeLeaves(token, legalAlternatives, stemming),
       },
       typed: quoteCorpusValue(token.value),
     })),
@@ -524,6 +576,7 @@ export type CaseLawCorpusQueryOptions = {
   surfaceFields?: readonly string[] | undefined;
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
+  legalAlternatives?: CorpusTermExpander | null | undefined;
 };
 
 /**
@@ -541,6 +594,7 @@ export const caseLawCorpusQuery = ({
   surfaceFields,
   keywordFields,
   functionWords,
+  legalAlternatives,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
     expand,
@@ -548,6 +602,7 @@ export const caseLawCorpusQuery = ({
     surfaceFields,
     keywordFields,
     functionWords,
+    legalAlternatives,
   });
   if (freeText === null) {
     return null;

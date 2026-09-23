@@ -580,10 +580,10 @@ mechanics, and similar), not gaps in coverage.
 | public_indexing        | 7     |
 | reader_annotations     | 4     |
 | realtime_stream        | 3     |
-| search_ui              | 13    |
+| search_ui              | 15    |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 173
+Total: 175

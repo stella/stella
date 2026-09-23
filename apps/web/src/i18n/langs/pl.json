@@ -111,6 +111,7 @@
       "askInChat": "Utwórz bezpłatne konto, aby zadać to pytanie na czacie",
       "description": "Po utworzeniu konta wrócisz na tę stronę.",
       "generateHeadnotes": "Utwórz bezpłatne konto, aby AI ułożyła tezy",
+      "refineSearch": "Utwórz bezpłatne konto, aby ulepszyć wyszukiwanie za pomocą AI",
       "writeResearchQuestion": "Utwórz bezpłatne konto, aby zadać pytanie tym wynikom"
     },
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",

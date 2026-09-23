@@ -111,6 +111,7 @@
       "askInChat": "Sukurkite nemokamą paskyrą, kad paklaustumėte to pokalbyje",
       "description": "Kai paskyra bus paruošta, grįšite į šį puslapį.",
       "generateHeadnotes": "Sukurkite nemokamą paskyrą, kad DI parengtų santraukas",
+      "refineSearch": "Sukurkite nemokamą paskyrą, kad patobulintumėte paiešką su DI",
       "writeResearchQuestion": "Sukurkite nemokamą paskyrą, kad užduotumėte klausimą šiems rezultatams"
     },
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",

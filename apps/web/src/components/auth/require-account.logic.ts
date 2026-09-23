@@ -14,6 +14,7 @@ export const ACCOUNT_INTENT_TITLE_KEYS = {
   askAboutDocument: "auth.requireAccount.askAboutDocument",
   askInChat: "auth.requireAccount.askInChat",
   generateHeadnotes: "auth.requireAccount.generateHeadnotes",
+  refineSearch: "auth.requireAccount.refineSearch",
   writeResearchQuestion: "auth.requireAccount.writeResearchQuestion",
 } as const satisfies Record<string, TranslationKey>;
 

@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -16,12 +16,26 @@ import {
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
+/**
+ * Legal-vocabulary alternatives for a search's words, as the expansion
+ * endpoint answers them and the search accepts them.
+ */
+type CaseLawQueryAlternatives = NonNullable<
+  Parameters<typeof api.case.decisions.search.post>[0]["alternatives"]
+>;
+
 export type DecisionListFilters = {
+  /**
+   * Words ORed in beside the reader's own. Present only when there are some,
+   * so a search without them keeps the key the route loader primed.
+   */
+  alternatives?: CaseLawQueryAlternatives;
   court?: string;
   country: string;
   dateFrom?: string;
@@ -66,10 +80,14 @@ const caseLawDecisionKeys = {
     "status",
     { country },
   ],
+  // Total over the key's fields: a filter that reaches the request body
+  // cannot be left out of the cache identity, or a result set cached without
+  // it would answer a request made with it.
   list: (key: DecisionListKey) => [
     ...caseLawDecisionKeys.all,
     "list",
     {
+      alternatives: key.alternatives,
       court: key.court,
       country: key.country,
       dateFrom: key.dateFrom,
@@ -81,7 +99,7 @@ const caseLawDecisionKeys = {
       search: key.search,
       sort: key.sort,
       strict: key.strict,
-    },
+    } satisfies Record<keyof DecisionListKey, unknown>,
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
   bySlug: (key: DecisionBySlugKey) => [
@@ -240,6 +258,9 @@ export const decisionsInfiniteOptions = (
             ...(listFilters.strict !== undefined && {
               strict: listFilters.strict,
             }),
+            ...(listFilters.alternatives !== undefined && {
+              alternatives: listFilters.alternatives,
+            }),
           },
           { fetch: { signal } },
         );
@@ -325,6 +346,102 @@ export const decisionsInfiniteOptions = (
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+type RefineCaseLawQueryOptions = {
+  country: string;
+  locale: string;
+  query: string;
+};
+
+/**
+ * The reader's search rewritten by the model into the words the
+ * jurisdiction's decisions use. Plain words the case-law search requires,
+ * never boolean syntax. Authenticated and metered, unlike the reads above.
+ */
+export const refineCaseLawQuery = async (body: RefineCaseLawQueryOptions) =>
+  unwrapEden(await api.case.decisions.search.refine.post(body));
+
+type CaseLawQueryExpansionOptions = {
+  /** The organization whose model and usage answer; part of the identity. */
+  activeOrganizationId: string;
+  country: string;
+  query: string;
+  /** Reports a failed expansion; the search then runs as typed. */
+  onFailure: (error: unknown) => void;
+};
+
+type CaseLawQueryExpansion = Awaited<
+  ReturnType<typeof api.case.decisions.search.expand.post>
+>["data"];
+
+/** Payment required, forbidden, and over quota: the organization's answer. */
+const EXPANSION_DECLINED_STATUSES: ReadonlySet<number> = new Set([
+  402, 403, 429,
+]);
+
+const DECLINED_EXPANSION = {
+  alternatives: [],
+  outcome: "none",
+} satisfies NonNullable<CaseLawQueryExpansion>;
+
+/** A request that failed on the way: searched as typed, asked again later. */
+const DEGRADED_EXPANSION = {
+  alternatives: [],
+  outcome: "degraded",
+} satisfies NonNullable<CaseLawQueryExpansion>;
+
+/**
+ * The legal-vocabulary alternatives the model proposes for a search, for a
+ * signed-in reader. Held for the session, so every page of one search is
+ * asked with the same alternatives the first page was; the server pins them
+ * in the cursor either way. A failure is reported and degrades to none: the
+ * expansion may widen a search, never stop one.
+ */
+export const caseLawQueryExpansionOptions = ({
+  activeOrganizationId,
+  country,
+  onFailure,
+  query,
+}: CaseLawQueryExpansionOptions) =>
+  queryOptions({
+    queryKey: [
+      ...caseLawDecisionKeys.all,
+      "expansion",
+      { activeOrganizationId, country, query },
+    ],
+    queryFn: async ({ signal }) => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          unwrapEden(
+            await api.case.decisions.search.expand.post(
+              { country, query },
+              { fetch: { signal } },
+            ),
+          ),
+        catch: (error: unknown) => error,
+      });
+      if (result.isOk()) {
+        return result.value;
+      }
+      // The organization declining the spend (no grant, no plan, no quota)
+      // is an answer, not a fault: settled, unreported, not asked again.
+      if (
+        APIError.is(result.error) &&
+        EXPANSION_DECLINED_STATUSES.has(result.error.status)
+      ) {
+        return DECLINED_EXPANSION;
+      }
+      if (!signal.aborted) {
+        onFailure(result.error);
+      }
+      return DEGRADED_EXPANSION;
+    },
+    // A settled answer holds for the session; a degraded one is asked again
+    // the next time the search is, as the server does not cache it either.
+    staleTime: ({ state }) =>
+      state.data?.outcome === "degraded" ? 0 : Number.POSITIVE_INFINITY,
+    retry: false,
   });
 
 export const decisionOptions = (decisionId: string) =>

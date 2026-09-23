@@ -123,6 +123,7 @@ import type {
   CaseLawResultsLine,
 } from "@/features/case-law/search-warnings.logic";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
+import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
@@ -626,9 +627,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const countryParam = toCaseLawCountryParam(scope);
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
-  const filters = createDecisionFiltersFromSearch(search, {
+  const typedFilters = createDecisionFiltersFromSearch(search, {
     excerpt: layout.excerpt,
   });
+  const filters = useExpandedDecisionFilters(typedFilters, intent);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
   // What the field last asked the URL to hold. A navigation that lands on
@@ -985,6 +987,18 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     );
   };
 
+  // The AI rewrite replaces the entry and runs at once, the way a typed edit
+  // would after its debounce: the field shows the words the search required,
+  // and the URL, not the field, is what searches.
+  const searchRefinedQuery = (refined: string) => {
+    setQueryInput(refined);
+    setRequestedQuery(refined);
+    detached(
+      searchNavigation((previous) => withQuery(previous, refined)),
+      "cases.refine-navigate",
+    );
+  };
+
   // No sort control where no order applies: a browse listing is newest-first
   // by definition, and an identifier lookup is answered by the identity path,
   // which ranks by relevance whatever the URL asks for. Offering a choice the
@@ -1010,6 +1024,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         country={countryParam}
         maxLength={MAX_QUERY_LENGTH}
         onQueryChange={handleQueryChange}
+        onRefined={searchRefinedQuery}
         onSubmit={openSingleMatch}
         query={queryInput}
       />

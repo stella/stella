@@ -156,6 +156,11 @@ import {
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
+import {
+  type LegalAlternatives,
+  legalAlternativesExpander,
+  withLegalAlternativesIdentity,
+} from "@/api/lib/legal-search/legal-alternatives";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import {
@@ -725,6 +730,8 @@ type CorpusIndexQueryOptions = {
    * identifier has no function words to drop.
    */
   functionWords: ReadonlySet<string> | null;
+  /** Passed in for the same reason: `strict` matches only the words typed. */
+  legalAlternatives: CorpusTermExpander | null;
 };
 
 const buildCorpusIndexQuery = ({
@@ -733,10 +740,12 @@ const buildCorpusIndexQuery = ({
   fields,
   expand,
   functionWords,
+  legalAlternatives,
 }: CorpusIndexQueryOptions): string | null =>
   caseLawCorpusQuery({
     text: body.query,
     functionWords,
+    legalAlternatives,
     filters: {
       court: body.court,
       dateFrom: body.dateFrom,
@@ -797,6 +806,7 @@ type ResolveCorpusIndexQueryOptions = {
   generation: string;
   jurisdictionClause: string | undefined;
   functionWords: ReadonlySet<string> | null;
+  legalAlternatives: LegalAlternatives;
 };
 
 type ResolvedCorpusIndexQuery = {
@@ -817,7 +827,9 @@ const resolveCorpusIndexQuery = async ({
   generation,
   jurisdictionClause,
   functionWords,
+  legalAlternatives: alternatives,
 }: ResolveCorpusIndexQueryOptions): Promise<ResolvedCorpusIndexQuery> => {
+  const legalAlternatives = legalAlternativesExpander(alternatives);
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const fields = caseLawCorpusQueryFields({
     generation,
@@ -837,6 +849,7 @@ const resolveCorpusIndexQuery = async ({
         fields,
         expand,
         functionWords,
+        legalAlternatives,
       });
       if (query !== null) {
         expanderByQuery.set(query, expand);
@@ -869,6 +882,7 @@ const resolveCorpusIndexQuery = async ({
           // a query that required different words would describe a different
           // result set than the page it sits beside.
           functionWords,
+          legalAlternatives,
         }) ??
           // Dropping a filter only ever widens the query. What can build to
           // nothing is the reader's text, and it did not, or the resolver
@@ -880,7 +894,22 @@ const resolveCorpusIndexQuery = async ({
       );
   };
 
-  return { resolved, facetQueries };
+  return {
+    // The alternatives are part of the ranking, so the identity a cursor
+    // pins names them too: a continuation asked with others is stale.
+    resolved:
+      resolved.type === "empty"
+        ? resolved
+        : {
+            dictionary: withLegalAlternativesIdentity(
+              resolved.dictionary,
+              alternatives,
+            ),
+            query: resolved.query,
+            type: resolved.type,
+          },
+    facetQueries,
+  };
 };
 
 const extractCorpusSnippet = (
@@ -1687,6 +1716,7 @@ export const searchCorpusIndexDecisions = async (
     generation,
     jurisdictionClause,
     functionWords: interpretation.functionWords,
+    legalAlternatives: interpretation.legalAlternatives,
   });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
