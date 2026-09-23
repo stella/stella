@@ -50,8 +50,8 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
-import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
   generateImageThumbnail,
   shouldGenerateImageThumbnail,
@@ -59,11 +59,7 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import {
-  deleteS3ObjectWithSignal,
-  putS3ObjectWithSignal,
-  readS3ArrayBuffer,
-} from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
@@ -412,9 +408,10 @@ export const hydrateFilePart = async ({
       });
     }
 
-    const buffer = yield* Result.await(
+    const stored = yield* Result.await(
       Result.tryPromise({
-        try: async () => await readS3ArrayBuffer(s3Key),
+        try: async () =>
+          await readStoredFile({ key: s3Key, mimeType, fileName }),
         catch: (cause) =>
           new ChatError({
             message: "Failed to read chat attachment",
@@ -422,6 +419,7 @@ export const hydrateFilePart = async ({
           }),
       }),
     );
+    const buffer = stored.bytes;
     const bytes = new Uint8Array(buffer);
 
     // Text-extractable formats are ALWAYS reduced to a `text` content part
@@ -495,9 +493,7 @@ export const hydrateFilePart = async ({
 
     if (mimeType === XLSX_MIME_TYPE) {
       const extracted = yield* Result.await(
-        extractXlsxAttachmentText(
-          storedFile({ key: s3Key, bytes: buffer, mimeType, fileName }),
-        ).then((result) =>
+        extractXlsxAttachmentText(stored).then((result) =>
           Result.mapError(
             result,
             (cause) =>

@@ -27,6 +27,7 @@ import type {
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const entityId = toSafeId<"entity">("entity_1");
@@ -428,7 +429,9 @@ describe("processExtraction", () => {
   });
 
   test("reads native extraction input through the caller-provided storage scope", async () => {
-    const readSource = mock(async () => new ArrayBuffer(8));
+    const readSource = mock(async ({ mimeType }: { mimeType: string }) =>
+      testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
 
     await executeNativeExtraction({
       fileField: fileContent,
@@ -445,10 +448,11 @@ describe("processExtraction", () => {
       },
     });
 
-    expect(readSource).toHaveBeenCalledWith(
-      `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
-      expect.any(AbortSignal),
-    );
+    expect(readSource).toHaveBeenCalledWith({
+      key: `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
+      mimeType: fileContent.mimeType,
+      signal: expect.any(AbortSignal),
+    });
     // The provided scope replaces the default reader outright: the store sees
     // no request at all.
     expect(fake.requests).toEqual([]);
@@ -458,7 +462,7 @@ describe("processExtraction", () => {
     const controller = new AbortController();
     const started = Promise.withResolvers<undefined>();
     const observedSignals: AbortSignal[] = [];
-    const readSource = mock(async (_key: string, signal: AbortSignal) => {
+    const readSource = mock(async ({ signal }: { signal: AbortSignal }) => {
       observedSignals.push(signal);
       started.resolve(undefined);
       await new Promise<void>((_resolve, reject) => {
@@ -470,7 +474,10 @@ describe("processExtraction", () => {
           },
         );
       });
-      return new ArrayBuffer();
+      return testScannedFile({
+        bytes: new ArrayBuffer(0),
+        mimeType: fileContent.mimeType,
+      });
     });
 
     const extraction = executeNativeExtraction({

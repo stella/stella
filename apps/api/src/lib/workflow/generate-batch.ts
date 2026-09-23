@@ -6,7 +6,7 @@ import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { storedFile } from "@/api/lib/file-scan/scanned-file";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -176,13 +176,8 @@ export const fetchAndPrepareFiles = async (
           fileId: meta.fileId,
           mimeType: meta.mimeType,
         });
-        const fileBuffer = await readS3ArrayBuffer(fileKey);
         const extracted = await extractFileTextResult(
-          storedFile({
-            key: fileKey,
-            bytes: fileBuffer,
-            mimeType: meta.mimeType,
-          }),
+          await readStoredFile({ key: fileKey, mimeType: meta.mimeType }),
         );
         if (Result.isError(extracted)) {
           throw new WorkflowIntegrationError({

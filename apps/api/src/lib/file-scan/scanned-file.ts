@@ -8,7 +8,7 @@
  *
  * - `scanUpload` (`scan-upload.ts`): bytes that passed the security scan (verdict not `reject`).
  *   Server-built output (filled templates, reports) is scanned the same way.
- * - `storedFile`: bytes read back from a `FileKey`. Objects reach a file key
+ * - `readStoredFile` (`stored-file.ts`): bytes it reads itself from a `FileKey`. Objects reach a file key
  *   only after a scan (upload finalize, direct upload, version writes, chat
  *   attachments) or as server-built derivatives of such objects (PDF and OCR
  *   renditions). Presigned staging keys are plain strings, so a raw upload
@@ -34,10 +34,10 @@ type ScannedFileFields = {
 let mint: (fields: ScannedFileFields) => ScannedFile;
 
 /**
- * Mints a `ScannedFile` from a completed scan. Only `scan-upload.ts` may
- * import this (enforced by `scanned-file-boundary`); it lives here so modules
- * that only read stored files do not pull the scanner and its native addon
- * into their bundle.
+ * Mints a `ScannedFile`. Only `scan-upload.ts`, `stored-file.ts`, and the test
+ * helper may import this (enforced by `scanned-file-boundary`); it lives apart
+ * from the scanner so stored-file readers do not bundle the scanner's native
+ * addon.
  */
 export const mintScannedFile = (fields: ScannedFileFields): ScannedFile =>
   mint(fields);
@@ -66,6 +66,11 @@ export class ScannedFile {
     mint = (fields) => new ScannedFile(fields);
   }
 
+  /**
+   * The scanned bytes. `scanUpload` copied them out of the caller's buffer and
+   * `readStoredFile` read them fresh, so no one else holds this buffer; parsers
+   * must treat it as read-only.
+   */
   get bytes(): ArrayBuffer {
     return this.#bytes;
   }
@@ -85,36 +90,3 @@ export class ScannedFile {
     });
   }
 }
-
-/** Copies only when the view does not span its whole buffer. */
-export const toArrayBuffer = (bytes: ArrayBuffer | Uint8Array): ArrayBuffer => {
-  if (bytes instanceof ArrayBuffer) {
-    return bytes;
-  }
-  const whole =
-    bytes.buffer instanceof ArrayBuffer &&
-    bytes.byteOffset === 0 &&
-    bytes.byteLength === bytes.buffer.byteLength;
-  return whole ? bytes.buffer : new Uint8Array(bytes).buffer;
-};
-
-type StoredFileInput = {
-  key: FileKey;
-  bytes: ArrayBuffer | Uint8Array;
-  mimeType: string;
-  fileName?: string;
-};
-
-/** Bytes read back from a file key, which only holds scanned or server-built output. */
-export const storedFile = ({
-  key,
-  bytes,
-  mimeType,
-  fileName = key,
-}: StoredFileInput): ScannedFile =>
-  mint({
-    bytes: toArrayBuffer(bytes),
-    fileName,
-    mimeType,
-    source: { type: "stored", key },
-  });

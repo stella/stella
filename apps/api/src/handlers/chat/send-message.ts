@@ -193,7 +193,7 @@ import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { storedFile } from "@/api/lib/file-scan/scanned-file";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   FILE_SIZE_LIMIT_BYTES,
@@ -204,7 +204,6 @@ import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -2699,9 +2698,10 @@ const readActiveFileFallbackForModel = async ({
       fileId: source.fileId,
       mimeType: source.mimeType,
     });
-    const buffer = yield* Result.await(
+    const storedSource = yield* Result.await(
       Result.tryPromise({
-        try: async () => await readS3ArrayBuffer(s3Key),
+        try: async () =>
+          await readStoredFile({ key: s3Key, mimeType: source.mimeType }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -2710,14 +2710,13 @@ const readActiveFileFallbackForModel = async ({
           }),
       }),
     );
+    const buffer = storedSource.bytes;
     if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
       return Result.err(activeFileSizeLimitError());
     }
 
     if (source.type === "extracted-text") {
-      const extracted = await extractFileTextResult(
-        storedFile({ key: s3Key, bytes: buffer, mimeType: source.mimeType }),
-      );
+      const extracted = await extractFileTextResult(storedSource);
       if (Result.isError(extracted)) {
         return Result.err(
           new HandlerError({

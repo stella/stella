@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { storedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
   OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
-import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { extractFileText, resolveExtractionMimeType } from "./extract-content";
 
@@ -53,9 +52,7 @@ describe("resolveExtractionMimeType", () => {
 });
 
 const extractFixtureText = async (bytes: ArrayBuffer, mimeType: string) =>
-  await extractFileText(
-    storedFile({ key: testFileKey("org/ws/fixture"), bytes, mimeType }),
-  );
+  await extractFileText(testScannedFile({ bytes, mimeType }));
 
 describe("extractFileText", () => {
   test("extracts direct text files", async () => {

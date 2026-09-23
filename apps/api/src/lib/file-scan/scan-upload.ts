@@ -10,10 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import {
-  mintScannedFile,
-  toArrayBuffer,
-} from "@/api/lib/file-scan/scanned-file";
+import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 export class FileScanRejectedError extends TaggedError(
   "FileScanRejectedError",
@@ -41,7 +38,12 @@ export const scanUpload = async ({
 }: ScanUploadInput): Promise<
   Result<ScannedFile, FileScanRejectedError | FileScanFailedError>
 > => {
-  const buffer = toArrayBuffer(bytes);
+  // Scan and keep a private copy: a caller still holding its buffer must not
+  // be able to change the bytes after the verdict.
+  const buffer =
+    bytes instanceof ArrayBuffer
+      ? bytes.slice(0)
+      : new Uint8Array(bytes).buffer;
   const scanned = await scanFile({
     buffer: new Uint8Array(buffer),
     declaredMimeType,
