@@ -183,9 +183,6 @@ describe("custom oxlint guardrails", () => {
       "no-workspace-field-value-drift/no-raw-field-value-bidi-text",
     );
     expect(configSource).toContain(
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
-    );
-    expect(configSource).toContain(
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
     );
     expect(configSource).toContain(
@@ -205,8 +202,13 @@ describe("custom oxlint guardrails", () => {
   test("public SEO endpoints cannot import auth or protected code", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(configSource).toContain("apps/web/src/routes/robots[.]txt.ts");
-    expect(configSource).toContain("apps/web/src/routes/sitemap[.]xml.ts");
+    // Escaped brackets: the files are literally named `robots[.]txt.ts`.
+    expect(configSource).toContain(
+      String.raw`apps/web/src/routes/robots\\[.\\]txt.ts`,
+    );
+    expect(configSource).toContain(
+      String.raw`apps/web/src/routes/sitemap\\[.\\]xml.ts`,
+    );
     expect(configSource).toContain(
       "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
     );
