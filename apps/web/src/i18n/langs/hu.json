@@ -713,14 +713,16 @@
         "showSource": "Forrás megjelenítése",
         "yes": "Igen"
       },
-      "deleteColumnConfirm": "Eltávolítja a kérdést és minden válaszát.",
+      "deleteColumnConfirm": "A kérdés és minden válasza törlődik az egész szervezet számára, minden keresésből és minden tagnál. Ha csak ebből a keresésből szeretné eltávolítani, válassza az „Eltávolítás ebből a keresésből” lehetőséget.",
       "editQuestionHint": "A szöveg, a válasz típusának vagy a lehetőségeinek módosítása elveti a jelenlegi válaszokat; utána futtassa újra az oszlopot.",
       "nothingToRun": "Minden cellának van már válasza",
       "questionPlaceholder": "pl. Érvényesnek találta a bíróság a felmondást?",
+      "removeFromSearch": "Eltávolítás ebből a keresésből",
       "runAll": "Mind megválaszolása",
       "runConfirm": "Válaszadás most",
       "runEstimate": "{rows, plural, one {# határozat} other {# határozat}} × {columns, plural, one {# kérdés} other {# kérdés}} ezen az oldalon: {cells, plural, one {# válasz} other {# válasz}} készül.",
       "runTitle": "Ezen oldal megválaszolása",
+      "savedQuestions": "Mentett kérdések",
       "title": "Kutatási táblák",
       "updated": "Utoljára szerkesztve: {date}"
     },

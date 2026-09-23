@@ -252,6 +252,54 @@ describe("a query edit", () => {
   });
 });
 
+describe("the question columns a search carries", () => {
+  const questions = ["col_a", "col_b"];
+  const searches = [
+    { country: "cz", q: "nájem", questions },
+    { country: "cz", q: "nájem", court: "Nejvyšší soud", questions },
+    { country: "sk", q: undefined, sort: "newest", questions },
+    { country: "cz", q: "nájem", strict: STRICT_SEARCH_VALUE, questions },
+  ] as const;
+  const queries = ["nájem", "výpověď nájmu", "", "  ", "nájem bytu"];
+
+  // A new query is a new search: the columns picked for the last topic would
+  // otherwise follow the reader into an unrelated one.
+  test("a changed query starts without them, an unchanged one keeps them", () => {
+    for (const previous of searches) {
+      for (const query of queries) {
+        const next = withQuery(
+          { ...previous, questions: [...questions] },
+          query,
+        );
+        const queryChanged = next.q !== previous.q;
+
+        expect(next.questions).toEqual(queryChanged ? undefined : questions);
+      }
+    }
+  });
+
+  // No write pending means the change is a filter, sort, page or strict step
+  // on the same topic, which keeps them.
+  test("a change with no query edit pending keeps them", () => {
+    for (const previous of searches) {
+      const next = withPendingQuery(
+        { ...previous, questions: [...questions] },
+        null,
+      );
+
+      expect(next.questions).toEqual(questions);
+    }
+  });
+
+  test("the canonical address never names them", () => {
+    for (const search of searches) {
+      expect(
+        createCaseLawIndexPath({ ...search, questions: [...questions] }),
+      ).not.toContain("questions");
+    }
+  });
+});
+
 describe("a query edit still pending when something else changes", () => {
   test("carries the typed text into the change instead of losing it", () => {
     expect(

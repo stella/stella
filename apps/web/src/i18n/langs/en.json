@@ -713,14 +713,16 @@
         "showSource": "Show source",
         "yes": "Yes"
       },
-      "deleteColumnConfirm": "This removes the question and every answer it holds.",
+      "deleteColumnConfirm": "This deletes the question and all its answers for your whole organization, from every search and for every member. To take it off this search only, use “Remove from this search”.",
       "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.",
       "nothingToRun": "Every cell already has an answer",
       "questionPlaceholder": "e.g. Did the court find the termination valid?",
+      "removeFromSearch": "Remove from this search",
       "runAll": "Answer all",
       "runConfirm": "Answer now",
       "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.",
       "runTitle": "Answer this page",
+      "savedQuestions": "Saved questions",
       "title": "Research tables",
       "updated": "Last edited {date}"
     },

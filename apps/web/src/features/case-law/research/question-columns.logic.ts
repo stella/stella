@@ -343,7 +343,7 @@ const setFilters = ({
 });
 
 /** What the reader can do to the column a question is asked in, in menu order. */
-const QUESTION_COLUMN_ACTIONS = ["edit", "run", "delete"] as const;
+const QUESTION_COLUMN_ACTIONS = ["edit", "run", "remove", "delete"] as const;
 
 export type QuestionColumnAction = (typeof QUESTION_COLUMN_ACTIONS)[number];
 
@@ -368,28 +368,40 @@ export const READ_ONLY_QUESTIONS = {
 
 // Which grant each header action spends. Editing the wording and moving a
 // column are both `update`; answering again spends `run` because it bills.
+// Taking a question off this search changes only the reader's URL, so it
+// spends none.
 const COLUMN_ACTION_GRANT = {
   edit: "update",
   run: "run",
+  remove: null,
   delete: "delete",
-} as const satisfies Record<QuestionColumnAction, keyof QuestionColumnGrants>;
+} as const satisfies Record<
+  QuestionColumnAction,
+  keyof QuestionColumnGrants | null
+>;
 
 /**
  * The header actions this reader may take, in menu order. A reader who holds
- * none gets a header that names the question and nothing else — the columns
- * and their answers stay readable, because reading them is not a grant.
+ * no grant may still take the question off this search, and nothing else: the
+ * columns and their answers stay readable, because reading them is not a grant.
  */
 export const allowedColumnActions = (
   grants: QuestionColumnGrants,
 ): readonly QuestionColumnAction[] =>
-  QUESTION_COLUMN_ACTIONS.filter(
-    (action) => grants[COLUMN_ACTION_GRANT[action]],
-  );
+  QUESTION_COLUMN_ACTIONS.filter((action) => {
+    const grant = COLUMN_ACTION_GRANT[action];
+    return grant === null || grants[grant];
+  });
 
 /** Everything the table needs to draw and work the organization's questions. */
 export type AvailableQuestionColumns = {
   type: "available";
+  /** The questions this search shows, in its order. */
   columns: readonly QuestionColumn[];
+  /** The organization's questions this search does not show yet. */
+  addable: readonly QuestionColumn[];
+  /** Shows questions on this search, after the ones it already shows. */
+  onAddToSearch: (columnIds: readonly string[]) => void;
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
   onColumnAction: (
     column: QuestionColumn,

@@ -713,14 +713,16 @@
         "showSource": "Ver fuente",
         "yes": "Sí"
       },
-      "deleteColumnConfirm": "Quita la pregunta y todas sus respuestas.",
+      "deleteColumnConfirm": "Se eliminarán la pregunta y todas sus respuestas para toda su organización, en todas las búsquedas y para todos los miembros. Para quitarla solo de esta búsqueda, use «Quitar de esta búsqueda».",
       "editQuestionHint": "Cambiar la redacción, el tipo de respuesta o sus opciones descarta las respuestas actuales; vuelva a ejecutar la columna después.",
       "nothingToRun": "Todas las celdas ya tienen respuesta",
       "questionPlaceholder": "p. ej. ¿Consideró el tribunal válido el despido?",
+      "removeFromSearch": "Quitar de esta búsqueda",
       "runAll": "Responder todo",
       "runConfirm": "Responder ahora",
       "runEstimate": "{rows, plural, one {# resolución} other {# resoluciones}} × {columns, plural, one {# pregunta} other {# preguntas}} en esta página: {cells, plural, one {se generará # respuesta} other {se generarán # respuestas}}.",
       "runTitle": "Responder esta página",
+      "savedQuestions": "Preguntas guardadas",
       "title": "Tablas de investigación",
       "updated": "Última edición {date}"
     },

@@ -24,6 +24,11 @@ export type CaseLawIndexSearch = {
   from?: string | undefined;
   lang?: string | undefined;
   q?: string | undefined;
+  /**
+   * The organization's questions this search draws as columns, in order. Not
+   * part of the result set, so the canonical address leaves it out.
+   */
+  questions?: string[] | undefined;
   sort?: SearchSort | undefined;
   /**
    * Require every word the query carries, as a link beside the results asks
@@ -158,14 +163,17 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
 });
 
 /**
- * The URL a query edit lands on, with `strict` dropped.
+ * The URL a query edit lands on, with `strict` and `questions` dropped.
  *
  * Requiring every word is asked of one query, by a link beside that query's
  * results, and nothing on screen gives it back once it is on. Carried into the
  * next query it would silently require every word of text the reader never
  * asked that of, and the question-shaped searches the widening exists for
- * would answer nothing. So the drop belongs to the transition rather than to
- * each caller: no place that writes `q` can forget it.
+ * would answer nothing. The question columns were picked for one topic too: a
+ * new query is a new search and starts without them, while a filter, sort,
+ * page or strict change narrows the same topic and keeps them. So the drop
+ * belongs to the transition rather than to each caller: no place that writes
+ * `q` can forget it.
  */
 export const withQuery = (
   previous: CaseLawIndexSearch,
@@ -175,7 +183,7 @@ export const withQuery = (
   if (q === previous.q) {
     return previous;
   }
-  return { ...previous, q, strict: undefined };
+  return { ...previous, q, strict: undefined, questions: undefined };
 };
 
 /**

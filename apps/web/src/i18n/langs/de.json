@@ -713,14 +713,16 @@
         "showSource": "Quelle anzeigen",
         "yes": "Ja"
       },
-      "deleteColumnConfirm": "Entfernt die Frage und alle ihre Antworten.",
+      "deleteColumnConfirm": "Die Frage und alle ihre Antworten werden für Ihre gesamte Organisation gelöscht, aus jeder Suche und für jedes Mitglied. Um sie nur in dieser Suche auszublenden, wählen Sie „Aus dieser Suche entfernen“.",
       "editQuestionHint": "Eine Änderung des Wortlauts, des Antworttyps oder seiner Optionen verwirft die vorhandenen Antworten; führen Sie die Spalte danach erneut aus.",
       "nothingToRun": "Jede Zelle hat bereits eine Antwort",
       "questionPlaceholder": "z. B. Hielt das Gericht die Kündigung für wirksam?",
+      "removeFromSearch": "Aus dieser Suche entfernen",
       "runAll": "Alle beantworten",
       "runConfirm": "Jetzt beantworten",
       "runEstimate": "{rows, plural, one {# Entscheidung} other {# Entscheidungen}} × {columns, plural, one {# Frage} other {# Fragen}} auf dieser Seite: {cells, plural, one {# Antwort wird erzeugt} other {# Antworten werden erzeugt}}.",
       "runTitle": "Diese Seite beantworten",
+      "savedQuestions": "Gespeicherte Fragen",
       "title": "Recherchetabellen",
       "updated": "Zuletzt bearbeitet {date}"
     },

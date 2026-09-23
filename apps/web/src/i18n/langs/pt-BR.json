@@ -713,14 +713,16 @@
         "showSource": "Mostrar fonte",
         "yes": "Sim"
       },
-      "deleteColumnConfirm": "Remove a pergunta e todas as suas respostas.",
+      "deleteColumnConfirm": "A pergunta e todas as suas respostas serão excluídas para toda a sua organização, em todas as pesquisas e para todos os membros. Para tirá-la apenas desta pesquisa, use “Remover desta pesquisa”.",
       "editQuestionHint": "Alterar a redação, o tipo de resposta ou suas opções descarta as respostas atuais; execute a coluna novamente depois.",
       "nothingToRun": "Todas as células já têm resposta",
       "questionPlaceholder": "ex.: O tribunal considerou a rescisão válida?",
+      "removeFromSearch": "Remover desta pesquisa",
       "runAll": "Responder tudo",
       "runConfirm": "Responder agora",
       "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
       "runTitle": "Responder esta página",
+      "savedQuestions": "Perguntas salvas",
       "title": "Tabelas de pesquisa",
       "updated": "Última edição em {date}"
     },
