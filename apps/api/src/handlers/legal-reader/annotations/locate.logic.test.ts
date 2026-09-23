@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   ANNOTATION_LOCATE_ISSUE,
@@ -133,6 +134,7 @@ describe("locatePassages", () => {
           );
         },
       ),
+      propertyConfig(),
     );
   });
 });
