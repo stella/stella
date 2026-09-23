@@ -398,7 +398,7 @@
     "apps/web/src/routes/dev/-components/ui-playground.tsx": 2,
     "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx": 1,
     "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx": 1,
-    "apps/web/src/routes/law/$country/statutes/index.tsx": 2,
+    "apps/web/src/routes/law/$country/statutes/index.tsx": 1,
     "apps/web/src/routes/law/-law-home/law-database-status.tsx": 1,
     "apps/web/src/routes/law/-statute-detail.tsx": 1,
     "apps/web/src/routes/law/cases/index.tsx": 1,

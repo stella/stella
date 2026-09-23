@@ -6,7 +6,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  redirect,
+} from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -26,9 +31,13 @@ import {
   publicLawPageSizeSearchSchema,
   publicLawPageSizeSearchValue,
   publicLawPagesToWalk,
+  reachablePublicLawPage,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
-import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
+import {
+  publicLawLoadMode,
+  publicLawRowsPhase,
+} from "@/components/public-law-table/public-law-results-state.logic";
 import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
@@ -188,27 +197,48 @@ const shownStatutes = (
 export const Route = createFileRoute("/law/$country/statutes/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps, params }) => {
+  // A page the chain of cursors does not reach redirects to the deepest one
+  // that does, as the case-law results do: server-side, so a crawler and a
+  // no-JS reader get a real redirect instead of page 3 under a page-40 URL.
+  beforeLoad: async ({ context: { queryClient }, params, search }) => {
     if (!isPublicStatuteCountry(params.country)) {
       notFound({ throw: true });
+      return;
     }
     const options = statutesInfiniteOptions(
-      createStatuteListFilters(params.country, deps),
-      publicLawPageSize(deps.pageSize),
+      createStatuteListFilters(params.country, search),
+      publicLawPageSize(search.pageSize),
     );
-    // The corpus answers with cursors, so a deep link walks the chain to the
-    // page it names; the pager's links are real addresses.
     const walked =
       queryClient.getQueryData(options.queryKey)?.pages.length ?? 0;
-    const wanted = publicLawPageNumber(deps.page);
-    const [pages] = await Promise.all([
-      ensureRouteInfiniteQueryData(queryClient, {
+    const wanted = publicLawPageNumber(search.page);
+    // Only a deep arrival pays for the walk; the loader decides whether any
+    // other navigation is worth awaiting.
+    let reached = walked;
+    if (wanted > 1 && wanted > walked) {
+      const chain = await ensureRouteInfiniteQueryData(queryClient, {
         ...options,
-        ...(wanted > 1 &&
-          wanted > walked && { pages: publicLawPagesToWalk(wanted, walked) }),
-      }),
-      // The type filter's choices: warm, never awaited, so a slow facet read
-      // cannot hold the list back.
+        pages: publicLawPagesToWalk(wanted, walked),
+      });
+      reached = chain.pages.length;
+    }
+    const page = publicLawPageSearchValue(
+      reachablePublicLawPage(wanted, reached),
+    );
+    if (search.page !== page) {
+      redirect({
+        to: "/law/$country/statutes",
+        params: { country: params.country },
+        search: { ...search, page },
+        replace: true,
+        throw: true,
+      });
+    }
+  },
+  loader: async ({ cause, context: { queryClient }, deps, params }) => {
+    // The type filter's choices: warmed, never awaited, so a slow facet read
+    // cannot hold the list back.
+    detached(
       prefetchRouteQuery(
         queryClient,
         statuteFacetsOptions(params.country.toUpperCase()),
@@ -216,7 +246,33 @@ export const Route = createFileRoute("/law/$country/statutes/")({
           getAnalytics().captureError(error);
         },
       ),
-    ]);
+      "statutes.facets-prefetch",
+    );
+    const options = statutesInfiniteOptions(
+      createStatuteListFilters(params.country, deps),
+      publicLawPageSize(deps.pageSize),
+    );
+    const cached = queryClient.getQueryData(options.queryKey);
+
+    // A filter, a search or a page step on a list that is already drawn: the
+    // components hold the previous rows and swap them in place, so awaiting
+    // here would only replace a live page with a skeleton.
+    if (
+      publicLawLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
+      "background"
+    ) {
+      return { statutes: shownStatutes(cached, deps.page) };
+    }
+
+    // `beforeLoad` has already walked a deep link's chain, so this is a cache
+    // read for that case and the first fetch otherwise.
+    const walked = cached?.pages.length ?? 0;
+    const wanted = publicLawPageNumber(deps.page);
+    const pages = await ensureRouteInfiniteQueryData(queryClient, {
+      ...options,
+      ...(wanted > 1 &&
+        wanted > walked && { pages: publicLawPagesToWalk(wanted, walked) }),
+    });
 
     return { statutes: shownStatutes(pages, deps.page) };
   },
