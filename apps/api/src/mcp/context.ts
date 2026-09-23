@@ -96,6 +96,8 @@ import type {
   recordTemplatePersistenceReceipt,
   releaseTemplatePersistenceClaim,
 } from "@/api/mcp/template-persistence";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
@@ -193,6 +195,11 @@ export type McpRequestContext = {
    * alone, which is the JWT bearer case.
    */
   credentialPermissions?: PermissionInput | undefined;
+  /**
+   * Who can confirm tools that need a person's go-ahead
+   * (`mcp/tool-confirmation.ts`). Absent means the caller relays it.
+   */
+  toolConfirmation?: ToolConfirmation | undefined;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
    * `invoke_capability` gates each capability on its catalog scope against this
@@ -439,6 +446,10 @@ export const resolveMcpSessionContext = async (
     createOperationDatabaseScope,
     ...(session.credential?.type === "machine_api_key"
       ? { credentialPermissions: session.credential.permissions }
+      : {}),
+    // An agent run has no person at the tool boundary to confirm a call.
+    ...(session.credential?.type === "agent_run"
+      ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
     enabledRegistrySlugs,
     grantedScopes: session.scopes,

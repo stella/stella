@@ -4,7 +4,9 @@ import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
+import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -107,6 +109,7 @@ const createContext = ({
   pinServerValidatedWorkspaceId,
   archivedWorkspaceIds = [] as string[],
   workspaceIds = ["ws_1"],
+  toolConfirmation,
 }: {
   createOperationDatabaseScope?: McpRequestContext["createOperationDatabaseScope"];
   credentialPermissions?: McpRequestContext["credentialPermissions"];
@@ -117,6 +120,7 @@ const createContext = ({
   safeDb?: McpRequestContext["safeDb"];
   archivedWorkspaceIds?: string[];
   workspaceIds?: string[];
+  toolConfirmation?: McpRequestContext["toolConfirmation"];
 } = {}): McpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
   return {
@@ -156,6 +160,7 @@ const createContext = ({
     pinServerValidatedWorkspaceId,
     safeDb,
     scopedDb,
+    ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
   };
 };
@@ -614,6 +619,53 @@ describe("invoke_capability gates", () => {
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("confirmation_required");
+  });
+
+  describe("sessions without a person to confirm (agent runs)", () => {
+    const agentRunCall = async (args: Record<string, unknown>) =>
+      await handleMcpToolCall({
+        args,
+        context: createContext({
+          grantedScopes: MCP_OAUTH_SCOPES,
+          toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        }),
+        toolName: "invoke_capability",
+      });
+
+    test("every destructive capability is unavailable, even with confirm", async () => {
+      // Derived from the catalog, not a list: a capability that later becomes
+      // destructive is covered without touching this test.
+      const destructiveIds = capabilityCatalog
+        .filter((entry) => entry.destructive)
+        .map((entry) => entry.id);
+      expect(destructiveIds.length).toBeGreaterThan(0);
+
+      for (const capability of destructiveIds) {
+        const result = await agentRunCall({
+          capability,
+          input: {},
+          confirm: true,
+        });
+        expect({ capability, code: errorEnvelope(result).code }).toEqual({
+          capability,
+          code: "permission_denied",
+        });
+      }
+    });
+
+    test("a capability that needs no confirmation is unaffected", async () => {
+      const result = await agentRunCall({
+        capability: "entities.get",
+        input: {},
+        validate_only: true,
+      });
+      const payload = parseToolPayload(result);
+      const code =
+        typeof payload === "object" && payload !== null && "error" in payload
+          ? asTestRaw<{ error: { code: string } }>(payload).error.code
+          : "ok";
+      expect(code).not.toBe("permission_denied");
+    });
   });
 
   test("invalid input -> validation_error with dot-path issues", async () => {

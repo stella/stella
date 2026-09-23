@@ -59,8 +59,11 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
+  confirmationUnavailableResult,
   DEFAULT_LIST_LIMIT,
   enumProp,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
   getWorkspaceStatus,
   intProp,
   MAX_LIST_LIMIT,
@@ -73,8 +76,6 @@ import {
   parseRequiredString,
   stringProp,
   structuredErrorResult,
-  FEATURE_DISABLED_MESSAGE,
-  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
 import {
@@ -1505,6 +1506,15 @@ const invokeCapabilityHandler = async ({
   }
 
   // 5. Destructive confirm gate.
+  const unconfirmable = entry.destructive
+    ? confirmationUnavailableResult({
+        toolConfirmation: context.toolConfirmation,
+        subject: `Capability "${id}"`,
+      })
+    : null;
+  if (unconfirmable !== null) {
+    return unconfirmable;
+  }
   if (entry.destructive && args["confirm"] !== true) {
     return structuredErrorResult({
       code: "confirmation_required",
