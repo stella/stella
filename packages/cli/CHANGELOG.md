@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 1.20.0
+
+### Minor Changes
+
+- [#3735](https://github.com/stella/stella/pull/3735) [`56b68d7`](https://github.com/stella/stella/commit/56b68d77ba55974c5e485318c9e39bd097ce22cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `annotation list|create|update|delete` reads and writes highlights and comments on case-law decisions and statute versions.
+
+### Patch Changes
+
+- [#3741](https://github.com/stella/stella/pull/3741) [`dbc1f5d`](https://github.com/stella/stella/commit/dbc1f5d6605e00a560aa977a3d9231bc5f7a8980) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Capabilities that create or change documents now require `stella:documents_write`, the consent the named document tools already required: `entities.upload`, `entities.upload-version`, `entities.bilingual.create`, `entities.create-from-legal-source`, `entities.restore-version`, `document-translations.runs.create`, and `fields.kanban-placement.update`. `entities.duplicate` and `entities.copy-to-matter` require it in addition to `stella:matters_write`. Document uploads through `uploads.create` and `uploads.update` require it too, and `stella upload` checks for both scopes before starting a new document.
+
+- [#3740](https://github.com/stella/stella/pull/3740) [`6c8ed73`](https://github.com/stella/stella/commit/6c8ed73fbffce3ee6768d35c3a5f112b94a9875c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella feedback submit` takes the `approval_token` that `stella feedback prepare` returns; the server refuses a report the token does not cover. Key-value output no longer truncates values without whitespace (tokens, ids, URLs), so they can be copied at any terminal width.
+
 ## 1.19.3
 
 ### Patch Changes
