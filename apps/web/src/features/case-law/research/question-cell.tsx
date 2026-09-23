@@ -163,7 +163,7 @@ const WithProvenance = ({
   decision,
   onShowPassage,
   run,
-}: WithProvenanceProps) => {
+}: WithProvenanceProps): ReactNode => {
   if (
     !run ||
     (run.justification.blocks.length === 0 && run.rationale.length === 0)
