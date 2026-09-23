@@ -5,6 +5,7 @@ import {
   type RecapMessage,
 } from "@/api/handlers/chat/thread-recap-transcript";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -135,7 +136,9 @@ export const generateThreadRecapText = async ({
     return cleanRecapText(text);
   } catch (error) {
     aiAnalytics.captureError(error);
-    captureError(error, { threadId, feature: "chat.thread_recap" });
+    if (isUnanticipatedAIFailure(error)) {
+      captureError(error, { threadId, feature: "chat.thread_recap" });
+    }
     return null;
   }
 };
