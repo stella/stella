@@ -236,6 +236,11 @@ const scopedDb: ScopedDb = async (callback) => {
           if (table === caseLawCorpusUploadIntents) {
             return [{ status: intentStatus }];
           }
+          if ("holdsDocument" in selection) {
+            // The document-less payload guard: the row holds no document,
+            // and this refresh's empty payload differs from what it holds.
+            return [{ holdsDocument: false, differs: true }];
+          }
           if ("id" in selection && "redactedAt" in selection) {
             // The batch reserves by locking every decision it packs and
             // keeping the ones no redaction has claimed.
@@ -495,11 +500,15 @@ describe("processDecision — canonical storage mode", () => {
       packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
     ).toEqual([decisionId]);
     expect(updatedDecisionRows[0]).toMatchObject({
-      fulltext: "Recovered decision text.",
       sourceHash: "recovered-detail-hash",
       sourceObservationHash: "listing-only-replay-hash",
       sourceObservationOrder: 2n,
     });
+    // The row already holds the payload it is replaying, so the claim does
+    // not copy it back in; the pack above carries it from the row.
+    for (const column of ["fulltext", "sections", "documentAst"]) {
+      expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+    }
     expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
     expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
     expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
@@ -594,26 +603,28 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    // An empty payload contributes no member, so the batch transfers nothing.
+    // An empty payload has nothing to store, so nothing is transferred or
+    // reserved: the row is written settled, with no pointers, at once.
     expect(transferredPacks).toEqual([]);
-    const settled = updatedDecisionRows.at(-1);
-    expect(settled).toMatchObject({
+    expect(events).not.toContain("intent-reserve");
+    expect(updatedDecisionRows).toEqual([]);
+    const inserted = insertedRows.at(0);
+    expect(inserted).toMatchObject({
       corpusMirrorStatus: "settled",
       textS3Key: null,
       normalizedS3Key: null,
       astS3Key: null,
       contentHash: null,
     });
-    // Nothing in object storage backs this row, so the settle must not
-    // trim the Postgres payload columns.
-    expect(settled).not.toHaveProperty("fulltext");
+    // Nothing in object storage backs this row, so its Postgres payload
+    // columns are what it holds.
+    expect(inserted?.["documentAst"]).toEqual(decision.documentAst);
     // A row a reader cannot open is stored unpublished under the packed
     // layout too: the marker is decided by the write that proves the row
     // holds no document, never by where a payload would have lived.
     expect(
-      partialObservationFromMetadata(insertedRows.at(0)?.["metadata"]),
+      partialObservationFromMetadata(inserted?.["metadata"]),
     ).toMatchObject({ isListingOnly: true });
-    expect(events.at(-1)).toBe("intent-delete");
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {

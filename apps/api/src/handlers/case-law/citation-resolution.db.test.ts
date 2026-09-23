@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import {
   type CitationResolutionCursor,
+  classifyCitationsBeforeWrite,
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
   reopenCitationsResolvedTo,
@@ -823,6 +824,58 @@ test("an unambiguous same-jurisdiction citation resolves", async () => {
 test("every examined row records when it was examined", async () => {
   expect((await rowOf(plainCitation))?.attemptedAt).toBeInstanceOf(Date);
   expect((await rowOf(crossBorderCitation))?.attemptedAt).toBeInstanceOf(Date);
+});
+
+test("a citation settled before it is written gets the walk's answer", async () => {
+  // The pipeline inserts new citations already settled rather than inserting
+  // them pending and updating each one. That is only honest if the answer is
+  // the walk's: every row the walk settled above is classified again from its
+  // own columns, as if it were about to be written, and must come out the
+  // same.
+  const settled = await db
+    .select({
+      id: caseLawCitations.id,
+      citingDecisionId: caseLawCitations.citingDecisionId,
+      citationKey: caseLawCitations.citationKey,
+      identifierType: caseLawCitations.identifierType,
+      normalizedIdentifierValue: caseLawCitations.normalizedIdentifierValue,
+      citedDecisionTypeHint: caseLawCitations.citedDecisionTypeHint,
+      citedCourtHint: caseLawCitations.citedCourtHint,
+      citedSheetNumber: caseLawCitations.citedSheetNumber,
+      citedDecisionDate: caseLawCitations.citedDecisionDate,
+      citedDecisionId: caseLawCitations.citedDecisionId,
+      resolutionStatus: caseLawCitations.resolutionStatus,
+      resolutionRuleId: caseLawCitations.resolutionRuleId,
+    })
+    .from(caseLawCitations);
+  const examined = settled.filter(
+    (row) => row.resolutionStatus !== CITATION_RESOLUTION_STATUS.PENDING,
+  );
+  // Not vacuous: the fixture carries every outcome the walk can reach.
+  expect(new Set(examined.map((row) => row.resolutionStatus))).toEqual(
+    new Set([
+      CITATION_RESOLUTION_STATUS.RESOLVED,
+      CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+      CITATION_RESOLUTION_STATUS.UNMATCHED,
+    ]),
+  );
+  for (const row of settled) {
+    const resolutions = await classifyCitationsBeforeWrite(asTx(), {
+      citingDecisionId: row.citingDecisionId,
+      citations: [{ ...row, id: createSafeId<"caseLawCitation">() }],
+    });
+    const [resolution] = [...resolutions.values()];
+    if (row.resolutionStatus === CITATION_RESOLUTION_STATUS.PENDING) {
+      // Unkeyed, or a jurisdiction with no declared policy: left pending.
+      expect(resolution).toBeUndefined();
+      continue;
+    }
+    expect(resolution).toEqual({
+      citedDecisionId: row.citedDecisionId,
+      resolutionStatus: row.resolutionStatus,
+      resolutionRuleId: row.resolutionRuleId,
+    });
+  }
 });
 
 test("a matching key in a jurisdiction CZE cannot reach does not link", async () => {

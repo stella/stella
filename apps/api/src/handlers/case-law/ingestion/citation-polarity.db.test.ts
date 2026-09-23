@@ -2,19 +2,19 @@
  * Polarity is written when the citation row is published, and a refresh
  * re-derives it.
  *
- * A refresh deletes every citation row of the decision and re-inserts it from
- * the document, so a label written after the insert — by the background
- * classifier, whenever it next comes round — lives only until the next
- * refresh. Classifying in the pipeline makes the delete/re-insert a
- * recomputation rather than a blanking, which is what the second half of the
- * test below asserts: the rows are new rows, carrying the same reading.
+ * A refresh rewrites every citation row that no longer reads what the
+ * document and the rules say, so a label written after the insert — by the
+ * background classifier, whenever it next comes round — lives only until the
+ * next refresh that disagrees with it. Classifying in the pipeline makes that
+ * rewrite a recomputation rather than a blanking, which is what the second
+ * half of the test below asserts; a refresh that agrees rewrites nothing.
  *
  * The rules come from `SEED_RULES`, not from patterns invented here: the
  * assertion is about what the shipped rule set says about a Czech sentence.
  */
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -129,6 +129,17 @@ const readCitations = async () =>
     .from(caseLawCitations)
     .orderBy(asc(caseLawCitations.citationText));
 
+/**
+ * Every citation tuple's header. `xmax` is where an update, a delete or a row
+ * lock lands, so an unchanged pair is a row nobody touched.
+ */
+const citationTupleHeaders = async (): Promise<unknown> =>
+  await db.execute(sql`
+    SELECT id::text AS id, xmin::text AS xmin, xmax::text AS xmax
+      FROM case_law_citations
+     ORDER BY id
+  `);
+
 /** The seeded `srov.` rule as it stands now: its source and its counter. */
 const readRule = async () =>
   (
@@ -210,7 +221,9 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
   ]);
 
   // Same document, new source hash: the refresh applies rather than
-  // dedup-skipping, and it deletes and re-inserts every row above.
+  // dedup-skipping. Its citations are the rows already stored, so not one of
+  // them is rewritten, deleted or even locked: every tuple header survives.
+  const headersBefore = await citationTupleHeaders();
   const refreshed = await processDecision({
     input: decision("hash-after-the-publisher-touched-it"),
     sourceId,
@@ -221,15 +234,37 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
     corpus,
   });
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  expect(await citationTupleHeaders()).toEqual(headersBefore);
+  expect(await readCitations()).toEqual(published);
+  // Nothing was published again, so no rule fired again.
+  expect(await readRule()).toMatchObject({ matchCount: 1 });
 
-  const reinserted = await readCitations();
-  // New rows, or the assertion below would hold for a pipeline that never
-  // reclassifies because it never rewrote anything.
-  expect(reinserted.map(({ id }) => id)).not.toEqual(
-    published.map(({ id }) => id),
+  // A stored row that no longer reads what the rules say is rewritten: the
+  // verdict is taken off it here, as a rule retirement would, and the next
+  // refresh publishes the rules' reading again on a new row.
+  const precedent = published.find(
+    ({ kind }) => kind === CITATION_KIND.PRECEDENT,
   );
+  if (!precedent) {
+    throw new TypeError("expected the precedent citation to be stored");
+  }
+  await db
+    .update(caseLawCitations)
+    .set({ polarity: null, polarityRuleId: null })
+    .where(eq(caseLawCitations.id, precedent.id));
+  const reclassified = await processDecision({
+    input: decision("hash-after-a-rule-was-retired"),
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-09-15T10:00:00.000Z"),
+    observationOrder: 3n,
+    refresh: DECISION_REFRESH.ALWAYS,
+    corpus,
+  });
+  expect(reclassified.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  const republished = await readCitations();
   expect(
-    reinserted.map(({ citationText, kind, polarity, polarityRuleId }) => ({
+    republished.map(({ citationText, kind, polarity, polarityRuleId }) => ({
       citationText,
       kind,
       polarity,
@@ -243,10 +278,17 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
       polarityRuleId,
     })),
   );
-
+  // Only the row that differed is new; the other kept its identity.
+  expect(republished.map(({ id }) => id === precedent.id)).toEqual([
+    false,
+    false,
+  ]);
+  expect(
+    republished.filter(({ id }) => published.some((row) => row.id === id)),
+  ).toHaveLength(1);
   // A row published with a verdict never reaches `classify-citations.ts`, so
-  // the publish is the only place left that can say a rule fired. Twice: the
-  // refresh re-derived the same verdict on a new row.
+  // the publish is the only place left that can say a rule fired: once for
+  // the first row, once for the row that replaced it.
   expect(await readRule()).toMatchObject({ matchCount: 2 });
 });
 

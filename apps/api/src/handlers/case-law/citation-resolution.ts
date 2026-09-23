@@ -76,6 +76,7 @@
  * random.
  */
 
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -100,7 +101,9 @@ import {
   CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_SCOPE,
   CITATION_RESOLUTION_STATUS,
+  CITATION_RESOLUTION_STATUSES,
   type CitationResolutionRule,
+  type CitationResolutionStatus,
   CITATION_CANDIDATE_SCAN_CAP,
   citationReopenableByKeySql,
   countsByRule,
@@ -109,6 +112,7 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -243,6 +247,16 @@ const toCount = (value: unknown): number => {
  * counts on the other — the statement still runs, so the miscount is
  * invisible until someone trusts the number.
  */
+const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
 const firstRow = (result: unknown): unknown => {
   if (Array.isArray(result)) {
     return result.at(0);
@@ -429,39 +443,15 @@ const citationMatchingHoldersSql = ({
   LIMIT ${limit}`;
 
 /**
- * The one statement. `selection` names which pending rows this call settles;
- * everything after it is the doctrine, shared so the walk and the ingest-time
- * pass cannot drift into two different definitions of an honest link.
- *
- * `cited_decision_id` is written from the same CASE that writes the status, so
- * a resolved row always carries its target and an unresolved one never carries
- * a stale target from an earlier attempt.
+ * The doctrine as CTEs over a `batch` of citations: what each one's
+ * candidates are and what the rules make of them, ending in `classified`.
+ * `batch` supplies the citation's identity columns and its citing decision's
+ * country, date and language.
  */
-const resolutionStatement = (selection: SQL): SQL => sql`
-  WITH ${policyCte()},
+const classificationCtes = (batch: SQL): SQL => sql`
+  ${policyCte()},
   ${hintFamilyCte()},
-  batch AS (
-    SELECT c.id,
-           c.citation_key,
-           c.identifier_type,
-           c.normalized_identifier_value,
-           c.citing_decision_id,
-           c.cited_decision_type_hint,
-           c.cited_court_hint,
-           c.cited_sheet_number,
-           c.cited_decision_date,
-           citing.country AS citing_country,
-           citing.decision_date AS citing_date,
-           citing.language AS citing_language
-      FROM ${caseLawCitations} c
-      JOIN ${caseLawDecisions} citing ON citing.id = c.citing_decision_id
-     WHERE ${unsettledCitationSql({
-       resolutionStatus: sql.raw("c.resolution_status"),
-       citedDecisionId: sql.raw("c.cited_decision_id"),
-       citationKey: sql.raw("c.citation_key"),
-     })}
-       ${selection}
-  ),
+  batch AS (${batch}),
   candidates AS (
     SELECT b.id,
            b.citing_decision_id,
@@ -664,7 +654,41 @@ const resolutionStatement = (selection: SQL): SQL => sql`
              ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
            END AS status
       FROM candidates c
-  ),
+  )`;
+
+/**
+ * The one statement. `selection` names which pending rows this call settles;
+ * everything after it is the doctrine, shared so the walk, the ingest-time
+ * pass and the classification of rows about to be written cannot drift into
+ * different definitions of an honest link.
+ *
+ * `cited_decision_id` is written from the same CASE that writes the status, so
+ * a resolved row always carries its target and an unresolved one never carries
+ * a stale target from an earlier attempt.
+ */
+const resolutionStatement = (selection: SQL): SQL => sql`
+  WITH ${classificationCtes(sql`
+    SELECT c.id,
+           c.citation_key,
+           c.identifier_type,
+           c.normalized_identifier_value,
+           c.citing_decision_id,
+           c.cited_decision_type_hint,
+           c.cited_court_hint,
+           c.cited_sheet_number,
+           c.cited_decision_date,
+           citing.country AS citing_country,
+           citing.decision_date AS citing_date,
+           citing.language AS citing_language
+      FROM ${caseLawCitations} c
+      JOIN ${caseLawDecisions} citing ON citing.id = c.citing_decision_id
+     WHERE ${unsettledCitationSql({
+       resolutionStatus: sql.raw("c.resolution_status"),
+       citedDecisionId: sql.raw("c.cited_decision_id"),
+       citationKey: sql.raw("c.citation_key"),
+     })}
+       ${selection}
+  `)},
   updated AS (
     UPDATE ${caseLawCitations} target
        SET cited_decision_id = cls.decision_id,
@@ -896,6 +920,139 @@ export const resolveCitationsForDecision = async (
   );
   const row: unknown = firstRow(result);
   return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
+};
+
+/** A citation about to be written, in the columns classification reads. */
+export type UnwrittenCitation = {
+  id: SafeId<"caseLawCitation">;
+  citationKey: string | null;
+  identifierType: string | null;
+  normalizedIdentifierValue: string | null;
+  citedDecisionTypeHint: string | null;
+  citedCourtHint: string | null;
+  citedSheetNumber: string | null;
+  citedDecisionDate: string | null;
+};
+
+/** What the resolver decides for a citation, to be written with the row. */
+export type CitationResolution = {
+  citedDecisionId: SafeId<"caseLawDecision"> | null;
+  resolutionStatus: CitationResolutionStatus;
+  resolutionRuleId: CitationResolutionRule | null;
+};
+
+const isCitationResolutionStatus = (
+  value: unknown,
+): value is CitationResolutionStatus =>
+  typeof value === "string" &&
+  CITATION_RESOLUTION_STATUSES.some((status) => status === value);
+
+const isCitationResolutionRule = (
+  value: unknown,
+): value is CitationResolutionRule =>
+  typeof value === "string" &&
+  CITATION_RESOLUTION_RULES.some((rule) => rule === value);
+
+/**
+ * Settle citations before they are written, so each row is inserted with its
+ * outcome instead of inserted pending and then updated.
+ *
+ * The same doctrine as the walk, over the rows in hand rather than rows read
+ * back: matching reads only the decision graph, never the citation table, so
+ * a row's absence from it changes nothing. The citing decision must already
+ * be written in this transaction; its country, date and language are read
+ * from it exactly as the walk reads them.
+ *
+ * A row the map leaves out is written pending, as the walk would have left
+ * it: its key does not canonicalize, or its citing jurisdiction declares no
+ * resolution policy.
+ */
+export const classifyCitationsBeforeWrite = async (
+  tx: CitationResolutionTx,
+  {
+    citingDecisionId,
+    citations,
+  }: {
+    citingDecisionId: SafeId<"caseLawDecision">;
+    citations: readonly UnwrittenCitation[];
+  },
+): Promise<Map<string, CitationResolution>> => {
+  const resolvable = citations.filter(
+    (citation) => citation.citationKey !== null,
+  );
+  if (resolvable.length === 0) {
+    return new Map();
+  }
+  await lockCitationGraph(tx);
+  // One jsonb parameter rather than a VALUES list, so the statement's text is
+  // the same whatever the decision's citation count and one prepared plan
+  // serves every call.
+  const rows = JSON.stringify(
+    resolvable.map((citation) => ({
+      id: citation.id,
+      citation_key: citation.citationKey,
+      identifier_type: citation.identifierType,
+      normalized_identifier_value: citation.normalizedIdentifierValue,
+      cited_decision_type_hint: citation.citedDecisionTypeHint,
+      cited_court_hint: citation.citedCourtHint,
+      cited_sheet_number: citation.citedSheetNumber,
+      cited_decision_date: citation.citedDecisionDate,
+    })),
+  );
+  const result: unknown = await tx.execute(sql`
+    WITH ${classificationCtes(sql`
+      SELECT c.id,
+             c.citation_key,
+             c.identifier_type,
+             c.normalized_identifier_value,
+             citing.id AS citing_decision_id,
+             c.cited_decision_type_hint,
+             c.cited_court_hint,
+             c.cited_sheet_number,
+             c.cited_decision_date,
+             citing.country AS citing_country,
+             citing.decision_date AS citing_date,
+             citing.language AS citing_language
+        FROM jsonb_to_recordset(${rows}::text::jsonb) AS c(
+               id uuid,
+               citation_key varchar,
+               identifier_type varchar,
+               normalized_identifier_value varchar,
+               cited_decision_type_hint varchar,
+               cited_court_hint varchar,
+               cited_sheet_number varchar,
+               cited_decision_date date
+             )
+        JOIN ${caseLawDecisions} citing ON citing.id = ${citingDecisionId}::uuid
+    `)}
+    SELECT cls.id::text AS id,
+           cls.decision_id::text AS decision_id,
+           cls.rule_id,
+           cls.status
+      FROM classified cls
+     WHERE cls.resolves_to IS NOT NULL
+  `);
+  const resolutions = new Map<string, CitationResolution>();
+  for (const row of executedRows(result)) {
+    if (!isRecord(row) || typeof row["id"] !== "string") {
+      return panic("citation classification returned a row without an id");
+    }
+    const status = row["status"];
+    if (!isCitationResolutionStatus(status)) {
+      return panic(`citation classification returned status ${String(status)}`);
+    }
+    const ruleId = row["rule_id"];
+    const decisionId = row["decision_id"];
+    resolutions.set(row["id"], {
+      citedDecisionId:
+        typeof decisionId === "string"
+          ? brandPersistedCaseLawDecisionId(decisionId)
+          : null,
+      resolutionStatus: status,
+      resolutionRuleId: isCitationResolutionRule(ruleId) ? ruleId : null,
+    });
+  }
+  return resolutions;
 };
 
 export type ReopenCitationsForKeyOptions = {

@@ -61,7 +61,7 @@ export const storedObservationHasDetail = (metadata: Column): SQL =>
  * already stored are kept; a stored marker that is not an object is replaced,
  * since `||` would otherwise build an array the predicate cannot read.
  */
-export const metadataMarkedListingOnly = (metadata: Column): SQL =>
+export const metadataMarkedListingOnly = (metadata: Column | SQL): SQL =>
   sql`jsonb_set(coalesce(${metadata}, '{}'::jsonb), ${sql.raw(`'{${PARTIAL_OBSERVATION_KEY}}'`)}, (case when jsonb_typeof(${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}) = 'object' then ${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)} else '{}'::jsonb end) || jsonb_build_object(${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}, true))`;
 
 /**

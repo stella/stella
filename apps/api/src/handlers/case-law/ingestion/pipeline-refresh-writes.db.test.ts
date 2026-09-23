@@ -1,0 +1,304 @@
+/**
+ * What a refresh that brings nothing new writes: nothing it does not have to.
+ *
+ * A publisher's page moves for reasons of its own (a counter, a banner, a
+ * re-render), which changes the source hash and makes the crawl refresh the
+ * decision. The row must then take the new observation and nothing else: its
+ * payload is not copied back in and trimmed out again, its citations are not
+ * deleted and re-inserted, and `updated_at`, which the recent-activity reads
+ * and the search refresh order by, does not move. The same holds for a
+ * decision the publisher serves without a document.
+ *
+ * Each case first shows the refresh did apply (the observation advanced), so
+ * the stillness that follows is not a skipped write.
+ */
+
+import { Result } from "better-result";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { and, eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
+
+import { authRelationsPart } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  DECISION_REFRESH,
+  PROCESS_DECISION_STATUS,
+  processDecision,
+  type CaseLawCorpusDependencies,
+} from "@/api/handlers/case-law/ingestion/pipeline";
+import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { isRecord } from "@/api/lib/type-guards";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+let client: Awaited<ReturnType<typeof createTestPglite>>;
+let db: ReturnType<typeof drizzle>;
+let scopedDb: ScopedDb;
+
+const sourceId = createSafeId<"caseLawSource">();
+
+/** Every pack the canonical batches of this file handed to the transfer. */
+const transferred: EncodedPack[] = [];
+
+const canonical = {
+  mode: "canonical",
+  transfer: {
+    layout: "packs",
+    putPacks: async ({ packs }) => {
+      transferred.push(...packs);
+      return await Promise.resolve(Result.ok(undefined));
+    },
+  },
+} satisfies CaseLawCorpusDependencies;
+
+const postgresOnly = {
+  mode: "off",
+  transfer: {
+    layout: "packs",
+    putPacks: () => {
+      throw new TypeError("a postgres-only plan must not transfer packs");
+    },
+  },
+} satisfies CaseLawCorpusDependencies;
+
+const PRECEDENT =
+  "K výkladu § 1765 občanského zákoníku srov. rozsudek Nejvyššího soudu " +
+  "ze dne 3. 2. 2020, sp. zn. 21 Cdo 1234/2020, z něhož soud vycházel.";
+
+const withDocument = (
+  caseNumber: string,
+  rawHash: string,
+  metadata: Record<string, unknown> = {},
+): IngestionResult => ({
+  caseNumber,
+  court: "Nejvyšší soud",
+  country: "CZE",
+  language: "cs",
+  decisionDate: "2024-03-01",
+  decisionType: "rozsudek",
+  fulltext: PRECEDENT,
+  metadata,
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  rawHash,
+  documentAst: {},
+});
+
+/** A decision the publisher lists and serves inline, with no document. */
+const withoutDocument = (
+  caseNumber: string,
+  rawHash: string,
+): IngestionResult => ({
+  caseNumber,
+  court: "Nejvyšší soud",
+  country: "CZE",
+  language: "cs",
+  decisionDate: "2024-03-01",
+  decisionType: "rozsudek",
+  metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  rawHash,
+  documentAst: {},
+});
+
+type StoredRow = {
+  id: string;
+  updatedAt: string;
+  observationOrder: string | null;
+  mirrorStatus: string;
+  contentHash: string | null;
+  textKey: string | null;
+  holdsInlineText: boolean;
+  metadata: unknown;
+};
+
+const storedRow = async (caseNumber: string): Promise<StoredRow> => {
+  const result = await db.execute(sql`
+    SELECT id::text AS id,
+           updated_at::text AS updated_at,
+           source_observation_order::text AS observation_order,
+           corpus_mirror_status,
+           content_hash,
+           text_s3_key,
+           fulltext IS NOT NULL AS holds_inline_text,
+           metadata
+      FROM case_law_decisions
+     WHERE source_id = ${sourceId}::uuid
+       AND case_number = ${caseNumber}
+  `);
+  const record = result.rows.at(0);
+  if (!isRecord(record)) {
+    throw new TypeError(`expected a stored decision ${caseNumber}`);
+  }
+  return {
+    id: String(record["id"]),
+    updatedAt: String(record["updated_at"]),
+    observationOrder:
+      typeof record["observation_order"] === "string"
+        ? record["observation_order"]
+        : null,
+    mirrorStatus: String(record["corpus_mirror_status"]),
+    contentHash:
+      typeof record["content_hash"] === "string"
+        ? record["content_hash"]
+        : null,
+    textKey:
+      typeof record["text_s3_key"] === "string" ? record["text_s3_key"] : null,
+    holdsInlineText: record["holds_inline_text"] === true,
+    metadata: record["metadata"],
+  };
+};
+
+/** Every citation tuple's header for one citing decision. */
+const citationHeaders = async (decisionId: string): Promise<unknown> =>
+  (
+    await db.execute(sql`
+      SELECT id::text AS id, xmin::text AS xmin, xmax::text AS xmax,
+             resolution_status
+        FROM case_law_citations
+       WHERE citing_decision_id = ${decisionId}::uuid
+       ORDER BY id
+    `)
+  ).rows;
+
+let order = 0n;
+const ingest = async (
+  input: IngestionResult,
+  corpus: CaseLawCorpusDependencies,
+) => {
+  order += 1n;
+  const outcome = await processDecision({
+    input,
+    observationOrder: order,
+    sourceId,
+    scopedDb,
+    observedAt: new Date(Date.UTC(2026, 8, 23, 12, 0, Number(order))),
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus,
+  });
+  expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  return order;
+};
+
+beforeAll(async () => {
+  client = await createTestPglite();
+  db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  scopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: "refresh-writes-test",
+    name: "Refresh writes test",
+  });
+});
+
+afterAll(async () => {
+  await client.close();
+});
+
+test("a moved page over the same document rewrites neither payload, citations nor updated_at", async () => {
+  const caseNumber = "30 Cdo 100/2024";
+  await ingest(withDocument(caseNumber, "page-v1"), canonical);
+  const first = await storedRow(caseNumber);
+  // The fixture reaches the boundary: settled into the corpus, trimmed out of
+  // the row, and carrying a citation the refresh could rewrite.
+  expect(first.mirrorStatus).toBe("settled");
+  expect(first.contentHash).not.toBeNull();
+  expect(first.holdsInlineText).toBe(false);
+  const citations = await citationHeaders(first.id);
+  expect(citations).toHaveLength(1);
+  const packsBefore = transferred.length;
+
+  const refreshed = await ingest(
+    withDocument(caseNumber, "page-v2"),
+    canonical,
+  );
+  const second = await storedRow(caseNumber);
+  // The refresh applied: the row now carries this observation.
+  expect(second.observationOrder).toBe(String(refreshed));
+
+  expect(second.updatedAt).toBe(first.updatedAt);
+  expect(second.contentHash).toBe(first.contentHash);
+  expect(second.textKey).toBe(first.textKey);
+  expect(second.holdsInlineText).toBe(false);
+  expect(transferred.length).toBe(packsBefore);
+  expect(await citationHeaders(first.id)).toEqual(citations);
+});
+
+test("a refresh that changes what the decision says moves updated_at", async () => {
+  // The other half of the rule above: without it, a row that never moves
+  // would pass the first test too.
+  const caseNumber = "30 Cdo 101/2024";
+  await ingest(withDocument(caseNumber, "page-v1"), canonical);
+  const first = await storedRow(caseNumber);
+  await ingest(
+    withDocument(caseNumber, "page-v2", { chamber: "grand" }),
+    canonical,
+  );
+  const second = await storedRow(caseNumber);
+  expect(second.updatedAt).not.toBe(first.updatedAt);
+  expect(second.metadata).toMatchObject({ chamber: "grand" });
+});
+
+test.each([
+  ["canonical", canonical],
+  ["postgres-only", postgresOnly],
+] as const)(
+  "a document-less decision refreshed without one is not rewritten (%s)",
+  async (_mode, corpus) => {
+    const caseNumber = `30 Cdo 200/2024 ${_mode}`;
+    await ingest(withoutDocument(caseNumber, "page-v1"), corpus);
+    const first = await storedRow(caseNumber);
+    // Stored unpublished: an inline source that served no document.
+    expect(partialObservationFromMetadata(first.metadata).isListingOnly).toBe(
+      true,
+    );
+    expect(first.mirrorStatus).toBe("settled");
+    const packsBefore = transferred.length;
+
+    const refreshed = await ingest(
+      withoutDocument(caseNumber, "page-v2"),
+      corpus,
+    );
+    const second = await storedRow(caseNumber);
+    expect(second.observationOrder).toBe(String(refreshed));
+
+    expect(second.updatedAt).toBe(first.updatedAt);
+    expect(second.mirrorStatus).toBe("settled");
+    expect(second.contentHash).toBe(first.contentHash);
+    expect(second.metadata).toEqual(first.metadata);
+    expect(transferred.length).toBe(packsBefore);
+  },
+);
+
+test("a document arriving for a document-less decision is still written", async () => {
+  const caseNumber = "30 Cdo 300/2024";
+  await ingest(withoutDocument(caseNumber, "page-v1"), canonical);
+  const first = await storedRow(caseNumber);
+  await ingest(withDocument(caseNumber, "page-v2"), canonical);
+  const second = await storedRow(caseNumber);
+  expect(second.contentHash).not.toBe(first.contentHash);
+  expect(second.updatedAt).not.toBe(first.updatedAt);
+  expect(partialObservationFromMetadata(second.metadata).isListingOnly).toBe(
+    false,
+  );
+  const decisionRow = (
+    await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          eq(caseLawDecisions.caseNumber, caseNumber),
+        ),
+      )
+  ).at(0);
+  expect(await citationHeaders(decisionRow?.id ?? "")).toHaveLength(1);
+});
