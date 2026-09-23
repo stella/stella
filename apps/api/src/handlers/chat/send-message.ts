@@ -111,6 +111,10 @@ import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
+  createToolReadScopeRecorder,
+  recordToolReadScope,
+} from "@/api/handlers/chat/tool-read-scope";
+import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -182,6 +186,7 @@ import {
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
+import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
@@ -1958,10 +1963,25 @@ export const createSendMessage = (
         // allowlist (validation above stays broad so persisted tool parts
         // keep validating). The scope name is schema-validated; unknown
         // names never reach this point.
-        const streamingTools =
-          body.toolScope === undefined
-            ? chatTools
-            : restrictChatToolsToScope(chatTools, body.toolScope);
+        const toolReadScope = createToolReadScopeRecorder({
+          accessibleWorkspaceIds: accessibleSet,
+          persist: async (newWorkspaceIds) =>
+            await expandThreadDataScope({
+              newWorkspaceIds,
+              recordAuditEvent,
+              safeDb,
+              threadId: body.threadId,
+              threadWorkspaceId: workspaceId,
+            }),
+          refRegistry,
+        });
+        const streamingTools = recordToolReadScope({
+          recorder: toolReadScope,
+          tools:
+            body.toolScope === undefined
+              ? chatTools
+              : restrictChatToolsToScope(chatTools, body.toolScope),
+        });
 
         const externalMcpSystemHint = buildExternalMcpSystemHint(
           externalMcpTools === undefined ? [] : externalMcpTools.connectors,
@@ -2017,18 +2037,13 @@ export const createSendMessage = (
                   });
                 }
 
-                // Snapshot the refs the registry already holds before streaming.
+                // Snapshot what the registry has observed before streaming.
                 // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
-                // resolved during prompt construction; folding the WHOLE registry
-                // into thread scope at onFinish would over-broaden it to pinned-
-                // but-never-read matters, which could make the thread unreadable
-                // after that matter's access is revoked even though its content was
-                // never persisted. Only the delta minted DURING the stream (a
-                // matter/entity a tool or subagent actually read) should widen
-                // `data_workspace_ids`.
-                const workspaceIdsBeforeStream = new Set(
-                  refRegistry.getRegisteredWorkspaceIds(),
-                );
+                // resolved during prompt construction and are not reads of the
+                // turn; tool schemas only offer matter refs, which the registry
+                // does not count as observed. Reads observed from here on widen
+                // `data_workspace_ids` as each tool returns and again at finish.
+                const workspaceIdsBeforeStream = toolReadScope.startTurn();
 
                 const chatResponse = await dependencies.streamResponse({
                   abortSignal: createMeteredAIAbortSignal(),
@@ -2888,8 +2903,7 @@ const resolveAssistantMessageRefs = ({
     return resolved;
   };
 
-  const registeredWorkspaceIdsAfterStream =
-    refRegistry.getRegisteredWorkspaceIds();
+  const observedWorkspaceIdsAfterStream = refRegistry.getObservedWorkspaceIds();
   const turnWorkspaceIds = new Set<SafeId<"workspace">>();
 
   const resolvedMessages = messages.map((message) => {
@@ -2905,7 +2919,7 @@ const resolveAssistantMessageRefs = ({
     const messageWorkspaceIds = computeAssistantTurnWorkspaceIds({
       accessibleWorkspaceIds,
       opaqueReadWorkspaceIds,
-      registeredWorkspaceIdsAfterStream,
+      observedWorkspaceIdsAfterStream,
       responseParts: parts,
       workspaceIdsBeforeStream,
     });

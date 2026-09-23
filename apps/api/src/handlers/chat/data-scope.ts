@@ -183,14 +183,14 @@ type ComputeAssistantTurnWorkspaceIdsInput = {
   // The just-finished assistant message's parts (structural
   // `workspaceId`/`matterRef` fields plus resolved `#stella-*` text refs).
   responseParts: readonly unknown[];
-  // Every workspace id the shared ref registry had already registered
+  // Every workspace id the shared ref registry had already observed
   // before this turn's stream started (prompt-time pins, prior-turn
   // history refs). Excluded from the delta below so those don't fold
   // into scope on every later turn.
   workspaceIdsBeforeStream: ReadonlySet<SafeId<"workspace">>;
-  // The registry's current registered-workspace snapshot, taken after the
-  // stream finished.
-  registeredWorkspaceIdsAfterStream: readonly SafeId<"workspace">[];
+  // The registry's observed-workspace snapshot, taken after the stream
+  // finished. Refs only offered as tool-schema choices are not in it.
+  observedWorkspaceIdsAfterStream: readonly SafeId<"workspace">[];
   // Only ids the caller can currently access widen scope — guards against
   // a hallucinated or stale UUID (from the model, or a workspace the
   // caller lost access to mid-turn) ever landing in `data_workspace_ids`.
@@ -222,14 +222,14 @@ type ComputeAssistantTurnWorkspaceIdsInput = {
 export const computeAssistantTurnWorkspaceIds = ({
   responseParts,
   workspaceIdsBeforeStream,
-  registeredWorkspaceIdsAfterStream,
+  observedWorkspaceIdsAfterStream,
   accessibleWorkspaceIds,
   opaqueReadWorkspaceIds = [],
 }: ComputeAssistantTurnWorkspaceIdsInput): SafeId<"workspace">[] => {
   const candidateIds = [
     ...opaqueReadWorkspaceIds,
     ...extractAssistantWorkspaceIds(responseParts),
-    ...registeredWorkspaceIdsAfterStream.filter(
+    ...observedWorkspaceIdsAfterStream.filter(
       (id) => !workspaceIdsBeforeStream.has(id),
     ),
   ];
