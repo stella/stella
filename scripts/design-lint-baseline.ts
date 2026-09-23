@@ -1,14 +1,16 @@
 // Design-system lint backlog guard.
 //
-// `oxlint.config.ts` enables the tracked design rules (the `@shadcn/lint` pair
-// plus the local `no-raw-overflow-scroll` and `no-imported-class-constant`) for
-// every file except the ones this baseline lists per rule
-// (scripts/design-lint-policy.ts turns the rule off there). Those files carry
-// merged-code debt; this guard holds each file's count at its baseline by
-// running the rule-only pass (`oxlint.design.config.ts`) over them. A rise
-// fails, a file that reaches zero fails until it is pruned (an override on a
-// clean file would hide the next finding), and a fall just prompts a
-// regeneration so the list keeps shrinking.
+// `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
+// local `no-raw-overflow-scroll` and `no-imported-class-constant`, and the API
+// size-bound rules `require-bounded-request-schema` and
+// `no-unbounded-response-body`) for every file in their scope except the ones
+// this baseline lists per rule (scripts/design-lint-policy.ts turns the rule
+// off there). Those files carry merged-code debt; this guard holds each file's
+// count at its baseline by running the rule-only pass
+// (`oxlint.design.config.ts`) over them. A rise fails, a file that reaches
+// zero fails until it is pruned (an override on a clean file would hide the
+// next finding), and a fall just prompts a regeneration so the list keeps
+// shrinking.
 //
 // Modes:
 //   bun scripts/design-lint-baseline.ts          report per-rule counts vs baseline
@@ -73,6 +75,8 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
   "no-imported-class-constant/no-imported-class-constant": {},
+  "require-bounded-request-schema/require-bounded-request-schema": {},
+  "no-unbounded-response-body/no-unbounded-response-body": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>
@@ -188,9 +192,7 @@ const run = (): number => {
   }
 
   if (regressed.length === 0 && stale.length === 0) {
-    console.log(
-      `OK: design-system backlog holds across ${files.length} files.`,
-    );
+    console.log(`OK: lint backlog holds across ${files.length} files.`);
     if (improved.length > 0) {
       console.log(
         `${improved.length} file(s) improved; run \`${WRITE_HINT}\` to lock the improvement in.`,
@@ -200,14 +202,14 @@ const run = (): number => {
   }
 
   if (regressed.length > 0) {
-    console.error("\nDesign-system findings rose in backlog file(s):");
+    console.error("\nLint findings rose in backlog file(s):");
     for (const entry of regressed) {
       console.error(`  ${entry}`);
     }
     console.error(
       "\nThe rule is off in these files only for the findings already there.\n" +
         "Fix the new finding: `bun --bun oxlint -c oxlint.design.config.ts <file>`\n" +
-        "names the variant, size, token, or primitive to use.",
+        "names the replacement to use.",
     );
   }
   if (stale.length > 0) {

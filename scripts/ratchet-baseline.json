@@ -987,6 +987,14 @@
       "packages/scripts/src/dev-runner.ts": 1
     }
   },
+  "require-bounded-request-schema-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-unbounded-response-body-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-raw-use-effect-suppressions": {
     "count": 0,
     "files": {}

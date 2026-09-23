@@ -184,6 +184,16 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "per-iteration network round-trips inside a loop",
   },
   {
+    rule: "require-bounded-request-schema/require-bounded-request-schema",
+    tier: "data-volume",
+    guards: "request strings and arrays accepted with no length bound",
+  },
+  {
+    rule: "no-unbounded-response-body/no-unbounded-response-body",
+    tier: "data-volume",
+    guards: "upstream and object-storage bodies buffered with no size bound",
+  },
+  {
     rule: "no-raw-use-effect/no-raw-use-effect",
     tier: "data-volume",
     guards: "raw effects outside the sanctioned effect wrappers",
