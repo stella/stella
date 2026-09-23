@@ -3621,10 +3621,11 @@ export const readStoredRawFromS3: StoredRawReader = async (key) => {
   if (Result.isOk(read)) {
     return read.value;
   }
-  if (isMissingS3ObjectError(read.error)) {
+  const failure = read.error;
+  if (isMissingS3ObjectError(failure)) {
     return null;
   }
-  throw read.error;
+  throw failure;
 };
 
 /**
