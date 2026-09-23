@@ -47,6 +47,7 @@ import {
   defineWalkKind,
 } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   hashContent,
@@ -1295,6 +1296,14 @@ export const buildPlDecision = ({
     : [];
   const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
     publisherIdentifiers;
+  // Only this court is also stored by a source of its own; see the key.
+  const rulingKeys = plSupremeCourtRulingKeys({
+    caseNumber,
+    identifiers: publisherIdentifiers,
+    court: courtName,
+    decisionDate,
+    decisionType,
+  });
 
   const rawHash = hashContent(JSON.stringify(dumpItem));
   const detailHash =
@@ -1390,6 +1399,7 @@ export const buildPlDecision = ({
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,
       }),
+      ...(rulingKeys.length > 0 && { rulingKeys }),
     }),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],

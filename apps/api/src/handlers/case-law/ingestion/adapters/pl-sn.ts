@@ -27,18 +27,21 @@
  * offset reached inside it, oldest month first; at the present month the
  * cursor parks and re-reads only that month's tail.
  *
- * The listing is ordered by docket, and the API offers no keyset or
- * publication-time key to walk instead, so an offset inside a month is not
- * stable against the publisher backfilling a decision into it: a docket
- * sorting ahead of the cursor shifts every later offset by one, and the row
- * that crosses the page boundary is passed unseen. That is why the crawl is
- * not the only path to a decision (rule 16): the day-sliced reconciliation
- * below lists each decision date independently of this cursor, compares the
- * identities against what is held, and ingests the difference.
+ * The listing is ordered newest decision date first, then by docket, and the
+ * API offers no keyset or publication-time key to walk instead. An offset
+ * inside a month is therefore not stable against the publisher adding a
+ * decision to it: one sorting ahead of the cursor is passed unseen and shifts
+ * every later row down by one. In the month being filled in that is every
+ * newly published decision, since the newest dates sort first. That is why
+ * the crawl is not the only path to a decision (rule 16): the day-sliced
+ * reconciliation below lists each decision date independently of this
+ * cursor, compares the identities against what is held, and ingests the
+ * difference, and its tip window covers the weeks this court takes to publish.
  *
  * Overlap with `pl-courts`: SAOS republished this court until 2016-06-22 and
  * its importer has been dormant since. The two sources have separate id
- * spaces and are not deduplicated here.
+ * spaces; both store the ruling keys from `pl-sn-ruling-keys.ts`, which is
+ * what relates a row here to its SAOS copy.
  */
 
 import { Result, panic } from "better-result";
@@ -78,6 +81,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -159,11 +163,12 @@ const PL_SN_FIRST_MONTH = PL_SN_FIRST_SLICE.slice(0, 7);
  * Slices near the tip the reconciliation re-walks on a fast cadence.
  *
  * A slice is a decision date, and this court publishes against a date for
- * weeks after it: `data_modyfikacji` on a decision handed down in 1993 reads
- * 2025. A fortnight is the active frontier, not the whole fill-in window; what
- * reaches a later arrival is the ledger re-selecting a slice recorded short.
+ * weeks after it, in places months. Past this window a slice is walked again
+ * only when it is already known short or on the monthly recheck, so a late
+ * arrival would wait a month or more. Two months covers most of that delay
+ * for one listing request per slice per day.
  */
-const PL_SN_TIP_WINDOW_DAYS = 14;
+const PL_SN_TIP_WINDOW_DAYS = 62;
 
 /**
  * Consecutive empty months one `fetchPage` may step over before it banks the
@@ -422,15 +427,20 @@ type ListWindowOptions = {
 };
 
 type ListedWindow = {
+  /** The rows at and after the offset asked for. */
   rows: Record<string, unknown>[];
   /**
-   * How many rows the publisher served, before the shape filter below.
-   *
-   * This, not the filtered count, is what says whether a page was full: one
-   * row the filter drops would otherwise make a full page read as the last
-   * one, and the walk would leave the rest of the month unvisited.
+   * How many rows at and after the offset the publisher served, before the
+   * shape filter below: what the offset advances by.
    */
   served: number;
+  /**
+   * Whether the publisher served a whole page. This, not a filtered count,
+   * says whether more follows: one row the filter drops would otherwise make
+   * a full page read as the last one, and the walk would leave the rest of
+   * the month unvisited.
+   */
+  full: boolean;
   /** The listing request these rows came back from. */
   url: string;
 };
@@ -438,9 +448,11 @@ type ListedWindow = {
 /**
  * One page of the publisher's listing for a closed decision-date window.
  *
- * The offset has to land on a page boundary, because `strona` is a page
- * number and there is no per-item offset to ask for: every cursor this
- * adapter writes is a multiple of the page size it was written with.
+ * `strona` is a page number and there is no per-item offset to ask for, so an
+ * offset inside a page is served by asking for the page that holds it and
+ * dropping the rows before it. A crawl parked on a month's short tail writes
+ * such an offset; read as a page start, the rows between it and the next
+ * boundary would be passed over.
  */
 const listWindow = async ({
   cursor,
@@ -477,8 +489,14 @@ const listWindow = async ({
       ),
     );
   }
-  const rows: unknown[] = payload;
-  return Result.ok({ rows: rows.filter(isRecord), served: rows.length, url });
+  const page: unknown[] = payload;
+  const fresh = page.slice(offset % pageSize);
+  return Result.ok({
+    rows: fresh.filter(isRecord),
+    served: fresh.length,
+    full: page.length >= pageSize,
+    url,
+  });
 };
 
 type DecisionIdOptions = {
@@ -810,6 +828,12 @@ export const assemblePlSnDecision = async ({
       dissentingOnDecision: record.zglaszajacy_zdanie_odrebne_orzeczenie,
       dissentingOnReasons: record.zglaszajacy_zdanie_odrebne_uzasadnienie,
       modifiedDate: record.data_modyfikacji,
+      rulingKeys: plSupremeCourtRulingKeys({
+        caseNumber,
+        court,
+        decisionDate,
+        decisionType,
+      }),
     }),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN],
@@ -1236,9 +1260,17 @@ const buildPlSnFromPayload = async (
 type CrawlWindow = {
   month: string;
   offset: number;
+  /**
+   * Whether `month` was listed from `offset` at all. The empty-month budget
+   * can run out on a month it stepped to but never asked about, and a walk
+   * that read that as an empty answer would step past the month unseen.
+   */
+  listed: boolean;
   rows: Record<string, unknown>[];
   /** Rows the publisher served for this page; see {@link ListedWindow}. */
   served: number;
+  /** Whether the page was a whole one; see {@link ListedWindow}. */
+  full: boolean;
   /** The listing request the rows came back from. */
   url: string;
 };
@@ -1271,21 +1303,46 @@ const advanceToPopulatedWindow = async (
     if (Result.isError(listed)) {
       return listed;
     }
-    const { rows, served } = listed.value;
+    const { full, rows, served } = listed.value;
     url = listed.value.url;
     if (served > 0) {
-      return Result.ok({ month, offset, rows, served, url });
+      return Result.ok({
+        month,
+        offset,
+        rows,
+        served,
+        full,
+        url,
+        listed: true,
+      });
     }
     const next = monthAfter(month);
     if (next === null) {
       // The present month, with nothing after this offset: park here so the
       // next cycle re-reads this month's tail and nothing older (rule 13).
-      return Result.ok({ month, offset, rows: [], served: 0, url });
+      return Result.ok({
+        month,
+        offset,
+        rows: [],
+        served: 0,
+        full: false,
+        url,
+        listed: true,
+      });
     }
     month = next;
     offset = 0;
   }
-  return Result.ok({ month, offset, rows: [], served: 0, url });
+  // Out of budget, standing on a month no request has asked about yet.
+  return Result.ok({
+    month,
+    offset,
+    rows: [],
+    served: 0,
+    full: false,
+    url,
+    listed: false,
+  });
 };
 
 const plSnFetchPage = async (
@@ -1300,6 +1357,13 @@ const plSnFetchPage = async (
     return advanced;
   }
   const window = advanced.value;
+  if (!window.listed) {
+    return Result.ok({
+      decisions: [],
+      sourceUrl: window.url,
+      nextCursor: encodePlSnCursor(window),
+    });
+  }
   const decisions: IngestionResult[] = [];
   let aborted = false;
 
@@ -1350,7 +1414,7 @@ const plSnFetchPage = async (
   // Measured against what the publisher served, not what survived the shape
   // filter: a full page with one unreadable row is still a full page, and
   // reading it as the month's last one would leave the rest unvisited.
-  if (window.served >= CRAWL_PAGE_SIZE) {
+  if (window.full) {
     return Result.ok({
       decisions,
       sourceUrl: window.url,
@@ -1371,9 +1435,9 @@ const plSnFetchPage = async (
           // is caught up. The cursor stops where the listing stopped rather
           // than on the rows it just read: standing still re-served the same
           // tail every cycle and spent a detail and a document request on
-          // each of its rows again, for decisions already held. Read the same
-          // way the offsets within a month are walked at all — the window
-          // appends — and what lands behind it is the day slices' to find.
+          // each of its rows again, for decisions already held. New decisions
+          // sort ahead of this offset rather than after it, so they are the
+          // day slices' to find, not this cursor's.
           encodePlSnCursor({
             month: window.month,
             offset: window.offset + window.served,

@@ -381,6 +381,22 @@ describe("walking decision-date months oldest first", () => {
     expect(page.nextCursor).toBe("1994-04:0");
   });
 
+  test("a page out of empty-month budget stops on the month it has not asked about", async () => {
+    // Thirteen empty months from 1993-06 spend the budget; 1994-07 is the
+    // month the walk has stepped to without listing it.
+    const asked = sourceHolding("1994-07", [
+      { id: "x", sygnatura_sprawy: "I CSK 1/94", forma_orzeczenia: "wyrok SN" },
+    ]);
+
+    const first = await walk(null);
+    expect(first.decisions).toEqual([]);
+    expect(asked).not.toContain("1994-07-01");
+    expect(first.nextCursor).toBe("1994-07:0");
+
+    const second = await walk(first.nextCursor);
+    expect(second.decisions).toHaveLength(1);
+  });
+
   test("a full page advances the offset inside the same month", async () => {
     const rows = Array.from({ length: 40 }, (_unused, index) => ({
       id: `id-${index}`,
@@ -393,6 +409,27 @@ describe("walking decision-date months oldest first", () => {
 
     expect(page.decisions).toHaveLength(20);
     expect(page.nextCursor).toBe("1994-03:20");
+  });
+
+  test("an offset inside a page resumes at that row, not at the page's start", async () => {
+    // A cursor parked on a short tail stops between page boundaries.
+    const rows = Array.from({ length: 45 }, (_unused, index) => ({
+      id: `id-${index}`,
+      sygnatura_sprawy: `I CSK ${index}/94`,
+      forma_orzeczenia: "wyrok SN",
+    }));
+    sourceHolding("1994-03", rows);
+
+    const first = await walk("1994-03:25");
+    expect(
+      first.decisions.map((decision) => decision.sourceDocumentId),
+    ).toEqual(rows.slice(25, 40).map(({ id }) => id));
+    expect(first.nextCursor).toBe("1994-03:40");
+
+    const second = await walk(first.nextCursor);
+    expect(
+      second.decisions.map((decision) => decision.sourceDocumentId),
+    ).toEqual(rows.slice(40).map(({ id }) => id));
   });
 
   test("a full page holding an unreadable row still continues the month", async () => {
@@ -550,7 +587,11 @@ describe("replaying a stored envelope", () => {
       // row, hash included, so a replay converges rather than churning.
       expect(outcome.result.rawHash).toBe(decision.rawHash);
       expect(outcome.result.fulltext).toBe(decision.fulltext);
-      expect(outcome.result.metadata).toEqual(decision.metadata);
+      // The recording predates the ruling key; everything it stored is kept.
+      expect(outcome.result.metadata).toEqual({
+        ...decision.metadata,
+        rulingKeys: ["sn|IIIARN36/94|1993-06-23|wyrok"],
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
