@@ -1,9 +1,10 @@
+import { lazy, Suspense } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { AvtRoute } from "@/features/avt/avt-route";
 import { isAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { detached } from "@/lib/detached";
 import {
@@ -31,6 +32,12 @@ import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
 import { TableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout";
+
+// The AVT view is a beta surface: it loads only when an AVT view opens.
+const AvtRoute = lazy(async () => {
+  const m = await import("@/features/avt/avt-route");
+  return { default: m.AvtRoute };
+});
 
 type FilesystemWorkspaceView = WorkspaceView & {
   layout: Extract<ViewLayout, { type: "filesystem" }>;
@@ -186,14 +193,16 @@ function RouteComponent() {
         return null;
       }
       return (
-        <AvtRoute
-          onRunChange={(run) => {
-            detached(navigate({ search: { run } }), "avt-view.open-run");
-          }}
-          runId={runId}
-          view={activeView}
-          workspaceId={workspaceId}
-        />
+        <Suspense fallback={null}>
+          <AvtRoute
+            onRunChange={(run) => {
+              detached(navigate({ search: { run } }), "avt-view.open-run");
+            }}
+            runId={runId}
+            view={activeView}
+            workspaceId={workspaceId}
+          />
+        </Suspense>
       );
     default: {
       activeView.layout.type satisfies never;
