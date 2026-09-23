@@ -8,6 +8,7 @@
 // siblings, which is the shape this rule owns.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { SourceCode } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import { isAstNode, unwrapExpression } from "./utils.ts";
@@ -41,7 +42,10 @@ const keyAttributeOf = (node: unknown): AstNode | null => {
   );
 };
 
-const keySignature = (attribute: AstNode, sourceCode): string | null => {
+const keySignature = (
+  attribute: AstNode,
+  sourceCode: SourceCode,
+): string | null => {
   const value = attribute.value;
   if (!isAstNode(value)) {
     return "implicit:true";

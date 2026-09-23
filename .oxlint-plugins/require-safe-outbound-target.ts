@@ -827,7 +827,8 @@ export default eslintCompatPlugin({
               consequent ?? "",
             )?.[0];
             const alternateOrigin = ABSOLUTE_ORIGIN.exec(alternate ?? "")?.[0];
-            return consequentOrigin === alternateOrigin
+            return consequentOrigin !== undefined &&
+              consequentOrigin === alternateOrigin
               ? `${consequentOrigin}/${DYNAMIC_PART}`
               : null;
           }
@@ -843,7 +844,9 @@ export default eslintCompatPlugin({
               return direct;
             }
             const base = staticPattern(expression.arguments.at(1), visited);
-            return hasFixedOrigin(base) && isProvablyRelativeUrlPattern(direct)
+            return base !== null &&
+              hasFixedOrigin(base) &&
+              isProvablyRelativeUrlPattern(direct)
               ? `${base}/${DYNAMIC_PART}`
               : null;
           }

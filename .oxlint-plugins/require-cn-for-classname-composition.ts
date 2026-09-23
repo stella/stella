@@ -1587,7 +1587,7 @@ export default eslintCompatPlugin({
               });
             }
           }
-          return memberWrites.sort(
+          return memberWrites.toSorted(
             (left, right) => left.position - right.position,
           );
         };
