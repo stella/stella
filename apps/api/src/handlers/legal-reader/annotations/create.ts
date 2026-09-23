@@ -22,6 +22,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["create"] },
+  description:
+    "Leave a highlight or comment on a passage of a case-law decision or a statute version; private unless shared.",
   mcp: { type: "tool", name: "create_reader_annotation" },
   body: createAnnotationBodySchema,
 } satisfies HandlerConfig;

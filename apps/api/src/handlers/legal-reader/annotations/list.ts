@@ -36,6 +36,8 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  description:
+    "List the highlights and comments on one decision or statute version: the caller's own and those colleagues shared.",
   mcp: { type: "tool", name: "list_reader_annotations" },
   access: "read",
   query: querySchema,

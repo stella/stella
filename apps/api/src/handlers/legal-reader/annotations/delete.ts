@@ -16,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["delete"] },
+  description: "Permanently delete one of the caller's highlights or comments.",
   mcp: { type: "tool", name: "delete_reader_annotation" },
   params: annotationParamsSchema,
 } satisfies HandlerConfig;

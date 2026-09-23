@@ -21,6 +21,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["update"] },
+  description:
+    "Change one of the caller's highlights or comments: its words, colour, style, or visibility.",
   mcp: { type: "tool", name: "update_reader_annotation" },
   params: annotationParamsSchema,
   body: updateAnnotationBodySchema,
