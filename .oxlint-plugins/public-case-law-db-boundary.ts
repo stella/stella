@@ -6,7 +6,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { PUBLIC_CASE_LAW_SCHEMA_IMPORTS } from "../apps/api/src/lib/public-law-relations.ts";
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 import {
   type AstNode,
   canonicalModuleId,
@@ -25,8 +25,10 @@ const SCHEMA_MODULE = "apps/api/src/db/schema";
 const PRIVATE_SQL_TOKEN_RE =
   /\b(?:workspace|workspaces|organization|organizations|entity|entities|field|fields|file|files|chat|user|session|account|matter|matters|task|tasks|contact|contacts)\b/iu;
 
-const PUBLIC_CASE_LAW_SCHEMA_IMPORT_SET: ReadonlySet<string> = new Set(
-  PUBLIC_CASE_LAW_SCHEMA_IMPORTS,
+// Every relation the public-law reader role is granted: the case-law tables
+// and the public legislation tables read alongside them.
+const PUBLIC_LAW_SCHEMA_IMPORT_SET: ReadonlySet<string> = new Set(
+  Object.keys(PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT),
 );
 
 const PUBLIC_CASE_LAW_QUERY_RELATIONS: ReadonlySet<string> = new Set([
@@ -107,7 +109,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           privateCaseLawImport:
-            "Public case-law data files may only import the explicit public case-law table allowlist from '@/api/db/schema'.",
+            "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'.",
           privateTxQuery:
             "Public case-law data files may only use the explicit public tx.query relation allowlist.",
           privateSqlText:
@@ -143,7 +145,7 @@ export default eslintCompatPlugin({
               if (
                 (isAstNode(specifier) && specifier.importKind === "type") ||
                 (imported !== null &&
-                  (PUBLIC_CASE_LAW_SCHEMA_IMPORT_SET.has(imported) ||
+                  (PUBLIC_LAW_SCHEMA_IMPORT_SET.has(imported) ||
                     CONSTANT_EXPORT_RE.test(imported)))
               ) {
                 continue;

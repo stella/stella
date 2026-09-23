@@ -113,7 +113,7 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("privateCaseLawImport");
     expect(pluginSource).toContain("privateTxQuery");
     expect(pluginSource).toContain("privateSqlText");
-    expect(pluginSource).toContain("PUBLIC_CASE_LAW_SCHEMA_IMPORTS");
+    expect(pluginSource).toContain("PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT");
     expect(pluginSource).toContain("PUBLIC_CASE_LAW_QUERY_RELATIONS");
     expect(pluginSource).toContain("tx.query");
     expect(pluginSource).toContain("workspace|workspaces");
