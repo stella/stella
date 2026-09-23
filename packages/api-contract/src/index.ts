@@ -192,12 +192,17 @@ export type {
   DesktopEditMimeType,
 } from "./desktop-edit-file-types";
 export {
+  EMAIL_CITATION_BLOCK_MODE,
   EMAIL_CITATION_HREF_PREFIX,
   EMAIL_HEADER_CITATION_ID,
   isEmailCitationBlockId,
+  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+  MAX_EMAIL_CITATION_BLOCKS,
   parseEmailCitationHref,
 } from "./email-citations";
 export type {
+  EmailCitationBlock,
+  EmailCitationBlockMode,
   EmailCitationHrefTarget,
   EmailHeaderCitationId,
 } from "./email-citations";
@@ -315,6 +320,7 @@ export {
   DEFAULT_MATTER_NUMBER_PATTERN,
   matchesMatterReferencePattern,
   MATTER_REFERENCE_TOKENS,
+  renderMatterReference,
   renderMatterReferencePattern,
 } from "./matter-reference";
 export type { MatterReferenceToken } from "./matter-reference";
@@ -489,6 +495,16 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
 } as const;
 export type EmailTextAttachmentCharset =
   (typeof EMAIL_TEXT_ATTACHMENT_CHARSET)[keyof typeof EMAIL_TEXT_ATTACHMENT_CHARSET];
+
+/** One attachment an email preview lists, without its bytes. */
+export type EmailAttachmentDescriptor = {
+  charset: EmailTextAttachmentCharset | null;
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number;
+  previewable: boolean;
+};
 
 /**
  * Bounded WHATWG Encoding labels accepted for passive email text previews.

@@ -4,6 +4,11 @@ import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
 } from "@stll/api-contract";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+  resolveEmailMimeType,
+} from "@stll/api-contract/email-mime-types";
 
 export const DOCX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
 export const XLSX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
@@ -33,34 +38,11 @@ export const isDocxFile = (file: Pick<File, "name" | "type">): boolean =>
   file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");
 
 export const PDF_MIME = "application/pdf" as const;
-export const EML_MIME = "message/rfc822" as const;
-export const MSG_MIME = "application/vnd.ms-outlook" as const;
+export const EML_MIME = EML_MIME_TYPE;
+export const MSG_MIME = MSG_MIME_TYPE;
 export const MARKDOWN_MIME = "text/markdown" as const;
 
-const EMAIL_MIME_TYPES: readonly string[] = Object.freeze([EML_MIME, MSG_MIME]);
-const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
-  eml: EML_MIME,
-  msg: MSG_MIME,
-};
 const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
-
-export const isEmailMimeType = (
-  mimeType: string | null | undefined,
-): boolean =>
-  mimeType === undefined || mimeType === null
-    ? false
-    : EMAIL_MIME_TYPES.includes(mimeType);
-
-export const emailMimeTypeFromFileName = (
-  fileName: string | null | undefined,
-): string | null => {
-  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
-  if (!fileName || dotIndex === -1) {
-    return null;
-  }
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EMAIL_EXTENSION_MIME_TYPES[extension] ?? null;
-};
 
 export const isEmailFile = ({
   fileName,
@@ -68,8 +50,7 @@ export const isEmailFile = ({
 }: {
   fileName?: string | null | undefined;
   mimeType?: string | null | undefined;
-}): boolean =>
-  isEmailMimeType(mimeType) || emailMimeTypeFromFileName(fileName) !== null;
+}): boolean => resolveEmailMimeType({ fileName, mimeType }) !== null;
 
 export const isMarkdownFile = ({
   fileName,
@@ -98,9 +79,11 @@ export const isMarkdownFile = ({
  * Must match the chrome topbar (`h-12`) so right-side
  * sub-screens line up with the matter header.
  */
-export const TOOLBAR_ROW_HEIGHT = "h-12" as const;
+export {
+  TOOLBAR_ROW_HEIGHT,
+  TOOLBAR_ROW_HEIGHT_PX,
+} from "@stll/ui/layout-tokens";
 export const TOOLBAR_ROW_MIN_HEIGHT = "min-h-12" as const;
-export const TOOLBAR_ROW_HEIGHT_PX = 48 as const;
 /** Glyph size inside a rail tab button — matches the `size-3.5`
  * class every built-in rail icon uses. Numeric form is for
  * components that take a pixel size prop instead of a Tailwind

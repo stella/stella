@@ -20,6 +20,8 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { caseLawJudges } from "@/api/db/schema";
 import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -41,7 +43,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CZ_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 

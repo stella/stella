@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { status } from "elysia";
 
 import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -10,14 +12,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
-import {
-  emailToPreview,
-  resolveEmailMimeType,
-} from "@/api/lib/files/email-to-html";
+import { emailToPreview } from "@/api/lib/files/email-to-html";
 import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
 import {
   FILE_READ_URL_EXPIRY_SECONDS,

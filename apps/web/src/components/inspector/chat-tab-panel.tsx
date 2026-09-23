@@ -88,17 +88,11 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
+import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested-followup-prompts";
 import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
-import {
-  resolveSuggestedPromptsAvailability,
-  resolveSuggestedPromptsTurnOwner,
-} from "@/features/chat/lib/suggested-prompts-availability";
-import {
-  chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
-} from "@/features/chat/queries";
+import { chatThreadOptions } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -109,7 +103,6 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
   createChatThreadId,
   getChatThreadKey,
@@ -308,64 +301,23 @@ export const ChatTabPanel = ({
     },
   );
 
+  const {
+    handleAskUserEditingChange,
+    suggestedFollowupPrompt,
+    suggestedPrompts,
+  } = useSuggestedFollowupPrompts({
+    activeOrganizationId,
+    approvalPendingMessageId,
+    error,
+    isGenerating,
+    messages,
+    threadRef,
+    turnAbandoned,
+  });
   // TipTap composer for this thread — `@`-mention chips, drafts,
   // attachments come from the same provider as the right-panel
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
-  const lastMessage = messages.at(-1);
-  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set<string>());
-  const handleAskUserEditingChange = useCallback(
-    (toolCallId: string, isEditing: boolean) => {
-      setEditingAskUserToolCallIds((current) => {
-        if (current.has(toolCallId) === isEditing) {
-          return current;
-        }
-        const next = new Set(current);
-        if (isEditing) {
-          next.add(toolCallId);
-        } else {
-          next.delete(toolCallId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
-  // Fetch suggestions only when editor is empty, last message is from
-  // assistant, and no generation is in progress. Using draft state
-  // avoids triggering the query when user is actively typing.
-  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
-    editorIsEmpty: editorIsInitiallyEmpty,
-    error,
-    isGenerating,
-    lastMessage: lastMessage ?? null,
-    turnAbandoned,
-    turnOwner: resolveSuggestedPromptsTurnOwner({
-      approvalPendingMessageId,
-      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
-      lastMessage: lastMessage ?? null,
-    }),
-  });
-  const lastMessageId =
-    suggestedPromptsAvailability.status === "eligible"
-      ? suggestedPromptsAvailability.lastMessageId
-      : "";
-  const { data: suggestedPromptsData } = useQuery(
-    chatThreadSuggestedPromptsOptions({
-      activeOrganizationId,
-      enabled: suggestedPromptsAvailability.status === "eligible",
-      lastMessageId,
-      threadRef,
-    }),
-  );
-  const suggestedPrompts =
-    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
-      ? suggestedPromptsData.prompts
-      : [];
-  const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,

@@ -1,58 +1,28 @@
 import { Result } from "better-result";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and } from "drizzle-orm";
 
 import { prorateHourlyCents } from "@stll/money";
 
-import { member, user } from "@/api/db/auth-schema";
-import { timeEntryStatusSchema } from "@/api/db/billing-validators";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
+import {
+  loadTimekeeperNames,
+  timeEntryExportConditions,
+  timeEntryExportQuerySchema,
+} from "@/api/handlers/time-entries/export-query";
+import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-
-export const exportCsvQuerySchema = t.Object({
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  status: t.Optional(timeEntryStatusSchema),
-  workItemId: t.Optional(tSafeId("entity")),
-});
-
-type ExportCsvQuerySchema = Static<typeof exportCsvQuerySchema>;
-
-type ExportCsvHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  query: ExportCsvQuerySchema;
-};
 
 export const exportCsvHandler = async ({
   scopedDb,
   workspaceId,
   organizationId,
   query,
-}: ExportCsvHandlerProps) => {
-  const conditions = [eq(timeEntries.workspaceId, workspaceId)];
-
-  if (query.dateFrom) {
-    conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
-  }
-  if (query.dateTo) {
-    conditions.push(lte(timeEntries.dateWorked, query.dateTo));
-  }
-  if (query.status) {
-    conditions.push(eq(timeEntries.status, query.status));
-  }
-  if (query.workItemId) {
-    conditions.push(eq(timeEntries.workItemId, query.workItemId));
-  }
+}: TimeEntryExportHandlerProps) => {
+  const conditions = timeEntryExportConditions({ workspaceId, query });
 
   const rows = await scopedDb((tx) =>
     tx
@@ -78,31 +48,11 @@ export const exportCsvHandler = async ({
       .limit(LIMITS.exportRowLimit),
   );
 
-  // Batch-fetch user names
-  const userIds = new Set<string>();
-  for (const row of rows) {
-    if (row.userId) {
-      userIds.add(row.userId);
-    }
-  }
-
-  const usersResult =
-    userIds.size > 0
-      ? await scopedDb((tx) =>
-          tx
-            .select({ id: user.id, name: user.name })
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id))
-            .where(
-              and(
-                eq(member.organizationId, organizationId),
-                inArray(member.userId, [...userIds]),
-              ),
-            ),
-        )
-      : [];
-
-  const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
+  const userMap = await loadTimekeeperNames({
+    scopedDb,
+    organizationId,
+    rows,
+  });
 
   const headers = [
     "Date",
@@ -163,7 +113,7 @@ const config = {
   permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
-  query: exportCsvQuerySchema,
+  query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;
 
 const exportCsv = createSafeHandler(

@@ -4,7 +4,7 @@ import {
 } from "@stll/api-contract";
 import type { DesktopEditFileType } from "@stll/api-contract";
 
-export const DESKTOP_EDIT_FILE_TYPES = {
+export const DESKTOP_EDIT_FILE_TYPE_DETAILS = {
   docx: {
     application: "Word",
     ...DESKTOP_EDIT_FILE_TYPE_CONFIG.docx,

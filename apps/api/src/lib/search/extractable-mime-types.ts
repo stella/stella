@@ -11,7 +11,8 @@
  * module at startup, so it must stay free of side effects.
  */
 
-import { EMAIL_MIME_TYPES } from "@/api/lib/files/email-to-html";
+import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
+
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,

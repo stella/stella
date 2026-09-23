@@ -1,8 +1,9 @@
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 

@@ -133,28 +133,3 @@ export const validatePattern = (
  */
 export const toScopeKey = (pattern: string, now: Date): string =>
   renderMatterReferencePattern({ now, pattern, sequence: "" });
-
-/**
- * Renders a full reference by replacing all tokens in-place.
- * {SEQ} is replaced with the zero-padded sequence number;
- * date tokens are resolved from `now`.
- *
- * Examples (given 2026-02-20, seq=1, padding=3):
- * - "{YYYY}/{SEQ}" -> "2026/001"
- * - "CORP-{SEQ}-{YYYY}" -> "CORP-001-2026"
- * - "{SEQ}" -> "001"
- */
-export const toReference = ({
-  pattern,
-  now,
-  seq,
-  padding,
-}: {
-  pattern: string;
-  now: Date;
-  seq: number;
-  padding: number;
-}): string => {
-  const paddedSeq = String(seq).padStart(padding, "0");
-  return renderMatterReferencePattern({ now, pattern, sequence: paddedSeq });
-};

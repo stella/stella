@@ -7,10 +7,10 @@ import {
   isGithubSkillEntry,
   loadCatalogue,
 } from "@stll/catalogue";
+import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
-import { fetchWithTimeout } from "@/lib/fetch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 
 const MAX_GITHUB_SKILL_BYTES = 512 * 1024;

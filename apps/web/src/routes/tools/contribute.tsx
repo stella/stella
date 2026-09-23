@@ -14,6 +14,7 @@ import {
   type CatalogueCost,
   type CatalogueSetup,
 } from "@stll/catalogue/schema";
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -29,7 +30,6 @@ import { Textarea } from "@stll/ui/textarea";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";

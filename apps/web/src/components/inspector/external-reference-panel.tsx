@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { FetchBoundaryError } from "@stll/errors";
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -42,7 +43,6 @@ import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";

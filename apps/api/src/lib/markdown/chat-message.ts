@@ -1,5 +1,4 @@
 import * as cheerio from "cheerio";
-import { decodeHTMLAttribute } from "entities";
 
 import {
   resourceRef,
@@ -12,6 +11,7 @@ import {
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
+import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedEntityId,
@@ -53,71 +53,16 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);
 const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
-const REMOVE_ENTIRELY = new Set([
-  "script",
-  "style",
-  "iframe",
-  "object",
-  "embed",
-  "form",
-  "textarea",
-]);
-
 const isAllowedLocalHref = (href: string): boolean =>
   href.startsWith(SKILL_REF_HREF_PREFIX) &&
   href.length > SKILL_REF_HREF_PREFIX.length;
 
-const sanitizeHtml = (html: string): string =>
-  new HTMLRewriter()
-    .on("*", {
-      element(el) {
-        const tagName = el.tagName;
-        if (REMOVE_ENTIRELY.has(tagName)) {
-          el.remove();
-          return;
-        }
-        if (!ALLOWED_TAGS.has(tagName)) {
-          el.removeAndKeepContent();
-          return;
-        }
-        const allowed = ALLOWED_ATTRS[tagName];
-        const toRemove: string[] = [];
-        for (const [name] of el.attributes) {
-          if (!allowed?.has(name)) {
-            toRemove.push(name);
-          }
-        }
-        for (const name of toRemove) {
-          el.removeAttribute(name);
-        }
-        if (tagName !== "a") {
-          return;
-        }
-        const rawHref = el.getAttribute("href");
-        if (!rawHref) {
-          return;
-        }
-        // getAttribute returns the attribute text as written; downstream
-        // consumers decode entities, so validate the decoded value and emit
-        // exactly what was checked.
-        const href = decodeHTMLAttribute(rawHref);
-        if (isAllowedLocalHref(href)) {
-          el.setAttribute("href", href);
-          return;
-        }
-        if (!URL.canParse(href, "https://placeholder.invalid")) {
-          el.removeAttribute("href");
-          return;
-        }
-        const url = new URL(href, "https://placeholder.invalid");
-        if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
-          el.removeAttribute("href");
-          return;
-        }
-        el.setAttribute("href", href);
-      },
-    })
-    .transform(html);
+const sanitizeHtml = createHtmlSanitizer({
+  allowedTags: ALLOWED_TAGS,
+  allowedAttrs: ALLOWED_ATTRS,
+  allowedHrefSchemes: ALLOWED_HREF_SCHEMES,
+  isAllowedLocalHref,
+});
 
 const parseMentionCategory = (value: string) =>
   isChatMentionCategory(value) ? value : null;

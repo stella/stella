@@ -17,26 +17,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
+import {
+  AddableMemberSelect,
+  useAddableMembers,
+} from "@/components/workspaces/addable-member-select";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -234,26 +229,9 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const orgQuery = useQuery(organizationOptions(activeOrganizationId));
-  const org = orgQuery.data;
-  const { data: existingMembers = [] } = useQuery(
-    workspaceMembersOptions(workspaceId),
-  );
+  const { items: memberItems } = useAddableMembers(workspaceId);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const availableMembers = org
-    ? org.members.filter((m) => !existingUserIds.has(m.userId))
-    : [];
-
-  const memberItems = availableMembers.map((m) => ({
-    email: m.user.email,
-    image: m.user.image,
-    name: m.user.name,
-    value: m.userId,
-  }));
 
   const handleSubmit = () => {
     if (!selectedUserId) {
@@ -319,41 +297,11 @@ export const AddMemberDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
-          <Select onValueChange={setSelectedUserId} value={selectedUserId}>
-            <SelectTrigger>
-              <SelectValue>
-                {(current) => {
-                  const found = memberItems.find((m) => m.value === current);
-                  if (!found) {
-                    return t("workspaces.members.selectMember");
-                  }
-
-                  return (
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      className="min-w-0"
-                      image={found.image}
-                      name={found.name}
-                      secondaryText={found.email}
-                    />
-                  );
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {memberItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  <UserIdentity
-                    avatarClassName="size-7 shrink-0 text-3xs"
-                    className="min-w-0"
-                    image={item.image}
-                    name={item.name}
-                    secondaryText={item.email}
-                  />
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          <AddableMemberSelect
+            items={memberItems}
+            onValueChange={setSelectedUserId}
+            value={selectedUserId}
+          />
         </DialogPanel>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>

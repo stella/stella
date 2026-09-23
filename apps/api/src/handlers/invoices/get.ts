@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,51 +27,7 @@ const readInvoiceById = createSafeHandler(
             id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
           },
-          with: {
-            timeEntries: {
-              columns: {
-                id: true,
-                workItemId: true,
-                dateWorked: true,
-                billedMinutes: true,
-                rateAtEntry: true,
-                currency: true,
-                narrative: true,
-                invoiceNarrative: true,
-                status: true,
-              },
-              with: {
-                workItem: {
-                  columns: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-            expenses: {
-              columns: {
-                id: true,
-                matterId: true,
-                dateIncurred: true,
-                amount: true,
-                currency: true,
-                category: true,
-                description: true,
-                invoiceDescription: true,
-                billable: true,
-                markup: true,
-              },
-              with: {
-                matter: {
-                  columns: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
+          with: INVOICE_DETAIL_RELATIONS,
         }),
       ),
     );

@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES } from "@stll/api-contract";
+import {
+  MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES,
+  type EmailAttachmentDescriptor,
+} from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -63,7 +66,6 @@ import {
   emailAttachmentPreviewOptions,
   emailHtmlPreviewOptions,
   saveEmailAttachment,
-  type EmailAttachmentDescriptor,
 } from "@/lib/files/queries";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";

@@ -2,6 +2,7 @@ import {
   isRequiredViewLayout,
   REQUIRED_VIEW_LAYOUTS,
   type RequiredViewLayoutType,
+  type ViewLayoutType,
 } from "@stll/api-contract";
 import { conditionIncludesKind } from "@stll/conditions";
 
@@ -9,7 +10,7 @@ import type { EntityKind } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SupportedLang } from "@/api/lib/locale";
-import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
+import type { ViewLayout } from "@/api/lib/views-schema";
 
 /**
  * Layouts that every workspace must have exactly one of.

@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { useLatest } from "@stll/ui/use-latest";
 
 import { useMountEffect } from "@/hooks/use-effect";
@@ -22,7 +23,6 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";

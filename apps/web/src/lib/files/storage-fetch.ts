@@ -1,5 +1,6 @@
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { APIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import type { StorageFetchPurpose } from "@/lib/files/file-metadata-query.logic";
 
 type FetchStorageArrayBufferOptions = {

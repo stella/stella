@@ -6,14 +6,12 @@
 // slow third-party endpoint stalls the entire handler — invisible in
 // dev, paging on-call in prod.
 //
-// Under `apps/web/src` and `apps/api/src` (except each app's own
-// `fetchWithTimeout` wrapper module and test files) the rule is
-// stricter still: ANY direct `fetch()`/`globalThis.fetch()`/
+// Under `apps/web/src` and `apps/api/src` (except test files) the rule
+// is stricter still: ANY direct `fetch()`/`globalThis.fetch()`/
 // `window.fetch()` call is flagged, signal or not, because both apps
-// have a wrapper — `fetchWithTimeout` from `@/lib/fetch` (web) or
-// `@/api/lib/fetch` (api) — that makes the timeout mandatory and
-// non-optional at the type level. Elsewhere (packages/*) the looser
-// "must have a signal" check below still applies.
+// import `fetchWithTimeout` from `@stll/fetch`, which makes the timeout
+// mandatory and non-optional at the type level. Elsewhere (packages/*)
+// the looser "must have a signal" check below still applies.
 //
 // Flags (packages/*):
 //   fetch(url)                       // no options at all
@@ -36,7 +34,7 @@
 //
 // Allows (apps/web/src, apps/api/src):
 //   fetchWithTimeout(url, { timeoutMs: 10_000 })
-//   raw fetch() inside the app's own lib/fetch.ts wrapper module or in *.test.* files
+//   raw fetch() in *.test.* files
 //
 // Escape hatch: `// eslint-disable-next-line require-fetch-timeout/require-fetch-timeout`
 // with a `// SAFETY:` comment explaining why the call cannot hang
@@ -50,21 +48,15 @@ import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
-// apps/web/src and apps/api/src each have a `fetchWithTimeout` wrapper
-// that makes the timeout mandatory at the type level, so raw fetch() is
-// disallowed there outright — except inside the wrapper module itself
-// (which has to call the real fetch()) and test files (already exempted
-// by the "**/*.test.{ts,tsx}" override in oxlint.config.ts; re-checked
-// here too so this branch stays correct if that scoping ever changes).
+// apps/web/src and apps/api/src import `fetchWithTimeout` from
+// `@stll/fetch`, which makes the timeout mandatory at the type level, so raw
+// fetch() is disallowed there outright — except in test files (already
+// exempted by the "**/*.test.{ts,tsx}" override in oxlint.config.ts;
+// re-checked here too so this branch stays correct if that scoping ever
+// changes).
 const STRICT_FETCH_SCOPES = [
-  {
-    srcPattern: /(?:^|\/)apps\/web\/src\//u,
-    wrapperSuffix: "apps/web/src/lib/fetch.ts",
-  },
-  {
-    srcPattern: /(?:^|\/)apps\/api\/src\//u,
-    wrapperSuffix: "apps/api/src/lib/fetch.ts",
-  },
+  /(?:^|\/)apps\/web\/src\//u,
+  /(?:^|\/)apps\/api\/src\//u,
 ];
 
 const normalizePath = (filename: string): string =>
@@ -80,16 +72,10 @@ const isStrictFetchWrapperFile = (context: {
   getFilename?: () => string;
 }): boolean => {
   const normalized = normalizePath(filenameForContext(context));
-  const scope = STRICT_FETCH_SCOPES.find((candidate) =>
-    candidate.srcPattern.test(normalized),
+  return (
+    STRICT_FETCH_SCOPES.some((pattern) => pattern.test(normalized)) &&
+    !TEST_FILE_PATTERN.test(normalized)
   );
-  if (!scope) {
-    return false;
-  }
-  if (normalized.endsWith(scope.wrapperSuffix)) {
-    return false;
-  }
-  return !TEST_FILE_PATTERN.test(normalized);
 };
 
 const getNodeType = (node: unknown): string | null => {
@@ -397,7 +383,7 @@ export default eslintCompatPlugin({
           useFetchWithTimeout:
             "apps/web/src and apps/api/src must not call fetch() " +
             "directly. Use `fetchWithTimeout(url, { timeoutMs, ...init })` " +
-            "from `@/lib/fetch` (web) or `@/api/lib/fetch` (api) so the " +
+            "from `@stll/fetch` so the " +
             "timeout is mandatory, not opt-in.",
         },
       },

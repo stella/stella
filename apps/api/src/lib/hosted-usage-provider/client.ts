@@ -2,7 +2,8 @@
 
 import { Result, TaggedError } from "better-result";
 
-import { fetchWithTimeout } from "@/api/lib/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+
 import {
   getHostedUsageProviderKind,
   type HostedUsageProviderApiCredentials,

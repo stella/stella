@@ -3,10 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
+import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteRateEntryBodySchema = t.Object({
   id: tSafeId("rateEntry"),
@@ -28,47 +28,14 @@ const deleteRateEntry = createSafeHandler(
     body: deleteRateEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
-    const table = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.rateTables.findFirst({
-          where: {
-            id: { eq: params.rateTableId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!table) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Rate table not found" }),
-      );
-    }
-
     const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.rateEntries.findFirst({
-          where: {
-            id: { eq: body.id },
-            rateTableId: { eq: params.rateTableId },
-          },
-          columns: {
-            id: true,
-            userId: true,
-            hourlyRate: true,
-            effectiveFrom: true,
-            effectiveTo: true,
-          },
-        }),
-      ),
+      loadRateEntry({
+        safeDb,
+        workspaceId,
+        rateTableId: params.rateTableId,
+        entryId: body.id,
+      }),
     );
-
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Rate entry not found" }),
-      );
-    }
 
     yield* Result.await(
       safeDb(async (tx) => {

@@ -1,13 +1,13 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkills } from "@/api/db/schema";
+import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteSkillParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
@@ -34,48 +34,16 @@ const deleteSkill = createSafeRootHandler(
     user,
     recordAuditEvent,
   }) {
-    const existingRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: agentSkills.id,
-            scope: agentSkills.scope,
-            userId: agentSkills.userId,
-            slug: agentSkills.slug,
-          })
-          .from(agentSkills)
-          .where(
-            and(
-              eq(agentSkills.id, params.skillId),
-              eq(agentSkills.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .limit(1),
-      ),
+    const existing = yield* Result.await(
+      loadManagedSkill({
+        safeDb,
+        skillId: params.skillId,
+        organizationId: session.activeOrganizationId,
+        memberRole,
+        userId: user.id,
+        action: "delete",
+      }),
     );
-    const existing = existingRows.at(0);
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Skill not found" }),
-      );
-    }
-
-    if (
-      existing.scope === "team" &&
-      !["admin", "owner"].includes(memberRole.role)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Only admins and owners can delete team skills",
-        }),
-      );
-    }
-    if (existing.scope === "private" && existing.userId !== user.id) {
-      return Result.err(
-        new HandlerError({ status: 403, message: "Forbidden" }),
-      );
-    }
 
     yield* Result.await(
       safeDb(

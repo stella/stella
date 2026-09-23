@@ -10,6 +10,7 @@
  * is written anywhere, and a fetch that fails leaves the stored document.
  */
 
+import { fetchWithTimeout } from "@stll/fetch";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
@@ -18,7 +19,6 @@ import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const FETCH_TIMEOUT_MS = 20_000;
 

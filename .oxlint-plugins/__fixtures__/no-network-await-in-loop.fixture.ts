@@ -16,9 +16,11 @@ import type { S3Client } from "@aws-sdk/client-s3";
 // matches import sources, not spellings.
 import { fetchLocalCache } from "unrelated-cache";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import {
+  fetchWithTimeout,
+  fetchWithTimeout as aliasedFetch,
+} from "@stll/fetch";
 
-import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { api } from "@/lib/api";
 

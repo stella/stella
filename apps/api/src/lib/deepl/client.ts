@@ -15,6 +15,7 @@ import * as v from "valibot";
  * actionable HTTP responses.
  */
 
+import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import {
@@ -25,7 +26,6 @@ import {
   DeepLTimeoutError,
   DeepLUpstreamError,
 } from "@/api/lib/deepl/errors";
-import { fetchWithTimeout, type FetchWithTimeoutInit } from "@/api/lib/fetch";
 
 const PRO_BASE_URL = "https://api.deepl.com";
 const FREE_BASE_URL = "https://api-free.deepl.com";

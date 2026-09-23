@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
+import { EMAIL_CITATION_BLOCK_MODE } from "@stll/api-contract";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,12 +12,7 @@ import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
 } from "@/api/lib/files/email-attachment-token";
-import { EMAIL_CITATION_BLOCK_MODE } from "@/api/lib/files/email-citations";
-import {
-  buildEmailPreview,
-  parseEmail,
-  resolveEmailMimeType,
-} from "@/api/lib/files/email-to-html";
+import { buildEmailPreview, parseEmail } from "@/api/lib/files/email-to-html";
 import { createFileKey, resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";

@@ -314,6 +314,55 @@ export type ReassignActiveTaskAssignmentsParams = {
     | undefined;
 };
 
+/**
+ * The user's active task assignments in matters they still belong to, through
+ * an organization they are still a member of. Reads one row past
+ * `LIMITS.accountDeletionTaskAssignmentsMax` so callers can refuse an
+ * over-limit handoff.
+ */
+export const selectActiveTaskAssignments = async (
+  db: Pick<Transaction, "select">,
+  currentUserId: string,
+) =>
+  await db
+    .select({
+      assigneeId: taskAssignees.id,
+      entityId: taskAssignees.entityId,
+      organizationId: workspaces.organizationId,
+      role: taskAssignees.role,
+      taskName: entities.displayName,
+      workspaceId: taskAssignees.workspaceId,
+      workspaceName: workspaces.name,
+    })
+    .from(taskAssignees)
+    .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+    .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+        eq(workspaceMembers.userId, currentUserId),
+      ),
+    )
+    .innerJoin(
+      member,
+      and(
+        eq(member.organizationId, workspaces.organizationId),
+        eq(member.userId, currentUserId),
+      ),
+    )
+    .where(
+      and(
+        eq(taskAssignees.userId, currentUserId),
+        eq(entities.kind, "task"),
+        or(
+          isNull(entities.status),
+          inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
+        ),
+      ),
+    )
+    .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
+
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
   taskAssignees,
   workObligations,
@@ -351,40 +400,10 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     .where(eq(workspaceMembers.userId, currentUserId))
     .for("update");
 
-  const currentTaskAssignments = await tx
-    .select({
-      entityId: taskAssignees.entityId,
-      organizationId: workspaces.organizationId,
-      workspaceId: taskAssignees.workspaceId,
-    })
-    .from(taskAssignees)
-    .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
-    .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
-    .innerJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
-        eq(workspaceMembers.userId, currentUserId),
-      ),
-    )
-    .innerJoin(
-      member,
-      and(
-        eq(member.organizationId, workspaces.organizationId),
-        eq(member.userId, currentUserId),
-      ),
-    )
-    .where(
-      and(
-        eq(taskAssignees.userId, currentUserId),
-        eq(entities.kind, "task"),
-        or(
-          isNull(entities.status),
-          inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
-        ),
-      ),
-    )
-    .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
+  const currentTaskAssignments = await selectActiveTaskAssignments(
+    tx,
+    currentUserId,
+  );
 
   if (
     currentTaskAssignments.length > LIMITS.accountDeletionTaskAssignmentsMax

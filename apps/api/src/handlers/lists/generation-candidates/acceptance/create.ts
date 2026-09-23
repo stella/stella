@@ -11,6 +11,7 @@ import {
   legalListItemSources,
   WORK_OBLIGATION_SOURCE,
 } from "@/api/db/schema";
+import { commitSettledRun } from "@/api/handlers/lists/generation-candidates/commit-settled-run";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -518,27 +519,11 @@ export const createAcceptGenerationCandidate = (
           });
         }
 
-        const pending = await tx.query.legalListGenerationCandidates.findFirst({
-          where: {
-            runId: { eq: body.runId },
-            listId: { eq: body.listId },
-            workspaceId: { eq: workspaceId },
-            status: { in: ["pending", "accepting"] },
-          },
-          columns: { id: true },
+        await commitSettledRun(tx, {
+          runId: body.runId,
+          listId: body.listId,
+          workspaceId,
         });
-        if (!pending) {
-          await tx
-            .update(legalListGenerationRuns)
-            .set({ status: "committed", updatedAt: new Date() })
-            .where(
-              and(
-                eq(legalListGenerationRuns.id, body.runId),
-                eq(legalListGenerationRuns.listId, body.listId),
-                eq(legalListGenerationRuns.workspaceId, workspaceId),
-              ),
-            );
-        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,

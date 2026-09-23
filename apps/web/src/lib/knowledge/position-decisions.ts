@@ -7,15 +7,15 @@
  * rather than in JSX.
  */
 
+import type { PositionDecisionSummary } from "@/lib/eden-client";
 import type {
   PlaybookPositionDecisions,
   PositionStandard,
 } from "@/lib/knowledge/playbook-types";
 
-/** Inferred from the playbook read rather than restated, so a change to what
- *  the server counts fails to compile in the editor that shows it. */
-export type PositionDecisionSummary =
-  PlaybookPositionDecisions[keyof PlaybookPositionDecisions];
+/** The server's own summary type, so a change to what it counts fails to
+ *  compile in the editor that shows it. */
+export type { PositionDecisionSummary };
 
 /** Dismissed this often with nothing ever accepted, and the position is not a
  *  standard anyone holds: the editor says so instead of implying one. */

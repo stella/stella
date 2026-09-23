@@ -9,6 +9,31 @@ import { browserApiBaseUrl } from "@/lib/api-url";
 
 export type WebApiRoutes = WebAPI["~Routes"]["v1"];
 
+// Types the API owns and the browser reads by name, re-exported through the
+// one module allowed to import the API's Eden contract.
+export type {
+  AskManual,
+  DeterministicCheck,
+  FallbackEntry,
+  GlobalSearchHit,
+  GradedPosition,
+  IdealLanguage,
+  LegalListSourceLocator,
+  Negotiation,
+  PlaybookScope,
+  PlaybookTrigger,
+  Position,
+  PositionDecisionSummary,
+  PositionSeverity,
+  PositionStandard,
+  PositionStandardSource,
+  ReferencePassage,
+  TierRule,
+  ViewLayout,
+  ViewSort,
+  ViewTemplateProperty,
+} from "@stll/api/eden-contract";
+
 const clientOptions = {
   async onRequest() {
     await waitForSimulatedApiDelay();

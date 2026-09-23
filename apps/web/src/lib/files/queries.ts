@@ -3,19 +3,17 @@ import * as v from "valibot";
 
 import type {
   AuthoredDocumentPropertyKey,
-  EmailTextAttachmentCharset,
+  EmailAttachmentDescriptor,
+  EmailCitationBlock,
 } from "@stll/api-contract";
 import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { shareFileData } from "@/lib/files/array-buffer-utils";
-import type {
-  EmailCitationBlock,
-  EmailCitationSource,
-} from "@/lib/files/email-citations";
+import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   documentPropertiesQueryKey,
@@ -37,15 +35,6 @@ type FileData = {
   mimeType: string;
   originalMimeType: string;
   buffer: ArrayBuffer;
-};
-
-export type EmailAttachmentDescriptor = {
-  charset: EmailTextAttachmentCharset | null;
-  id: string;
-  fileName: string | null;
-  mimeType: string | null;
-  sizeBytes: number;
-  previewable: boolean;
 };
 
 type EmailHtmlPreviewData = {

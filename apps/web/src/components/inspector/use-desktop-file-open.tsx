@@ -12,7 +12,7 @@ import {
   openFileInDesktop,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPES,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   type DesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
@@ -29,7 +29,9 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
   const t = useTranslations();
   const [isOpening, setIsOpening] = useState(false);
   const application =
-    target === null ? "" : DESKTOP_EDIT_FILE_TYPES[target.fileType].application;
+    target === null
+      ? ""
+      : DESKTOP_EDIT_FILE_TYPE_DETAILS[target.fileType].application;
 
   const open = async () => {
     if (isOpening || target === null) {

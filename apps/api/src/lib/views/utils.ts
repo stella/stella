@@ -1,11 +1,8 @@
+import type { ViewLayoutType } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import { pruneStaleNode } from "@/api/lib/conditions/ast-utils";
-import type {
-  ViewLayout,
-  ViewLayoutBase,
-  ViewLayoutType,
-} from "@/api/lib/views-schema";
+import type { ViewLayout, ViewLayoutBase } from "@/api/lib/views-schema";
 
 // A grouping points at a deleted property when it is a real (non-built-in)
 // property id no longer present in the workspace. Built-in groupings (`_kind`,

@@ -31,6 +31,7 @@ import type {
   TimeEntryStatus,
   WorkspaceContactRole,
 } from "@stll/api-contract";
+import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { deriveBlockId } from "@stll/folio-core/server";
 
 import { rootDb } from "@/api/db/root";
@@ -75,11 +76,7 @@ import {
   DEFAULT_DOCUMENT_TYPES,
   ensureDefaultDocumentTypes,
 } from "@/api/lib/document-types/defaults";
-import {
-  EML_MIME_TYPE,
-  parseEmail,
-  parsedEmailToText,
-} from "@/api/lib/files/email-to-html";
+import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";

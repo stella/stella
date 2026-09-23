@@ -7,6 +7,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
 import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -239,28 +240,15 @@ const updateSkill = createSafeRootHandler(
       );
     }
 
-    if (
-      existing.scope === "team" &&
-      !["admin", "owner"].includes(memberRole.role)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Only admins and owners can edit team skills",
-        }),
-      );
-    }
-    if (existing.scope === "private" && existing.userId !== user.id) {
-      return Result.err(
-        new HandlerError({ status: 403, message: "Forbidden" }),
-      );
-    }
+    yield* requireSkillManager({
+      skill: existing,
+      memberRole,
+      userId: user.id,
+      action: "edit",
+    });
 
     if (hasMetadataEdit) {
-      const editableOrigin = requireEditableSkillOrigin(existing.origin);
-      if (Result.isError(editableOrigin)) {
-        return Result.err(editableOrigin.error);
-      }
+      yield* requireEditableSkillOrigin(existing.origin);
     }
 
     const { updates, changes } = buildSkillUpdateDiff(body, existing);

@@ -26,7 +26,6 @@
     "apps/web/src/components/workspaces/active-edit-badge.tsx": 1,
     "apps/web/src/components/workspaces/bulk-add-columns.tsx": 1,
     "apps/web/src/components/workspaces/cell-metadata-flags.tsx": 6,
-    "apps/web/src/components/workspaces/field-value.tsx": 1,
     "apps/web/src/components/workspaces/kanban/kanban-card.tsx": 1,
     "apps/web/src/components/workspaces/lead-section.tsx": 1,
     "apps/web/src/components/workspaces/members-section.tsx": 1,

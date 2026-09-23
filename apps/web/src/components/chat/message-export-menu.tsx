@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Popover, PopoverPopup, PopoverTitle } from "@stll/ui/popover";
@@ -33,7 +34,6 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 

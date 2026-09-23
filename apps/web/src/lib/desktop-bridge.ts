@@ -6,6 +6,8 @@ import type {
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
 import { FetchBoundaryError } from "@stll/errors";
+import { fetchWithTimeout } from "@stll/fetch";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
@@ -14,8 +16,6 @@ import { getFreshLinkedAccount } from "@/lib/auth-session";
 import type { DesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { unwrapEden } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
-import type { FetchWithTimeoutInit } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;

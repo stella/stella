@@ -8,6 +8,7 @@ import type { Command } from "prosemirror-state";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,
@@ -26,7 +27,6 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 const DEBOUNCE_MS = 1500;
 const MIN_PREFIX_CHARS = 8;

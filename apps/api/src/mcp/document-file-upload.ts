@@ -7,9 +7,9 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import { captureError } from "@/api/lib/analytics/capture";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";

@@ -1,4 +1,3 @@
-import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
 import {
@@ -7,11 +6,11 @@ import {
 } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
+import { fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -44,21 +43,7 @@ export const readScrubbedDownload = async ({
   scopedDb,
   workspaceId,
 }: ScrubbedDownloadOptions) => {
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({ content: fields.content, entityId: entities.id })
-      .from(fields)
-      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-      .innerJoin(
-        entities,
-        and(
-          eq(entityVersions.entityId, entities.id),
-          eq(entities.workspaceId, workspaceId),
-        ),
-      )
-      .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
-      .limit(1),
-  );
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
 
   const row = rows.at(0);
   if (!row) {

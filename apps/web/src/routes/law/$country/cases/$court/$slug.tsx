@@ -1,32 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PublicDecisionViewer } from "@/routes/law/-case-detail";
+import { publicDecisionSearchSchema } from "@/routes/law/-case-detail.logic";
 import {
-  createPublicCaseLawDecisionHead,
-  loadPublicCaseLawDecisionRoute,
-  publicDecisionSearchSchema,
-} from "@/routes/law/-case-detail.logic";
+  loadPublicDecisionRoute,
+  publicDecisionHead,
+} from "@/routes/law/-public-decision-route";
 
 export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
   validateSearch: publicDecisionSearchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps, location, params }) =>
-    await loadPublicCaseLawDecisionRoute({
-      hash: location.hash,
-      params,
-      queryClient,
-      search: deps,
-    }),
-  head: ({ loaderData, params }) => {
-    if (!loaderData?.caseNumber) {
-      return { meta: [] };
-    }
-
-    return createPublicCaseLawDecisionHead({
-      decision: loaderData,
-      params,
-    });
-  },
+  loader: loadPublicDecisionRoute,
+  head: publicDecisionHead,
   component: PublicDecisionRoute,
 });
 

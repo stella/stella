@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
   Frame,
@@ -21,7 +22,6 @@ import { browserApiRootUrl } from "@/lib/api-url";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 

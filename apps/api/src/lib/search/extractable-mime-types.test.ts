@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { EMAIL_MIME_TYPES } from "@/api/lib/files/email-to-html";
+import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
+
 import {
   DOCX_MIME_TYPE,
   PDF_MIME_TYPE,

@@ -1,7 +1,8 @@
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { PDF_MIME_TYPE } from "@/consts";
 import { apiUrl } from "@/lib/api-url";
 import { APIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 const PRINT_IFRAME_CLEANUP_MS = 5 * 60 * 1000;
 

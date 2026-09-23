@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { toAPIError } from "@/lib/errors/api";
 import type { APIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 // Matches the backend's own AI-call budget (send-message.ts'
 // CHAT_METERED_AI_TIMEOUT_MS) so the client doesn't cut a slow-but-healthy

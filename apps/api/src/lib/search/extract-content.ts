@@ -11,6 +11,8 @@
 
 import { Result } from "better-result";
 
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   extractionWorkerErrorCode,
@@ -18,7 +20,6 @@ import {
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { resolveEmailMimeType } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {
   resolveRuntimeWorkerPath,

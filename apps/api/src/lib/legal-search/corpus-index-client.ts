@@ -1,9 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_COMMIT_TIMEOUT_SECS,

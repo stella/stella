@@ -1,19 +1,13 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import {
-  entities,
-  taskAssignees,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   enqueueAccountDeletionCleanup,
   processAccountDeletionCleanupRequest,
 } from "@/api/lib/account-deletion-cleanup-queue";
-import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
   assertUserIsNotSoleOrgOwner,
@@ -34,6 +28,7 @@ import {
   resetFolioCollabUserState,
   revokeAuthCredentialsAndInvitations,
   revokeOAuthTokensAndGrants,
+  selectActiveTaskAssignments,
 } from "@/api/lib/account-deletion-steps";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -171,43 +166,10 @@ export const getPendingTasksAndMembers = async (
 > =>
   await Result.tryPromise({
     try: async () => {
-      const userAssignments = await rootDb
-        .select({
-          assigneeId: taskAssignees.id,
-          entityId: taskAssignees.entityId,
-          role: taskAssignees.role,
-          taskName: entities.displayName,
-          workspaceId: taskAssignees.workspaceId,
-          workspaceName: workspaces.name,
-        })
-        .from(taskAssignees)
-        .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
-        .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
-        .innerJoin(
-          workspaceMembers,
-          and(
-            eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
-            eq(workspaceMembers.userId, currentUserId),
-          ),
-        )
-        .innerJoin(
-          member,
-          and(
-            eq(member.organizationId, workspaces.organizationId),
-            eq(member.userId, currentUserId),
-          ),
-        )
-        .where(
-          and(
-            eq(taskAssignees.userId, currentUserId),
-            eq(entities.kind, "task"),
-            or(
-              isNull(entities.status),
-              inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
-            ),
-          ),
-        )
-        .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
+      const userAssignments = await selectActiveTaskAssignments(
+        rootDb,
+        currentUserId,
+      );
 
       if (userAssignments.length > LIMITS.accountDeletionTaskAssignmentsMax) {
         throw new HandlerError({
@@ -218,8 +180,12 @@ export const getPendingTasksAndMembers = async (
       }
 
       const tasks = userAssignments.map((assignment) => ({
-        ...assignment,
+        assigneeId: assignment.assigneeId,
+        entityId: assignment.entityId,
         role: assignment.role,
+        taskName: assignment.taskName,
+        workspaceId: assignment.workspaceId,
+        workspaceName: assignment.workspaceName,
       }));
 
       const workspaceIds = [

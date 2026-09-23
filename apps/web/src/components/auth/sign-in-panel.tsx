@@ -8,6 +8,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
@@ -30,7 +31,6 @@ import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";

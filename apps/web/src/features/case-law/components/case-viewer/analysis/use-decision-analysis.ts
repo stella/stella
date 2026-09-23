@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
   type PersistedDecisionAnalysis,
@@ -20,7 +21,6 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { fetchWithTimeout } from "@/lib/fetch";
 
 type AnalysisState =
   | { status: "idle" }

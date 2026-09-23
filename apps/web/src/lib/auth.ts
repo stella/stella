@@ -10,6 +10,7 @@ import {
 import { createAuthClient } from "better-auth/react";
 import { Result } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -20,7 +21,6 @@ import {
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 import { createSecretTokenBoundary } from "@/lib/secret-token";
 import type { SecretToken } from "@/lib/secret-token";

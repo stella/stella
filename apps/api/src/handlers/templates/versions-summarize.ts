@@ -1,13 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 import { loadTemplateVersionDiffSources } from "./versions";
 
@@ -64,50 +62,18 @@ const templateVersionSummarize = createSafeRootHandler(
       );
     }
 
-    const segments = buildLineDiffSegments(
-      sources.prevText,
-      sources.currentText,
-    );
-
-    // Identical versions: nothing to summarize, skip the model call.
-    let summary: string | null = null;
-    if (segments.length > 0) {
-      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-        usageMetering: {
-          actionType: "chat",
-          organizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId: user.id,
-          workspaceId: null,
-        },
+    const summary = yield* Result.await(
+      summarizeVersionChange({
+        prevText: sources.prevText,
+        currentText: sources.currentText,
         feature: "templates.version_summary",
-        modelRole: "fast",
         orgAIConfig,
-        properties: { organization_id: organizationId },
-        traceId: Bun.randomUUIDv7(),
-      });
-
-      summary = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await summarizeVersionDiff({
-              diffText: diffSegmentsToText(segments),
-              orgAIConfig,
-              organizationId,
-              aiAnalytics,
-            }),
-          catch: (cause) => {
-            aiAnalytics.captureError(cause);
-            return new HandlerError({
-              status: 500,
-              message: "Failed to summarize version changes",
-              cause,
-            });
-          },
-        }),
-      );
-    }
+        organizationId,
+        safeDb,
+        userId: user.id,
+        workspaceId: null,
+      }),
+    );
 
     return Result.ok({ summary });
   },
