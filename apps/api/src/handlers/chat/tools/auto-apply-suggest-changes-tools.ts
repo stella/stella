@@ -318,159 +318,182 @@ export const createAutoApplySuggestChangesTools = ({
       ),
       outputSchema: toTanStackToolSchema(outputSchema),
     }).server(async (input): Promise<AutoApplySuggestChangesOutput> => {
-      const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
-      if (
-        !authorName &&
-        requiresAuthor(input, docxEditRepresentation, suggestChanges)
-      ) {
-        // Structured, client-branchable outcome (not a thrown ChatToolError):
-        // the chat client detects `code` and opens a "set your name" modal
-        // inline, then retries this same call. No version is written.
-        return {
-          success: false,
-          code: SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE,
-          message:
-            "Set a preferred name in your account settings before using " +
-            "automatic document edits: tracked changes and comments must be " +
-            "attributed to you, never to a placeholder author.",
-          retryable: true,
-        };
-      }
+      const applied = await Result.gen(async function* () {
+        const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
+        if (
+          !authorName &&
+          requiresAuthor(input, docxEditRepresentation, suggestChanges)
+        ) {
+          // Structured, client-branchable outcome (not a ChatToolError): the
+          // chat client detects `code` and opens a "set your name" modal
+          // inline, then retries this same call. No version is written.
+          return Result.ok({
+            success: false,
+            code: SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE,
+            message:
+              "Set a preferred name in your account settings before using " +
+              "automatic document edits: tracked changes and comments must be " +
+              "attributed to you, never to a placeholder author.",
+            retryable: true,
+          } satisfies AutoApplySuggestChangesOutput);
+        }
 
-      const loaded = await loadEntityVersionDocxBuffer({
-        safeDb,
-        organizationId,
-        workspaceId,
-        entityId,
-        fileFieldId,
-      });
-      if (Result.isError(loaded)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: loaded.error.message,
-          cause: loaded.error,
-        });
-      }
-
-      const reviewer = await openScannedDocxReviewer(loaded.value.scanned, {
-        author: authorName ?? "",
-      });
-      // The reviewer bridge has no version notion of its own; the loaded
-      // entity version is the host's, and folio compares the model's
-      // `documentVersion` pin against it before applying anything.
-      const bridge: FolioAgentBridge = Object.assign(
-        createReviewerBridge(reviewer, { mode: docxEditRepresentation }),
-        { getDocumentVersion: () => loaded.value.entityVersionId },
-      );
-      const executed = executeFolioToolCall(
-        SUGGEST_CHANGES_TOOL_NAME,
-        input,
-        bridge,
-        toolOptions,
-      );
-      if (!executed.ok) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: executed.error,
-        });
-      }
-      const summary = executed.result;
-      if (summary.applied.length === 0) {
-        const skippedSummary = summary.skipped
-          .map((skip) => `${skip.id}: ${skip.reason}`)
-          .join("; ");
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: `No operations could be applied in "${docxEditRepresentation}" mode. Skipped: ${skippedSummary}`,
-        });
-      }
-
-      const edited = await reviewer.toBuffer();
-      const validation = await validateDocxBuffer(edited);
-      if (!validation.valid) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: `The edited document failed validation: ${validation.error}`,
-        });
-      }
-
-      const scanResult = await scan({
-        buffer: new Uint8Array(edited),
-        declaredMimeType: DOCX_MIME_TYPE,
-        fileName: loaded.value.fileName,
-      });
-      if (Result.isError(scanResult)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "The edited document security scan failed",
-          cause: scanResult.error,
-        });
-      }
-      if (scanResult.value.verdict === "reject") {
-        const reasons = scanResult.value.findings.flatMap((finding) =>
-          finding.severity === "reject" ? [finding.message] : [],
-        );
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: `The edited document was rejected: ${reasons.join("; ")}`,
-        });
-      }
-      const scanWarnings = getWarnings(scanResult.value) ?? undefined;
-
-      const writeAttempt = await Result.tryPromise({
-        try: async () =>
-          await createVersion({
+        const loaded = yield* Result.await(
+          loadEntityVersionDocxBuffer({
             safeDb,
             organizationId,
             workspaceId,
             entityId,
-            userId,
-            recordAuditEvent,
-            buffer: edited,
-            fileName: loaded.value.fileName,
-            mimeType: DOCX_MIME_TYPE,
-            source: null,
-            writePolicy: {
-              type: "automatic-docx-edit",
-              expectedCurrentVersionId,
-              filePropertyId: loaded.value.filePropertyId,
-              replacedFileFieldId: fileFieldId,
-            },
-            scanWarnings,
-          }),
-        catch: (cause) =>
-          new ChatToolError({
-            kind: "server-defect",
-            message: "The edited document could not be persisted",
-            cause,
-          }),
-      });
-      if (Result.isError(writeAttempt)) {
-        throw writeAttempt.error;
-      }
-      const written = writeAttempt.value;
-      if (Result.isError(written)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: written.error.message,
-          cause: written.error,
-        });
-      }
+            fileFieldId,
+          }).then((result) =>
+            result.mapError(
+              (error) =>
+                new ChatToolError({
+                  kind: "server-defect",
+                  message: error.message,
+                  cause: error,
+                }),
+            ),
+          ),
+        );
 
-      return {
-        success: true,
-        versionId: written.value.entityVersionId,
-        versionNumber: written.value.versionNumber,
-        fieldId: written.value.fieldId,
-        replacedFieldId: fileFieldId,
-        representation: docxEditRepresentation,
-        applied: summary.applied.map(({ id }) => ({ id })),
-        skipped: summary.skipped.map(({ id, reason }) => ({ id, reason })),
-        normalizations: summary.normalizations.map(({ path, message }) => ({
-          path,
-          message,
-        })),
-      };
+        const reviewer = await openScannedDocxReviewer(loaded.scanned, {
+          author: authorName ?? "",
+        });
+        // The reviewer bridge has no version notion of its own; the loaded
+        // entity version is the host's, and folio compares the model's
+        // `documentVersion` pin against it before applying anything.
+        const bridge: FolioAgentBridge = Object.assign(
+          createReviewerBridge(reviewer, { mode: docxEditRepresentation }),
+          { getDocumentVersion: () => loaded.entityVersionId },
+        );
+        const executed = executeFolioToolCall(
+          SUGGEST_CHANGES_TOOL_NAME,
+          input,
+          bridge,
+          toolOptions,
+        );
+        if (!executed.ok) {
+          return Result.err(
+            new ChatToolError({
+              kind: "invalid-input",
+              message: executed.error,
+            }),
+          );
+        }
+        const summary = executed.result;
+        if (summary.applied.length === 0) {
+          const skippedSummary = summary.skipped
+            .map((skip) => `${skip.id}: ${skip.reason}`)
+            .join("; ");
+          return Result.err(
+            new ChatToolError({
+              kind: "invalid-input",
+              message: `No operations could be applied in "${docxEditRepresentation}" mode. Skipped: ${skippedSummary}`,
+            }),
+          );
+        }
+
+        const edited = await reviewer.toBuffer();
+        const validation = await validateDocxBuffer(edited);
+        if (!validation.valid) {
+          return Result.err(
+            new ChatToolError({
+              kind: "invalid-input",
+              message: `The edited document failed validation: ${validation.error}`,
+            }),
+          );
+        }
+
+        const scanned = yield* Result.await(
+          scan({
+            buffer: new Uint8Array(edited),
+            declaredMimeType: DOCX_MIME_TYPE,
+            fileName: loaded.fileName,
+          }).then((result) =>
+            result.mapError(
+              (cause) =>
+                new ChatToolError({
+                  kind: "server-defect",
+                  message: "The edited document security scan failed",
+                  cause,
+                }),
+            ),
+          ),
+        );
+        if (scanned.verdict === "reject") {
+          const reasons = scanned.findings.flatMap((finding) =>
+            finding.severity === "reject" ? [finding.message] : [],
+          );
+          return Result.err(
+            new ChatToolError({
+              kind: "invalid-input",
+              message: `The edited document was rejected: ${reasons.join("; ")}`,
+            }),
+          );
+        }
+        const scanWarnings = getWarnings(scanned) ?? undefined;
+
+        const writeAttempt = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await createVersion({
+                safeDb,
+                organizationId,
+                workspaceId,
+                entityId,
+                userId,
+                recordAuditEvent,
+                buffer: edited,
+                fileName: loaded.fileName,
+                mimeType: DOCX_MIME_TYPE,
+                source: null,
+                writePolicy: {
+                  type: "automatic-docx-edit",
+                  expectedCurrentVersionId,
+                  filePropertyId: loaded.filePropertyId,
+                  replacedFileFieldId: fileFieldId,
+                },
+                scanWarnings,
+              }),
+            catch: (cause) =>
+              new ChatToolError({
+                kind: "server-defect",
+                message: "The edited document could not be persisted",
+                cause,
+              }),
+          }),
+        );
+        const written = yield* writeAttempt.mapError(
+          (error) =>
+            new ChatToolError({
+              kind: "server-defect",
+              message: error.message,
+              cause: error,
+            }),
+        );
+
+        return Result.ok({
+          success: true,
+          versionId: written.entityVersionId,
+          versionNumber: written.versionNumber,
+          fieldId: written.fieldId,
+          replacedFieldId: fileFieldId,
+          representation: docxEditRepresentation,
+          applied: summary.applied.map(({ id }) => ({ id })),
+          skipped: summary.skipped.map(({ id, reason }) => ({ id, reason })),
+          normalizations: summary.normalizations.map(({ path, message }) => ({
+            path,
+            message,
+          })),
+        } satisfies AutoApplySuggestChangesOutput);
+      });
+      // TanStack AI reports a tool failure by the error its server function
+      // throws.
+      if (Result.isError(applied)) {
+        throw applied.error;
+      }
+      return applied.value;
     }),
   };
 };
