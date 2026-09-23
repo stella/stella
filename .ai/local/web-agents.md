@@ -1,3 +1,13 @@
+## Where Feature Code Lives
+
+- `routes/<route>/-components` (and `-hooks`, etc.): code used by exactly one
+  route.
+- `features/<area>/`: a feature used by more than one route (the vertical-slice
+  home).
+- `components/`: UI shared across features, with no feature-specific logic.
+- The `slice-owned-web-components` ratchet counts `components/` files whose
+  importers all sit in one feature or one route; it may only shrink.
+
 ## End-to-End Tests
 
 - Browser navigation must name `waitUntil: "commit"` or

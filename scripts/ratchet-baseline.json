@@ -1577,6 +1577,47 @@
       "scripts/result-boundary-globs.ts": 2
     }
   },
+  "slice-owned-web-components": {
+    "count": 36,
+    "files": {
+      "apps/web/src/components/ai-suggestions/scroll-editor-to-pos.ts": 1,
+      "apps/web/src/components/auth/two-factor-panel.tsx": 1,
+      "apps/web/src/components/authenticated-case-law-workspace.tsx": 1,
+      "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx": 1,
+      "apps/web/src/components/chat-input-surface.tsx": 1,
+      "apps/web/src/components/chat/chat-thread-origin-prefix.tsx": 1,
+      "apps/web/src/components/chat/create-document-draft-inspector.ts": 1,
+      "apps/web/src/components/dev-root.tsx": 1,
+      "apps/web/src/components/dev/autocomplete-playground.tsx": 1,
+      "apps/web/src/components/drag-and-drop-live-region.tsx": 1,
+      "apps/web/src/components/entity-views/entity-views.tsx": 1,
+      "apps/web/src/components/flows/flow-switch.tsx": 1,
+      "apps/web/src/components/keyboard-shortcuts-dialog.tsx": 1,
+      "apps/web/src/components/legal-reader/cited-provision-link.tsx": 1,
+      "apps/web/src/components/legal-reader/cited-statute-link.tsx": 1,
+      "apps/web/src/components/legal-reader/outline-jump-field.tsx": 1,
+      "apps/web/src/components/notification-bell.tsx": 1,
+      "apps/web/src/components/organization/invite-member-dialog.tsx": 1,
+      "apps/web/src/components/pdf/page-organizer.tsx": 1,
+      "apps/web/src/components/pdf/pdf-viewer.tsx": 1,
+      "apps/web/src/components/person-mention-label.tsx": 1,
+      "apps/web/src/components/public-law-table/public-law-pager.tsx": 1,
+      "apps/web/src/components/public-law-table/public-law-results-state.logic.ts": 1,
+      "apps/web/src/components/public-session-inspector.tsx": 1,
+      "apps/web/src/components/selfhost-update-banner.tsx": 1,
+      "apps/web/src/components/shortcut-echo-hud.tsx": 1,
+      "apps/web/src/components/sidebar-sizing.ts": 1,
+      "apps/web/src/components/table-skeleton-rows.tsx": 1,
+      "apps/web/src/components/usage/usage-fallback-notice.tsx": 1,
+      "apps/web/src/components/usage/use-usage-limit.ts": 1,
+      "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx": 1,
+      "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx": 1,
+      "apps/web/src/components/workspaces/matter-combobox.tsx": 1,
+      "apps/web/src/components/workspaces/properties/delete-property.tsx": 1,
+      "apps/web/src/components/workspaces/properties/property-conditions.tsx": 1,
+      "apps/web/src/components/workspaces/table/use-entity-table-find.ts": 1
+    }
+  },
   "api-lib-top-level-entries": {
     "count": 287,
     "files": {

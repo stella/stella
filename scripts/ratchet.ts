@@ -1121,28 +1121,104 @@ const crossesFeature: CrossSliceRule = (file, resolved) => {
   return from !== null && to !== null && to !== from;
 };
 
-const countCrossSliceImports =
-  (crosses: CrossSliceRule): FileCounter =>
-  (content, file) => {
-    let total = 0;
-    for (const raw of content.split("\n")) {
-      if (COMMENT_LINE.test(raw)) {
-        continue;
-      }
-      const code = truncateAtLineComment(raw);
-      for (const match of code.matchAll(MODULE_SPECIFIER)) {
-        const spec = match[1];
-        if (spec === undefined) {
-          continue;
-        }
-        const resolved = resolveSpecifier(file, spec);
-        if (resolved !== null && crosses(file, resolved)) {
-          total += 1;
-        }
+// Module specifiers imported by `content`, one entry per import site.
+const moduleSpecifiers = (content: string): string[] => {
+  const specifiers: string[] = [];
+  for (const raw of content.split("\n")) {
+    if (COMMENT_LINE.test(raw)) {
+      continue;
+    }
+    const code = truncateAtLineComment(raw);
+    for (const match of code.matchAll(MODULE_SPECIFIER)) {
+      const spec = match[1];
+      if (spec !== undefined) {
+        specifiers.push(spec);
       }
     }
-    return total;
-  };
+  }
+  return specifiers;
+};
+
+const countCrossSliceImports =
+  (crosses: CrossSliceRule): FileCounter =>
+  (content, file) =>
+    moduleSpecifiers(content).filter((spec) => {
+      const resolved = resolveSpecifier(file, spec);
+      return resolved !== null && crosses(file, resolved);
+    }).length;
+
+// --- Slice-private web components -------------------------------------------
+// apps/web keeps feature UI in three homes (apps/web/AGENTS.md): route-private
+// `-components` for one route, `features/<area>` for a feature several routes
+// share, and `components/` for UI shared across features. A file under
+// components/ whose every importer sits in one feature dir or one top-level
+// route slice is private code parked in the shared bucket. Importers are
+// non-test web sources; a components/ file imported by another components/
+// file (or by lib/, hooks/, ...) is shared by definition. Unimported files are
+// dead code, not misplaced code, and are not counted.
+const WEB_SOURCE_GLOB = "apps/web/src/**/*.{ts,tsx}";
+const WEB_COMPONENTS_PREFIX = "apps/web/src/components/";
+const SPECIFIER_FILE_SUFFIXES = [
+  "",
+  ".ts",
+  ".tsx",
+  "/index.ts",
+  "/index.tsx",
+] as const;
+const SHARED_IMPORTER = "shared";
+
+// The slice an importer belongs to: `features/<area>`, `routes/<top-level
+// route>` (routes/dev.tsx and routes/dev/ are one slice, as in
+// crossesRoutePrivate), or SHARED_IMPORTER for everything else.
+const webImporterSlice = (file: string): string => {
+  const feature = sliceOf(file, WEB_FEATURES_PREFIX);
+  if (feature !== null) {
+    return `features/${feature}`;
+  }
+  const route = sliceOf(file, WEB_ROUTES_PREFIX);
+  if (route !== null) {
+    return `routes/${route.replace(/\.tsx?$/u, "")}`;
+  }
+  return SHARED_IMPORTER;
+};
+
+const countSliceOwnedWebComponents: RepoCounter = (root) => {
+  const sources = scanRepoFiles(root, [WEB_SOURCE_GLOB]);
+  const known = new Set(sources);
+  const importerSlices = new Map<string, Set<string>>();
+  for (const file of sources) {
+    const slice = webImporterSlice(file);
+    const content = readFileSync(path.join(root, file), "utf-8");
+    // The compiler's import pre-scan, not the per-line MODULE_SPECIFIER scan:
+    // a lazily loaded component is formatted as a multi-line `import(...)`.
+    const { importedFiles } = ts.preProcessFile(content, true, true);
+    for (const { fileName: spec } of importedFiles) {
+      const resolved = resolveSpecifier(file, spec);
+      if (resolved === null || !resolved.startsWith(WEB_COMPONENTS_PREFIX)) {
+        continue;
+      }
+      const target = SPECIFIER_FILE_SUFFIXES.map(
+        (suffix) => `${resolved}${suffix}`,
+      ).find((candidate) => known.has(candidate));
+      if (target === undefined || target === file) {
+        continue;
+      }
+      const slices = importerSlices.get(target) ?? new Set<string>();
+      slices.add(slice);
+      importerSlices.set(target, slices);
+    }
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const [component, slices] of importerSlices) {
+    if (slices.size === 1 && !slices.has(SHARED_IMPORTER)) {
+      files[component] = 1;
+      count += 1;
+    }
+  }
+  return { count, files };
+};
 
 // --- Metric table -----------------------------------------------------------
 
@@ -2262,6 +2338,13 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     description:
       'blocks of 60+ consecutive tokens (comments and literal contents blanked) whose exact token sequence also appears in another file, or at a non-overlapping position in the same one, counted once per block per file with both copies charged. Hand-written TypeScript only (Rust under apps/desktop/src-tauri and Astro under apps/landing/src are outside this scan), excluding tests, generated/ and .gen. files and anything over 300 KB. The fix is to extract the block into whichever module already owns the concern, or into a package (`bun run new-package <name> --description "…"`) when neither side owns it — never to leave both copies in place',
     count: countDuplicateTokenBlocks,
+  },
+  {
+    scope: "repo",
+    id: "slice-owned-web-components",
+    description:
+      "files under apps/web/src/components whose non-test importers all sit in one features/<area> dir or one top-level route slice: feature- or route-private code parked in the shared components/ bucket. Move it to that feature dir or the route's `-components` (apps/web/AGENTS.md)",
+    count: countSliceOwnedWebComponents,
   },
   {
     scope: "repo",
@@ -3428,6 +3511,42 @@ const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
 // companion is excluded.
 const EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES = 5;
 
+// Web component placement fixtures: path -> content. Counted: a component only
+// one feature imports (from two files), one only a route slice imports (the
+// route file and its `-components` child are one slice), a nested `.ts`
+// module, and one a feature loads through a multi-line dynamic import. Not counted: a component two features
+// import, one another component also imports, one only a test imports, and
+// one nothing imports.
+const WEB_COMPONENT_PLACEMENT_FIXTURES = {
+  "apps/web/src/components/feature-owned.tsx":
+    "export const FeatureOwned = 1;\n",
+  "apps/web/src/components/route-owned.tsx": "export const RouteOwned = 1;\n",
+  "apps/web/src/components/dir-owned/helper.ts": "export const DirOwned = 1;\n",
+  "apps/web/src/components/two-features.tsx": "export const TwoFeatures = 1;\n",
+  "apps/web/src/components/component-shared.tsx":
+    'import { FeatureOwnedTwin } from "./feature-owned-twin";\nexport const ComponentShared = FeatureOwnedTwin;\n',
+  "apps/web/src/components/feature-owned-twin.tsx":
+    "export const FeatureOwnedTwin = 1;\n",
+  "apps/web/src/components/test-only.tsx": "export const TestOnly = 1;\n",
+  "apps/web/src/components/unimported.tsx": "export const Unimported = 1;\n",
+  "apps/web/src/components/lazy-owned.tsx": "export const LazyOwned = 1;\n",
+  "apps/web/src/features/placement-alpha/a.tsx":
+    'import { FeatureOwned } from "@/components/feature-owned";\nimport { TwoFeatures } from "@/components/two-features";\nimport { FeatureOwnedTwin } from "@/components/feature-owned-twin";\n',
+  "apps/web/src/features/placement-alpha/b.tsx":
+    'import { FeatureOwned } from "../../components/feature-owned";\n',
+  "apps/web/src/features/placement-alpha/a.test.tsx":
+    'import { TestOnly } from "@/components/test-only";\n',
+  "apps/web/src/features/placement-beta/lazy.tsx":
+    'export const load = () =>\n  import(\n    "@/components/lazy-owned"\n  );\n',
+  "apps/web/src/features/placement-beta/c.tsx":
+    'import { TwoFeatures } from "@/components/two-features";\n',
+  "apps/web/src/routes/placement.tsx":
+    'import { RouteOwned } from "@/components/route-owned";\nimport { DirOwned } from "@/components/dir-owned/helper";\n',
+  "apps/web/src/routes/placement/-components/panel.tsx":
+    'import { RouteOwned } from "@/components/route-owned";\n',
+} as const;
+const EXPECTED_SLICE_OWNED_WEB_COMPONENTS = 4;
+
 // Duplicate-token-block fixtures. Ten lines of seven tokens each: 70 tokens, so
 // the shared run clears the 60-token window with room to spare.
 const CLONE_BLOCK_LINES = Array.from(
@@ -3672,6 +3791,22 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/lib/__fixtures__",
         "apps/api/src/lib/tests",
         "apps/api/src/lib/__tests__",
+      ],
+    },
+    {
+      id: "slice-owned-web-components",
+      expected: EXPECTED_SLICE_OWNED_WEB_COMPONENTS,
+      present: [
+        "apps/web/src/components/feature-owned.tsx",
+        "apps/web/src/components/route-owned.tsx",
+        "apps/web/src/components/dir-owned/helper.ts",
+        "apps/web/src/components/lazy-owned.tsx",
+      ],
+      absent: [
+        "apps/web/src/components/two-features.tsx",
+        "apps/web/src/components/feature-owned-twin.tsx",
+        "apps/web/src/components/test-only.tsx",
+        "apps/web/src/components/unimported.tsx",
       ],
     },
     {
@@ -3984,6 +4119,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
+    for (const [rel, content] of Object.entries(
+      WEB_COMPONENT_PLACEMENT_FIXTURES,
+    )) {
+      writeFixture(root, rel, content);
+    }
     // Repo-scope layout fixtures.
     writeFixture(
       root,
