@@ -102,6 +102,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
+import { applyCitationReviews } from "@/api/handlers/case-law/polarity/reviews";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
@@ -863,7 +864,7 @@ const polarityMatchesByRule = (
  * what used to move `match_count`, so without this the column would stop
  * reporting how much work a rule does — the one thing it is for.
  */
-const settleCitationPolarity = async (
+const settleRuleVerdicts = async (
   tx: Transaction,
   rows: readonly (typeof caseLawCitations.$inferInsert)[],
   observedAt: Date,
@@ -899,6 +900,21 @@ const settleCitationPolarity = async (
       : row,
   );
 };
+
+/**
+ * The polarity each citation row is published with. A reviewed citation takes
+ * its review first, so a rule neither labels it nor counts it as a match.
+ */
+const settleCitationPolarity = async (
+  tx: Transaction,
+  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  observedAt: Date,
+): Promise<(typeof caseLawCitations.$inferInsert)[]> =>
+  await settleRuleVerdicts(
+    tx,
+    await applyCitationReviews(tx, rows),
+    observedAt,
+  );
 
 /**
  * Where this decision's canonical payload ends up.

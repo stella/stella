@@ -37,11 +37,13 @@ import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
 import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
   POLARITIES,
+  REVIEWABLE_POLARITIES,
   RULE_SOURCE,
   RULE_SOURCES,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   Polarity,
+  ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
@@ -183,6 +185,10 @@ const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS_SQL_VALUES =
   );
 
 const POLARITY_SQL_VALUES = POLARITIES.map((polarity) =>
+  sql.raw(`'${polarity}'`),
+);
+
+const REVIEWABLE_POLARITY_SQL_VALUES = REVIEWABLE_POLARITIES.map((polarity) =>
   sql.raw(`'${polarity}'`),
 );
 
@@ -2190,6 +2196,56 @@ export const caseLawPolarityRules = p.pgTable(
       sql`${t.source} IN (${sql.join(RULE_SOURCE_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * A reviewed polarity for one citation of one decision.
+ *
+ * Keyed on the citing decision and the citation key rather than on the
+ * citation row: a refresh deletes and re-inserts every citation row of the
+ * decision under new ids, and the review has to outlive that. The pipeline
+ * re-applies it to the new rows as they are written, and no classifier pass
+ * overwrites a row it covers.
+ */
+export const caseLawCitationReviews = p.pgTable(
+  "case_law_citation_reviews",
+  {
+    id: pUuid<"caseLawCitationReview">().primaryKey(),
+    citingDecisionId:
+      safeUuid<"caseLawDecision">("citing_decision_id").notNull(),
+    /** Same key as `case_law_citations.citation_key`. */
+    citationKey: p.varchar("citation_key", { length: 128 }).notNull(),
+    polarity: p
+      .varchar("polarity", { length: 16 })
+      .$type<ReviewablePolarity>()
+      .notNull(),
+    /** Opaque reference to where the review is recorded. */
+    reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+    reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.citingDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_citation_reviews_citing_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("case_law_citation_reviews_citation_idx")
+      .on(t.citingDecisionId, t.citationKey),
+    p.check(
+      "citation_reviews_polarity_values",
+      sql`${t.polarity} IN (${sql.join(REVIEWABLE_POLARITY_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citation_reviews_citation_key_non_empty",
+      sql`${t.citationKey} <> ''`,
+    ),
+    p.check("citation_reviews_review_ref_non_empty", sql`${t.reviewRef} <> ''`),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

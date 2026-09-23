@@ -168,6 +168,14 @@ RUN bun build \
     --target bun \
     --outfile /app/classify-citations.js \
     apps/api/scripts/classify-citations.ts
+# Reviewed citation polarities: stores them and applies them to the current
+# citation rows. Needs the API env (database) and runs inside the API task;
+# reports without writing until `--apply`:
+#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
+RUN bun build \
+    --target bun \
+    --outfile /app/apply-reviewed-citation-labels.js \
+    apps/api/src/scripts/apply-reviewed-citation-labels.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
 # set from a JSON file, so the committed sample ships next to the bundle:
 #   ["bun", "/app/corpus-snippet-compare.js",
@@ -298,6 +306,7 @@ COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/de
 COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /app/repair-publisher-absent-text.js
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
 COPY --chown=stella:stella --from=builder /app/classify-citations.js /app/classify-citations.js
+COPY --chown=stella:stella --from=builder /app/apply-reviewed-citation-labels.js /app/apply-reviewed-citation-labels.js
 COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json

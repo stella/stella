@@ -12,7 +12,7 @@
  * Over time, the regex ruleset grows and model usage drops.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
@@ -28,6 +28,7 @@ import type {
   CitationWindows,
 } from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
+import { unreviewedCitationSql } from "@/api/handlers/case-law/polarity/reviews";
 import {
   incrementMatchCount,
   matchRule,
@@ -309,6 +310,7 @@ const trackSurfaceForm = async ({
  *
  * `result.confidence` is deliberately not written: `case_law_citations` has
  * no column for it. Adding one is a schema change, not a write-path change.
+ * A reviewed citation is left as it is.
  */
 export const persistPolarity = async (
   citationId: SafeId<"caseLawCitation">,
@@ -324,6 +326,11 @@ export const persistPolarity = async (
         polarity: result.polarity,
         polarityRuleId: result.ruleId,
       })
-      .where(eq(caseLawCitations.id, citationId));
+      .where(
+        and(
+          eq(caseLawCitations.id, citationId),
+          unreviewedCitationSql(caseLawCitations),
+        ),
+      );
   });
 };

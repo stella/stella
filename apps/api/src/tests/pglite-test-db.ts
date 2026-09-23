@@ -219,7 +219,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_search_documents",
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
-      "case_law_index_jobs"
+      "case_law_index_jobs",
+      "case_law_citation_reviews"
     TO stella_ingestion
   `,
   `
@@ -296,7 +297,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_pack_refs",
       "case_law_decision_source_identities",
       "case_law_raw_sweeps",
-      "case_law_decision_supplements"
+      "case_law_decision_supplements",
+      "case_law_citation_reviews"
     FROM stella
   `,
   // Legislation corpus — same global model as case law.
