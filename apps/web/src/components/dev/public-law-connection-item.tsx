@@ -14,21 +14,22 @@ import { MenuItem } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
-import { APIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 const CONNECTING_POLL_INTERVAL_MS = 1000;
 
+/**
+ * The dev guard answers outside dev with a 404, which Eden reports as an
+ * error; a successful raw `Response` is not a state the route produces.
+ */
+const unexpectedResponse = () =>
+  panic("The dev public-law connection route returned a raw Response");
+
 const readPublicLawConnection = async (signal: AbortSignal) => {
-  const response = await api.dev["public-law-connection"].get({
-    fetch: { signal },
-  });
-  if (response.error || response.data instanceof Response) {
-    throw new APIError({
-      status: response.error?.status ?? 404,
-      message: "Failed to read the case-law connection",
-    });
-  }
-  return response.data;
+  const data = unwrapEden(
+    await api.dev["public-law-connection"].get({ fetch: { signal } }),
+  );
+  return data instanceof Response ? unexpectedResponse() : data;
 };
 
 type PublicLawConnection = Awaited<ReturnType<typeof readPublicLawConnection>>;
@@ -107,14 +108,8 @@ export const PublicLawConnectionItem = () => {
   const connection = useQuery(publicLawConnectionOptions);
   const connect = useMutation({
     mutationFn: async () => {
-      const response = await api.dev["public-law-connection"].post();
-      if (response.error || response.data instanceof Response) {
-        throw new APIError({
-          status: response.error?.status ?? 404,
-          message: "Failed to start the case-law connection",
-        });
-      }
-      return response.data;
+      const data = unwrapEden(await api.dev["public-law-connection"].post());
+      return data instanceof Response ? unexpectedResponse() : data;
     },
     onSuccess: (data) => {
       queryClient.setQueryData(publicLawConnectionOptions.queryKey, data);
