@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  CLIENT_ADDRESS_SOURCE,
   isTrustedProxy,
+  parseEdgeClientAddress,
   parseTrustedProxies,
+  resolveClientAddress,
   resolveClientIp,
   resolveSignupRateLimitClientIp,
+  stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 
@@ -217,5 +222,129 @@ describe("resolveSignupRateLimitClientIp", () => {
         trusted: parseTrustedProxies("10.0.0.0/8"),
       }),
     ).toBeNull();
+  });
+});
+
+describe("edge client address", () => {
+  const EDGE_HEADER = "cloudfront-viewer-address";
+  const trusted = parseTrustedProxies("10.0.0.0/8");
+  const request = (headers: Record<string, string> = {}) =>
+    new Request("https://example/test", { headers });
+
+  test("parses the address and drops the port", () => {
+    expect(parseEdgeClientAddress("203.0.113.7:46532")).toBe("203.0.113.7");
+    expect(parseEdgeClientAddress("2001:db8::1:443")).toBe("2001:db8::1");
+    expect(
+      parseEdgeClientAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334:46532"),
+    ).toBe("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+    expect(parseEdgeClientAddress("[2001:db8::1]:443")).toBe("2001:db8::1");
+  });
+
+  test("rejects values that are not an address with a port", () => {
+    for (const value of [null, "", "203.0.113.7", "host:443", "1.2.3.4:x"]) {
+      expect(parseEdgeClientAddress(value)).toBeNull();
+    }
+  });
+
+  test("uses the edge header from a trusted peer, ahead of x-forwarded-for", () => {
+    expect(
+      resolveClientAddress(
+        request({
+          [EDGE_HEADER]: "203.0.113.7:443",
+          "x-forwarded-for": "198.51.100.1",
+        }),
+        fakeServer("10.0.0.5"),
+        { trusted, edgeHeader: EDGE_HEADER },
+      ),
+    ).toEqual({
+      address: "203.0.113.7",
+      source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+    });
+  });
+
+  test("ignores the edge header from a peer outside the trusted set", () => {
+    expect(
+      resolveClientAddress(
+        request({ [EDGE_HEADER]: "203.0.113.7:443" }),
+        fakeServer("198.51.100.9"),
+        { trusted, edgeHeader: EDGE_HEADER },
+      ),
+    ).toEqual({
+      address: "198.51.100.9",
+      source: CLIENT_ADDRESS_SOURCE.peer,
+    });
+  });
+
+  test("ignores the edge header unless one is configured", () => {
+    expect(
+      resolveClientAddress(
+        request({ [EDGE_HEADER]: "203.0.113.7:443" }),
+        fakeServer("10.0.0.5"),
+        { trusted, edgeHeader: null },
+      ),
+    ).toEqual({ address: "10.0.0.5", source: CLIENT_ADDRESS_SOURCE.peer });
+  });
+
+  test("falls back to the forwarded chain when the edge header is absent", () => {
+    expect(
+      resolveClientAddress(
+        request({ "x-forwarded-for": "203.0.113.7" }),
+        fakeServer("10.0.0.5"),
+        { trusted, edgeHeader: EDGE_HEADER },
+      ),
+    ).toEqual({
+      address: "203.0.113.7",
+      source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+    });
+  });
+
+  test("a client-chosen x-forwarded-for value does not change the address", () => {
+    const resolve = (forwardedFor: string) =>
+      resolveClientIp(
+        request({
+          [EDGE_HEADER]: "203.0.113.7:443",
+          "x-forwarded-for": forwardedFor,
+        }),
+        fakeServer("10.0.0.5"),
+        { trusted, edgeHeader: EDGE_HEADER },
+      );
+
+    expect(resolve("198.51.100.1")).toBe("203.0.113.7");
+    expect(resolve("192.0.2.44, 198.51.100.1")).toBe("203.0.113.7");
+  });
+
+  test("the signup bucket uses the same edge address", () => {
+    expect(
+      resolveSignupRateLimitClientIp(
+        request({ [EDGE_HEADER]: "203.0.113.7:443" }),
+        fakeServer("10.0.0.5"),
+        {
+          source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+          trusted,
+          edgeHeader: EDGE_HEADER,
+        },
+      ),
+    ).toBe("203.0.113.7");
+  });
+});
+
+describe("stampClientAddressHeader", () => {
+  test("replaces an incoming value with the resolved address", () => {
+    const request = new Request("https://example/test", {
+      headers: { [AUTH_CLIENT_ADDRESS_HEADER]: "198.51.100.1" },
+    });
+    stampClientAddressHeader(request, {
+      address: "203.0.113.7",
+      source: CLIENT_ADDRESS_SOURCE.peer,
+    });
+    expect(request.headers.get(AUTH_CLIENT_ADDRESS_HEADER)).toBe("203.0.113.7");
+  });
+
+  test("removes an incoming value when no address was resolved", () => {
+    const request = new Request("https://example/test", {
+      headers: { [AUTH_CLIENT_ADDRESS_HEADER]: "198.51.100.1" },
+    });
+    stampClientAddressHeader(request, null);
+    expect(request.headers.get(AUTH_CLIENT_ADDRESS_HEADER)).toBeNull();
   });
 });

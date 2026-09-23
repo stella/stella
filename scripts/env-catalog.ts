@@ -154,6 +154,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS",
   "STELLA_API_PORT",
   "STELLA_API_URL",
+  "STELLA_CLIENT_ADDRESS_HEADER",
   "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
   "STELLA_COMMIT_SHA",
@@ -207,6 +208,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   SMTP_PORT: "1025",
   SMTP_USERNAME: "",
   STELLA_API_URL: "http://localhost:3001",
+  STELLA_CLIENT_ADDRESS_HEADER: "cloudfront-viewer-address",
   STELLA_COLLAB_MODE: "single-process",
   STELLA_COLLAB_PORT: "3002",
   STELLA_COLLAB_REDIS_URL: "redis://localhost:6379",
@@ -382,6 +384,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
+  STELLA_CLIENT_ADDRESS_HEADER:
+    "Header the edge sets to the viewer address with its port (e.g. cloudfront-viewer-address). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:

@@ -118,8 +118,9 @@ import {
 } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
-  resolveClientIp,
+  resolveClientAddress,
   resolveSignupRateLimitClientIp,
+  stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import {
   currentQueryCount,
@@ -291,6 +292,12 @@ const buildRequestLogDetails = ({
     Object.assign(details, { requestId: reqCtx.requestId });
   }
 
+  if (reqCtx?.clientAddressSource) {
+    Object.assign(details, {
+      clientAddressSource: reqCtx.clientAddressSource,
+    });
+  }
+
   return details;
 };
 
@@ -314,8 +321,12 @@ const api = new Elysia()
         : undefined;
 
     initRequestContext(request, sessionId);
+    const clientAddress = resolveClientAddress(request, context.server ?? null);
+    // Better Auth reads the address from this header.
+    stampClientAddressHeader(request, clientAddress);
     enrichRequestContext(request, {
-      clientIp: resolveClientIp(request, context.server ?? null),
+      clientIp: clientAddress?.address ?? null,
+      clientAddressSource: clientAddress?.source ?? null,
       signupRateLimitIp: resolveSignupRateLimitClientIp(
         request,
         context.server ?? null,

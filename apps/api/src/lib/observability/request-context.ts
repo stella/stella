@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { ClientAddressSource } from "@/api/lib/client-ip";
+
 /** Response header carrying the per-request correlation id (receipt). */
 export const REQUEST_ID_HEADER = "x-request-id";
 
@@ -7,6 +9,7 @@ type RequestContext = {
   startTime: number;
   requestId: string;
   clientIp?: string | null;
+  clientAddressSource?: ClientAddressSource | null;
   signupRateLimitIp?: string | null;
   posthogDistinctId?: string;
   organizationId?: string;

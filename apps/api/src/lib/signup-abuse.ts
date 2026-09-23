@@ -3,7 +3,10 @@ import { Address4, Address6 } from "ip-address";
 import { isIP } from "node:net";
 
 import { env } from "@/api/env";
-import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import {
+  EXISTING_ACCOUNT_OTP_EMAIL_MAX,
+  NEW_ACCOUNT_OTP_RATE_LIMITS,
+} from "@/api/lib/limits";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
@@ -81,10 +84,11 @@ const counterKey = (kind: "email" | "ip", identity: string): string =>
   )}`;
 
 type SignupOtpRateLimitResult =
-  | { status: "allowed" }
+  | { status: "allowed"; count: number }
   | {
       status: "rate_limited";
       reason: "email" | "ip";
+      count: number;
     };
 
 export const consumeSignupOtpRateLimit = async ({
@@ -105,9 +109,10 @@ export const consumeSignupOtpRateLimit = async ({
     return {
       status: "rate_limited",
       reason: kind,
+      count: counter.count,
     };
   }
-  return { status: "allowed" };
+  return { status: "allowed", count: counter.count };
 };
 
 export type NewAccountOtpPolicyResult =
@@ -149,18 +154,20 @@ export const evaluateNewAccountOtpPolicy = async ({
       })
     : null;
 
-  // New-account capacity does not gate sign-in for an account that already
-  // exists; that address is governed by the auth rate limits instead.
+  // An address that already has an account gets a higher ceiling on the same
+  // email counter; new-account capacity (and the IP counter) does not apply.
   if (await accountExists(normalizedEmail)) {
-    return { status: "allowed", reason: "existing_account" };
+    return emailRateLimitResult.count > EXISTING_ACCOUNT_OTP_EMAIL_MAX
+      ? { status: "rate_limited", reason: "email" }
+      : { status: "allowed", reason: "existing_account" };
   }
 
   if (emailRateLimitResult.status === "rate_limited") {
-    return emailRateLimitResult;
+    return { status: "rate_limited", reason: "email" };
   }
 
   if (ipRateLimitResult?.status === "rate_limited") {
-    return ipRateLimitResult;
+    return { status: "rate_limited", reason: "ip" };
   }
 
   if (isDisposableEmailAddress(normalizedEmail)) {

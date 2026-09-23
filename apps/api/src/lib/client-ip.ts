@@ -15,6 +15,11 @@ import { panic } from "better-result";
  * (comma-separated CIDRs covering the load balancers and CDNs in
  * front of the API). When the variable is unset, no proxy is
  * trusted: forwarded headers are ignored.
+ *
+ * An edge that reports the viewer address in a header of its own (for
+ * example CloudFront's `CloudFront-Viewer-Address`) is named with
+ * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
+ * peer and takes precedence over the `x-forwarded-for` chain.
  */
 import { BlockList, isIP, isIPv6 } from "node:net";
 
@@ -23,6 +28,24 @@ import {
   SIGNUP_RATE_LIMIT_IP_SOURCE,
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
+
+/**
+ * The header stella sets on every request after resolving the client address,
+ * replacing any incoming value, so Better Auth and other readers of request
+ * headers see the same address as stella.
+ */
+export const AUTH_CLIENT_ADDRESS_HEADER = "x-stella-client-address";
+
+export const CLIENT_ADDRESS_SOURCE = {
+  edgeHeader: "edge_header",
+  forwardedFor: "forwarded_for",
+  peer: "peer",
+} as const;
+
+export type ClientAddressSource =
+  (typeof CLIENT_ADDRESS_SOURCE)[keyof typeof CLIENT_ADDRESS_SOURCE];
+
+export type ClientAddress = { address: string; source: ClientAddressSource };
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -123,40 +146,119 @@ const clientIpFromForwardedFor = (
 };
 
 /**
- * Returns the resolved client IP for an incoming request, or `null`
- * if the runtime did not expose a socket peer (e.g. the request was
- * synthesised in-process for tests).
+ * Parses an edge viewer-address header. The value always carries a port
+ * (`203.0.113.7:443`, `2001:db8::1:443`, or the bracketed `[2001:db8::1]:443`),
+ * so the last colon-separated segment is dropped before validation.
  */
-export const resolveClientIp = (
+export const parseEdgeClientAddress = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  const bracketed = /^\[([^\]]+)\]:\d{1,5}$/u.exec(trimmed)?.at(1);
+  if (bracketed !== undefined) {
+    return isIPv6(bracketed) ? bracketed : null;
+  }
+  const separator = trimmed.lastIndexOf(":");
+  if (separator <= 0) {
+    return null;
+  }
+  const host = trimmed.slice(0, separator);
+  const port = trimmed.slice(separator + 1);
+  if (!/^\d{1,5}$/u.test(port)) {
+    return null;
+  }
+  return isIP(host) === 0 ? null : host;
+};
+
+type ClientAddressOptions = {
+  trusted?: TrustedProxies;
+  /** Header name carrying the edge's viewer address; null disables it. */
+  edgeHeader?: string | null;
+};
+
+const addressFromTrustedPeer = (
+  request: Request,
+  peer: string,
+  trusted: TrustedProxies,
+  edgeHeader: string | null,
+): ClientAddress | null => {
+  if (edgeHeader !== null) {
+    const address = parseEdgeClientAddress(request.headers.get(edgeHeader));
+    if (address !== null) {
+      return { address, source: CLIENT_ADDRESS_SOURCE.edgeHeader };
+    }
+  }
+  const forwarded = clientIpFromForwardedFor(
+    request.headers.get("x-forwarded-for"),
+    peer,
+    trusted,
+  );
+  return forwarded === null
+    ? null
+    : { address: forwarded, source: CLIENT_ADDRESS_SOURCE.forwardedFor };
+};
+
+/**
+ * Resolves the client address and where it came from, or `null` if the
+ * runtime did not expose a socket peer (e.g. the request was synthesised
+ * in-process for tests).
+ */
+export const resolveClientAddress = (
   request: Request,
   server: ServerLike | null,
-  options?: { trusted?: TrustedProxies },
-): string | null => {
+  options?: ClientAddressOptions,
+): ClientAddress | null => {
   const peer = server?.requestIP(request)?.address ?? null;
   if (!peer) {
     return null;
   }
   const trusted = options?.trusted ?? getTrustedProxies();
   if (!isTrustedProxy(peer, trusted)) {
-    return peer;
+    return { address: peer, source: CLIENT_ADDRESS_SOURCE.peer };
   }
-  const xff = clientIpFromForwardedFor(
-    request.headers.get("x-forwarded-for"),
-    peer,
-    trusted,
+  const edgeHeader =
+    options?.edgeHeader === undefined
+      ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
+      : options.edgeHeader;
+  return (
+    addressFromTrustedPeer(request, peer, trusted, edgeHeader) ?? {
+      address: peer,
+      source: CLIENT_ADDRESS_SOURCE.peer,
+    }
   );
-  if (xff) {
-    return xff;
-  }
-  return peer;
 };
+
+/**
+ * Stamps the resolved address onto the request as
+ * {@link AUTH_CLIENT_ADDRESS_HEADER}, replacing any incoming value; without an
+ * address the header is removed.
+ */
+export const stampClientAddressHeader = (
+  request: Request,
+  clientAddress: ClientAddress | null,
+): void => {
+  request.headers.delete(AUTH_CLIENT_ADDRESS_HEADER);
+  if (clientAddress !== null) {
+    request.headers.set(AUTH_CLIENT_ADDRESS_HEADER, clientAddress.address);
+  }
+};
+
+/** The resolved client IP; see {@link resolveClientAddress}. */
+export const resolveClientIp = (
+  request: Request,
+  server: ServerLike | null,
+  options?: ClientAddressOptions,
+): string | null =>
+  resolveClientAddress(request, server, options)?.address ?? null;
 
 /**
  * Returns a client IP suitable for a shared signup-rate-limit bucket.
  *
  * Direct mode trusts only the kernel-provided socket peer and ignores request
  * headers. Trusted-proxy mode requires the peer to be in the configured proxy
- * set and derives the client from its `x-forwarded-for` chain. Keeping the
+ * set and derives the client from the edge address header, when configured,
+ * or its `x-forwarded-for` chain. Keeping the
  * deployment topology explicit prevents both attacker-controlled buckets and
  * one shared bucket for every user behind an unconfigured proxy.
  */
@@ -166,6 +268,7 @@ export const resolveSignupRateLimitClientIp = (
   options?: {
     source?: SignupRateLimitIpSource;
     trusted?: TrustedProxies;
+    edgeHeader?: string | null;
   },
 ): string | null => {
   const peer = server?.requestIP(request)?.address ?? null;
@@ -189,9 +292,11 @@ export const resolveSignupRateLimitClientIp = (
     return null;
   }
 
-  return clientIpFromForwardedFor(
-    request.headers.get("x-forwarded-for"),
-    peer,
-    trusted,
+  const edgeHeader =
+    options?.edgeHeader === undefined
+      ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
+      : options.edgeHeader;
+  return (
+    addressFromTrustedPeer(request, peer, trusted, edgeHeader)?.address ?? null
   );
 };
