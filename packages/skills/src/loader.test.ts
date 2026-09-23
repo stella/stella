@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseSkillFile, SkillFileError } from "./loader";
+import {
+  listSkillMetadata,
+  loadSkill,
+  parseSkillFile,
+  SkillFileError,
+} from "./loader";
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
 import { getSkillResourceKind } from "./resource-kinds";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
 const parseValid = (source: string) => {
@@ -340,6 +347,34 @@ Body.`);
     expect(parsed.error).toBeInstanceOf(SkillFileError);
     expect(parsed.error.message).toBe(
       "Skill file frontmatter must include name and description",
+    );
+  });
+});
+
+describe("shipped built-in skills", () => {
+  // Chat resolves a built-in by its frontmatter name and loads it by its
+  // directory id, so the two must be the same string.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s is named after its directory and fits the package limits",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(skill.name).toBe(id);
+      expect(skill.name).toMatch(SKILL_NAME_PATTERN);
+      expect(skill.description.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+      );
+      expect(skill.body.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.bodyMaxChars,
+      );
+    },
+  );
+
+  test("the metadata list names every shipped skill", () => {
+    expect(listSkillMetadata().map(({ name }) => name)).toEqual(
+      GENERATED_SKILLS.map(({ id }) => id).toSorted((a, b) =>
+        a.localeCompare(b),
+      ),
     );
   });
 });
