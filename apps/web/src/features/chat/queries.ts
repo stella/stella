@@ -22,6 +22,7 @@ import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
@@ -37,7 +38,6 @@ import type {
 } from "./chat-query-contract";
 import {
   createChatRuntime,
-  LifecycleRegistry,
   resetChatRequestStateForTests,
 } from "./chat-runtime";
 import type { ChatRuntime } from "./chat-runtime";

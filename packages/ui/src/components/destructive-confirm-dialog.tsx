@@ -66,11 +66,10 @@ const DestructiveConfirmDialog = ({
   };
 
   const handleConfirmClick = () => {
-    // `handleConfirm` handles its own failure and cannot reject; this only
-    // marks the promise as observed. The design-system layer stays free of an
-    // app-specific telemetry channel.
-    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-    handleConfirm().catch(() => undefined);
+    // `handleConfirm` settles a failed confirm itself, so a rejection here is
+    // a bug. The platform error channel surfaces it while the design-system
+    // layer stays free of an app-specific telemetry channel.
+    handleConfirm().catch(reportError);
   };
 
   return (

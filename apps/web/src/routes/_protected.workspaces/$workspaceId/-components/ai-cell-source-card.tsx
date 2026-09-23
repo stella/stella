@@ -10,7 +10,7 @@ import {
 } from "@stll/ui/preview-card";
 import { cn } from "@stll/ui/utils";
 
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import {
   getCellFlagById,
   useFlagLabel,
@@ -256,11 +256,6 @@ const CellFlagProvenanceRow = ({
     return null;
   }
   const Icon = flag.icon;
-  const provenanceLabel = provenance
-    ? [provenance.addedByName, formatRelativeTime(provenance.addedAt)]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
 
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-xs">
@@ -269,12 +264,20 @@ const CellFlagProvenanceRow = ({
       {provenance && (
         <span className="text-muted-foreground flex min-w-0 items-center gap-1">
           <span className="shrink-0">·</span>
-          <UserAvatar
+          <UserIdentityAvatar
             className="size-4 shrink-0 text-[7px]"
             image={provenance.addedByImage}
             name={provenance.addedByName}
           />
-          <span className="truncate">{provenanceLabel}</span>
+          <span className="truncate">
+            {provenance.addedByName ? (
+              <>
+                <BidiText>{provenance.addedByName}</BidiText>
+                {" · "}
+              </>
+            ) : null}
+            {formatRelativeTime(provenance.addedAt)}
+          </span>
         </span>
       )}
     </span>

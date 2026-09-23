@@ -1860,21 +1860,10 @@ const openBrowser = (url: string) => {
   }
 
   try {
-    const child = Bun.spawn(command, {
+    Bun.spawn(command, {
       stderr: "ignore",
       stdout: "ignore",
-    });
-
-    const timeout = setTimeout(() => {
-      child.kill();
-    }, DEFAULT_OPEN_BROWSER_TIMEOUT_MS);
-    timeout.unref();
-
-    // Dev tooling: no capture channel to route this through, and
-    // `child.exited` settles with a status rather than rejecting.
-    // eslint-disable-next-line no-detached-void/no-detached-void
-    void child.exited.finally(() => {
-      clearTimeout(timeout);
+      timeout: DEFAULT_OPEN_BROWSER_TIMEOUT_MS,
     });
     return true;
   } catch {
@@ -2055,10 +2044,10 @@ const main = async () => {
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
-      // `shutdown` ends in `process.exit`, so this promise never settles for
-      // a handler to observe.
-      // eslint-disable-next-line no-detached-void/no-detached-void
-      void shutdown(0);
+      shutdown(0).catch((error: unknown) => {
+        console.error("Dev runner shutdown failed:", error);
+        process.exit(1);
+      });
     });
   }
 

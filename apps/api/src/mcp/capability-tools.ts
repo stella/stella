@@ -61,27 +61,24 @@ import type {
 import {
   closestToolNames,
   confirmationUnavailableResult,
+  cursorInput,
   DEFAULT_LIST_LIMIT,
-  enumProp,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
-  intProp,
   MAX_LIST_LIMIT,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
+  nullAsAbsent,
   oauthScopeRecoveryHint,
-  parseOptionalCursor,
-  parseOptionalEnum,
-  parseOptionalLimit,
-  parseRequiredString,
-  stringProp,
   structuredErrorResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
 import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
+  defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
@@ -97,7 +94,7 @@ const HANDLER_KINDS = [
   "session",
   "token",
   "public",
-] as const;
+] as const satisfies readonly McpToolDefinition[];
 
 type HandlerKind = (typeof HANDLER_KINDS)[number];
 
@@ -788,7 +785,41 @@ const INVOKE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({ result: v.unknown() });
 
 // --- list_capabilities -------------------------------------------------------
 
-const CAPABILITY_LIST_CURSOR = "cursor";
+const CAPABILITY_ACCESS_FILTERS = ["all", "read", "write"] as const;
+
+const listCapabilitiesArgsSchema = nullAsAbsent(
+  v.strictObject({
+    domain: v.optional(
+      v.pipe(
+        v.string(),
+        v.description(
+          'Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices").',
+        ),
+      ),
+    ),
+    access: v.optional(
+      v.pipe(
+        v.picklist(CAPABILITY_ACCESS_FILTERS),
+        v.description("Filter by access level."),
+      ),
+      "all",
+    ),
+    cursor: cursorInput({
+      description:
+        "Opaque pagination cursor from a previous page; omit for the first page.",
+    }),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Maximum capabilities to return."),
+      ),
+      DEFAULT_LIST_LIMIT,
+    ),
+  }),
+);
 
 const contextFeatureEnabled = (
   feature: string | undefined,
@@ -823,36 +854,11 @@ const listCapabilitiesHandler: McpToolHandler<
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => {
-  const domain = args["domain"];
-  if (domain !== undefined && typeof domain !== "string") {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Parameter domain must be a string",
-      issues: [{ path: "domain", message: "Expected a string" }],
-    });
+  const parsed = v.safeParse(listCapabilitiesArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
-  const access = parseOptionalEnum({
-    args,
-    defaultValue: "all",
-    key: "access",
-    values: ["all", "read", "write"] as const,
-  });
-  if (typeof access !== "string") {
-    return access;
-  }
-  const cursor = parseOptionalCursor({ args, key: CAPABILITY_LIST_CURSOR });
-  if (typeof cursor === "object") {
-    return cursor;
-  }
-  const limit = parseOptionalLimit({
-    args,
-    defaultValue: DEFAULT_LIST_LIMIT,
-    key: "limit",
-    max: MAX_LIST_LIMIT,
-  });
-  if (typeof limit !== "number") {
-    return limit;
-  }
+  const { domain, access, cursor, limit } = parsed.output;
 
   const afterId =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
@@ -860,7 +866,7 @@ const listCapabilitiesHandler: McpToolHandler<
     return structuredErrorResult({
       code: "validation_error",
       message: "Invalid cursor",
-      issues: [{ path: CAPABILITY_LIST_CURSOR, message: "Malformed cursor" }],
+      issues: [{ path: "cursor", message: "Malformed cursor" }],
       hint: "Pass the cursor verbatim as returned by a previous call, or omit it for the first page.",
     });
   }
@@ -948,6 +954,18 @@ const hintForUnknownId = (id: string): string => {
     : "Call list_capabilities to browse available capability ids.";
 };
 
+const describeCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject({
+    capability: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
+      ),
+    ),
+  }),
+);
+
 type GuardedEndpoint =
   | { ok: true; endpoint: EndpointDefinition }
   | { ok: false; result: InternalToolErrorResult };
@@ -995,10 +1013,11 @@ const describeCapabilityHandler: McpToolHandler<
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => {
-  const id = parseRequiredString(args, "capability");
-  if (typeof id !== "string") {
-    return id;
+  const parsed = v.safeParse(describeCapabilityArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const id = parsed.output.capability;
   const entry = CATALOG_BY_ID.get(id);
   if (!entry) {
     return notFoundWithHint(id);
@@ -1118,79 +1137,79 @@ const filelessFieldRefusal = (
   });
 };
 
-const INVOKE_BOOLEAN_ARGS = ["validate_only", "confirm"] as const;
-const INVOKE_INPUT_PARTS = ["body", "params", "query"] as const;
-const INVOKE_ARG_KEYS = [
-  "capability",
-  "input",
-  ...INVOKE_BOOLEAN_ARGS,
-] as const;
-const INVOKE_ARG_KEY_SET = new Set<string>(INVOKE_ARG_KEYS);
-const INVOKE_INPUT_PART_SET = new Set<string>(INVOKE_INPUT_PARTS);
+const invokeInputPartSchema = (description: string) =>
+  v.optional(
+    v.pipe(
+      v.record(
+        v.string(),
+        v.unknown(),
+        (issue) => `Expected an object, got ${typeof issue.input}`,
+      ),
+      v.description(description),
+    ),
+  );
+
+const INVOKE_INPUT_PARTS = {
+  body: invokeInputPartSchema(
+    "Request body fields, per the capability's body schema.",
+  ),
+  params: invokeInputPartSchema(
+    "Path parameters; matter-scoped capabilities require matterId here.",
+  ),
+  query: invokeInputPartSchema(
+    "Query parameters, per the capability's query schema.",
+  ),
+};
+
+const invokeFlagSchema = (description: string) =>
+  v.optional(
+    v.pipe(
+      v.boolean(
+        (issue) => `Expected a JSON boolean, got ${typeof issue.input}`,
+      ),
+      v.description(description),
+    ),
+  );
 
 /**
- * Strict shape check for invoke_capability's OWN arguments. The MCP transport
- * does not enforce the advertised JSON Schema on tool args, so a hand-built
- * request can mistype a flag or misplace the capability's input — and either
- * one, read leniently, fails open: `validate_only: "true"` silently read as
- * `false` would EXECUTE a capability the caller intended as a dry run, and a
- * top-level `query` neither rejected nor read would run the capability with NO
- * input (an unfiltered, unpaginated call the agent never asked for). Every
- * mistyped argument and every key outside the advertised set is therefore
- * refused with a named issue: booleans must be JSON booleans, `input` and its
- * body/params/query parts must be objects. Never coerce, never ignore.
+ * invoke_capability's OWN arguments, read strictly. A mistyped flag or a
+ * misplaced input, read leniently, fails open: `validate_only: "true"`
+ * silently read as `false` would EXECUTE a capability the caller intended as
+ * a dry run, and a misspelt input part neither rejected nor read would run the
+ * capability without the filter the agent asked for. Booleans must be JSON
+ * booleans, and `input` and its body/params/query parts must be objects.
+ * Never coerce, never ignore.
  */
-const invokeArgIssues = (
-  args: Record<string, unknown>,
-): McpValidationIssue[] => {
-  const issues: McpValidationIssue[] = [];
-  for (const key of Object.keys(args)) {
-    if (INVOKE_ARG_KEY_SET.has(key)) {
-      continue;
-    }
-    issues.push({
-      path: key,
-      message: INVOKE_INPUT_PART_SET.has(key)
-        ? `Unknown argument: the capability's own input goes under \`input\`, as input.${key}`
-        : `Unknown argument. Expected one of: ${INVOKE_ARG_KEYS.join(", ")}`,
-    });
-  }
-  for (const key of INVOKE_BOOLEAN_ARGS) {
-    const value = args[key];
-    if (value !== undefined && typeof value !== "boolean") {
-      issues.push({
-        path: key,
-        message: `Expected a JSON boolean, got ${typeof value}`,
-      });
-    }
-  }
-  const input = args["input"];
-  if (input !== undefined) {
-    if (isRecord(input)) {
-      for (const key of Object.keys(input)) {
-        if (INVOKE_INPUT_PART_SET.has(key)) {
-          continue;
-        }
-        issues.push({
-          path: `input.${key}`,
-          message: `Unknown input part. Expected one of: ${INVOKE_INPUT_PARTS.join(", ")}`,
-        });
-      }
-      for (const part of INVOKE_INPUT_PARTS) {
-        const value = input[part];
-        if (value !== undefined && !isRecord(value)) {
-          issues.push({
-            path: `input.${part}`,
-            message: `Expected an object, got ${typeof value}`,
-          });
-        }
-      }
-    } else {
-      issues.push({ path: "input", message: "Expected an object" });
-    }
-  }
-  return issues;
-};
+const invokeCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject({
+    capability: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        "Capability id to invoke, as returned by list_capabilities.",
+      ),
+    ),
+    input: v.optional(
+      v.pipe(
+        v.strictObject(INVOKE_INPUT_PARTS, (issue) =>
+          // valibot reports a key outside the entries as expecting `never`.
+          issue.expected === "never"
+            ? `Unknown input part. Expected one of: ${Object.keys(INVOKE_INPUT_PARTS).join(", ")}`
+            : "Expected an object",
+        ),
+        v.description(
+          "The capability's input, split into the parts its schema declares.",
+        ),
+      ),
+    ),
+    validate_only: invokeFlagSchema(
+      "When true, validate the input against the capability schema and return without executing.",
+    ),
+    confirm: invokeFlagSchema(
+      "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
+    ),
+  }),
+);
 
 /**
  * Rename the public input field names back to the internal ones a handler
@@ -1342,18 +1361,6 @@ const withInternalFieldNames = ({
     : { ok: true, value: projected };
 };
 
-/** Split the (already shape-validated) `input` arg into its three parts. */
-const readInvokeInput = (raw: unknown): InvokeInput => {
-  if (!isRecord(raw)) {
-    return { body: undefined, params: undefined, query: undefined };
-  }
-  return {
-    body: raw["body"],
-    params: raw["params"],
-    query: raw["query"],
-  };
-};
-
 /** Resolve the workspace id for a workspace-kind capability from `input.params.matterId`. */
 const resolveCapabilityWorkspace = ({
   context,
@@ -1426,25 +1433,24 @@ const invokeCapabilityHandler = async ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }): Promise<McpToolResponse> => {
-  const id = parseRequiredString(args, "capability");
-  if (typeof id !== "string") {
-    return id;
+  // 0. The meta-tool's own argument shapes, before ANY gate: neither a
+  // mistyped flag nor a misplaced input may be read leniently
+  // (`validate_only: "true"` would fail open into executing a request that
+  // intended a dry run; a top-level `query` would run the capability with no
+  // input at all).
+  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(
+      parsed.issues,
+      "Fix the arguments named in issues[]: the capability's own input goes under input: { body, params, query }, boolean flags must be JSON booleans (not strings), and input and its parts must be objects.",
+    );
   }
-
-  // 0. The meta-tool's own argument shapes, before ANY gate: the transport
-  // does not enforce the advertised JSON Schema, and neither a mistyped flag
-  // nor a misplaced input may be read leniently (`validate_only: "true"` would
-  // fail open into executing a request that intended a dry run; a top-level
-  // `query` would run the capability with no input at all).
-  const argIssues = invokeArgIssues(args);
-  if (argIssues.length > 0) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "invoke_capability arguments failed validation",
-      issues: argIssues,
-      hint: "Fix the arguments named in issues[]: the capability's own input goes under input: { body, params, query }, boolean flags must be JSON booleans (not strings), and input and its parts must be objects.",
-    });
-  }
+  const {
+    capability: id,
+    input: rawInput,
+    validate_only: validateOnlyFlag,
+    confirm,
+  } = parsed.output;
 
   const entry = CATALOG_BY_ID.get(id);
 
@@ -1521,7 +1527,7 @@ const invokeCapabilityHandler = async ({
   if (unconfirmable !== null) {
     return unconfirmable;
   }
-  if (entry.destructive && args["confirm"] !== true) {
+  if (entry.destructive && confirm !== true) {
     return structuredErrorResult({
       code: "confirmation_required",
       message: `Capability "${id}" is an irreversible operation and was called without confirmation`,
@@ -1529,11 +1535,12 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // Shapes were strictly validated up front (gate 0), so these reads are safe:
-  // validate_only/confirm are real booleans (or absent), input parts are
-  // objects, and no unknown argument reached here.
-  const input = readInvokeInput(args["input"]);
-  const validateOnly = args["validate_only"] === true;
+  const input: InvokeInput = {
+    body: rawInput?.body,
+    params: rawInput?.params,
+    query: rawInput?.query,
+  };
+  const validateOnly = validateOnlyFlag === true;
 
   // 6. Fileless mode. This capability reached here because its file field is
   // OPTIONAL, so the JSON modes run; the field itself still cannot cross. It is
@@ -1908,7 +1915,7 @@ export const mapHandlerResult = ({
 // --- tool set ----------------------------------------------------------------
 
 const CAPABILITY_TOOL_DEFINITIONS = [
-  {
+  defineValibotMcpTool({
     annotations: {
       title: "List capabilities",
       destructiveHint: false,
@@ -1928,25 +1935,9 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "can run it, which field takes a file, and what to use instead), " +
       "handlerKind (workspace or root), and every OAuth scope it needs. Use " +
       "describe_capability for the full input schema.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        domain: stringProp(
-          'Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices").',
-        ),
-        access: enumProp("Filter by access level.", ["all", "read", "write"]),
-        cursor: stringProp(
-          "Opaque pagination cursor from a previous page; omit for the first page.",
-        ),
-        limit: intProp("Maximum capabilities to return.", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-      },
-      additionalProperties: false,
-    },
-  },
-  {
+    inputSchema: listCapabilitiesArgsSchema,
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Describe capability",
       destructiveHint: false,
@@ -1964,18 +1955,9 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "its transport (whether this path can run it, which field takes a file, " +
       "and what to use instead). Call this before invoke_capability to learn " +
       "exactly what input to pass.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        capability: stringProp(
-          'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
-        ),
-      },
-      required: ["capability"],
-      additionalProperties: false,
-    },
-  },
-  {
+    inputSchema: describeCapabilityArgsSchema,
+  }),
+  defineValibotMcpTool({
     // openWorldHint: true because the target capability is selected at
     // runtime by id, and the catalog includes contacts.business-registries-
     // lookup, which reaches the shared business-registry dispatch (ARES,
@@ -2006,53 +1988,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "role its permissions. Set validate_only: true to check input without " +
       "running it; destructive capabilities require confirm: true after human " +
       "approval.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        capability: stringProp(
-          "Capability id to invoke, as returned by list_capabilities.",
-        ),
-        input: {
-          type: "object",
-          description:
-            "The capability's input, split into the parts its schema declares.",
-          properties: {
-            body: {
-              type: "object",
-              description:
-                "Request body fields, per the capability's body schema.",
-              additionalProperties: true,
-            },
-            params: {
-              type: "object",
-              description:
-                "Path parameters; matter-scoped capabilities require matterId here.",
-              additionalProperties: true,
-            },
-            query: {
-              type: "object",
-              description:
-                "Query parameters, per the capability's query schema.",
-              additionalProperties: true,
-            },
-          },
-          additionalProperties: false,
-        },
-        validate_only: {
-          type: "boolean",
-          description:
-            "When true, validate the input against the capability schema and return without executing.",
-        },
-        confirm: {
-          type: "boolean",
-          description:
-            "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
-        },
-      },
-      required: ["capability"],
-      additionalProperties: false,
-    },
-  },
+    inputSchema: invokeCapabilityArgsSchema,
+  }),
 ] as const satisfies readonly McpToolDefinition[];
 
 export const CAPABILITY_TOOL_HANDLERS = {

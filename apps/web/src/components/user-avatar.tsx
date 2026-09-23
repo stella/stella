@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   ReviewAuthorAvatar,
@@ -8,29 +10,18 @@ import { cn } from "@stll/ui/utils";
 import { getDisplayName } from "@/lib/get-display-name";
 
 /**
- * A user's avatar anywhere in the app.
+ * A user's avatar on avatar-only surfaces: presence stacks, compact triggers,
+ * and rows whose label is not the plain user name. Pair an avatar with the
+ * name through `UserIdentity` instead.
  *
  * The rendering lives in the design system as `ReviewAuthorAvatar`, shared
  * with the review chrome; this module stays the app's single owner of user
  * identity (`no-hand-rolled-user-identity` points every call site here), so
  * the name and the app's unknown-user label are bound in one place.
  */
-export const UserAvatar = ReviewAuthorAvatar;
-
-type UserIdentityAvatarProps = {
-  className?: string;
-  image?: string | null | undefined;
-  name?: string | null;
-};
-
-/** Compact user identity for presence stacks and other avatar-only surfaces. */
-export const UserIdentityAvatar = ({
-  className,
-  image,
-  name,
-}: UserIdentityAvatarProps) => (
-  <ReviewAuthorAvatar className={className} image={image} name={name ?? null} />
-);
+export const UserIdentityAvatar = (
+  props: ComponentProps<typeof ReviewAuthorAvatar>,
+) => <ReviewAuthorAvatar {...props} />;
 
 type UserIdentityProps = {
   as?: "div" | "span";

@@ -10,6 +10,7 @@
  */
 
 import { detached } from "@/lib/detached";
+import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 
 type ReviewSessionWrites = {
   inFlight: Set<Promise<void>>;
@@ -17,7 +18,11 @@ type ReviewSessionWrites = {
   suggestionTails: Map<string, Promise<unknown>>;
 };
 
-const reviewSessionWrites = new Map<string, ReviewSessionWrites>();
+// Entries leave through releaseWhenIdle once a session has nothing pending.
+const reviewSessionWrites = new LifecycleRegistry<
+  string,
+  ReviewSessionWrites
+>();
 
 const writesFor = (reviewSessionId: string): ReviewSessionWrites => {
   const existing = reviewSessionWrites.get(reviewSessionId);

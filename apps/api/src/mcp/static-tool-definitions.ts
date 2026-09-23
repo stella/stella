@@ -87,39 +87,8 @@ type LegacyManualInputToolName = Exclude<
   ValibotInputToolName
 >;
 
-/**
- * Ratchet for native tools whose advertised JSON Schema still mirrors a
- * separate runtime validator. New tools must use defineValibotMcpTool; each
- * migration removes a name here. The bidirectional check prevents this debt
- * list from drifting away from the executable registry; the shared
- * `legacy-manual-mcp-input-schemas` decrease-only metric prevents it growing.
- */
-const MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES = [
-  "list_templates",
-  "fill_template",
-  "save_filled_template",
-  "list_capabilities",
-  "describe_capability",
-  "invoke_capability",
-] as const satisfies readonly LegacyManualInputToolName[];
-
-type DeclaredLegacyManualInputToolName =
-  (typeof MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES)[number];
-type MissingLegacyManualInputToolName = Exclude<
-  LegacyManualInputToolName,
-  DeclaredLegacyManualInputToolName
->;
-type MigratedInputToolStillDeclaredLegacy = Exclude<
-  DeclaredLegacyManualInputToolName,
-  LegacyManualInputToolName
->;
-
-true satisfies [
-  MissingLegacyManualInputToolName,
-  MigratedInputToolStillDeclaredLegacy,
-] extends [never, never]
-  ? true
-  : never;
+// Every native tool must use defineValibotMcpTool, so no hand-written input schema mirrors a validator.
+true satisfies [LegacyManualInputToolName] extends [never] ? true : never;
 
 /**
  * The closed set of curated static MCP tool names, derived from the single

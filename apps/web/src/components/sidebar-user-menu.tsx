@@ -34,7 +34,7 @@ import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { SidebarMenuItem, useSidebar } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -99,7 +99,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           }
           side="right"
         >
-          <UserAvatar
+          <UserIdentityAvatar
             className="size-7 rounded-full"
             fallbackClassName="text-3xs"
             image={user.image}

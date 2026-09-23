@@ -29,7 +29,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 
@@ -166,7 +166,7 @@ export const VersionRow = ({
       {/* Row 2: author + time */}
       <div className="flex items-center gap-1.5">
         {author && (
-          <UserAvatar
+          <UserIdentityAvatar
             className="size-4 shrink-0 text-[8px]"
             image={author.image}
             name={author.name}

@@ -501,8 +501,8 @@ const compactMcpOutputSchema = (
  * Defines a native tool from the same Valibot schema its handler parses.
  * `inputSchemaSource` retains that actual schema as internal registry metadata:
  * handlers parse through the definition, while wire projection selects only
- * MCP protocol fields. The static compile-time ratchet also uses its presence
- * to distinguish derived schemas from legacy hand-maintained mirrors.
+ * MCP protocol fields. A compile-time check in `static-tool-definitions.ts`
+ * requires its presence on every native tool.
  *
  * `inputSchema` must be wrapped in `nullAsAbsent`, so that a strict
  * tool-schema client's `null` for an unset optional property reads as

@@ -332,7 +332,7 @@ const FlowEditorForm = ({
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(organizationId),
   );
-  const workspaces = workspacesData?.workspaces ?? [];
+  const workspaces = workspacesData?.workspaces;
 
   const updateStep = (index: number, next: FlowStep) => {
     setSteps((prev) =>
@@ -616,6 +616,8 @@ const FlowEditorForm = ({
 // ── Trigger section ───────────────────────────────────
 
 type WorkspaceOption = { id: string; name: string };
+// Undefined while the matter list is still loading.
+type WorkspaceOptions = WorkspaceOption[] | undefined;
 
 const TriggerSection = ({
   trigger,
@@ -623,7 +625,7 @@ const TriggerSection = ({
   onChange,
 }: {
   trigger: TriggerDraft;
-  workspaces: WorkspaceOption[];
+  workspaces: WorkspaceOptions;
   onChange: (next: TriggerDraft) => void;
 }) => {
   const t = useTranslations();
@@ -705,7 +707,7 @@ const ScheduleConfig = ({
   onChange,
 }: {
   schedule: TriggerDraft["schedule"];
-  workspaces: WorkspaceOption[];
+  workspaces: WorkspaceOptions;
   onChange: (next: TriggerDraft["schedule"]) => void;
 }) => {
   const t = useTranslations();
@@ -727,7 +729,7 @@ const ScheduleConfig = ({
             <SelectValue placeholder={t("common.selectAMatter")} />
           </SelectTrigger>
           <SelectPopup>
-            {workspaces.map((workspace) => (
+            {workspaces?.map((workspace) => (
               <SelectItem key={workspace.id} value={workspace.id}>
                 {workspace.name}
               </SelectItem>
@@ -856,7 +858,7 @@ const FileUploadConfig = ({
   onChange,
 }: {
   fileUpload: TriggerDraft["fileUpload"];
-  workspaces: WorkspaceOption[];
+  workspaces: WorkspaceOptions;
   onChange: (next: TriggerDraft["fileUpload"]) => void;
 }) => {
   const t = useTranslations();
@@ -931,7 +933,7 @@ const FileUploadConfig = ({
         </label>
         {fileUpload.workspaceScope.type === "selected" && (
           <div className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2">
-            {workspaces.map((workspace) => (
+            {workspaces?.map((workspace) => (
               <label
                 className="flex items-center gap-2 text-sm"
                 key={workspace.id}

@@ -325,8 +325,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // anonymized (the list alone reaches the anonymized surface). Most of it is
 // create's input: the discriminated mark and the anchored passages the server
 // places the mark by.
+// Projecting the last six hand-written input schemas from their validators
+// then adds 161 default: the projection states bounds and defaults the
+// validators already enforced (`minLength`, the cursor's `maxLength`,
+// `access`/`limit` defaults) plus Valibot's empty `required`.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 172_200,
+  default: 172_400,
   anonymized: 75_400,
   law: 28_250,
 };

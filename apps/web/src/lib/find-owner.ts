@@ -12,6 +12,7 @@ import type {
   FindScope,
 } from "@/lib/find-owner.logic";
 import { HOTKEYS } from "@/lib/hotkeys";
+import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 type FindSurface = {
@@ -27,7 +28,7 @@ type FindSurface = {
 // surface overlap during a route transition, so a per-owner slot would let the
 // older instance's cleanup delete the live one's registration. Nothing
 // subscribes: ownership is decided per key press, not per render.
-const surfaces = new Map<symbol, FindSurface>();
+const surfaces = new LifecycleRegistry<symbol, FindSurface>();
 
 /**
  * The binding every surface answers, refreshed by each mounted surface from

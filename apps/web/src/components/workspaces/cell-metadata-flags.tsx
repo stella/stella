@@ -23,7 +23,7 @@ import {
   useReviewFlagLabel,
 } from "@/components/review-flags";
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import {
   cellOverrideKey,
   useCellMetadataOverridesStore,
@@ -269,7 +269,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
 
   const tooltipContent = provenance ? (
     <span className="flex min-w-0 items-center gap-2">
-      <UserAvatar
+      <UserIdentityAvatar
         className="size-5 shrink-0 text-[8px]"
         image={provenance.lockedByImage}
         name={displayName}
@@ -337,7 +337,7 @@ const FlagProvenanceTooltip = ({
 
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <UserAvatar
+      <UserIdentityAvatar
         className="size-5 shrink-0 text-[8px]"
         image={metadata.addedByImage}
         name={displayName}

@@ -1,13 +1,13 @@
 // A user avatar and its visible name must render through UserIdentity. Several
-// surfaces placed `<UserAvatar name={X}>` beside a separate `{X}` label; those
-// labels bypassed the shared display-name fallback, bidirectional isolation,
-// and deleted-account styling even though the avatar looked correct.
+// surfaces placed `<UserIdentityAvatar name={X}>` beside a separate `{X}`
+// label; those labels bypassed the shared display-name fallback,
+// bidirectional isolation, and deleted-account styling even though the avatar
+// looked correct.
 //
-// The ban is deliberately scoped to a UserAvatar with a sibling that renders
-// the exact same identifier or member expression. Avatar-only controls,
-// transformed short labels, combined metadata, and different nearby text are
-// legitimate variants. The `hand-rolled-user-identity` ratchet metric covers
-// expressions and nesting shapes this exact AST comparison cannot recognize.
+// The ban is deliberately scoped to a UserIdentityAvatar with a sibling that
+// renders the exact same identifier or member expression. Avatar-only
+// controls, transformed short labels, combined metadata, and different nearby
+// text are legitimate variants.
 
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
@@ -63,7 +63,7 @@ const userAvatarNameKey = (node: unknown): string | null => {
   const opening = node.openingElement;
   if (
     !isAstNode(opening) ||
-    getJsxName(opening.name) !== "UserAvatar" ||
+    getJsxName(opening.name) !== "UserIdentityAvatar" ||
     !Array.isArray(opening.attributes)
   ) {
     return null;
@@ -130,7 +130,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           useIdentity:
-            "Render UserIdentity instead of placing UserAvatar beside the " +
+            "Render UserIdentity instead of placing UserIdentityAvatar beside the " +
             "same user name.",
         },
       },

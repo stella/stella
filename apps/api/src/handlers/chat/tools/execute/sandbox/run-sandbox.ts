@@ -206,24 +206,19 @@ export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
   snapshotSandboxAdmission();
 
 /**
- * Test-only: register host work in the process-global in-flight set exactly as
- * `runHostCall` does (added on registration, removed when it settles). Drain
- * tests use it to create a stranded entry (a promise that never settles)
- * DIRECTLY, instead of racing a real run's wall-clock ceiling against QuickJS
- * startup on a loaded runner: with a small `maxTotalDurationMs`, the ceiling
- * can pass before the script's host call ever executes, so the end-to-end
- * construction of a strand is nondeterministic under CI load.
+ * Test-only: leave a stranded entry (a host promise that never settles) in the
+ * process-global in-flight set. Drain tests use it DIRECTLY instead of racing
+ * a real run's wall-clock ceiling against QuickJS startup on a loaded runner:
+ * with a small `maxTotalDurationMs`, the ceiling can pass before the script's
+ * host call ever executes, so the end-to-end construction of a strand is
+ * nondeterministic under CI load.
  */
-export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
-  const tracked: Promise<void> = work
-    // The tracked wrapper only records in-flight host work; the real
-    // rejection belongs to `work`, which the caller still owns.
-    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-    .catch(() => undefined)
-    .finally(() => {
-      sandboxHostWorkInFlight.delete(tracked);
-    });
-  sandboxHostWorkInFlight.add(tracked);
+export const strandSandboxHostWorkForTest = (): void => {
+  sandboxHostWorkInFlight.add(
+    new Promise<void>(() => {
+      // never settles; models a stranded host call
+    }),
+  );
 };
 
 /**

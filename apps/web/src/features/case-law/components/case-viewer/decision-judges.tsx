@@ -83,10 +83,10 @@ export const judgePortraitSrc = (path: string): string =>
     : panic(`Judge portrait path is not API-root-relative: ${path}`);
 
 /**
- * The design system's avatar, not `UserAvatar`: a judge is the court's, not
- * an account of this workspace, so the identity the app binds to a user must
- * not be reused for one. The renderer is shared, which is what keeps the
- * initials fallback from being rebuilt here.
+ * The design system's avatar, not `UserIdentityAvatar`: a judge is the
+ * court's, not an account of this workspace, so the identity the app binds
+ * to a user must not be reused for one. The renderer is shared, which is
+ * what keeps the initials fallback from being rebuilt here.
  */
 const JudgePortrait = ({ judge }: { judge: DecisionJudge }) => (
   <ReviewAuthorAvatar

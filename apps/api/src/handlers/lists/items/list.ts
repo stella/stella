@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -166,15 +166,22 @@ const readListItems = createSafeHandler(
               inArray(fields.propertyId, propertyIds),
             ),
           );
-        const fieldsByEntity = new Map<string, typeof fieldRows>();
+        // Seeded with every page row so an item without field values still
+        // has an entry and a miss on lookup is an invariant breach.
+        const fieldsByEntity = new Map<string, typeof fieldRows>(
+          entityIds.map((id) => [id, []]),
+        );
         for (const field of fieldRows) {
-          const entityFields = fieldsByEntity.get(field.entityId) ?? [];
-          entityFields.push(field);
-          fieldsByEntity.set(field.entityId, entityFields);
+          (
+            fieldsByEntity.get(field.entityId) ??
+            panic(`Field for unselected entity ${field.entityId}`)
+          ).push(field);
         }
         return rows.map((row) =>
           Object.assign(row, {
-            customFields: fieldsByEntity.get(row.id) ?? [],
+            customFields:
+              fieldsByEntity.get(row.id) ??
+              panic(`Entity ${row.id} missing from field grouping`),
           }),
         );
       }),

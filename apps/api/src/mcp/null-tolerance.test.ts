@@ -12,9 +12,8 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  * it. This suite pins how BOTH MCP validation surfaces treat that null, as a
  * regression invariant:
  *
- *  - Static curated tools (`handleMcpToolCall` -> per-tool arg parsing): a mix
- *    of hand-rolled optional parsers (`parseOptionalEnum/Limit/Cursor`, which
- *    test `=== undefined` for absence) and Valibot `v.strictObject` schemas.
+ *  - Static curated tools (`handleMcpToolCall` -> per-tool arg parsing): Valibot
+ *    `v.strictObject` schemas wrapped in `nullAsAbsent`.
  *  - The capability invoke path (`executeInvoke` -> `validatePart`): the
  *    Elysia-parity TypeBox chain Default -> Convert -> Clean -> Check over the
  *    live handler config schemas.
@@ -225,7 +224,7 @@ describe("static tools read explicit null on plain optional fields as omission",
     property: string;
     args: Record<string, unknown>;
   }[] = [
-    // Hand-rolled optional parsers (parseOptionalEnum/Limit/Cursor).
+    // Optional enum, limit, and cursor properties.
     { tool: "list_matters", property: "status", args: {} },
     { tool: "list_matters", property: "limit", args: {} },
     { tool: "list_matters", property: "cursor", args: {} },

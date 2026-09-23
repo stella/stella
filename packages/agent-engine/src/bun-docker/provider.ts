@@ -252,11 +252,9 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         stderr.close();
       }
     })();
-    // Mark the eager pump's rejection as observed even when a caller kills the
-    // process without calling wait(). wait() still awaits the original promise
-    // and surfaces the same failure to callers that do observe completion.
-    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter, no-detached-void/no-detached-void
-    void pump.catch(() => undefined);
+    // Observed eagerly so the pump's failure is never unhandled when a caller
+    // kills the process without calling wait(); wait() rethrows it.
+    const pumpSettlements = Promise.allSettled([pump]);
 
     return {
       pid: -1,
@@ -278,7 +276,11 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         end: () => Promise.resolve(),
       },
       wait: async () => {
-        await pump;
+        for (const settlement of await pumpSettlements) {
+          if (settlement.status === "rejected") {
+            throw settlement.reason;
+          }
+        }
         return await inspectExecExitCode(conn, execId);
       },
       kill: async () => {

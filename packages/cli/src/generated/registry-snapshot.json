@@ -1002,6 +1002,8 @@
     "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "template_id": {
           "type": "string",
@@ -1010,11 +1012,11 @@
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List templates",
@@ -1032,6 +1034,8 @@
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "inputSchema": {
       "type": "object",
+      "required": ["template_id", "values"],
+      "additionalProperties": false,
       "properties": {
         "template_id": {
           "type": "string",
@@ -1040,28 +1044,26 @@
         },
         "values": {
           "type": "object",
-          "description": "Map of field path to value.",
-          "additionalProperties": true
+          "additionalProperties": {},
+          "description": "Map of field path to value."
         },
         "allow_unused_values": {
           "type": "boolean",
           "description": "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly."
         },
         "completion_mode": {
-          "type": "string",
           "enum": ["require_complete", "allow_partial"],
+          "type": "string",
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
-          "type": "string",
           "enum": ["text", "docx"],
+          "type": "string",
           "description": "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
           "default": "text"
         }
-      },
-      "required": ["template_id", "values"],
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Fill template",
@@ -1125,10 +1127,18 @@
     "description": "Fill a registered template and persist its DOCX in a matter. Use create_document (optionally with parent_id) or create_version with entity_id. Call list_templates for field paths; never guess required values. Missing required values always fail. Unfilled placeholders or failed AI drafts stop writes unless completion_mode is allow_partial. Returns document/version ids and fill diagnostics.",
     "inputSchema": {
       "type": "object",
+      "required": [
+        "action",
+        "template_id",
+        "matter_id",
+        "idempotency_key",
+        "values"
+      ],
+      "additionalProperties": false,
       "properties": {
         "action": {
-          "type": "string",
           "enum": ["create_document", "create_version"],
+          "type": "string",
           "description": "Persistence destination"
         },
         "template_id": {
@@ -1153,34 +1163,28 @@
         },
         "name": {
           "type": "string",
-          "description": "Optional DOCX file name; defaults to the template file name",
-          "maxLength": 255
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Optional DOCX file name; defaults to the template file name"
         },
         "idempotency_key": {
           "type": "string",
-          "description": "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-          "maxLength": 128
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Unique retry key for this save operation; reuse it only to recover the same timed-out request"
         },
         "values": {
           "type": "object",
-          "description": "Map of template field path to value",
-          "additionalProperties": true
+          "additionalProperties": {},
+          "description": "Map of template field path to value"
         },
         "completion_mode": {
-          "type": "string",
           "enum": ["require_complete", "allow_partial"],
+          "type": "string",
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
-      },
-      "required": [
-        "action",
-        "template_id",
-        "matter_id",
-        "idempotency_key",
-        "values"
-      ],
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Save filled template",
@@ -4709,28 +4713,33 @@
     "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "domain": {
           "type": "string",
           "description": "Filter to one capability domain: the id prefix before the first dot (e.g. \"time-entries\", \"invoices\")."
         },
         "access": {
-          "type": "string",
           "enum": ["all", "read", "write"],
-          "description": "Filter by access level."
+          "type": "string",
+          "description": "Filter by access level.",
+          "default": "all"
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
           "description": "Opaque pagination cursor from a previous page; omit for the first page."
         },
         "limit": {
           "type": "integer",
-          "description": "Maximum capabilities to return.",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Maximum capabilities to return.",
+          "default": 25
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List capabilities",
@@ -4748,14 +4757,15 @@
     "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
     "inputSchema": {
       "type": "object",
+      "required": ["capability"],
+      "additionalProperties": false,
       "properties": {
         "capability": {
           "type": "string",
+          "minLength": 1,
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \"time-entries.create\")."
         }
-      },
-      "required": ["capability"],
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Describe capability",
@@ -4774,32 +4784,36 @@
     "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "inputSchema": {
       "type": "object",
+      "required": ["capability"],
+      "additionalProperties": false,
       "properties": {
         "capability": {
           "type": "string",
+          "minLength": 1,
           "description": "Capability id to invoke, as returned by list_capabilities."
         },
         "input": {
           "type": "object",
-          "description": "The capability's input, split into the parts its schema declares.",
           "properties": {
             "body": {
               "type": "object",
-              "description": "Request body fields, per the capability's body schema.",
-              "additionalProperties": true
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
             },
             "params": {
               "type": "object",
-              "description": "Path parameters; matter-scoped capabilities require matterId here.",
-              "additionalProperties": true
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
             },
             "query": {
               "type": "object",
-              "description": "Query parameters, per the capability's query schema.",
-              "additionalProperties": true
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
             }
           },
-          "additionalProperties": false
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
         },
         "validate_only": {
           "type": "boolean",
@@ -4809,9 +4823,7 @@
           "type": "boolean",
           "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
         }
-      },
-      "required": ["capability"],
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Invoke capability",

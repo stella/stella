@@ -182,21 +182,9 @@
     "count": 0,
     "files": {}
   },
-  "legacy-manual-mcp-input-schemas": {
-    "count": 6,
-    "files": {
-      "apps/api/src/mcp/static-tool-definitions.ts": 6
-    }
-  },
   "nullish-array-fallback": {
-    "count": 7,
-    "files": {
-      "apps/api/src/handlers/lists/generation-candidates/create.ts": 1,
-      "apps/api/src/handlers/lists/generation-candidates/list.ts": 2,
-      "apps/api/src/handlers/lists/items/list.ts": 2,
-      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "barrel-index-files": {
     "count": 0,
@@ -207,29 +195,16 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 4,
-    "files": {
-      "apps/web/src/boot-prefetch.ts": 1,
-      "apps/web/src/components/ai-suggestions/review-session-writes.ts": 1,
-      "apps/web/src/lib/find-owner.ts": 1,
-      "apps/web/src/lib/relative-time.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "entity-kind-glyph-adhoc": {
     "count": 0,
     "files": {}
   },
   "hand-rolled-user-identity": {
-    "count": 8,
-    "files": {
-      "apps/web/src/components/sidebar-user-menu.tsx": 1,
-      "apps/web/src/components/versions/version-list.tsx": 1,
-      "apps/web/src/components/workspaces/active-edit-badge.tsx": 1,
-      "apps/web/src/components/workspaces/cell-metadata-flags.tsx": 2,
-      "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/-components/team-avatars.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "raw-user-avatar-primitive": {
     "count": 0,
@@ -1100,10 +1075,9 @@
     "files": {}
   },
   "require-query-limit-suppressions": {
-    "count": 3,
+    "count": 2,
     "files": {
-      "apps/api/src/handlers/chat/history-window.ts": 2,
-      "apps/api/src/handlers/workspaces/list.ts": 1
+      "apps/api/src/handlers/chat/history-window.ts": 2
     }
   },
   "no-raw-zip-load-suppressions": {
@@ -1208,27 +1182,16 @@
     "files": {}
   },
   "no-swallowed-rejection-suppressions": {
-    "count": 7,
-    "files": {
-      "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
-      "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
-      "apps/api/src/lib/errors/utils.ts": 1,
-      "apps/api/src/lib/with-timeout.ts": 1,
-      "apps/web/src/workers/anonymize-chat-worker.ts": 1,
-      "packages/agent-engine/src/bun-docker/provider.ts": 1,
-      "packages/ui/src/components/destructive-confirm-dialog.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "require-toast-error-capture-suppressions": {
     "count": 0,
     "files": {}
   },
   "no-detached-void-suppressions": {
-    "count": 3,
-    "files": {
-      "packages/agent-engine/src/bun-docker/provider.ts": 1,
-      "packages/scripts/src/dev-runner.ts": 2
-    }
+    "count": 0,
+    "files": {}
   },
   "require-detached-label-shape-suppressions": {
     "count": 0,

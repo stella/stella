@@ -371,56 +371,6 @@ export const MCP_TOOL_EXECUTION_OPTIONS: LocalToolExecutionOptions = {
   toolCallId: "mcp",
 };
 
-export const stringProp = (
-  description: string,
-  opts?: { maxLength?: number },
-) =>
-  ({
-    type: "string",
-    description,
-    ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
-  }) as const;
-
-/**
- * `uuidInputSchema` as a hand-written JSON Schema property, for the tools whose
- * advertised schema is still maintained alongside their validator rather than
- * projected from it. Both sides must move together until the tool migrates to
- * `defineValibotMcpTool`.
- */
-export const uuidProp = (description: string) =>
-  ({
-    type: "string",
-    format: "uuid",
-    description,
-  }) as const;
-
-/**
- * A nullable string parameter. Advertises `type: ["string", "null"]` so the MCP
- * JSON schema matches a Valibot field that accepts null (the "pass null to
- * clear" convention); a plain string type would mislead callers into believing
- * null is rejected.
- */
-export const nullableStringProp = (
-  description: string,
-  opts?: { maxLength?: number },
-) =>
-  ({
-    type: ["string", "null"],
-    description,
-    ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
-  }) as const;
-
-export const intProp = (
-  description: string,
-  opts?: { max?: number; min?: number },
-) =>
-  ({
-    type: "integer",
-    description,
-    ...(opts?.min === undefined ? {} : { minimum: opts.min }),
-    ...(opts?.max === undefined ? {} : { maximum: opts.max }),
-  }) as const;
-
 export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
@@ -884,93 +834,6 @@ const argValidationError = (
     message,
   });
 
-export const parseRequiredString = (
-  args: Record<string, unknown>,
-  key: string,
-  opts?: { maxLength?: number },
-): string | InternalToolErrorResult => {
-  const value = args[key];
-  if (typeof value !== "string" || value.length === 0) {
-    return argValidationError(
-      `Missing required parameter: ${key}`,
-      `Provide '${key}' as a non-empty string.`,
-      key,
-    );
-  }
-  if (opts?.maxLength !== undefined && value.length > opts.maxLength) {
-    return argValidationError(
-      `Parameter ${key} exceeds maximum length of ${opts.maxLength}`,
-      `Shorten '${key}' to at most ${opts.maxLength} characters.`,
-      key,
-    );
-  }
-  return value;
-};
-
-/**
- * Absence as a tool argument: omitted, or the `null` a strict tool-schema
- * client sends for a declared property it is not setting. The schemas express
- * the same rule through {@link nullAsAbsent}; these readers predate it and
- * still parse raw arguments.
- */
-const isAbsentArgument = (value: unknown): boolean =>
-  value === undefined || value === null;
-
-export const parseOptionalEnum = <TValues extends readonly string[]>({
-  args,
-  defaultValue,
-  key,
-  values,
-}: {
-  args: Record<string, unknown>;
-  defaultValue: TValues[number];
-  key: string;
-  values: TValues;
-}): TValues[number] | InternalToolErrorResult => {
-  const value = args[key];
-  if (isAbsentArgument(value)) {
-    return defaultValue;
-  }
-  if (typeof value !== "string" || !values.includes(value)) {
-    return argValidationError(
-      `Invalid parameter: ${key}. Expected one of ${values.join(", ")}`,
-      `Set '${key}' to one of: ${values.join(", ")}.`,
-      key,
-    );
-  }
-  return value;
-};
-
-export const parseOptionalLimit = ({
-  args,
-  defaultValue,
-  key,
-  max,
-}: {
-  args: Record<string, unknown>;
-  defaultValue: number;
-  key: string;
-  max: number;
-}): number | InternalToolErrorResult => {
-  const value = args[key];
-  if (isAbsentArgument(value)) {
-    return defaultValue;
-  }
-  if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value < 1 ||
-    value > max
-  ) {
-    return argValidationError(
-      `Invalid parameter: ${key}. Expected an integer between 1 and ${max}`,
-      `Set '${key}' to an integer between 1 and ${max}.`,
-      key,
-    );
-  }
-  return value;
-};
-
 export const isToolErrorResult = (
   value: unknown,
 ): value is InternalToolErrorResult =>
@@ -1024,36 +887,6 @@ export const cursorInput = ({
       v.transform((value: string) => (issuedBy(value) ? value : undefined)),
     ),
   );
-
-export const parseOptionalCursor = ({
-  args,
-  key,
-}: {
-  args: Record<string, unknown>;
-  key: string;
-}): string | undefined | InternalToolErrorResult => {
-  const value = args[key];
-  if (isAbsentArgument(value)) {
-    return undefined;
-  }
-  if (typeof value !== "string") {
-    return argValidationError(
-      `Invalid parameter: ${key}. Expected an opaque cursor string`,
-      `Pass the '${key}' as the opaque cursor returned by a previous call, or omit it for the first page.`,
-      key,
-    );
-  }
-  if (value.length > MAX_CURSOR_LENGTH) {
-    return argValidationError(
-      `Parameter ${key} exceeds maximum length of ${MAX_CURSOR_LENGTH}`,
-      `Pass the '${key}' verbatim as returned; a valid cursor never exceeds ${MAX_CURSOR_LENGTH} characters.`,
-      key,
-    );
-  }
-  // The raw-argument twin of {@link cursorInput}, for the tools that still
-  // maintain their advertised schema by hand.
-  return isIssuablePaginationCursor(value) ? value : undefined;
-};
 
 export type TextWindowResult = {
   text: string;

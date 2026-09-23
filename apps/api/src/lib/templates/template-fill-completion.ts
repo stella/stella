@@ -19,7 +19,12 @@ export const DEFAULT_TEMPLATE_FILL_COMPLETION_MODE =
  * different defaults: an omitted mode is strict on both.
  */
 export const templateFillCompletionModeSchema = v.optional(
-  v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
+  v.pipe(
+    v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
+    v.description(
+      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+    ),
+  ),
   DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
 );
 
