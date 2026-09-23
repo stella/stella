@@ -99,7 +99,7 @@ jobs:
       # The commit is created through the API so GitHub signs it.
       - name: Open or update pull request
         if: steps.check.outputs.update_count != '0'
-        uses: stella/.github/.github/actions/signed-commit@35506c43f400ed14b8554568d5d9988a49299f0c
+        uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
         with:
           token: ${{ github.token }}
           mode: refresh-pr
