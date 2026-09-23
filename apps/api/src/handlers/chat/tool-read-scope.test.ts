@@ -120,7 +120,7 @@ describe("tool read scope", () => {
     recorder.startTurn();
 
     await expect(tools["read"]?.execute?.({}, undefined)).rejects.toThrow(
-      "scope write failed",
+      "Failed to record the thread's data scope.",
     );
   });
 

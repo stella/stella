@@ -114,13 +114,14 @@ export const recordToolReadScope = ({
       execute: async (input: unknown, context: unknown) => {
         const output: unknown = await execute(input, context);
         const recorded = await recorder.recordObservedReads();
-        if (Result.isError(recorded)) {
-          const failure = recorded.error;
-          if (!committedBeforeScope) {
-            throw failure;
-          }
-          captureError(failure, { source: "chat-tool-read-scope", tool: name });
+        if (Result.isError(recorded) && committedBeforeScope) {
+          captureError(recorded.error, {
+            source: "chat-tool-read-scope",
+            tool: name,
+          });
+          return output;
         }
+        recorded.unwrap("Failed to record the thread's data scope.");
         return output;
       },
     };
