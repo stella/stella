@@ -731,8 +731,8 @@ export const headS3ObjectWithSignal = async (
   contentLength: number | null;
   contentType: string | null;
 } | null> => {
-  const head = await Result.tryPromise({
-    try: async () =>
+  const head = await presentOrNull(
+    async () =>
       await documentsCredentials.run(
         async () =>
           await getAbortableS3().send(
@@ -740,18 +740,13 @@ export const headS3ObjectWithSignal = async (
             { abortSignal: signal },
           ),
       ),
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(head)) {
-    return {
-      contentLength: head.value.ContentLength ?? null,
-      contentType: head.value.ContentType ?? null,
-    };
-  }
-  if (isMissingS3ObjectError(head.error)) {
-    return null;
-  }
-  throw head.error;
+  );
+  return head === null
+    ? null
+    : {
+        contentLength: head.ContentLength ?? null,
+        contentType: head.ContentType ?? null,
+      };
 };
 
 /** Read one object while allowing the caller to cancel the HTTP request. */
@@ -804,25 +799,34 @@ export const isMissingS3ObjectError = (error: unknown): boolean => {
 };
 
 /**
+ * A request's answer, or `null` when the store confirms the key holds
+ * nothing. Every other failure is raised: see {@link isMissingS3ObjectError}.
+ */
+const presentOrNull = async <T>(
+  request: () => Promise<T>,
+): Promise<T | null> => {
+  const response = await Result.tryPromise({
+    try: request,
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(response)) {
+    return response.value;
+  }
+  if (isMissingS3ObjectError(response.error)) {
+    return null;
+  }
+  throw response.error;
+};
+
+/**
  * Read one object, or `null` when the store confirms it holds no such key.
  * Every other failure is raised: see {@link isMissingS3ObjectError}.
  */
 export const readS3ObjectIfPresent = async (
   key: string,
   signal: AbortSignal,
-): Promise<ArrayBuffer | null> => {
-  const read = await Result.tryPromise({
-    try: async () => await getS3ObjectWithSignal(key, signal),
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(read)) {
-    return read.value;
-  }
-  if (isMissingS3ObjectError(read.error)) {
-    return null;
-  }
-  throw read.error;
-};
+): Promise<ArrayBuffer | null> =>
+  await presentOrNull(async () => await getS3ObjectWithSignal(key, signal));
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */
 export const deleteS3ObjectWithSignal = async (
@@ -983,11 +987,15 @@ export const listS3ObjectPage = async ({
       }),
       { abortSignal: signal },
     );
-    const objects = (page.Contents ?? []).flatMap(({ Key, LastModified }) =>
-      Key === undefined || LastModified === undefined
+    // The SDK omits `Contents` on an empty page.
+    const objects =
+      page.Contents === undefined
         ? []
-        : [{ key: Key, lastModified: LastModified }],
-    );
+        : page.Contents.flatMap(({ Key, LastModified }) =>
+            Key === undefined || LastModified === undefined
+              ? []
+              : [{ key: Key, lastModified: LastModified }],
+          );
     return { objects, truncated: page.IsTruncated === true };
   });
 
@@ -1035,6 +1043,25 @@ export const readS3ObjectBounded = async ({
     }
     return await response.Body.transformToByteArray();
   });
+
+/**
+ * {@link readS3ObjectBounded} from the documents bucket, or `null` when the
+ * store confirms it holds no such key.
+ */
+export const readS3ObjectBoundedIfPresent = async ({
+  key,
+  maxBytes,
+  signal,
+}: Omit<BoundedS3ReadOptions, "bucket">): Promise<Uint8Array | null> =>
+  await presentOrNull(
+    async () =>
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key,
+        maxBytes,
+        signal,
+      }),
+  );
 
 // The signed URL is consumed by the very next statement, so it only has to
 // outlive one read.

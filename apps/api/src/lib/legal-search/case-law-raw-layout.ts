@@ -22,14 +22,17 @@ import {
   RAW_KEY_OWNERSHIP,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
-  writeRawSourcePayload,
+  writeCaseLawRawPayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type {
   RawDocumentOwner,
   RawObjectCopy,
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
-import { headS3ObjectWithSignal, readS3ObjectIfPresent } from "@/api/lib/s3";
+import {
+  headS3ObjectWithSignal,
+  readS3ObjectBoundedIfPresent,
+} from "@/api/lib/s3";
 
 /**
  * Every decision's raw pointer, reconciled against the per-decision layout.
@@ -133,6 +136,8 @@ type ReconcileRawRowOptions = {
    * envelopes, the only payloads a writer names files in.
    */
   readEveryPayload: boolean;
+  /** The caller's cancellation, which every object-storage call follows. */
+  signal: AbortSignal;
 };
 
 type RawRowReconciliation = { outcome: RawLayoutRowOutcome; copies: number };
@@ -143,6 +148,7 @@ const reconcileRawRow = async ({
   decisionId,
   mode,
   readEveryPayload,
+  signal: cancelled,
 }: ReconcileRawRowOptions): Promise<RawRowReconciliation> => {
   // Opened before the read that proves the decision live, per decision, so
   // a slow page never starts a write outside the window of its own read:
@@ -170,7 +176,10 @@ const reconcileRawRow = async ({
     documentId: row.id,
   } as const;
   const own = classifyCaseLawRawKey(storedKey, owner) === RAW_KEY_OWNERSHIP.OWN;
-  const signal = AbortSignal.timeout(RAW_LAYOUT_IO_TIMEOUT_MS);
+  const signal = AbortSignal.any([
+    cancelled,
+    AbortSignal.timeout(RAW_LAYOUT_IO_TIMEOUT_MS),
+  ]);
 
   const head = await headS3ObjectWithSignal(storedKey, signal);
   if (head === null) {
@@ -212,7 +221,11 @@ const reconcileRawRow = async ({
     return { outcome: RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE, copies: 0 };
   }
 
-  const read = await readS3ObjectIfPresent(storedKey, signal);
+  const read = await readS3ObjectBoundedIfPresent({
+    key: storedKey,
+    maxBytes: RAW_ENVELOPE_READ_MAX_BYTES,
+    signal,
+  });
   if (read === null) {
     return {
       outcome: own
@@ -221,17 +234,11 @@ const reconcileRawRow = async ({
       copies: 0,
     };
   }
-  const storedBytes = new Uint8Array(read);
+  const storedBytes = read;
   const text = payloadText(storedBytes);
-  const homing = Result.try({
-    try: () => homeRawPayloadObjects({ payload: text, owner }),
-    catch: (cause) => cause,
-  });
+  const homing = homeRawPayloadObjects({ payload: text, owner });
   if (Result.isError(homing)) {
-    if (isUnmovableRawObjectError(homing.error)) {
-      return { outcome: RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE, copies: 0 };
-    }
-    throw homing.error;
+    return { outcome: RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE, copies: 0 };
   }
   const { copies } = homing.value;
 
@@ -352,21 +359,22 @@ const movePayload = async ({
   }
 
   for (const copy of copies) {
-    const copied = await Result.tryPromise({
-      try: async () => await copyRawObject({ copy, window, signal }),
-      catch: (cause) => cause,
-    });
+    const copied = await copyRawObject({ copy, window, signal });
     if (Result.isError(copied)) {
-      if (isUnmovableRawObjectError(copied.error)) {
-        return { outcome: RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE, copies: 0 };
-      }
-      throw copied.error;
+      // A source no attempt can copy is reported as such; anything else, a
+      // closed window or a failed server-side copy, is tried again.
+      return {
+        outcome: isUnmovableRawObjectError(copied.error)
+          ? RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE
+          : RAW_LAYOUT_ROW_OUTCOME.RETRY,
+        copies: 0,
+      };
     }
   }
-  const writtenKey =
+  const written =
     plan.type === "copy"
-      ? rawDocumentPayloadKey(owner, digest)
-      : await writeRawSourcePayload({
+      ? Result.ok(rawDocumentPayloadKey(owner, digest))
+      : await writeCaseLawRawPayload({
           owner,
           window,
           data: plan.payload,
@@ -374,6 +382,10 @@ const movePayload = async ({
           storedKey,
           storedContentType: row.sourceRawContentType,
         });
+  if (Result.isError(written)) {
+    return { outcome: RAW_LAYOUT_ROW_OUTCOME.RETRY, copies: 0 };
+  }
+  const writtenKey = written.value;
   if (
     plan.type === "write" &&
     writtenKey !== rawSourcePayloadKey({ owner, data: plan.payload })
@@ -450,6 +462,11 @@ type ReconcileRawLayoutPageOptions = {
   /** Restrict the walk to one source: the census before a legacy sweep. */
   sourceId?: SafeId<"caseLawSource">;
   readEveryPayload?: boolean;
+  /**
+   * Cancels the page between decisions and every object-storage call within
+   * one, so a page never outlives the run that started it.
+   */
+  signal: AbortSignal;
 };
 
 /**
@@ -466,6 +483,7 @@ export const reconcileCaseLawRawLayoutPage = async ({
   mode,
   sourceId,
   readEveryPayload = false,
+  signal,
 }: ReconcileRawLayoutPageOptions): Promise<RawLayoutPageResult> => {
   const rows = await scopedDb(
     async (tx) =>
@@ -501,10 +519,14 @@ export const reconcileCaseLawRawLayoutPage = async ({
           decisionId: row.id,
           mode,
           readEveryPayload,
+          signal,
         }),
       catch: (cause) => cause,
     });
   for (const row of rows) {
+    // A cancelled page reports nothing: the checkpoint stays where it was
+    // and the next run starts the page again.
+    signal.throwIfAborted();
     // In id order, so the checkpoint can stop before a decision to retry.
     const reconciled = await reconcile(row);
     const { outcome, copies } = Result.isError(reconciled)

@@ -20,10 +20,11 @@ import {
   deleteS3ObjectWithSignal,
   listS3ObjectKeys,
   headS3ObjectWithSignal,
-  readS3ObjectIfPresent,
+  readS3ObjectBoundedIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
+import type { S3PresignError } from "@/api/lib/s3-presign";
 
 /**
  * Where a publisher's response is kept, for both corpus families.
@@ -125,7 +126,7 @@ export const RAW_SOURCE_WRITE_WINDOW_MS = 10 * 60 * 1000;
  */
 export const RAW_SOURCE_ERASURE_SETTLE_MS = 6 * RAW_SOURCE_WRITE_WINDOW_MS;
 
-class RawSourceWriteWindowClosedError extends TaggedError(
+export class RawSourceWriteWindowClosedError extends TaggedError(
   "RawSourceWriteWindowClosedError",
 )<{ message: string }> {}
 
@@ -141,13 +142,17 @@ export const openRawSourceWriteWindow = (): RawSourceWriteWindow => ({
     Temporal.Now.instant().epochMilliseconds + RAW_SOURCE_WRITE_WINDOW_MS,
 });
 
-const assertWriteWindowOpen = (window: RawSourceWriteWindow): void => {
-  if (Temporal.Now.instant().epochMilliseconds >= window.closesAtMs) {
-    throw new RawSourceWriteWindowClosedError({
-      message: "Raw source write window closed before the write started",
-    });
-  }
-};
+/** Whether a write may still start in this window. */
+const checkWriteWindow = (
+  window: RawSourceWriteWindow,
+): Result<void, RawSourceWriteWindowClosedError> =>
+  Temporal.Now.instant().epochMilliseconds >= window.closesAtMs
+    ? Result.err(
+        new RawSourceWriteWindowClosedError({
+          message: "Raw source write window closed before the write started",
+        }),
+      )
+    : Result.ok(undefined);
 
 type RawSourcePayloadWrite = {
   data: Uint8Array | string;
@@ -158,22 +163,36 @@ type RawSourcePayloadWrite = {
   storedContentType: string | null;
 };
 
-export type WriteRawSourcePayloadOptions = RawSourcePayloadWrite &
-  (
-    | {
-        owner: Extract<
-          RawSourcePayloadOwner,
-          { family: typeof RAW_SOURCE_FAMILY.LEGISLATION }
-        >;
-      }
-    | {
-        owner: Extract<
-          RawSourcePayloadOwner,
-          { family: typeof RAW_SOURCE_FAMILY.CASE_LAW }
-        >;
-        window: RawSourceWriteWindow;
-      }
-  );
+export type WriteRawSourcePayloadOptions = RawSourcePayloadWrite & {
+  owner: Extract<
+    RawSourcePayloadOwner,
+    { family: typeof RAW_SOURCE_FAMILY.LEGISLATION }
+  >;
+};
+
+export type WriteCaseLawRawPayloadOptions = RawSourcePayloadWrite & {
+  owner: Extract<
+    RawSourcePayloadOwner,
+    { family: typeof RAW_SOURCE_FAMILY.CASE_LAW }
+  >;
+  window: RawSourceWriteWindow;
+};
+
+/** PUT one payload under its key, unless the key already holds it. */
+const putRawSourcePayload = async ({
+  key,
+  data,
+  contentType,
+  storedKey,
+}: Omit<RawSourcePayloadWrite, "storedContentType"> & {
+  key: string;
+}): Promise<void> => {
+  if (key !== storedKey) {
+    await createS3ObjectIfAbsent({ contentType, data, key });
+    return;
+  }
+  await writeS3ObjectWithRetry({ contentType, data, key });
+};
 
 /**
  * Store one publisher payload and return its object key.
@@ -187,27 +206,50 @@ export type WriteRawSourcePayloadOptions = RawSourcePayloadWrite &
  * version. A changed content type on the recorded key still re-uploads: it is
  * stored on the object, not derivable from the key.
  */
-export const writeRawSourcePayload = async (
-  options: WriteRawSourcePayloadOptions,
-): Promise<string> => {
-  const { owner, data, contentType, storedKey, storedContentType } = options;
+export const writeRawSourcePayload = async ({
+  owner,
+  data,
+  contentType,
+  storedKey,
+  storedContentType,
+}: WriteRawSourcePayloadOptions): Promise<string> => {
   const key = rawSourcePayloadKey({ owner, data });
-  if (key === storedKey && contentType === storedContentType) {
-    return key;
+  if (key !== storedKey || contentType !== storedContentType) {
+    await putRawSourcePayload({ key, data, contentType, storedKey });
   }
-  if ("window" in options) {
-    assertWriteWindowOpen(options.window);
-  }
-  if (key !== storedKey) {
-    await createS3ObjectIfAbsent({ contentType, data, key });
-    return key;
-  }
-  await writeS3ObjectWithRetry({ contentType, data, key });
   return key;
 };
 
 /** The seam a caller injects in tests, in place of the object-storage write. */
 export type WriteRawSourcePayload = typeof writeRawSourcePayload;
+
+/**
+ * {@link writeRawSourcePayload} for a decision's payload, which lives under
+ * the decision's own prefix and so is written only inside the window of the
+ * read that proved the decision live. A closed window is an error, and no
+ * write starts.
+ */
+export const writeCaseLawRawPayload = async ({
+  owner,
+  window,
+  data,
+  contentType,
+  storedKey,
+  storedContentType,
+}: WriteCaseLawRawPayloadOptions): Promise<
+  Result<string, RawSourceWriteWindowClosedError>
+> => {
+  const key = rawSourcePayloadKey({ owner, data });
+  if (key === storedKey && contentType === storedContentType) {
+    return Result.ok(key);
+  }
+  const open = checkWriteWindow(window);
+  if (Result.isError(open)) {
+    return open;
+  }
+  await putRawSourcePayload({ key, data, contentType, storedKey });
+  return Result.ok(key);
+};
 
 type SourceBinaryInput = RawDocumentOwner & {
   bytes: Uint8Array;
@@ -258,19 +300,22 @@ export const writeSourceBinary = async ({
   ...input
 }: SourceBinaryInput & {
   window: RawSourceWriteWindow;
-}): Promise<SourceRawObjectRef> => {
+}): Promise<Result<SourceRawObjectRef, RawSourceWriteWindowClosedError>> => {
   const ref = sourceBinaryRef(input);
   const location = parseCorpusLocation(ref.location);
   if (location.type !== "object") {
     return panic(`Unexpected source binary location ${ref.location}`);
   }
-  assertWriteWindowOpen(window);
+  const open = checkWriteWindow(window);
+  if (Result.isError(open)) {
+    return open;
+  }
   await createS3ObjectIfAbsent({
     contentType: input.contentType,
     data: input.bytes,
     key: location.key,
   });
-  return ref;
+  return Result.ok(ref);
 };
 
 /** Where a stored raw key sits relative to one decision. */
@@ -328,7 +373,7 @@ export type HomedRawPayload = {
   copies: RawObjectCopy[];
 };
 
-class RawSourceObjectUnhomeableError extends TaggedError(
+export class RawSourceObjectUnhomeableError extends TaggedError(
   "RawSourceObjectUnhomeableError",
 )<{ message: string; location: string }> {}
 
@@ -349,9 +394,9 @@ export const homeRawPayloadObjects = ({
 }: {
   payload: Uint8Array | string;
   owner: RawDocumentOwner;
-}): HomedRawPayload => {
+}): Result<HomedRawPayload, RawSourceObjectUnhomeableError> => {
   if (typeof payload !== "string") {
-    return { payload, copies: [] };
+    return Result.ok({ payload, copies: [] });
   }
   const named = Object.entries(decodeSourceRawEnvelopeObjects(payload));
   const copies: RawObjectCopy[] = [];
@@ -362,10 +407,12 @@ export const homeRawPayloadObjects = ({
       continue;
     }
     if (ref.location.startsWith("pack:") || !SHA256_HEX.test(ref.sha256)) {
-      throw new RawSourceObjectUnhomeableError({
-        message: `Envelope names a file that cannot be copied: ${ref.location}`,
-        location: ref.location,
-      });
+      return Result.err(
+        new RawSourceObjectUnhomeableError({
+          message: `Envelope names a file that cannot be copied: ${ref.location}`,
+          location: ref.location,
+        }),
+      );
     }
     const own = {
       ...ref,
@@ -377,18 +424,22 @@ export const homeRawPayloadObjects = ({
     homed[part] = own;
     copies.push({ fromKey: ref.location, ref: own });
   }
-  return copies.length === 0
-    ? { payload, copies }
-    : {
-        payload: withSourceRawObjects(
-          payload,
-          homed satisfies SourceRawObjects,
-        ),
-        copies,
-      };
+  return Result.ok(
+    copies.length === 0
+      ? { payload, copies }
+      : {
+          payload: withSourceRawObjects(
+            payload,
+            homed satisfies SourceRawObjects,
+          ),
+          copies,
+        },
+  );
 };
 
-class RawSourceObjectCopyError extends TaggedError("RawSourceObjectCopyError")<{
+export class RawSourceObjectCopyError extends TaggedError(
+  "RawSourceObjectCopyError",
+)<{
   message: string;
   fromKey: string;
 }> {}
@@ -400,6 +451,21 @@ class RawSourceObjectCopyError extends TaggedError("RawSourceObjectCopyError")<{
 export const isUnmovableRawObjectError = (error: unknown): boolean =>
   error instanceof RawSourceObjectCopyError ||
   error instanceof RawSourceObjectUnhomeableError;
+
+/**
+ * Why a copy did not happen: its source cannot be copied (see
+ * {@link isUnmovableRawObjectError}), the write window closed, or the
+ * server-side copy failed. A failed read or check of the source throws.
+ */
+export type RawObjectCopyFailure =
+  | RawSourceObjectCopyError
+  | RawSourceWriteWindowClosedError
+  | S3PresignError;
+
+/** Why storing a decision's raw payload and its files did not happen. */
+export type RawSourceWriteFailure =
+  | RawSourceObjectUnhomeableError
+  | RawObjectCopyFailure;
 
 /** Largest object a copy reads to check its bytes against its digest. */
 const RAW_COPY_VERIFY_MAX_BYTES = 64 * 1024 * 1024;
@@ -423,57 +489,60 @@ export const copyRawObject = async ({
   copy: RawObjectCopy;
   window: RawSourceWriteWindow;
   signal: AbortSignal;
-}): Promise<void> => {
+}): Promise<Result<void, RawObjectCopyFailure>> => {
+  const uncopyable = (message: string) =>
+    Result.err(new RawSourceObjectCopyError({ message, fromKey }));
   if (!fromKey.endsWith(`/${ref.sha256}`)) {
-    throw new RawSourceObjectCopyError({
-      message: `A copy source is not named by its digest: ${fromKey}`,
-      fromKey,
-    });
+    return uncopyable(`A copy source is not named by its digest: ${fromKey}`);
   }
   const source = await headS3ObjectWithSignal(fromKey, signal);
   if (source === null || source.contentLength !== ref.byteLength) {
-    throw new RawSourceObjectCopyError({
-      message: `A copy source is not stored as its reference states: ${fromKey}`,
-      fromKey,
-    });
+    return uncopyable(
+      `A copy source is not stored as its reference states: ${fromKey}`,
+    );
   }
   const location = parseCorpusLocation(ref.location);
   if (location.type !== "object") {
     return panic(`Unexpected raw object location ${ref.location}`);
   }
   if ((await headS3ObjectWithSignal(location.key, signal)) !== null) {
-    return;
+    return Result.ok(undefined);
   }
   if (ref.byteLength > RAW_COPY_VERIFY_MAX_BYTES) {
     // Too large to hold here: copied server-side, trusted by its name.
-    assertWriteWindowOpen(window);
-    const copied = await copyObject(fromKey, location.key);
-    if (Result.isError(copied)) {
-      throw copied.error;
+    const open = checkWriteWindow(window);
+    if (Result.isError(open)) {
+      return open;
     }
-    return;
+    return await copyObject(fromKey, location.key);
   }
-  const read = await readS3ObjectIfPresent(fromKey, signal);
-  const bytes = read === null ? null : new Uint8Array(read);
+  const bytes = await readS3ObjectBoundedIfPresent({
+    key: fromKey,
+    maxBytes: RAW_COPY_VERIFY_MAX_BYTES,
+    signal,
+  });
   if (
     bytes === null ||
     bytes.byteLength !== ref.byteLength ||
     sha256Of(bytes) !== ref.sha256
   ) {
-    throw new RawSourceObjectCopyError({
-      message: `A copy source does not hold the bytes its name states: ${fromKey}`,
-      fromKey,
-    });
+    return uncopyable(
+      `A copy source does not hold the bytes its name states: ${fromKey}`,
+    );
   }
-  assertWriteWindowOpen(window);
+  const open = checkWriteWindow(window);
+  if (Result.isError(open)) {
+    return open;
+  }
   await createS3ObjectIfAbsent({
     contentType: ref.contentType,
     data: bytes,
     key: location.key,
   });
+  return Result.ok(undefined);
 };
 
-class RawDocumentErasureIncompleteError extends TaggedError(
+export class RawDocumentErasureIncompleteError extends TaggedError(
   "RawDocumentErasureIncompleteError",
 )<{ message: string; prefix: string }> {}
 
@@ -505,16 +574,20 @@ const RAW_ERASE_MAX_ROUNDS = 10;
  * Delete every raw object one document owns: its payloads, including those
  * an earlier observation stored and a later one replaced, and its files.
  *
- * Throws when a listing or a delete fails, or when the prefix outlasts the
- * round bound, so the caller keeps the erasure as a retry target rather than
- * recording one it did not finish.
+ * A prefix that outlasts the round bound is an error, and a failed listing
+ * or delete throws, so the caller keeps the erasure as a retry target rather
+ * than recording one it did not finish.
  */
 export const eraseRawDocument = async ({
   signal,
   ...owner
-}: RawDocumentOwner & { signal: AbortSignal }): Promise<void> => {
+}: RawDocumentOwner & { signal: AbortSignal }): Promise<
+  Result<void, RawDocumentErasureIncompleteError>
+> => {
   const prefix = rawDocumentPrefix(owner);
-  const eraseRound = async (round: number): Promise<void> => {
+  const eraseRound = async (
+    round: number,
+  ): Promise<Result<void, RawDocumentErasureIncompleteError>> => {
     const keys = await listS3ObjectKeys({
       bucket: envBase.S3_BUCKET,
       prefix,
@@ -523,15 +596,17 @@ export const eraseRawDocument = async ({
     });
     await deleteRawKeys(keys, signal);
     if (keys.length <= RAW_ERASE_PAGE) {
-      return;
+      return Result.ok(undefined);
     }
     if (round >= RAW_ERASE_MAX_ROUNDS) {
-      throw new RawDocumentErasureIncompleteError({
-        message: `Raw objects remain under ${prefix}`,
-        prefix,
-      });
+      return Result.err(
+        new RawDocumentErasureIncompleteError({
+          message: `Raw objects remain under ${prefix}`,
+          prefix,
+        }),
+      );
     }
-    await eraseRound(round + 1);
+    return await eraseRound(round + 1);
   };
-  await eraseRound(1);
+  return await eraseRound(1);
 };

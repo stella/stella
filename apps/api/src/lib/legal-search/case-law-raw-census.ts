@@ -5,11 +5,9 @@ import { isUuid } from "@stll/uuid-codec";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
-// eslint-disable-next-line no-restricted-imports -- brands decision ids read back out of object keys the census lists
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  enqueueCaseLawRawSweepTx,
+  enqueueCaseLawRawSweepsTx,
   RAW_PREFIX_STATE,
   readRawPrefixStates,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
@@ -17,6 +15,7 @@ import type { RawPrefixState } from "@/api/lib/legal-search/case-law-raw-sweeps"
 import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-storage";
 import { listS3ObjectPage } from "@/api/lib/s3";
 import type { S3ListedObject } from "@/api/lib/s3";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * The object side of the raw-storage census: every per-decision prefix in
@@ -144,7 +143,12 @@ export const censusCaseLawRawObjectsPage = async ({
       counts.unrecognized += 1;
       continue;
     }
-    byDecision.set(decisionId, [...(byDecision.get(decisionId) ?? []), object]);
+    const held = byDecision.get(decisionId);
+    if (held === undefined) {
+      byDecision.set(decisionId, [object]);
+    } else {
+      held.push(object);
+    }
   }
   const groups = [...byDecision.entries()];
   // A truncated page may have cut the last decision's objects short: leave
@@ -162,11 +166,12 @@ export const censusCaseLawRawObjectsPage = async ({
   const resumeKey = accounted.at(-1)?.key ?? cursor?.startAfter ?? null;
 
   const nowMs = Temporal.Now.instant().epochMilliseconds;
-  const decisionIds = judged.map(([id]) => toSafeId<"caseLawDecision">(id));
+  const decisionIds = judged.map(([id]) => brandPersistedCaseLawDecisionId(id));
   await scopedDb(async (tx) => {
     const states = await readRawPrefixStates(tx, decisionIds);
+    const owed: SafeId<"caseLawDecision">[] = [];
     for (const [id, objects] of judged) {
-      const decisionId = toSafeId<"caseLawDecision">(id);
+      const decisionId = brandPersistedCaseLawDecisionId(id);
       const state = states.get(decisionId) ?? RAW_PREFIX_STATE.ORPHANED;
       counts[state] += 1;
       const newestMs = Math.max(
@@ -182,15 +187,18 @@ export const censusCaseLawRawObjectsPage = async ({
       if (!sweepable || mode === RAW_CENSUS_MODE.PLAN) {
         continue;
       }
-      // eslint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one upsert per unowned prefix on a bounded page; the common page queues none
-      await enqueueCaseLawRawSweepTx(tx, {
+      owed.push(decisionId);
+    }
+    await enqueueCaseLawRawSweepsTx(
+      tx,
+      owed.map((decisionId) => ({
         decisionId,
         sourceId,
         firstAttemptAt: new Date(nowMs),
         settleAfter: new Date(nowMs),
-      });
-      counts.queued += 1;
-    }
+      })),
+    );
+    counts.queued += owed.length;
   });
 
   if (page.truncated) {

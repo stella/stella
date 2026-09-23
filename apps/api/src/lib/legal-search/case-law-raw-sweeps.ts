@@ -20,6 +20,7 @@ import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
+import type { RawDocumentErasureIncompleteError } from "@/api/lib/legal-search/raw-source-storage";
 import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
@@ -56,29 +57,30 @@ type EnqueueCaseLawRawSweepOptions = CaseLawRawOwner & {
 };
 
 /**
- * Record that a decision's raw prefix is owed a sweep, in the transaction
- * that learned it. Merges with an entry already there: the earliest attempt
- * and the latest settle time.
+ * Record that decisions' raw prefixes are owed a sweep, in the transaction
+ * that learned it, one statement for all of them. Each merges with an entry
+ * already there: the earliest attempt and the latest settle time. The
+ * decisions must be distinct.
  */
-export const enqueueCaseLawRawSweepTx = async (
+export const enqueueCaseLawRawSweepsTx = async (
   tx: Transaction,
-  {
-    decisionId,
-    sourceId,
-    firstAttemptAt,
-    settleAfter,
-  }: EnqueueCaseLawRawSweepOptions,
+  entries: readonly EnqueueCaseLawRawSweepOptions[],
 ): Promise<void> => {
+  if (entries.length === 0) {
+    return;
+  }
   // audit: skip — erasure bookkeeping; the erasure itself is audited in
   // case_law_index_jobs by its caller
   await tx
     .insert(caseLawRawSweeps)
-    .values({
-      decisionId,
-      sourceId,
-      settleAfter,
-      nextAttemptAt: firstAttemptAt,
-    })
+    .values(
+      entries.map(({ decisionId, sourceId, firstAttemptAt, settleAfter }) => ({
+        decisionId,
+        sourceId,
+        settleAfter,
+        nextAttemptAt: firstAttemptAt,
+      })),
+    )
     .onConflictDoUpdate({
       target: caseLawRawSweeps.decisionId,
       set: {
@@ -86,6 +88,14 @@ export const enqueueCaseLawRawSweepTx = async (
         nextAttemptAt: sql`LEAST(${caseLawRawSweeps.nextAttemptAt}, excluded.next_attempt_at)`,
       },
     });
+};
+
+/** {@link enqueueCaseLawRawSweepsTx} for one decision. */
+export const enqueueCaseLawRawSweepTx = async (
+  tx: Transaction,
+  entry: EnqueueCaseLawRawSweepOptions,
+): Promise<void> => {
+  await enqueueCaseLawRawSweepsTx(tx, [entry]);
 };
 
 /** A settle time counted from now. */
@@ -209,7 +219,12 @@ export type CaseLawRawSweepOutcome =
        * that has run the entry is kept and the erasure is not complete.
        */
       legacy: "none" | "pending";
-    };
+    }
+  /**
+   * The prefix held more than one bounded pass deletes. The entry stays, so
+   * the sweeper returns to it.
+   */
+  | { type: "incomplete"; error: RawDocumentErasureIncompleteError };
 
 type SweepCaseLawRawDecisionOptions = CaseLawRawOwner & {
   scopedDb: ScopedDb;
@@ -292,7 +307,10 @@ export const sweepCaseLawRawDecision = async ({
     return { type: kept };
   }
 
-  await eraseRawDocument({ ...documentOwner(owner), signal });
+  const erased = await eraseRawDocument({ ...documentOwner(owner), signal });
+  if (Result.isError(erased)) {
+    return { type: "incomplete", error: erased.error };
+  }
   const legacy = (await sourceHoldsLegacyRawObjects(owner.sourceId, signal))
     ? "pending"
     : "none";
@@ -393,7 +411,11 @@ export const reconcileCaseLawRawSweeps = async ({
   for (const owner of claimed) {
     signal.throwIfAborted();
     // One sweep at a time keeps listings and deletes within the store's limits.
-    const outcome = await sweep(owner);
+    const swept = await sweep(owner);
+    const outcome =
+      Result.isOk(swept) && swept.value.type === "incomplete"
+        ? Result.err(swept.value.error)
+        : swept;
     if (Result.isError(outcome)) {
       result.failed += 1;
       captureError(outcome.error, {

@@ -265,17 +265,27 @@ test("redaction erases the decision's publisher files and no other decision's", 
     contentType: "application/pdf",
     window: openRawSourceWriteWindow(),
   } as const;
-  await writeSourceBinary({ ...owner, documentId: DECISION_ID, bytes: shared });
-  await writeSourceBinary({
-    ...owner,
-    documentId: DECISION_ID,
-    bytes: superseded,
-  });
-  const kept = await writeSourceBinary({
-    ...owner,
-    documentId: OTHER_DECISION_ID,
-    bytes: shared,
-  });
+  (
+    await writeSourceBinary({
+      ...owner,
+      documentId: DECISION_ID,
+      bytes: shared,
+    })
+  ).unwrap();
+  (
+    await writeSourceBinary({
+      ...owner,
+      documentId: DECISION_ID,
+      bytes: superseded,
+    })
+  ).unwrap();
+  const kept = (
+    await writeSourceBinary({
+      ...owner,
+      documentId: OTHER_DECISION_ID,
+      bytes: shared,
+    })
+  ).unwrap();
   const keysUnder = (documentId: string): string[] =>
     [...fakeS3.objects.keys()].filter((id) =>
       id.includes(rawDocumentPrefix({ ...owner, documentId })),
@@ -324,11 +334,13 @@ test("a failed file delete keeps the redaction a retry target", async () => {
     documentId: DECISION_ID,
     window: openRawSourceWriteWindow(),
   } as const;
-  const file = await writeSourceBinary({
-    ...owner,
-    bytes: new TextEncoder().encode("%PDF-1.4 a decision"),
-    contentType: "application/pdf",
-  });
+  const file = (
+    await writeSourceBinary({
+      ...owner,
+      bytes: new TextEncoder().encode("%PDF-1.4 a decision"),
+      contentType: "application/pdf",
+    })
+  ).unwrap();
   await db
     .update(caseLawDecisions)
     .set({ sourceRawS3Key: "case-law/raw/envelope", sourceRawContentType: "x" })

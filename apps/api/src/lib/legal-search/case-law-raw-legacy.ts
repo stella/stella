@@ -88,10 +88,12 @@ const censusSource = async ({
   scopedDb,
   sourceId,
   pageLimit,
+  signal,
 }: {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   pageLimit: number;
+  signal: AbortSignal;
 }): Promise<CensusCounts> => {
   const counts = emptyCounts();
   const walk = async (
@@ -104,6 +106,7 @@ const censusSource = async ({
       mode: RAW_LAYOUT_MODE.PLAN,
       sourceId,
       readEveryPayload: true,
+      signal,
     });
     for (const outcome of Object.values(RAW_LAYOUT_ROW_OUTCOME)) {
       counts[outcome] += page.counts[outcome];
@@ -131,7 +134,12 @@ export const sweepCaseLawLegacyRawSource = async ({
   if (await pointed()) {
     return { type: "refused", reason: "pointer", census: null };
   }
-  const census = await censusSource({ scopedDb, sourceId, pageLimit });
+  const census = await censusSource({
+    scopedDb,
+    sourceId,
+    pageLimit,
+    signal,
+  });
   // A row the census would still move, could not move, or could not read
   // may name a legacy object; only rows proven to name their own objects
   // (stored or not) let the sweep go ahead.

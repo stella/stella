@@ -27,8 +27,6 @@
  */
 import { panic } from "better-result";
 
-// eslint-disable-next-line no-restricted-imports -- CLI boundary: brands ids parsed from argv
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
@@ -43,6 +41,10 @@ import {
   sweepCaseLawLegacyRawSource,
 } from "@/api/lib/legal-search/case-law-raw-legacy";
 import { refreshS3 } from "@/api/lib/s3";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedCaseLawSourceId,
+} from "@/api/lib/safe-id-boundaries";
 import {
   flagInteger,
   flagUuid,
@@ -80,7 +82,9 @@ const { ingestionDb } = apply
 await refreshS3();
 
 const sourceId =
-  sourceArg === undefined ? undefined : toSafeId<"caseLawSource">(sourceArg);
+  sourceArg === undefined
+    ? undefined
+    : brandPersistedCaseLawSourceId(sourceArg);
 
 if (command === "rows") {
   const totals = new Map<string, number>();
@@ -93,6 +97,7 @@ if (command === "rows") {
       limit: pageLimit,
       mode: apply ? RAW_LAYOUT_MODE.APPLY : RAW_LAYOUT_MODE.PLAN,
       ...(sourceId === undefined ? {} : { sourceId }),
+      signal: new AbortController().signal,
     });
     for (const [outcome, count] of Object.entries(page.counts)) {
       totals.set(outcome, (totals.get(outcome) ?? 0) + count);
@@ -103,7 +108,7 @@ if (command === "rows") {
     return page.resumeAfter === null ? null : await walk(page.resumeAfter);
   };
   await walk(
-    afterArg === undefined ? null : toSafeId<"caseLawDecision">(afterArg),
+    afterArg === undefined ? null : brandPersistedCaseLawDecisionId(afterArg),
   );
   console.log(
     `${apply ? "Applied" : "Would apply"}: ${[...totals.entries()]
@@ -126,28 +131,29 @@ const result = await sweepCaseLawLegacyRawSource({
   signal: new AbortController().signal,
   pageLimit,
 });
-switch (result.type) {
-  case "refused":
-    console.error(
-      result.reason === "pointer"
-        ? "Refused: a live decision of this source still points outside its own raw prefix. Run `rows --apply` first."
-        : `Refused: a live payload of this source names, or may name, a file outside its own prefix (${JSON.stringify(result.census)}).`,
-    );
-    process.exit(1);
-    break;
-  case "swept":
-    console.log(
-      `${result.mode === LEGACY_RAW_SWEEP_MODE.APPLY ? "Deleted" : "Would delete"} ${String(result.legacyObjects)} objects of the older layout; census ${JSON.stringify(result.census)}.`,
-    );
-    if (result.referencedAfter) {
+const exitCode = ((): number => {
+  switch (result.type) {
+    case "refused":
       console.error(
-        "A live decision pointed into the older layout while this ran, so a writer of that layout is still running. Stop it, then run `rows --apply`.",
+        result.reason === "pointer"
+          ? "Refused: a live decision of this source still points outside its own raw prefix. Run `rows --apply` first."
+          : `Refused: a live payload of this source names, or may name, a file outside its own prefix (${JSON.stringify(result.census)}).`,
       );
-      process.exit(1);
-    }
-    process.exit(0);
-    break;
-  default:
-    result satisfies never;
-    panic(`Unhandled legacy sweep result: ${String(result)}`);
-}
+      return 1;
+    case "swept":
+      console.log(
+        `${result.mode === LEGACY_RAW_SWEEP_MODE.APPLY ? "Deleted" : "Would delete"} ${String(result.legacyObjects)} objects of the older layout; census ${JSON.stringify(result.census)}.`,
+      );
+      if (result.referencedAfter) {
+        console.error(
+          "A live decision pointed into the older layout while this ran, so a writer of that layout is still running. Stop it, then run `rows --apply`.",
+        );
+        return 1;
+      }
+      return 0;
+    default:
+      result satisfies never;
+      return panic(`Unhandled legacy sweep result: ${String(result)}`);
+  }
+})();
+process.exit(exitCode);

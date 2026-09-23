@@ -480,6 +480,9 @@ export const redactCaseLawDecision = async ({
     if (Result.isError(rawSwept)) {
       return { type: "incomplete", error: rawSwept.error };
     }
+    if (rawSwept.value.type === "incomplete") {
+      return { type: "incomplete", error: rawSwept.value.error };
+    }
     if (rawSwept.value.type !== "swept") {
       // The fence above erased the row in this very call.
       return panic(`Erased decision swept as ${rawSwept.value.type}`);

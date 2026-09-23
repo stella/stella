@@ -7,8 +7,6 @@ import { isUuid } from "@stll/uuid-codec";
 import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { schedulerJobs } from "@/api/db/schema";
-// eslint-disable-next-line no-restricted-imports -- brands ids this task persisted in its own payload
-import { toSafeId } from "@/api/lib/branded-types";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,
@@ -19,6 +17,10 @@ import {
   reconcileCaseLawRawLayoutPage,
 } from "@/api/lib/legal-search/case-law-raw-layout";
 import { reconcileCaseLawRawSweeps } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedCaseLawSourceId,
+} from "@/api/lib/safe-id-boundaries";
 import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
 
 /**
@@ -76,7 +78,7 @@ const parseRowCursor = (payload: Record<string, unknown> | null) => {
   if (typeof value !== "string" || !isUuid(value)) {
     return panic("Raw row pass cursor must be a UUID");
   }
-  return toSafeId<"caseLawDecision">(value);
+  return brandPersistedCaseLawDecisionId(value);
 };
 
 /**
@@ -98,6 +100,7 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
     cursor,
     limit: ROW_PAGE_LIMIT,
     mode: RAW_LAYOUT_MODE.APPLY,
+    signal,
   });
   // Checkpoint last, and only as far as every row before it is settled.
   await rootDb
@@ -149,7 +152,7 @@ const parseCensusCursor = (
   if (startAfter !== null && typeof startAfter !== "string") {
     return panic("Raw census cursor key must be a string");
   }
-  return { sourceId: toSafeId<"caseLawSource">(sourceId), startAfter };
+  return { sourceId: brandPersistedCaseLawSourceId(sourceId), startAfter };
 };
 
 /**

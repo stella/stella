@@ -350,6 +350,7 @@ const migrateSource = async (sourceId: SafeId<"caseLawSource">) =>
     limit: 1000,
     mode: RAW_LAYOUT_MODE.APPLY,
     sourceId,
+    signal: signal(),
   });
 
 describe("erasing one decision's raw objects", () => {
@@ -894,6 +895,7 @@ describe("moving decisions out of the older layout", () => {
       limit: 1000,
       mode: RAW_LAYOUT_MODE.PLAN,
       sourceId,
+      signal: signal(),
     });
     expect(plan.counts.migrated).toBe(2);
     expect((await rowOf(a.decisionId))?.sourceRawS3Key).toBe(a.payloadKey);
