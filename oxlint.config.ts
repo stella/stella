@@ -4239,7 +4239,6 @@ export default defineConfig({
         "no-physical-properties/no-physical-properties": "off",
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
-        "security-guards/no-unscoped-user-query": "off",
         "vitest/no-focused-tests": "error",
         // bun:test globals (describe/test/expect/it/…) can resolve as `error`
         // when test files are excluded from a package's main tsconfig.

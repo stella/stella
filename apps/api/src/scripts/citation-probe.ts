@@ -125,8 +125,8 @@ const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
   if (!relativeUri) {
     return null;
   }
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixed container credentials endpoint; the runtime supplies only the path
   const response = await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixed container credentials endpoint; the runtime supplies only the path
     `http://169.254.170.2${relativeUri}`,
     { timeoutMs: 5000 },
   );

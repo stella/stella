@@ -2,6 +2,7 @@
 //
 // Each `oxlint-disable-next-line` below marks a case the rule MUST flag; each
 // `expect-clean` marks a case it must accept.
+/* oxlint-disable typescript/restrict-template-expressions -- the escape helper's module is outside the fixture's type program, so its result types as an error type */
 
 import {
   ilike,

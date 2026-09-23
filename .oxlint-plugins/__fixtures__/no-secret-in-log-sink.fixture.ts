@@ -52,7 +52,7 @@ logger.info("refresh", session_token);
 logger.warn({ API_KEY: apiKey.trim() });
 // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- fixture: environment read under a KEY name
 logger.error(process.env.STRIPE_KEY);
-// oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- fixture: Bun environment read
+// oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink, typescript/restrict-template-expressions -- fixture: Bun environment read
 logger.error(`deploy ${Bun.env.DEPLOY_KEY}`);
 
 const { warn } = console;

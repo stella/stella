@@ -209,6 +209,7 @@ const postJson = async <TSchema extends v.GenericSchema>({
     headers.set("Authorization", `Bearer ${authorizationToken}`);
   }
 
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- posts only to the operator-configured API origin
   const response = await fetch(`${apiUrl}/v1${path}`, {
     body: JSON.stringify(body),
     headers,
