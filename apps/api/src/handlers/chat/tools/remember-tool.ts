@@ -96,7 +96,11 @@ export const createRememberTool = ({
     inputSchema: toTanStackToolSchema(rememberToolInputSchema),
     outputSchema: toTanStackToolSchema(rememberToolOutputSchema),
   }).server(async ({ content, kind, scope }) => {
-    const saved = await Result.gen(async function* () {
+    // A plain async function rather than `Result.gen`: the generator would
+    // re-raise a rejected await as a `Panic` instead of its own error.
+    const saved = await (async (): Promise<
+      Result<{ status: "saved" }, ChatToolError>
+    > => {
       const resolvedScope = scope ?? "user";
 
       if (resolvedScope === "workspace" && workspaceId === null) {
@@ -132,7 +136,7 @@ export const createRememberTool = ({
       // The stored content is replayed into future system prompts across
       // this scope, so refuse anything carrying model-control sequences
       // before it can become a persistent injection vector.
-      const sanitizedContent = yield* sanitizeMemoryContent(content).mapError(
+      const sanitizedContentResult = sanitizeMemoryContent(content).mapError(
         () =>
           new ChatToolError({
             kind: "invalid-input",
@@ -140,6 +144,10 @@ export const createRememberTool = ({
               "That memory could not be saved because it contained control or model-instruction sequences.",
           }),
       );
+      if (Result.isError(sanitizedContentResult)) {
+        return Result.err(sanitizedContentResult.error);
+      }
+      const sanitizedContent = sanitizedContentResult.value;
 
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
       const memoryWorkspaceId =
@@ -201,7 +209,7 @@ export const createRememberTool = ({
         );
       }
       return Result.ok({ status: "saved" } as const);
-    });
+    })();
     // TanStack AI reports a tool failure by the error its server function
     // throws.
     if (Result.isError(saved)) {

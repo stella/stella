@@ -127,6 +127,10 @@ const updateEntityFieldsOutputSchema = v.strictObject({
   newValue: v.string(),
 });
 
+type UpdateEntityFieldsOutput = v.InferOutput<
+  typeof updateEntityFieldsOutputSchema
+>;
+
 const requireAllowedWorkspaceId = ({
   allowedIds,
   workspaceId,
@@ -283,7 +287,10 @@ export const createWorkspaceTools = ({
       ),
       outputSchema: toTanStackToolSchema(updateEntityFieldsOutputSchema),
     }).server(async (input) => {
-      const updated = await Result.gen(async function* () {
+      // Ref resolution is synchronous; the database work below stays outside
+      // `Result.gen`, whose generator would re-raise a rejected query as a
+      // `Panic` instead of the query's own error.
+      const target = Result.gen(function* () {
         const resolvedMatter = yield* refRegistry.resolveMatterRefs([
           input.matterRef,
         ]);
@@ -314,6 +321,15 @@ export const createWorkspaceTools = ({
         const propertyId =
           resolvedProperty.at(0) ??
           panic("resolved property ref list is unexpectedly empty");
+        return Result.ok({ allowedWorkspaceId, entityId, propertyId });
+      });
+      if (Result.isError(target)) {
+        throw target.error;
+      }
+      const { allowedWorkspaceId, entityId, propertyId } = target.value;
+      const updated = await (async (): Promise<
+        Result<UpdateEntityFieldsOutput, ChatToolError>
+      > => {
         const { value } = input;
         const property = await scopedDb((tx) =>
           tx.query.properties.findFirst({
@@ -334,10 +350,14 @@ export const createWorkspaceTools = ({
           );
         }
 
-        const content = yield* fieldContentForValue({
+        const fieldContent = fieldContentForValue({
           content: property.content,
           value,
         });
+        if (Result.isError(fieldContent)) {
+          return Result.err(fieldContent.error);
+        }
+        const content = fieldContent.value;
 
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
@@ -418,7 +438,7 @@ export const createWorkspaceTools = ({
           newValue:
             isEmpty || content === null ? "" : formatFieldValue(content),
         });
-      });
+      })();
       // TanStack AI reports a tool failure by the error its server function
       // throws.
       if (Result.isError(updated)) {

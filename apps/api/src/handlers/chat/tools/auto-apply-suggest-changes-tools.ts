@@ -318,7 +318,11 @@ export const createAutoApplySuggestChangesTools = ({
       ),
       outputSchema: toTanStackToolSchema(outputSchema),
     }).server(async (input): Promise<AutoApplySuggestChangesOutput> => {
-      const applied = await Result.gen(async function* () {
+      // A plain async function rather than `Result.gen`: the generator would
+      // re-raise a rejected await as a `Panic` instead of its own error.
+      const applied = await (async (): Promise<
+        Result<AutoApplySuggestChangesOutput, ChatToolError>
+      > => {
         const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
         if (
           !authorName &&
@@ -338,24 +342,26 @@ export const createAutoApplySuggestChangesTools = ({
           } satisfies AutoApplySuggestChangesOutput);
         }
 
-        const loaded = yield* Result.await(
-          loadEntityVersionDocxBuffer({
-            safeDb,
-            organizationId,
-            workspaceId,
-            entityId,
-            fileFieldId,
-          }).then((result) =>
-            result.mapError(
-              (error) =>
-                new ChatToolError({
-                  kind: "server-defect",
-                  message: error.message,
-                  cause: error,
-                }),
-            ),
+        const loadedResult = await loadEntityVersionDocxBuffer({
+          safeDb,
+          organizationId,
+          workspaceId,
+          entityId,
+          fileFieldId,
+        }).then((result) =>
+          result.mapError(
+            (error) =>
+              new ChatToolError({
+                kind: "server-defect",
+                message: error.message,
+                cause: error,
+              }),
           ),
         );
+        if (Result.isError(loadedResult)) {
+          return Result.err(loadedResult.error);
+        }
+        const loaded = loadedResult.value;
 
         const reviewer = await openScannedDocxReviewer(loaded.scanned, {
           author: authorName ?? "",
@@ -405,22 +411,24 @@ export const createAutoApplySuggestChangesTools = ({
           );
         }
 
-        const scanned = yield* Result.await(
-          scan({
-            buffer: new Uint8Array(edited),
-            declaredMimeType: DOCX_MIME_TYPE,
-            fileName: loaded.fileName,
-          }).then((result) =>
-            result.mapError(
-              (cause) =>
-                new ChatToolError({
-                  kind: "server-defect",
-                  message: "The edited document security scan failed",
-                  cause,
-                }),
-            ),
+        const scannedResult = await scan({
+          buffer: new Uint8Array(edited),
+          declaredMimeType: DOCX_MIME_TYPE,
+          fileName: loaded.fileName,
+        }).then((result) =>
+          result.mapError(
+            (cause) =>
+              new ChatToolError({
+                kind: "server-defect",
+                message: "The edited document security scan failed",
+                cause,
+              }),
           ),
         );
+        if (Result.isError(scannedResult)) {
+          return Result.err(scannedResult.error);
+        }
+        const scanned = scannedResult.value;
         if (scanned.verdict === "reject") {
           const reasons = scanned.findings.flatMap((finding) =>
             finding.severity === "reject" ? [finding.message] : [],
@@ -434,37 +442,39 @@ export const createAutoApplySuggestChangesTools = ({
         }
         const scanWarnings = getWarnings(scanned) ?? undefined;
 
-        const writeAttempt = yield* Result.await(
-          Result.tryPromise({
-            try: async () =>
-              await createVersion({
-                safeDb,
-                organizationId,
-                workspaceId,
-                entityId,
-                userId,
-                recordAuditEvent,
-                buffer: edited,
-                fileName: loaded.fileName,
-                mimeType: DOCX_MIME_TYPE,
-                source: null,
-                writePolicy: {
-                  type: "automatic-docx-edit",
-                  expectedCurrentVersionId,
-                  filePropertyId: loaded.filePropertyId,
-                  replacedFileFieldId: fileFieldId,
-                },
-                scanWarnings,
-              }),
-            catch: (cause) =>
-              new ChatToolError({
-                kind: "server-defect",
-                message: "The edited document could not be persisted",
-                cause,
-              }),
-          }),
-        );
-        const written = yield* writeAttempt.mapError(
+        const writeAttemptResult = await Result.tryPromise({
+          try: async () =>
+            await createVersion({
+              safeDb,
+              organizationId,
+              workspaceId,
+              entityId,
+              userId,
+              recordAuditEvent,
+              buffer: edited,
+              fileName: loaded.fileName,
+              mimeType: DOCX_MIME_TYPE,
+              source: null,
+              writePolicy: {
+                type: "automatic-docx-edit",
+                expectedCurrentVersionId,
+                filePropertyId: loaded.filePropertyId,
+                replacedFileFieldId: fileFieldId,
+              },
+              scanWarnings,
+            }),
+          catch: (cause) =>
+            new ChatToolError({
+              kind: "server-defect",
+              message: "The edited document could not be persisted",
+              cause,
+            }),
+        });
+        if (Result.isError(writeAttemptResult)) {
+          return Result.err(writeAttemptResult.error);
+        }
+        const writeAttempt = writeAttemptResult.value;
+        const writtenResult = writeAttempt.mapError(
           (error) =>
             new ChatToolError({
               kind: "server-defect",
@@ -472,6 +482,10 @@ export const createAutoApplySuggestChangesTools = ({
               cause: error,
             }),
         );
+        if (Result.isError(writtenResult)) {
+          return Result.err(writtenResult.error);
+        }
+        const written = writtenResult.value;
 
         return Result.ok({
           success: true,
@@ -487,7 +501,7 @@ export const createAutoApplySuggestChangesTools = ({
             message,
           })),
         } satisfies AutoApplySuggestChangesOutput);
-      });
+      })();
       // TanStack AI reports a tool failure by the error its server function
       // throws.
       if (Result.isError(applied)) {
