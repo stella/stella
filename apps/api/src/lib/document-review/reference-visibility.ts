@@ -21,6 +21,7 @@ import { inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
@@ -146,7 +147,7 @@ export const findingForReader = (
     citations: finding.citations,
     // Passage ids only (older rows may carry more); their text resolves
     // through the passages endpoint, which answers per reader.
-    referenceCitations: (finding.referenceCitations ?? []).map(
+    referenceCitations: arrayOrEmpty(finding.referenceCitations).map(
       ({ fileFieldId, passages }) => ({
         fileFieldId,
         passages: passages.map(({ id, blockId }) => ({ id, blockId })),

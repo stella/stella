@@ -319,16 +319,22 @@ describe("document review run export", () => {
           };
         }
 
-        // The passage and readable-reference reads run through the caller's
-        // own scoped transaction; row security answers none of the matters
-        // the run pinned, so the passage that would say "Precedent wording."
-        // is simply absent.
+        // The passage read, then the readable-reference read, both through
+        // the caller's own scoped transaction; row security answers none of
+        // the matters the run pinned, so the passage that would say
+        // "Precedent wording." is simply absent.
+        if (selectCallCount === 3) {
+          return {
+            from: () => ({
+              where: async () => [],
+            }),
+          };
+        }
         return {
           from: () => ({
-            where: () =>
-              Object.assign(Promise.resolve([]), {
-                limit: async () => [],
-              }),
+            where: () => ({
+              limit: async () => [],
+            }),
           }),
         };
       },
