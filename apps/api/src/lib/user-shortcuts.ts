@@ -1,4 +1,5 @@
 import { APIError } from "better-auth/api";
+import { Result } from "better-result";
 
 /**
  * Server-side structural validation for the `userShortcuts` additional field.
@@ -17,9 +18,10 @@ const MAX_USER_SHORTCUTS_JSON_LENGTH = 4096;
 const MAX_SHORTCUT_ID_LENGTH = 64;
 const MAX_SHORTCUT_BINDING_LENGTH = 64;
 
-const rejectUserShortcuts = (): never => {
-  throw new APIError("BAD_REQUEST", { message: "Invalid keyboard shortcuts" });
-};
+const rejectUserShortcuts = (): Result<never, APIError> =>
+  Result.err(
+    new APIError("BAD_REQUEST", { message: "Invalid keyboard shortcuts" }),
+  );
 
 /**
  * Normalize the incoming `userShortcuts` field for persistence.
@@ -27,17 +29,13 @@ const rejectUserShortcuts = (): never => {
  * - `undefined` (field absent from the update) is passed through untouched.
  * - `null` or an empty object clears the override map.
  * - A valid object is canonically re-serialized (stable key order).
- * - Anything else throws a `BAD_REQUEST`.
+ * - Anything else is rejected with a `BAD_REQUEST`.
  */
 export const normalizeUserShortcutsField = (
   value: unknown,
-): string | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === null) {
-    return null;
+): Result<string | null | undefined, APIError> => {
+  if (value === undefined || value === null) {
+    return Result.ok(value);
   }
 
   if (typeof value !== "string") {
@@ -46,19 +44,18 @@ export const normalizeUserShortcutsField = (
 
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    return null;
+    return Result.ok(null);
   }
 
   if (trimmed.length > MAX_USER_SHORTCUTS_JSON_LENGTH) {
     return rejectUserShortcuts();
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
+  const parsedJson = Result.try((): unknown => JSON.parse(trimmed));
+  if (Result.isError(parsedJson)) {
     return rejectUserShortcuts();
   }
+  const parsed = parsedJson.value;
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return rejectUserShortcuts();
@@ -66,7 +63,7 @@ export const normalizeUserShortcutsField = (
 
   const entries = Object.entries(parsed);
   if (entries.length === 0) {
-    return null;
+    return Result.ok(null);
   }
   if (entries.length > MAX_USER_SHORTCUTS_ENTRIES) {
     return rejectUserShortcuts();
@@ -96,5 +93,5 @@ export const normalizeUserShortcutsField = (
     normalized[id] = binding;
   }
 
-  return JSON.stringify(normalized);
+  return Result.ok(JSON.stringify(normalized));
 };

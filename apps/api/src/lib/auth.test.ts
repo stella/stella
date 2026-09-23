@@ -1,4 +1,5 @@
 import type { HookEndpointContext } from "better-auth";
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -14,7 +15,7 @@ import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
-  assertNewAccountEmailAllowedForCreation,
+  checkNewAccountEmailAllowedForCreation,
   ensureDisplayName,
   getEmailOtpMinimumResponseDuration,
   getAuth,
@@ -463,7 +464,7 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
       },
     });
 
-    expect(handled).toBe(true);
+    expect(Result.isOk(handled) && handled.value).toBe(true);
     expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
   });
 
@@ -478,22 +479,21 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
       },
     });
 
-    expect(handled).toBe(true);
+    expect(Result.isOk(handled) && handled.value).toBe(true);
     expect(resolvedPaths).toEqual(["/two-factor/enable"]);
   });
 
   test("keeps ordinary endpoints on the cookie-cache fast path", async () => {
     let resolved = false;
 
-    expect(
-      await resolveAuthoritativeSessionForSensitiveAuthPath({
-        ctx: sensitiveCtx("/get-session"),
-        resolveSession: async () => {
-          resolved = true;
-          return null;
-        },
-      }),
-    ).toBe(false);
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: sensitiveCtx("/get-session"),
+      resolveSession: async () => {
+        resolved = true;
+        return null;
+      },
+    });
+    expect(Result.isOk(handled) && handled.value).toBe(false);
     expect(resolved).toBe(false);
   });
 
@@ -614,19 +614,12 @@ describe("new-account email policy", () => {
   });
 
   test("rejects a disposable address when creating its account", async () => {
-    const rejection: unknown = await Promise.resolve()
-      .then(() =>
-        assertNewAccountEmailAllowedForCreation({
-          email: "blocked@mailinator.com",
-          path: "/sign-in/email-otp",
-        }),
-      )
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const checked = checkNewAccountEmailAllowedForCreation({
+      email: "blocked@mailinator.com",
+      path: "/sign-in/email-otp",
+    });
 
-    expect(rejection).toMatchObject({
+    expect(Result.isError(checked) && checked.error).toMatchObject({
       body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
       statusCode: 400,
     });
@@ -639,10 +632,14 @@ describe("new-account email policy", () => {
       undefined,
     ];
     for (const path of otherCreationPaths) {
-      assertNewAccountEmailAllowedForCreation({
-        email: "provider-user@mailinator.com",
-        path,
-      });
+      expect(
+        Result.isOk(
+          checkNewAccountEmailAllowedForCreation({
+            email: "provider-user@mailinator.com",
+            path,
+          }),
+        ),
+      ).toBe(true);
     }
   });
 
