@@ -57,10 +57,10 @@ export const SUPPLEMENT_FOLD_OUTCOME = {
   RETRYABLE: "retryable",
 } as const;
 
-export type SupplementFoldOutcome =
+type SupplementFoldOutcome =
   (typeof SUPPLEMENT_FOLD_OUTCOME)[keyof typeof SUPPLEMENT_FOLD_OUTCOME];
 
-export type SupplementFoldRowReport = {
+type SupplementFoldRowReport = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
   outcome: SupplementFoldOutcome;
@@ -78,7 +78,7 @@ export type SupplementFoldReport = {
   haltReason: string | null;
 };
 
-export const SUPPLEMENT_FOLD_LISTED_ROWS = 50;
+const SUPPLEMENT_FOLD_LISTED_ROWS = 50;
 
 const emptyOutcomes = (): Record<SupplementFoldOutcome, number> => ({
   [SUPPLEMENT_FOLD_OUTCOME.MERGED]: 0,

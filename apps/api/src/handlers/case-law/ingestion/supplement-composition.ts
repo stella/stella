@@ -194,7 +194,7 @@ type SupplementCandidateRow = StoredSupplement & {
 const DOCKET_ROW_LIMIT = 100;
 
 /** The supplements stored under a docket, whatever they are attached to. */
-export const selectSupplementsUnder = async (
+const selectSupplementsUnder = async (
   tx: Transaction,
   key: SupplementTargetKey,
 ): Promise<SupplementCandidateRow[]> =>
