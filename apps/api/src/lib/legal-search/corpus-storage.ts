@@ -842,20 +842,38 @@ export const readCorpusSections = async (
   return parsePersistedCorpusSections(parsed);
 };
 
-export const readCorpusAst = async (
+/**
+ * A parsed AST together with the length of the JSON it was parsed from, which
+ * is what a reader that keeps the result has to budget: the parsed graph's
+ * heap footprint scales with it, and nothing cheaper measures it afterwards.
+ */
+export type SizedCorpusAst = {
+  ast: DocumentAst | EmptyAst | null;
+  decodedLength: number;
+};
+
+export const readSizedCorpusAst = async (
   storedKey: string,
   seams: CorpusByteSourceSeams,
-): Promise<DocumentAst | EmptyAst | null> => {
+): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
     async (signal) =>
       await readStoredCorpusBytes({ storedKey, signal, ...seams }),
   );
-  const parsed: unknown = JSON.parse(
-    await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
-  );
-  return parsePersistedCorpusAst(parsed);
+  const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
+  const parsed: unknown = JSON.parse(decoded);
+  return {
+    ast: parsePersistedCorpusAst(parsed),
+    decodedLength: decoded.length,
+  };
 };
+
+export const readCorpusAst = async (
+  storedKey: string,
+  seams: CorpusByteSourceSeams,
+): Promise<DocumentAst | EmptyAst | null> =>
+  (await readSizedCorpusAst(storedKey, seams)).ast;
 
 type ReadCorpusAtAuthoritativePointerOptions<T> = {
   storedKey: string;

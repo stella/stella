@@ -4,8 +4,12 @@ import {
   readCorpusAst as readAstWithDenial,
   readCorpusSections as readSectionsWithDenial,
   readCorpusText as readTextWithDenial,
+  readSizedCorpusAst as readSizedAstWithDenial,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { CorpusByteSourceSeams } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  CorpusByteSourceSeams,
+  SizedCorpusAst,
+} from "@/api/lib/legal-search/corpus-storage";
 import {
   packedAddresses,
   selectCorpusTombstones,
@@ -76,6 +80,15 @@ export const readCorpusAst = async (
   options: BoundReadOptions = {},
 ): Promise<DocumentAst | EmptyAst | null> =>
   await readAstWithDenial(storedKey, {
+    readTombstones: readCorpusTombstones,
+    ...options,
+  });
+
+export const readSizedCorpusAst = async (
+  storedKey: string,
+  options: BoundReadOptions = {},
+): Promise<SizedCorpusAst> =>
+  await readSizedAstWithDenial(storedKey, {
     readTombstones: readCorpusTombstones,
     ...options,
   });

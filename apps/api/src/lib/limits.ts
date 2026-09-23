@@ -582,6 +582,12 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /**
+   * Estimated heap the process keeps for parsed consolidation ASTs between
+   * requests. A large code's consolidation parses to roughly 10 MiB, so this
+   * holds about one page of provision history plus the act being read.
+   */
+  legislationAstCacheMaxHeapBytes: 96 * 1024 * 1024,
   /** Provisions one batch read may ask for, each up to the text budget above. */
   legislationProvisionBatchMax: 20,
   /** Works (one canonical URL each) in one statute sitemap shard. */

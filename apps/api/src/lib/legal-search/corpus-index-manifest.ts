@@ -59,6 +59,7 @@ import {
   type CorpusIndexDocstoreSettings,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
+import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import {
   CORPUS_INDEX_ID_MAX_LENGTH,
   corpusIndexId,
@@ -373,17 +374,6 @@ const indexConfig = ({
   search_settings: { default_search_fields: defaultSearchFields },
   retention: null,
 });
-
-const deepFreeze = <T>(value: T): T => {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-  for (const child of Object.values(value)) {
-    deepFreeze(child);
-  }
-  Object.freeze(value);
-  return value;
-};
 
 const caseLawFields = (): CorpusIndexFieldMapping[] => [
   ...commonFields(),
