@@ -1116,17 +1116,26 @@ describe("invoke_capability upload purpose gate", () => {
     expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
   });
 
-  test("a document upload still runs on the domain scope", async () => {
-    const result = await handleMcpToolCall({
-      args: {
-        capability: "uploads.create",
-        input: { body: documentBody, params: { matterId: "ws_1" } },
-        validate_only: true,
-      },
-      context: createContext({ grantedScopes: ["stella:matters_write"] }),
-      toolName: "invoke_capability",
-    });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+  test("a document upload needs the documents consent, not the domain scope alone", async () => {
+    const invoke = async (grantedScopes: string[]) =>
+      await handleMcpToolCall({
+        args: {
+          capability: "uploads.create",
+          input: { body: documentBody, params: { matterId: "ws_1" } },
+          validate_only: true,
+        },
+        context: createContext({ grantedScopes }),
+        toolName: "invoke_capability",
+      });
+
+    const refused = errorEnvelope(await invoke(["stella:matters_write"]));
+    expect(refused.code).toBe("missing_scope");
+    expect(refused.message).toContain("stella:documents_write");
+    expect(
+      parseToolPayload<{ valid: boolean }>(
+        await invoke(["stella:matters_write", "stella:documents_write"]),
+      ).valid,
+    ).toBe(true);
   });
 
   test("finalize takes the purpose from the stored upload, not from the caller", async () => {
@@ -1150,21 +1159,30 @@ describe("invoke_capability upload purpose gate", () => {
     expect(envelope.message).toContain("stella:skills");
   });
 
-  test("finalizing a document upload stays on the domain scope", async () => {
-    const result = await handleMcpToolCall({
-      args: {
-        capability: "uploads.update",
-        input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
-        validate_only: true,
-      },
-      context: createContext({
-        grantedScopes: ["stella:matters_write"],
-        workspaceIds: [WORKSPACE_ID],
-        scopedDb: storedPurposeDb("entity_create"),
-      }),
-      toolName: "invoke_capability",
-    });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+  test("finalizing a document upload needs the documents consent", async () => {
+    const invoke = async (grantedScopes: string[]) =>
+      await handleMcpToolCall({
+        args: {
+          capability: "uploads.update",
+          input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+          validate_only: true,
+        },
+        context: createContext({
+          grantedScopes,
+          workspaceIds: [WORKSPACE_ID],
+          scopedDb: storedPurposeDb("entity_create"),
+        }),
+        toolName: "invoke_capability",
+      });
+
+    const refused = errorEnvelope(await invoke(["stella:matters_write"]));
+    expect(refused.code).toBe("missing_scope");
+    expect(refused.message).toContain("stella:documents_write");
+    expect(
+      parseToolPayload<{ valid: boolean }>(
+        await invoke(["stella:matters_write", "stella:documents_write"]),
+      ).valid,
+    ).toBe(true);
   });
 
   // The permission half of the same gate. `uploads.*` declares workspace:read

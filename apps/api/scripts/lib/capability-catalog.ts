@@ -1730,3 +1730,44 @@ export const serializeCoverageDoc = ({
 ${domainSections.join("\n")}
 ${renderWaivedInternalSection(internalWaiverCounts)}`;
 };
+
+const VALUE_IMPORT_PATTERN =
+  /import\s+(?!type\b)(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/gu;
+
+type WritePrimitive = { module: string; name: string; scope: string };
+
+/**
+ * The write primitives a handler source imports by value, by module and
+ * exported name (`import { a as b }` counts as `a`; `import type` and inline
+ * `type` specifiers do not). Only direct imports are seen: a primitive reached
+ * through an intermediate helper is not, which is why the registry lists the
+ * functions handlers call rather than lower-level shared writers.
+ */
+export const writePrimitivesImportedBy = <T extends WritePrimitive>({
+  primitives,
+  source,
+}: {
+  primitives: readonly T[];
+  source: string;
+}): T[] => {
+  const found: T[] = [];
+  for (const match of source.matchAll(VALUE_IMPORT_PATTERN)) {
+    const specifiers = match[1] ?? "";
+    const module = match[2] ?? "";
+    const names = new Set(
+      specifiers
+        .split(",")
+        .map((specifier) => specifier.trim())
+        .filter(
+          (specifier) => specifier !== "" && !specifier.startsWith("type "),
+        )
+        .map((specifier) => specifier.split(/\s+as\s+/u).at(0) ?? specifier),
+    );
+    for (const primitive of primitives) {
+      if (primitive.module === module && names.has(primitive.name)) {
+        found.push(primitive);
+      }
+    }
+  }
+  return found;
+};

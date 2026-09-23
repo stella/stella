@@ -30,6 +30,7 @@ import {
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
+  writePrimitivesImportedBy,
 } from "./capability-catalog";
 
 describe("deriveCapabilityId", () => {
@@ -643,6 +644,37 @@ describe("serializeCatalog", () => {
   test("round-trips through JSON.parse", () => {
     const entries = [{ id: "x", inputSchema: { body: { type: "object" } } }];
     expect(JSON.parse(serializeCatalog(entries))).toEqual(entries);
+  });
+});
+
+describe("writePrimitivesImportedBy", () => {
+  const primitives = [
+    { module: "@/api/writes", name: "writeDocument", scope: "documents" },
+    { module: "@/api/other", name: "writeTask", scope: "tasks" },
+  ];
+
+  test("finds value imports by module and exported name", () => {
+    const source = [
+      'import { helper, writeDocument } from "@/api/writes";',
+      "import {",
+      "  writeTask as persist,",
+      '} from "@/api/other";',
+    ].join("\n");
+
+    expect(
+      writePrimitivesImportedBy({ primitives, source }).map(({ name }) => name),
+    ).toEqual(["writeDocument", "writeTask"]);
+  });
+
+  test("ignores type-only imports and other modules", () => {
+    const source = [
+      'import type { writeDocument } from "@/api/writes";',
+      'import { type writeTask } from "@/api/other";',
+      'import { writeDocument } from "@/api/elsewhere";',
+      'import { writeDocumentSchema } from "@/api/writes";',
+    ].join("\n");
+
+    expect(writePrimitivesImportedBy({ primitives, source })).toEqual([]);
   });
 });
 
