@@ -14,7 +14,7 @@ import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-rea
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-export type AnnotationPassage = {
+type AnnotationPassage = {
   /**
    * The block anchor the document text prints in square brackets. Absent,
    * the whole document is searched and the quote must occur once in it.
@@ -24,7 +24,7 @@ export type AnnotationPassage = {
   quote: string;
 };
 
-export type LocatedSpan = {
+type LocatedSpan = {
   blockAnchorId: string;
   startOffset: number;
   endOffset: number;
@@ -39,17 +39,17 @@ export const ANNOTATION_LOCATE_ISSUE = {
   quoteTooLong: "quote_too_long",
 } as const;
 
-export type AnnotationLocateIssueCode =
+type AnnotationLocateIssueCode =
   (typeof ANNOTATION_LOCATE_ISSUE)[keyof typeof ANNOTATION_LOCATE_ISSUE];
 
-export type AnnotationLocateIssue = {
+type AnnotationLocateIssue = {
   code: AnnotationLocateIssueCode;
   /** Index into the passages the caller sent. */
   passageIndex: number;
   message: string;
 };
 
-export type LocatePassagesResult =
+type LocatePassagesResult =
   | { status: "located"; spans: LocatedSpan[] }
   | { status: "rejected"; issues: AnnotationLocateIssue[] };
 
