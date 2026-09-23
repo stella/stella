@@ -57,6 +57,7 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedColumns } from "@/components/workspaces/table/workspace-grid-order";
+import { AddPropertyRailSpacer } from "@/components/workspaces/table/workspace-table/end-fillers";
 import { HeaderEndFillerCell } from "@/components/workspaces/table/workspace-table/header-cells";
 import {
   TABLE_ROW_ESTIMATE_PX,
@@ -550,6 +551,11 @@ const GroupSkeleton = ({
               ...tableEndFillerCellStyle,
             }}
           />
+          {addPropertyColumn && (
+            <AddPropertyRailSpacer
+              height={fillerRowCount * TABLE_ROW_ESTIMATE_PX}
+            />
+          )}
         </WorkspaceGridRow>
       )}
     </div>
