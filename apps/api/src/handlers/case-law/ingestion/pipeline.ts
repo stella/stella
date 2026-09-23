@@ -42,13 +42,16 @@ import {
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { withSourceRawObjects } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  StoredRawReadError,
+  withSourceRawObjects,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   DecisionSupplement,
   IngestionResult,
   SourceAdapter,
   SourceRawObjectRef,
-  StoredRawReader,
+  StoredRawResultReader,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -279,6 +282,8 @@ export const PROCESS_DECISION_RETRY_REASON = {
 export const SUPPLEMENT_RETRY_REASON = {
   /** Its standalone row still stands beside its judgment. */
   ABSORB: "supplement-absorb",
+  /** Its judgment's stored payload could not be read this time. */
+  JUDGMENT_READ: "supplement-judgment-read",
 } as const;
 
 export type ProcessResult =
@@ -3039,6 +3044,10 @@ export const SUPPLEMENT_ABSORB_FAILED =
 export const SUPPLEMENT_JUDGMENT_UNREADABLE =
   "case_law.ingestion.supplement_judgment_unreadable";
 
+/** Emitted when a supplement's judgment payload could not be read this time. */
+export const SUPPLEMENT_JUDGMENT_READ_FAILED =
+  "case_law.ingestion.supplement_judgment_read_failed";
+
 /** Why a supplement is kept as a decision of its own. */
 export const SUPPLEMENT_STANDALONE_REASON = {
   /** No stored ruling under its docket can be its judgment. */
@@ -3079,7 +3088,7 @@ export type ProcessSupplementResult =
       status: typeof PROCESS_DECISION_STATUS.RETRYABLE;
       reason:
         | (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON]
-        | typeof SUPPLEMENT_RETRY_REASON.ABSORB;
+        | (typeof SUPPLEMENT_RETRY_REASON)[keyof typeof SUPPLEMENT_RETRY_REASON];
     };
 
 export type ProcessSupplementOptions = {
@@ -3096,7 +3105,7 @@ export type ProcessSupplementOptions = {
   nextObservationOrder: () => Promise<bigint>;
   /** Rebuilds the judgment from its stored payload: the adapter's replay. */
   reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
-  readStoredRaw: StoredRawReader;
+  readStoredRaw: StoredRawResultReader;
   corpus?: CaseLawCorpusDependencies;
   polarityRules?: RuleCache | undefined;
   /** Test seam; production writes the object store. */
@@ -3249,6 +3258,23 @@ export const processSupplement = async ({
   });
   const { row, rulings, selection } = placed;
 
+  /** Object storage did not answer for the judgment: try the placement again. */
+  const judgmentReadFailed = (
+    judgmentId: SafeId<"caseLawDecision">,
+    error: StoredRawReadError,
+  ): ProcessSupplementResult => {
+    logger.warn(SUPPLEMENT_JUDGMENT_READ_FAILED, {
+      sourceId,
+      judgmentId,
+      sourceDocumentId,
+      ...errorSystemFields(error.cause),
+    });
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      reason: SUPPLEMENT_RETRY_REASON.JUDGMENT_READ,
+    };
+  };
+
   /**
    * Take the supplement out of a judgment a correction says it no longer
    * belongs to, then place it again. The former holder is written first, and
@@ -3266,6 +3292,9 @@ export const processSupplement = async ({
       reparseStoredRaw,
       readStoredRaw,
     });
+    if (rebuiltFormer.type === "read-failed") {
+      return judgmentReadFailed(formerId, rebuiltFormer.error);
+    }
     if (rebuiltFormer.type === "unreadable") {
       logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
         sourceId,
@@ -3293,14 +3322,32 @@ export const processSupplement = async ({
     if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
       return rewritten;
     }
-    const detached = await scopedDb(
-      async (tx) =>
+    // The rewrite parks a supplement it leaves out; one still naming the
+    // former holder is detached here.
+    const detached = await scopedDb(async (tx) => {
+      if (
         await detachSupplement(tx, {
           sourceId,
           sourceDocumentId,
           decisionId: formerId,
-        }),
-    );
+        })
+      ) {
+        return true;
+      }
+      const current = (
+        await tx
+          .select({ decisionId: caseLawDecisionSupplements.decisionId })
+          .from(caseLawDecisionSupplements)
+          .where(
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      return current?.decisionId === null;
+    });
     if (!detached) {
       // Moved by a concurrent placement; the next observation settles it.
       return {
@@ -3443,6 +3490,9 @@ export const processSupplement = async ({
     reparseStoredRaw,
     readStoredRaw,
   });
+  if (rebuilt.type === "read-failed") {
+    return judgmentReadFailed(judgment.id, rebuilt.error);
+  }
   if (rebuilt.type === "unreadable") {
     logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
       sourceId,
@@ -3500,12 +3550,14 @@ type RebuildStoredJudgmentOptions = {
   judgmentId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   reparseStoredRaw: ProcessSupplementOptions["reparseStoredRaw"];
-  readStoredRaw: StoredRawReader;
+  readStoredRaw: StoredRawResultReader;
 };
 
 type RebuiltJudgment =
   | { type: "rebuilt"; result: IngestionResult }
-  | { type: "unreadable"; detail: string };
+  | { type: "unreadable"; detail: string }
+  /** Object storage did not answer; nothing is known about the payload. */
+  | { type: "read-failed"; error: StoredRawReadError };
 
 /**
  * The judgment's own observation, rebuilt from the payload stored with it,
@@ -3546,7 +3598,11 @@ const rebuildStoredJudgment = async ({
   if (row.sourceRawS3Key === null) {
     return { type: "unreadable", detail: "the judgment has no stored payload" };
   }
-  const raw = await readStoredRaw(row.sourceRawS3Key);
+  const read = await readStoredRaw(row.sourceRawS3Key);
+  if (Result.isError(read)) {
+    return { type: "read-failed", error: read.error };
+  }
+  const raw = read.value;
   if (raw === null) {
     return { type: "unreadable", detail: `no object at ${row.sourceRawS3Key}` };
   }
@@ -3612,7 +3668,7 @@ const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
  * supplement is parked for another attempt rather than stored as if its
  * judgment had no payload.
  */
-export const readStoredRawFromS3: StoredRawReader = async (key) => {
+export const readStoredRawFromS3: StoredRawResultReader = async (key) => {
   const read = await Result.tryPromise({
     try: async () =>
       await readS3ObjectBounded({
@@ -3624,13 +3680,18 @@ export const readStoredRawFromS3: StoredRawReader = async (key) => {
     catch: (cause) => cause,
   });
   if (Result.isOk(read)) {
-    return read.value;
+    return Result.ok(read.value);
   }
-  const failure = read.error;
-  if (isMissingS3ObjectError(failure)) {
-    return null;
+  if (isMissingS3ObjectError(read.error)) {
+    return Result.ok(null);
   }
-  throw failure;
+  return Result.err(
+    new StoredRawReadError({
+      message: `Stored payload read failed for ${key}`,
+      key,
+      cause: read.error,
+    }),
+  );
 };
 
 /**

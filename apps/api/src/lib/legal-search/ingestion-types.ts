@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
@@ -232,6 +232,36 @@ export type DecisionSupplement = {
  * confirmed it holds no such object.
  */
 export type StoredRawReader = (key: string) => Promise<Uint8Array | null>;
+
+/** A stored raw payload read that could not tell whether the object exists. */
+export class StoredRawReadError extends TaggedError("StoredRawReadError")<{
+  message: string;
+  key: string;
+  cause: unknown;
+}> {}
+
+/**
+ * Reads a stored raw payload as a value: `null` only where object storage
+ * confirmed it holds no such object; any other failure is an error, so the
+ * caller retries its work instead of treating the payload as absent.
+ */
+export type StoredRawResultReader = (
+  key: string,
+) => Promise<Result<Uint8Array | null, StoredRawReadError>>;
+
+/** A reader that raises, as one that returns its failure. */
+export const storedRawResultReader =
+  (read: StoredRawReader): StoredRawResultReader =>
+  async (key) =>
+    await Result.tryPromise({
+      try: async () => await read(key),
+      catch: (cause) =>
+        new StoredRawReadError({
+          message: `Stored payload read failed for ${key}`,
+          key,
+          cause,
+        }),
+    });
 
 /** One item an adapter read off a page: a decision, or a supplement to one. */
 export type IngestionItem =

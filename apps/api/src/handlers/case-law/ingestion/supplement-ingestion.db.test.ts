@@ -25,7 +25,7 @@ import { envBase } from "@/api/env-base";
 import type {
   DecisionSupplement,
   IngestionResult,
-  StoredRawReader,
+  StoredRawResultReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
@@ -97,9 +97,9 @@ afterEach(() => {
   fake.stop();
 });
 
-const readStoredRaw: StoredRawReader = async (key) =>
+const readStoredRaw: StoredRawResultReader = async (key) =>
   await Promise.resolve(
-    fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.bytes ?? null,
+    Result.ok(fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.bytes ?? null),
   );
 
 const reparseStoredRaw =

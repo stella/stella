@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -23,7 +23,7 @@ import {
 import { envBase } from "@/api/env-base";
 import type {
   IngestionResult,
-  StoredRawReader,
+  StoredRawResultReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
@@ -96,9 +96,9 @@ afterEach(() => {
   fake.stop();
 });
 
-const readStoredRaw: StoredRawReader = async (key) =>
+const readStoredRaw: StoredRawResultReader = async (key) =>
   await Promise.resolve(
-    fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.bytes ?? null,
+    Result.ok(fake.objects.get(`${envBase.S3_BUCKET}/${key}`)?.bytes ?? null),
   );
 
 const COURT = "Sąd Okręgowy we Wrocławiu";

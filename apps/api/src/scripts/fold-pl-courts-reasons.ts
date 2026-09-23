@@ -24,6 +24,7 @@
 import { Result } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { storedRawResultReader } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
   plCourtsAdapter,
@@ -59,7 +60,7 @@ await runCaseLawSourceBackfill<
       scopedDb,
       sourceId,
       adapter: plCourtsAdapter,
-      readStoredRaw,
+      readStoredRaw: storedRawResultReader(readStoredRaw),
       sourceLease,
       decisionTypes: [PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE],
       limit: requestBudget ?? DEFAULT_ROWS_PER_PASS,

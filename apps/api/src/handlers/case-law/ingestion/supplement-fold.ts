@@ -26,7 +26,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import type {
   SourceAdapter,
-  StoredRawReader,
+  StoredRawResultReader,
   StoredRawReparseRejection,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -94,7 +94,7 @@ export type FoldStoredSupplementsOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   adapter: SourceAdapter;
-  readStoredRaw: StoredRawReader;
+  readStoredRaw: StoredRawResultReader;
   /** Held for the whole run: every write is ordered on the source's counter. */
   sourceLease: CaseLawSourceIngestionLease;
   /**
@@ -198,7 +198,15 @@ export const foldStoredSupplements = async ({
     row: FoldRow & { sourceRawS3Key: string },
   ): Promise<SupplementFoldRowReport> => {
     const base = { id: row.id, caseNumber: row.caseNumber };
-    const raw = await readStoredRaw(row.sourceRawS3Key);
+    const read = await readStoredRaw(row.sourceRawS3Key);
+    if (Result.isError(read)) {
+      return {
+        ...base,
+        outcome: SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
+        detail: read.error.message,
+      };
+    }
+    const raw = read.value;
     if (raw === null) {
       return {
         ...base,
