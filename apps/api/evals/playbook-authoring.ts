@@ -1,6 +1,8 @@
 /**
- * Playbook authoring eval, contract tier: can a model drive `save_playbook`
- * from its schema and description alone, with no skill loaded?
+ * Playbook authoring eval, in two tiers.
+ *
+ * Contract tier: can a model drive `save_playbook` from its schema and
+ * description alone, with no skill loaded?
  *
  * Each task plants one trap in the tool's grammar: the tier ladder, `extract`
  * versus `graded`, severity values, snake_case nesting, `source_id` to change a
@@ -14,7 +16,15 @@
  * rows are in memory (`lib/playbook-store.ts`). Run a small model beside a
  * large one: a large model works around a poor shape, a small one shows it.
  *
+ * Behavior tier: does a model with the shipped `playbook-builder` skill
+ * active build a playbook the way the skill says? The skill reaches the
+ * prompt through the production active-skill path, `ask-user` is the
+ * production definition answered from a script (so the interview runs inside
+ * one agent loop), and the matter reads are production definitions answered
+ * from fixtures (`lib/playbook-builder-scenarios.ts`).
+ *
  *   bun run eval:playbook-authoring -- --models gpt-5.4-nano,gpt-5.6-luna --runs 3
+ *   bun run eval:playbook-authoring -- --tier behavior --task discovery
  */
 
 import { Value } from "@sinclair/typebox/value";
@@ -23,7 +33,11 @@ import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import { writeFile } from "node:fs/promises";
 
+import { buildActiveSkillSection } from "@/api/handlers/chat/chat-prompt";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   streamChatChunks,
@@ -38,7 +52,9 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 import { playbookPositionsSchema } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
+import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 
 import { runEvalModelTurn } from "./lib/model-turn";
@@ -52,6 +68,18 @@ import type {
   PlaybookSteps,
   SaveCallRecord,
 } from "./lib/playbook-authoring-score";
+import {
+  BUILDER_SCENARIOS,
+  MATTER_TOOL_NAMES,
+  answerMatterTool,
+} from "./lib/playbook-builder-scenarios";
+import type {
+  AskedQuestion,
+  BuilderEvent,
+  BuilderScenario,
+  MatterToolName,
+} from "./lib/playbook-builder-scenarios";
+import { findUnchangedResends } from "./lib/playbook-builder-score";
 import { createPlaybookStore } from "./lib/playbook-store";
 import type { PlaybookStore, StoredPlaybook } from "./lib/playbook-store";
 
@@ -64,6 +92,14 @@ const MAX_RUNS = 20;
 const MAX_OUTPUT_TOKENS = 16_000;
 const MAX_ITERATIONS = 8;
 const MODEL_TURN_TIMEOUT_MS = 300_000;
+// A behavior run interviews, reads contracts, and saves position by position
+// inside one agent loop.
+const BEHAVIOR_MAX_ITERATIONS = 40;
+const BEHAVIOR_TURN_TIMEOUT_MS = 900_000;
+const PLAYBOOK_BUILDER_SKILL = "playbook-builder";
+
+const TIERS = ["contract", "behavior"] as const;
+type Tier = (typeof TIERS)[number];
 
 const SAVE_PLAYBOOK = "save_playbook";
 const LIST_PLAYBOOKS = "list_playbooks";
@@ -71,7 +107,7 @@ const TOOL_NAMES = [LIST_PLAYBOOKS, SAVE_PLAYBOOK] as const;
 
 // No skill and no authoring guidance: the tool descriptions and schemas are
 // the whole contract under test.
-const SYSTEM_PROMPT = [
+const CONTRACT_SYSTEM_PROMPT = [
   "You maintain contract review playbooks for a law firm through the tools",
   "you are given. Do what the request asks with those tools, then reply with",
   "one short sentence. Do not ask questions; every fact you need is in the",
@@ -421,9 +457,17 @@ const TASKS: EvalTask[] = [
 
 type ToolTrace = { name: string; input: unknown; result?: unknown };
 
-const definitionOf = (name: (typeof TOOL_NAMES)[number]) =>
-  KNOWLEDGE_TOOL_DEFINITIONS.find((definition) => definition.name === name) ??
-  panic(`The knowledge tool set has no ${name}`);
+type ProductionToolName = (typeof TOOL_NAMES)[number] | MatterToolName;
+
+const PRODUCTION_DEFINITIONS = [
+  ...KNOWLEDGE_TOOL_DEFINITIONS,
+  ...STELLA_TOOL_DEFINITIONS,
+  ...DOCUMENT_TOOL_DEFINITIONS,
+];
+
+const definitionOf = (name: ProductionToolName) =>
+  PRODUCTION_DEFINITIONS.find((definition) => definition.name === name) ??
+  panic(`The static tool registry has no ${name}`);
 
 /**
  * The tool as an MCP client is served it: the wire JSON Schema, and no
@@ -432,7 +476,7 @@ const definitionOf = (name: (typeof TOOL_NAMES)[number]) =>
  * envelope, leaving nothing in the trace to score.
  */
 const productionTool = (
-  name: (typeof TOOL_NAMES)[number],
+  name: ProductionToolName,
   handler: (input: unknown) => Promise<unknown>,
 ): AnyServerTool => {
   const definition = definitionOf(name);
@@ -513,15 +557,23 @@ type ModelTurn = {
   rawCalls: ToolTrace[];
 };
 
+type ModelTurnOptions = {
+  model: ResolvedTanStackTextModel;
+  prompt: string;
+  system: string;
+  tools: AnyServerTool[];
+  iterations: number;
+  timeoutMs: number;
+};
+
 const runModelTurn = async ({
   model,
   prompt,
+  system,
   tools,
-}: {
-  model: ResolvedTanStackTextModel;
-  prompt: string;
-  tools: AnyServerTool[];
-}): Promise<ModelTurn> => {
+  iterations,
+  timeoutMs,
+}: ModelTurnOptions): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
     role: "fast",
@@ -531,14 +583,14 @@ const runModelTurn = async ({
   const callNames = new Map<string, string>();
   let finalText = "";
   const { error, latencyMs, usage } = await runEvalModelTurn({
-    timeoutMs: MODEL_TURN_TIMEOUT_MS,
+    timeoutMs,
     chat: (abortController) =>
       streamChatChunks({
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],
-        agentLoopStrategy: maxIterations(MAX_ITERATIONS),
-        ...systemPromptsPatch({ caching, model, system: SYSTEM_PROMPT }),
+        agentLoopStrategy: maxIterations(iterations),
+        ...systemPromptsPatch({ caching, model, system }),
         modelOptions: mergeGenerationOptions({
           caching,
           model,
@@ -602,7 +654,10 @@ const runTask = async ({
   const turn = await runModelTurn({
     model,
     prompt: task.brief,
+    system: CONTRACT_SYSTEM_PROMPT,
     tools: createTools({ store, task, trace, saveCalls }),
+    iterations: MAX_ITERATIONS,
+    timeoutMs: MODEL_TURN_TIMEOUT_MS,
   });
   // A call the transport dropped before a handler ran still belongs in the
   // trace, under a name that says no handler saw it.
@@ -650,17 +705,224 @@ const runTask = async ({
   };
 };
 
+// --- behavior tier --------------------------------------------------------
+
+const BEHAVIOR_SYSTEM_PREAMBLE =
+  "You are stella, an assistant in a legal workspace. You act through the " +
+  "tools you are given.";
+
+/**
+ * The system prompt a chat with the built-in skill active carries: the skill
+ * is resolved and rendered by the production active-skill path, from the
+ * shipped `SKILL.md`.
+ */
+const behaviorSystemPrompt = async (store: PlaybookStore): Promise<string> => {
+  const resolved = await resolveActiveChatSkillContext({
+    activeSkill: { skillName: PLAYBOOK_BUILDER_SKILL },
+    memberRole: { role: store.context.memberRole },
+    organizationId: store.context.organizationId,
+    safeDb: store.context.safeDb,
+    userId: store.context.userId,
+  });
+  const skill = resolved.isOk()
+    ? resolved.value
+    : panic(
+        `The ${PLAYBOOK_BUILDER_SKILL} skill did not resolve`,
+        resolved.error,
+      );
+  return `${BEHAVIOR_SYSTEM_PREAMBLE}\n\n${buildActiveSkillSection(skill)}`;
+};
+
+const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
+  const questions = isRecord(input) ? input["questions"] : undefined;
+  if (!Array.isArray(questions)) {
+    return [];
+  }
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return questions.filter(isRecord).map((question) => {
+    const options = question["options"];
+    const preset = question["default"];
+    return {
+      question: text(question["question"]),
+      reason: text(question["reason"]),
+      options: Array.isArray(options) ? options.map(text) : [],
+      default: typeof preset === "string" ? preset : undefined,
+    };
+  });
+};
+
+const allPositions = (store: PlaybookStore): Position[] =>
+  store.playbooks().flatMap(({ positions }) => positions.items);
+
+const createBehaviorTools = ({
+  store,
+  scenario,
+  events,
+}: {
+  store: PlaybookStore;
+  scenario: BuilderScenario;
+  events: BuilderEvent[];
+}): AnyServerTool[] => {
+  const record = (
+    event: Omit<BuilderEvent, "questions" | "resentUnchanged"> &
+      Partial<BuilderEvent>,
+  ) => events.push({ questions: [], resentUnchanged: [], ...event });
+
+  const callRegistry = async (
+    name: (typeof TOOL_NAMES)[number],
+    input: unknown,
+  ): Promise<unknown> => {
+    const before = allPositions(store);
+    const result = await handleMcpToolCall({
+      args: isRecord(input) ? input : {},
+      context: store.context,
+      toolName: name,
+    });
+    const text = result.content.at(0);
+    const payload: unknown =
+      text?.type === "text" ? JSON.parse(text.text) : null;
+    record({
+      name,
+      input,
+      resentUnchanged:
+        name === SAVE_PLAYBOOK
+          ? findUnchangedResends({ input, before, after: allPositions(store) })
+          : [],
+    });
+    return payload;
+  };
+
+  const askUser = createOrgTools({
+    accessibleWorkspaceIds: store.context.accessibleWorkspaceIds,
+    organizationId: store.context.organizationId,
+    scopedDb: store.context.scopedDb,
+  })[ASK_USER_TOOL_NAME].server((input) => {
+    const questions = askedQuestionsOf(input);
+    record({ name: ASK_USER_TOOL_NAME, input, questions });
+    return {
+      answers: questions.map((question) => ({
+        question: question.question,
+        answer: scenario.answer(question),
+      })),
+    };
+  });
+
+  return [
+    ...TOOL_NAMES.map((name) =>
+      productionTool(name, async (input) => await callRegistry(name, input)),
+    ),
+    ...MATTER_TOOL_NAMES.map((name) =>
+      productionTool(name, async (input) => {
+        record({ name, input });
+        return await Promise.resolve(answerMatterTool(name, input));
+      }),
+    ),
+    askUser,
+  ];
+};
+
+type BehaviorRun = {
+  model: string;
+  scenario: string;
+  run: number;
+  outcome: "pass" | "fail" | "error";
+  defects: string[];
+  events: BuilderEvent[];
+  finalText: string;
+  latencyMs: number;
+  tokens: number | null;
+};
+
+const runScenario = async ({
+  model,
+  modelId,
+  repeat,
+  scenario,
+}: {
+  model: ResolvedTanStackTextModel;
+  modelId: string;
+  repeat: number;
+  scenario: BuilderScenario;
+}): Promise<BehaviorRun> => {
+  const store = createPlaybookStore([]);
+  const events: BuilderEvent[] = [];
+  const turn = await runModelTurn({
+    model,
+    prompt: scenario.brief,
+    system: await behaviorSystemPrompt(store),
+    tools: createBehaviorTools({ store, scenario, events }),
+    iterations: BEHAVIOR_MAX_ITERATIONS,
+    timeoutMs: BEHAVIOR_TURN_TIMEOUT_MS,
+  });
+  const playbooks = store.playbooks();
+  const defects = scenario.check({ events, playbooks });
+  // What the tool stored must be what the HTTP route would have accepted.
+  if (
+    playbooks.some(
+      ({ positions }) => !Value.Check(playbookPositionsSchema, positions),
+    )
+  ) {
+    defects.push("the stored positions do not parse as positionSchema");
+  }
+  let outcome: BehaviorRun["outcome"] = defects.length === 0 ? "pass" : "fail";
+  if (turn.error !== null) {
+    outcome = "error";
+    defects.unshift(turn.error);
+  }
+  return {
+    model: modelId,
+    scenario: scenario.id,
+    run: repeat,
+    outcome,
+    defects,
+    events,
+    finalText: turn.finalText,
+    latencyMs: turn.latencyMs,
+    tokens: turn.usage?.totalTokens ?? null,
+  };
+};
+
+const renderBehaviorReport = (runs: readonly BehaviorRun[]): string => {
+  const lines: string[] = ["# playbook-authoring (behavior tier)"];
+  for (const modelId of new Set(runs.map((run) => run.model))) {
+    const modelRuns = runs.filter((run) => run.model === modelId);
+    lines.push(
+      `\n### ${modelId}\n`,
+      "| scenario | run | outcome | questions | reads | saves | defects | tokens | ms |",
+      "| --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: |",
+    );
+    for (const run of modelRuns) {
+      const count = (predicate: (event: BuilderEvent) => boolean) =>
+        String(run.events.filter(predicate).length);
+      lines.push(
+        `| ${run.scenario} | ${String(run.run)} | ${run.outcome} | ${count(({ name }) => name === ASK_USER_TOOL_NAME)} | ${count(({ name }) => name === "read_content_across_matters")} | ${count(({ name }) => name === SAVE_PLAYBOOK)} | ${cell(run.defects)} | ${String(run.tokens ?? "-")} | ${String(run.latencyMs)} |`,
+      );
+    }
+    const passed = modelRuns.filter((run) => run.outcome === "pass");
+    lines.push(
+      "",
+      `passed ${String(passed.length)}/${String(modelRuns.length)}`,
+    );
+  }
+  return lines.join("\n");
+};
+
 type CliOptions = {
   models: string[];
   runs: number;
+  tiers: readonly Tier[];
   taskFilter: string | null;
   jsonPath: string | null;
 };
+
+const isTier = (value: string): value is Tier =>
+  TIERS.some((tier) => tier === value);
 
 const parseArgs = (argv: readonly string[]): CliOptions => {
   const options: CliOptions = {
     models: DEFAULT_MODELS,
     runs: DEFAULT_RUNS,
+    tiers: TIERS,
     taskFilter: null,
     jsonPath: null,
   };
@@ -680,6 +942,12 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
           MAX_RUNS,
           Math.max(1, Number.parseInt(value, 10) || DEFAULT_RUNS),
         );
+        index += 1;
+        break;
+      case "--tier":
+        options.tiers = isTier(value)
+          ? [value]
+          : panic(`--tier takes ${TIERS.join(" or ")}`);
         index += 1;
         break;
       case "--task":
@@ -712,7 +980,7 @@ const stepsCell = (steps: PlaybookSteps): string =>
     return steps[name] ? initial.toUpperCase() : initial;
   }).join("");
 
-const renderReport = (runs: readonly EvalRun[]): string => {
+const renderContractReport = (runs: readonly EvalRun[]): string => {
   const lines: string[] = ["# playbook-authoring (contract tier)"];
   for (const modelId of new Set(runs.map((run) => run.model))) {
     const modelRuns = runs.filter((run) => run.model === modelId);
@@ -759,14 +1027,20 @@ const resolveModels = async (modelIds: readonly string[]) => {
 
 const main = async () => {
   const options = parseArgs(process.argv.slice(2));
-  const tasks = TASKS.filter(
-    (task) => options.taskFilter === null || task.id === options.taskFilter,
-  );
-  if (tasks.length === 0) {
-    panic(`No task is named ${String(options.taskFilter)}`);
+  const matches = (id: string) =>
+    options.taskFilter === null || id === options.taskFilter;
+  const tasks = options.tiers.includes("contract")
+    ? TASKS.filter((task) => matches(task.id))
+    : [];
+  const scenarios = options.tiers.includes("behavior")
+    ? BUILDER_SCENARIOS.filter((scenario) => matches(scenario.id))
+    : [];
+  if (tasks.length === 0 && scenarios.length === 0) {
+    panic(`No task or scenario is named ${String(options.taskFilter)}`);
   }
 
   const runs: EvalRun[] = [];
+  const behaviorRuns: BehaviorRun[] = [];
   for (const { id, model } of await resolveModels(options.models)) {
     for (const task of tasks) {
       for (let repeat = 1; repeat <= options.runs; repeat += 1) {
@@ -774,11 +1048,28 @@ const main = async () => {
         runs.push(await runTask({ model, modelId: id, repeat, task }));
       }
     }
+    for (const scenario of scenarios) {
+      for (let repeat = 1; repeat <= options.runs; repeat += 1) {
+        process.stderr.write(
+          `${id} · ${scenario.id} · run ${String(repeat)}\n`,
+        );
+        behaviorRuns.push(
+          await runScenario({ model, modelId: id, repeat, scenario }),
+        );
+      }
+    }
   }
 
-  process.stdout.write(`${renderReport(runs)}\n`);
+  const reports = [
+    ...(runs.length > 0 ? [renderContractReport(runs)] : []),
+    ...(behaviorRuns.length > 0 ? [renderBehaviorReport(behaviorRuns)] : []),
+  ];
+  process.stdout.write(`${reports.join("\n\n")}\n`);
   if (options.jsonPath !== null) {
-    await writeFile(options.jsonPath, JSON.stringify({ runs }, null, 2));
+    await writeFile(
+      options.jsonPath,
+      JSON.stringify({ runs, behaviorRuns }, null, 2),
+    );
   }
 };
 

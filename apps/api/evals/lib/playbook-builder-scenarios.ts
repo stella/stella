@@ -1,0 +1,571 @@
+/**
+ * Scenarios for the playbook-authoring eval's behavior tier: the matters and
+ * contracts a run can find, the user's scripted answers, and what each
+ * scenario checks in the run's evidence.
+ *
+ * The oracle is the stored playbook, the questions asked, and the shape and
+ * order of the calls, never the model's prose.
+ */
+
+import { panic } from "better-result";
+
+import { attachmentText } from "@/api/handlers/chat/upload-files";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
+
+import { classifyQuestion, isCzech } from "./playbook-builder-score";
+import type { QuestionTopic } from "./playbook-builder-score";
+import type { StoredPlaybook } from "./playbook-store";
+
+export const MATTER_TOOL_NAMES = [
+  "list_matters",
+  "list_documents",
+  "search_across_matters",
+  "read_content_across_matters",
+] as const;
+
+export type MatterToolName = (typeof MATTER_TOOL_NAMES)[number];
+
+export type AskedQuestion = {
+  question: string;
+  reason: string;
+  options: readonly string[];
+  default: string | undefined;
+};
+
+/** One call a run made, in order. `questions` is set on an `ask-user` call. */
+export type BuilderEvent = {
+  name: string;
+  input: unknown;
+  questions: readonly AskedQuestion[];
+  /** Issues a save named by `source_id` and left unchanged. */
+  resentUnchanged: readonly string[];
+};
+
+type BuilderEvidence = {
+  events: readonly BuilderEvent[];
+  playbooks: readonly StoredPlaybook[];
+};
+
+export type BuilderScenario = {
+  id: string;
+  brief: string;
+  answer: (question: AskedQuestion) => string;
+  check: (evidence: BuilderEvidence) => string[];
+};
+
+// --- the organization's matters -------------------------------------------
+
+const SUPPLY_MATTER = {
+  id: "5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e01",
+  name: "Nordwind Logistik: supplier contracts",
+};
+const DISPUTE_MATTER = {
+  id: "5d1f0a4e-6c2b-4e8a-9f3d-1a2b3c4d5e02",
+  name: "Harbour Co v Nordwind (dispute)",
+};
+const MATTERS = [SUPPLY_MATTER, DISPUTE_MATTER];
+
+type FixtureDocument = {
+  id: string;
+  matterId: string;
+  name: string;
+  text: string;
+};
+
+const servicesAgreement = ({
+  supplier,
+  cap,
+  payment,
+  status,
+}: {
+  supplier: string;
+  cap: string;
+  payment: string;
+  status: string;
+}) =>
+  [
+    `SERVICES AGREEMENT between Nordwind Logistik GmbH (Customer) and ${supplier} (Supplier). ${status}`,
+    "1. Services. The Supplier provides warehouse management software services as described in Schedule 1.",
+    `2. Fees and payment. Invoices are payable within ${payment} of receipt.`,
+    `3. Liability. ${cap}`,
+    "4. Term. The agreement runs for an initial term of 24 months and renews for 12 months unless terminated on 3 months' notice.",
+    "5. Governing law. This agreement is governed by the laws of the Federal Republic of Germany. Courts of Hamburg have exclusive jurisdiction.",
+    "6. Data protection. The parties conclude a data processing agreement under Article 28 GDPR.",
+  ].join("\n\n");
+
+const KELLER = {
+  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01",
+  matterId: SUPPLY_MATTER.id,
+  name: "Services Agreement Nordwind - Keller GmbH (signed 2025-03-14).pdf",
+  text: servicesAgreement({
+    supplier: "Keller GmbH",
+    cap: "Each party's total liability is capped at the fees paid in the 12 months before the claim. The cap does not apply to intent or gross negligence.",
+    payment: "30 days",
+    status: "Signed by both parties on 14 March 2025.",
+  }),
+};
+const BRANDT = {
+  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f02",
+  matterId: SUPPLY_MATTER.id,
+  name: "Services Agreement Nordwind - Brandt AG (executed).docx",
+  text: servicesAgreement({
+    supplier: "Brandt AG",
+    cap: "Total liability of either party is limited to the fees paid in the 12 months preceding the event giving rise to the claim, except for intent and gross negligence.",
+    payment: "30 days",
+    status: "Executed on 2 September 2025.",
+  }),
+};
+// Counterparty paper, not executed: the confirmation question exists so the
+// user can keep this out of the playbook.
+const VOGEL_DRAFT = {
+  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f03",
+  matterId: SUPPLY_MATTER.id,
+  name: "Services Agreement Nordwind - Vogel (DRAFT v3, supplier markup).docx",
+  text: servicesAgreement({
+    supplier: "Vogel Systems GmbH",
+    cap: "The Supplier's total liability is capped at EUR 10,000.",
+    payment: "10 days",
+    status: "DRAFT v3 with the supplier's markup; not signed.",
+  }),
+};
+// Executed, but in a matter the user did not name.
+const HARBOUR = {
+  id: "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f04",
+  matterId: DISPUTE_MATTER.id,
+  name: "Services Agreement Nordwind - Harbour Co (executed).pdf",
+  text: servicesAgreement({
+    supplier: "Harbour Co Ltd",
+    cap: "Liability is uncapped.",
+    payment: "45 days",
+    status: "Executed on 1 June 2024.",
+  }),
+};
+const DOCUMENTS: readonly FixtureDocument[] = [
+  KELLER,
+  BRANDT,
+  VOGEL_DRAFT,
+  HARBOUR,
+];
+
+const matterOf = (matterId: string) =>
+  MATTERS.find(({ id }) => id === matterId);
+
+const stringArg = (input: unknown, key: string): string | undefined => {
+  if (typeof input !== "object" || input === null || !(key in input)) {
+    return undefined;
+  }
+  const value: unknown = Reflect.get(input, key);
+  return typeof value === "string" ? value : undefined;
+};
+
+/** Answers the matter reads from the fixtures, shaped like their projections. */
+export const answerMatterTool = (
+  name: MatterToolName,
+  input: unknown,
+): unknown => {
+  switch (name) {
+    case "list_matters":
+      return {
+        matters: MATTERS.map(({ id, name: matterName }) => ({
+          matterId: id,
+          name: matterName,
+          status: "active",
+        })),
+        nextCursor: null,
+      };
+    case "list_documents": {
+      const matterId = stringArg(input, "matter_id");
+      return {
+        documents: DOCUMENTS.filter((doc) => doc.matterId === matterId).map(
+          ({ id, name: documentName }) => ({
+            id,
+            name: documentName,
+            kind: "document",
+            parentId: null,
+          }),
+        ),
+        nextCursor: null,
+      };
+    }
+    case "search_across_matters": {
+      const words = (stringArg(input, "query") ?? "")
+        .toLowerCase()
+        .split(/\W+/u)
+        .filter((word) => word.length > 2);
+      const hits = DOCUMENTS.filter((doc) =>
+        words.some((word) =>
+          `${doc.name} ${doc.text}`.toLowerCase().includes(word),
+        ),
+      );
+      return {
+        totalCount: hits.length,
+        nextCursor: null,
+        hits: hits.map((doc) => ({
+          entityId: doc.id,
+          workspaceId: doc.matterId,
+          workspaceName: matterOf(doc.matterId)?.name ?? "",
+          name: doc.name,
+          kind: "document",
+          headline: doc.text.slice(0, 160),
+        })),
+      };
+    }
+    case "read_content_across_matters": {
+      const doc = DOCUMENTS.find(
+        ({ id }) => id === stringArg(input, "entity_id"),
+      );
+      if (doc === undefined) {
+        return { error: { code: "not_found", message: "No such document" } };
+      }
+      return {
+        charCount: doc.text.length,
+        entityId: doc.id,
+        kind: "document",
+        name: doc.name,
+        text: doc.text,
+        truncated: false,
+        nextCursor: null,
+        workspaceId: doc.matterId,
+      };
+    }
+    default: {
+      name satisfies never;
+      return panic(`No fixture answers ${String(name)}`);
+    }
+  }
+};
+
+// --- evidence readers -----------------------------------------------------
+
+const RECOMMENDATION = "Use your recommendation.";
+
+const fallbackAnswer = (question: AskedQuestion): string =>
+  question.default ?? question.options.at(0) ?? RECOMMENDATION;
+
+/** The script's answer for each topic; a question with none gets a default. */
+const answerByTopic =
+  (answers: Record<QuestionTopic, string>) =>
+  (question: AskedQuestion): string => {
+    const topic = classifyQuestion(question.question);
+    return topic === null ? fallbackAnswer(question) : answers[topic];
+  };
+
+const questionText = ({ question, reason, options }: AskedQuestion) =>
+  [question, reason, ...options].join(" ");
+
+const askedQuestions = (events: readonly BuilderEvent[]) =>
+  events.flatMap(({ questions }) => questions);
+
+const indexOfFirst = (
+  events: readonly BuilderEvent[],
+  predicate: (event: BuilderEvent) => boolean,
+): number => {
+  const index = events.findIndex(predicate);
+  return index === -1 ? Number.POSITIVE_INFINITY : index;
+};
+
+const isSave = ({ name }: BuilderEvent) => name === "save_playbook";
+
+const topicsAskedBeforeFirstSave = (events: readonly BuilderEvent[]) => {
+  const firstSave = indexOfFirst(events, isSave);
+  return new Set(
+    askedQuestions(events.slice(0, firstSave)).map(({ question }) =>
+      classifyQuestion(question),
+    ),
+  );
+};
+
+const missingTopics = (
+  events: readonly BuilderEvent[],
+  topics: readonly QuestionTopic[],
+): string[] => {
+  const asked = topicsAskedBeforeFirstSave(events);
+  return topics
+    .filter((topic) => !asked.has(topic))
+    .map((topic) => `did not ask about ${topic} before the first save`);
+};
+
+const matterCalls = (events: readonly BuilderEvent[]) =>
+  events.filter(({ name }) =>
+    MATTER_TOOL_NAMES.some((matterTool) => matterTool === name),
+  );
+
+const readDocumentIds = (events: readonly BuilderEvent[]) =>
+  new Set(
+    events
+      .filter(({ name }) => name === "read_content_across_matters")
+      .map(({ input }) => stringArg(input, "entity_id")),
+  );
+
+const tierTexts = (position: Position): string[] => {
+  if (position.mode !== "graded" || position.standard.source !== "tiers") {
+    return [];
+  }
+  const { acceptable, fallback, notAcceptable } = position.standard.tiers;
+  return [
+    ...acceptable.rules.map(({ text }) => text),
+    ...fallback.entries.map(({ text }) => text),
+    ...notAcceptable.rules.map(({ text }) => text),
+  ];
+};
+
+/** Defects every scenario shares: one playbook, enough positions, no resends. */
+const commonDefects = ({ events, playbooks }: BuilderEvidence): string[] => {
+  const defects: string[] = [];
+  if (playbooks.length !== 1) {
+    defects.push(`${String(playbooks.length)} playbooks stored; expected one`);
+  }
+  const positions = playbooks.at(0)?.positions.items ?? [];
+  if (positions.filter(({ mode }) => mode === "graded").length < 3) {
+    defects.push("fewer than three graded positions were saved");
+  }
+  const resent = events.flatMap(({ resentUnchanged }) => resentUnchanged);
+  if (resent.length > 0) {
+    defects.push(`resent unchanged positions: ${resent.join(", ")}`);
+  }
+  return defects;
+};
+
+// --- scenarios ------------------------------------------------------------
+
+const noDocuments: BuilderScenario = {
+  id: "no-documents",
+  brief: "Help me build a playbook for reviewing NDAs.",
+  answer: answerByTopic({
+    contracts: "No, I have none to share. Start without them.",
+    language: "Czech.",
+    law: "Czech law.",
+    side: "We are the receiving party.",
+    type: "Mutual and one-way NDAs we receive from business partners.",
+  }),
+  check: (evidence) => {
+    const defects = [
+      ...commonDefects(evidence),
+      ...missingTopics(evidence.events, [
+        "contracts",
+        "side",
+        "law",
+        "language",
+      ]),
+    ];
+    const searched = matterCalls(evidence.events);
+    if (searched.length > 0) {
+      defects.push(
+        `called ${searched.map(({ name }) => name).join(", ")} after the user declined contracts`,
+      );
+    }
+    const positions = evidence.playbooks.at(0)?.positions.items ?? [];
+    const czech = positions.filter((position) =>
+      isCzech([position.issue, ...tierTexts(position)].join(" ")),
+    );
+    if (czech.length * 2 < positions.length) {
+      defects.push(
+        `${String(czech.length)} of ${String(positions.length)} positions are in Czech`,
+      );
+    }
+    return defects;
+  },
+};
+
+const CONFIRMED_DOCUMENTS = [KELLER, BRANDT];
+const CONFIRMED_MARKERS = ["Keller", "Brandt"];
+const CANDIDATE_MARKERS = [...CONFIRMED_MARKERS, "Vogel", "Harbour"];
+
+const answerDiscoveryTopic = answerByTopic({
+  contracts: `Yes, please look for them in the "${SUPPLY_MATTER.name}" matter.`,
+  language: "English.",
+  law: "German law.",
+  side: "We are the customer.",
+  type: "IT services agreements with software suppliers.",
+});
+
+const discovery: BuilderScenario = {
+  id: "discovery",
+  brief:
+    "I want a playbook for the IT services agreements we sign with our suppliers.",
+  answer: (question) => {
+    if (
+      !CANDIDATE_MARKERS.some((marker) =>
+        questionText(question).includes(marker),
+      )
+    ) {
+      return answerDiscoveryTopic(question);
+    }
+    const picked = question.options.filter((option) =>
+      CONFIRMED_MARKERS.some((marker) => option.includes(marker)),
+    );
+    return picked.length > 0
+      ? picked.join(", ")
+      : "Use the Keller GmbH and Brandt AG agreements; the Vogel one is only a draft.";
+  },
+  check: (evidence) => {
+    const { events } = evidence;
+    const defects = [
+      ...commonDefects(evidence),
+      ...missingTopics(events, ["contracts", "side", "law"]),
+    ];
+    const firstMatterCall = indexOfFirst(
+      events,
+      (event) => matterCalls([event]).length > 0,
+    );
+    const firstContractsQuestion = indexOfFirst(events, ({ questions }) =>
+      questions.some(
+        ({ question }) => classifyQuestion(question) === "contracts",
+      ),
+    );
+    if (firstMatterCall < firstContractsQuestion) {
+      defects.push("searched matters before the user agreed");
+    }
+    if (events.some(({ name }) => name === "search_across_matters")) {
+      defects.push("searched across every matter although the user named one");
+    }
+    const otherMatters = events.filter(
+      ({ name, input }) =>
+        name === "list_documents" &&
+        stringArg(input, "matter_id") !== SUPPLY_MATTER.id,
+    );
+    if (otherMatters.length > 0) {
+      defects.push("listed documents outside the named matter");
+    }
+    const firstRead = indexOfFirst(
+      events,
+      ({ name }) => name === "read_content_across_matters",
+    );
+    const firstCandidates = indexOfFirst(events, ({ questions }) =>
+      questions.some((question) =>
+        CANDIDATE_MARKERS.some((marker) =>
+          questionText(question).includes(marker),
+        ),
+      ),
+    );
+    if (firstCandidates > firstRead) {
+      defects.push("read a contract before the user confirmed the candidates");
+    }
+    const read = readDocumentIds(events);
+    const unconfirmed = DOCUMENTS.filter(
+      ({ id }) =>
+        read.has(id) && !CONFIRMED_DOCUMENTS.some((doc) => doc.id === id),
+    );
+    if (unconfirmed.length > 0) {
+      defects.push(
+        `read unconfirmed documents: ${unconfirmed.map(({ name }) => name).join(", ")}`,
+      );
+    }
+    if (!CONFIRMED_DOCUMENTS.every(({ id }) => read.has(id))) {
+      defects.push("did not read every confirmed contract");
+    }
+    const positions = evidence.playbooks.at(0)?.positions.items ?? [];
+    const liability = positions.find(({ issue }) => /liabilit/iu.test(issue));
+    if (
+      liability === undefined ||
+      !tierTexts(liability).some((text) => text.includes("12"))
+    ) {
+      defects.push(
+        "no liability position grounded in the contracts' 12-month cap",
+      );
+    }
+    return defects;
+  },
+};
+
+const dpa = ({
+  processor,
+  liability,
+}: {
+  processor: string;
+  liability: string;
+}) =>
+  [
+    `DATA PROCESSING AGREEMENT between Nordwind Logistik GmbH (Controller) and ${processor} (Processor). Executed.`,
+    "1. Subject matter. The Processor processes personal data of the Controller's employees and customers only on documented instructions.",
+    "2. Personal data breaches. The Processor notifies the Controller of a personal data breach without undue delay and in any event within 48 hours of becoming aware of it.",
+    "3. Sub-processors. The Processor engages a new sub-processor only after 30 days' prior written notice, during which the Controller may object.",
+    "4. Audits. The Controller may audit the Processor once a year on 30 days' notice.",
+    `5. Liability. ${liability}`,
+    "6. Governing law. This agreement is governed by the laws of the Netherlands.",
+  ].join("\n\n");
+
+const answerDpaTopic = answerByTopic({
+  contracts: "Only the two I attached.",
+  language: "English.",
+  law: "Dutch law.",
+  side: "We are the controller.",
+  type: "Data processing agreements under Article 28 GDPR.",
+});
+
+const withDocuments: BuilderScenario = {
+  id: "with-documents",
+  brief: [
+    "Build a playbook for the data processing agreements we sign as controller, from these two executed DPAs. Write it in English.",
+    "Non-standard breach notification terms go to our privacy counsel.",
+    "",
+    attachmentText({
+      fileName: "DPA Nordwind - CloudStore BV (executed).docx",
+      content: dpa({
+        processor: "CloudStore BV",
+        liability:
+          "Each party's liability under this agreement is subject to the limitation of liability in the main services agreement.",
+      }),
+    }),
+    "",
+    attachmentText({
+      fileName: "DPA Nordwind - Payroll Partners BV (executed).docx",
+      content: dpa({
+        processor: "Payroll Partners BV",
+        liability:
+          "The Processor's liability for breaches of this agreement or of data protection law is unlimited.",
+      }),
+    }),
+  ].join("\n"),
+  answer: (question) =>
+    /liabilit/iu.test(questionText(question))
+      ? "The processor's liability for its own data protection breaches may be unlimited; everything else falls under the main agreement's cap."
+      : answerDpaTopic(question),
+  check: (evidence) => {
+    const { events } = evidence;
+    const defects = [...commonDefects(evidence)];
+    const searched = matterCalls(events);
+    if (searched.length > 0) {
+      defects.push(
+        `looked for more contracts: ${searched.map(({ name }) => name).join(", ")}`,
+      );
+    }
+    const asked = askedQuestions(events);
+    if (!asked.some((question) => /liabilit/iu.test(questionText(question)))) {
+      defects.push("did not ask about liability, where the DPAs disagree");
+    }
+    const agreed = asked
+      .map(({ question }) => question)
+      .filter((text) =>
+        /breach notif|48 hours|sub-?processor|audit/iu.test(text),
+      );
+    if (agreed.length > 0) {
+      defects.push(
+        `asked where the DPAs agree: ${agreed.map((text) => text.slice(0, 80)).join(" | ")}`,
+      );
+    }
+    const positions = evidence.playbooks.at(0)?.positions.items ?? [];
+    const breach = positions.find(({ issue }) => /breach/iu.test(issue));
+    const escalation =
+      breach?.mode === "graded" ? (breach.negotiation?.escalation ?? "") : "";
+    if (!/privacy counsel/iu.test(escalation)) {
+      defects.push(
+        "the privacy-counsel route is not in the breach position's escalation",
+      );
+    }
+    if (
+      positions.some((position) =>
+        tierTexts(position).some((text) => /privacy counsel/iu.test(text)),
+      )
+    ) {
+      defects.push("the privacy-counsel route landed in a tier rule");
+    }
+    return defects;
+  },
+};
+
+export const BUILDER_SCENARIOS: readonly BuilderScenario[] = [
+  noDocuments,
+  discovery,
+  withDocuments,
+];
