@@ -74,16 +74,19 @@ test(
   "every override glob matches a linted file",
   () => {
     const dead: string[] = [];
-    const overrides = Array.isArray(config.overrides) ? config.overrides : [];
-    for (const override of overrides) {
-      if (vendoredOverrides.has(override) || !isRecord(override)) {
+    for (const scope of readScopes(config)) {
+      if (scope.scope === BASE_SCOPE || vendoredOverrides.has(scope.source)) {
         continue;
       }
-      for (const key of ["files", "excludeFiles"] as const) {
-        for (const pattern of stringArray(override[key])) {
-          if (fileIndex.filesMatching(pattern).length === 0) {
-            dead.push(`${key}: ${pattern}`);
-          }
+      const globs = [
+        ...scope.files.map((pattern) => ["files", pattern] as const),
+        ...scope.excludeFiles.map(
+          (pattern) => ["excludeFiles", pattern] as const,
+        ),
+      ];
+      for (const [key, pattern] of globs) {
+        if (fileIndex.filesMatching(pattern).length === 0) {
+          dead.push(`${key}: ${pattern}`);
         }
       }
     }

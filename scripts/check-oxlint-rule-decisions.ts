@@ -58,7 +58,6 @@ const basePlugins = new Set(
   [
     "eslint",
     ...presets.flatMap((preset) => stringArray(preset["plugins"])),
-    ...stringArray(config.plugins),
   ].map(pluginScope),
 );
 const scopedPlugins = new Set(
