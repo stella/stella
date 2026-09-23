@@ -185,7 +185,6 @@ import {
   openRawSourceWriteWindow,
   RAW_KEY_OWNERSHIP,
   RAW_SOURCE_FAMILY,
-  rawDocumentPrefix,
   rawSourcePayloadKey,
   sourceBinaryRef,
   writeCaseLawRawPayload,
