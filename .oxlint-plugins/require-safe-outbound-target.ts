@@ -948,7 +948,7 @@ export default eslintCompatPlugin({
           }
           source = normalizePath(path.resolve(path.dirname(filename), source));
           const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
-          return apiSourceIndex !== -1
+          return apiSourceIndex >= 0
             ? source.slice(apiSourceIndex + 1)
             : source;
         };
