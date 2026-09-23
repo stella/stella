@@ -207,6 +207,12 @@ describe("absorbed supplement redirect", () => {
           level: 2,
           inlines: [{ type: "text", text: "Reasons" }],
         },
+        {
+          id: `${ANCHOR_PREFIX}b4`,
+          anchorId: `${ANCHOR_PREFIX}p-4`,
+          type: "paragraph",
+          inlines: [{ type: "text", text: "Uzasadnienie." }],
+        },
       ],
     },
     resolution: {

@@ -3,13 +3,11 @@ import { notFound, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
+import { anchorAfterResolution } from "@/features/case-law/decision-resolution.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionCitationsInfiniteOptions,
@@ -207,37 +205,16 @@ type CanonicalDecisionHashOptions = {
   hash: string;
 };
 
-/**
- * The fragment a canonical redirect carries.
- *
- * An address naming reasons that were absorbed into their judgment lands on
- * the reasons inside it: the anchor it named, under the prefix the reasons'
- * blocks carry there, or the reasons' first block when it named none.
- */
-export const canonicalDecisionHash = ({
+/** The fragment a canonical redirect carries; see `anchorAfterResolution`. */
+const canonicalDecisionHash = ({
   decision: { documentAst, resolution },
   hash,
-}: CanonicalDecisionHashOptions): string => {
-  switch (resolution.type) {
-    case DECISION_READ_RESOLUTION.DIRECT:
-      return hash;
-    case DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT: {
-      if (hash !== "") {
-        return `${resolution.anchorPrefix}${hash}`;
-      }
-      return (
-        parseDocumentAst(documentAst)
-          ?.blocks.map(({ anchorId }) => anchorId)
-          .find((anchorId) => anchorId.startsWith(resolution.anchorPrefix)) ??
-        ""
-      );
-    }
-    default: {
-      resolution satisfies never;
-      return panic(`Unhandled decision resolution: ${String(resolution)}`);
-    }
-  }
-};
+}: CanonicalDecisionHashOptions): string =>
+  anchorAfterResolution({
+    resolution,
+    documentAst,
+    anchorId: hash === "" ? undefined : hash,
+  }) ?? "";
 
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
