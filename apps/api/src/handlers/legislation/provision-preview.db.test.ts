@@ -184,6 +184,14 @@ describe("reading one provision preview", () => {
     ).toEqual(["cast_1", "hlava_2"]);
   });
 
+  test("carries the provision's own heading beside its body", async () => {
+    const preview = await readPreview(civilCode, "par_898");
+
+    expect("heading" in preview ? preview.heading?.anchorId : null).toBe(
+      "par_898",
+    );
+  });
+
   test("a cited paragraph keeps its letters and their points", async () => {
     const preview = await readPreview(civilCode, "par_898", "par_898-odst_2");
 

@@ -39,6 +39,7 @@ import {
   locateCompareRows,
   pairCompareSides,
   provisionCompareSide,
+  provisionWordingSide,
   resolveCompareVersions,
   visibleCompareGroups,
 } from "@/features/statutes/statute-compare";
@@ -46,6 +47,7 @@ import type {
   CompareRowLocation,
   CompareSideState,
   PairedCompareSides,
+  ProvisionWording,
   StatuteCompareGroup,
   StatuteCompareMove,
   StatuteCompareRow,
@@ -58,14 +60,8 @@ import type {
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import { formatValidityDate } from "@/features/statutes/statute-format";
-import {
-  paragraphFromPreview,
-  prepareStatuteReader,
-} from "@/features/statutes/statute-reader-blocks";
-import type {
-  PreviewBlock,
-  StatuteMasthead as StatuteMastheadData,
-} from "@/features/statutes/statute-reader-blocks";
+import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
+import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -216,11 +212,6 @@ const orderSides = ({
   frame.newer.id === onScreenId
     ? pairCompareSides({ newer: onScreen, older: other })
     : pairCompareSides({ newer: other, older: onScreen });
-
-const readyBlocks = (blocks: readonly Block[]): CompareSideState => ({
-  type: "ready",
-  blocks,
-});
 
 type ActComparisonProps = {
   frame: CompareFrame;
@@ -373,10 +364,6 @@ const ProvisionComparison = ({
   );
 };
 
-type ProvisionWording = {
-  blocks: readonly PreviewBlock[];
-};
-
 /** The provision read's answer: still loading, not in that version, or its wording. */
 const otherProvisionSide = (
   data: ProvisionWording | null | undefined,
@@ -388,7 +375,7 @@ const otherProvisionSide = (
     return { type: "absent" };
   }
 
-  return readyBlocks(data.blocks.map(paragraphFromPreview));
+  return provisionWordingSide(data);
 };
 
 type CompareFrameLayoutProps = {

@@ -5,6 +5,8 @@ import {
 } from "@stll/legal-ast/document-ast";
 import type {
   Block,
+  HeadingBlock,
+  HeadingLevel,
   Inline,
   ParagraphBlock,
   ParagraphListDepth,
@@ -398,6 +400,33 @@ export const paragraphFromPreview = ({
     ...(listDepth === null ? {} : { listDepth }),
   };
 };
+
+export type PreviewHeading = PreviewBlock & { level: HeadingLevel };
+
+/**
+ * A provision read's own heading as a heading the reader can render. Its
+ * lines are the heading's line breaks, so the designation keeps a row of its
+ * own the way the reader sets it.
+ */
+export const headingFromPreview = ({
+  anchorId,
+  id,
+  level,
+  text,
+}: PreviewHeading): HeadingBlock => ({
+  anchorId,
+  id,
+  inlines: text
+    .split("\n")
+    .flatMap((line, index): Inline[] =>
+      index === 0
+        ? [{ text: line, type: "text" }]
+        : [{ type: "line-break" }, { text: line, type: "text" }],
+    ),
+  level,
+  plainText: text,
+  type: "heading",
+});
 
 type PrepareStatuteReaderOptions = {
   blocks: readonly Block[];

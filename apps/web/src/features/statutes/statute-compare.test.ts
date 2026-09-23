@@ -10,11 +10,15 @@ import {
   locateCompareRows,
   pairCompareSides,
   provisionCompareSide,
+  provisionWordingSide,
   resolveCompareVersions,
   splitDiffSides,
   visibleCompareGroups,
 } from "@/features/statutes/statute-compare";
-import type { StatuteCompareRow } from "@/features/statutes/statute-compare";
+import type {
+  CompareSideState,
+  StatuteCompareRow,
+} from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 
@@ -339,6 +343,71 @@ describe("a consolidation without a usable AST", () => {
         unstructured,
       );
     }
+  });
+});
+
+describe("one provision compared", () => {
+  const body: Block = {
+    type: "paragraph",
+    id: "b2",
+    anchorId: "par_5-odst_1",
+    inlines: [{ type: "text", text: "(1) The seller shall deliver." }],
+    plainText: "(1) The seller shall deliver.",
+  };
+  const onScreen: Block[] = [
+    {
+      type: "heading",
+      id: "b1",
+      anchorId: "par_5",
+      level: 4,
+      inlines: [
+        { type: "text", text: "§ 5" },
+        { type: "line-break" },
+        { type: "text", text: "Delivery" },
+      ],
+      plainText: "§ 5\nDelivery",
+    },
+    body,
+  ];
+  const readSide = (caption: string) =>
+    provisionWordingSide({
+      heading: {
+        anchorId: "par_5",
+        id: "b1",
+        level: 4,
+        text: `§ 5\n${caption}`,
+      },
+      blocks: [{ anchorId: body.anchorId, id: body.id, text: body.plainText }],
+    });
+  const rowsBetween = (older: CompareSideState, newer: CompareSideState) => {
+    const paired = pairCompareSides({ newer, older });
+    if (paired.type !== "both") {
+      throw new Error(`Expected both sides, got ${paired.type}`);
+    }
+    return rowsOf(paired.older, paired.newer);
+  };
+
+  // The provision read never repeats the heading among its blocks, so a
+  // side built from the blocks alone misses an amended caption.
+  test("an amendment to the caption alone is a change", () => {
+    const rows = rowsBetween(
+      provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+      readSide("Delivery and acceptance"),
+    );
+
+    expect(rows.map((row) => [row.type, row.status])).toEqual([
+      ["heading", "changed"],
+      ["text", "unchanged"],
+    ]);
+  });
+
+  test("the side on screen reads as the provision read does", () => {
+    expect(
+      rowsBetween(
+        provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+        readSide("Delivery"),
+      ).every((row) => row.status === "unchanged"),
+    ).toBe(true);
   });
 });
 

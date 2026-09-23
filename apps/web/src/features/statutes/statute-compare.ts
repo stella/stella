@@ -8,6 +8,7 @@ import type {
 } from "@stll/folio-core";
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
+import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
 
@@ -20,8 +21,13 @@ import {
 } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import {
+  headingFromPreview,
   paragraphFromPreview,
   prepareStatuteReader,
+} from "@/features/statutes/statute-reader-blocks";
+import type {
+  PreviewBlock,
+  PreviewHeading,
 } from "@/features/statutes/statute-reader-blocks";
 
 /** What the comparison pairs blocks by: a heading only pairs a heading. */
@@ -532,6 +538,28 @@ type ProvisionCompareSideOptions = {
   provision: string;
 };
 
+/** A provision read's answer: its own heading and the blocks it owns. */
+export type ProvisionWording = {
+  heading: PreviewHeading | null;
+  blocks: readonly PreviewBlock[];
+};
+
+/**
+ * A provision's wording as the comparison reads it. The heading is compared
+ * with the body: an amendment may change only the designation or the
+ * caption, and a body alone would report no change.
+ */
+export const provisionWordingSide = ({
+  blocks,
+  heading,
+}: ProvisionWording): CompareSideState => ({
+  type: "ready",
+  blocks: [
+    ...(heading === null ? [] : [headingFromPreview(heading)]),
+    ...blocks.map(paragraphFromPreview),
+  ],
+});
+
 /**
  * One provision of a consolidation already in memory, narrowed by the rule
  * the API applies to the other side. A preview carries text without block
@@ -546,20 +574,26 @@ export const provisionCompareSide = ({
   if (blocks === null) {
     return { type: "unstructured" };
   }
+  const heading = resolveDocumentHeadingAnchor(blocks, provision);
   const owned = provisionPreviewBlocks(blocks, provision, undefined);
 
-  return owned === null
-    ? { type: "absent" }
-    : {
-        type: "ready",
-        blocks: owned.map((block) =>
-          paragraphFromPreview({
-            anchorId: block.anchorId,
-            id: block.id,
-            text: block.plainText,
-          }),
-        ),
-      };
+  if (heading === null || owned === null) {
+    return { type: "absent" };
+  }
+
+  return provisionWordingSide({
+    heading: {
+      anchorId: heading.anchorId,
+      id: heading.id,
+      level: heading.level,
+      text: heading.plainText,
+    },
+    blocks: owned.map((block) => ({
+      anchorId: block.anchorId,
+      id: block.id,
+      text: block.plainText,
+    })),
+  });
 };
 
 export type PairedCompareSides =
