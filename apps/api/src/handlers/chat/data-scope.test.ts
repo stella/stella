@@ -588,9 +588,9 @@ describe("extractThreadDataWorkspaceIds", () => {
 });
 
 describe("computeAssistantTurnWorkspaceIds", () => {
-  // `send-message.ts` snapshots `refRegistry.getRegisteredWorkspaceIds()`
+  // `send-message.ts` snapshots `refRegistry.getObservedWorkspaceIds()`
   // before streaming and diffs it against the post-stream snapshot passed
-  // here as `registeredWorkspaceIdsAfterStream`. This is the mechanism that
+  // here as `observedWorkspaceIdsAfterStream`. This is the mechanism that
   // widens `chat_threads.data_workspace_ids` when a `spawn_subagents`
   // subagent reads workspace-scoped content and only returns a free-form
   // text summary — no structural `matterRef`/`workspaceId` field or
@@ -603,7 +603,7 @@ describe("computeAssistantTurnWorkspaceIds", () => {
         { type: "text", content: "Done — see the summary above." },
       ],
       workspaceIdsBeforeStream: new Set(),
-      registeredWorkspaceIdsAfterStream: [wsA],
+      observedWorkspaceIdsAfterStream: [wsA],
       accessibleWorkspaceIds: new Set([wsA]),
     });
 
@@ -614,7 +614,7 @@ describe("computeAssistantTurnWorkspaceIds", () => {
     const ids = computeAssistantTurnWorkspaceIds({
       accessibleWorkspaceIds: new Set([wsA, wsB]),
       opaqueReadWorkspaceIds: [wsA, wsB],
-      registeredWorkspaceIdsAfterStream: [],
+      observedWorkspaceIdsAfterStream: [],
       responseParts: [
         { content: "A summary without structured refs", type: "text" },
       ],
@@ -630,7 +630,7 @@ describe("computeAssistantTurnWorkspaceIds", () => {
     const ids = computeAssistantTurnWorkspaceIds({
       responseParts: [],
       workspaceIdsBeforeStream: new Set([wsA]),
-      registeredWorkspaceIdsAfterStream: [wsA],
+      observedWorkspaceIdsAfterStream: [wsA],
       accessibleWorkspaceIds: new Set([wsA]),
     });
 
@@ -644,7 +644,7 @@ describe("computeAssistantTurnWorkspaceIds", () => {
     const ids = computeAssistantTurnWorkspaceIds({
       responseParts: [],
       workspaceIdsBeforeStream: new Set(),
-      registeredWorkspaceIdsAfterStream: [wsA],
+      observedWorkspaceIdsAfterStream: [wsA],
       accessibleWorkspaceIds: new Set(),
     });
 
@@ -664,7 +664,7 @@ describe("computeAssistantTurnWorkspaceIds", () => {
         },
       ],
       workspaceIdsBeforeStream: new Set(),
-      registeredWorkspaceIdsAfterStream: [wsA, wsB],
+      observedWorkspaceIdsAfterStream: [wsA, wsB],
       accessibleWorkspaceIds: new Set([wsA, wsB]),
     });
 

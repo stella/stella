@@ -77,6 +77,7 @@ import {
 } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -247,6 +248,7 @@ const suggestChangesOperationTypeEnum = (
 // register by default (no disabled slugs).
 const buildFullCoverageChatTools = (
   thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
+  refRegistry: ChatRefRegistry = createChatRefRegistry(),
 ) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
@@ -268,7 +270,7 @@ const buildFullCoverageChatTools = (
     organizationId,
     requestWorkspaceId: workspaceId,
     thirdPartyBoundary,
-    refRegistry: createChatRefRegistry(),
+    refRegistry,
     toolDefectMemo: createChatToolDefectMemo(),
     safeDb: unusedSafeDb,
     scopedDb: unusedScopedDb,
@@ -716,6 +718,16 @@ describe("chat tool schemas", () => {
       expect(rejection.message).toBe(`Entity "${entityRef}" is read-only.`);
       expect(entityLookups).toBe(1);
     }
+  });
+
+  test("building the chat tool set observes no workspace", () => {
+    // Thread data scope is derived from what the registry observed during a
+    // turn, so tool construction may offer matter refs but never observe one.
+    const registry = createChatRefRegistry();
+    buildFullCoverageChatTools(rawThirdPartyBoundary, registry);
+
+    expect(registry.getRegisteredWorkspaceIds()).toContain(workspaceId);
+    expect(registry.getObservedWorkspaceIds()).toEqual([]);
   });
 
   test("workspace tool schemas enumerate matter refs, never workspace UUIDs", () => {

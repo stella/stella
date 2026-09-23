@@ -157,7 +157,7 @@ export const createWorkspaceTools = ({
     allowedWorkspaceIds,
   );
   const wsSchema = matterRefSchema(
-    allowedWorkspaceIds.map((id) => refRegistry.toMatterRef(id)),
+    allowedWorkspaceIds.map((id) => refRegistry.offerMatterRef(id)),
   );
 
   return {

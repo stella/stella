@@ -130,6 +130,8 @@ type RefState<TTarget> = {
   prefix: string;
   refToTarget: Map<string, TTarget>;
   targetToRef: Map<string, string>;
+  /** Refs minted by a read path, as opposed to only offered to the model. */
+  observed: Set<string>;
 };
 
 type ResolveRefsResult<TTarget> = Result<TTarget[], ChatToolError>;
@@ -139,26 +141,39 @@ const createRefState = <TTarget>(prefix: string): RefState<TTarget> => ({
   prefix,
   refToTarget: new Map(),
   targetToRef: new Map(),
+  observed: new Set(),
 });
+
+const REF_MINT_PURPOSE = {
+  /** The id came from data a tool, prompt, or message put in front of the model. */
+  observe: "observe",
+  /** The id is only offered as a choice (a tool schema enum), not read. */
+  offer: "offer",
+} as const;
+
+type RefMintPurpose = (typeof REF_MINT_PURPOSE)[keyof typeof REF_MINT_PURPOSE];
 
 const getOrCreateRef = <TTarget>({
   key,
+  purpose = REF_MINT_PURPOSE.observe,
   state,
   target,
 }: {
   key: string;
+  purpose?: RefMintPurpose;
   state: RefState<TTarget>;
   target: TTarget;
 }) => {
-  const existingRef = state.targetToRef.get(key);
-  if (existingRef) {
-    return existingRef;
+  let ref = state.targetToRef.get(key);
+  if (ref === undefined) {
+    state.counter += 1;
+    ref = `${state.prefix}_${state.counter}`;
+    state.targetToRef.set(key, ref);
+    state.refToTarget.set(ref, target);
   }
-
-  state.counter += 1;
-  const ref = `${state.prefix}_${state.counter}`;
-  state.targetToRef.set(key, ref);
-  state.refToTarget.set(ref, target);
+  if (purpose === REF_MINT_PURPOSE.observe) {
+    state.observed.add(ref);
+  }
   return ref;
 };
 
@@ -256,15 +271,23 @@ export type ResolveRefIdProps = {
 
 export type ChatRefRegistry = {
   /**
-   * Deduped union of every workspace id any tool (including subagents)
-   * resolved a matter or entity ref for on this turn, regardless of
-   * whether that content ever reached the assistant's response parts.
-   * Used to widen `chat_threads.data_workspace_ids` so a subagent that
-   * read a matter but only returned a free-form summary still triggers
-   * scope persistence — otherwise a later access revocation would leave
-   * that content readable via the persisted assistant text.
+   * Deduped union of every workspace id this registry holds a matter or
+   * entity ref for, whether observed or only offered. Memory provenance uses
+   * this deliberately broad set.
    */
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
+  /**
+   * Workspace ids of every matter or entity ref minted by a read path this
+   * turn: prompt context, message history, and tool output. Refs that were
+   * only offered as tool-schema choices (`offerMatterRef`) are excluded until
+   * a read path mints them too. Thread data scope is derived from this set.
+   */
+  getObservedWorkspaceIds: () => SafeId<"workspace">[];
+  /**
+   * The ref for a matter the model may choose (a tool-schema enum value).
+   * Offering is not reading, so it does not add to the observed set.
+   */
+  offerMatterRef: (workspaceId: SafeId<"workspace">) => string;
   hydrateAssistantTextRefs: (text: string) => string;
   hydrateUserTextRefs: (text: string) => string;
   hydrateAssistantValueRefs: (value: unknown) => unknown;
@@ -652,6 +675,23 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     );
   };
 
+  const getObservedWorkspaceIds = (): SafeId<"workspace">[] => {
+    const ids = new Set<SafeId<"workspace">>();
+    for (const ref of matterState.observed) {
+      const workspaceId = matterState.refToTarget.get(ref);
+      if (workspaceId !== undefined) {
+        ids.add(workspaceId);
+      }
+    }
+    for (const ref of entityState.observed) {
+      const target = entityState.refToTarget.get(ref);
+      if (target !== undefined) {
+        ids.add(target.workspaceId);
+      }
+    }
+    return [...ids];
+  };
+
   const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {
     const ids = new Set<SafeId<"workspace">>([
       ...matterState.refToTarget.values(),
@@ -663,7 +703,15 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   return {
+    getObservedWorkspaceIds,
     getRegisteredWorkspaceIds,
+    offerMatterRef: (workspaceId: SafeId<"workspace">) =>
+      getOrCreateRef({
+        key: workspaceId,
+        purpose: REF_MINT_PURPOSE.offer,
+        state: matterState,
+        target: workspaceId,
+      }),
     hydrateAssistantTextRefs,
     hydrateUserTextRefs,
     hydrateAssistantValueRefs,

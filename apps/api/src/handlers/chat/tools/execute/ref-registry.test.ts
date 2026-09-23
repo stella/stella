@@ -363,3 +363,42 @@ describe("getRegisteredWorkspaceIds", () => {
     expect(registry.getRegisteredWorkspaceIds()).toEqual([workspaceId]);
   });
 });
+
+describe("getObservedWorkspaceIds", () => {
+  const workspaceA = toSafeId<"workspace">(
+    "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+  );
+  const workspaceB = toSafeId<"workspace">(
+    "4e919658-a448-5354-8e3a-e99911214d2c",
+  );
+
+  test("an offered matter ref is not observed", () => {
+    const registry = createChatRefRegistry();
+
+    registry.offerMatterRef(workspaceA);
+
+    expect(registry.getObservedWorkspaceIds()).toEqual([]);
+    expect(registry.getRegisteredWorkspaceIds()).toEqual([workspaceA]);
+  });
+
+  test("an offered matter becomes observed once a read path mints it", () => {
+    const registry = createChatRefRegistry();
+
+    const offered = registry.offerMatterRef(workspaceA);
+    registry.offerMatterRef(workspaceB);
+    const observed = registry.toMatterRef(workspaceA);
+
+    expect(observed).toBe(offered);
+    expect(registry.getObservedWorkspaceIds()).toEqual([workspaceA]);
+  });
+
+  test("an entity ref observes its workspace", () => {
+    const registry = createChatRefRegistry();
+    const entityId = toSafeId<"entity">("e650e388-8d13-59ca-8adb-e81e1916deea");
+
+    registry.offerMatterRef(workspaceA);
+    registry.toEntityRef({ entityId, workspaceId: workspaceB });
+
+    expect(registry.getObservedWorkspaceIds()).toEqual([workspaceB]);
+  });
+});
