@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
@@ -50,6 +52,7 @@ import {
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
@@ -745,6 +748,27 @@ const detailMetadata = (
   );
 
 /**
+ * The ruling's gazette number and reporter entry, as reporter identifiers, so
+ * a decision citing it either way resolves to it. Read from the record card's
+ * two cells and the document page's combined field alike; the case number
+ * and the ECLI keep their two places within the identifier limit.
+ */
+const parallelCitationIdentifiers = ({
+  detail,
+  parallelQuotation,
+}: {
+  detail: NalusDetailFields | null;
+  parallelQuotation: string | undefined;
+}): DecisionIdentifiers | undefined => {
+  const [first, ...rest] = czechConstitutionalIdentifiersFromParallelCitations([
+    ...(parallelQuotation === undefined ? [] : [parallelQuotation]),
+    ...(detail?.parallelCitationLaws ?? []),
+    ...(detail?.parallelCitationReports ?? []),
+  ]).slice(0, DECISION_IDENTIFIER_MAX_COUNT - 2);
+  return first === undefined ? undefined : [first, ...rest];
+};
+
+/**
  * What this source states about a decision, and what becomes of it.
  *
  * Keyed on the record card's labels, so the map is total over the page by
@@ -1009,6 +1033,7 @@ const parseDecisionPage = ({
     // rapporteur cell the court has blanked states that the decision has no
     // judge on it, and dropping the field would leave the stored rows alone.
     ...(judges === undefined ? {} : { judges }),
+    identifiers: parallelCitationIdentifiers({ detail, parallelQuotation }),
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: checkedDecisionMetadata({
       caseNumber: parsed.caseNumber,

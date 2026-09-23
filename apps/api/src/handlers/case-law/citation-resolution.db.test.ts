@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
   citationKeyOf,
+  decisionIdentifiersFromStoredMetadata,
   extractCitations,
   normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
@@ -525,6 +526,161 @@ test.each([
     );
   },
 );
+
+test("a Constitutional Court ruling is reached by its gazette number and by its reporter entry", async () => {
+  // The ruling's identifiers come from its stored parallel citations, as a
+  // backfill recomputes them; the citing sentences are real Czech prose.
+  const constitutional = { ...base, court: "Ústavní soud", country: "CZE" };
+  const rulingId = createSafeId<"caseLawDecision">();
+  const citingId = createSafeId<"caseLawDecision">();
+  const ruling = {
+    caseNumber: "Pl. ÚS 18/01",
+    ecli: null,
+    metadata: { parallelQuotation: "234/2002 Sb.\nN 53/26 SbNU 73" },
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...constitutional,
+      id: rulingId,
+      caseNumber: ruling.caseNumber,
+      citationKey: citationKeyOf(ruling.caseNumber),
+      decisionDate: "2002-03-13",
+    },
+    {
+      ...constitutional,
+      id: citingId,
+      caseNumber: "Pl. ÚS 1/12",
+      citationKey: citationKeyOf("Pl. ÚS 1/12"),
+      decisionDate: "2012-11-27",
+    },
+  ]);
+  await db.insert(caseLawDecisionIdentifiers).values(
+    decisionIdentifiersFromStoredMetadata(ruling).map((identifier) => ({
+      decisionId: rulingId,
+      type: identifier.type,
+      value: identifier.value,
+      normalizedValue: normalizeDecisionIdentifier(identifier),
+    })),
+  );
+  const extracted = extractCitations([
+    {
+      index: 0,
+      text: "Ustanovení § 31 odst. 4 zákona č. 82/1998 Sb., ve znění nálezu Ústavního soudu č. 234/2002 Sb., bylo …",
+    },
+    {
+      index: 1,
+      text: "Uvedené východisko [srov. též N 53/26 SbNU 73] platí",
+    },
+  ]);
+  await db.insert(caseLawCitations).values(
+    extracted.map((citation) => ({
+      id: createSafeId<"caseLawCitation">(),
+      citingDecisionId: citingId,
+      citationText: citation.citationText,
+      citationKey: citationKeyOf(citation.citationText),
+      identifierType: citation.identifierType,
+      normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+        citation.identifierType,
+        citation.identifierValue,
+      ),
+    })),
+  );
+
+  await resolveCitationsForDecision(asTx(), citingId);
+
+  const rows = await db
+    .select({
+      text: caseLawCitations.citationText,
+      type: caseLawCitations.identifierType,
+      cited: caseLawCitations.citedDecisionId,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.citingDecisionId, citingId));
+  // Code-point order over two fixed spellings; no linguistic collation.
+  expect(rows.toSorted((a, b) => (a.text < b.text ? -1 : 1))).toEqual([
+    {
+      text: "234/2002 Sb.",
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      cited: rulingId,
+    },
+    {
+      text: "N 53/26 SbNU 73",
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      cited: rulingId,
+    },
+  ]);
+});
+
+test("a Constitutional Court docket beside its reporter entry still resolves by the docket", async () => {
+  // The target carries no collection identifiers, as no ruling does before a
+  // backfill: the citation must reach it exactly as it did when the reporter
+  // entry beside the docket went unread.
+  const constitutional = { ...base, court: "Ústavní soud", country: "CZE" };
+  const rulingId = createSafeId<"caseLawDecision">();
+  const citingId = createSafeId<"caseLawDecision">();
+  const caseNumber = "Pl. ÚS 77/06";
+  await db.insert(caseLawDecisions).values([
+    {
+      ...constitutional,
+      id: rulingId,
+      caseNumber,
+      citationKey: citationKeyOf(caseNumber),
+      decisionDate: "2007-02-15",
+    },
+    {
+      ...constitutional,
+      id: citingId,
+      caseNumber: "Pl. ÚS 2/12",
+      citationKey: citationKeyOf("Pl. ÚS 2/12"),
+      decisionDate: "2012-11-27",
+    },
+  ]);
+  await db.insert(caseLawDecisionIdentifiers).values(
+    decisionIdentifiersFromStoredMetadata({
+      caseNumber,
+      ecli: null,
+      metadata: {},
+    }).map((identifier) => ({
+      decisionId: rulingId,
+      type: identifier.type,
+      value: identifier.value,
+      normalizedValue: normalizeDecisionIdentifier(identifier),
+    })),
+  );
+  const extracted = extractCitations([
+    {
+      index: 0,
+      text: "obsažené v nálezu ze dne 15. února 2007 sp. zn. Pl. ÚS 77/06 (N 30/44 SbNU 349; 37/2007 Sb.), podle nichž",
+    },
+  ]);
+  expect(extracted).toHaveLength(1);
+  await db.insert(caseLawCitations).values(
+    extracted.map((citation) => ({
+      id: createSafeId<"caseLawCitation">(),
+      citingDecisionId: citingId,
+      citationText: citation.citationText,
+      citationKey: citationKeyOf(citation.citationText),
+      identifierType: citation.identifierType,
+      normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+        citation.identifierType,
+        citation.identifierValue,
+      ),
+    })),
+  );
+
+  await resolveCitationsForDecision(asTx(), citingId);
+
+  const rows = await db
+    .select({
+      type: caseLawCitations.identifierType,
+      cited: caseLawCitations.citedDecisionId,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.citingDecisionId, citingId));
+  expect(rows).toEqual([
+    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, cited: rulingId },
+  ]);
+});
 
 type CitationRow = {
   cited: string | null;
