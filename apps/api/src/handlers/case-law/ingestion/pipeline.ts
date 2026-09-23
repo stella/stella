@@ -3869,7 +3869,7 @@ type RebuiltJudgment =
  * as a replay rebuilds it. The payload travels with the result so the write
  * keeps the row's raw pointer on the same content-addressed object.
  */
-const rebuildStoredJudgment = async ({
+export const rebuildStoredJudgment = async ({
   judgmentId,
   scopedDb,
   reparseStoredRaw,

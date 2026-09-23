@@ -7,7 +7,7 @@ import { panic, Result } from "better-result";
  *
  *   bun run src/scripts/redact-case-law-decision.ts <decisionId>
  */
-import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
+import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 // eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
 import { toSafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -28,10 +28,43 @@ if (decisionIdArg === undefined || decisionIdArg.length === 0) {
 await refreshS3();
 await refreshCorpusS3();
 
-const redaction = await redactCaseLawDecision({
+const redaction = await redactCaseLawDecisionWithSupplementHolders({
   decisionId: toSafeId<"caseLawDecision">(decisionIdArg),
   scopedDb: ingestionDb,
 });
+
+/**
+ * The decisions that also held the erased text, as supplements composed
+ * into them: rebuilt without it, or withheld until the repair lane or a
+ * rerun rebuilds them.
+ */
+const holderReport = (): { exitCode: 0 | 1; lines: string[] } => {
+  if (Result.isError(redaction)) {
+    return { exitCode: 0, lines: [] };
+  }
+  const lines = redaction.value.holders.map((holder) => {
+    switch (holder.type) {
+      case "recomposed":
+        return `Rebuilt decision ${holder.judgmentId} without the erased supplement.`;
+      case "withheld":
+        return `Withheld decision ${holder.judgmentId} until it is rebuilt without the erased supplement (${holder.reason}); the repair lane or a rerun rebuilds it.`;
+      case "withhold-incomplete":
+        return `Decision ${holder.judgmentId} still holds the erased supplement in a corpus object; run this again.`;
+      default: {
+        holder satisfies never;
+        return panic(`Unhandled holder outcome: ${String(holder)}`);
+      }
+    }
+  });
+  return {
+    exitCode: redaction.value.holders.some(
+      (holder) => holder.type === "withhold-incomplete",
+    )
+      ? 1
+      : 0,
+    lines,
+  };
+};
 
 const report = ((): { exitCode: 0 | 1; message: string } => {
   if (Result.isError(redaction)) {
@@ -41,7 +74,7 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
       message: `Decision ${decisionIdArg} was not redacted; run it again: ${redaction.error.message}`,
     };
   }
-  const outcome = redaction.value;
+  const outcome = redaction.value.redaction;
   switch (outcome.type) {
     case "redacted": {
       const corpus =
@@ -75,9 +108,12 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
   }
 })();
 
-if (report.exitCode === 0) {
-  console.log(report.message);
+const holders = holderReport();
+const exitCode = report.exitCode === 0 ? holders.exitCode : report.exitCode;
+const message = [report.message, ...holders.lines].join("\n");
+if (exitCode === 0) {
+  console.log(message);
 } else {
-  console.error(report.message);
+  console.error(message);
 }
-process.exit(report.exitCode);
+process.exit(exitCode);

@@ -43,6 +43,7 @@ import {
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
@@ -288,6 +289,17 @@ const supplementRow = async (
         ),
       )
   ).at(0) ?? panic(`no supplement ${sourceDocumentId}`);
+
+/**
+ * The fixture numbers observations itself; a write under the source's lease
+ * takes the source's counter, which starts past them here.
+ */
+const advanceSourceCounter = async (sourceId: SafeId<"caseLawSource">) => {
+  await db
+    .update(caseLawSources)
+    .set({ observationOrder: 1_000_000n })
+    .where(eq(caseLawSources.id, sourceId));
+};
 
 /** The raw object keys stored under one decision's own prefix. */
 const rawKeysUnder = (
@@ -877,6 +889,88 @@ describe("the reasons' stored payload", () => {
     expect(
       (await decisionBy(fixture.sourceId, "339002")).fulltext,
     ).not.toContain(REASONS_TEXT);
+  });
+
+  test("erased after joining their ruling leave its document, and stay out of it", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    expect(ruling.fulltext).toContain(REASONS_TEXT);
+    await advanceSourceCounter(fixture.sourceId);
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+    });
+
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      { type: "recomposed", judgmentId: ruling.id },
+    ]);
+    const rebuilt = async () =>
+      (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+            metadata: caseLawDecisions.metadata,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, ruling.id))
+      ).at(0) ?? panic("the ruling is gone");
+    const after = await rebuilt();
+    expect(after.fulltext).toContain(RULING_TEXT);
+    expect(after.fulltext).not.toContain(REASONS_TEXT);
+    expect(JSON.stringify(after.documentAst)).not.toContain(REASONS_TEXT);
+    expect(after.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY]).toBeUndefined();
+    expect(await citationsOf(ruling.id)).toEqual([]);
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+
+    // Neither document observed again brings the erased text back.
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, {
+      ...decisionOf(RULING),
+      rawHash: "re-observed",
+    });
+    const again = await rebuilt();
+    expect(again.fulltext).not.toContain(REASONS_TEXT);
+    expect(JSON.stringify(again.documentAst)).not.toContain(REASONS_TEXT);
+    expect(await citationsOf(ruling.id)).toEqual([]);
+  });
+
+  test("erased after joining a ruling whose payload cannot be read withhold that ruling", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    // The reasons stood alone once in this history too: erase the row a
+    // standalone observation left behind.
+    await ingestStandaloneReasons(fixture);
+    const standaloneId = (await decisionBy(fixture.sourceId, "339001")).id;
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: standaloneId,
+      scopedDb,
+      readStoredRaw: async () => await Promise.resolve(Result.ok(null)),
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+    });
+
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      {
+        type: "withheld",
+        judgmentId: ruling.id,
+        reason: expect.any(String),
+      },
+    ]);
+    const withheld = await decisionBy(fixture.sourceId, "339002");
+    expect(withheld.fulltext).toBeNull();
+    expect(await citationsOf(ruling.id)).toEqual([]);
+    expect(await publishedIds(fixture.sourceId)).not.toContain("339002");
   });
 
   test("go with an erasure of their ruling, and stay gone", async () => {
