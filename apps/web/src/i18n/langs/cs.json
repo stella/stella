@@ -248,6 +248,7 @@
       "open": "Otevřít",
       "otherList": "Zkontrolováno podle jiného seznamu",
       "sizeConfirmTitle": "Ověřit tento dokument?",
+      "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
       "verify": "Ověřit",
       "verifyAgain": "Ověřit znovu"
     },

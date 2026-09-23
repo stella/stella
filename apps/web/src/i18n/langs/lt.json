@@ -248,6 +248,7 @@
       "open": "Atverti",
       "otherList": "Patikrinta pagal kitą sąrašą",
       "sizeConfirmTitle": "Patikrinti šį dokumentą?",
+      "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
       "verify": "Tikrinti",
       "verifyAgain": "Tikrinti iš naujo"
     },

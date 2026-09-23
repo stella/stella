@@ -251,6 +251,7 @@ type Messages = {
       "open": "Open";
       "otherList": "Checked against another list";
       "sizeConfirmTitle": "Verify this document?";
+      "statusLoadFailed": "The verification status of these documents could not be loaded.";
       "verify": "Verify";
       "verifyAgain": "Verify again";
     };

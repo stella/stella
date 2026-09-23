@@ -48,7 +48,13 @@ export const DocumentVerifications = ({
     onStarted: onOpenRun,
   });
   const confirmation = verification.sizeConfirmation;
-  const { data: latestByFile, isPending } = useQuery(
+  const {
+    data: latestByFile,
+    isPending,
+    isError,
+    isRefetching,
+    refetch,
+  } = useQuery(
     latestVerificationsOptions({
       workspaceId,
       documents: files.map((file) => ({
@@ -66,8 +72,27 @@ export const DocumentVerifications = ({
     );
   }
 
+  // Until the statuses load, a row cannot tell "never verified" from
+  // "running", so it offers no verdict and no Verify.
+  const statusLoad: StatusLoad = latestLoadState({ isPending, isError });
+
   return (
     <>
+      {statusLoad === "failed" && (
+        <div className="text-muted-foreground mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span>{t("avt.documents.statusLoadFailed")}</span>
+          <Button
+            loading={isRefetching}
+            onClick={() => {
+              detached(refetch(), "avt.refetch-latest-verifications");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
       <ul className="divide-y rounded-xl border">
         {files.map((file) => (
           <DocumentRow
@@ -81,7 +106,7 @@ export const DocumentVerifications = ({
                 }),
               ) ?? null
             }
-            loading={isPending}
+            statusLoad={statusLoad}
             listId={listId}
             onOpenRun={onOpenRun}
             onVerify={(target) => {
@@ -116,9 +141,24 @@ export const DocumentVerifications = ({
   );
 };
 
+type StatusLoad = "loading" | "failed" | "loaded";
+
+const latestLoadState = ({
+  isPending,
+  isError,
+}: {
+  isPending: boolean;
+  isError: boolean;
+}): StatusLoad => {
+  if (isError) {
+    return "failed";
+  }
+  return isPending ? "loading" : "loaded";
+};
+
 type DocumentRowProps = {
   latest: VerificationRunSummary | null;
-  loading: boolean;
+  statusLoad: StatusLoad;
   listId: string;
   file: WorkspaceFile;
   starting: boolean;
@@ -128,7 +168,7 @@ type DocumentRowProps = {
 
 const DocumentRow = ({
   latest,
-  loading,
+  statusLoad,
   listId,
   file,
   starting,
@@ -145,7 +185,9 @@ const DocumentRow = ({
         <p className="truncate text-sm font-medium" dir="auto">
           {file.name ?? file.fileName}
         </p>
-        {!loading && <LatestRunSummary latest={latest} listId={listId} />}
+        {statusLoad === "loaded" && (
+          <LatestRunSummary latest={latest} listId={listId} />
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {latest !== null && (
@@ -159,7 +201,9 @@ const DocumentRow = ({
           </Button>
         )}
         <Button
-          disabled={!canVerify || active || starting}
+          disabled={
+            !canVerify || statusLoad !== "loaded" || active || starting
+          }
           loading={starting}
           onClick={() =>
             onVerify({ entityId: file.entityId, fileFieldId: file.fieldId })

@@ -248,6 +248,7 @@
       "open": "Otvoriť",
       "otherList": "Skontrolované podľa iného zoznamu",
       "sizeConfirmTitle": "Overiť tento dokument?",
+      "statusLoadFailed": "Stav overenia týchto dokumentov sa nepodarilo načítať.",
       "verify": "Overiť",
       "verifyAgain": "Overiť znova"
     },

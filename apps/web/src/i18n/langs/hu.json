@@ -248,6 +248,7 @@
       "open": "Megnyitás",
       "otherList": "Másik listához viszonyítva ellenőrizve",
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
+      "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
       "verify": "Ellenőrzés",
       "verifyAgain": "Ismételt ellenőrzés"
     },

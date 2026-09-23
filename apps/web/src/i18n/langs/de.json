@@ -248,6 +248,7 @@
       "open": "Öffnen",
       "otherList": "Gegen eine andere Liste geprüft",
       "sizeConfirmTitle": "Dieses Dokument prüfen?",
+      "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
       "verify": "Prüfen",
       "verifyAgain": "Erneut prüfen"
     },

@@ -248,6 +248,7 @@
       "open": "Ava",
       "otherList": "Kontrollitud teise loendi alusel",
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
+      "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
       "verify": "Kontrolli",
       "verifyAgain": "Kontrolli uuesti"
     },

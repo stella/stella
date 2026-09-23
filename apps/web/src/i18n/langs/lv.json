@@ -248,6 +248,7 @@
       "open": "Atvērt",
       "otherList": "Pārbaudīts pret citu sarakstu",
       "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
+      "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
       "verify": "Pārbaudīt",
       "verifyAgain": "Pārbaudīt vēlreiz"
     },

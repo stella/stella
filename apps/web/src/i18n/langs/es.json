@@ -248,6 +248,7 @@
       "open": "Abrir",
       "otherList": "Verificado con otra lista",
       "sizeConfirmTitle": "¿Verificar este documento?",
+      "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
       "verify": "Verificar",
       "verifyAgain": "Volver a verificar"
     },
