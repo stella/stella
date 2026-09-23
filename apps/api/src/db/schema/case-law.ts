@@ -1827,7 +1827,6 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
       )
       .where(isNotNull(t.workEli)),
-    p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
     p.check(
       "provision_citations_unit_values",
       sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,
