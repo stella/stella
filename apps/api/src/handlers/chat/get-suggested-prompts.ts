@@ -9,6 +9,7 @@ import {
 import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -267,7 +268,9 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.ok<SuggestedPromptsResult>({ prompts });
     } catch (error) {
       aiAnalytics.captureError(error);
-      captureError(error, { threadId, feature: "chat.suggested_prompts" });
+      if (isUnanticipatedAIFailure(error)) {
+        captureError(error, { threadId, feature: "chat.suggested_prompts" });
+      }
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
   },

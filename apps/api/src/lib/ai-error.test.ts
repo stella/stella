@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyAIError,
   isAnticipatedAIFailure,
+  isUnanticipatedAIFailure,
   providerStatusCode,
   providerStatusFields,
 } from "@/api/lib/ai-error";
@@ -462,5 +463,56 @@ describe("providerStatusFields", () => {
         "error.provider.status": status,
       });
     }
+  });
+});
+
+describe("isUnanticipatedAIFailure", () => {
+  test("classifies the error itself rather than taking a kind", () => {
+    // The convenience form exists for catch blocks that never classified the
+    // error, so it must agree with the guard on every input the guard sees.
+    const cases: unknown[] = [
+      new HandlerError({
+        status: 502,
+        message: "AI generation was cancelled",
+        cause: new AIGenerationCancelledError({
+          message: "AI generation was cancelled",
+        }),
+      }),
+      new HandlerError({ status: 403, message: "no key for role" }),
+      new HandlerError({ status: 502, message: "generation failed" }),
+      new ChatEmptyCompletionError({ message: "no content" }),
+      apiCallError(429),
+      new Error("stream ended before completion"),
+    ];
+
+    for (const error of cases) {
+      expect(isUnanticipatedAIFailure(error)).toBe(
+        !isAnticipatedAIFailure(error, classifyAIError(error)),
+      );
+    }
+  });
+
+  test("does not report a cancelled generation", () => {
+    // A cancelled run is the caller's own deadline or a client that went
+    // away. It answers 502, so only the cause tells a defect sink apart from
+    // a generation that genuinely broke.
+    const cancelled = new HandlerError({
+      status: 502,
+      message: "AI generation was cancelled",
+      cause: new AIGenerationCancelledError({
+        message: "AI generation was cancelled",
+      }),
+    });
+
+    expect(isUnanticipatedAIFailure(cancelled)).toBe(false);
+  });
+
+  test("reports a 502 the cancellation tag does not explain", () => {
+    const error = new HandlerError({
+      status: 502,
+      message: "AI generation did not complete",
+    });
+
+    expect(isUnanticipatedAIFailure(error)).toBe(true);
   });
 });

@@ -379,6 +379,20 @@ export const isAnticipatedAIFailure = (
   isCancelledGeneration(error) ||
   (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
+/**
+ * The same judgement for a sink that holds no classified kind of its own.
+ *
+ * A best-effort side path (thread title, recap, suggested prompts) catches
+ * whatever its generation threw and has only the error in hand, so pairing
+ * the classifier with the guard at each such catch is the whole of the
+ * decision. Without it those sinks fall back to "report everything", which
+ * grades this module's anticipated outcomes — a provider quota refusal, a
+ * deadline the caller itself set — as defects, the exact reading
+ * {@link isAnticipatedAIFailure} exists to prevent.
+ */
+export const isUnanticipatedAIFailure = (error: unknown): boolean =>
+  !isAnticipatedAIFailure(error, classifyAIError(error));
+
 type AIHandlerErrorFallback = {
   status: HandlerErrorStatusCode;
   message: string;

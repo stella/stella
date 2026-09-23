@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -164,6 +165,8 @@ export const generateThreadTitle = async ({
     }
   } catch (error) {
     aiAnalytics.captureError(error);
-    captureError(error, { threadId });
+    if (isUnanticipatedAIFailure(error)) {
+      captureError(error, { threadId });
+    }
   }
 };
