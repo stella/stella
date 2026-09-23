@@ -1879,6 +1879,12 @@ export default defineConfig({
       },
     },
     {
+      // The desktop shell runs in the system WebView of its minimum macOS
+      // version, which predates `Array#toSorted`; sort a fresh array there.
+      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      rules: { "unicorn/no-array-sort": "off" },
+    },
+    {
       // Two guards contradict each other in apps/web; this override picks one.
       //
       // React Compiler: bails out of any component or hook containing a logical
