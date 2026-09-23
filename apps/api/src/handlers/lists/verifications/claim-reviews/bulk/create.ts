@@ -111,8 +111,19 @@ const createBulkClaimReviews = createSafeHandler(
           runId,
           claimIds,
         });
+        // Claims already decided are left as they are, so only the rest are
+        // held to the routine rule: a conflict someone settled by hand must
+        // not block accepting the routine claims around it.
+        const toMark = claims.filter((claim) => {
+          const record = before.get(claim.id);
+          return (
+            (record?.review.status ?? null) === null &&
+            (record?.eventCount ?? 0) <
+              VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
+          );
+        });
         const contested = contestedFactIds(run.evidence);
-        const attention = claims.filter((claim) =>
+        const attention = toMark.filter((claim) =>
           needsAttention(
             reviewedView(
               claim,
@@ -127,15 +138,6 @@ const createBulkClaimReviews = createSafeHandler(
             claimIds: attention.map((claim) => claim.id),
           } as const;
         }
-
-        const toMark = claims.filter((claim) => {
-          const record = before.get(claim.id);
-          return (
-            (record?.review.status ?? null) === null &&
-            (record?.eventCount ?? 0) <
-              VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
-          );
-        });
         if (toMark.length === 0) {
           return { type: "marked", reviews: [] } as const;
         }
