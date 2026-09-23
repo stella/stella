@@ -1935,7 +1935,13 @@ export const czRegionalAdapter = defineSourceAdapter({
               item,
               attempt: await Result.tryPromise({
                 try: async () => await buildCzRegionalDecision(item, signal),
-                catch: (cause) => cause,
+                // Only the adapter's own refusal is recovered from below; any
+                // other failure is a defect and halts the page rather than
+                // turning a fetched document into a listing-only row.
+                catch: (cause) =>
+                  cause instanceof UnpersistableDecisionFieldError
+                    ? cause
+                    : panic("CZ regional decision assembly failed", cause),
               }),
             })),
           );

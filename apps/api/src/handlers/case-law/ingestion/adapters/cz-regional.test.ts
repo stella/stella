@@ -11,7 +11,7 @@
  */
 
 import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -520,22 +520,25 @@ describe("the crawl keeps a refused row as its listing", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    mock.restore();
   });
 
-  /** Crawl one day page whose district document states `courtCode: 7`. */
-  const crawlWithRefusedDistrict = async ({
+  /** Crawl one day page whose district document carries `districtMetadata`. */
+  const crawlDay = async ({
     cursor,
     withAppellate,
+    districtMetadata,
   }: {
     cursor: string;
     withAppellate: boolean;
+    districtMetadata: Record<string, unknown>;
   }): Promise<Awaited<ReturnType<typeof czRegionalAdapter.fetchPage>>> => {
     const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
     const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
     const bodies = new Map([
       [
         district.odkaz ?? panic("the district row links no document"),
-        await documentWithMetadata(DISTRICT_DOCUMENT, { courtCode: 7 }),
+        await documentWithMetadata(DISTRICT_DOCUMENT, districtMetadata),
       ],
       [
         appellate.odkaz ?? panic("the appellate row links no document"),
@@ -559,9 +562,10 @@ describe("the crawl keeps a refused row as its listing", () => {
   };
 
   test("a refused row is stored listing-only beside the rest of the page", async () => {
-    const page = await crawlWithRefusedDistrict({
+    const page = await crawlDay({
       cursor: "2025-06-11:0",
       withAppellate: true,
+      districtMetadata: { courtCode: 7 },
     });
 
     const decisions = page.unwrap().decisions;
@@ -583,11 +587,41 @@ describe("the crawl keeps a refused row as its listing", () => {
 
   test("a day of refused rows is not an empty day to gap-skip past", async () => {
     // Thirty empty days in a row would make an empty day skip a week ahead.
-    const page = await crawlWithRefusedDistrict({
+    const page = await crawlDay({
       cursor: "2025-06-11:0:30",
       withAppellate: false,
+      districtMetadata: { courtCode: 7 },
     });
 
     expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
+  });
+
+  test("an assembly failure other than a refusal halts the page", async () => {
+    // The first serialization of the district listing row fails as a defect
+    // would; a listing-only fallback would serialize it again and succeed.
+    const stringify = JSON.stringify.bind(JSON);
+    let failed = false;
+    spyOn(JSON, "stringify").mockImplementation(
+      (value: unknown, replacer?: undefined, space?: string | number) => {
+        if (
+          !failed &&
+          isRecord(value) &&
+          value["jednaciCislo"] === DISTRICT_DOCKET
+        ) {
+          failed = true;
+          throw new Error("assembly defect");
+        }
+        return stringify(value, replacer, space);
+      },
+    );
+
+    const page = await crawlDay({
+      cursor: "2025-06-11:0",
+      withAppellate: true,
+      districtMetadata: {},
+    });
+
+    expect(failed).toBe(true);
+    expect(page.isErr()).toBe(true);
   });
 });
