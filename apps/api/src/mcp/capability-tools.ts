@@ -49,6 +49,7 @@ import {
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
 } from "@/api/mcp/public-field-names";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -59,8 +60,11 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
+  confirmationUnavailableResult,
   DEFAULT_LIST_LIMIT,
   enumProp,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
   getWorkspaceStatus,
   intProp,
   MAX_LIST_LIMIT,
@@ -73,8 +77,6 @@ import {
   parseRequiredString,
   stringProp,
   structuredErrorResult,
-  FEATURE_DISABLED_MESSAGE,
-  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
 import {
@@ -866,9 +868,14 @@ const listCapabilitiesHandler: McpToolHandler<
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
   // them, closing the guess-the-id bypass).
+  // A session that cannot confirm is not offered destructive capabilities;
+  // invoke refuses them for it as well.
+  const confirmable =
+    context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
   const filtered = CATALOG.filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
+      (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -1505,6 +1512,15 @@ const invokeCapabilityHandler = async ({
   }
 
   // 5. Destructive confirm gate.
+  const unconfirmable = entry.destructive
+    ? confirmationUnavailableResult({
+        toolConfirmation: context.toolConfirmation,
+        subject: `Capability "${id}"`,
+      })
+    : null;
+  if (unconfirmable !== null) {
+    return unconfirmable;
+  }
   if (entry.destructive && args["confirm"] !== true) {
     return structuredErrorResult({
       code: "confirmation_required",

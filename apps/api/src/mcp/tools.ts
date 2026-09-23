@@ -39,11 +39,12 @@ import type {
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
+  confirmationUnavailableResult,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
   serializeToolResult,
   structuredErrorResult,
-  FEATURE_DISABLED_MESSAGE,
-  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
@@ -336,6 +337,15 @@ export const handleMcpToolCall = async ({
   // owning dispatch boundary because the selected target determines risk.
   const confirmation = transportConfirmation(staticTool, normalizedArgs);
   const requiresConfirmation = confirmation.required;
+  const unconfirmable = confirmation.required
+    ? confirmationUnavailableResult({
+        toolConfirmation: context.toolConfirmation,
+        subject: toolName,
+      })
+    : null;
+  if (unconfirmable !== null) {
+    return serializeToolResult(unconfirmable);
+  }
   if (confirmation.required && normalizedArgs["confirm"] !== true) {
     return serializeToolResult(
       structuredErrorResult({

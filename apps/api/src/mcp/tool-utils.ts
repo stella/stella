@@ -33,6 +33,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
   InternalToolErrorResult,
   InternalToolMcpPresentation,
@@ -1425,3 +1427,22 @@ export const normalizeTextField = ({
 
   return value.length > 0 ? value : fallback;
 };
+
+/**
+ * The refusal for a confirmation-gated call from a session that cannot
+ * confirm, or null when the session may proceed to the usual `confirm` check.
+ */
+export const confirmationUnavailableResult = ({
+  toolConfirmation = TOOL_CONFIRMATION.caller,
+  subject,
+}: {
+  toolConfirmation?: ToolConfirmation | undefined;
+  subject: string;
+}): InternalToolErrorResult | null =>
+  toolConfirmation === TOOL_CONFIRMATION.unavailable
+    ? structuredErrorResult({
+        code: "permission_denied",
+        message: `${subject} needs a person's confirmation and is not available in agent runs`,
+        hint: "Describe the change in your reply so the user can make it in stella; do not retry it from this run.",
+      })
+    : null;
