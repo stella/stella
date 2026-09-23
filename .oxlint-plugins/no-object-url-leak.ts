@@ -82,7 +82,7 @@ const nodePosition = (node: unknown): number => {
 
 const staticMemberName = (node: unknown): string | null => {
   const member = unwrapExpression(node);
-  if (member === null || member.type !== "MemberExpression") {
+  if (member?.type !== "MemberExpression") {
     return null;
   }
   return getPropertyName(member.property);
@@ -580,13 +580,12 @@ export default eslintCompatPlugin({
 
         const isUrlMethodCall = (node: unknown, method: string): boolean => {
           const call = unwrapExpression(node);
-          if (call === null || call.type !== "CallExpression") {
+          if (call?.type !== "CallExpression") {
             return false;
           }
           const callee = unwrapExpression(call.callee);
           return (
-            callee !== null &&
-            callee.type === "MemberExpression" &&
+            callee?.type === "MemberExpression" &&
             staticMemberName(callee) === method &&
             isUrlNamespace(callee.object)
           );

@@ -262,15 +262,16 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
     return null;
   }
   const { dependencies, url } = value;
-  const [first, ...rest] = staticStrings(dependencies) ?? [];
+  const strings = staticStrings(dependencies) ?? [];
+  const first = strings.at(0);
   if (first === undefined || typeof url !== "string") {
     return null;
   }
-  return { dependencies: [first, ...rest], url };
+  return { dependencies: [first, ...strings.slice(1)], url };
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {
-  if (!isStaticRecord(value) || value["reason"] !== NO_LLMS_TXT_REASON) {
+  if (!isStaticRecord(value) || value.reason !== NO_LLMS_TXT_REASON) {
     return null;
   }
   const { checkedAt, dependency, explanation, expiresAt } = value;
@@ -298,7 +299,7 @@ const fixturePolicy = (
   if (!isStaticRecord(value)) {
     return null;
   }
-  const dependencies = staticStrings(value["dependencies"]);
+  const dependencies = staticStrings(value.dependencies);
   const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
   if (
     dependencies === null ||

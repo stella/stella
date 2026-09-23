@@ -118,7 +118,7 @@ const MIN_SKIP_REASON_WORDS = 3;
 // Whether a comment is an `audit: skip - <reason>` directive with a reason of
 // at least three words.
 const isJustifiedSkipDirective = (text: string): boolean => {
-  const reason = SKIP_DIRECTIVE.exec(text)?.groups?.["reason"] ?? "";
+  const reason = SKIP_DIRECTIVE.exec(text)?.groups?.reason ?? "";
   const words = reason.split(/\s+/u).filter((word) => /\p{L}/u.test(word));
   return words.length >= MIN_SKIP_REASON_WORDS;
 };
@@ -156,7 +156,7 @@ const isTransactionCallback = (fn: unknown): boolean => {
 };
 
 const isTransactionParameter = (variable: Variable): boolean => {
-  const [definition] = variable.defs;
+  const definition = variable.defs.at(0);
   if (variable.defs.length !== 1 || definition?.type !== "Parameter") {
     return false;
   }
@@ -280,7 +280,7 @@ const isRecorderVariable = (
   variable: Variable,
   depth: number,
 ): boolean => {
-  const [definition] = variable.defs;
+  const definition = variable.defs.at(0);
   if (variable.defs.length !== 1 || definition === undefined) {
     return false;
   }

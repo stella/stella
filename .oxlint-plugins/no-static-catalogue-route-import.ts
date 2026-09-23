@@ -61,7 +61,7 @@ export default eslintCompatPlugin({
             return isGuardedRouteFile(context);
           },
           ImportDeclaration(node) {
-            const source = node.source?.value;
+            const source = node.source.value;
             if (
               typeof source !== "string" ||
               !isCatalogueBrowserModule(source)

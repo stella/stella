@@ -206,16 +206,13 @@ export default eslintCompatPlugin({
             renamedReexportCandidates.length = 0;
           },
           Program(node) {
-            for (const statement of node.body ?? []) {
+            for (const statement of node.body) {
               if (statement.type !== "ImportDeclaration") {
                 continue;
               }
-              const source = statement.source?.value;
-              for (const specifier of statement.specifiers ?? []) {
-                if (
-                  specifier.type === "ImportNamespaceSpecifier" &&
-                  specifier.local?.type === "Identifier"
-                ) {
+              const source = statement.source.value;
+              for (const specifier of statement.specifiers) {
+                if (specifier.type === "ImportNamespaceSpecifier") {
                   if (
                     typeof source === "string" &&
                     isTranslationTypeModule(source)
@@ -240,7 +237,6 @@ export default eslintCompatPlugin({
                 if (
                   specifier.type === "ImportSpecifier" &&
                   isIdentifierNamed(specifier.imported, "TranslationKey") &&
-                  specifier.local?.type === "Identifier" &&
                   typeof source === "string" &&
                   isTranslationTypeModule(source)
                 ) {
@@ -251,8 +247,7 @@ export default eslintCompatPlugin({
                 }
                 if (
                   specifier.type === "ImportSpecifier" &&
-                  isBroadTranslatorName(specifier.imported) &&
-                  specifier.local?.type === "Identifier"
+                  isBroadTranslatorName(specifier.imported)
                 ) {
                   broadTranslatorTypeNames.add(specifier.local.name);
                 }
@@ -261,10 +256,7 @@ export default eslintCompatPlugin({
           },
           "Program:exit"() {
             for (const declaration of typeAliases) {
-              if (
-                declaration.id?.type === "Identifier" &&
-                declaration.id.name === "TranslationKey"
-              ) {
+              if (declaration.id.name === "TranslationKey") {
                 const variable = resolveInScope(declaration.id);
                 if (variable) {
                   broadKeyVariables.add(variable);
@@ -277,11 +269,8 @@ export default eslintCompatPlugin({
               foundAlias = false;
               for (const declaration of typeAliases) {
                 const annotation = declaration.typeAnnotation;
-                const variable = declaration.id
-                  ? resolveInScope(declaration.id)
-                  : null;
+                const variable = resolveInScope(declaration.id);
                 if (
-                  declaration.id?.type !== "Identifier" ||
                   variable === null ||
                   broadKeyVariables.has(variable) ||
                   !isBroadKeyTypeReference(annotation)
@@ -294,12 +283,10 @@ export default eslintCompatPlugin({
             }
 
             for (const [declaration, exportNode] of exportedAliasNodes) {
-              if (declaration.id?.name === "TranslationKey") {
+              if (declaration.id.name === "TranslationKey") {
                 continue;
               }
-              const variable = declaration.id
-                ? resolveInScope(declaration.id)
-                : null;
+              const variable = resolveInScope(declaration.id);
               if (variable && broadKeyVariables.has(variable)) {
                 context.report({
                   messageId: "broadAliasExport",
@@ -308,7 +295,7 @@ export default eslintCompatPlugin({
               }
             }
             for (const specifier of localExportCandidates) {
-              if (specifier.local?.type !== "Identifier") {
+              if (specifier.local.type !== "Identifier") {
                 continue;
               }
               const variable = resolveInScope(specifier.local);
@@ -352,7 +339,7 @@ export default eslintCompatPlugin({
             }
 
             const source = node.source?.value;
-            for (const specifier of node.specifiers ?? []) {
+            for (const specifier of node.specifiers) {
               if (
                 typeof source === "string" &&
                 isTranslationTypeModule(source)
@@ -366,8 +353,8 @@ export default eslintCompatPlugin({
                 continue;
               }
               if (
-                (source === null || source === undefined) &&
-                specifier.local?.type === "Identifier" &&
+                source === undefined &&
+                specifier.local.type === "Identifier" &&
                 specifier.local.name !== "TranslationKey"
               ) {
                 localExportCandidates.push(specifier);

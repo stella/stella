@@ -39,7 +39,7 @@ export default eslintCompatPlugin({
           before() {
             suspenseQueryAliases.clear();
             queryNamespaces.clear();
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&
@@ -52,7 +52,7 @@ export default eslintCompatPlugin({
             return !isFileIn(context, allowedFiles);
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== QUERY_MODULE) {
+            if (node.source.value !== QUERY_MODULE) {
               return;
             }
 
@@ -80,7 +80,7 @@ export default eslintCompatPlugin({
 
             if (
               callee.type === "MemberExpression" &&
-              callee.computed === false &&
+              !callee.computed &&
               isIdentifier(callee.object) &&
               queryNamespaces.has(callee.object.name) &&
               isIdentifier(callee.property, "useSuspenseQuery")

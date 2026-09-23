@@ -202,7 +202,6 @@ export default eslintCompatPlugin({
             const parent = node.parent;
 
             if (
-              !parent ||
               parent.type !== "SwitchStatement" ||
               !isFieldTypeExpression(parent.discriminant, fieldTypeAliases)
             ) {

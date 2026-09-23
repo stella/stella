@@ -555,8 +555,7 @@ export default eslintCompatPlugin({
         const isPgTableOwner = (owner: AstNode): boolean => {
           const variable = resolveInScope(owner);
           return (
-            variable !== null &&
-            variable.defs.some((def) => {
+            variable?.defs.some((def) => {
               if (def.type === "Variable" && isAstNode(def.node)) {
                 return (
                   def.node.type === "VariableDeclarator" &&
@@ -567,7 +566,7 @@ export default eslintCompatPlugin({
                 return false;
               }
               return isPgTableCall(def.node.parent);
-            })
+            }) === true
           );
         };
 

@@ -79,7 +79,7 @@ const isDeadChild = (parent: AstNode, child: AstNode): boolean => {
     : Array.isArray(parent.consequent)
       ? parent.consequent
       : null;
-  if (statements !== null && statements.includes(child)) {
+  if (statements?.includes(child) === true) {
     return statements
       .slice(0, statements.indexOf(child))
       .some(

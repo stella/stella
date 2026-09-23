@@ -198,8 +198,7 @@ export default eslintCompatPlugin({
         // from "@/lib/api"` (or an aliased form of it) — i.e. the actual
         // import, not a same-named local that shadows it.
         const isApiImportVariable = (variable: Variable | null) =>
-          variable !== null &&
-          variable.defs.some((def) => {
+          variable?.defs.some((def) => {
             if (def.type !== "ImportBinding" || !isAstNode(def.node)) {
               return false;
             }
@@ -216,7 +215,7 @@ export default eslintCompatPlugin({
               isStringLiteral(def.parent.source) &&
               def.parent.source.value === API_MODULE
             );
-          });
+          }) === true;
 
         // A chain root only counts as a direct Eden `api` root when it is
         // both spelled like the import (fast pre-check against the
@@ -353,8 +352,7 @@ export default eslintCompatPlugin({
           }
           const variable = resolveInScope(callee);
           return (
-            variable !== null &&
-            variable.defs.some((definition) => {
+            variable?.defs.some((definition) => {
               if (
                 definition.type !== "ImportBinding" ||
                 !isAstNode(definition.node) ||
@@ -373,7 +371,7 @@ export default eslintCompatPlugin({
                 importedName !== null &&
                 adapters.has(importedName)
               );
-            })
+            }) === true
           );
         };
 

@@ -61,7 +61,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&

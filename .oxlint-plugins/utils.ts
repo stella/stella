@@ -399,7 +399,7 @@ export const isSingleAssignment = (variable: Variable): boolean =>
 
 // The initializer of a variable declared exactly once and never reassigned.
 export const stableInitializer = (variable: Variable): AstNode | null => {
-  const [definition] = variable.defs;
+  const definition = variable.defs.at(0);
   if (
     variable.defs.length !== 1 ||
     definition?.type !== "Variable" ||
@@ -486,7 +486,7 @@ const memberOfNamespace = (
   base: ImportedBinding | null,
   property: string | null,
 ): ImportedBinding | null =>
-  base !== null && base.imported === NAMESPACE_IMPORT && property !== null
+  base?.imported === NAMESPACE_IMPORT && property !== null
     ? { source: base.source, imported: property }
     : null;
 
@@ -522,7 +522,7 @@ const bindingFromVariable = (
   variable: Variable,
   seen: Set<unknown>,
 ): ImportedBinding | null => {
-  const [definition] = variable.defs;
+  const definition = variable.defs.at(0);
   if (variable.defs.length !== 1 || definition === undefined) {
     return null;
   }
@@ -626,9 +626,7 @@ export const canonicalModuleId = (
   } else if (specifier.startsWith("@/api/")) {
     resolved = `apps/api/src/${specifier.slice("@/api/".length)}`;
   } else if (specifier.startsWith("@/")) {
-    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.[
-      "app"
-    ];
+    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.app;
     if (app !== undefined) {
       resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
     }

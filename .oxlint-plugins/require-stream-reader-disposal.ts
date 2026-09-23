@@ -142,6 +142,15 @@ const visitNodes = (
   }
 };
 
+// Nodes under `root` in visit order, excluding nested function bodies.
+const collectNodes = (root: AstNode): AstNode[] => {
+  const nodes: AstNode[] = [];
+  visitNodes(root, root, (node) => {
+    nodes.push(node);
+  });
+  return nodes;
+};
+
 const staticMemberName = (node: AstNode): string | null => {
   if (node.type !== "MemberExpression") {
     return null;
@@ -157,13 +166,12 @@ const memberCall = (
   method: string,
 ): { call: AstNode; object: unknown } | null => {
   const call = unwrapValue(node);
-  if (call === null || call.type !== "CallExpression") {
+  if (call?.type !== "CallExpression") {
     return null;
   }
   const callee = unwrapValue(call.callee);
   if (
-    callee === null ||
-    callee.type !== "MemberExpression" ||
+    callee?.type !== "MemberExpression" ||
     staticMemberName(callee) !== method
   ) {
     return null;
@@ -275,11 +283,7 @@ const nearestLoopWithin = (
 
 const isLiteralTrue = (node: unknown): boolean => {
   const expression = unwrapValue(node);
-  return (
-    expression !== null &&
-    expression.type === "Literal" &&
-    expression.value === true
-  );
+  return expression?.type === "Literal" && expression.value === true;
 };
 
 const isInfiniteLoop = (node: AstNode): boolean => {
@@ -732,7 +736,7 @@ export default eslintCompatPlugin({
           return (
             callee?.type === "MemberExpression" &&
             staticMemberName(callee) === "catch" &&
-            readerMethodCall(callee.object, "cancel", binding) !== null
+            readerMethodCall(callee.object, "cancel", binding)
           );
         };
 
@@ -915,25 +919,16 @@ export default eslintCompatPlugin({
             return false;
           }
 
-          let used = false;
-          let hasCompetingExit = false;
-          visitNodes(acquisition.root, acquisition.root, (node) => {
-            if (
+          const hasCompetingExitOrUse = collectNodes(acquisition.root).some(
+            (node) =>
               (node.type === "ReturnStatement" && node !== finalStatement) ||
-              node.type === "ThrowStatement"
-            ) {
-              hasCompetingExit = true;
-            }
-            if (
-              node.type === "CallExpression" &&
-              ["cancel", "read", "releaseLock"].some((method) =>
-                readerMethodCall(node, method, binding),
-              )
-            ) {
-              used = true;
-            }
-          });
-          return !hasCompetingExit && !used;
+              node.type === "ThrowStatement" ||
+              (node.type === "CallExpression" &&
+                ["cancel", "read", "releaseLock"].some((method) =>
+                  readerMethodCall(node, method, binding),
+                )),
+          );
+          return !hasCompetingExitOrUse;
         };
 
         const readResultKind = (
@@ -946,8 +941,7 @@ export default eslintCompatPlugin({
           }
           if (
             variable.references.some(
-              (reference) =>
-                reference.init !== true && reference.isWrite?.() === true,
+              (reference) => reference.isWrite() && !reference.init,
             )
           ) {
             return null;
@@ -1090,22 +1084,20 @@ export default eslintCompatPlugin({
           const block = tryNode.block;
           const body = tryNode.block.body;
           const readStatementIndexes: number[] = [];
-          let hasNestedRead = false;
-          visitNodes(block, block, (node) => {
+          for (const node of collectNodes(block)) {
             if (!readerMethodCall(node, "read", binding)) {
-              return;
+              continue;
             }
             const site = statementSite(node);
-            if (site === null || site.block !== block) {
-              hasNestedRead = true;
-              return;
+            if (site?.block !== block) {
+              return false;
             }
             const index = body.indexOf(site.statement);
             if (index !== -1) {
               readStatementIndexes.push(index);
             }
-          });
-          if (hasNestedRead || readStatementIndexes.length === 0) {
+          }
+          if (readStatementIndexes.length === 0) {
             return false;
           }
           const lastReadIndex = Math.max(...readStatementIndexes);
@@ -1147,30 +1139,22 @@ export default eslintCompatPlugin({
             readLoops.add(loop);
           }
           for (const loop of readLoops) {
-            let unsafeExit = false;
-            visitNodes(loop, loop, (node) => {
-              if (unsafeExit) {
-                return;
-              }
+            const unsafeExit = collectNodes(loop).some((node) => {
               if (node.type === "ThrowStatement") {
-                unsafeExit = !handlerCancels && !hasPriorCancel(node, binding);
-                return;
+                return !handlerCancels && !hasPriorCancel(node, binding);
               }
               if (node.type === "YieldExpression") {
-                unsafeExit = true;
-                return;
+                return true;
               }
               if (node.type === "AwaitExpression") {
                 const awaited = unwrapValue(node.argument);
-                if (
+                return (
                   !dominatedByDoneGuard(node, binding) &&
                   !containsReaderMethod(awaited, "read", binding) &&
-                  !containsReaderMethod(awaited, "cancel", binding)
-                ) {
-                  unsafeExit =
-                    !handlerCancels && !hasPriorCancel(node, binding);
-                }
-                return;
+                  !containsReaderMethod(awaited, "cancel", binding) &&
+                  !handlerCancels &&
+                  !hasPriorCancel(node, binding)
+                );
               }
               if (
                 node.type === "CallExpression" &&
@@ -1179,23 +1163,18 @@ export default eslintCompatPlugin({
                 !containsReaderMethod(node, "cancel", binding) &&
                 !containsReaderMethod(node, "releaseLock", binding)
               ) {
-                unsafeExit = !handlerCancels && !hasPriorCancel(node, binding);
-                return;
-              }
-              if (node.type === "ReturnStatement") {
-                unsafeExit =
-                  !dominatedByDoneGuard(node, binding) &&
-                  !hasPriorCancel(node, binding);
-                return;
+                return !handlerCancels && !hasPriorCancel(node, binding);
               }
               if (
-                node.type === "BreakStatement" &&
-                breakExitsLoop(node, loop)
+                node.type === "ReturnStatement" ||
+                (node.type === "BreakStatement" && breakExitsLoop(node, loop))
               ) {
-                unsafeExit =
+                return (
                   !dominatedByDoneGuard(node, binding) &&
-                  !hasPriorCancel(node, binding);
+                  !hasPriorCancel(node, binding)
+                );
               }
+              return false;
             });
             if (unsafeExit) {
               return true;

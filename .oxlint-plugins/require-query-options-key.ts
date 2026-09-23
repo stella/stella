@@ -149,7 +149,7 @@ const resolveOptionsValue = ({ node, context, seen }) => {
     ) {
       return null;
     }
-    if (definition.parent.parent?.type === "ForOfStatement") {
+    if (definition.parent.parent.type === "ForOfStatement") {
       return { type: "boundary" } as const;
     }
     if (definition.node.id.type !== "Identifier") {

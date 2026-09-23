@@ -50,7 +50,7 @@ export default eslintCompatPlugin({
           before() {
             queryAliases.clear();
             queryNamespaces.clear();
-            const configuredOptions = context.options?.[0];
+            const configuredOptions = context.options.at(0);
             const options = isRecord(configuredOptions)
               ? configuredOptions
               : {};
@@ -62,7 +62,7 @@ export default eslintCompatPlugin({
             return !isFileIn(context, allowedFiles);
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== QUERY_MODULE) {
+            if (node.source.value !== QUERY_MODULE) {
               return;
             }
 
@@ -90,7 +90,7 @@ export default eslintCompatPlugin({
 
             if (
               callee.type === "MemberExpression" &&
-              callee.computed === false &&
+              !callee.computed &&
               isIdentifier(callee.object) &&
               queryNamespaces.has(callee.object.name) &&
               isIdentifier(callee.property, "useQuery")

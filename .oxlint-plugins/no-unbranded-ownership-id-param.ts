@@ -240,12 +240,10 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const options = context.options?.[0] ?? {};
+            const options = context.options.at(0) ?? {};
             const configuredNames =
-              typeof options === "object" &&
-              options !== null &&
-              !Array.isArray(options)
-                ? options["names"]
+              typeof options === "object" && !Array.isArray(options)
+                ? options.names
                 : undefined;
             triggerNames =
               Array.isArray(configuredNames) && configuredNames.length > 0

@@ -31,7 +31,7 @@ export default eslintCompatPlugin({
             return !isFileIn(context, ALLOWED_FILES);
           },
           ImportDeclaration(node) {
-            if (!HOTKEY_MODULES.has(node.source?.value)) {
+            if (!HOTKEY_MODULES.has(node.source.value)) {
               return;
             }
 

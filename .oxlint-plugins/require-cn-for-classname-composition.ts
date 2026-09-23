@@ -20,6 +20,7 @@ import {
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 // The grouped alias (@stll/ui/lib/utils) is deprecated but still resolves to
 // this module, so both spellings import the canonical `cn`.
@@ -550,7 +551,7 @@ export default eslintCompatPlugin({
               (parent.type === "CatchClause" && current === parent.body) ||
               (parent.type === "TryStatement" &&
                 current === parent.block &&
-                parent.handler != null &&
+                isAstNode(parent.handler) &&
                 !isImmediateSafeCaughtTryAssignment(node, parent.block)) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
@@ -785,58 +786,62 @@ export default eslintCompatPlugin({
               ) {
                 continue;
               }
-              const invalidatedAt = candidate.variable.references.reduce(
-                (earliest, candidateReference) => {
-                  const position = candidateReference.identifier.range[0];
-                  if (
-                    alias.consumedPath.length === 0 ||
-                    position <= reference.identifier.range[0] ||
-                    position >= earliest
-                  ) {
-                    return earliest;
-                  }
-                  let owner: unknown = candidateReference.identifier;
-                  const writtenPath: string[] = [];
-                  while (isAstNode(owner)) {
-                    const parent = owner.parent;
-                    if (
-                      !isMemberExpression(parent) ||
-                      !Object.is(parent.object, owner)
-                    ) {
-                      break;
-                    }
-                    const propertyName = staticPropertyName(
-                      parent.property,
-                      parent.computed,
-                    );
-                    if (propertyName === null) {
-                      return earliest;
-                    }
-                    writtenPath.push(propertyName);
-                    owner = parent;
-                  }
-                  if (
-                    writtenPath.length === 0 ||
-                    writtenPath.length > alias.consumedPath.length ||
-                    writtenPath.some(
-                      (segment, index) =>
-                        segment !== alias.consumedPath.at(index),
-                    ) ||
-                    !isAstNode(owner) ||
-                    !isAstNode(owner.parent) ||
-                    owner.parent.type !== "AssignmentExpression" ||
-                    owner.parent.left !== owner ||
-                    owner.parent.operator !== "=" ||
-                    controlFlowContext(
-                      candidateReference.identifier,
-                      candidate.variable.scope.block,
-                    ) !== "unconditional"
-                  ) {
-                    return earliest;
-                  }
-                  return position;
-                },
+              const invalidatedAt = Math.min(
                 candidate.validUntil,
+                ...candidate.variable.references
+                  .filter((candidateReference) => {
+                    const position = candidateReference.identifier.range[0];
+                    if (
+                      alias.consumedPath.length === 0 ||
+                      position <= reference.identifier.range[0]
+                    ) {
+                      return false;
+                    }
+                    let owner: unknown = candidateReference.identifier;
+                    const writtenPath: string[] = [];
+                    while (isAstNode(owner)) {
+                      const parent = owner.parent;
+                      if (
+                        !isMemberExpression(parent) ||
+                        !Object.is(parent.object, owner)
+                      ) {
+                        break;
+                      }
+                      const propertyName = staticPropertyName(
+                        parent.property,
+                        parent.computed,
+                      );
+                      if (propertyName === null) {
+                        return false;
+                      }
+                      writtenPath.push(propertyName);
+                      owner = parent;
+                    }
+                    if (
+                      writtenPath.length === 0 ||
+                      writtenPath.length > alias.consumedPath.length ||
+                      writtenPath.some(
+                        (segment, index) =>
+                          segment !== alias.consumedPath.at(index),
+                      ) ||
+                      !isAstNode(owner) ||
+                      !isAstNode(owner.parent) ||
+                      owner.parent.type !== "AssignmentExpression" ||
+                      owner.parent.left !== owner ||
+                      owner.parent.operator !== "=" ||
+                      controlFlowContext(
+                        candidateReference.identifier,
+                        candidate.variable.scope.block,
+                      ) !== "unconditional"
+                    ) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .map(
+                    (candidateReference) =>
+                      candidateReference.identifier.range[0],
+                  ),
               );
               queue.push({
                 propertyPath: candidate.propertyPath.slice(
@@ -1040,9 +1045,7 @@ export default eslintCompatPlugin({
               writes.push({
                 context: writeContext,
                 opaque:
-                  assignment === null ||
-                  assignment.operator !== "=" ||
-                  !isAstNode(assignment.right),
+                  assignment?.operator !== "=" || !isAstNode(assignment.right),
                 position: reference.identifier.range[0],
                 propertyName: staticPropertyName(
                   member.property,
@@ -1318,8 +1321,7 @@ export default eslintCompatPlugin({
             }
             const stableElements = arrayExpressionElements(stableValue);
             if (
-              stableElements !== null &&
-              stableElements.some(
+              stableElements?.some(
                 (element) =>
                   isAstNode(element) && element.type === "SpreadElement",
               )
@@ -1360,8 +1362,8 @@ export default eslintCompatPlugin({
                   lastUnconditionalWrite?.value ??
                   flattenedValues.at(index) ??
                   LOCAL_ABSENT_VALUE;
-                const possibleValues: unknown[] = [baseValue];
-                possibleValues.push(
+                const candidateValues: unknown[] = [baseValue];
+                candidateValues.push(
                   ...propertyWrites
                     .filter(
                       (write) =>
@@ -1377,9 +1379,9 @@ export default eslintCompatPlugin({
                   ) ||
                   writes.some((write) => write.propertyName === null)
                 ) {
-                  possibleValues.push(LOCAL_OPAQUE_VALUE);
+                  candidateValues.push(LOCAL_OPAQUE_VALUE);
                 }
-                values.push(...possibleValues);
+                values.push(...candidateValues);
               }
               return values;
             }
@@ -1413,10 +1415,7 @@ export default eslintCompatPlugin({
             return null;
           }
           const values: unknown[] = [];
-          const candidateNames =
-            selectedPropertyNames === undefined
-              ? properties.names
-              : selectedPropertyNames;
+          const candidateNames = selectedPropertyNames ?? properties.names;
           for (const candidateName of candidateNames) {
             const resolution = localValueResolver.propertyResolution(
               source,
@@ -1457,6 +1456,205 @@ export default eslintCompatPlugin({
             values.push(LOCAL_OPAQUE_VALUE);
           }
           return values;
+        };
+
+        type PropertyRead = {
+          propertyName: string;
+          readPosition: number;
+          visitedVariables: Set<Variable>;
+        };
+
+        const branchOutcomes = (
+          expression: AstNode,
+        ): LogicalOutcome[] | null => {
+          if (expression.type === "ConditionalExpression") {
+            return [
+              { propertyAbsent: false, value: expression.consequent },
+              { propertyAbsent: false, value: expression.alternate },
+            ];
+          }
+          return isLogicalExpression(expression)
+            ? logicalOutcomes(expression)
+            : null;
+        };
+
+        const outcomesPropertyResolution = (
+          outcomes: readonly LogicalOutcome[],
+          { propertyName, readPosition, visitedVariables }: PropertyRead,
+        ): LocalResolution => {
+          const resolutions = outcomes.map((outcome) =>
+            outcome.propertyAbsent || isProvablyNonObject(outcome.value)
+              ? { type: "absent" as const }
+              : localValueResolver.propertyResolution(
+                  outcome.value,
+                  propertyName,
+                  new Set(visitedVariables),
+                  readPosition,
+                ),
+          );
+          if (resolutions.some((result) => result.type === "opaque")) {
+            return { type: "opaque" };
+          }
+          if (resolutions.every((result) => result.type === "absent")) {
+            return { type: "absent" };
+          }
+          return {
+            type: "found",
+            value: {
+              type: "LocalPossibleValues",
+              values: resolutions.flatMap((result) => {
+                if (result.type !== "found") {
+                  return [LOCAL_ABSENT_VALUE];
+                }
+                return isLocalPossibleValues(result.value)
+                  ? result.value.values
+                  : [result.value];
+              }),
+            } satisfies LocalPossibleValues,
+          };
+        };
+
+        type MemberWrite = {
+          context: "conditional" | "unconditional";
+          opaque: boolean;
+          position: number;
+          value: unknown;
+        };
+
+        // Writes to `<alias>.<propertyName>` (or to a computed member of an
+        // alias) that precede `readPosition`, in source order.
+        const aliasMemberWrites = (
+          variable: Variable,
+          { propertyName, readPosition }: PropertyRead,
+        ): MemberWrite[] => {
+          const memberWrites: MemberWrite[] = [];
+          for (const ownerVariable of stableObjectAliases(
+            variable,
+            readPosition,
+          )) {
+            for (const reference of ownerVariable.references) {
+              if (reference.identifier.range[0] >= readPosition) {
+                continue;
+              }
+              const member = reference.identifier.parent;
+              if (
+                !isMemberExpression(member) ||
+                member.object !== reference.identifier
+              ) {
+                continue;
+              }
+              const owner = member.parent;
+              const isAssignment =
+                isAstNode(owner) &&
+                owner.type === "AssignmentExpression" &&
+                owner.left === member;
+              const isUpdate =
+                isAstNode(owner) &&
+                ((owner.type === "UpdateExpression" &&
+                  owner.argument === member) ||
+                  (owner.type === "UnaryExpression" &&
+                    owner.operator === "delete" &&
+                    owner.argument === member));
+              if (!isAssignment && !isUpdate) {
+                continue;
+              }
+              const writtenProperty = staticPropertyName(
+                member.property,
+                member.computed,
+              );
+              if (
+                writtenProperty !== null &&
+                writtenProperty !== propertyName
+              ) {
+                continue;
+              }
+              const writeContext = controlFlowContext(
+                reference.identifier,
+                variable.scope.block,
+              );
+              if (writeContext === null) {
+                continue;
+              }
+              memberWrites.push({
+                context: writeContext,
+                opaque:
+                  writtenProperty === null ||
+                  !isAssignment ||
+                  owner.operator !== "=" ||
+                  !isAstNode(owner.right),
+                position: reference.identifier.range[0],
+                value: isAssignment ? owner.right : null,
+              });
+            }
+          }
+          return memberWrites.sort(
+            (left, right) => left.position - right.position,
+          );
+        };
+
+        const identifierPropertyResolution = (
+          expression: AstNode,
+          read: PropertyRead,
+        ): LocalResolution => {
+          const { propertyName, readPosition, visitedVariables } = read;
+          const variable = variableForExpression(expression);
+          if (variable === null || visitedVariables.has(variable)) {
+            return { type: "opaque" };
+          }
+          const stableValue = localValueResolver.stableValue(
+            expression,
+            visitedVariables,
+          );
+          const memberWrites = aliasMemberWrites(variable, read);
+          const lastUnconditionalWrite = memberWrites.findLast(
+            (write) => write.context === "unconditional" && !write.opaque,
+          );
+          const baseResolution =
+            lastUnconditionalWrite === undefined
+              ? stableValue === null
+                ? { type: "opaque" as const }
+                : localValueResolver.propertyResolution(
+                    stableValue,
+                    propertyName,
+                    new Set([...visitedVariables, variable]),
+                    readPosition,
+                  )
+              : {
+                  type: "found" as const,
+                  value: lastUnconditionalWrite.value,
+                };
+          const basePosition = lastUnconditionalWrite?.position ?? -1;
+          if (
+            memberWrites.some(
+              (write) => write.position > basePosition && write.opaque,
+            )
+          ) {
+            return { type: "opaque" };
+          }
+          const conditionalWrites = memberWrites.filter(
+            (write) =>
+              write.position > basePosition &&
+              write.context === "conditional" &&
+              !write.opaque,
+          );
+          if (conditionalWrites.length === 0) {
+            return baseResolution;
+          }
+          if (baseResolution.type === "opaque") {
+            return baseResolution;
+          }
+          return {
+            type: "found",
+            value: {
+              type: "LocalPossibleValues",
+              values: [
+                baseResolution.type === "found"
+                  ? baseResolution.value
+                  : LOCAL_ABSENT_VALUE,
+                ...conditionalWrites.map((write) => write.value),
+              ],
+            } satisfies LocalPossibleValues,
+          };
         };
 
         const localValueResolver: LocalValueResolver = {
@@ -1570,9 +1768,9 @@ export default eslintCompatPlugin({
                     writtenPath.length,
                   )) {
                     const nextValues: unknown[] = [];
-                    for (const value of values) {
+                    for (const pathValue of values) {
                       const resolution = this.propertyResolution(
-                        value,
+                        pathValue,
                         remainingProperty,
                         new Set(visitedVariables),
                         reference.identifier.range[0],
@@ -1601,12 +1799,12 @@ export default eslintCompatPlugin({
               }
             }
             nestedWrites.sort((left, right) => left.position - right.position);
-            const ancestorCutoff = ancestorWrites
-              .filter((write) => write.context === "unconditional")
-              .reduce(
-                (latest, write) => Math.max(latest, write.position),
-                Number.NEGATIVE_INFINITY,
-              );
+            const ancestorCutoff = Math.max(
+              Number.NEGATIVE_INFINITY,
+              ...ancestorWrites
+                .filter((write) => write.context === "unconditional")
+                .map((write) => write.position),
+            );
             const effectiveNestedWrites = nestedWrites.filter(
               (write) => write.position > ancestorCutoff,
             );
@@ -1826,12 +2024,7 @@ export default eslintCompatPlugin({
             }
             return null;
           },
-          propertyValue(
-            source,
-            propertyName,
-            visitedVariables = new Set(),
-            readPosition,
-          ) {
+          propertyValue(source, propertyName, visitedVariables, readPosition) {
             const resolution = this.propertyResolution(
               source,
               propertyName,
@@ -1883,180 +2076,20 @@ export default eslintCompatPlugin({
             if (expression === null) {
               return { type: "opaque" };
             }
-            let outcomes: LogicalOutcome[] | null = null;
-            if (expression.type === "ConditionalExpression") {
-              outcomes = [
-                {
-                  propertyAbsent: false,
-                  value: expression.consequent,
-                },
-                {
-                  propertyAbsent: false,
-                  value: expression.alternate,
-                },
-              ];
-            } else if (isLogicalExpression(expression)) {
-              outcomes = logicalOutcomes(expression);
-            }
+            const outcomes = branchOutcomes(expression);
             if (outcomes !== null) {
-              const resolutions = outcomes.map((outcome) =>
-                outcome.propertyAbsent || isProvablyNonObject(outcome.value)
-                  ? { type: "absent" as const }
-                  : this.propertyResolution(
-                      outcome.value,
-                      propertyName,
-                      new Set(visitedVariables),
-                      readPosition,
-                    ),
-              );
-              if (resolutions.some((result) => result.type === "opaque")) {
-                return { type: "opaque" };
-              }
-              if (resolutions.every((result) => result.type === "absent")) {
-                return { type: "absent" };
-              }
-              return {
-                type: "found",
-                value: {
-                  type: "LocalPossibleValues",
-                  values: resolutions.flatMap((result) => {
-                    if (result.type !== "found") {
-                      return [LOCAL_ABSENT_VALUE];
-                    }
-                    return isLocalPossibleValues(result.value)
-                      ? result.value.values
-                      : [result.value];
-                  }),
-                } satisfies LocalPossibleValues,
-              };
+              return outcomesPropertyResolution(outcomes, {
+                propertyName,
+                readPosition,
+                visitedVariables,
+              });
             }
             if (isIdentifier(expression)) {
-              const variable = variableForExpression(expression);
-              if (variable === null || visitedVariables.has(variable)) {
-                return { type: "opaque" };
-              }
-              const stableValue = this.stableValue(
-                expression,
-                visitedVariables,
-              );
-              const memberWrites: {
-                context: "conditional" | "unconditional";
-                opaque: boolean;
-                position: number;
-                value: unknown;
-              }[] = [];
-              for (const ownerVariable of stableObjectAliases(
-                variable,
+              return identifierPropertyResolution(expression, {
+                propertyName,
                 readPosition,
-              )) {
-                for (const reference of ownerVariable.references) {
-                  if (reference.identifier.range[0] >= readPosition) {
-                    continue;
-                  }
-                  const member = reference.identifier.parent;
-                  if (
-                    !isMemberExpression(member) ||
-                    member.object !== reference.identifier
-                  ) {
-                    continue;
-                  }
-                  const owner = member.parent;
-                  const isAssignment =
-                    isAstNode(owner) &&
-                    owner.type === "AssignmentExpression" &&
-                    owner.left === member;
-                  const isUpdate =
-                    isAstNode(owner) &&
-                    ((owner.type === "UpdateExpression" &&
-                      owner.argument === member) ||
-                      (owner.type === "UnaryExpression" &&
-                        owner.operator === "delete" &&
-                        owner.argument === member));
-                  if (!isAssignment && !isUpdate) {
-                    continue;
-                  }
-                  const writtenProperty = staticPropertyName(
-                    member.property,
-                    member.computed,
-                  );
-                  if (
-                    writtenProperty !== null &&
-                    writtenProperty !== propertyName
-                  ) {
-                    continue;
-                  }
-                  const writeContext = controlFlowContext(
-                    reference.identifier,
-                    variable.scope.block,
-                  );
-                  if (writeContext === null) {
-                    continue;
-                  }
-                  memberWrites.push({
-                    context: writeContext,
-                    opaque:
-                      writtenProperty === null ||
-                      !isAssignment ||
-                      owner.operator !== "=" ||
-                      !isAstNode(owner.right),
-                    position: reference.identifier.range[0],
-                    value: isAssignment ? owner.right : null,
-                  });
-                }
-              }
-              memberWrites.sort(
-                (left, right) => left.position - right.position,
-              );
-
-              const lastUnconditionalWrite = memberWrites.findLast(
-                (write) => write.context === "unconditional" && !write.opaque,
-              );
-              const baseResolution =
-                lastUnconditionalWrite === undefined
-                  ? stableValue === null
-                    ? { type: "opaque" as const }
-                    : this.propertyResolution(
-                        stableValue,
-                        propertyName,
-                        new Set([...visitedVariables, variable]),
-                        readPosition,
-                      )
-                  : {
-                      type: "found" as const,
-                      value: lastUnconditionalWrite.value,
-                    };
-              const basePosition = lastUnconditionalWrite?.position ?? -1;
-              if (
-                memberWrites.some(
-                  (write) => write.position > basePosition && write.opaque,
-                )
-              ) {
-                return { type: "opaque" };
-              }
-              const conditionalWrites = memberWrites.filter(
-                (write) =>
-                  write.position > basePosition &&
-                  write.context === "conditional" &&
-                  !write.opaque,
-              );
-              if (conditionalWrites.length === 0) {
-                return baseResolution;
-              }
-              if (baseResolution.type === "opaque") {
-                return baseResolution;
-              }
-              return {
-                type: "found",
-                value: {
-                  type: "LocalPossibleValues",
-                  values: [
-                    baseResolution.type === "found"
-                      ? baseResolution.value
-                      : LOCAL_ABSENT_VALUE,
-                    ...conditionalWrites.map((write) => write.value),
-                  ],
-                } satisfies LocalPossibleValues,
-              };
+                visitedVariables,
+              });
             }
             if (isMemberExpression(expression)) {
               const memberValue = this.memberValue(
@@ -2113,7 +2146,7 @@ export default eslintCompatPlugin({
                 };
                 continue;
               }
-              if (property.computed === true && candidateName === null) {
+              if (property.computed && candidateName === null) {
                 objectResolution = { type: "opaque" };
               }
             }
@@ -2412,7 +2445,7 @@ export default eslintCompatPlugin({
               (parent.type === "CatchClause" && current === parent.body) ||
               (parent.type === "TryStatement" &&
                 current === parent.block &&
-                parent.handler != null &&
+                isAstNode(parent.handler) &&
                 !isImmediateSafeCaughtTryAssignment(
                   identifier,
                   parent.block,
@@ -2451,7 +2484,7 @@ export default eslintCompatPlugin({
           }
           const writes = variable.references.filter(
             (reference) =>
-              reference.init !== true &&
+              !reference.init &&
               reference.isWrite() &&
               reference.identifier.range[0] < node.range[0] &&
               writeContextInside(reference.identifier, callback) !== null,
@@ -2512,7 +2545,7 @@ export default eslintCompatPlugin({
               (parent.type === "CatchClause" && current === parent.body) ||
               (parent.type === "TryStatement" &&
                 current === parent.block &&
-                parent.handler != null &&
+                isAstNode(parent.handler) &&
                 !isImmediateSafeCaughtTryAssignment(
                   identifier,
                   parent.block,
@@ -2563,7 +2596,7 @@ export default eslintCompatPlugin({
           }
           const writes = variable.references.filter(
             (reference) =>
-              reference.init !== true &&
+              !reference.init &&
               reference.isWrite() &&
               reference.identifier.range[0] < node.range[0] &&
               writeContextInVariableScope(reference.identifier, variable) !==
@@ -2620,7 +2653,7 @@ export default eslintCompatPlugin({
           }
           if (statement.type === "IfStatement") {
             return (
-              statement.alternate == null ||
+              !isAstNode(statement.alternate) ||
               canCompleteNormally(statement.consequent) ||
               canCompleteNormally(statement.alternate)
             );
@@ -2630,7 +2663,7 @@ export default eslintCompatPlugin({
             Array.isArray(statement.cases)
           ) {
             const cases = statement.cases.filter(isAstNode);
-            if (!cases.some((switchCase) => switchCase.test == null)) {
+            if (!cases.some((switchCase) => !isAstNode(switchCase.test))) {
               return true;
             }
             const caseCanComplete = (startIndex: number): boolean => {
@@ -2660,7 +2693,7 @@ export default eslintCompatPlugin({
           }
           if (statement.type === "TryStatement") {
             if (
-              statement.finalizer != null &&
+              isAstNode(statement.finalizer) &&
               !canCompleteNormally(statement.finalizer)
             ) {
               return false;
@@ -2817,14 +2850,14 @@ export default eslintCompatPlugin({
             };
             visitBody(node.body, true);
 
-            const possibleValues = returnValues.flatMap((returnValue) => {
+            const returnedValues = returnValues.flatMap((returnValue) => {
               const writes = writtenValues(returnValue, node);
               return writes ?? [returnValue];
             });
             if (canCompleteNormally(node.body)) {
-              possibleValues.push(LOCAL_ABSENT_VALUE);
+              returnedValues.push(LOCAL_ABSENT_VALUE);
             }
-            const presentValues = possibleValues.filter(
+            const presentValues = returnedValues.filter(
               (returnValue) => !isLocalAbsentValue(returnValue),
             );
             const allCanonical =
@@ -2837,7 +2870,7 @@ export default eslintCompatPlugin({
             }
 
             const returnKinds = new Set<string>();
-            for (const returnValue of possibleValues) {
+            for (const returnValue of returnedValues) {
               const staticValue = staticClassValue(returnValue);
               if (staticValue !== null) {
                 returnKinds.add(`static:${staticValue}`);
@@ -2900,7 +2933,7 @@ export default eslintCompatPlugin({
             if (
               !isClassNameAttribute(node) ||
               node.value?.type !== "JSXExpressionContainer" ||
-              node.value.expression?.type === "JSXEmptyExpression"
+              node.value.expression.type === "JSXEmptyExpression"
             ) {
               return;
             }

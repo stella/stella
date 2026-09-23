@@ -370,7 +370,7 @@ export default eslintCompatPlugin({
         };
 
         const isStableAlias = (declaration: ESTree.VariableDeclarator) =>
-          declaration.parent?.type === "VariableDeclaration" &&
+          declaration.parent.type === "VariableDeclaration" &&
           declaration.parent.kind === "const";
 
         const localFunctionReturnType = (

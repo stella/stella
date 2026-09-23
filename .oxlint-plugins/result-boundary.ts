@@ -92,8 +92,7 @@ const isRethrowOfCatchBinding = (
   }
   const variable = resolveVariable(context, argument);
   if (
-    variable === null ||
-    variable.defs.length !== 1 ||
+    variable?.defs.length !== 1 ||
     variable.defs.at(0)?.type !== "CatchClause"
   ) {
     return false;

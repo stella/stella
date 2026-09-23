@@ -197,15 +197,7 @@ export default eslintCompatPlugin({
             return !isFileIn(context, [ALLOWLISTED_FILE]);
           },
           ImportDeclaration(node) {
-            if (
-              node.source === null ||
-              node.source === undefined ||
-              typeof node.source !== "object"
-            ) {
-              return;
-            }
-            const source = (node.source as { value?: unknown }).value;
-            if (source !== PG_CORE_MODULE) {
+            if (node.source.value !== PG_CORE_MODULE) {
               return;
             }
 
@@ -226,10 +218,6 @@ export default eslintCompatPlugin({
                 if (isIdentifier(specifier.local)) {
                   pgCoreNamespaceAliases.add(specifier.local.name);
                 }
-                continue;
-              }
-
-              if (specifier.type !== "ImportSpecifier") {
                 continue;
               }
 

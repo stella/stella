@@ -106,7 +106,7 @@ export default eslintCompatPlugin({
             const callsRouterInvalidation =
               isAstNode(node.callee) &&
               node.callee.type === "MemberExpression" &&
-              node.callee.computed === false &&
+              !node.callee.computed &&
               isIdentifier(node.callee.object) &&
               routerObjectNames.has(node.callee.object.name) &&
               getPropertyName(node.callee.property) === "invalidate";
