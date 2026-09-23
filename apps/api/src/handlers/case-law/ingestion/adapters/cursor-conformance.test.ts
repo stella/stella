@@ -117,6 +117,22 @@ const NSS_SESSION_PAGE = `<html><body><form>
 /** A search that matched nothing renders no rows and no `currParams`. */
 const NSS_NO_RESULTS_PAGE = "<html><body><table></table></body></html>";
 
+/** The Tribunal portal's print view, holding one ruling on its only page. */
+const TK_ONE_ROW_LISTING = `<html><body>
+  <span>Strona wyników: 1 z 1</span>
+  <table><tbody id="wyszukiwanie:dataTable_data"><tr data-ri="0"><td>
+    <div id="wyszukiwanie:dataTable:0:dokument_:dokument">
+      <a href="/ipo/Sprawa?cid=1&amp;dokument=1&amp;sprawa=1"><span class="sygnatura">K 1/20</span></a>
+      <br />Wyrok z dnia 1 lipca 2020 r.
+      <br />
+    </div>
+  </td></tr></tbody></table>
+</body></html>`;
+
+/** A case page whose record states nothing and which holds no ruling tab. */
+const TK_EMPTY_CASE_PAGE =
+  '<html><body><div id="sprawaForm:tabView:metryka"></div></body></html>';
+
 // ── Coverage declaration ─────────────────────────────────
 
 /**
@@ -253,6 +269,26 @@ const ADAPTER_CONFORMANCE = {
       jsonResponse({ success: true, data: [{ success: true, data: [] }] }),
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
+  },
+  [ADAPTER_KEYS.PL_TK]: {
+    disposition: "exercised",
+    // Every stage lists one ruling on one page, and its case page states no
+    // ruling tab. The crawl reads that ruling once per stage from the old end
+    // of the listing and then only rotates between caught-up stages.
+    exhaustedSource: ({ url }) =>
+      new Response(
+        url.includes("/Sprawa?") ? TK_EMPTY_CASE_PAGE : TK_ONE_ROW_LISTING,
+        {
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Set-Cookie": "JSESSIONID=conformance; Path=/ipo",
+          },
+        },
+      ),
+    // One cursor per stage in the rotation; each lap opens a session, builds
+    // the search and reads the listing's single page.
+    maxSteadyStateCursors: 3,
+    maxSteadyStatePositions: 3,
   },
   [ADAPTER_KEYS.AT_COURTS]: AT_RIS_COVERAGE,
   [ADAPTER_KEYS.AT_VFGH]: AT_RIS_COVERAGE,

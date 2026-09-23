@@ -62,6 +62,7 @@ import {
   plCourtsSearchFixture,
   plKioFixture,
   plSnFixture,
+  plTkFixture,
   skCourtsFixture,
   skUsFixture,
   type AtRisFixtureAdapter,
@@ -130,6 +131,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: plSnFixture },
     { kind: "page-recording", file: "pl-sn-page.json.gz" },
   ],
+  [ADAPTER_KEYS.PL_TK]: [{ kind: "built", fixture: plTkFixture }],
   [ADAPTER_KEYS.AT_COURTS]: [
     ...atRisEvidence(ADAPTER_KEYS.AT_COURTS),
     { kind: "page-recording", file: "at-courts-page.json.gz" },

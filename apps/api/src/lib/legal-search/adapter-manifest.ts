@@ -275,6 +275,21 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_TK]: {
+    key: ADAPTER_KEYS.PL_TK,
+    name: "Polish Constitutional Tribunal (Trybunał Konstytucyjny)",
+    publisher: "Trybunał Konstytucyjny",
+    publicHomeUrl: "https://ipo.trybunal.gov.pl/ipo/",
+    ...ADAPTER_JURISDICTIONS.POL,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      // The Tribunal's first ruling, U 1/86; the portal lists nothing older.
+      fromInclusive: "1986-05-28",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",

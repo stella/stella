@@ -97,10 +97,13 @@ const isRetryableStatus = (status: number): boolean => status >= 500;
  * Returns the response even for retryable statuses after
  * exhausting retries, so the caller can decide what to do
  * (skip page, treat as miss, etc.).
+ *
+ * `init` takes Bun's fetch options too, for a publisher that answers only one
+ * HTTP version.
  */
 export const fetchWithRetry = async (
   url: string,
-  init: RequestInit | undefined,
+  init: BunFetchRequestInit | undefined,
   opts: FetchWithRetryOptions,
 ): Promise<Response> => {
   const {
