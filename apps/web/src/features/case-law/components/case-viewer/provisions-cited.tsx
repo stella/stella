@@ -17,9 +17,15 @@ import {
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
+  citedWorkAtDateKey,
   decisionProvisionsInfiniteOptions,
-  statuteByEliOptions,
+  statuteByCitedWork,
+  statutesResolveOptions,
   statuteVersionsOptions,
+} from "@/features/case-law/queries/provisions";
+import type {
+  CitedWorkAtDate,
+  ResolvedCitedStatute,
 } from "@/features/case-law/queries/provisions";
 import {
   pickVersionAt,
@@ -36,18 +42,10 @@ import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 /**
- * Works whose act is looked up when the panel opens. A reference names its
- * work by identifier, while the statute reader is addressed by document, so
- * each distinct work costs one read; past this many the references still
- * read, they just do not link.
- */
-const LINKED_WORKS_LIMIT = 12;
-
-/**
  * The statutes a decision applies, as the decision itself states them.
  *
  * Closed until asked for: the references are a reading aid beside the
- * decision, and resolving each cited work to its act costs a read per work.
+ * decision, and resolving the cited works to their acts is a read.
  */
 export const ProvisionsCited = ({
   decisionDate,
@@ -74,6 +72,28 @@ export const ProvisionsCited = ({
   const groups = groupProvisionsByWork(
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
+
+  // Each work is read at the version its references state, and at the
+  // decision's date otherwise; every work on the panel resolves in one read.
+  const decisionAsOf = decisionDateToIso(decisionDate);
+  const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
+  for (const group of groups) {
+    const asOf =
+      group.provisions.find((provision) => provision.versionValidFrom !== null)
+        ?.versionValidFrom ?? decisionAsOf;
+    if (group.workEli !== null && asOf !== null) {
+      citedWorkByGroup.set(group.key, {
+        asOf,
+        country: group.jurisdiction,
+        eli: group.workEli,
+      });
+    }
+  }
+  const { data: resolved } = useQuery({
+    ...statutesResolveOptions([...citedWorkByGroup.values()]),
+    enabled: open && citedWorkByGroup.size > 0,
+  });
+  const statuteByWork = statuteByCitedWork(resolved);
 
   // Absent is the answer for a decision that applies no provisions. A failed
   // read is not that answer, so it keeps the panel and says so instead of
@@ -117,15 +137,22 @@ export const ProvisionsCited = ({
               </Button>
             </div>
           )}
-          {groups.map((group, index) => (
-            <WorkReferences
-              decisionDate={decisionDate}
-              group={group}
-              isLinked={index < LINKED_WORKS_LIMIT}
-              key={group.key}
-              renderPart={renderPart}
-            />
-          ))}
+          {groups.map((group) => {
+            const citedWork = citedWorkByGroup.get(group.key);
+
+            return (
+              <WorkReferences
+                group={group}
+                key={group.key}
+                renderPart={renderPart}
+                statute={
+                  citedWork === undefined
+                    ? undefined
+                    : statuteByWork.get(citedWorkAtDateKey(citedWork))
+                }
+              />
+            );
+          })}
           {hasNextPage && (
             <Button
               className="w-fit"
@@ -146,34 +173,19 @@ export const ProvisionsCited = ({
 };
 
 const WorkReferences = ({
-  decisionDate,
   group,
-  isLinked,
   renderPart,
+  statute,
 }: {
-  decisionDate: Date | string | null;
   group: WorkGroup;
-  isLinked: boolean;
   renderPart: RenderProvisionPart;
+  /** The work's resolved consolidation; absent while unread or unheld. */
+  statute: ResolvedCitedStatute | undefined;
 }) => {
-  const asOf =
-    group.provisions.find((provision) => provision.versionValidFrom !== null)
-      ?.versionValidFrom ?? decisionDateToIso(decisionDate);
-  const { data: statute } = useQuery({
-    ...statuteByEliOptions({
-      // The query is disabled when neither source supplied a legal date.
-      asOf: asOf ?? "0001-01-01",
-      country: group.jurisdiction,
-      eli: group.workEli ?? "",
-    }),
-    enabled: isLinked && group.workEli !== null && asOf !== null,
-  });
-
   const { data: versions } = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
-      statute !== null &&
       referencesOutsideVersion(statute, group.provisions),
   });
 
@@ -188,7 +200,7 @@ const WorkReferences = ({
    * rather than linking somewhere it does not belong.
    */
   const documentFor = (provision: ProvisionGroup) => {
-    if (statute === undefined || statute === null) {
+    if (statute === undefined) {
       return null;
     }
 
@@ -213,7 +225,7 @@ const WorkReferences = ({
         </BidiText>
         {/* The act's name once its record is in: a number alone asks the
             reader to know that 89/2012 Sb. is the civil code. */}
-        {statute !== undefined && statute !== null && (
+        {statute !== undefined && (
           <BidiText as="span" className="truncate" title={statute.title}>
             {statute.title}
           </BidiText>

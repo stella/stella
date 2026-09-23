@@ -11,10 +11,13 @@ import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallbac
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
+  citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
-  statuteByEliOptions,
+  statuteByCitedWork,
+  statutesResolveOptions,
   statuteVersionsOptions,
 } from "@/features/case-law/queries/provisions";
+import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -27,12 +30,6 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import type { SafeId } from "@/lib/safe-id";
-
-/**
- * Works whose act is resolved for inline linking. Each distinct work costs one
- * read; past this many the references still read as text, as in the panel.
- */
-const LINKED_WORKS_LIMIT = 12;
 
 export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;
@@ -137,7 +134,7 @@ export const useDecisionProvisionAnchors = ({
     if (asOf === null) {
       continue;
     }
-    if (seen.has(key) || works.length >= LINKED_WORKS_LIMIT) {
+    if (seen.has(key)) {
       continue;
     }
     seen.add(key);
@@ -161,9 +158,6 @@ export const useDecisionProvisionAnchors = ({
       existing.rows.push({ versionValidFrom: decisionAsOf });
       continue;
     }
-    if (works.length >= LINKED_WORKS_LIMIT) {
-      continue;
-    }
     seen.add(key);
     works.push({
       asOf: decisionAsOf,
@@ -173,22 +167,22 @@ export const useDecisionProvisionAnchors = ({
     });
   }
 
-  const statutes = useQueries({
-    queries: works.map((work) =>
-      statuteByEliOptions({
-        asOf: work.asOf,
-        country: work.jurisdiction,
-        eli: work.eli,
-      }),
-    ),
-  });
-  const statuteByWork = new Map<
-    string,
-    NonNullable<(typeof statutes)[number]["data"]>
-  >();
+  // Every cited work resolves in one request, however many the text names.
+  const citedWorks = works.map((work) => ({
+    asOf: work.asOf,
+    country: work.jurisdiction,
+    eli: work.eli,
+  }));
+  const { data: resolved } = useQuery(statutesResolveOptions(citedWorks));
+  const resolvedByCitedWork = statuteByCitedWork(resolved);
+  const statuteByWork = new Map<string, ResolvedCitedStatute>();
   for (const [index, work] of works.entries()) {
-    const statute = statutes[index]?.data;
-    if (statute !== undefined && statute !== null) {
+    const citedWork = citedWorks[index];
+    const statute =
+      citedWork === undefined
+        ? undefined
+        : resolvedByCitedWork.get(citedWorkAtDateKey(citedWork));
+    if (statute !== undefined) {
       statuteByWork.set(workKeyOf(work), statute);
     }
   }

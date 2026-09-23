@@ -27,6 +27,10 @@ import {
 } from "@/api/handlers/legislation/provision-history";
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
 import {
+  resolveStatutesBodySchema,
+  resolveStatutesHandler,
+} from "@/api/handlers/legislation/resolve";
+import {
   legislationShelfQuerySchema,
   readLegislationShelfHandler,
 } from "@/api/handlers/legislation/shelf";
@@ -104,6 +108,24 @@ const readStatuteByEli = createSafePublicHandler(
       Result.tryPromise(
         async () =>
           await readStatuteByEliHandler(query, legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const resolveStatutes = createSafePublicHandler(
+  {
+    // The batch form of `by-eli`: one read per Work is what `read_statute`
+    // already answers, so an agent gains nothing from a second tool.
+    mcp: { type: "covered", by: "read_statute" },
+    body: resolveStatutesBodySchema,
+  },
+  async function* ({ body }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await resolveStatutesHandler(body, legislationPublicReadDb),
       ),
     );
 
@@ -262,6 +284,9 @@ export const publicLegislationRoute = new Elysia({
   // a document id and rejected by the UUID schema.
   .get("/statutes/by-eli", readStatuteByEli.handler, {
     query: readStatuteByEli.config.query,
+  })
+  .post("/statutes/resolve", resolveStatutes.handler, {
+    body: resolveStatutes.config.body,
   })
   // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
   // literal segment, not a document id.

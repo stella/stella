@@ -29,6 +29,7 @@ import {
   listStatutesHandler,
 } from "@/api/handlers/legislation/list";
 import { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
+import { resolveStatutesHandler } from "@/api/handlers/legislation/resolve";
 import {
   readLegislationShelf,
   readLegislationShelfHandler,
@@ -1399,6 +1400,155 @@ describe("point-in-time statute read", () => {
 
     expect(expectDocumentId(result)).toBe(civilCodeCurrent);
     expect(result).not.toHaveProperty("metadata");
+  });
+});
+
+describe("batched point-in-time statute resolve", () => {
+  const civilCode = "CZ/2012/89";
+
+  test("answers each work at its own date, in request order, echoing the request", async () => {
+    const works = [
+      { country: "CZE", eli: civilCode, asOf: "2015-06-01" },
+      { country: "CZE", eli: "CZ/2006/262", asOf: "2021-01-01" },
+      { country: "CZE", eli: civilCode, asOf: "2021-01-01" },
+      { country: "CZE", eli: "CZ/1900/1", asOf: "2021-01-01" },
+    ];
+
+    const { items } = await resolveStatutesHandler({ works }, legislationDb);
+
+    expect(
+      items.map(({ country, eli, asOf }) => ({ country, eli, asOf })),
+    ).toEqual(works);
+    expect(items.map((item) => item.statute?.id ?? null)).toEqual([
+      civilCodeSuperseded,
+      labourCode,
+      civilCodeCurrent,
+      null,
+    ]);
+    expect(items[0]?.statute).toMatchObject({
+      eli: civilCode,
+      country: "CZE",
+      language: "cs",
+      versionValidFrom: "2014-01-01",
+      versionValidTo: "2019-12-31",
+    });
+  });
+
+  test("breaks ties the way the single point-in-time read does", async () => {
+    // On 2021-01-01 three consolidations cover the date: the open-ended 2016
+    // one, and the Czech and English 2020 ones. The latest opening wins, then
+    // the language order, exactly as `by-eli` decides.
+    const dates = ["2014-01-01", "2016-06-01", "2021-01-01", yesterday, today];
+    const { items } = await resolveStatutesHandler(
+      {
+        works: dates.map((asOf) => ({ country: "CZE", eli: civilCode, asOf })),
+      },
+      legislationDb,
+    );
+
+    const single = await Promise.all(
+      dates.map(async (asOf) => expectDocumentId(await readAsOf(asOf))),
+    );
+    expect(items.map((item): string | undefined => item.statute?.id)).toEqual(
+      single,
+    );
+    expect(items[2]?.statute?.id).toBe(civilCodeCurrent);
+  });
+
+  test("answers null where no consolidation applies, without failing the batch", async () => {
+    const { items } = await resolveStatutesHandler(
+      {
+        works: [
+          // Before the corpus covers the work.
+          { country: "CZE", eli: civilCode, asOf: "2013-01-01" },
+          // A source not cleared for redistribution.
+          { country: "CZE", eli: "CZ/1999/111", asOf: "2021-01-01" },
+          // A jurisdiction this surface holds no law for.
+          { country: "Freedonia", eli: civilCode, asOf: "2021-01-01" },
+          // A jurisdiction the corpus holds rows for but does not publish.
+          { country: "SVK", eli: "SVK/2020/123", asOf: "2021-01-01" },
+        ],
+      },
+      legislationDb,
+    );
+
+    expect(items.map((item) => item.statute?.id ?? null)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  test("answers an act cited after it ended with its last consolidation", async () => {
+    // A court keeps applying an ended act to the facts it governed; the
+    // wording it read is the last one, on its closing day and long after.
+    const { items } = await resolveStatutesHandler(
+      {
+        works: [yesterday, today, "2999-01-01"].map((asOf) => ({
+          country: "CZE",
+          eli: "CZ/1998/222",
+          asOf,
+        })),
+      },
+      legislationDb,
+    );
+
+    expect(items.map((item) => item.statute?.id ?? null)).toEqual([
+      sunsetAct,
+      sunsetAct,
+      sunsetAct,
+    ]);
+  });
+
+  test("prefers the consolidation in force over an older one left open", async () => {
+    const { items } = await resolveStatutesHandler(
+      { works: [{ country: "CZE", eli: civilCode, asOf: "2016-06-01" }] },
+      legislationDb,
+    );
+
+    expect(items[0]?.statute?.id).toBe(
+      expectDocumentId(await readAsOf("2016-06-01")),
+    );
+  });
+
+  test("matches the ELI exactly, not an act sharing its digits", async () => {
+    // `CZ/2012/1089` ends in the digits of `CZ/2012/89`; `CZ/2012/8` is a
+    // prefix of it. Neither may answer for the other.
+    const { items } = await resolveStatutesHandler(
+      {
+        works: [
+          { country: "CZE", eli: "CZ/2012/1089", asOf: "2021-01-01" },
+          { country: "CZE", eli: "CZ/2012/8", asOf: "2021-01-01" },
+        ],
+      },
+      legislationDb,
+    );
+
+    expect(items.map((item) => item.statute?.id ?? null)).toEqual([
+      czechCivilCode,
+      null,
+    ]);
+  });
+
+  test("reads the country however the caller spelled it and echoes that spelling", async () => {
+    const { items } = await resolveStatutesHandler(
+      { works: [{ country: "cze", eli: "CZ/2006/262", asOf: "2021-01-01" }] },
+      legislationDb,
+    );
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        country: "cze",
+        statute: expect.objectContaining({ id: labourCode, country: "CZE" }),
+      }),
+    ]);
+  });
+
+  test("an empty batch answers empty", async () => {
+    expect(await resolveStatutesHandler({ works: [] }, legislationDb)).toEqual({
+      items: [],
+    });
   });
 });
 
