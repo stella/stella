@@ -44,7 +44,6 @@ import { withSourceRawObjects } from "@/api/handlers/case-law/ingestion/adapter"
 import type {
   IngestionResult,
   SourceRawObjectRef,
-  SourceRawObjects,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
@@ -136,6 +135,8 @@ import {
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
+  sourceBinaryRef,
   writeRawSourcePayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
@@ -499,59 +500,76 @@ const uploadSourceRaw = async (
     family: RAW_SOURCE_FAMILY.CASE_LAW,
   });
 
-type WriteSourceRawObjectsOptions = {
-  sourceId: SafeId<"caseLawSource">;
-  objects: IngestionResult["sourceRawObjects"];
-};
-
-/**
- * Store the publisher files one decision was served, and answer the
- * references its envelope names them by.
- */
-const writeSourceRawObjects = async ({
-  sourceId,
-  objects,
-}: WriteSourceRawObjectsOptions): Promise<SourceRawObjects> => {
-  if (objects === undefined) {
-    return {};
-  }
-  const written: Record<string, SourceRawObjectRef> = {};
-  for (const [part, { bytes, contentType }] of Object.entries(objects)) {
-    written[part] = await writeSourceBinary({
-      family: RAW_SOURCE_FAMILY.CASE_LAW,
-      sourceId,
-      bytes,
-      contentType,
-    });
-  }
-  return written;
-};
-
-type CloseSourceRawEnvelopeOptions = {
+type PlanSourceRawPayloadOptions = {
   result: IngestionResult;
-  objects: SourceRawObjects;
+  sourceId: SafeId<"caseLawSource">;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+/** The raw payload a row stores, and the publisher files it names. */
+type SourceRawPayloadPlan = {
+  payload: Uint8Array | string;
+  /** Only the files the payload names: anything else would be unreachable. */
+  files: readonly {
+    bytes: Uint8Array;
+    contentType: string;
+    ref: SourceRawObjectRef;
+  }[];
 };
 
 /**
- * The raw payload this row stores, with its binary parts resolved.
+ * The raw payload this row stores, with its binary parts resolved to the
+ * addresses they are (or will be) stored at. Pure: the addresses are derived
+ * from the decision and the bytes, so whether anything needs writing can be
+ * decided before any write.
  *
  * An adapter that hands over bytes without an envelope still has them
  * stored as the payload itself, which is the shape every adapter wrote
  * before parts existed and the one `LEGACY_RAW_SHAPES` describes.
  */
-const closeSourceRawEnvelope = ({
+const planSourceRawPayload = ({
   result,
-  objects,
-}: CloseSourceRawEnvelopeOptions): Uint8Array | string | undefined => {
+  sourceId,
+  decisionId,
+}: PlanSourceRawPayloadOptions): SourceRawPayloadPlan | undefined => {
   if (result.sourceRawBytes !== undefined) {
-    return result.sourceRawBytes;
+    return { payload: result.sourceRawBytes, files: [] };
   }
   if (result.sourceRaw === undefined) {
     return undefined;
   }
-  return Object.keys(objects).length === 0
-    ? result.sourceRaw
-    : withSourceRawObjects(result.sourceRaw, objects);
+  const files = Object.entries(result.sourceRawObjects ?? {}).map(
+    ([part, { bytes, contentType }]) => ({
+      part,
+      bytes,
+      contentType,
+      ref: sourceBinaryRef({
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId,
+        documentId: decisionId,
+        bytes,
+        contentType,
+      }),
+    }),
+  );
+  const payload =
+    files.length === 0
+      ? result.sourceRaw
+      : withSourceRawObjects(
+          result.sourceRaw,
+          Object.fromEntries(files.map(({ part, ref }) => [part, ref])),
+        );
+  // A payload that is not an envelope cannot name the files, and a file
+  // nothing names is one no reader would ever look for.
+  if (files.length > 0 && payload === result.sourceRaw) {
+    logger.error("case_law.ingestion.source_files_without_envelope", {
+      sourceId,
+      caseNumber: result.caseNumber,
+      files: files.length,
+    });
+    return { payload, files: [] };
+  }
+  return { payload, files };
 };
 
 type BuildCitationRowsOptions = {
@@ -1624,6 +1642,8 @@ const processDecisionAttempt = async ({
   // key and carries a retryable failure through the eventual row outcome.
   const acquireSourceRawArtifact = async () => {
     const rawContentType = result.sourceRawContentType ?? "text/plain";
+    const storedRawKey = existing?.sourceRawS3Key ?? null;
+    const storedRawContentType = existing?.sourceRawContentType ?? null;
 
     let sourceRawS3Key: string | null = null;
     let sourceRawContentType: string | null = null;
@@ -1633,27 +1653,43 @@ const processDecisionAttempt = async ({
       sourceRawContentType = existing.sourceRawContentType;
     } else {
       try {
-        // The publisher's files first: the envelope names them by the
-        // address storage answers with, so it cannot be written until they
-        // are written. Both writes are content-addressed, so a retry after
-        // a failure between them re-lands the same objects.
-        const objects = await writeSourceRawObjects({
-          sourceId,
-          objects: result.sourceRawObjects,
-        });
-        const rawPayload = closeSourceRawEnvelope({ result, objects });
-        if (rawPayload === undefined) {
+        const plan = planSourceRawPayload({ result, sourceId, decisionId });
+        if (plan === undefined) {
           return {
             type: "acquired",
             artifact: { s3UploadFailed, sourceRawContentType, sourceRawS3Key },
           } as const;
         }
+        // The publisher's files first: the envelope names them, so it is
+        // never stored before they are. That order is also why a row that
+        // already records this exact envelope proves its files are stored,
+        // and an unchanged observation writes nothing at all. Every write
+        // is content-addressed and created only if absent, so a retry after
+        // a failure between them lands nothing twice.
+        const payloadAlreadyStored =
+          storedRawKey ===
+            rawSourcePayloadKey({
+              family: RAW_SOURCE_FAMILY.CASE_LAW,
+              sourceId,
+              data: plan.payload,
+            }) && storedRawContentType === rawContentType;
+        if (!payloadAlreadyStored) {
+          for (const { bytes, contentType } of plan.files) {
+            await writeSourceBinary({
+              family: RAW_SOURCE_FAMILY.CASE_LAW,
+              sourceId,
+              documentId: decisionId,
+              bytes,
+              contentType,
+            });
+          }
+        }
         sourceRawS3Key = await uploadSourceRaw({
           sourceId,
-          data: rawPayload,
+          data: plan.payload,
           contentType: rawContentType,
-          storedKey: existing?.sourceRawS3Key ?? null,
-          storedContentType: existing?.sourceRawContentType ?? null,
+          storedKey: storedRawKey,
+          storedContentType: storedRawContentType,
         });
         sourceRawContentType = rawContentType;
       } catch (error) {

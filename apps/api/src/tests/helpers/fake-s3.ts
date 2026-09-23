@@ -36,6 +36,8 @@ export type FakeS3Request = {
   readonly copySourceKey: string | null;
   /** The `Range` header a GET carried; `null` when it asked for the object. */
   readonly range: string | null;
+  /** The `If-None-Match` header a PUT carried; `null` for an unconditional one. */
+  readonly ifNoneMatch: string | null;
 };
 
 export type FakeS3Failure = {
@@ -53,6 +55,12 @@ export type FakeS3 = {
   readonly endpoint: string;
   /** Objects by `<bucket>/<key>`. */
   readonly objects: Map<string, FakeS3Object>;
+  /**
+   * How many versions each `<bucket>/<key>` has been written, as a versioned
+   * bucket would keep them: every applied PUT or copy adds one, a PUT refused
+   * by its precondition adds none.
+   */
+  readonly versions: Map<string, number>;
   readonly requests: FakeS3Request[];
   readonly failNext: (failure: FakeS3Failure) => void;
   readonly put: (
@@ -208,6 +216,10 @@ export type FakeS3Options = {
  */
 export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
+  const versions = new Map<string, number>();
+  const addVersion = (id: string): void => {
+    versions.set(id, (versions.get(id) ?? 0) + 1);
+  };
   const requests: FakeS3Request[] = [];
   const failures: { failure: FakeS3Failure; remaining: number }[] = [];
 
@@ -256,7 +268,17 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     })();
     const contentType = request.headers.get("content-type");
     const range = method === "GET" ? request.headers.get("range") : null;
-    requests.push({ method, bucket, key, contentType, copySourceKey, range });
+    const ifNoneMatch =
+      method === "PUT" ? request.headers.get("if-none-match") : null;
+    requests.push({
+      method,
+      bucket,
+      key,
+      contentType,
+      copySourceKey,
+      range,
+      ifNoneMatch,
+    });
 
     const failure = takeFailure(method, key);
     if (failure !== null) {
@@ -292,16 +314,22 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       }
       // Snapshot, as S3 does: the copy must not alias the source's bytes.
       objects.set(id, { ...source, bytes: source.bytes.slice() });
+      addVersion(id);
       return new Response(
         `${XML_HEADER}<CopyObjectResult><ETag>&quot;fake&quot;</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified></CopyObjectResult>`,
         { status: 200, headers: { "content-type": "application/xml" } },
       );
     }
     if (method === "PUT") {
-      objects.set(id, {
-        bytes: new Uint8Array(await request.arrayBuffer()),
-        contentType,
-      });
+      // The body is read before the precondition is checked, so the check
+      // and the write below happen with no await between them: two
+      // concurrent conditional PUTs cannot both see the key empty.
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (ifNoneMatch === "*" && objects.has(id)) {
+        return errorResponse("PreconditionFailed", 412, key);
+      }
+      objects.set(id, { bytes, contentType });
+      addVersion(id);
       return new Response(null, { status: 200, headers: { etag: '"fake"' } });
     }
     if (method === "DELETE") {
@@ -346,6 +374,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   return {
     endpoint,
     objects,
+    versions,
     requests,
     failNext: (failure) => {
       failures.push({ failure, remaining: failure.times ?? 1 });
