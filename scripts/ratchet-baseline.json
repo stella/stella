@@ -1050,7 +1050,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 73,
+    "count": 70,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -1098,7 +1098,6 @@
       "apps/api/src/scripts/backfill-citation-authority.ts": 1,
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
-      "apps/api/src/scripts/backfill-fulltext.ts": 3,
       "apps/api/src/scripts/corpus-column-trim.ts": 2,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
       "apps/api/src/scripts/normalize-case-numbers.ts": 1
