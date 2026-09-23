@@ -33,16 +33,23 @@ const renderPolicies = (table: PgTable): string => {
     .join("\n");
 };
 
+const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
+
+// Annotated as `unknown` so the traversal does not infer a union of every
+// table type.
+const schemaExports: Record<string, unknown> = { ...schema };
+
 const tablesReferencingChatThreads = (): PgTable[] =>
-  Object.values(schema).filter(
-    (candidate): candidate is PgTable =>
-      is(candidate, PgTable) &&
-      candidate !== schema.chatThreads &&
-      getTableConfig(candidate).foreignKeys.some(
-        (foreignKey) =>
-          foreignKey.reference().foreignTable === schema.chatThreads,
-      ),
-  );
+  Object.values(schemaExports)
+    .filter(isPgTable)
+    .filter(
+      (table) =>
+        table !== schema.chatThreads &&
+        getTableConfig(table).foreignKeys.some(
+          (foreignKey) =>
+            foreignKey.reference().foreignTable === schema.chatThreads,
+        ),
+    );
 
 describe("chat-derived rows carry the thread's data scope", () => {
   test("the schema has tables referencing chat threads", () => {

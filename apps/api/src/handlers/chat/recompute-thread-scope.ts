@@ -39,10 +39,12 @@ export const planThreadScopeAdditions = ({
 }: PlanThreadScopeAdditionsInput): ThreadScopeAddition[] => {
   const planned: ThreadScopeAddition[] = [];
   for (const thread of threads) {
+    const messages = messagesByThreadId.get(thread.id);
+    if (messages === undefined) {
+      continue;
+    }
     const stored = new Set<string>(thread.dataWorkspaceIds);
-    const additions = extractThreadDataWorkspaceIds(
-      messagesByThreadId.get(thread.id) ?? [],
-    ).filter(
+    const additions = extractThreadDataWorkspaceIds(messages).filter(
       (candidate) =>
         !stored.has(candidate) &&
         workspaceOrganizationById.get(candidate) === thread.organizationId,

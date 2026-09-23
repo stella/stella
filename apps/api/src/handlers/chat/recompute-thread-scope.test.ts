@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatMessage } from "@/api/handlers/chat/types";
-import { toSafeId } from "@/api/lib/branded-types";
 import {
   collectMessageWorkspaceIds,
   planThreadScopeAdditions,
-} from "@/api/lib/chat/recompute-thread-scope";
+} from "@/api/handlers/chat/recompute-thread-scope";
+import type { ChatMessage } from "@/api/handlers/chat/types";
+import { toSafeId } from "@/api/lib/branded-types";
 
 const orgA = toSafeId<"organization">("00000000-0000-0000-0000-0000000000a1");
 const orgB = toSafeId<"organization">("00000000-0000-0000-0000-0000000000b1");

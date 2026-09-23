@@ -1,22 +1,31 @@
 /**
  * Recompute stored chat thread data scope from persisted messages, then carry
- * each thread's scope onto the DOCX suggestions it originated.
+ * each thread's scope onto the rows derived from it: the DOCX suggestions it
+ * originated, its compaction snapshots, and memories extracted from its
+ * messages.
  *
  * Scope is recomputed with the runtime extractor (see
- * `lib/chat/recompute-thread-scope.ts`) and merged in SQL at update time, so a
- * turn writing scope concurrently is never overwritten. Threads are read in
- * (organization, owner, id) order and a batch never spans two owners, so each
- * batch's audit events share one recorder. The cursor is logged with every
- * batch and can be passed back to resume.
+ * `handlers/chat/recompute-thread-scope.ts`) and merged in SQL against the
+ * locked rows, so a turn writing scope concurrently is never overwritten, and
+ * scope only ever widens. Threads are read in (organization, owner, id) order
+ * and a batch never spans two owners, so a batch's audit events share one
+ * recorder. A thread with a message the reader cannot parse is left unchanged
+ * and listed at the end, and the run then exits non-zero. The cursor is
+ * logged with every batch and can be passed back to resume.
  *
  *   bun run src/scripts/recompute-chat-data-scope.ts [--after <org>:<user>:<thread>] [--dry-run]
  */
 import { panic, Result } from "better-result";
 import { asc, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { chatMessages, chatThreads, workspaces } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
+import {
+  collectMessageWorkspaceIds,
+  planThreadScopeAdditions,
+} from "@/api/handlers/chat/recompute-thread-scope";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
   AUDIT_ACTION,
@@ -24,10 +33,6 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  collectMessageWorkspaceIds,
-  planThreadScopeAdditions,
-} from "@/api/lib/chat/recompute-thread-scope";
 
 const THREAD_BATCH_SIZE = 50;
 const STATEMENT_TIMEOUT = "60000ms";
@@ -48,12 +53,93 @@ const parseCursor = (value: string | null): Cursor | null => {
 const formatCursor = ({ organizationId, threadId, userId }: Cursor) =>
   `${organizationId}:${userId}:${threadId}`;
 
+/** A PostgreSQL uuid[] built from bound elements (never empty here). */
+const uuidArray = (ids: readonly string[]): SQL =>
+  sql`ARRAY[${sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::uuid[]`;
+
+// Derived rows whose scope must cover their thread's, widened in one
+// statement. Each branch touches only rows that do not yet cover it.
+const widenDerivedRows = (threadIds: readonly string[]) => sql`
+  WITH batch_threads AS (
+    SELECT id, data_workspace_ids FROM chat_threads
+    WHERE id = ANY(${uuidArray(threadIds)})
+  ),
+  suggestions AS (
+    UPDATE docx_suggestions ds
+    SET source_data_workspace_ids = ARRAY(
+      SELECT DISTINCT scoped.workspace_id
+      FROM pg_catalog.unnest(
+        ds.source_data_workspace_ids || bt.data_workspace_ids
+      ) AS scoped(workspace_id)
+    )
+    FROM batch_threads bt
+    WHERE ds.origin_thread_id = bt.id
+      AND NOT (bt.data_workspace_ids <@ ds.source_data_workspace_ids)
+    RETURNING ds.id
+  ),
+  compactions AS (
+    UPDATE chat_thread_compactions cc
+    SET memory_extraction_data_workspace_ids = ARRAY(
+      SELECT DISTINCT scoped.workspace_id
+      FROM pg_catalog.unnest(
+        cc.memory_extraction_data_workspace_ids || bt.data_workspace_ids
+      ) AS scoped(workspace_id)
+    )
+    FROM batch_threads bt
+    WHERE cc.thread_id = bt.id
+      AND NOT (bt.data_workspace_ids <@ cc.memory_extraction_data_workspace_ids)
+    RETURNING cc.id
+  ),
+  memories AS (
+    UPDATE ai_memories m
+    SET source_data_workspace_ids = ARRAY(
+      SELECT DISTINCT scoped.workspace_id
+      FROM pg_catalog.unnest(
+        m.source_data_workspace_ids || bt.data_workspace_ids
+      ) AS scoped(workspace_id)
+    )
+    FROM chat_messages cm
+    JOIN batch_threads bt ON bt.id = cm.thread_id
+    WHERE m.source_message_id = cm.id
+      AND NOT (bt.data_workspace_ids <@ m.source_data_workspace_ids)
+    RETURNING m.id
+  )
+  SELECT
+    (SELECT count(*)::int FROM suggestions)
+    + (SELECT count(*)::int FROM compactions)
+    + (SELECT count(*)::int FROM memories) AS changed
+`;
+
+// The same predicates, counted without writing, for `--dry-run`.
+const countStaleDerivedRows = (threadIds: readonly string[]) => sql`
+  SELECT
+    (SELECT count(*)::int FROM docx_suggestions ds
+      JOIN chat_threads ct ON ct.id = ds.origin_thread_id
+      WHERE ct.id = ANY(${uuidArray(threadIds)})
+        AND NOT (ct.data_workspace_ids <@ ds.source_data_workspace_ids))
+    +
+    (SELECT count(*)::int FROM chat_thread_compactions cc
+      JOIN chat_threads ct ON ct.id = cc.thread_id
+      WHERE ct.id = ANY(${uuidArray(threadIds)})
+        AND NOT (ct.data_workspace_ids <@ cc.memory_extraction_data_workspace_ids))
+    +
+    (SELECT count(*)::int FROM ai_memories m
+      JOIN chat_messages cm ON cm.id = m.source_message_id
+      JOIN chat_threads ct ON ct.id = cm.thread_id
+      WHERE ct.id = ANY(${uuidArray(threadIds)})
+        AND NOT (ct.data_workspace_ids <@ m.source_data_workspace_ids))
+    AS stale
+`;
+
 type BatchOutcome = {
   next: Cursor | null;
   scannedThreads: number;
-  unreadableMessages: number;
   widenedThreads: number;
-  widenedSuggestions: number;
+  widenedDerivedRows: number;
+  heldThreadIds: string[];
 };
 
 const readThreadBatch = async (after: Cursor | null) => {
@@ -88,6 +174,7 @@ const readThreadBatch = async (after: Cursor | null) => {
       );
 };
 
+/** Parsed messages per thread; a thread with any unreadable message is held. */
 const readMessagesByThreadId = async (
   threadIds: readonly SafeId<"chatThread">[],
 ) => {
@@ -101,19 +188,25 @@ const readMessagesByThreadId = async (
     .from(chatMessages)
     .where(inArray(chatMessages.threadId, [...threadIds]));
 
-  let unreadable = 0;
+  const held = new Set<string>();
   const messagesByThreadId = new Map<string, ChatMessage[]>();
   for (const row of rows) {
     const message = Result.try(() => chatMessageFromPersisted(row));
     if (Result.isError(message)) {
-      unreadable += 1;
+      held.add(row.threadId);
       continue;
     }
-    const list = messagesByThreadId.get(row.threadId) ?? [];
-    list.push(message.value);
-    messagesByThreadId.set(row.threadId, list);
+    const list = messagesByThreadId.get(row.threadId);
+    if (list === undefined) {
+      messagesByThreadId.set(row.threadId, [message.value]);
+    } else {
+      list.push(message.value);
+    }
   }
-  return { messagesByThreadId, unreadable };
+  for (const threadId of held) {
+    messagesByThreadId.delete(threadId);
+  }
+  return { held: [...held], messagesByThreadId };
 };
 
 const recomputeBatch = async ({
@@ -130,14 +223,18 @@ const recomputeBatch = async ({
     return {
       next: null,
       scannedThreads: 0,
-      unreadableMessages: 0,
       widenedThreads: 0,
-      widenedSuggestions: 0,
+      widenedDerivedRows: 0,
+      heldThreadIds: [],
     };
   }
-  const threadIds = threads.map((thread) => thread.id);
-  const { messagesByThreadId, unreadable } =
-    await readMessagesByThreadId(threadIds);
+  const { held, messagesByThreadId } = await readMessagesByThreadId(
+    threads.map((thread) => thread.id),
+  );
+  const heldSet = new Set(held);
+  const readableThreadIds = threads
+    .map((thread) => thread.id)
+    .filter((threadId) => !heldSet.has(threadId));
 
   const mentionedWorkspaceIds = collectMessageWorkspaceIds(messagesByThreadId);
   const workspaceRows =
@@ -157,19 +254,30 @@ const recomputeBatch = async ({
       workspaceRows.map((row) => [row.id, row.organizationId]),
     ),
   });
-  const next = {
-    organizationId: last.organizationId,
-    userId: last.userId,
-    threadId: last.id,
+  const base = {
+    next: {
+      organizationId: last.organizationId,
+      userId: last.userId,
+      threadId: last.id,
+    },
+    scannedThreads: threads.length,
+    heldThreadIds: held,
   };
 
+  if (readableThreadIds.length === 0) {
+    return { ...base, widenedThreads: 0, widenedDerivedRows: 0 };
+  }
+
   if (dryRun) {
+    // Counts derived rows already behind their thread; rows that fall behind
+    // only once a planned thread widens are counted by the real run.
+    const counted = await rootDb.execute<{ stale: number }>(
+      countStaleDerivedRows(readableThreadIds),
+    );
     return {
-      next,
-      scannedThreads: threads.length,
-      unreadableMessages: unreadable,
+      ...base,
       widenedThreads: planned.length,
-      widenedSuggestions: 0,
+      widenedDerivedRows: counted.at(0)?.stale ?? 0,
     };
   }
 
@@ -200,7 +308,7 @@ const recomputeBatch = async ({
       const values = sql.join(
         planned.map(
           ({ additions, threadId }) =>
-            sql`(${threadId}::uuid, ${additions}::uuid[])`,
+            sql`(${threadId}::uuid, ${uuidArray(additions)})`,
         ),
         sql`, `,
       );
@@ -245,62 +353,85 @@ const recomputeBatch = async ({
       );
     }
 
-    // A suggestion inherits the scope of the thread it came from.
-    const suggestions = await tx.execute<{ id: string }>(sql`
-      UPDATE docx_suggestions ds
-      SET source_data_workspace_ids = ARRAY(
-        SELECT DISTINCT scoped.workspace_id
-        FROM pg_catalog.unnest(
-          ds.source_data_workspace_ids || ct.data_workspace_ids
-        ) AS scoped(workspace_id)
-      )
-      FROM chat_threads ct
-      WHERE ds.origin_thread_id = ct.id
-        AND ct.id = ANY(${threadIds}::uuid[])
-        AND NOT (ct.data_workspace_ids <@ ds.source_data_workspace_ids)
-      RETURNING ds.id
-    `);
-    return { widenedThreads, widenedSuggestions: suggestions.length };
+    // Runs after the thread update so it reads the widened thread scope.
+    const derived = await tx.execute<{ changed: number }>(
+      widenDerivedRows(readableThreadIds),
+    );
+    return {
+      widenedThreads,
+      widenedDerivedRows: derived.at(0)?.changed ?? 0,
+    };
   });
 
-  return {
-    next,
-    scannedThreads: threads.length,
-    unreadableMessages: unreadable,
-    ...outcome,
-  };
+  return { ...base, ...outcome };
+};
+
+type Totals = {
+  scannedThreads: number;
+  widenedThreads: number;
+  widenedDerivedRows: number;
+  heldThreadIds: string[];
+};
+
+// Keyset batches run strictly in order, one after the other.
+const runBatches = async ({
+  after,
+  batch,
+  dryRun,
+  totals,
+}: {
+  after: Cursor | null;
+  batch: number;
+  dryRun: boolean;
+  totals: Totals;
+}): Promise<Totals> => {
+  const outcome = await recomputeBatch({ after, dryRun });
+  if (outcome.next === null) {
+    return totals;
+  }
+  console.log(
+    `[batch ${batch}] scanned=${outcome.scannedThreads} ` +
+      `widened_threads=${outcome.widenedThreads} ` +
+      `widened_derived_rows=${outcome.widenedDerivedRows} ` +
+      `held=${outcome.heldThreadIds.length} ` +
+      `after=${formatCursor(outcome.next)}`,
+  );
+  return await runBatches({
+    after: outcome.next,
+    batch: batch + 1,
+    dryRun,
+    totals: {
+      scannedThreads: totals.scannedThreads + outcome.scannedThreads,
+      widenedThreads: totals.widenedThreads + outcome.widenedThreads,
+      widenedDerivedRows:
+        totals.widenedDerivedRows + outcome.widenedDerivedRows,
+      heldThreadIds: [...totals.heldThreadIds, ...outcome.heldThreadIds],
+    },
+  });
 };
 
 const afterIndex = process.argv.indexOf("--after");
 const dryRun = process.argv.includes("--dry-run");
-let after = parseCursor(
-  afterIndex === -1 ? null : (process.argv.at(afterIndex + 1) ?? null),
-);
-const totals = {
-  scannedThreads: 0,
-  unreadableMessages: 0,
-  widenedThreads: 0,
-  widenedSuggestions: 0,
-};
-
 console.log(`=== RECOMPUTE CHAT DATA SCOPE${dryRun ? " (dry run)" : ""} ===`);
-for (let batch = 1; ; batch += 1) {
-  const outcome = await recomputeBatch({ after, dryRun });
-  if (outcome.next === null) {
-    break;
-  }
-  totals.scannedThreads += outcome.scannedThreads;
-  totals.unreadableMessages += outcome.unreadableMessages;
-  totals.widenedThreads += outcome.widenedThreads;
-  totals.widenedSuggestions += outcome.widenedSuggestions;
-  console.log(
-    `[batch ${batch}] scanned=${outcome.scannedThreads} ` +
-      `widened_threads=${outcome.widenedThreads} ` +
-      `widened_suggestions=${outcome.widenedSuggestions} ` +
-      `unreadable_messages=${outcome.unreadableMessages} ` +
-      `after=${formatCursor(outcome.next)}`,
-  );
-  after = outcome.next;
-}
+const { heldThreadIds, ...totals } = await runBatches({
+  after: parseCursor(
+    afterIndex === -1 ? null : (process.argv.at(afterIndex + 1) ?? null),
+  ),
+  batch: 1,
+  dryRun,
+  totals: {
+    scannedThreads: 0,
+    widenedThreads: 0,
+    widenedDerivedRows: 0,
+    heldThreadIds: [],
+  },
+});
 console.log(`done: ${JSON.stringify(totals)}`);
+if (heldThreadIds.length > 0) {
+  console.log(
+    `held ${heldThreadIds.length} thread(s) with unreadable messages; ` +
+      `repair them and re-run: ${heldThreadIds.join(",")}`,
+  );
+  process.exit(1);
+}
 process.exit(0);
