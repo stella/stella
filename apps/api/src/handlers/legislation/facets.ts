@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -52,22 +53,22 @@ const FACETS_CACHE_MAX_ENTRIES = 16;
 const DOCUMENT_TYPE_BUCKET_LIMIT = 1000;
 
 /**
- * A Work is counted once whatever number of consolidations it has: the
- * `(type, source, eli, language)` groups are built first and then counted,
- * which hashes in memory where `count(DISTINCT row)` sorts to disk. The read
- * is a scan of the jurisdiction (about 100 ms warm for the Czech corpus),
- * which the cache below pays once per window.
+ * Each Work is counted by the row the listing shows for it today
+ * (`isLatestOpenedVersionOfWorkAt`), so a bucket's count is the length of the
+ * list narrowed to it: a Work that only opens in the future is not offered,
+ * and a Work whose kind changed between wordings counts once, under the kind
+ * it is listed as. The read is a scan of the jurisdiction, which the cache
+ * below pays once per window.
  */
 export const readLegislationFacets = async (
   legislationDb: LegislationReadDb,
   country: string,
 ): Promise<LegislationFacets> =>
   await legislationDb(async (tx) => {
-    const works = tx
+    const documentType = await tx
       .select({
-        documentType: sql<string>`${legislationDocuments.documentType}`.as(
-          "document_type",
-        ),
+        value: sql<string>`${legislationDocuments.documentType}`,
+        count: sql<number>`count(*)::integer`,
       })
       .from(legislationDocuments)
       .innerJoin(
@@ -78,25 +79,12 @@ export const readLegislationFacets = async (
         and(
           publishedLegislationDocument,
           eq(legislationDocuments.country, country),
+          isLatestOpenedVersionOfWorkAt(sql`CURRENT_DATE`),
           sql`${legislationDocuments.documentType} <> ''`,
         ),
       )
-      .groupBy(
-        legislationDocuments.documentType,
-        legislationDocuments.sourceId,
-        legislationDocuments.eli,
-        legislationDocuments.language,
-      )
-      .as("works");
-
-    const documentType = await tx
-      .select({
-        value: works.documentType,
-        count: sql<number>`count(*)::integer`,
-      })
-      .from(works)
-      .groupBy(works.documentType)
-      .orderBy(sql`count(*) DESC`, works.documentType)
+      .groupBy(legislationDocuments.documentType)
+      .orderBy(sql`count(*) DESC`, legislationDocuments.documentType)
       .limit(DOCUMENT_TYPE_BUCKET_LIMIT);
 
     return { documentType };

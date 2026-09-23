@@ -320,8 +320,11 @@ beforeAll(
         versionValidFrom: "2020-01-01",
         versionValidTo: null,
       }),
+      // Recast as another kind of act from a date still to come: the listing
+      // does not show that wording yet, so no facet may offer its kind.
       seedDocument({
         id: civilCodeFuture,
+        documentType: "regulation",
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
@@ -1134,6 +1137,33 @@ describe("statute facets", () => {
         { value: "code", count: 1 },
       ],
     });
+  });
+
+  test("each kind of act offered lists exactly as many works as it counts", async () => {
+    const facets = await readLegislationFacets(legislationDb, "CZE");
+    const listed = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", limit: LIMITS.legislationListPageSizeMax },
+        legislationDb,
+      ),
+    );
+
+    for (const bucket of facets.documentType) {
+      const narrowed = expectPage(
+        await listStatutesHandler(
+          {
+            country: "CZE",
+            documentType: bucket.value,
+            limit: LIMITS.legislationListPageSizeMax,
+          },
+          legislationDb,
+        ),
+      );
+      expect(narrowed.items).toHaveLength(bucket.count);
+    }
+    expect(
+      facets.documentType.reduce((total, bucket) => total + bucket.count, 0),
+    ).toBe(listed.items.length);
   });
 
   test("the handler rejects a malformed jurisdiction before reading anything", async () => {

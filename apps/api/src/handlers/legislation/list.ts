@@ -171,7 +171,7 @@ export const isCurrentVersionOfWork = isVersionOfWorkAt(sql`CURRENT_DATE`);
  * wording closed is listed as ended rather than dropped, so a repealed act
  * stays findable; a Work whose every wording opens after `asOf` is not listed.
  */
-const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
+export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
   ${legislationDocuments.versionValidFrom} IS NULL
   OR ${legislationDocuments.versionValidFrom} <= ${asOf}
 ) AND NOT EXISTS (
