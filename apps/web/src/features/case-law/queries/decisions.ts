@@ -26,7 +26,7 @@ import { toSafeId } from "@/lib/safe-id";
  * Legal-vocabulary alternatives for a search's words, as the expansion
  * endpoint answers them and the search accepts them.
  */
-export type CaseLawQueryAlternatives = NonNullable<
+type CaseLawQueryAlternatives = NonNullable<
   Parameters<typeof api.case.decisions.search.post>[0]["alternatives"]
 >;
 
@@ -80,10 +80,14 @@ const caseLawDecisionKeys = {
     "status",
     { country },
   ],
+  // Total over the key's fields: a filter that reaches the request body
+  // cannot be left out of the cache identity, or a result set cached without
+  // it would answer a request made with it.
   list: (key: DecisionListKey) => [
     ...caseLawDecisionKeys.all,
     "list",
     {
+      alternatives: key.alternatives,
       court: key.court,
       country: key.country,
       dateFrom: key.dateFrom,
@@ -95,7 +99,7 @@ const caseLawDecisionKeys = {
       search: key.search,
       sort: key.sort,
       strict: key.strict,
-    },
+    } satisfies Record<keyof DecisionListKey, unknown>,
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
   bySlug: (key: DecisionBySlugKey) => [
@@ -359,13 +363,23 @@ export const refineCaseLawQuery = async (body: RefineCaseLawQueryOptions) =>
   unwrapEden(await api.case.decisions.search.refine.post(body));
 
 type CaseLawQueryExpansionOptions = {
+  /** The organization whose model and usage answer; part of the identity. */
+  activeOrganizationId: string;
   country: string;
   query: string;
   /** Reports a failed expansion; the search then runs as typed. */
   onFailure: (error: unknown) => void;
 };
 
-const NO_ALTERNATIVES: CaseLawQueryAlternatives = [];
+type CaseLawQueryExpansion = Awaited<
+  ReturnType<typeof api.case.decisions.search.expand.post>
+>["data"];
+
+/** A request that failed on the way: searched as typed, asked again later. */
+const DEGRADED_EXPANSION = {
+  alternatives: [],
+  outcome: "degraded",
+} satisfies NonNullable<CaseLawQueryExpansion>;
 
 /**
  * The legal-vocabulary alternatives the model proposes for a search, for a
@@ -375,12 +389,17 @@ const NO_ALTERNATIVES: CaseLawQueryAlternatives = [];
  * expansion may widen a search, never stop one.
  */
 export const caseLawQueryExpansionOptions = ({
+  activeOrganizationId,
   country,
   onFailure,
   query,
 }: CaseLawQueryExpansionOptions) =>
   queryOptions({
-    queryKey: [...caseLawDecisionKeys.all, "expansion", { country, query }],
+    queryKey: [
+      ...caseLawDecisionKeys.all,
+      "expansion",
+      { activeOrganizationId, country, query },
+    ],
     queryFn: async ({ signal }) => {
       const result = await Result.tryPromise(async () =>
         unwrapEden(
@@ -391,14 +410,17 @@ export const caseLawQueryExpansionOptions = ({
         ),
       );
       if (result.isOk()) {
-        return result.value.alternatives;
+        return result.value;
       }
       if (!signal.aborted) {
         onFailure(result.error);
       }
-      return NO_ALTERNATIVES;
+      return DEGRADED_EXPANSION;
     },
-    staleTime: Number.POSITIVE_INFINITY,
+    // A settled answer holds for the session; a degraded one is asked again
+    // the next time the search is, as the server does not cache it either.
+    staleTime: ({ state }) =>
+      state.data?.outcome === "degraded" ? 0 : Number.POSITIVE_INFINITY,
     retry: false,
   });
 

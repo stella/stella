@@ -9,6 +9,7 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { Temporal } from "@stll/time";
 
+import { envBase } from "@/api/env-base";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -113,9 +114,25 @@ const cacheExpansion = (key: string, alternatives: LegalAlternatives) => {
   });
 };
 
-const NO_ALTERNATIVES: { alternatives: LegalAlternatives } = {
-  alternatives: [],
+/**
+ * What an answer is. `expanded` and `none` are settled and may be reused;
+ * `degraded` is a model call that failed or timed out, which the caller
+ * searches without and asks again later.
+ */
+type ExpansionOutcome = "degraded" | "expanded" | "none";
+
+type ExpansionAnswer = {
+  alternatives: LegalAlternatives;
+  outcome: ExpansionOutcome;
 };
+
+const NO_ALTERNATIVES: ExpansionAnswer = { alternatives: [], outcome: "none" };
+const DEGRADED: ExpansionAnswer = { alternatives: [], outcome: "degraded" };
+
+const settledAnswer = (alternatives: LegalAlternatives): ExpansionAnswer => ({
+  alternatives,
+  outcome: alternatives.length === 0 ? "none" : "expanded",
+});
 
 const config = {
   description:
@@ -123,8 +140,10 @@ const config = {
     "the terms the jurisdiction's statutes and courts use for an everyday " +
     "word, in the corpus language. The answer is passed to the case-law " +
     "search as `alternatives`, which ORs them beside each word. Empty when " +
-    "the organization has no AI available, the query is an identifier, or " +
-    "the model does not answer in time. Consumes AI usage.",
+    "the organization has no AI available, the query is an identifier, the " +
+    "deployment searches without the corpus index, or the model does not " +
+    "answer in time (`outcome: degraded`, worth asking again). Consumes AI " +
+    "usage.",
   // The grant AI chat carries: one AI spend, withheld from roles that may
   // not start a chat.
   permissions: { chat: ["create"] },
@@ -163,6 +182,13 @@ const expandCaseLawSearch = createSafeRootHandler(
       );
     }
 
+    // Only the corpus-index search reads alternatives; the Postgres search
+    // requires the words as typed, so asking the model there would spend
+    // usage on an answer no query uses.
+    if (envBase.LEGAL_SEARCH_PROVIDER !== "corpus-index") {
+      return Result.ok(NO_ALTERNATIVES);
+    }
+
     // An identifier is matched as written, so there is nothing to expand.
     const intent = parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(country),
@@ -199,7 +225,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     ].join("\u0000");
     const cached = readCachedExpansion(cacheKey);
     if (cached !== null) {
-      return Result.ok({ alternatives: cached });
+      return Result.ok(settledAnswer(cached));
     }
 
     const analytics = createTanStackAIAnalyticsCallbacks({
@@ -251,7 +277,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     // reported, and not cached, so the next search asks again.
     if (generated.isErr()) {
       analytics.captureError(generated.error);
-      return Result.ok(NO_ALTERNATIVES);
+      return Result.ok(DEGRADED);
     }
 
     const alternatives = normalizeLegalAlternatives(
@@ -259,7 +285,7 @@ const expandCaseLawSearch = createSafeRootHandler(
       { functionWords, query: body.query },
     );
     cacheExpansion(cacheKey, alternatives);
-    return Result.ok({ alternatives });
+    return Result.ok(settledAnswer(alternatives));
   },
 );
 

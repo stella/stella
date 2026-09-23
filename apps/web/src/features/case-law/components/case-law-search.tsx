@@ -51,13 +51,21 @@ export const CaseLawSearch = ({
   const analytics = useAnalytics();
   const locale = useI18nStore((state) => state.loadedLang);
   const refine = useMutation({
-    mutationFn: async (entry: string) =>
+    mutationFn: async (asked: { country: string; entry: string }) =>
       await refineCaseLawQuery({
-        country: fromCaseLawCountryParam(country),
+        country: fromCaseLawCountryParam(asked.country),
         locale,
-        query: entry,
+        query: asked.entry,
       }),
-    onSuccess: (refined) => onRefined(refined.query),
+    // The box stays editable while the model answers. A rewrite of an entry
+    // the reader has since changed, or of another jurisdiction, is dropped
+    // rather than written over what they typed.
+    onSuccess: (refined, asked) => {
+      if (asked.entry !== query.trim() || asked.country !== country) {
+        return;
+      }
+      onRefined(refined.query);
+    },
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
@@ -79,7 +87,7 @@ export const CaseLawSearch = ({
       query={query}
       refine={{
         isPending: refine.isPending,
-        onRefine: () => refine.mutate(query.trim()),
+        onRefine: () => refine.mutate({ country, entry: query.trim() }),
       }}
       searchLabel={t("caseLaw.searchLabel")}
     />

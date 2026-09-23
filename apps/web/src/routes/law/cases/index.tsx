@@ -108,7 +108,6 @@ import {
   readDecisionIntent,
 } from "@/features/case-law/open-decision-match";
 import {
-  caseLawQueryExpansionOptions,
   decisionFacetsOptions,
   decisionsInfiniteOptions,
 } from "@/features/case-law/queries/decisions";
@@ -123,13 +122,12 @@ import type {
   CaseLawResultsLine,
 } from "@/features/case-law/search-warnings.logic";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
-import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
-import { useAnalytics } from "@/lib/analytics/provider";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -612,31 +610,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const typedFilters = createDecisionFiltersFromSearch(search, {
     excerpt: layout.excerpt,
   });
-  // A signed-in reader's search also matches the words the jurisdiction's
-  // statutes use for theirs ("kauce" beside "jistota"), as their
-  // organization's model proposes them. A visitor's search runs as typed:
-  // the public page spends no AI on its own account. The rows first answer
-  // the words as typed and are replaced once the alternatives land, so the
-  // model never holds the search up.
-  const authStatus = useClientAuthStatus();
-  const analytics = useAnalytics();
-  const typedQuery = typedFilters.search ?? "";
-  const { data: alternatives } = useQuery({
-    ...caseLawQueryExpansionOptions({
-      country: typedFilters.country,
-      onFailure: (failure) => analytics.captureError(failure),
-      query: typedQuery,
-    }),
-    enabled:
-      authStatus.status === "authenticated" &&
-      intent.type === "text" &&
-      typedQuery.length > 0 &&
-      typedFilters.strict === undefined,
-  });
-  const filters =
-    alternatives === undefined || alternatives.length === 0
-      ? typedFilters
-      : { ...typedFilters, alternatives };
+  const filters = useExpandedDecisionFilters(typedFilters, intent);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
   // What the field last asked the URL to hold. A navigation that lands on
