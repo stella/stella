@@ -40,6 +40,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "case_law_decision_identifiers",
   "case_law_decision_judges",
   "case_law_decision_source_identities",
+  "case_law_decision_supplements",
   "case_law_decisions",
   "case_law_fts_configs",
   "case_law_index_jobs",
