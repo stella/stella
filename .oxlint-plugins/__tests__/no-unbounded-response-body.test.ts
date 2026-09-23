@@ -38,6 +38,17 @@ describe.serial("no-unbounded-response-body", () => {
     ).toEqual([2, 3, 5, 7]);
   });
 
+  test("drops a destructured response once the binding is reassigned", async () => {
+    expect(
+      await lint([
+        "let [response] = await Promise.all([fetch(url)]);",
+        "response = new Response(localStream);",
+        "const text = await response.text();",
+        "",
+      ]),
+    ).toEqual([]);
+  });
+
   test("reports unbounded storage readers imported from the owner", async () => {
     expect(
       await lint([

@@ -65,6 +65,45 @@ describe.serial("require-bounded-request-schema", () => {
     ).toEqual([]);
   });
 
+  test("reports files without size or count limits", async () => {
+    expect(
+      await lint([
+        "createSafeHandler({",
+        "  body: t.Object({",
+        "    upload: t.File(),",
+        "    many: t.Files({ maxSize: '5m' }),",
+        "    bounded: t.Files({ maxSize: '5m', maxItems: 5 }),",
+        "  }),",
+        "}, handler);",
+        "",
+      ]),
+    ).toEqual([3, 4]);
+  });
+
+  test("follows const alias chains", async () => {
+    expect(
+      await lint([
+        "const schema = t.Object({ name: t.String() });",
+        "const requestBody = schema;",
+        "export default { config: { body: requestBody }, handler };",
+        "",
+      ]),
+    ).toEqual([1]);
+  });
+
+  test("walks cursor schemas the pagination rule does not report", async () => {
+    expect(
+      await lint([
+        "createSafeHandler({",
+        "  query: t.Object({",
+        "    cursor: t.Nullable(t.String()),",
+        "  }),",
+        "}, handler);",
+        "",
+      ]),
+    ).toEqual([3]);
+  });
+
   test("ignores response and non-request schemas", async () => {
     expect(
       await lint([

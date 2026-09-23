@@ -38,11 +38,17 @@
 //     fraction digits are unbounded);
 //   - `t.Array(items)` whose options object has no `maxItems`.
 //
+//   - `t.File()` whose options have no `maxSize`, and `t.Files()` without
+//     both `maxSize` and `maxItems` (multipart bodies are buffered whole, so
+//     the schema is the only per-field limit).
+//
+// Same-file `const` aliases are followed through chains (`const b = a`).
 // Accepted without proof: an options argument that is not an object literal,
 // or one containing a spread (the bound may come from the spread), and any
 // imported schema or helper call, which is judged where it is defined. A
-// `cursor` property is left to `require-pagination-cursor-schema`, which owns
-// that key.
+// `cursor` whose schema is an inline `t.String(...)`, bare or in
+// `t.Optional(...)`, is left to `require-pagination-cursor-schema`, which
+// reports exactly those shapes; other cursor schemas are walked here.
 //
 // Known blind spots: `t.Record` keys, `t.RegExp`, schemas assembled at
 // runtime, and request schemas whose const name does not follow the naming
@@ -81,8 +87,6 @@ const LEAF_BUILDERS: ReadonlySet<string> = new Set([
   "Any",
   "Boolean",
   "BooleanString",
-  "File",
-  "Files",
   "Integer",
   "Literal",
   "Null",
@@ -99,7 +103,11 @@ const PAGINATION_CURSOR_KEY = "cursor";
 
 type Finding = {
   node: AstNode;
-  messageId: "unboundedString" | "unboundedArray";
+  messageId:
+    | "unboundedString"
+    | "unboundedArray"
+    | "unboundedFile"
+    | "unboundedFiles";
 };
 
 const typeboxBuilderName = (node: unknown): string | null => {
@@ -174,6 +182,24 @@ const stringIsBounded = (options: unknown): boolean =>
 const arrayIsBounded = (options: unknown): boolean =>
   optionsBound(options, (key) => key === "maxItems");
 
+const fileIsBounded = (options: unknown): boolean =>
+  optionsBound(options, (key) => key === "maxSize");
+
+// Multipart bodies are buffered whole; the per-field limits live here.
+const filesAreBounded = (options: unknown): boolean =>
+  fileIsBounded(options) && optionsBound(options, (key) => key === "maxItems");
+
+// The cursor shapes `require-pagination-cursor-schema` reports: an inline
+// `t.String(...)`, bare or wrapped in `t.Optional(...)`. Any other cursor
+// composition is walked like every other field.
+const isPaginationRuleCursor = (value: unknown): boolean => {
+  let schema = unwrapExpression(value);
+  if (typeboxBuilderName(schema) === "Optional" && schema !== null) {
+    schema = unwrapExpression(callArguments(schema).at(0));
+  }
+  return typeboxBuilderName(schema) === "String";
+};
+
 const isIdentifierReference = (
   node: unknown,
 ): node is ESTree.IdentifierReference =>
@@ -231,10 +257,30 @@ export default eslintCompatPlugin({
           unboundedArray:
             "Request schema array has no maxItems. Add `{ maxItems }` so a " +
             "request cannot carry an unbounded element count.",
+          unboundedFile:
+            "Request schema file has no maxSize. Add `{ maxSize }` (see " +
+            "FILE_SIZE_LIMITS in @/api/lib/limits).",
+          unboundedFiles:
+            "Request schema file list needs both maxSize and maxItems.",
         },
       },
       createOnce(context) {
         let reported = new Set<unknown>();
+
+        // Follows `const b = a` chains to the first non-identifier initializer.
+        const resolveSchemaInitializer = (identifier: unknown): unknown => {
+          const seen = new Set<unknown>();
+          let current: unknown = identifier;
+          while (
+            isAstNode(current) &&
+            current.type === "Identifier" &&
+            !seen.has(current)
+          ) {
+            seen.add(current);
+            current = unwrapExpression(resolveConstInitializer(current));
+          }
+          return current === identifier ? null : current;
+        };
 
         const resolveConstInitializer = (identifier: unknown): unknown => {
           if (!isIdentifierReference(identifier)) {
@@ -276,7 +322,7 @@ export default eslintCompatPlugin({
           visited.add(current);
 
           if (current.type === "Identifier") {
-            const init = resolveConstInitializer(current);
+            const init = resolveSchemaInitializer(current);
             if (isSchemaBuilder(unwrapExpression(init))) {
               collect(init, visited, findings);
             }
@@ -301,7 +347,10 @@ export default eslintCompatPlugin({
                 collect(property.argument, visited, findings);
                 continue;
               }
-              if (getPropertyName(property.key) === PAGINATION_CURSOR_KEY) {
+              if (
+                getPropertyName(property.key) === PAGINATION_CURSOR_KEY &&
+                isPaginationRuleCursor(property.value)
+              ) {
                 continue;
               }
               collect(property.value, visited, findings);
@@ -325,6 +374,16 @@ export default eslintCompatPlugin({
             case "String":
               if (!stringIsBounded(args.at(0))) {
                 findings.push({ node: current, messageId: "unboundedString" });
+              }
+              return;
+            case "File":
+              if (!fileIsBounded(args.at(0))) {
+                findings.push({ node: current, messageId: "unboundedFile" });
+              }
+              return;
+            case "Files":
+              if (!filesAreBounded(args.at(0))) {
+                findings.push({ node: current, messageId: "unboundedFiles" });
               }
               return;
             case "Array":
@@ -382,7 +441,7 @@ export default eslintCompatPlugin({
               return;
             }
             if (value.type === "Identifier") {
-              const init = resolveConstInitializer(value);
+              const init = resolveSchemaInitializer(value);
               if (isSchemaBuilder(unwrapExpression(init))) {
                 inspect(init);
               }

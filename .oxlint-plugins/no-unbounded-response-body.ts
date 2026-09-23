@@ -240,7 +240,23 @@ export default eslintCompatPlugin({
         // The initializer of a binding that still denotes it: `const`, or a
         // `let`/`var` that scope analysis proves is never written after init.
         const stableInitializer = (variable): unknown => {
+          const reassigned = variable.references.some(
+            (reference) =>
+              typeof reference.isWrite === "function" &&
+              reference.isWrite() &&
+              reference.init !== true,
+          );
           for (const def of variable.defs) {
+            // A `let`/`var` written after its declaration no longer denotes
+            // its initializer, destructured or not.
+            if (
+              reassigned &&
+              isAstNode(def.parent) &&
+              def.parent.type === "VariableDeclaration" &&
+              def.parent.kind !== "const"
+            ) {
+              return null;
+            }
             const destructured = promiseAllElement(def, variable.name);
             if (destructured !== null) {
               return destructured;
@@ -253,17 +269,6 @@ export default eslintCompatPlugin({
               def.parent.type !== "VariableDeclaration"
             ) {
               continue;
-            }
-            if (
-              def.parent.kind !== "const" &&
-              variable.references.some(
-                (reference) =>
-                  typeof reference.isWrite === "function" &&
-                  reference.isWrite() &&
-                  reference.init !== true,
-              )
-            ) {
-              return null;
             }
             return def.node.init;
           }
