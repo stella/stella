@@ -7,6 +7,14 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const PROVISIONS_PAGE_SIZE = 50;
+/** The endpoint's own maximum page. */
+const PROVISIONS_LINKING_PAGE_SIZE = 100;
+/**
+ * Pages read to link a decision's text. A decision citing more provisions
+ * than this reads the rest as text rather than holding the reader on an
+ * unbounded walk.
+ */
+const PROVISIONS_LINKING_PAGE_LIMIT = 20;
 /** One work resolves to one act; the extra rows absorb a loose title match. */
 const STATUTE_LOOKUP_PAGE_SIZE = 5;
 const ELI_ACT_TAIL_RE =
@@ -38,30 +46,75 @@ const decisionProvisionKeys = {
   ],
 };
 
+const fetchDecisionProvisionsPage = async ({
+  cursor,
+  decisionId,
+  limit,
+  signal,
+}: {
+  cursor: string | null;
+  decisionId: string;
+  limit: number;
+  signal: AbortSignal;
+}) => {
+  const response = await api.case
+    .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+    .provisions.get({
+      query: { limit, ...(cursor !== null && { cursor }) },
+      fetch: { signal },
+    });
+
+  return unwrapPublicLawEden(response, "listPublicDecisionProvisions");
+};
+
+type DecisionProvisionsPage = Awaited<
+  ReturnType<typeof fetchDecisionProvisionsPage>
+>;
+
 /** The provisions a decision applies, in the order its text states them. */
 export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   infiniteQueryOptions({
     queryKey: decisionProvisionKeys.forDecision(decisionId),
-    queryFn: async ({ pageParam, signal }) => {
-      const response = await api.case
-        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
-        .provisions.get({
-          query: {
-            limit: PROVISIONS_PAGE_SIZE,
-            ...(pageParam !== null && { cursor: pageParam }),
-          },
-          fetch: { signal },
-        });
-
-      const data = unwrapPublicLawEden(
-        response,
-        "listPublicDecisionProvisions",
-      );
-
-      return data;
-    },
+    queryFn: async ({ pageParam, signal }) =>
+      await fetchDecisionProvisionsPage({
+        cursor: pageParam,
+        decisionId,
+        limit: PROVISIONS_PAGE_SIZE,
+        signal,
+      }),
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * Every provision a decision applies, for linking them where the text states
+ * them. The panel pages on demand; the text cannot, or a reference past the
+ * first page reads as plain text until the panel is expanded.
+ */
+export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
+  queryOptions({
+    queryKey: [...decisionProvisionKeys.forDecision(decisionId), "linking"],
+    queryFn: async ({ signal }) => {
+      const items: DecisionProvisionsPage["items"] = [];
+      const previews: DecisionProvisionsPage["previews"] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < PROVISIONS_LINKING_PAGE_LIMIT; page += 1) {
+        const data = await fetchDecisionProvisionsPage({
+          cursor,
+          decisionId,
+          limit: PROVISIONS_LINKING_PAGE_SIZE,
+          signal,
+        });
+        items.push(...data.items);
+        previews.push(...data.previews);
+        cursor = data.nextCursor;
+        if (cursor === null) {
+          break;
+        }
+      }
+      return { items, previews };
+    },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

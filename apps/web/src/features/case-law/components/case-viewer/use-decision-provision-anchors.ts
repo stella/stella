@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -11,7 +11,7 @@ import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallbac
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
-  decisionProvisionsInfiniteOptions,
+  decisionProvisionsForLinkingOptions,
   statuteByEliOptions,
   statuteVersionsOptions,
 } from "@/features/case-law/queries/provisions";
@@ -102,17 +102,14 @@ export const useDecisionProvisionAnchors = ({
   decisionId,
 }: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
   const renderPart = useProvisionPartRenderer();
-  const { data } = useInfiniteQuery(
-    decisionProvisionsInfiniteOptions(decisionId),
-  );
-  const pages = optionalArray(data?.pages);
-  const rows = pages.flatMap((page) => page.items);
+  const { data } = useQuery(decisionProvisionsForLinkingOptions(decisionId));
+  const rows = optionalArray(data?.items);
   // The list carries the wording of the provisions it could read, keyed by
   // the server that resolved them; a row it could not read hovers to its own
   // preview request.
   const previewByKey = new Map(
-    pages.flatMap((page) =>
-      page.previews.map((preview) => [preview.key, preview] as const),
+    optionalArray(data?.previews).map(
+      (preview) => [preview.key, preview] as const,
     ),
   );
 
