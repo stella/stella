@@ -29,7 +29,6 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { downloadFile } from "@/lib/utils";
-import { useCategoryOps } from "@/routes/_protected.knowledge/-components/category-ops";
 import {
   CategoryFormDialog,
   CategoryMobileFilterBar,
@@ -392,20 +391,62 @@ const ClauseCategorySidebar = ({
   );
 };
 
-/** Clause-categories CRUD wired to the api treaty. */
+/** Clause-categories CRUD wired to the api treaty. Each op surfaces its own
+ *  error toast and resolves to the shared `CategoryOps` contract. */
 const useClauseCategoryOps = (): CategoryOps => {
   const t = useTranslations();
 
-  return useCategoryOps({
-    deleteFailedTitle: t("clauses.deleteFailed"),
-    requests: {
-      create: (name) => api["clause-categories"].put({ name }),
-      rename: (id, name) =>
-        api["clause-categories"]({ categoryId: id }).post({ name }),
-      remove: (id) => api["clause-categories"]({ categoryId: id }).delete(),
+  return {
+    create: async (name) => {
+      const response = await api["clause-categories"].put({ name });
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return null;
+      }
+      return { id: response.data.id, name: response.data.name };
     },
-    saveFailedTitle: t("clauses.saveFailed"),
-  });
+    rename: async (id, name) => {
+      const response = await api["clause-categories"]({
+        categoryId: id,
+      }).post({ name });
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return false;
+      }
+      return true;
+    },
+    remove: async (id) => {
+      const response = await api["clause-categories"]({
+        categoryId: id,
+      }).delete();
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.deleteFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return false;
+      }
+      return true;
+    },
+  };
 };
 
 const useClauseCategoryLabels = (): CategoryLabels => {

@@ -1,16 +1,13 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, gte, lte, or } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
+import { member, user } from "@/api/db/auth-schema";
 import {
   expenseCategorySchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
-import {
-  selectTimekeeperNames,
-  timekeeperIdsOf,
-} from "@/api/handlers/time-entries/timekeeper-names";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -156,16 +153,28 @@ const readExpenses = createSafeHandler(
         encodePaginationCursor([item.dateIncurred, item.id]),
     });
 
-    const userIds = timekeeperIdsOf(page.items);
+    // Batch-fetch user names
+    const userIds = new Set<string>();
+    for (const row of page.items) {
+      if (row.userId) {
+        userIds.add(row.userId);
+      }
+    }
+
     const usersResult =
       userIds.size > 0
         ? yield* Result.await(
-            safeDb(
-              async (tx) =>
-                await selectTimekeeperNames(tx, {
-                  organizationId: session.activeOrganizationId,
-                  userIds,
-                }),
+            safeDb((tx) =>
+              tx
+                .select({ id: user.id, name: user.name })
+                .from(member)
+                .innerJoin(user, eq(member.userId, user.id))
+                .where(
+                  and(
+                    eq(member.organizationId, session.activeOrganizationId),
+                    inArray(member.userId, [...userIds]),
+                  ),
+                ),
             ),
           )
         : [];

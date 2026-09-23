@@ -16,7 +16,6 @@ import type {
   ViewLayoutType,
 } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
-import type { OptionColor } from "@stll/ui/option-color";
 
 import type {
   ChatAnonRestoration,
@@ -42,6 +41,10 @@ type PropertiesResponse =
 // silently drifting.
 export type WorkspacePropertyWire = PropertiesResponse[number];
 export type PropertyContent = PropertiesResponse[number]["content"];
+export type OptionColor = Extract<
+  PropertyContent,
+  { type: "multi-select" | "single-select" }
+>["options"][number]["color"];
 export type UpsertFieldContent =
   WebApiRoutes["fields"][":workspaceId"]["post"]["body"]["content"];
 export type BoundingBox =
@@ -64,7 +67,6 @@ export type {
   GlobalSearchResultType,
   LegalListSourceLocator,
   McpOAuthScope,
-  OptionColor,
   PropertyContentType,
   SafeId,
   SafeIdType,

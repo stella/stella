@@ -1483,7 +1483,7 @@
     }
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 29,
+    "count": 30,
     "files": {
       "apps/web/src/lib/analytics/noop.ts": 1,
       "apps/web/src/lib/analytics/posthog.ts": 1,
@@ -1508,11 +1508,12 @@
       "packages/template-conditions/src/field-values.ts": 1,
       "packages/template-conditions/src/index.ts": 1,
       "packages/template-conditions/src/path.ts": 1,
+      "packages/ui/src/lib/option-color.ts": 1,
       "packages/workspace-model/src/properties.ts": 1
     }
   },
   "duplicate-token-blocks": {
-    "count": 60,
+    "count": 64,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1546,6 +1547,9 @@
       "apps/api/src/scripts/eu-ecj-refetch.ts": 1,
       "apps/web/src/components/auth/sign-in-panel.tsx": 2,
       "apps/web/src/lib/types.ts": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 2,
       "packages/locales/src/languages.ts": 7,
       "packages/ui/src/index.ts": 1,
       "scripts/result-boundary-globs.ts": 2
