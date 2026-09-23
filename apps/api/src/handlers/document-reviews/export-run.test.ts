@@ -109,6 +109,8 @@ describe("document review run export", () => {
         return {
           from: () => ({
             where: () => ({
+              // The readable-reference lookup: only the run's own matter.
+              limit: async () => [{ id: WORKSPACE_ID }],
               orderBy: () => ({
                 limit: async () => [
                   {
@@ -317,12 +319,16 @@ describe("document review run export", () => {
           };
         }
 
-        // The passage read runs through the caller's own scoped transaction;
-        // row security answers none of the matters the run pinned, so the
-        // passage that would say "Precedent wording." is simply absent.
+        // The passage and readable-reference reads run through the caller's
+        // own scoped transaction; row security answers none of the matters
+        // the run pinned, so the passage that would say "Precedent wording."
+        // is simply absent.
         return {
           from: () => ({
-            where: async () => [],
+            where: () =>
+              Object.assign(Promise.resolve([]), {
+                limit: async () => [],
+              }),
           }),
         };
       },
