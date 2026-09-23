@@ -16,7 +16,7 @@ import {
   isStrictSearch,
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
-import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
@@ -27,15 +27,6 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
 export type CaseLawSearchScope = CaseLawIndexSearch;
-
-/**
- * The corpus country the pill names. A URL without a country is scoped by
- * `beforeLoad` before public search calls this helper.
- */
-export const caseLawCountryScope = (
-  country: string | undefined,
-): string | undefined =>
-  country === undefined ? undefined : fromCaseLawCountryParam(country);
 
 type ReadDecisionIntentOptions = {
   readonly jurisdiction?: string | undefined;

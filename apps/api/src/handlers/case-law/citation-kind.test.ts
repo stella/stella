@@ -548,19 +548,112 @@ describe("Polish cues and registries", () => {
     }
   });
 
-  test("a regional administrative mark is still not authority", () => {
-    // WSA is knowingly absent: `registryOf` stops at the slash and would key
-    // on the bare `sa`, the seat that identifies the court dropped. This
-    // pins the gap so that adding WSA is a deliberate edit here, not a
-    // silent side effect of loosening the reader.
+  test("an administrative-court docket is authority on the registry alone", () => {
+    for (const citationText of [
+      "sygn. akt I SA/Wa 123/20",
+      "II SAB/Wa 11/04",
+      "III SA/Gl 1234/19",
+      "VIII SA/Wa 5/20",
+      "sygn. akt II SA/Łd 123/20",
+      "II SPP/Wa 1/20",
+      "sygn. akt II FSK 1226/21",
+      "II GZ 15/04",
+      "I OW 10/04",
+      "I OZ 45/23",
+      "I FNP 1/20",
+      "SA/Wr 1234/98",
+      "III SA 1234/01",
+      "FPS 1/99",
+      "sygn. akt OPK 1/97",
+      "SA/Ł 1234/98",
+      "sygn. akt I SA 1234-1236/98",
+      "IISA/WR 12/01",
+      "II GOK 2/18",
+      "II OKW 1/24",
+      "IV SA 123/04",
+      "sygn. akt FSK 123/04",
+      "SA 123/98",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("a Tribunal or KIO docket is authority on the registry alone", () => {
+    for (const citationText of [
+      ...[
+        "K",
+        "SK",
+        "P",
+        "U",
+        "W",
+        "S",
+        "Kp",
+        "Pp",
+        "Kpt",
+        "Uw",
+        "Kw",
+        "Ts",
+        "Tw",
+        "T",
+      ].map((prefix) => `${prefix} 2/26`),
+      "sygn.: P. 12/98",
+      "sygn. K. 7/95",
+      "KPT 1/17",
+      "KIO 1234/24",
+      "KIO/UZP 1188/08",
+      "KIO 2845/25, KIO 2846/25",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+    // A common court's docket under a division stays its own history.
     expect(
       classifyCitationVerdict({
-        citationText: "sygn. akt I SA/Wa 123/20",
+        citationText: "sygn. akt II K 12/20",
         context: null,
       }),
     ).toEqual({
       kind: CITATION_KIND.PROCEDURAL,
       evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+    });
+  });
+
+  test("common-court and malformed dockets do not read as administrative", () => {
+    for (const citationText of [
+      // A regional court's commercial register, title case.
+      "sygn. akt XXIII Gz 12/20",
+      // An NSA mark under a division the NSA does not have.
+      "IV FSK 1/20",
+      // A seat no administrative court sits in.
+      "I SA/Xy 1/20",
+      // A regional court beyond Warsaw's eight divisions.
+      "IX SA/Wa 1/20",
+      // A seatless `SA` after the reform.
+      "III SA 1234/07",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PROCEDURAL,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("the reviewed regional judgment is procedural by context", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "III SA/Wa 1234/19",
+        context:
+          "skargi kasacyjnej od wyroku Wojewódzkiego Sądu Administracyjnego " +
+          "w Warszawie z dnia 10 marca 2020 r., III SA/Wa 1234/19",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
     });
   });
 
