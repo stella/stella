@@ -304,6 +304,12 @@ export const foldStoredSupplements = async ({
           outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
           detail: disposition.judgmentId,
         };
+      case "erased":
+        return {
+          ...base,
+          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+          detail: disposition.decisionId,
+        };
       default: {
         disposition satisfies never;
         return panic(

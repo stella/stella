@@ -1,5 +1,15 @@
 import { Result, panic } from "better-result";
-import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -3168,7 +3178,12 @@ export type SupplementDisposition =
    * it took down, so the supplement is parked, nothing is published, and a
    * standalone row it already has is absorbed into the judgment.
    */
-  | { type: "withheld"; judgmentId: SafeId<"caseLawDecision"> };
+  | { type: "withheld"; judgmentId: SafeId<"caseLawDecision"> }
+  /**
+   * Its own standalone row is erased. The erasure covers the supplement, so
+   * nothing of it is kept or placed.
+   */
+  | { type: "erased"; decisionId: SafeId<"caseLawDecision"> };
 
 export type ProcessSupplementResult =
   | {
@@ -3268,6 +3283,31 @@ export const processSupplement = async ({
   };
   const placed = await scopedDb(async (tx) => {
     await lockSupplementTarget(tx, key);
+    const erasedOwn = (
+      await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+            isNotNull(caseLawDecisions.redactedAt),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (erasedOwn !== undefined) {
+      // audit: skip — background case-law ingestion; public case-law data
+      await tx
+        .delete(caseLawDecisionSupplements)
+        .where(
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+          ),
+        );
+      return { type: "erased" as const, decisionId: erasedOwn.id };
+    }
     // audit: skip — background case-law ingestion; public case-law data
     const [row] = await tx
       .insert(caseLawDecisionSupplements)
@@ -3329,8 +3369,20 @@ export const processSupplement = async ({
           ),
         );
     }
-    return { row, selection, leavesHolder, judgment };
+    return {
+      type: "placed" as const,
+      row,
+      selection,
+      leavesHolder,
+      judgment,
+    };
   });
+  if (placed.type === "erased") {
+    return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "erased", decisionId: placed.decisionId },
+    };
+  }
   const { row, selection, leavesHolder, judgment } = placed;
 
   const rawWriteFailed = (error: unknown): ProcessSupplementResult => {

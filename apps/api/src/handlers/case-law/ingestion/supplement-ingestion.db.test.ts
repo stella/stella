@@ -834,6 +834,51 @@ describe("the reasons' stored payload", () => {
     expect(rawKeysUnder(fixture.sourceId, former.id)).toEqual([formerOwn]);
   });
 
+  test("go with an erasure of their own standalone row, and stay gone", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    const supplementKey =
+      (await supplementRow(fixture.sourceId, "339001")).sourceRawS3Key ??
+      panic("no pointer");
+
+    const erased = await redactCaseLawDecision({
+      decisionId: standalone.id,
+      scopedDb,
+    });
+
+    expect(Result.isOk(erased) && erased.value.type).toBe("redacted");
+    const supplements = async () =>
+      await db
+        .select({ id: caseLawDecisionSupplements.sourceDocumentId })
+        .from(caseLawDecisionSupplements)
+        .where(eq(caseLawDecisionSupplements.sourceId, fixture.sourceId));
+    expect(await supplements()).toEqual([]);
+    expect(rawKeysUnder(fixture.sourceId, standalone.id)).toEqual([]);
+
+    fake.put(envBase.S3_BUCKET, supplementKey, "late");
+    await sweepCaseLawRawDecision({
+      decisionId: standalone.id,
+      sourceId: fixture.sourceId,
+      scopedDb,
+      signal: AbortSignal.timeout(10_000),
+    });
+    expect(rawKeysUnder(fixture.sourceId, standalone.id)).toEqual([]);
+
+    // Observed again, even with their ruling stored since, the erased
+    // reasons are neither kept nor composed into it.
+    await ingestDecision(fixture, decisionOf(RULING));
+    const again = await ingestSupplement(fixture, supplementOf(REASONS));
+    expect(again).toEqual({
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "erased", decisionId: standalone.id },
+    });
+    expect(await supplements()).toEqual([]);
+    expect(
+      (await decisionBy(fixture.sourceId, "339002")).fulltext,
+    ).not.toContain(REASONS_TEXT);
+  });
+
   test("go with an erasure of their ruling, and stay gone", async () => {
     const fixture = await newSource();
     await ingestDecision(fixture, decisionOf(RULING));
