@@ -1020,10 +1020,7 @@ const findMcpConnectorIconHref = ({
 const sanitizeMcpToolNamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]/gu, "_");
 
-const fallbackIconUrl = (rawUrl: string): string | undefined => {
-  try {
-    return new URL("/favicon.ico", rawUrl).toString();
-  } catch {
-    return undefined;
-  }
-};
+const fallbackIconUrl = (rawUrl: string): string | undefined =>
+  URL.canParse("/favicon.ico", rawUrl)
+    ? new URL("/favicon.ico", rawUrl).toString()
+    : undefined;
