@@ -3,6 +3,25 @@
     "count": 0,
     "files": {}
   },
+  "package-as-casts": {
+    "count": 23,
+    "files": {
+      "packages/boe/src/query.ts": 2,
+      "packages/business-registries/src/shared/canonical-id.ts": 1,
+      "packages/business-registries/src/shared/errors.ts": 1,
+      "packages/business-registries/src/shared/status.ts": 1,
+      "packages/cli/src/build-cli-tree.ts": 3,
+      "packages/cli/src/cli.ts": 1,
+      "packages/money/src/cents.ts": 2,
+      "packages/money/src/index.ts": 4,
+      "packages/scripts/src/auth-md-spec-drift.ts": 1,
+      "packages/scripts/src/dev-runner.ts": 1,
+      "packages/scripts/src/i18n-check.ts": 2,
+      "packages/scripts/src/i18n-lint.ts": 2,
+      "packages/template-conditions/src/compute.ts": 1,
+      "packages/ui/src/lib/week.ts": 1
+    }
+  },
   "legacy-paint-transitions": {
     "count": 233,
     "files": {

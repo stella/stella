@@ -1872,6 +1872,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "package-as-casts",
+    description:
+      "`as` type assertions in packages/*/src (excl. `as const`, import aliases, tests/gen/d.ts); the as-casts counter over shared packages",
+    include: ["packages/*/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countAsCasts,
+  },
+  {
+    scope: "file",
     id: "legacy-paint-transitions",
     description:
       "legacy Tailwind utilities and CSS declarations that transition paint properties instead of transform/opacity; existing per-file debt may only shrink",
@@ -2689,6 +2698,18 @@ const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // multi-line template body, both single- and multi-line mapped-type remaps,
 // the block comment, and the "//" inside the url string are all excluded.
 const EXPECTED_AS_CASTS = 7;
+
+// The same counter over packages/*/src: two real casts; the `as const`, the
+// import alias, and the word inside a string are not casts.
+const SELF_TEST_PACKAGE_AS_CASTS = [
+  'import { parse as parseValue } from "valibot";',
+  "const a = input as Widget;",
+  "const b = [1, 2] as const;",
+  'const c = "known as Widget";',
+  "const d = (raw as unknown) satisfies unknown;",
+  "",
+].join("\n");
+const EXPECTED_PACKAGE_AS_CASTS = 2;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const direct = "transition transition-colors";`,
@@ -3564,6 +3585,35 @@ const legacyPaintSelfTestFailures = (snapshot: Baseline): string[] => {
   return [];
 };
 
+// Both cast metrics share one counter; each is checked against its own
+// fixture and its own test-file exclusion.
+const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const asMetric = requireSnapshot(snapshot, "as-casts");
+  if (asMetric.count !== EXPECTED_AS_CASTS) {
+    failures.push(
+      `as-casts counted ${asMetric.count}, expected ${EXPECTED_AS_CASTS}`,
+    );
+  }
+  if ("apps/api/src/casts.test.ts" in asMetric.files) {
+    failures.push("as-casts did not exclude a .test.ts file");
+  }
+  if ("apps/web/src/types.gen.ts" in asMetric.files) {
+    failures.push("as-casts did not exclude a .gen.ts file");
+  }
+
+  const packageAsMetric = requireSnapshot(snapshot, "package-as-casts");
+  if (packageAsMetric.count !== EXPECTED_PACKAGE_AS_CASTS) {
+    failures.push(
+      `package-as-casts counted ${packageAsMetric.count}, expected ${EXPECTED_PACKAGE_AS_CASTS} (files: ${Object.keys(packageAsMetric.files).join(", ")})`,
+    );
+  }
+  if ("packages/cast-fixture/src/casts.test.ts" in packageAsMetric.files) {
+    failures.push("package-as-casts did not exclude a .test.ts file");
+  }
+  return failures;
+};
+
 // The repo-scope metrics assert on a layout rather than one file's text, so
 // each check names the count it expects plus the files that must and must not
 // appear in its per-file breakdown.
@@ -4060,21 +4110,20 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
     writeFixture(root, "apps/web/src/types.gen.ts", "const g = x as Y;\n");
+    writeFixture(
+      root,
+      "packages/cast-fixture/src/casts.ts",
+      SELF_TEST_PACKAGE_AS_CASTS,
+    );
+    writeFixture(
+      root,
+      "packages/cast-fixture/src/casts.test.ts",
+      "const z = value as Widget;\n",
+    );
 
     const snapshot = scanAll(root);
 
-    const asMetric = requireSnapshot(snapshot, "as-casts");
-    if (asMetric.count !== EXPECTED_AS_CASTS) {
-      failures.push(
-        `as-casts counted ${asMetric.count}, expected ${EXPECTED_AS_CASTS}`,
-      );
-    }
-    if ("apps/api/src/casts.test.ts" in asMetric.files) {
-      failures.push("as-casts did not exclude a .test.ts file");
-    }
-    if ("apps/web/src/types.gen.ts" in asMetric.files) {
-      failures.push("as-casts did not exclude a .gen.ts file");
-    }
+    failures.push(...asCastSelfTestFailures(snapshot));
 
     const mockLedgerMetric = requireSnapshot(
       snapshot,
