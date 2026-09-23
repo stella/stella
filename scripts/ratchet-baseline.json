@@ -241,7 +241,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1053,
+    "count": 1054,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -256,7 +256,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 3,
-      "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 9,
+      "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 10,
       "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 4,
