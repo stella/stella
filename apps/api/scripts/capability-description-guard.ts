@@ -68,7 +68,7 @@ export const findUndescribedIds = (
         description === undefined || description.trim().length === 0,
     )
     .map(({ id }) => id)
-    .sort();
+    .toSorted();
 
 export type LedgerDiff = {
   /** Undescribed capabilities absent from the ledger: new debt. */
@@ -100,20 +100,20 @@ export const computeLedgerDiff = ({
   const ledgerSet = new Set(ledger);
   const catalogSet = new Set(catalogIds);
 
-  const unledgered = undescribed.filter((id) => !ledgerSet.has(id)).sort();
+  const unledgered = undescribed.filter((id) => !ledgerSet.has(id)).toSorted();
   const described = ledger
     .filter((id) => catalogSet.has(id) && !undescribedSet.has(id))
-    .sort();
-  const unknown = ledger.filter((id) => !catalogSet.has(id)).sort();
+    .toSorted();
+  const unknown = ledger.filter((id) => !catalogSet.has(id)).toSorted();
 
   // A ledger that is unsorted or holds a duplicate produces noisy diffs and can
   // hide a line during review, so the file's own shape is part of the contract.
-  const sorted = [...ledger].sort();
+  const sorted = [...ledger].toSorted();
   const malformed =
     ledger.length === new Set(ledger).size &&
     ledger.every((id, index) => id === sorted[index])
       ? []
-      : [...new Set(ledger)].sort();
+      : [...new Set(ledger)].toSorted();
 
   return { unledgered, described, unknown, malformed };
 };
@@ -156,7 +156,7 @@ const readLedger = async (): Promise<string[]> => {
 };
 
 const writeLedger = async (ids: readonly string[]): Promise<void> => {
-  const sorted = [...ids].sort();
+  const sorted = [...ids].toSorted();
   await Bun.write(LEDGER_PATH, `${JSON.stringify(sorted, null, 2)}\n`);
 };
 
@@ -168,7 +168,7 @@ type Loaded = {
 const loadCatalog = async (): Promise<Loaded> => {
   const entries = await readCatalog(CATALOG_PATH);
   return {
-    catalogIds: entries.map(({ id }) => id).sort(),
+    catalogIds: entries.map(({ id }) => id).toSorted(),
     undescribed: findUndescribedIds(entries),
   };
 };

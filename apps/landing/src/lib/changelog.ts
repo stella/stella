@@ -49,7 +49,7 @@ const listReleaseTags = (): string[] => {
     }
   }
 
-  return tags.sort((left, right) =>
+  return tags.toSorted((left, right) =>
     right.localeCompare(left, "en", { numeric: true }),
   );
 };

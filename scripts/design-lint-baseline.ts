@@ -77,7 +77,9 @@ const emptyBacklog = (): DesignLintBacklog => ({
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>
   Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
+    Object.entries(counts).toSorted(([left], [right]) =>
+      left.localeCompare(right),
+    ),
   );
 
 const lint = (paths: readonly string[]): DesignLintBacklog => {

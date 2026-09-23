@@ -141,7 +141,7 @@ const discoverApiOrigin = async (): Promise<string> => {
           (port) => port > DEFAULT_API_PORT && port < DEFAULT_API_PORT + 2000,
         ),
     ),
-  ].sort((a, b) => a - b);
+  ].toSorted((a, b) => a - b);
 
   for (const port of ports) {
     if (await isStellaApi(port)) {

@@ -115,7 +115,7 @@ export const exportPdfHandler = async ({
     "TIMESHEET REPORT",
     "",
     `Period: ${dateRange}`,
-    `Generated: ${Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }).split("T")[0]}`,
+    `Generated: ${Temporal.Now.plainDateISO("UTC").toString()}`,
     `Entries: ${rows.length}`,
     "",
     "-".repeat(80),

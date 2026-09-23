@@ -294,7 +294,9 @@ export const flattenCourtWeightEntries = (
     return flattened;
   }
 
-  const entries = [...map.values()].flat().sort(compareCourtWeightPrecedence);
+  const entries = [...map.values()]
+    .flat()
+    .toSorted(compareCourtWeightPrecedence);
   flattenedEntriesCache.set(map, entries);
   return entries;
 };

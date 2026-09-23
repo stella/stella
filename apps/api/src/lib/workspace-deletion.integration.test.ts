@@ -465,7 +465,7 @@ beforeAll(async () => {
         organizationId,
         workspaceId: targetWorkspaceId,
       }),
-    ].sort(),
+    ].toSorted(),
     organizationId,
     otherUserId,
     retainedAttachmentKey: retainedThread.s3Key,
@@ -649,7 +649,7 @@ describe("workspace deletion", () => {
           fixture.targetWorkspaceId,
         ),
       );
-    expect(cleanupRows.flatMap(({ s3Keys }) => s3Keys).sort()).toEqual(
+    expect(cleanupRows.flatMap(({ s3Keys }) => s3Keys).toSorted()).toEqual(
       fixture.expectedDeletedKeys,
     );
     expect(

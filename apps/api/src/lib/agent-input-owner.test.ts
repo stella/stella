@@ -123,7 +123,7 @@ const filesMatching = async (rule: BypassRule): Promise<string[]> => {
       }
     }
   }
-  return [...matched].sort();
+  return [...matched].toSorted();
 };
 
 describe("every agent-written value kind has one reader", () => {

@@ -702,7 +702,7 @@ describe("assembleReportData findings", () => {
     for (const contract of data.contracts) {
       const own = data.findings
         .filter((f) => f.contractIndex === contract.index)
-        .sort((a, b) => a.findingIndex - b.findingIndex);
+        .toSorted((a, b) => a.findingIndex - b.findingIndex);
       expect(contract.risks.map((r) => r.issue)).toEqual(
         own.map((f) => f.issue),
       );

@@ -81,7 +81,7 @@ const parseOutcome = (schema: v.GenericSchema, input: unknown): string => {
           (issue) =>
             `${(issue.path ?? []).map(({ key }) => String(key)).join(".")}: ${issue.message}`,
         )
-        .sort()
+        .toSorted()
         .join(" | ");
 };
 

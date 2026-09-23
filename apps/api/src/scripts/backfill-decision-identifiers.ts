@@ -30,14 +30,14 @@ const modeArgs = args.filter(
 if (modeArgs.length !== 1) {
   panic("Pass exactly one of --apply or --verify");
 }
-const unsupported = args.filter(
+const unsupported = args.find(
   (argument) =>
     argument !== APPLY_MODE &&
     argument !== VERIFY_MODE &&
     !argument.startsWith(BATCH_PREFIX),
 );
-if (unsupported.length > 0) {
-  panic(`Unsupported argument: ${unsupported.at(0)}`);
+if (unsupported !== undefined) {
+  panic(`Unsupported argument: ${unsupported}`);
 }
 const batchArgs = args.filter((argument) => argument.startsWith(BATCH_PREFIX));
 if (batchArgs.length > 1) {

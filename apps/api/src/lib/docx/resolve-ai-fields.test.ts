@@ -219,7 +219,7 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     // One draft per row, grounded in the row object (not the whole data object).
     expect(seenNames).toHaveLength(2);
     // oxlint-disable-next-line require-cached-collator/require-cached-collator -- test-only order-independence check on fixture values, not display text
-    expect([...seenNames].sort((a, b) => a.localeCompare(b))).toEqual([
+    expect([...seenNames].toSorted((a, b) => a.localeCompare(b))).toEqual([
       "Alpha",
       "Beta",
     ]);
@@ -280,7 +280,9 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       },
     });
     expect(seen.map((i) => i.count)).toEqual([3, 3, 3]);
-    expect(seen.map((i) => i.index).sort((a, b) => a - b)).toEqual([1, 2, 3]);
+    expect(seen.map((i) => i.index).toSorted((a, b) => a - b)).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   test("skips rows that already carry a non-empty value", async () => {

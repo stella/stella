@@ -156,7 +156,7 @@ const findExactMirrorFailures = async (
   return {
     totalRoutes,
     compiledRoutes,
-    mirrorFailures: [...mirrorFailureScopes].sort(),
+    mirrorFailures: [...mirrorFailureScopes].toSorted(),
     compileErrors,
   };
 };

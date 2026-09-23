@@ -179,6 +179,6 @@ test("the migrate entrypoint takes the lane through the timeout-free sequence", 
     expect(at, needle).toBeGreaterThan(-1);
     return at;
   });
-  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 });

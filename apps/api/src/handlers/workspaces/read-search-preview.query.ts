@@ -172,7 +172,7 @@ export const readSearchPreviewHandler = async ({
           document.updatedAt ??
           panic("Matter preview document has no activity timestamp"),
       }))
-      .sort((left, right) => {
+      .toSorted((left, right) => {
         const dateOrder = right.updatedAt.getTime() - left.updatedAt.getTime();
         if (dateOrder !== 0 || left.id === right.id) {
           return dateOrder;

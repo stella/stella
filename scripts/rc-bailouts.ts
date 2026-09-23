@@ -269,7 +269,7 @@ const byKey = (
 
 const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline => {
   const current: Baseline = {};
-  for (const [key, { memos }] of [...bailouts.entries()].sort(byKey)) {
+  for (const [key, { memos }] of [...bailouts.entries()].toSorted(byKey)) {
     current[key] = memos;
   }
   return current;
@@ -460,8 +460,8 @@ const run = (): number => {
   }
 
   if (mode === "report") {
-    for (const [key, { reasons }] of [...bailouts.entries()].sort(byKey)) {
-      console.log(`${key}\t${[...reasons].sort().join(", ")}`);
+    for (const [key, { reasons }] of [...bailouts.entries()].toSorted(byKey)) {
+      console.log(`${key}\t${[...reasons].toSorted().join(", ")}`);
     }
     console.log(
       `\nscanned ${files.length} files | bailout functions ${bailouts.size}`,

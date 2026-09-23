@@ -450,11 +450,11 @@ const ClipboardCard = ({
   const [imagePreviewRetryToken, setImagePreviewRetryToken] = useState(0);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
-  const formattedAge = new Intl.NumberFormat(undefined, {
+  const formattedAge = format.number(age.value, {
     style: "unit",
     unit: age.unit,
     unitDisplay: "narrow",
-  }).format(age.value);
+  });
   const relativeTime =
     age.type === "lessThan" ? `<${formattedAge}` : formattedAge;
   // Code points, the count a reader would get from the text itself.
@@ -2443,7 +2443,7 @@ const ClipboardApp = () => {
               <main className="relative min-h-0 flex-1">
                 {filteredItems.length === 0 ? (
                   <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                    <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
+                    <span className="bg-foreground/6 text-foreground-ghost grid size-11 place-items-center rounded-2xl shadow-sm/5">
                       {filterQuery ? (
                         <SearchIcon aria-hidden="true" className="size-5" />
                       ) : (

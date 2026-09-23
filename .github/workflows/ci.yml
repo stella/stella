@@ -751,8 +751,18 @@ jobs:
         # tracked rules against the real repository file list the way oxlint
         # does and fails when a scope's effective restriction set is missing an
         # inherited entry. Deliberate narrowings live in DELIBERATE_NARROWINGS
-        # with a reason and are checked in both directions.
-        run: bun test scripts/oxlint-override-union.test.ts
+        # with a reason and are checked in both directions. The liveness test
+        # fails on a scope glob or option path that matches no file and on an
+        # "off" that no earlier scope enabled.
+        run: |
+          bun test scripts/oxlint-override-union.test.ts \
+            scripts/oxlint-config-liveness.test.ts
+
+      - name: Oxlint rule decisions
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every built-in rule of an enabled plugin is named in the config, on
+        # or off, so an oxlint upgrade cannot add rules nobody decided on.
+        run: bun scripts/check-oxlint-rule-decisions.ts
 
       - name: Ratchet guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

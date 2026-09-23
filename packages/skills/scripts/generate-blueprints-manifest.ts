@@ -40,7 +40,7 @@ const blueprintEntries = readdirSync(blueprintsRoot, { withFileTypes: true })
   .filter((blueprintId) =>
     existsSync(path.join(blueprintsRoot, blueprintId, skillFileName)),
   )
-  .sort((a, b) => a.localeCompare(b))
+  .toSorted((a, b) => a.localeCompare(b))
   .map((blueprintId, index): BlueprintEntry => {
     const blueprintDir = path.join(blueprintsRoot, blueprintId);
     return {
@@ -99,7 +99,7 @@ function listResources(
   }
 
   return resources
-    .sort((a, b) => a.path.localeCompare(b.path))
+    .toSorted((a, b) => a.path.localeCompare(b.path))
     .map((resource, resourceIndex) => ({
       importName: `blueprint${blueprintIndex}Resource${resourceIndex}`,
       kind: resource.kind,

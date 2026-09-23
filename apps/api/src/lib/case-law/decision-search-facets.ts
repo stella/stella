@@ -107,7 +107,7 @@ export const groupCourtsByTier = ({
   return COURT_TIER_LABELS.flatMap((tierLabel) => {
     const courts = buckets
       .filter((bucket) => tierOf.get(bucket.value) === tierLabel)
-      .sort(compareFacetBuckets)
+      .toSorted(compareFacetBuckets)
       .slice(0, perTierLimit);
     return courts.length === 0 ? [] : [{ tierLabel, courts }];
   });

@@ -64,11 +64,13 @@ describe("mcpWellKnownProtectedResourceUrls (RFC 9728 discovery)", () => {
     const schemes = ["http", "https"] as const;
     const paths = ["/", "/mcp", "/a/b", "/deep/nested/path", "/a/b/"];
 
-    for (let i = 0; i < 200; i++) {
-      const scheme = schemes[i % schemes.length];
-      const host = hosts[i % hosts.length];
-      const path = paths[i % paths.length];
-      const input = new URL(`${scheme}://${host}${path}`);
+    const shapes = schemes.flatMap((scheme) =>
+      hosts.flatMap((host) =>
+        paths.map((path) => `${scheme}://${host}${path}`),
+      ),
+    );
+    for (const shape of shapes) {
+      const input = new URL(shape);
       const urls = mcpWellKnownProtectedResourceUrls(input);
 
       // Root yields exactly one candidate; any other path yields exactly two.
@@ -157,11 +159,13 @@ describe("authorizationServerMetadataUrls (RFC 8414 / OIDC discovery)", () => {
     const schemes = ["http", "https"] as const;
     const paths = ["/", "/tenant", "/a/b", "/a/b/", "/deep/nested/"];
 
-    for (let i = 0; i < 200; i++) {
-      const scheme = schemes[i % schemes.length];
-      const host = hosts[i % hosts.length];
-      const path = paths[i % paths.length];
-      const input = new URL(`${scheme}://${host}${path}`);
+    const shapes = schemes.flatMap((scheme) =>
+      hosts.flatMap((host) =>
+        paths.map((path) => `${scheme}://${host}${path}`),
+      ),
+    );
+    for (const shape of shapes) {
+      const input = new URL(shape);
       const urls = authorizationServerMetadataUrls(input);
 
       expect(urls.length).toBe(input.pathname === "/" ? 2 : 3);

@@ -291,7 +291,7 @@ describe("cz-us reconciliation slices", () => {
     expect(new Set(walked).size).toBe(walked.length);
     // The ledger orders `(source, slice)` rows by byte comparison, so walk
     // order and lexicographic order have to be the same sequence.
-    expect([...walked].sort()).toEqual(walked);
+    expect([...walked].toSorted()).toEqual(walked);
   });
 
   test("previousSlice inverts nextSlice across the whole walk", () => {

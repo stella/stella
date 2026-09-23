@@ -186,8 +186,8 @@ describe("createMembershipScopedDb", () => {
         .orderBy(entities.workspaceId),
     );
 
-    expect(rows.map((row) => row.workspaceId).sort()).toEqual(
-      [ids.wsA1, ids.wsA2].sort(),
+    expect(rows.map((row) => row.workspaceId).toSorted()).toEqual(
+      [ids.wsA1, ids.wsA2].toSorted(),
     );
   });
 

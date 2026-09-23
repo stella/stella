@@ -119,7 +119,7 @@ export const locateProvisionAnchors = <T>({
     string,
     { ordinal: number; spanStart: number }
   >();
-  const orderedProvisions = [...provisions].sort(
+  const orderedProvisions = [...provisions].toSorted(
     (left, right) => left.spanStart - right.spanStart,
   );
   for (const source of orderedProvisions) {

@@ -101,7 +101,7 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
   });
   return {
     requests,
-    url: `http://localhost:${server.port}`,
+    url: server.url.origin,
     stop: () => {
       void server.stop(true);
     },

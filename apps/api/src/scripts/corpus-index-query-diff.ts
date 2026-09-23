@@ -85,7 +85,7 @@ const parseFlags = (argv: readonly string[]): Map<string, string> => {
   while (index < argv.length) {
     const token = argv[index];
     if (token === undefined || !token.startsWith("--")) {
-      fail(`unexpected argument: ${token}`);
+      fail(`unexpected argument: ${token ?? "(none)"}`);
     }
     const name = token.slice(2);
     if (!KNOWN_FLAGS.has(name)) {
@@ -142,7 +142,10 @@ const maxDivergence =
   rawMaxDivergence === undefined
     ? DEFAULT_MAX_DIVERGENCE
     : Number(rawMaxDivergence);
-if (!Number.isFinite(maxDivergence) || maxDivergence < 0 || maxDivergence > 1) {
+if (
+  rawMaxDivergence !== undefined &&
+  (!Number.isFinite(maxDivergence) || maxDivergence < 0 || maxDivergence > 1)
+) {
   fail(`--max-divergence must be within [0, 1], got: ${rawMaxDivergence}`);
 }
 

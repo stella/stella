@@ -244,11 +244,12 @@ describe("listing one decision date", () => {
   });
 
   test("the date filter is the slice, on both ends", async () => {
-    const asked: string[] = [];
+    const asked: (string | null)[][] = [];
     answerWith((url) => {
-      asked.push(
-        `${url.searchParams.get("data_wydania_od")}..${url.searchParams.get("data_wydania_do")}`,
-      );
+      asked.push([
+        url.searchParams.get("data_wydania_od"),
+        url.searchParams.get("data_wydania_do"),
+      ]);
       return jsonResponse(envelope([]));
     });
 
@@ -257,7 +258,7 @@ describe("listing one decision date", () => {
       page: 0,
     });
 
-    expect(asked).toEqual(["2025-06-11..2025-06-11"]);
+    expect(asked).toEqual([["2025-06-11", "2025-06-11"]]);
   });
 
   test("a full page reports there is more, so the walk cannot stop on it", async () => {

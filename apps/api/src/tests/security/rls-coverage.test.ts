@@ -41,7 +41,7 @@ const privilegesForTable = (
   tablePrivileges
     .filter((p) => p.table_name === table)
     .map((p) => p.privilege)
-    .sort();
+    .toSorted();
 
 beforeAll(
   async () => {
@@ -728,7 +728,7 @@ describe("policy coverage", () => {
       policies
         .filter((p) => p.table_name === table)
         .map((p) => p.command)
-        .sort();
+        .toSorted();
 
     expect(commandsFor("user")).toEqual(["r"]);
     expect(commandsFor("organization")).toEqual(["r"]);
@@ -772,7 +772,7 @@ describe("policy coverage", () => {
       userColumnPrivileges
         .filter((p) => p.table_name === "user" && p.privilege === "SELECT")
         .map((p) => p.column_name)
-        .sort(),
+        .toSorted(),
     ).toEqual(AUTH_USER_STELLA_SELECT_COLUMN_NAMES.toSorted());
 
     for (const table of GLOBAL_CASE_LAW_TABLES) {
@@ -819,7 +819,7 @@ describe("policy coverage", () => {
       columnPrivileges
         .filter((p) => p.table_name === "case_law_sources")
         .map((p) => p.column_name)
-        .sort(),
+        .toSorted(),
       // Derived, not restated: this list is the one the harness grants from,
       // which `pglite-role-grants.test.ts` holds equal to the committed
       // migrations column by column. A third hand-kept copy here would drift
@@ -842,7 +842,7 @@ describe("policy coverage", () => {
       columnPrivileges
         .filter((p) => p.table_name === "legislation_sources")
         .map((p) => p.column_name)
-        .sort(),
+        .toSorted(),
     ).toEqual(["last_sync_at", "sync_cursor", "updated_at"]);
     expect(
       privilegesForTable(tablePrivileges, "legislation_index_jobs"),

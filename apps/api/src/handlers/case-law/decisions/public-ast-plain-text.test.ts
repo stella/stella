@@ -216,7 +216,7 @@ const fixtureAsts = async (): Promise<{ name: string; ast: DocumentAst }[]> => {
     new Glob("*.html.gz").scan(ecjDir.pathname),
   );
   const ecjSources = await Promise.all(
-    names.sort().map(async (name) => ({
+    names.toSorted().map(async (name) => ({
       stem: name.replace(/\.html\.gz$/u, ""),
       html: await readGz(name, ecjDir),
     })),

@@ -225,7 +225,7 @@ export const mergeStreamedPosition = (
   next: IndexedPosition,
 ): IndexedPosition[] => {
   const without = current.filter((entry) => entry.index !== next.index);
-  return [...without, next].sort((a, b) => a.index - b.index);
+  return [...without, next].toSorted((a, b) => a.index - b.index);
 };
 
 export type ReviewProposalTarget = { entityId: string; fileFieldId: string };

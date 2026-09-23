@@ -163,7 +163,7 @@ export const sortReviewResultItems = (
 ): ReviewResultItem[] =>
   items
     .slice()
-    .sort(
+    .toSorted(
       (a, b) =>
         severityRank(a.finding.severity) - severityRank(b.finding.severity) ||
         a.order - b.order,

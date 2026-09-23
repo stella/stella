@@ -574,7 +574,7 @@ const stripComments = (content: string): string => {
 
   let output = "";
   let previousEnd = 0;
-  for (const range of [...ranges.values()].sort(
+  for (const range of [...ranges.values()].toSorted(
     (left, right) => left.pos - right.pos,
   )) {
     if (range.pos < previousEnd) {
@@ -1517,7 +1517,7 @@ const scanRepoFiles = (
       }
     }
   }
-  return [...seen].sort();
+  return [...seen].toSorted();
 };
 
 // Every file whose path below `src/lib` also exists under another app's
@@ -1592,7 +1592,7 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
   const files: Record<string, number> = {};
   let count = 0;
   for (const byWorkspace of definitions.values()) {
-    const workspaces = [...byWorkspace.keys()].sort();
+    const workspaces = [...byWorkspace.keys()].toSorted();
     for (const workspace of workspaces.slice(1)) {
       const rel =
         byWorkspace.get(workspace) ??
@@ -2418,7 +2418,7 @@ const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
 
 const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
   const files: Record<string, number> = {};
-  for (const rel of Object.keys(result.files).sort()) {
+  for (const rel of Object.keys(result.files).toSorted()) {
     files[rel] =
       result.files[rel] ??
       panic(`ratchet count for ${rel} disappeared during scan`);
@@ -3657,6 +3657,9 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const countText = (count: number | undefined) =>
+  count === undefined ? "absent" : String(count);
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -4232,12 +4235,11 @@ const runSelfTest = (): number => {
         `lint-suppression-directives counted ${lintSuppressionMetric.count}, expected ${EXPECTED_LINT_SUPPRESSIONS_TOTAL}`,
       );
     }
-    if (
-      lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"] !==
-      EXPECTED_LINT_SUPPRESSIONS_OWN_FILE
-    ) {
+    const ownFileCount =
+      lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"];
+    if (ownFileCount !== EXPECTED_LINT_SUPPRESSIONS_OWN_FILE) {
       failures.push(
-        `lint-suppression-directives per-file count for the dedicated fixture was ${lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"]}, expected ${EXPECTED_LINT_SUPPRESSIONS_OWN_FILE}`,
+        `lint-suppression-directives per-file count for the dedicated fixture was ${countText(ownFileCount)}, expected ${EXPECTED_LINT_SUPPRESSIONS_OWN_FILE}`,
       );
     }
 
@@ -4254,7 +4256,7 @@ const runSelfTest = (): number => {
     ).files[MIXED_FIXTURE];
     if (mixedResidual !== 3 || mixedTracked !== 7) {
       failures.push(
-        `suppression budgets did not partition ${MIXED_FIXTURE}: residual ${mixedResidual} (expected 3), require-query-limit ${mixedTracked} (expected 7)`,
+        `suppression budgets did not partition ${MIXED_FIXTURE}: residual ${countText(mixedResidual)} (expected 3), require-query-limit ${countText(mixedTracked)} (expected 7)`,
       );
     }
 

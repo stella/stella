@@ -7,7 +7,7 @@
  * (or the process) with it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -95,7 +95,8 @@ describe("style set package cleanup durability", () => {
     expect(storedKeys()).toEqual(writtenKeys());
     // The stranded object is the package itself, so the claim collects the
     // bytes the caller uploaded rather than an empty placeholder.
-    expect(fake.objects.get(`${bucket}/${writtenKeys().at(0)}`)?.bytes).toEqual(
+    const writtenKey = writtenKeys().at(0) ?? panic("no key was written");
+    expect(fake.objects.get(`${bucket}/${writtenKey}`)?.bytes).toEqual(
       new TextEncoder().encode("style set"),
     );
   });

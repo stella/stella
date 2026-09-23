@@ -12,7 +12,7 @@ describe("ResponsiveActionToolbar", () => {
     const markup = renderToStaticMarkup(
       <ResponsiveActionToolbar aria-label="Workspace actions">
         <ResponsiveActionToolbarItem slot="primary">
-          <input aria-label="Search" />
+          <input aria-label="Search" dir="ltr" />
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
           <button type="button">Filter</button>

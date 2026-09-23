@@ -592,22 +592,24 @@ const pad = (value: number): string => String(value).padStart(2, "0");
  */
 export const huDecisionDateFrom = (line: string): string | undefined => {
   const spelled = SPELLED_DATE.exec(line)?.groups;
-  if (spelled !== undefined) {
+  const spelledYear = spelled?.["year"];
+  if (spelled !== undefined && spelledYear !== undefined) {
     const month = MONTH_NUMBERS.get(
       (spelled["month"] ?? "").toLocaleLowerCase("hu-HU"),
     );
     if (month !== undefined) {
-      return `${spelled["year"]}-${pad(month)}-${pad(Number(spelled["day"]))}`;
+      return `${spelledYear}-${pad(month)}-${pad(Number(spelled["day"]))}`;
     }
   }
   const numeric = NUMERIC_DATE.exec(line)?.groups;
-  if (numeric === undefined) {
+  const year = numeric?.["year"];
+  if (numeric === undefined || year === undefined) {
     return undefined;
   }
   const month = Number(numeric["month"]);
   const day = Number(numeric["day"]);
   return month >= 1 && month <= 12 && day >= 1 && day <= 31
-    ? `${numeric["year"]}-${pad(month)}-${pad(day)}`
+    ? `${year}-${pad(month)}-${pad(day)}`
     : undefined;
 };
 
@@ -790,7 +792,7 @@ const anonSpansIn = (text: string): AnonSpan[] => {
       spans.push({ start, end: start + match[0].length });
     }
   }
-  return spans.sort((left, right) => left.start - right.start);
+  return spans.toSorted((left, right) => left.start - right.start);
 };
 
 /** Split one run's text at its placeholder spans, marking each as anonymized. */

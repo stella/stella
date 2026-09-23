@@ -146,7 +146,7 @@ test("court stays a viable tag field in every index", () => {
 
   // Total over the jurisdictions the corpus ships, so onboarding one is a
   // decision about its court registry rather than a silent inheritance.
-  expect(Object.keys(COURT_DOMAIN_BOUND).sort()).toEqual([
+  expect(Object.keys(COURT_DOMAIN_BOUND).toSorted()).toEqual([
     ...CASE_LAW_JURISDICTIONS,
   ]);
   expect(
@@ -192,7 +192,7 @@ test("no field repeated across a document's passages is free-text searchable", (
 
   // Anything else a default search field reaches must be per-passage content
   // (`text`) or written once per document (`title`).
-  expect([...defaults].sort()).toEqual(["text", "title"]);
+  expect([...defaults].toSorted()).toEqual(["text", "title"]);
 });
 
 test("passage fields are mapped for every family, heading_path searchable", () => {
@@ -246,7 +246,7 @@ test("every full-text field uses a declared tokenizer, and every declared one is
         .filter((name) => name !== undefined)
         .filter((name) => !BUILT_IN_TOKENIZERS.has(name)),
     );
-    expect([...declared].sort()).toEqual([...used].sort());
+    expect([...declared].toSorted()).toEqual([...used].toSorted());
 
     // Position-recorded fields are exactly the free-text surface; every one of
     // them folds, so a query typed without diacritics reaches text carrying
@@ -254,7 +254,7 @@ test("every full-text field uses a declared tokenizer, and every declared one is
     const fullText = config.doc_mapping.field_mappings.filter(
       (f) => f.record === "position",
     );
-    expect(fullText.map((f) => f.name).sort()).toEqual([
+    expect(fullText.map((f) => f.name).toSorted()).toEqual([
       "heading_path",
       "text",
       "title",

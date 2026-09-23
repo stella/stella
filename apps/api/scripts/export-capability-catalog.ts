@@ -1135,7 +1135,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       // set plus a reviewed domain list is what stops the surface drifting back
       // into synonym soup (`read` vs `list` vs `get` for the same shape).
       errors.push(
-        `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${[...CANONICAL_ACTION_VERBS].sort().join(", ")}, or an explicitly reviewed entry in DOMAIN_ACTION_VERBS. Prefer renaming the handler file to a canonical verb, or splitting a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
+        `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${[...CANONICAL_ACTION_VERBS].toSorted().join(", ")}, or an explicitly reviewed entry in DOMAIN_ACTION_VERBS. Prefer renaming the handler file to a canonical verb, or splitting a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
       );
       return;
     }
@@ -1502,16 +1502,18 @@ const summarizeDrift = (
     "  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
   );
   if (added.length > 0) {
-    console.error(`\n  added (${added.length}): ${added.sort().join(", ")}`);
+    console.error(
+      `\n  added (${added.length}): ${added.toSorted().join(", ")}`,
+    );
   }
   if (removed.length > 0) {
     console.error(
-      `\n  removed (${removed.length}): ${removed.sort().join(", ")}`,
+      `\n  removed (${removed.length}): ${removed.toSorted().join(", ")}`,
     );
   }
   if (changed.length > 0) {
     console.error(
-      `\n  changed (${changed.length}): ${changed.sort().join(", ")}`,
+      `\n  changed (${changed.length}): ${changed.toSorted().join(", ")}`,
     );
   }
   if (added.length === 0 && removed.length === 0 && changed.length === 0) {

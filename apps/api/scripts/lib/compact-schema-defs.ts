@@ -305,7 +305,7 @@ export const compactSchemaDefs = (
       ([serialized, { count }]) =>
         count > 1 && byteLengthOf(serialized) >= MIN_HOISTABLE_BYTES,
     )
-    .sort(([left], [right]) => (left < right ? -1 : 1));
+    .toSorted(([left], [right]) => (left < right ? -1 : 1));
   if (candidates.length === 0) {
     return { inputSchema: document, status: "compacted" };
   }
@@ -370,7 +370,7 @@ export const compactSchemaDefs = (
     // `$defs` last and name-sorted: the parts keep the key order they always
     // had, so an entry's diff shows the refs and the new block, nothing else.
     const defs: JsonRecord = {};
-    for (const name of [...bodies.keys()].sort()) {
+    for (const name of [...bodies.keys()].toSorted()) {
       defs[name] = bodies.get(name);
     }
     compacted[DEFS_KEY] = defs;

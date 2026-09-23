@@ -276,7 +276,7 @@ export const renderDiffTable = ({
     `${row.base.totalHits}`,
     `${row.candidate.totalHits}`,
     signed(row.diff.hitCountDelta),
-    row.diff.meanRankShift === null
+    row.diff.meanRankShift === null || row.diff.maxRankShift === null
       ? "-"
       : `${row.diff.meanRankShift}/${row.diff.maxRankShift}`,
     `+${row.diff.entered}/-${row.diff.left}`,

@@ -564,7 +564,7 @@ export const chatObjectCleanupWorkspaceIds = ({
         (candidate): candidate is SafeId<"workspace"> => candidate !== null,
       ),
     ),
-  ].sort();
+  ].toSorted();
 
 const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
   options,

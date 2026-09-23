@@ -199,7 +199,7 @@ export class MoneyTotals {
    * `localeCompare`, so ordering does not vary with the runtime's locale.
    */
   entries(): MoneyTotalsEntry[] {
-    return [...this.#totals.keys()].sort().map((currency) => ({
+    return [...this.#totals.keys()].toSorted().map((currency) => ({
       currency,
       amountCents: this.#totals.get(currency) ?? cents(0),
     }));

@@ -67,10 +67,9 @@ export const buildVersionNudge = ({
   minimum: string | undefined;
   lastNudged: string | undefined;
 }): VersionNudge => {
-  if (compareVersions(current, minimum) === -1) {
-    // The comparison only returns -1 when `minimum` parsed, so it is defined.
+  if (minimum !== undefined && compareVersions(current, minimum) === -1) {
     const target = latest ?? minimum;
-    if (target === undefined || target === lastNudged) {
+    if (target === lastNudged) {
       return {};
     }
     return {

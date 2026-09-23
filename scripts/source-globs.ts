@@ -54,5 +54,5 @@ export const scanSourceFiles = (root: string): readonly string[] => {
       }
     }
   }
-  return [...seen].sort();
+  return [...seen].toSorted();
 };

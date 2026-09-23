@@ -66,7 +66,7 @@ export const sourceLinkPolicyOf = (
       hosts.add(host);
     }
   }
-  return { publisherHosts: [...hosts].sort() };
+  return { publisherHosts: [...hosts].toSorted() };
 };
 
 /**

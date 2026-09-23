@@ -896,7 +896,9 @@ describe("detect-e2e-changes", () => {
 
     // Both directions: an exception that stops existing must be deleted, and
     // a new caller job must be a deliberate entry rather than a silent skip.
-    expect([...seenCallers].sort()).toEqual([...forwardingCallers].sort());
+    expect([...seenCallers].toSorted()).toEqual(
+      [...forwardingCallers].toSorted(),
+    );
   });
 
   test("uploads blob reports from the configured Playwright output directory", () => {

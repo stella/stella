@@ -109,7 +109,7 @@ const listPackDirectories = (): string[] => {
     .filter((entry) => entry.isDirectory())
     .map((entry) => path.join(packsRoot, entry.name))
     .filter((packDir) => existsSync(path.join(packDir, "pack.json")))
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 };
 
 const readPack = ({

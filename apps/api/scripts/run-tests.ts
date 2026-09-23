@@ -165,7 +165,7 @@ const testPaths = [
     cwd: apiRoot,
     onlyFiles: true,
   }),
-].sort();
+].toSorted();
 
 // Hidden directories are tool caches; `node_modules` is third-party code. A
 // test file colocated with a package-root module (`drizzle.config.test.ts`
@@ -190,7 +190,7 @@ const strayTestPaths = readdirSync(apiRoot, { withFileTypes: true })
       }),
     ].map((testPath) => `${entry.name}/${testPath}`);
   })
-  .sort();
+  .toSorted();
 if (strayTestPaths.length > 0) {
   console.error(
     `Test files outside the runner roots (${TEST_ROOTS.join(", ")}) never run:\n  ${strayTestPaths.join("\n  ")}\nMove the file under a root, or add its directory to TEST_ROOTS in apps/api/scripts/run-tests.ts.`,

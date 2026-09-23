@@ -635,7 +635,7 @@ const renderFindings = (
   for (const contract of scopeContracts(ctx, scope)) {
     const own = findings
       .filter((finding) => finding.contractIndex === contract.index)
-      .sort((a, b) => a.findingIndex - b.findingIndex);
+      .toSorted((a, b) => a.findingIndex - b.findingIndex);
     if (own.length === 0) {
       continue;
     }
@@ -870,7 +870,7 @@ const orderedGroups = (
       // The builder already orders groups worst first.
       return groups;
     case "name":
-      return [...groups].sort((a, b) =>
+      return [...groups].toSorted((a, b) =>
         compareDocumentTypeLabel(
           documentTypeLabel(a.documentType),
           documentTypeLabel(b.documentType),

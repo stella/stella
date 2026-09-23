@@ -60,7 +60,7 @@ export type BetterAuthBackfillResult = {
 const queryRows = async (
   transaction: BetterAuthBackfillTransaction,
   statement: SQL,
-) => {
+): Promise<Result<unknown[], BetterAuthBackfillError>> => {
   const queried = await Result.tryPromise({
     try: async () => await transaction.execute(statement),
     catch: (cause) =>

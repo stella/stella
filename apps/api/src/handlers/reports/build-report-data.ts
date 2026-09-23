@@ -315,7 +315,7 @@ const buildGroups = (
     group.findings.push(finding);
     countFinding(group.stats, finding);
   }
-  return [...byType.values()].sort(compareGroups);
+  return [...byType.values()].toSorted(compareGroups);
 };
 
 type VerdictPropertyInfo = {

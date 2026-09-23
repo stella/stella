@@ -534,23 +534,23 @@ export const summarizeCapture = (
     }
   }
   return {
-    requests: Object.keys(requestCounts).sort(),
+    requests: Object.keys(requestCounts).toSorted(),
     requestCounts: Object.fromEntries(
-      Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(requestCounts).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
     depth: depthChain.length,
     depthChain,
     dbQueries,
     missingDbQueryCounts: Object.fromEntries(
-      Object.entries(missingDbQueryCounts).sort(([a], [b]) =>
+      Object.entries(missingDbQueryCounts).toSorted(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
     responseSizes: Object.fromEntries(
-      Object.entries(responseSizes).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(responseSizes).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
     missingResponseSizeCounts: Object.fromEntries(
-      Object.entries(missingResponseSizeCounts).sort(([a], [b]) =>
+      Object.entries(missingResponseSizeCounts).toSorted(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
@@ -891,7 +891,7 @@ const maxPerKey = (
     merged[key] = Math.max(merged[key] ?? 0, value);
   }
   return Object.fromEntries(
-    Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)),
+    Object.entries(merged).toSorted(([a], [b]) => a.localeCompare(b)),
   );
 };
 
@@ -910,7 +910,9 @@ export const mergeResampledMetrics = (
   // sample would name levels the merged reading does not claim.
   const shallowest = candidate.depth < current.depth ? candidate : current;
   return {
-    requests: [...new Set([...current.requests, ...candidate.requests])].sort(),
+    requests: [
+      ...new Set([...current.requests, ...candidate.requests]),
+    ].toSorted(),
     requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
     depth: shallowest.depth,
     depthChain: shallowest.depthChain,
@@ -970,7 +972,7 @@ export const mergeNetworkBaseline = (
   results: Map<string, RouteNetworkMetrics>,
 ): NetworkBaseline => {
   const merged: NetworkBaseline = {};
-  for (const route of [...results.keys()].sort()) {
+  for (const route of [...results.keys()].toSorted()) {
     const metrics = results.get(route);
     if (metrics === undefined) {
       continue;
@@ -1003,19 +1005,23 @@ export const mergeNetworkBaseline = (
     }
     merged[route] = {
       depth: Math.max(metrics.depth, previous?.depth ?? 0),
-      requests: [...new Set([...metrics.requests, ...previousRequests])].sort(),
+      requests: [
+        ...new Set([...metrics.requests, ...previousRequests]),
+      ].toSorted(),
       requestCounts: Object.fromEntries(
-        Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
+        Object.entries(requestCounts).toSorted(([a], [b]) =>
+          a.localeCompare(b),
+        ),
       ),
       dbQueries: Object.fromEntries(
-        Object.entries(dbQueries).sort(([a], [b]) => a.localeCompare(b)),
+        Object.entries(dbQueries).toSorted(([a], [b]) => a.localeCompare(b)),
       ),
       // Rounded up to the next KiB here (the writer), not at measurement time,
       // so the raw max observed across write runs is what gets rounded once.
       responseSizes: Object.fromEntries(
         Object.entries(responseSizes)
           .map(([key, bytes]) => [key, roundUpToKiB(bytes)] as const)
-          .sort(([a], [b]) => a.localeCompare(b)),
+          .toSorted(([a], [b]) => a.localeCompare(b)),
       ),
     };
   }
@@ -1076,7 +1082,7 @@ export const assertNetworkBaseline = (
 export const assertNetworkBaselineCoverage = (expectedRoutes: string[]) => {
   const baseline = readNetworkBaseline();
   expect(
-    baseline === null ? [] : Object.keys(baseline).sort(),
+    baseline === null ? [] : Object.keys(baseline).toSorted(),
     `network baseline route keys in ${BASELINE_RELATIVE}`,
   ).toEqual(expectedRoutes.toSorted());
 };

@@ -7,7 +7,7 @@ const posts = (
   await getCollection("blog", ({ data }) =>
     import.meta.env.PROD ? !data.draft : true,
   )
-).sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
+).toSorted((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
 
 const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 ---

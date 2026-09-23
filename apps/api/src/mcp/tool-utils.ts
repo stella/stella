@@ -778,13 +778,13 @@ export const closestToolNames = (
     }
   }
 
-  return (
-    scored
+  return scored
+    .toSorted(
       // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-      .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
-      .slice(0, limit)
-      .map(({ name }) => name)
-  );
+      (a, b) => a.distance - b.distance || a.name.localeCompare(b.name),
+    )
+    .slice(0, limit)
+    .map(({ name }) => name);
 };
 
 const levenshtein = (a: string, b: string): number => {

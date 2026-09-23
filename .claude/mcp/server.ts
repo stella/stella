@@ -670,7 +670,7 @@ server.registerTool(
       }
 
       const limitedResults = results
-        .sort((left, right) => right.score - left.score)
+        .toSorted((left, right) => right.score - left.score)
         .slice(0, maxResults ?? DEFAULT_MAX_RESULTS);
 
       if (limitedResults.length === 0) {
@@ -748,7 +748,7 @@ server.registerTool(
       }
 
       const limitedChunks = scoredChunks
-        .sort((left, right) => right.score - left.score)
+        .toSorted((left, right) => right.score - left.score)
         .slice(0, maxChunks ?? DEFAULT_MAX_CHUNKS);
 
       if (limitedChunks.length === 0) {

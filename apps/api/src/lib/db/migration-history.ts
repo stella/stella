@@ -392,7 +392,7 @@ const listLocalMigrations = async (
       .filter((name) =>
         existsSync(nodePath.join(migrationsDir, name, "migration.sql")),
       )
-      .sort()
+      .toSorted()
       .map(async (name) => ({
         name,
         hash: await hashMigrationFile(

@@ -345,7 +345,8 @@ run_design_system_backlog_guard() {
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
 run_step "Oxlint override union guard" bun test \
-  scripts/oxlint-override-union.test.ts
+  scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
+run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
 run_step "Test input coverage" run_test_input_coverage_guard

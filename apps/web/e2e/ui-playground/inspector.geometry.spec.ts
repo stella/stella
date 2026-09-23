@@ -83,9 +83,9 @@ test("the pane's reader never scrolls sideways, at either width", async ({
   await expect(page.locator(`${SECTION} table`).first()).toBeVisible();
 
   const panes = await readGeometry(page);
-  expect(panes.map((pane) => pane.paneWidth).sort((a, b) => a - b)).toEqual([
-    ...PANE_WIDTHS,
-  ]);
+  expect(panes.map((pane) => pane.paneWidth).toSorted((a, b) => a - b)).toEqual(
+    [...PANE_WIDTHS],
+  );
 
   for (const pane of panes) {
     // The other vacuous pass: a reader measured at the whole pane width has

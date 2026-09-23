@@ -284,16 +284,16 @@ const resolveBase = (base: string): string | null => {
 
 const parseArgs = (args: readonly string[]): { readonly base: string } => {
   let base = DEFAULT_BASE;
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] !== "--base") {
-      panic(`Unknown argument: ${args[index]}`);
+  const argv = args.values();
+  for (const argument of argv) {
+    if (argument !== "--base") {
+      panic(`Unknown argument: ${argument}`);
     }
-    const value = args.at(index + 1);
+    const value = argv.next().value;
     if (value === undefined) {
       return panic("--base requires a git ref");
     }
     base = value;
-    index += 1;
   }
   return { base };
 };

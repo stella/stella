@@ -221,7 +221,7 @@ export const compileRules = (
     });
   }
 
-  return compiled.sort(compareRulePrecedence);
+  return compiled.toSorted(compareRulePrecedence);
 };
 
 /**

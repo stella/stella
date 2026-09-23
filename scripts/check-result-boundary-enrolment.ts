@@ -141,7 +141,7 @@ export const checkResultBoundaryEnrolment = ({
   }
 
   let enabledUnits = 0;
-  const byUnit = [...coverage.entries()].sort(([left], [right]) =>
+  const byUnit = [...coverage.entries()].toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
   for (const [unit, { covered, total }] of byUnit) {

@@ -161,7 +161,7 @@ export const extractTextBoxes = ({
 
   return boxes
     .filter((b) => b.x1 - b.x0 >= MIN_BOX_SIDE && b.y1 - b.y0 >= MIN_BOX_SIDE)
-    .sort(compareReadingOrder);
+    .toSorted(compareReadingOrder);
 };
 
 /** Top-to-bottom; left-to-right for boxes on the same text line band. */

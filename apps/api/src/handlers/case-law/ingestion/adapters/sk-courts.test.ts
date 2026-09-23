@@ -102,8 +102,8 @@ describe("the inventory is keyed on the schema the service publishes", () => {
     );
     const declared = [
       ...declaredPropertyPaths(schemas["Rozhodnutie"], "", schemas),
-    ].sort();
-    const decided = [...SK_COURTS_SOURCE_FIELD_PATHS].sort();
+    ].toSorted();
+    const decided = [...SK_COURTS_SOURCE_FIELD_PATHS].toSorted();
 
     const undecided = declared.filter((path) => !decided.includes(path));
     const invented = decided.filter((path) => !declared.includes(path));
@@ -292,7 +292,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     );
     const parts = decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "");
 
-    expect(Object.keys(parts ?? {}).sort()).toEqual(["detail", "listing"]);
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "listing"]);
   });
 
   test("a payload naming another decision is refused", async () => {
@@ -327,7 +327,7 @@ describe("the census and the registry agree about this adapter", () => {
       disposition.disposition === "stored" ? [disposition.part] : [],
     );
 
-    expect(recorded.sort()).toEqual(["detail", "listing"]);
+    expect(recorded.toSorted()).toEqual(["detail", "listing"]);
   });
 
   test("the surfaces still on the backlog name why", () => {
@@ -337,7 +337,7 @@ describe("the census and the registry agree about this adapter", () => {
         disposition.disposition === "backlog" ? [surface] : [],
     );
 
-    expect(backlog.sort()).toEqual(["bulk-dump", "document"]);
+    expect(backlog.toSorted()).toEqual(["bulk-dump", "document"]);
     expect(skCourtsAdapter.key).toBe(ADAPTER_KEYS.SK_COURTS);
   });
 });

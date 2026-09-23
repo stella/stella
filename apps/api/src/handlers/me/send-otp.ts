@@ -6,6 +6,7 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import {
   checkUserOrganizationOwnership,
+  ORGANIZATION_OWNERSHIP,
   getUserEmail,
 } from "@/api/lib/delete-account";
 import { sendOTPEmail } from "@/api/lib/email/email";
@@ -30,7 +31,7 @@ const deleteAccountSendOtp = createSafeSessionHandler(
       checkUserOrganizationOwnership(currentUserId),
     );
 
-    if (ownershipCheck.isSoleOwner) {
+    if (ownershipCheck.type === ORGANIZATION_OWNERSHIP.soleOwner) {
       return Result.err(
         new HandlerError({
           code: "account_deletion_sole_owner",

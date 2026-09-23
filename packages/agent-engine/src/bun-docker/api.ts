@@ -163,7 +163,7 @@ export async function* demuxExecStream(
           if (buffer.length < 8 + size) {
             break;
           }
-          const streamType = buffer[0];
+          const streamType = header.getUint8(0);
           if (streamType !== 1 && streamType !== 2) {
             throw new DockerApiError({
               message: `Docker exec stream returned invalid stream type ${streamType}`,

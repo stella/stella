@@ -10,8 +10,8 @@ import { COUNTRY_CODES } from "./codes.js";
 
 describe("COUNTRY_ALPHA3_BY_CODE", () => {
   test("covers every alpha-2 code exactly once", () => {
-    expect(Object.keys(COUNTRY_ALPHA3_BY_CODE).sort()).toEqual(
-      [...COUNTRY_CODES].sort(),
+    expect(Object.keys(COUNTRY_ALPHA3_BY_CODE).toSorted()).toEqual(
+      [...COUNTRY_CODES].toSorted(),
     );
   });
 

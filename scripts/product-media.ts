@@ -73,10 +73,10 @@ export const assertRecordingSourceMatches = (
 ): void => {
   const sourceKeys = entries
     .map((entry) => `${entry.captureId}:${entry.theme}`)
-    .sort();
+    .toSorted();
   const manifestKeys = manifest.recordings
     .map((recording) => `${recording.captureId}:${recording.theme}`)
-    .sort();
+    .toSorted();
   if (JSON.stringify(sourceKeys) !== JSON.stringify(manifestKeys)) {
     throw new ProductMediaError(
       `${PRODUCT_MEDIA_MANIFEST_PATH} does not match recordings-manifest.json; regenerate it`,
@@ -292,7 +292,7 @@ export const createProductMediaManifest = async (
   const publicDir = nodePath.join(rootDir, PRODUCT_MEDIA_PUBLIC_DIR);
   const filenames = (await readdir(publicDir))
     .filter((name) => name.endsWith(".mp4") || name.endsWith("-poster.jpg"))
-    .sort();
+    .toSorted();
   const assets = await Promise.all(
     filenames.map(async (filename): Promise<ProductMediaAsset> => {
       const path = nodePath.join(publicDir, filename);

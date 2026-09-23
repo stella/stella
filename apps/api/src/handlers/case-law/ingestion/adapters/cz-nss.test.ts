@@ -723,9 +723,10 @@ describe("cz-nss listSlicePage", () => {
     });
 
     const search = requests.at(-1);
-    expect(`${search?.method} ${search?.url}`).toBe(
-      `POST ${BASE_URL}/Home/Index`,
-    );
+    expect({ method: search?.method, url: search?.url }).toEqual({
+      method: "POST",
+      url: `${BASE_URL}/Home/Index`,
+    });
     // The court's own date field, in its own format.
     expect(search?.body).toContain("HodnotaDatumACasOd=10.06.2026");
     expect(listed.totalPages).toBe(1);

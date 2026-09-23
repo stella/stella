@@ -161,7 +161,7 @@ const listAs = async (args: Parameters<typeof runListAs>[0]) => {
   if (!("items" in result)) {
     throw new Error(`unexpected list result: ${JSON.stringify(result)}`);
   }
-  return result.items.map((item) => item.title).sort();
+  return result.items.map((item) => item.title).toSorted();
 };
 
 describe("signal visibility", () => {

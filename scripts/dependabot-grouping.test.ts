@@ -181,7 +181,7 @@ describe("Dependabot dependency groups", () => {
     const group = await readElysiaGroup();
     const uncovered = [...installedElysiaPackages]
       .filter((dependency) => !isDependencyInGroup(dependency, group))
-      .sort();
+      .toSorted();
 
     expect(uncovered).toEqual([]);
   });

@@ -147,7 +147,7 @@ export const ClipboardImagePreview = ({
       <span
         aria-label={alt}
         className={cn(
-          "text-muted-foreground/60 grid size-full place-items-center",
+          "text-foreground-disabled grid size-full place-items-center",
           className,
         )}
         role="img"

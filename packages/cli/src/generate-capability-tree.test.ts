@@ -743,7 +743,7 @@ describe("curated commands must not shadow capability commands", () => {
       .filter((namespace) =>
         namespace === "capability" ? false : capability.has(namespace),
       )
-      .sort();
+      .toSorted();
 
     expect([...capability]).toEqual(["capability"]);
     expect(
@@ -751,7 +751,7 @@ describe("curated commands must not shadow capability commands", () => {
         (path) => path.length === 3 && path.at(0) === "capability",
       ),
     ).toBe(true);
-    expect(shadowed).toEqual([...SHADOWED_NAMESPACE_ALLOWLIST].sort());
+    expect(shadowed).toEqual([...SHADOWED_NAMESPACE_ALLOWLIST].toSorted());
     expect(stats.generated).toBeGreaterThan(0);
   });
 });

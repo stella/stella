@@ -67,7 +67,7 @@ export const lockWorkspacesForEntityCap = async (
   tx: Transaction,
   workspaceIds: readonly SafeId<"workspace">[],
 ): Promise<void> => {
-  const orderedIds = [...new Set(workspaceIds)].sort();
+  const orderedIds = [...new Set(workspaceIds)].toSorted();
 
   for (const id of orderedIds) {
     // Raw `FOR UPDATE`, not the query-builder form: it locks the

@@ -260,7 +260,7 @@ export const TemplateList = ({
 
   const allTags = [
     ...new Set(templates.flatMap((template) => optionalArray(template.tags))),
-  ].sort(compareByLocale(lang));
+  ].toSorted(compareByLocale(lang));
 
   const visibleTemplates = tagFilter
     ? templates.filter((template) => template.tags?.includes(tagFilter))
@@ -1314,7 +1314,7 @@ const TemplateLanguagesField = ({
             label: languageDisplayName(language.code, lang),
           },
         ],
-  ).sort((a, b) => compareLabel(a.label, b.label));
+  ).toSorted((a, b) => compareLabel(a.label, b.label));
 
   const atLimit = languages.length >= MAX_TEMPLATE_LANGUAGES;
 

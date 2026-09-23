@@ -47,7 +47,7 @@ const workspaceDirectories = (
   )
 )
   .flat()
-  .sort();
+  .toSorted();
 
 const workspaceVersions = Object.fromEntries(
   (

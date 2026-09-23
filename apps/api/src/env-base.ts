@@ -24,10 +24,12 @@ import { resolveCorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-
 
 export { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 
-const nodeEnvKind = classifyNodeEnv(process.env.NODE_ENV);
-if (nodeEnvKind === NODE_ENV_KIND.unknown) {
+const nodeEnv = process.env.NODE_ENV;
+const nodeEnvKind = classifyNodeEnv(nodeEnv);
+// An unset NODE_ENV classifies as local, so only a set value can be unknown.
+if (nodeEnv !== undefined && nodeEnvKind === NODE_ENV_KIND.unknown) {
   panic(
-    `NODE_ENV="${process.env.NODE_ENV}" is not a recognized environment. Set one of ${KNOWN_NODE_ENVS.join(", ")}, or leave it unset for local development.`,
+    `NODE_ENV="${nodeEnv}" is not a recognized environment. Set one of ${KNOWN_NODE_ENVS.join(", ")}, or leave it unset for local development.`,
   );
 }
 

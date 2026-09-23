@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
@@ -162,7 +163,10 @@ const requestedCelex = await (async (): Promise<string[]> => {
     }
     return parsed;
   }
-  const parsed: unknown = JSON.parse(await Bun.file(censusPath ?? "").text());
+  if (censusPath === undefined) {
+    return panic("exactly one CELEX source was checked above");
+  }
+  const parsed: unknown = JSON.parse(await Bun.file(censusPath).text());
   if (!isCensusReport(parsed)) {
     console.error(`${censusPath} is not a census report`);
     process.exit(1);
@@ -186,7 +190,7 @@ if (after !== null && !isValidCelex(after)) {
 }
 
 const plan = [...new Set(requestedCelex)]
-  .sort()
+  .toSorted()
   .filter((celex) => after === null || celex > after)
   .slice(0, limit ?? undefined);
 

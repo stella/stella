@@ -27,7 +27,8 @@ const parseFieldsOverlay = (fields: unknown) =>
     fields,
   });
 
-const sortedKeys = (entries: object): string[] => Object.keys(entries).sort();
+const sortedKeys = (entries: object): string[] =>
+  Object.keys(entries).toSorted();
 
 const camelize = (key: string): string =>
   key.replace(/_(.)/gu, (_match: string, letter: string) =>
@@ -35,7 +36,7 @@ const camelize = (key: string): string =>
   );
 
 const sortedCamelKeys = (entries: object): string[] =>
-  Object.keys(entries).map(camelize).sort();
+  Object.keys(entries).map(camelize).toSorted();
 
 const snakeize = (key: string): string =>
   key.replace(/[A-Z]/gu, (letter: string) => `_${letter.toLowerCase()}`);

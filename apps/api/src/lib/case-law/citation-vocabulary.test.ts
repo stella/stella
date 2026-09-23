@@ -40,7 +40,7 @@ describe("the treatment vocabulary and the polarity domain", () => {
     const declared: string[] = [...CITATION_TREATMENTS];
     const derived: string[] = [...READABLE_POLARITIES, "unclassified"];
 
-    expect(declared.sort()).toEqual(derived.sort());
+    expect(declared.toSorted()).toEqual(derived.toSorted());
   });
 
   test("keep every stored polarity readable as a treatment", () => {

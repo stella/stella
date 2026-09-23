@@ -24,7 +24,7 @@ const StoredReaderTextScaleSchema = v.picklist(READER_TEXT_SCALES);
  * is a step a reader recognizes.
  */
 const nearestScale = (scale: number): number => {
-  const byDistance = [...READER_TEXT_SCALES].sort(
+  const byDistance = [...READER_TEXT_SCALES].toSorted(
     (left, right) => Math.abs(left - scale) - Math.abs(right - scale),
   );
   return byDistance.at(0) ?? READER_TEXT_SCALE_DEFAULT;

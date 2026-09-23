@@ -521,7 +521,7 @@ const metrics = (
   responseSizes: Record<string, number> = {},
   missingResponseSizeCounts: Record<string, number> = {},
 ): RouteNetworkMetrics => ({
-  requests: [...requests].sort(),
+  requests: [...requests].toSorted(),
   requestCounts,
   depth,
   depthChain: [],

@@ -257,11 +257,14 @@ const declaredNames = (): DeclaredName[] => {
   return names;
 };
 
-const overLimit = (names: readonly DeclaredName[]): DeclaredName[] =>
-  names.filter(
-    ({ name }) =>
-      name !== undefined &&
-      Buffer.byteLength(name) > POSTGRES_IDENTIFIER_LIMIT_BYTES,
+type MeasuredName = DeclaredName & { name: string };
+
+const overLimit = (names: readonly DeclaredName[]): MeasuredName[] =>
+  names.flatMap(({ table, name, explicit }) =>
+    name !== undefined &&
+    Buffer.byteLength(name) > POSTGRES_IDENTIFIER_LIMIT_BYTES
+      ? [{ table, name, explicit }]
+      : [],
   );
 
 /**

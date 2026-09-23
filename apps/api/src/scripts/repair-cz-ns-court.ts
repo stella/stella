@@ -258,14 +258,16 @@ console.info(
     `${held.toLocaleString()} already correct, ` +
     `${superseded.toLocaleString()} changed under the run.`,
 );
-for (const [court, count] of [...courts].sort((a, b) => b[1] - a[1])) {
+for (const [court, count] of [...courts].toSorted((a, b) => b[1] - a[1])) {
   console.info(`  ${String(count).padStart(6)}  ${court}`);
 }
 if (unknownCodes.size > 0) {
   console.error(
     "ECLI court codes the map does not know; these rows were left alone:",
   );
-  for (const [code, count] of [...unknownCodes].sort((a, b) => b[1] - a[1])) {
+  for (const [code, count] of [...unknownCodes].toSorted(
+    (a, b) => b[1] - a[1],
+  )) {
     console.error(`  ${String(count).padStart(6)}  ${code}`);
   }
 }

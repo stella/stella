@@ -117,7 +117,7 @@ const git = (args: readonly string[]): string =>
 export const watchedPathsHashAtHead = (
   watchedPaths: readonly string[],
 ): string => {
-  const normalizedPaths = [...new Set(watchedPaths)].sort();
+  const normalizedPaths = [...new Set(watchedPaths)].toSorted();
   const tree = git([
     "ls-tree",
     "-r",

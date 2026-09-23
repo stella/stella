@@ -659,7 +659,7 @@ const buildRootRoute = (
       // Reflect the ACTIVE tree (the cached-listings tree when the server
       // registry has diverged), not the baked-in one.
       collectLeafPaths(tree, [], lines, disabled);
-      this.process.stdout.write(`${lines.sort().join("\n")}\n`);
+      this.process.stdout.write(`${lines.toSorted().join("\n")}\n`);
     },
     parameters: { flags: buildServerFlag() },
   });

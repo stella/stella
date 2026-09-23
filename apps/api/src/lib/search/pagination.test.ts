@@ -49,7 +49,7 @@ const candidatesAfterCursor = ({
         )
         .slice(0, limit + 1),
     )
-    .sort(compareScoredSearchHits);
+    .toSorted(compareScoredSearchHits);
 
 const pageThrough = (
   source: readonly { hit: TestHit; score: number }[],

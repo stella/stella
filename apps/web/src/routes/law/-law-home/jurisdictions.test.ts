@@ -31,9 +31,9 @@ describe("law home jurisdictions", () => {
     const browserCountries = Object.keys(STATUTE_COUNTRIES)
       .filter(isPublicStatuteCountry)
       .map((segment) => segment.toUpperCase())
-      .sort();
+      .toSorted();
 
-    expect([...withStatutes].sort()).toEqual(browserCountries);
+    expect([...withStatutes].toSorted()).toEqual(browserCountries);
   });
 
   test("a listed scope has examples and an unlisted one has none", () => {

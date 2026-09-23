@@ -43,6 +43,7 @@ import {
   stemLegalTerm,
 } from "@/api/lib/legal-search/morphology/stem";
 import { putCorpusS3ObjectWithSignal, refreshCorpusS3 } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
 
 const DEFAULT_CHUNK_SIZE = 1000;
 /** Per-chunk ceiling. A measured chunk costs ~2s; this is the stall bound. */
@@ -151,7 +152,7 @@ const { ingestionDb } = await openCaseLawReadOnlySession();
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 const rowsOf = (result: unknown): Record<string, unknown>[] =>
-  Array.isArray(result) ? result : [];
+  Array.isArray(result) ? result.filter(isRecord) : [];
 
 type VocabularyChunk = {
   /** Exclusive upper bound reached, or null when the language is exhausted. */

@@ -23,7 +23,7 @@ const collectUploadSites = async (): Promise<UploadSite[]> => {
     ...new Bun.Glob("*.yml").scanSync({
       cwd: fileURLToPath(WORKFLOWS_URL),
     }),
-  ].sort();
+  ].toSorted();
   const sites: UploadSite[] = [];
 
   for (const file of workflows) {

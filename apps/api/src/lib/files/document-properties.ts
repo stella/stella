@@ -697,7 +697,7 @@ const replaceNamespacedAttribute = ({
     const regex = new RegExp(`(\\s${name}\\s*=\\s*)(["'])[^"']*\\2`, "gu");
     scrubbed = scrubbed.replace(
       regex,
-      (_attribute, prefix) => `${prefix}"${replacement}"`,
+      (_attribute, prefix: string) => `${prefix}"${replacement}"`,
     );
   }
   return scrubbed;

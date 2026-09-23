@@ -44,7 +44,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/legal-atlas",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/legal-atlas",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },

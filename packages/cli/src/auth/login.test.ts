@@ -136,7 +136,7 @@ const startProvider = (options: ProviderOptions = {}) => {
       void server.stop(true);
     },
     counts,
-    url: `http://127.0.0.1:${server.port}`,
+    url: server.url.origin,
   };
 };
 

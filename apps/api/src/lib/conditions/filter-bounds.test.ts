@@ -202,7 +202,7 @@ const discoverConsumers = (): string[] => {
       modules.push(module);
     }
   }
-  return modules.sort();
+  return modules.toSorted();
 };
 
 describe("condition consumer census", () => {
@@ -213,7 +213,7 @@ describe("condition consumer census", () => {
   test("every module importing the contract is probed, and only those", () => {
     const discovered = discoverConsumers();
     expect(discovered.length).toBeGreaterThan(0);
-    expect(discovered).toEqual(Object.keys(PROBES).sort());
+    expect(discovered).toEqual(Object.keys(PROBES).toSorted());
   });
 
   for (const [module, probes] of Object.entries(PROBES)) {

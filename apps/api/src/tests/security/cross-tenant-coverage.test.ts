@@ -141,7 +141,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
 const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
-  .sort();
+  .toSorted();
 
 // A domain is "covered" iff the matrix imports a handler from it. Parsing the
 // import specifiers keeps this in lockstep with the real matrix: a new case

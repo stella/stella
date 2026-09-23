@@ -326,7 +326,7 @@ const sampleIndexes = (total: number): readonly number[] => {
   for (let index = 0; index < total; index += SAMPLE_STRIDE) {
     picked.add(index);
   }
-  return [...picked].sort((a, b) => a - b);
+  return [...picked].toSorted((a, b) => a - b);
 };
 
 const buildFixture = (algorithm: string, voc: string, output: string) => {

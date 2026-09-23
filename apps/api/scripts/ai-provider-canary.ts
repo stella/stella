@@ -40,6 +40,7 @@ import {
   structuredOutputBudgetEdgeMaxOutputTokens,
   structuredOutputModelRoleMaxOutputTokens,
   IMPOSSIBLE_STRING_MAX_LENGTH,
+  isCanaryProvider,
   NULL_WIDENING_CANARY_PROVIDERS,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
@@ -1535,16 +1536,8 @@ const flagValue = (args: string[], flag: string): string | undefined => {
 
 const parseProvider = (args: string[]): CanaryProvider => {
   const value = flagValue(args, "--provider");
-  switch (value) {
-    case "google":
-    case "openrouter":
-    case "openai":
-    case "anthropic":
-    case "bedrock":
-    case "mistral":
-      return value;
-    case undefined:
-      break;
+  if (value !== undefined && isCanaryProvider(value)) {
+    return value;
   }
 
   throw new TypeError(

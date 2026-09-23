@@ -885,7 +885,7 @@ function RouteComponentInner({
           // No `pane` here: the arrangement decides which slot reads the
           // document, never which document is open, and keying on it
           // reopened the inspector tab (a fresh `renderId`) on every swap.
-          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}`}
+          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId ?? "no-pdf"}:${activeFileLabel}`}
           mimeType={activeMimeType}
           pdfFileId={activePdfFileId}
           propertyId={filePropertyId}

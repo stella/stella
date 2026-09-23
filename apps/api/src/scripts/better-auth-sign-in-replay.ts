@@ -106,32 +106,49 @@ const queryFailed = (cause: unknown) =>
     message: "Sign-in replay could not read the stored rows",
   });
 
+/** Bun SQL types every result as `any`; rows are `unknown` until checked. */
+const resultRows = (result: unknown): unknown[] | null =>
+  Array.isArray(result) ? result : null;
+
 const readRows = async (client: SQL) => {
   const queried = await Result.tryPromise({
-    try: async () => ({
-      microsoft: await client`
+    try: async () => {
+      const microsoft: unknown = await client`
         SELECT a.account_id AS "accountId", a.id_token AS "idToken",
                a.user_id AS "userId", u.email AS "email"
           FROM account a JOIN "user" u ON u.id = a.user_id
          WHERE a.provider_id = 'microsoft'
          ORDER BY a.id
          LIMIT ${MAX_SIGN_IN_ROWS + 1}
-      `,
-      sessions: await client`
+      `;
+      const sessions: unknown = await client`
         SELECT token, user_id AS "userId"
           FROM session
          WHERE expires_at > now()
          ORDER BY expires_at DESC
          LIMIT ${MAX_SESSION_ROWS}
-      `,
-      userCount: await client`SELECT count(*)::text AS "count" FROM "user"`,
-      accountCount: await client`SELECT count(*)::text AS "count" FROM account`,
-      sessionCount: await client`SELECT count(*)::text AS "count" FROM session`,
-    }),
+      `;
+      const userCount: unknown =
+        await client`SELECT count(*)::text AS "count" FROM "user"`;
+      const accountCount: unknown =
+        await client`SELECT count(*)::text AS "count" FROM account`;
+      const sessionCount: unknown =
+        await client`SELECT count(*)::text AS "count" FROM session`;
+      return {
+        microsoft: resultRows(microsoft),
+        sessions: resultRows(sessions),
+        userCount: resultRows(userCount)?.at(0),
+        accountCount: resultRows(accountCount)?.at(0),
+        sessionCount: resultRows(sessionCount)?.at(0),
+      };
+    },
     catch: queryFailed,
   });
   if (Result.isError(queried)) {
     return queried;
+  }
+  if (queried.value.microsoft === null || queried.value.sessions === null) {
+    return Result.err(queryFailed(undefined));
   }
   const microsoft: MicrosoftRow[] = [];
   for (const row of queried.value.microsoft) {
@@ -161,9 +178,7 @@ const readRows = async (client: SQL) => {
     }
     sessions.push({ token, userId });
   }
-  const userCount = queried.value.userCount.at(0);
-  const accountCount = queried.value.accountCount.at(0);
-  const sessionCount = queried.value.sessionCount.at(0);
+  const { userCount, accountCount, sessionCount } = queried.value;
   if (
     !isRecord(userCount) ||
     typeof userCount["count"] !== "string" ||
@@ -434,14 +449,16 @@ const run = async (
   // ends exactly as it started, and prove it by count.
   const replayedUserIds = rows.value.microsoft.map(({ userId }) => userId);
   const cleaned = await Result.tryPromise({
-    try: async () =>
-      replayedUserIds.length === 0
-        ? undefined
-        : await client`
-            DELETE FROM session
-             WHERE created_at >= ${replayStartedAt.toISOString()}::timestamptz
-               AND user_id IN ${client(replayedUserIds)}
-          `,
+    try: async () => {
+      if (replayedUserIds.length === 0) {
+        return;
+      }
+      await client`
+        DELETE FROM session
+         WHERE created_at >= ${replayStartedAt.toISOString()}::timestamptz
+           AND user_id IN ${client(replayedUserIds)}
+      `;
+    },
     catch: (cause) =>
       new BetterAuthSignInReplayError({
         cause,
@@ -449,7 +466,9 @@ const run = async (
         message: "Sign-in replay could not remove its session rows",
       }),
   });
-  const after = Result.isError(cleaned) ? cleaned : await readRows(client);
+  const after = Result.isError(cleaned)
+    ? Result.err(cleaned.error)
+    : await readRows(client);
   await client.end();
   if (Result.isError(replayed)) {
     return Result.err(replayed.error);

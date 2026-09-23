@@ -38,7 +38,7 @@ const callSites = async (): Promise<string[]> => {
       matched.push(file);
     }
   }
-  return matched.sort();
+  return matched.toSorted();
 };
 
 describe("document-reference stripping has declared owners", () => {
@@ -60,7 +60,7 @@ describe("document-reference stripping has declared owners", () => {
           disposition === STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
       )
       .map(([module]) => module)
-      .sort();
+      .toSorted();
 
     expect(await callSites()).toEqual(declared);
   });

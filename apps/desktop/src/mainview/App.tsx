@@ -136,7 +136,7 @@ const SettingRow = ({ helper, label, value }: SettingRowProps) => (
         </p>
       ) : null}
     </div>
-    <p className="text-muted-foreground max-w-40 text-right text-sm leading-relaxed">
+    <p className="text-muted-foreground max-w-40 text-end text-sm leading-relaxed">
       {value}
     </p>
   </div>

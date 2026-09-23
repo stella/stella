@@ -192,7 +192,7 @@ export const groupProvisionsByWork = (
 
   const grouped: WorkGroup[] = [];
   for (const { byProvision, work } of works.values()) {
-    work.provisions = [...byProvision.values()].sort(compareProvisions);
+    work.provisions = [...byProvision.values()].toSorted(compareProvisions);
     grouped.push(work);
   }
 

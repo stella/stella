@@ -211,7 +211,10 @@ export const anonymizeTextFieldsWithDependencies = async ({
     fields,
   });
   const combinedText = fields
-    .map((field, index) => `${markers[index]}${field}`)
+    .map(
+      (field, index) =>
+        `${markers[index] ?? panic(`Missing anonymized field marker at index ${index}`)}${field}`,
+    )
     .join("");
 
   const { excludedCanonicals, gazetteerEntries } =

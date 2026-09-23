@@ -63,7 +63,7 @@ const startMockProvider = (
       void server.stop(true);
     },
     getRequestCount: () => requestCount,
-    serverUrl: `http://127.0.0.1:${server.port}`,
+    serverUrl: server.url.origin,
   };
 };
 

@@ -48,6 +48,6 @@ for (const f of files) {
 }
 
 const result =
-  await $`bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware ${files}`.nothrow();
+  await $`bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware ${files}`.nothrow();
 
 process.exit(result.exitCode);

@@ -112,6 +112,8 @@ describe("property-test convention", () => {
     );
     const withScript = await collectPropertyScriptWorkspaces();
     expect(withPropertyTests.size).toBeGreaterThan(0);
-    expect([...withPropertyTests].sort()).toEqual([...withScript].sort());
+    expect([...withPropertyTests].toSorted()).toEqual(
+      [...withScript].toSorted(),
+    );
   });
 });

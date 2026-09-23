@@ -46,7 +46,7 @@ describe("parseRolesResponse", () => {
     // Brreg's own roster: CEO + auditor entity + public-sector parent.
     expect(officers).toHaveLength(3);
     expect(officers.every((o) => !o.isResigned)).toBe(true);
-    expect(officers.map((o) => o.role.code).sort()).toEqual([
+    expect(officers.map((o) => o.role.code).toSorted()).toEqual([
       "DAGL",
       "ORGL",
       "REVI",

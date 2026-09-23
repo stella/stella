@@ -139,7 +139,7 @@ export const CatalogueStep = ({
       (entry) =>
         recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
     )
-    .sort((left, right) =>
+    .toSorted((left, right) =>
       compareLocalizedName(localizedName(left), localizedName(right)),
     );
 
@@ -178,7 +178,7 @@ export const CatalogueStep = ({
   // "Vybrat vše doporučené" bulk-adds the ones in `recommendedSet`.
   const filteredEntries = [...recommendedEntries, ...otherEntries]
     .filter(matchesSearch)
-    .sort((left, right) =>
+    .toSorted((left, right) =>
       compareLocalizedName(localizedName(left), localizedName(right)),
     );
 
@@ -189,7 +189,7 @@ export const CatalogueStep = ({
         set.add(code);
       }
     }
-    return Array.from(set).sort();
+    return Array.from(set).toSorted();
   })();
 
   // Clicking a row focuses it on the left and surfaces the iOS
@@ -293,7 +293,7 @@ export const CatalogueStep = ({
               <GlobeIcon className="size-3.5" />
               {jurisdictionFilter.size === 0
                 ? t("common.all")
-                : Array.from(jurisdictionFilter).sort().join(", ")}
+                : Array.from(jurisdictionFilter).toSorted().join(", ")}
               <ChevronDownIcon className="size-3.5" />
             </PopoverTrigger>
             <PopoverPopup align="end" className="w-60" side="bottom">

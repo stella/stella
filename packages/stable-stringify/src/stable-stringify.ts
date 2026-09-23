@@ -92,7 +92,7 @@ export const stableStringify = (
   }
 
   const serializedEntries: string[] = [];
-  const orderedKeys = Object.entries(value).sort(([left], [right]) =>
+  const orderedKeys = Object.entries(value).toSorted(([left], [right]) =>
     left < right ? -1 : Number(left > right),
   );
   for (const [key, entryValue] of orderedKeys) {

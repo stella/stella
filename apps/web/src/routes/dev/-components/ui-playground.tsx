@@ -468,8 +468,11 @@ export function UiPlayground() {
                           Limit the list by status and owner.
                         </PopoverDescription>
                         <Separator />
-                        <Label>Owner</Label>
-                        <Input defaultValue="M. Novak" />
+                        <Label htmlFor="playground-filter-owner">Owner</Label>
+                        <Input
+                          defaultValue="M. Novak"
+                          id="playground-filter-owner"
+                        />
                         <Button size="sm">Apply</Button>
                       </div>
                     </PopoverPopup>
@@ -655,7 +658,9 @@ export function UiPlayground() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label>Hex color picker</Label>
+                  <span className="text-foreground text-sm font-medium">
+                    Hex color picker
+                  </span>
                   <HexColorPicker
                     className="!h-36 !w-full max-w-sm overflow-hidden rounded-lg border"
                     color={hexColor}

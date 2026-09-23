@@ -210,7 +210,7 @@ describe("replay walk boundary", () => {
             // timestamp, id breaking a tie that cannot occur here.
             expect(seen).toEqual(
               [...inserted]
-                .sort((left, right) => left.sub - right.sub)
+                .toSorted((left, right) => left.sub - right.sub)
                 .map(({ id }) => id),
             );
           },

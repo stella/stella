@@ -60,8 +60,8 @@ type Frontmatter = {
 type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
 
 export const listSkillMetadata = (): SkillMetadata[] =>
-  GENERATED_SKILLS.map((skill) => readSkillMetadata(skill.id)).sort((a, b) =>
-    a.name.localeCompare(b.name),
+  GENERATED_SKILLS.map((skill) => readSkillMetadata(skill.id)).toSorted(
+    (a, b) => a.name.localeCompare(b.name),
   );
 
 export const loadSkill = (skillId: string): StellaSkill => {

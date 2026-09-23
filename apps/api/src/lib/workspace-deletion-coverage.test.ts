@@ -113,14 +113,14 @@ describe("workspace deletion coverage", () => {
         )
         .map((column) => `${tableName}.${column.name}`);
     });
-    expect(derivedWorkspaceColumns.sort()).toEqual(
-      Object.keys(WORKSPACE_DERIVED_REFERENCE_DISPOSITION).sort(),
+    expect(derivedWorkspaceColumns.toSorted()).toEqual(
+      Object.keys(WORKSPACE_DERIVED_REFERENCE_DISPOSITION).toSorted(),
     );
   });
 
   test("every known workspace storage class has an explicit disposition", () => {
-    expect(Object.keys(WORKSPACE_STORAGE_DISPOSITION).sort()).toEqual(
-      Object.values(WORKSPACE_STORAGE_CLASS).sort(),
+    expect(Object.keys(WORKSPACE_STORAGE_DISPOSITION).toSorted()).toEqual(
+      Object.values(WORKSPACE_STORAGE_CLASS).toSorted(),
     );
     expect(
       Object.entries(WORKSPACE_STORAGE_DISPOSITION).filter(
@@ -149,8 +149,8 @@ describe("workspace deletion coverage", () => {
     });
     storageReferenceColumns.push("buffer_object_cleanup_intents.object_key");
 
-    expect(storageReferenceColumns.sort()).toEqual(
-      Object.keys(WORKSPACE_STORAGE_REFERENCE_DISPOSITION).sort(),
+    expect(storageReferenceColumns.toSorted()).toEqual(
+      Object.keys(WORKSPACE_STORAGE_REFERENCE_DISPOSITION).toSorted(),
     );
   });
 });

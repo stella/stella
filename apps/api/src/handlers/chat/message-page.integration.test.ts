@@ -111,7 +111,7 @@ const byCreatedThenId = (a: SeededMessage, b: SeededMessage): number => {
 const expectedAscendingIds = (
   messages: SeededMessage[],
 ): SafeId<"chatMessage">[] =>
-  [...messages].sort(byCreatedThenId).map((message) => message.id);
+  [...messages].toSorted(byCreatedThenId).map((message) => message.id);
 
 const loadPage = async (
   threadId: SafeId<"chatThread">,

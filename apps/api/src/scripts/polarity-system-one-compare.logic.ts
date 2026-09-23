@@ -268,7 +268,7 @@ export const percentileOf = (
   if (values.length === 0) {
     return null;
   }
-  const sorted = [...values].sort((left, right) => left - right);
+  const sorted = [...values].toSorted((left, right) => left - right);
   const rank = Math.min(
     sorted.length,
     Math.max(1, Math.ceil(share * sorted.length)),

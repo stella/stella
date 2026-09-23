@@ -271,10 +271,11 @@ const renderGcisLookupHit = (hit: BusinessRegistryHit): string => {
     hit.details?.registry === "gcis"
       ? hit.details.company.registerOrganization
       : null;
+  const address = addressText(hit);
   return [
     `**${hit.name}**`,
     `統一編號 ${hit.id}`,
-    addressText(hit) === null ? null : `公司所在地 ${addressText(hit)}`,
+    address === null ? null : `公司所在地 ${address}`,
     authority === null ? null : `登記機關 ${authority}`,
   ]
     .filter((part) => part !== null)
@@ -340,10 +341,7 @@ const formatCourtFile = (
 ): string | null =>
   parts === null ? null : `${parts.court}, ${parts.section} ${parts.insert}`;
 
-const formatAresDate = (value: string | null): string | null => {
-  if (value === null) {
-    return null;
-  }
+const formatAresDate = (value: string): string => {
   const date = parseIsoDateLocal(value);
   return date === null
     ? value
@@ -406,7 +404,10 @@ const lookupTemplateTokens = (
         company.courtFile?.section.trim() && company.courtFile.insert.trim()
           ? `${company.courtFile.section.trim()} ${company.courtFile.insert.trim()}`
           : null;
-      tokens["registered on"] = formatAresDate(company.dateRegistered);
+      tokens["registered on"] =
+        company.dateRegistered === null
+          ? null
+          : formatAresDate(company.dateRegistered);
       tokens["acting clause"] = company.actingClause;
       tokens["statutory bodies"] = company.statutoryBodies
         .map(({ organName, members }) =>

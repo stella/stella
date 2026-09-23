@@ -191,10 +191,10 @@ const parseOfficeSpan = (line: string): OfficeSpan => {
 };
 
 const earliest = (dates: readonly string[]): string | undefined =>
-  [...dates].sort().at(0);
+  [...dates].toSorted().at(0);
 
 const latest = (dates: readonly string[]): string | undefined =>
-  [...dates].sort().at(-1);
+  [...dates].toSorted().at(-1);
 
 /**
  * The term a roster entry states, as one span.

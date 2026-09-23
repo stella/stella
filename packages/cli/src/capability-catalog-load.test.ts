@@ -103,7 +103,7 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
     const entry = parsed?.at(0);
     // The projection is an allowlist: extra keys present on the wire entry must
     // not leak into the CLI's in-memory catalog.
-    expect(Object.keys(entry ?? {}).sort()).toEqual([
+    expect(Object.keys(entry ?? {}).toSorted()).toEqual([
       "access",
       "destructive",
       "handlerKind",
@@ -256,7 +256,7 @@ describe("committed capability-catalog snapshot", () => {
           )
         );
       })
-      .sort();
+      .toSorted();
     expect(malformed).toEqual([]);
   });
 });

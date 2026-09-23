@@ -11,7 +11,9 @@
 export const dropOverlappingSpans = <T extends { end: number; start: number }>(
   spans: readonly T[],
 ): T[] => {
-  const sorted = [...spans].sort((a, b) => a.start - b.start || b.end - a.end);
+  const sorted = [...spans].toSorted(
+    (a, b) => a.start - b.start || b.end - a.end,
+  );
   const kept: T[] = [];
   let lastEnd = -1;
   for (const span of sorted) {

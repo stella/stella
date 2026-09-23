@@ -131,23 +131,19 @@ describe("product media manifest", () => {
     execFileSync("git", ["init", "--quiet"], { cwd: rootDir });
     const videoBytes = Buffer.from("video bytes");
     const posterBytes = Buffer.from("poster bytes");
+    const videoSha256 = new Bun.CryptoHasher("sha256")
+      .update(videoBytes)
+      .digest("hex");
+    const posterSha256 = new Bun.CryptoHasher("sha256")
+      .update(posterBytes)
+      .digest("hex");
     const assets = [
-      {
-        ...VIDEO,
-        bytes: videoBytes.length,
-        sha256: new Bun.CryptoHasher("sha256").update(videoBytes).digest("hex"),
-      },
-      {
-        ...POSTER,
-        bytes: posterBytes.length,
-        sha256: new Bun.CryptoHasher("sha256")
-          .update(posterBytes)
-          .digest("hex"),
-      },
+      { ...VIDEO, bytes: videoBytes.length, sha256: videoSha256 },
+      { ...POSTER, bytes: posterBytes.length, sha256: posterSha256 },
     ];
     const payloads = new Map([
-      [`/${assets[0]?.sha256}.mp4`, videoBytes],
-      [`/${assets[1]?.sha256}.jpg`, posterBytes],
+      [`/${videoSha256}.mp4`, videoBytes],
+      [`/${posterSha256}.jpg`, posterBytes],
     ]);
     let requests = 0;
     const server = Bun.serve({

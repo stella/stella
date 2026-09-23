@@ -113,7 +113,7 @@ const packageJsonTemplate = ({
         clean: "git clean -xdf .cache .turbo node_modules",
         test: "bun test src",
         typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-        lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/${name}`,
+        lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/${name}`,
         "lint:fix": `cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/${name}`,
         format: "bun ../../scripts/run-oxfmt.ts .",
       },

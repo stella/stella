@@ -205,7 +205,7 @@ console.log(
 );
 
 for (const [spelling, count] of [...missedCounts.entries()]
-  .sort((a, b) => b[1] - a[1])
+  .toSorted((a, b) => b[1] - a[1])
   .slice(0, TOP_MISSED)) {
   console.log(`MISSED ${String(count)} ${spelling}`);
 }

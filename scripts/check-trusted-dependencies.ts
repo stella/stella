@@ -24,7 +24,7 @@ if (
   process.exit(1);
 }
 
-const expected = [...new Set(configured)].sort();
+const expected = [...new Set(configured)].toSorted();
 if (expected.length !== configured.length) {
   console.error("package.json trustedDependencies contains duplicate entries");
   process.exit(1);
@@ -50,7 +50,7 @@ const actual = result.stdout
     const match = /^[├└]── (.+)@[^@]+$/u.exec(line);
     return match?.[1] === undefined ? [] : [match[1]];
   })
-  .sort();
+  .toSorted();
 
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error(

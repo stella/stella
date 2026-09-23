@@ -77,12 +77,21 @@ export const getUserEmail = async (
           }),
   });
 
+export const ORGANIZATION_OWNERSHIP = {
+  soleOwner: "sole_owner",
+  notSoleOwner: "not_sole_owner",
+} as const;
+
+type OrganizationOwnership =
+  | { type: typeof ORGANIZATION_OWNERSHIP.soleOwner; orgName: string }
+  | { type: typeof ORGANIZATION_OWNERSHIP.notSoleOwner };
+
 /**
  * Checks if the user is the sole owner of any organization they belong to.
  */
 export const checkUserOrganizationOwnership = async (
   currentUserId: string,
-): Promise<Result<{ isSoleOwner: boolean; orgName?: string }, HandlerError>> =>
+): Promise<Result<OrganizationOwnership, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const ownedOrgs = await rootDb
@@ -96,7 +105,7 @@ export const checkUserOrganizationOwnership = async (
 
       const ownedOrgIds = ownedOrgs.map((org) => org.orgId);
       if (ownedOrgIds.length === 0) {
-        return { isSoleOwner: false };
+        return { type: ORGANIZATION_OWNERSHIP.notSoleOwner };
       }
 
       const orgIdsWithOtherOwners = new Set(
@@ -118,10 +127,13 @@ export const checkUserOrganizationOwnership = async (
         (org) => !orgIdsWithOtherOwners.has(org.orgId),
       );
       if (soleOwnedOrg) {
-        return { isSoleOwner: true, orgName: soleOwnedOrg.orgName };
+        return {
+          type: ORGANIZATION_OWNERSHIP.soleOwner,
+          orgName: soleOwnedOrg.orgName,
+        };
       }
 
-      return { isSoleOwner: false };
+      return { type: ORGANIZATION_OWNERSHIP.notSoleOwner };
     },
     catch: (err) =>
       new HandlerError({

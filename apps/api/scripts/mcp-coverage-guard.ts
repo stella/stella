@@ -221,13 +221,15 @@ export const classifyCoverage = ({
   // must be removed, so the waiver map only ever documents real backings.
   const staleWaivers = Object.keys(waivers)
     .filter((tool) => !registry.has(tool))
-    .sort();
+    .toSorted();
 
   return {
-    missingMcp: missingMcp.sort(),
-    invalidExposure: invalidExposure.sort(),
-    unknownToolNames: unknownToolNames.sort((a, b) => a.id.localeCompare(b.id)),
-    orphanTools: orphanTools.sort(),
+    missingMcp: missingMcp.toSorted(),
+    invalidExposure: invalidExposure.toSorted(),
+    unknownToolNames: unknownToolNames.toSorted((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
+    orphanTools: orphanTools.toSorted(),
     staleWaivers,
   };
 };
@@ -254,8 +256,10 @@ export const computeBaselineDiff = ({
 }): BaselineDiff => {
   const currentSet = new Set(currentPending);
   const baselineSet = new Set(baseline);
-  const newPending = currentPending.filter((id) => !baselineSet.has(id)).sort();
-  const stalePending = baseline.filter((id) => !currentSet.has(id)).sort();
+  const newPending = currentPending
+    .filter((id) => !baselineSet.has(id))
+    .toSorted();
+  const stalePending = baseline.filter((id) => !currentSet.has(id)).toSorted();
   return { newPending, stalePending };
 };
 
@@ -289,7 +293,7 @@ export const findHiddenEndpointMismatches = ({
       mismatches.push({ id, callCount, enumerableCount, allowed });
     }
   }
-  return mismatches.sort((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
 };
 
 /**
@@ -309,7 +313,7 @@ export const findStaleAllowlistEntries = ({
   const discovered = new Set(files.map(({ id }) => id));
   return Object.keys(allowlist)
     .filter((id) => !discovered.has(id))
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 };
 
 const readBaseline = async (): Promise<string[]> => {
@@ -336,7 +340,7 @@ const readBaseline = async (): Promise<string[]> => {
 };
 
 const writeBaseline = async (pending: readonly string[]): Promise<void> => {
-  const sorted = [...pending].sort();
+  const sorted = [...pending].toSorted();
   await Bun.write(BASELINE_PATH, `${JSON.stringify(sorted, null, 2)}\n`);
 };
 
@@ -600,7 +604,7 @@ const runSelfTest = (): number => {
     },
     "m.ts",
   );
-  const enumeratedIds = enumerated.map(({ id }) => id).sort();
+  const enumeratedIds = enumerated.map(({ id }) => id).toSorted();
   if (
     enumeratedIds.length !== 2 ||
     enumeratedIds[0] !== "m.ts" ||

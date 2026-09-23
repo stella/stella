@@ -85,7 +85,7 @@ const KEYWORD_PATTERN = CONDITION_RESERVED_WORDS.filter(isConditionKeyword)
   .join("|");
 
 const COMPARE_SYMBOL_PATTERN = Object.keys(COMPARE_SYMBOL_TO_OP)
-  .sort((left, right) => right.length - left.length)
+  .toSorted((left, right) => right.length - left.length)
   .map(escapeRegexLiteral)
   .join("|");
 

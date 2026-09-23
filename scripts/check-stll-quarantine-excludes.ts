@@ -374,7 +374,7 @@ export const checkQuarantineExcludes = ({
   const firstPartyPackages = readRegistryStllPackages(lockfile);
   const missing = [...firstPartyPackages]
     .filter((name) => !excludes.has(name))
-    .sort();
+    .toSorted();
   const temporary = readTemporaryExcludes(bunfig);
   const errors = [
     ...temporary.errors,

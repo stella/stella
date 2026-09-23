@@ -240,8 +240,8 @@ export const compareSnippetFragments = ({
       foldedWords(stripSearchHighlightMarkup(snippetFragment)),
       foldedWords(stripSearchHighlightMarkup(passageFragment)),
     ),
-    snippetMarks: [...snippetMarks].sort(),
-    passageMarks: [...passageMarks].sort(),
+    snippetMarks: [...snippetMarks].toSorted(),
+    passageMarks: [...passageMarks].toSorted(),
     marks: markAgreement(snippetMarks, passageMarks),
   };
 };
@@ -298,7 +298,7 @@ const median = (values: readonly number[]): number => {
   if (values.length === 0) {
     return 0;
   }
-  const sorted = [...values].sort((left, right) => left - right);
+  const sorted = [...values].toSorted((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
   const upper = sorted.at(middle) ?? panic("median index is out of range");
   if (sorted.length % 2 === 1) {

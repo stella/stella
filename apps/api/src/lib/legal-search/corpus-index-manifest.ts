@@ -769,7 +769,7 @@ const canonicalJson = (value: unknown): string => {
   if (prototype !== Object.prototype && prototype !== null) {
     return panic("Canonical JSON accepts plain objects only");
   }
-  const entries = Object.entries(value).sort(([left], [right]) =>
+  const entries = Object.entries(value).toSorted(([left], [right]) =>
     compareCanonicalJsonKeys(left, right),
   );
   return `{${entries

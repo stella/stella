@@ -51,7 +51,7 @@ import {
 } from "@/routes/dev_.avt/-components/avt/types";
 
 function orderFlaggedFirst(facts: readonly AnchorFact[]): AnchorFact[] {
-  return [...facts].sort(
+  return [...facts].toSorted(
     (a, b) => Number(Boolean(b.flag)) - Number(Boolean(a.flag)),
   );
 }

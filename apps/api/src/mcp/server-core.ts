@@ -229,7 +229,7 @@ export const mcpOmittedToolNamesByReason = ({
       scope.push(definition.name);
     }
   }
-  return { feature: feature.sort(), scope: scope.sort() };
+  return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
 const withMcpCors = (

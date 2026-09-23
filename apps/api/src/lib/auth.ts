@@ -27,7 +27,7 @@ import Elysia, { t } from "elysia";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
-import { parseUserAgent } from "@stll/user-agent";
+import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -667,6 +667,13 @@ const isMcpResourceScope = (
   scope: string,
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
   includes(MCP_ALL_RESOURCE_SCOPES, scope);
+
+// A device is its browser and OS; a user agent naming neither is no device.
+const newDeviceLoginDeviceKey = ({
+  browser,
+  os,
+}: ParsedUserAgent): string | null =>
+  browser === null && os === null ? null : `${browser ?? ""}|${os ?? ""}`;
 
 // Building an `Intl.DateTimeFormat` re-parses its options every call; cache
 // one per language instead of rebuilding it for every new-device-login email.
@@ -1389,22 +1396,22 @@ const createAuth = () => {
             if (previous.ipAddress) {
               knownIPs.add(previous.ipAddress);
             }
-            const previousDevice = parseUserAgent(previous.userAgent);
-            const deviceKey = `${previousDevice.browser}|${previousDevice.os}`;
-            if (deviceKey !== "null|null") {
-              knownDevices.add(deviceKey);
+            const previousDeviceKey = newDeviceLoginDeviceKey(
+              parseUserAgent(previous.userAgent),
+            );
+            if (previousDeviceKey !== null) {
+              knownDevices.add(previousDeviceKey);
             }
           }
 
           const currentDevice = parseUserAgent(session.userAgent);
-          const deviceKey = `${currentDevice.browser}|${currentDevice.os}`;
+          const deviceKey = newDeviceLoginDeviceKey(currentDevice);
           const currentIpAddress = session.ipAddress;
           const isNewIP =
             typeof currentIpAddress === "string" &&
             !knownIPs.has(currentIpAddress);
-          const hasDevice =
-            currentDevice.browser !== null || currentDevice.os !== null;
-          const isNewDevice = hasDevice && !knownDevices.has(deviceKey);
+          const isNewDevice =
+            deviceKey !== null && !knownDevices.has(deviceKey);
 
           if (!isNewIP && !isNewDevice) {
             return;

@@ -269,7 +269,7 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
     expect(
       new Date(String(body["assertion_expires"])).getTime(),
     ).toBeGreaterThan(Date.now());
-    expect(v.parse(v.array(v.string()), body["scopes"]).sort()).toEqual([
+    expect(v.parse(v.array(v.string()), body["scopes"]).toSorted()).toEqual([
       "stella:read",
       "stella:search",
     ]);
@@ -452,7 +452,7 @@ describe("agent-auth ID-JAG full exchange", () => {
     expect(tokenRes.status).toBe(200);
     const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
-    expect(String(tokenBody["scope"]).split(" ").sort()).toEqual([
+    expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
       "stella:read",
       "stella:search",
     ]);

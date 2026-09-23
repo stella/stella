@@ -2,7 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -97,13 +97,15 @@ describe("desktop registry API-key configuration", () => {
       expect(sessionResult).toBeNull();
     }
 
+    const sessionToken =
+      signedUp.token ?? panic("sign-up issued no session token");
     await auth.api.updateApiKey({
       body: {
         configId: DESKTOP_REGISTRY_KEY_CONFIG,
         keyId: created.id,
         enabled: false,
       },
-      headers: { authorization: `Bearer ${signedUp.token}` },
+      headers: { authorization: `Bearer ${sessionToken}` },
     });
     const disabledVerification = await auth.api
       .verifyApiKey({

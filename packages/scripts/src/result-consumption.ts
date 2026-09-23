@@ -945,7 +945,7 @@ const changedSourceFiles = (repositoryRoot: string, base: string): string[] => {
   return [...files]
     .filter(isProductSourcePath)
     .map((file) => path.join(repositoryRoot, file))
-    .sort();
+    .toSorted();
 };
 
 const workspaceConfig = (
@@ -1091,7 +1091,7 @@ const run = (): number => {
     }
   }
 
-  const diagnostics = [...diagnosticsByLocation.values()].sort((a, b) =>
+  const diagnostics = [...diagnosticsByLocation.values()].toSorted((a, b) =>
     `${a.file}:${a.line}:${a.column}`.localeCompare(
       `${b.file}:${b.line}:${b.column}`,
     ),

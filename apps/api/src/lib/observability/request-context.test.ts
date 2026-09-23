@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
@@ -98,14 +99,14 @@ describe("x-request-id response header", () => {
     void backgroundLoop();
 
     const app = buildReceiptApp().listen({ port: 0 });
-    const origin = `http://localhost:${app.server?.port}`;
+    const origin = `http://localhost:${app.server?.port ?? panic("test server bound no port")}`;
     const mismatches: string[] = [];
     for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
       const response = await fetch(`${origin}/ping`);
       const ambient = await response.text();
       const header = response.headers.get(REQUEST_ID_HEADER);
       if (ambient !== header) {
-        mismatches.push(`${header} !== ${ambient}`);
+        mismatches.push(`${header ?? "(no header)"} !== ${ambient}`);
       }
     }
 

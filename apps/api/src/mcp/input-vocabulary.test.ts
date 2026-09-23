@@ -82,7 +82,9 @@ describe("MCP input vocabulary: the container is a matter", () => {
         inputPropertyNames(tool).includes(CANONICAL_SCOPING_FIELD),
       )
       .map((tool) => tool.name);
-    expect([...declaring].sort()).toEqual([...MATTER_SCOPED_TOOLS].sort());
+    expect([...declaring].toSorted()).toEqual(
+      [...MATTER_SCOPED_TOOLS].toSorted(),
+    );
   });
 
   test("every scoping field is documented as a matter", () => {

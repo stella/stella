@@ -486,8 +486,10 @@ describe("empty corpus payload hashes", () => {
 describe("planCorpusDocumentWrite", () => {
   const documentId = "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10";
   const jurisdiction = "SVK";
+  const documentText =
+    "Rozsudok v mene Slovenskej republiky. Súd rozhodol o veci samej.";
   const documentPayload: CorpusPayload = {
-    text: "Rozsudok v mene Slovenskej republiky. Súd rozhodol o veci samej.",
+    text: documentText,
     sections: [
       {
         index: 0,
@@ -549,7 +551,7 @@ describe("planCorpusDocumentWrite", () => {
     const stored = recordedWrite(documentId, jurisdiction);
     const changed = {
       ...documentPayload,
-      text: `${documentPayload.text} Opravené znenie.`,
+      text: `${documentText} Opravené znenie.`,
     };
     // The fixture must express the fault: an unchanged hash would make the
     // equality guard the thing under test trivially pass.

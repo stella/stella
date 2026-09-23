@@ -710,13 +710,13 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
     ]);
     const { declarations, unsupported } = gateScan;
 
-    expect(unsupported.sort()).toEqual([]);
+    expect(unsupported.toSorted()).toEqual([]);
 
     // Sanity: the known gates must still be discovered by the pattern.
     // A miss here means the detection rotted, not that coverage is fine.
     const discoveredGates = [
       ...new Set(declarations.map((d) => d.gate)),
-    ].sort();
+    ].toSorted();
     expect(discoveredGates).toEqual(
       expect.arrayContaining(["SMOKE_TEST", "STELLA_RUN_POSTGRES_TESTS"]),
     );
@@ -726,7 +726,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
     );
     const staleExemptions = [...UNWIRED_TEST_FILES]
       .filter((file) => !discoveredFiles.has(file))
-      .sort();
+      .toSorted();
     expect(staleExemptions).toEqual([]);
 
     const uncovered = declarations
@@ -736,7 +736,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
           !isWired({ declaration, runners, workflows }),
       )
       .map(({ gate, file }) => `${gate} (declared in ${file})`)
-      .sort();
+      .toSorted();
     expect(uncovered).toEqual([]);
   });
 });

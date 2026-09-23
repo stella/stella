@@ -251,8 +251,8 @@ describe("the walk", () => {
     const finely = await walk(7);
     const coarsely = await walk(SOURCE_ROWS * 2);
 
-    expect(finely.rows.map((row) => row.id).sort()).toEqual(
-      coarsely.rows.map((row) => row.id).sort(),
+    expect(finely.rows.map((row) => row.id).toSorted()).toEqual(
+      coarsely.rows.map((row) => row.id).toSorted(),
     );
     expect(coarsely.pages).toHaveLength(2);
   });

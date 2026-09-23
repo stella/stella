@@ -45,21 +45,20 @@ const parseArgs = (args: readonly string[]): ExtractOptions => {
   let bundleUrl: string | undefined;
   let check = false;
 
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
+  const argv = args.values();
+  for (const argument of argv) {
     if (argument === "--check") {
       check = true;
       continue;
     }
 
     if (argument === "--bundle-url") {
-      const next = args[index + 1];
+      const next = argv.next().value;
       if (!next) {
         throw new TypeError("--bundle-url requires a value");
       }
 
       bundleUrl = next;
-      index += 1;
       continue;
     }
 

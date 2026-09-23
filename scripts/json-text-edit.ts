@@ -121,7 +121,7 @@ export const applyReplacements = (
   text: string,
   replacements: readonly JsonTextReplacement[],
 ): string => {
-  const ordered = [...replacements].sort(
+  const ordered = [...replacements].toSorted(
     (left, right) => right.start - left.start,
   );
   let output = text;

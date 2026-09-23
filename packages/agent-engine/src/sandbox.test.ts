@@ -66,7 +66,8 @@ describe("agent sandbox canary workflow", () => {
       "name"
     ];
 
-    expect(workflowName).toBe("Agent sandbox canary");
+    const expectedName = "Agent sandbox canary";
+    expect(workflowName).toBe(expectedName);
     expect(workflow).toContain('    - cron: "43 4 * * *"');
     expect(workflow).toContain(
       "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
@@ -74,7 +75,7 @@ describe("agent sandbox canary workflow", () => {
     expect(workflow).toContain(
       `group: agent-sandbox-canary-\${{ github.ref }}`,
     );
-    expect(scheduledAlertsWorkflow).toContain(`      - ${workflowName}`);
+    expect(scheduledAlertsWorkflow).toContain(`      - ${expectedName}`);
   });
 });
 

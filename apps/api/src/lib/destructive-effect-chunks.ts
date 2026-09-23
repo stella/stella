@@ -54,7 +54,7 @@ const sha256 = (value: string): string =>
 export const createS3DeletionEffectChunks = (
   keys: readonly string[],
 ): S3DeletionEffectChunk[] => {
-  const canonicalKeys = [...new Set(keys)].sort();
+  const canonicalKeys = [...new Set(keys)].toSorted();
   const chunks: S3DeletionEffectChunk[] = [];
   for (
     let start = 0;

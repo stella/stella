@@ -29,7 +29,7 @@ const skillEntries = readdirSync(skillsRoot, { withFileTypes: true })
   .filter((skillId) =>
     existsSync(path.join(skillsRoot, skillId, skillFileName)),
   )
-  .sort((a, b) => a.localeCompare(b))
+  .toSorted((a, b) => a.localeCompare(b))
   .map((skillId, index): SkillEntry => {
     const skillDir = path.join(skillsRoot, skillId);
     return {
@@ -98,7 +98,7 @@ function listResources(skillDir: string, skillIndex: number): ResourceEntry[] {
   }
 
   return resources
-    .sort((a, b) => a.path.localeCompare(b.path))
+    .toSorted((a, b) => a.path.localeCompare(b.path))
     .map((resource, resourceIndex) => ({
       importName: `skill${skillIndex}Resource${resourceIndex}`,
       kind: resource.kind,

@@ -141,7 +141,7 @@ export const buildAnonymizationDetectionKey = ({
   text,
   excludedCanonicals,
 }: BuildAnonymizationDetectionKeyOptions): string =>
-  `${[...excludedCanonicals].sort().join("|")}~${text}`;
+  `${[...excludedCanonicals].toSorted().join("|")}~${text}`;
 
 type DecideAnonymizationDetectionRunOptions = {
   text: string;

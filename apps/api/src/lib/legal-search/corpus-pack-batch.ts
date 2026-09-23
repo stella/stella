@@ -235,7 +235,7 @@ const reservationsFor = (
 ): CaseLawCorpusUploadReservationInput[] =>
   [...planned]
     // Decision ids, not words: this fixes the order rows are locked in.
-    .sort((left, right) =>
+    .toSorted((left, right) =>
       left.entry.decisionId < right.entry.decisionId ? -1 : 1,
     )
     .map((entry) => ({

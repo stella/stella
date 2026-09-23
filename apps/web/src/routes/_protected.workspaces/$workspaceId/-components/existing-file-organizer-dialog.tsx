@@ -1497,7 +1497,7 @@ const createFolderNode = (name: string, path: string): FolderPreviewNode => ({
 const sortFolderNode = (node: FolderPreviewNode, locale: string): void => {
   const compareText = compareByLocale(locale);
   node.children = new Map(
-    [...node.children.entries()].sort(([a], [b]) => compareText(a, b)),
+    [...node.children.entries()].toSorted(([a], [b]) => compareText(a, b)),
   );
   node.rows.sort((a, b) => compareText(a.suggestedName, b.suggestedName));
   for (const child of node.children.values()) {
@@ -1533,7 +1533,7 @@ const ensureFolders = async ({
 
   const folderPaths = [
     ...new Set(rows.map((row) => normalizeFolderPath(row.folderPath))),
-  ].sort(compareByLocale(locale));
+  ].toSorted(compareByLocale(locale));
 
   for (const folderPath of folderPaths) {
     let currentParentId: string | null = null;

@@ -175,7 +175,7 @@ export const reserveObjectCleanupIntents = async ({
   workspaceAvailability?: ObjectIntentWorkspaceAvailability;
   workspaceIds: SafeId<"workspace">[];
 }): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
-  const uniqueWorkspaceIds = [...new Set(workspaceIds)].sort();
+  const uniqueWorkspaceIds = [...new Set(workspaceIds)].toSorted();
   const intents =
     uniqueWorkspaceIds.length === 0
       ? [{ id: createSafeId<"pendingUpload">(), ownerWorkspaceId: null }]

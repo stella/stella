@@ -57,7 +57,7 @@ const IMPORT_SPECIFIER =
 const scriptFiles = (): string[] =>
   readdirSync(SCRIPTS_DIR)
     .filter((name) => name.endsWith(".ts") && !name.includes(".test."))
-    .sort();
+    .toSorted();
 
 const readSource = (name: string): string =>
   readFileSync(path.join(SCRIPTS_DIR, name), "utf-8");

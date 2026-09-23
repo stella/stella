@@ -124,7 +124,9 @@ const authenticate = async (
   const match = /^(?<name>[^=]*\.session_token)=(?<value>[^;]+)/u.exec(
     setCookie,
   );
-  if (!match) {
+  const name = match?.groups?.["name"];
+  const value = match?.groups?.["value"];
+  if (name === undefined || value === undefined) {
     throw new FetchBoundaryError({
       url: response.url,
       status: response.status,
@@ -133,7 +135,7 @@ const authenticate = async (
     });
   }
 
-  return `${match.groups?.["name"]}=${match.groups?.["value"]}`;
+  return `${name}=${value}`;
 };
 
 // -- Upload --

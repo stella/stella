@@ -1435,7 +1435,7 @@ describe("mcpOmittedToolNamesByReason", () => {
       .map((definition) => definition.name);
 
     expect(gated.length).toBeGreaterThan(0);
-    expect(omitted.feature).toEqual([...gated].sort());
+    expect(omitted.feature).toEqual([...gated].toSorted());
     // A fully granted token omits nothing for scope, so the feature evidence is
     // the complete explanation for what the projection dropped.
     expect(omitted.scope).toEqual([]);

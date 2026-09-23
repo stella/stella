@@ -219,8 +219,8 @@ const check = async (): Promise<void> => {
 
   // The pinned set itself must match the lockfile; a maintainer editing
   // PINNED_FILES without re-pinning is its own (local) drift.
-  const lockedPaths = Object.keys(lockfile.files).sort();
-  const pinnedPaths = [...PINNED_FILES].sort();
+  const lockedPaths = Object.keys(lockfile.files).toSorted();
+  const pinnedPaths = [...PINNED_FILES].toSorted();
   if (lockedPaths.join(",") !== pinnedPaths.join(",")) {
     drifts.push({
       key: "version",

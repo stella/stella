@@ -251,27 +251,27 @@ const CustomColorControls = ({
 );
 
 type InlineCustomColorProps = {
-  customSelected: boolean;
+  /** The selected hex (without #) when it matches no preset; null otherwise. */
+  customHex: string | null;
   handleInputChange: (raw: string) => void;
   handlePickerChange: (hex: string) => void;
   inputHex: string;
   label: string;
   pickerHex: string;
   presets: ColorPreset[];
-  value: string | undefined;
 };
 
 const InlineCustomColor = ({
-  customSelected,
+  customHex,
   handleInputChange,
   handlePickerChange,
   inputHex,
   label,
   pickerHex,
   presets,
-  value,
 }: InlineCustomColorProps) => {
-  const customColor = customSelected ? `#${value}` : undefined;
+  const customSelected = customHex !== null;
+  const customColor = customSelected ? `#${customHex}` : undefined;
   const customGradient = `conic-gradient(${presets
     .map((preset) => swatchColor(preset))
     .join(", ")})`;
@@ -336,7 +336,7 @@ const ColorPickerContent = ({
   columns,
   defaultExpanded,
   moreLabel,
-  presentation = "popover",
+  presentation,
 }: ColorPickerContentProps) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   // pickerHex: last valid 6-char hex from the visual picker (drives the picker's color prop)
@@ -346,7 +346,10 @@ const ColorPickerContent = ({
   );
   const [inputHex, setInputHex] = useState("");
   const presetSelected = presets.some((preset) => preset.value === value);
-  const customSelected = !presetSelected && looksLikeHex(value ?? "");
+  const customHex =
+    !presetSelected && value !== undefined && looksLikeHex(value)
+      ? value
+      : null;
 
   /** Called when the visual picker (SB square / hue strip) emits a color. */
   const handlePickerChange = (hex: string) => {
@@ -386,14 +389,13 @@ const ColorPickerContent = ({
           />
         ))}
         <InlineCustomColor
-          customSelected={customSelected}
+          customHex={customHex}
           handleInputChange={handleInputChange}
           handlePickerChange={handlePickerChange}
           inputHex={inputHex}
           label={moreLabel}
           pickerHex={pickerHex}
           presets={presets}
-          value={value}
         />
       </div>
     );

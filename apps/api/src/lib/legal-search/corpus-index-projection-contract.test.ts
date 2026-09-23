@@ -11,8 +11,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
 test("intent transitions are total and never reuse an uncertain append", () => {
-  expect(Object.keys(CORPUS_INDEX_INTENT_TRANSITIONS).sort()).toEqual(
-    [...CORPUS_INDEX_INTENT_STATUSES].sort(),
+  expect(Object.keys(CORPUS_INDEX_INTENT_TRANSITIONS).toSorted()).toEqual(
+    [...CORPUS_INDEX_INTENT_STATUSES].toSorted(),
   );
   expect(canTransitionCorpusIndexIntent("reserved", "append_started")).toBe(
     true,

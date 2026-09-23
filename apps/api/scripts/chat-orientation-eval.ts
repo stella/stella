@@ -1038,11 +1038,12 @@ const runBenchTask = async ({
     );
   }
 
+  const { minToolCalls } = task;
   const belowMinToolCalls =
-    task.minToolCalls !== undefined && turn.toolCalls < task.minToolCalls;
-  if (belowMinToolCalls && !noResponse) {
+    minToolCalls !== undefined && turn.toolCalls < minToolCalls;
+  if (minToolCalls !== undefined && belowMinToolCalls && !noResponse) {
     notes.push(
-      `answered without reading (${turn.toolCalls} tool call(s) < min ${task.minToolCalls})`,
+      `answered without reading (${turn.toolCalls} tool call(s) < min ${minToolCalls})`,
     );
   }
 
@@ -1178,7 +1179,9 @@ const main = async (): Promise<void> => {
   );
   if (tasks.length === 0) {
     throw new EvalHarnessError(
-      `--task ${options.taskFilter} matches no benchmark task (1-${BENCH_TASKS.length})`,
+      options.taskFilter === null
+        ? "no benchmark tasks are defined"
+        : `--task ${options.taskFilter} matches no benchmark task (1-${BENCH_TASKS.length})`,
     );
   }
 

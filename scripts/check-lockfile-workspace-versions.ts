@@ -64,7 +64,7 @@ const dirsForGlob = async (glob: string): Promise<string[]> => {
 
 const workspaceDirs = (await Promise.all(workspaceGlobs.map(dirsForGlob)))
   .flat()
-  .sort();
+  .toSorted();
 
 const lockText = await Bun.file(path.join(ROOT, "bun.lock")).text();
 

@@ -35,11 +35,11 @@ describe("MCP tool registry", () => {
       (tool) => tool.anonymized.exposure !== "excluded",
     )
       .map((tool) => tool.name)
-      .sort();
+      .toSorted();
 
     const projectedNames = ANONYMIZED_MCP_TOOL_DEFINITIONS.map(
       (tool) => tool.name,
-    ).sort();
+    ).toSorted();
 
     expect(projectedNames).toEqual(expectedNames);
   });
@@ -72,9 +72,11 @@ describe("MCP tool registry", () => {
   test("advertises exactly the scopes used by the anonymized projection", () => {
     const projectedScopes = [
       ...new Set(ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
-    ].sort();
+    ].toSorted();
 
-    expect(projectedScopes).toEqual([...MCP_ANONYMIZED_RESOURCE_SCOPES].sort());
+    expect(projectedScopes).toEqual(
+      [...MCP_ANONYMIZED_RESOURCE_SCOPES].toSorted(),
+    );
   });
 
   test("every default tool scope is an advertised default scope", () => {
@@ -135,8 +137,8 @@ describe("MCP tool registry", () => {
     // real gate, but it goes vacuous if that union ever resolves to `never`
     // (`Record<never, T>` accepts anything), so the census also runs here.
     expect(publicLawNames.length).toBeGreaterThan(0);
-    expect(Object.keys(LAW_MCP_TOOL_DISPOSITION).sort()).toEqual(
-      [...publicLawNames].sort(),
+    expect(Object.keys(LAW_MCP_TOOL_DISPOSITION).toSorted()).toEqual(
+      [...publicLawNames].toSorted(),
     );
   });
 
@@ -176,9 +178,9 @@ describe("MCP tool registry", () => {
   test("advertises exactly the scopes the law projection uses", () => {
     const projectedScopes = [
       ...new Set(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
-    ].sort();
+    ].toSorted();
 
-    expect(projectedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].sort());
+    expect(projectedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].toSorted());
   });
 
   test("tool names are unique across the registry", () => {

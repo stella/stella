@@ -73,7 +73,7 @@ export const storedAnnotationMatchesRequest = ({
   ) {
     return false;
   }
-  const expectedSpans = body.spans.map(spanKey).sort();
-  const storedSpans = rows.map(spanKey).sort();
+  const expectedSpans = body.spans.map(spanKey).toSorted();
+  const storedSpans = rows.map(spanKey).toSorted();
   return expectedSpans.every((span, index) => span === storedSpans.at(index));
 };

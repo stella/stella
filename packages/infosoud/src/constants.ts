@@ -1,3 +1,5 @@
+import { Temporal } from "temporal-polyfill/full";
+
 import type { CourtMap } from "./types.js";
 
 export const DEFAULT_BASE_URL = "https://infosoud.gov.cz/api/v1";
@@ -8,7 +10,9 @@ export const DEFAULT_USER_AGENT =
 export const DEFAULT_CASE_CACHE_TTL_MS: number = 6 * 60 * 60 * 1000;
 export const DEFAULT_HEARINGS_CACHE_TTL_MS: number = 60 * 60 * 1000;
 export const DEFAULT_EVENT_DETAIL_CACHE_TTL_MS: number = 6 * 60 * 60 * 1000;
-export const DEFAULT_COURTS_CACHE_TTL_MS: number = 24 * 60 * 60 * 1000;
+export const DEFAULT_COURTS_CACHE_TTL_MS: number = Temporal.Duration.from({
+  hours: 24,
+}).total("milliseconds");
 export const DEFAULT_DERIVED_COURT_MAP_CACHE_TTL_MS: number =
   DEFAULT_COURTS_CACHE_TTL_MS;
 

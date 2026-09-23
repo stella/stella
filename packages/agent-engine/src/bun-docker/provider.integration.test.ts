@@ -63,7 +63,7 @@ const listImageContainers = async (): Promise<string[]> => {
   return stdout
     .split("\n")
     .filter((containerId) => containerId !== "")
-    .sort();
+    .toSorted();
 };
 
 const rejectionState = async (

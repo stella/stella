@@ -280,7 +280,7 @@ type RegExpGroups = Partial<Record<string, string>>;
 
 /** A named group the matched pattern cannot have left empty. */
 const requiredGroup = (groups: RegExpGroups, name: string): string =>
-  groups[name] ?? panic(`Matched Hungarian citation has no ${name}`);
+  groups[name] ?? panic(`Matched citation has no ${name}`);
 
 const isHungarianUniformityField = (
   field: string,
@@ -958,32 +958,32 @@ const canonicalizeDedupKey = (text: string): string => {
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {
-    const canonical = `${numeric.groups["number"]}${numeric.groups["registry"]}/${numeric.groups["docket"]}`;
+    const canonical = `${requiredGroup(numeric.groups, "number")}${requiredGroup(numeric.groups, "registry")}/${requiredGroup(numeric.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${consolidated.groups["number"]}${consolidated.groups["registry"]}/${consolidated.groups["docket1"]},${consolidated.groups["docket2"]}/${consolidated.groups["year"]}`;
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 
   const courtCode = COURT_CODE_NORMALIZE_RE.exec(cleaned);
   if (courtCode?.groups) {
-    const canonical = `${courtCode.groups["code"]} ${courtCode.groups["number"]}${courtCode.groups["registry"]}/${courtCode.groups["docket"]}`;
+    const canonical = `${requiredGroup(courtCode.groups, "code")} ${requiredGroup(courtCode.groups, "number")}${requiredGroup(courtCode.groups, "registry")}/${requiredGroup(courtCode.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const courtCodeConsolidated =
     COURT_CODE_CONSOLIDATED_NORMALIZE_RE.exec(cleaned);
   if (courtCodeConsolidated?.groups) {
-    const canonical = `${courtCodeConsolidated.groups["code"]} ${courtCodeConsolidated.groups["number"]}${courtCodeConsolidated.groups["registry"]}/${courtCodeConsolidated.groups["docket1"]},${courtCodeConsolidated.groups["docket2"]}/${courtCodeConsolidated.groups["year"]}`;
+    const canonical = `${requiredGroup(courtCodeConsolidated.groups, "code")} ${requiredGroup(courtCodeConsolidated.groups, "number")}${requiredGroup(courtCodeConsolidated.groups, "registry")}/${requiredGroup(courtCodeConsolidated.groups, "docket1")},${requiredGroup(courtCodeConsolidated.groups, "docket2")}/${requiredGroup(courtCodeConsolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 
   const usCase = US_CASE_RE.exec(cleaned);
   if (usCase?.groups) {
-    const canonical = `${usCase.groups["chamber"]}ÚS${usCase.groups["infix"] ?? ""}${usCase.groups["docket"]}`;
+    const canonical = `${requiredGroup(usCase.groups, "chamber")}ÚS${usCase.groups["infix"] ?? ""}${requiredGroup(usCase.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 

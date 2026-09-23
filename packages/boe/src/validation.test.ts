@@ -55,7 +55,7 @@ describe("validateLawId", () => {
   test("invariant: any string matching the canonical shape validates", () => {
     const letters = "ABCSTXYZ";
     for (let i = 0; i < 200; i++) {
-      const letter = letters[Math.floor(Math.random() * letters.length)];
+      const letter = letters.charAt(Math.floor(Math.random() * letters.length));
       const year = String(1960 + Math.floor(Math.random() * 141)).padStart(
         4,
         "0",

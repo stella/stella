@@ -1052,7 +1052,7 @@ const buildStyleRegistry = (rows: ExportRow[]): StyleRegistry => {
         ),
       ),
     ),
-  ].sort();
+  ].toSorted();
   const currencyStyleIds = new Map<string, NumberStyleIds>();
   const customNumberFormats: CustomNumberFormat[] = [];
   let nextNumberFormatId = FIRST_CUSTOM_NUMBER_FORMAT_ID;

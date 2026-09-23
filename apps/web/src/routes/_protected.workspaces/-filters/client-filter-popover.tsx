@@ -36,7 +36,7 @@ export const ClientFilterPopover = ({
       }
     }
     const compareDisplayName = compareByLocale(locale);
-    return [...map.values()].sort((a, b) =>
+    return [...map.values()].toSorted((a, b) =>
       compareDisplayName(a.displayName, b.displayName),
     );
   })();

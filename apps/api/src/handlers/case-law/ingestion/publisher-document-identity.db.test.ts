@@ -458,7 +458,7 @@ if (!databaseUrl || !runPostgresTests) {
             [
               first.sourceDocumentId ?? "",
               second.sourceDocumentId ?? "",
-            ].sort(),
+            ].toSorted(),
           );
           expect(both.map(({ id }) => id)).toContain(legacy.at(0)?.id ?? "");
 

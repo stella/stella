@@ -124,9 +124,10 @@ const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
   if (!relativeUri) {
     return null;
   }
-  const response = await fetch(`http://169.254.170.2${relativeUri}`, {
-    signal: AbortSignal.timeout(5000),
-  });
+  const response = await fetchWithTimeout(
+    `http://169.254.170.2${relativeUri}`,
+    { timeoutMs: 5000 },
+  );
   if (!response.ok) {
     return null;
   }

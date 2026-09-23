@@ -131,7 +131,7 @@ const releasableWorkspaces = (): string[] => {
       workspaces.push(path.posix.dirname(manifest.split(path.sep).join("/")));
     }
   }
-  return workspaces.sort();
+  return workspaces.toSorted();
 };
 
 const gatedWorkspaces = (): string[] =>
@@ -141,7 +141,7 @@ const gatedWorkspaces = (): string[] =>
         pathspec.split("/").slice(0, 2).join("/"),
       ),
     ),
-  ].sort();
+  ].toSorted();
 
 /** The `changeset:` job block of the workflow, without the jobs that follow. */
 const changesetJob = (): string => {
@@ -402,7 +402,7 @@ describe("changeset policy file", () => {
   });
 
   test("declares the same packages to the changesets entry validator", () => {
-    expect([...policy.packageFiles].sort()).toEqual(
+    expect([...policy.packageFiles].toSorted()).toEqual(
       gatedWorkspaces().map((workspace) => `${workspace}/package.json`),
     );
   });

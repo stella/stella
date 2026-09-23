@@ -67,7 +67,7 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] => {
     return kindEntries
       .filter((entry) => entry.type === "directory")
       .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b))
+      .toSorted((a, b) => a.localeCompare(b))
       .map((slug): GeneratedEntry | null => {
         const folder = path.join(kindDir, slug);
         const manifest = path.join(folder, "manifest.json");

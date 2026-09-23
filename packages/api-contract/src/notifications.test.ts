@@ -45,15 +45,15 @@ const unionCoversEveryKind: AssertEqual<
 
 describe("notification kinds", () => {
   test("the kind list and the kind map name the same values", () => {
-    expect([...NOTIFICATION_KINDS].sort()).toEqual(
-      Object.values(NOTIFICATION_KIND).sort(),
+    expect([...NOTIFICATION_KINDS].toSorted()).toEqual(
+      Object.values(NOTIFICATION_KIND).toSorted(),
     );
     expect(new Set(NOTIFICATION_KINDS).size).toBe(NOTIFICATION_KINDS.length);
   });
 
   test("the entity-type list and map name the same values", () => {
-    expect([...NOTIFICATION_ENTITY_TYPES].sort()).toEqual(
-      Object.values(NOTIFICATION_ENTITY_TYPE).sort(),
+    expect([...NOTIFICATION_ENTITY_TYPES].toSorted()).toEqual(
+      Object.values(NOTIFICATION_ENTITY_TYPE).toSorted(),
     );
   });
 

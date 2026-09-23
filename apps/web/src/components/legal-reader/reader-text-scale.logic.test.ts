@@ -17,7 +17,9 @@ describe("reader text scale", () => {
   });
 
   test("the ladder rises", () => {
-    const rising = [...READER_TEXT_SCALES].sort((left, right) => left - right);
+    const rising = [...READER_TEXT_SCALES].toSorted(
+      (left, right) => left - right,
+    );
     expect([...READER_TEXT_SCALES]).toEqual(rising);
   });
 

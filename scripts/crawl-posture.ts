@@ -372,7 +372,7 @@ const servedHtmlFiles = (appDir: string): string[] => {
       files.push(path.join("public", rel));
     }
   }
-  return files.sort();
+  return files.toSorted();
 };
 
 // --- Per-posture checks -----------------------------------------------------
@@ -713,7 +713,7 @@ const listApps = (appsRoot: string): string[] =>
         existsSync(path.join(appsRoot, entry.name, "package.json")),
     )
     .map((entry) => entry.name)
-    .sort();
+    .toSorted();
 
 type CheckResult = {
   readonly reports: readonly AppReport[];

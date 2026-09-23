@@ -34,7 +34,7 @@ test("exercises every configured dev-runner environment name", () => {
 
   const compareNames = (left: string, right: string) =>
     left.localeCompare(right);
-  expect([...new Set(exercisedNames)].sort(compareNames)).toEqual(
-    [...new Set(configuredNames)].sort(compareNames),
+  expect([...new Set(exercisedNames)].toSorted(compareNames)).toEqual(
+    [...new Set(configuredNames)].toSorted(compareNames),
   );
 });

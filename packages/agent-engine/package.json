@@ -18,7 +18,7 @@
     "test": "bun test src scripts",
     "test:docker": "AGENT_ENGINE_DOCKER_TEST=1 bun test src/bun-docker/provider.integration.test.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/agent-engine",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/agent-engine",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-engine",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },

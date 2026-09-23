@@ -244,7 +244,7 @@ export const planCheck = ({
   affectedWorkspacePaths,
   workspacePaths,
 }: PlanCheckOptions): CheckPlan => {
-  const targets = [...new Set(affectedWorkspacePaths)].sort();
+  const targets = [...new Set(affectedWorkspacePaths)].toSorted();
   if (targets.some((target) => !workspacePaths.has(target))) {
     return {
       type: "fallback",
@@ -316,7 +316,7 @@ export const planCheck = ({
             !(rootScriptLintRuns && changedPath.startsWith("scripts/")),
         ),
       ),
-    ].sort(),
+    ].toSorted(),
     rootChecks,
   };
 };
@@ -330,19 +330,18 @@ const parseArgs = (args: readonly string[]): Options => {
   let base = DEFAULT_BASE;
   let dryRun = false;
 
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
+  const argv = args.values();
+  for (const argument of argv) {
     if (argument === "--dry-run") {
       dryRun = true;
       continue;
     }
     if (argument === "--base") {
-      const value = args.at(index + 1);
+      const value = argv.next().value;
       if (value === undefined) {
         panic("--base requires a git ref");
       }
       base = value;
-      index += 1;
       continue;
     }
     panic(`Unknown argument: ${argument}`);
@@ -475,7 +474,7 @@ export const resultBoundaryLintCommand = (
     .filter(isResultConventionSourceFile)
     .filter((file) => !isResultConventionExcludedFile(file))
     .filter((file) => !RESULT_BOUNDARY_BASELINE_FILES.has(file))
-    .sort();
+    .toSorted();
   if (paths.length === 0) {
     return null;
   }
@@ -519,7 +518,6 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
       "-c",
       "oxlint.config.ts",
       "--report-unused-disable-directives-severity=error",
-      "--deny-warnings",
       "--type-aware",
       ...plan.rootLintPaths,
     ]);

@@ -58,7 +58,7 @@ export const TeamFilterPopover = ({
       }
     }
     const compareUserName = compareByLocale(locale);
-    return [...map.values()].sort((a, b) =>
+    return [...map.values()].toSorted((a, b) =>
       compareUserName(a.userName, b.userName),
     );
   })();
