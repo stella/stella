@@ -34,6 +34,7 @@ import type {
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
+import { getSpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import {
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
@@ -639,7 +640,7 @@ const ToolApprovalSummary = ({
       )}
       {part.name === "spawn_subagents" && part.input !== undefined && (
         <SpawnSubagentsSubtaskList
-          isAwaitingApproval={part.state === "approval-requested"}
+          callStatus={getSpawnSubagentsCallStatus(part)}
           subagents={part.input.subagents}
         />
       )}
