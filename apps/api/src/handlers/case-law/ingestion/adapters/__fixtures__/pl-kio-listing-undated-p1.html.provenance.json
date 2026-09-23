@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "07280cc1218267a2bd7fbf0bed28cf4c0a02d3a9f43a7f181a4c8eba0e7a0039",
+  "sourceUrl": "https://orzeczenia.uzp.gov.pl/Home/GetResults",
+  "capturedAt": "2026-09-23T09:22:20.405Z",
+  "note": "POST body: CountStats=True&Srt=date_desc&Pg=1; whole corpus newest first: rows with no issue date sort ahead of every dated one"
+}

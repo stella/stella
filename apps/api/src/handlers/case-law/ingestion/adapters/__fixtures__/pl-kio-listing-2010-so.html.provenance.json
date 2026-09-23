@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "b1f00a0b499e1c51f5ac3f83462fbdb5b87df814de0b5d4110fdf964040a2f3f",
+  "sourceUrl": "https://orzeczenia.uzp.gov.pl/Home/GetResults",
+  "capturedAt": "2026-09-23T09:22:21.588Z",
+  "note": "POST body: Dt=08-01-2010+-+08-01-2010&CountStats=True&Srt=date_asc&Pg=1; a date holding a district-court ruling on a complaint"
+}

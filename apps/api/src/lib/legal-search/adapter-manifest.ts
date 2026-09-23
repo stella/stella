@@ -258,6 +258,23 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_KIO]: {
+    key: ADAPTER_KEYS.PL_KIO,
+    name: "Polish Procurement Appeals (UZP)",
+    publisher: "Urząd Zamówień Publicznych",
+    publicHomeUrl: "https://orzeczenia.uzp.gov.pl",
+    ...ADAPTER_JURISDICTIONS.POL,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      // The oldest issue date the search answers with. Rulings the database
+      // lists with no issue date are outside every date filter and are
+      // walked separately.
+      fromInclusive: "2003-04-11",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",

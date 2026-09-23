@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "9e078c93e09ce1d7e44e681578309a1ad6ef0e99ec0216b9164c3f782f1b4662",
+  "sourceUrl": "https://orzeczenia.uzp.gov.pl/Home/GetResults",
+  "capturedAt": "2026-09-23T09:22:17.991Z",
+  "note": "POST body: Dt=01-09-2025+-+01-09-2025&CountStats=True&Srt=date_asc&Pg=1; one decision date, first of two listing pages"
+}

@@ -80,6 +80,7 @@ import {
   buildPlDecision,
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
   assemblePlSnDecision,
   normalizePlSnDetail,
@@ -865,6 +866,77 @@ export const plSnFixture = (): EnrolledAdapterFixture => ({
     return built.type === "unkeyable"
       ? panic("pl-sn fixture did not build")
       : built.decision;
+  },
+});
+
+// ── PL KIO fixture ───────────────────────────────────────
+
+const PL_KIO_LISTING_ROW = {
+  id: "30308",
+  court: "Krajowa Izba Odwoławcza",
+  documentType: "wyrok",
+  signature: "KIO 2845/25|KIO 2846/25",
+  issueDate: "01-09-2025",
+} as const;
+
+/** One labelled value in the record page's own markup. */
+const plKioField = (label: string, value: string): string =>
+  `<div class="col-md-6"><p><label>${label}</label><br class="visible-xs" />${value}</p></div>`;
+
+/** One titled list of links in the record page's own markup. */
+const plKioList = (title: string, items: readonly string[]): string =>
+  `<br /><b>${title}</b><p style="margin-top:5px">${items
+    .map((item) => `<a target="_blank" href="/Home/Search">${item}</a>`)
+    .join(";")}</p>`;
+
+/**
+ * The record page, carrying every label the database prints for any of its
+ * four kinds, each with a value. No one real page states them all: the court
+ * rulings add the chamber's signature to the case list, the Supreme Court
+ * rulings a chamber, the administrative ones the challenged authority.
+ */
+const PL_KIO_DETAIL_PAGE = `<!DOCTYPE html><html><body>
+<section id="pageContent" class="container">
+<h2 class="section-title">KIO 2845/25|KIO 2846/25<a class="pull-right" href="/Home/PdfMetrics/30308?Kind=KIO">PDF</a></h2>
+<div class="details"><div class="details-metrics"><div class="row">
+${plKioField("Organ wydający", "Krajowa Izba Odwoławcza")}
+${plKioField("Rodzaj dokumentu", "wyrok")}
+${plKioField("Data wydania rozstrzygnięcia", "01-09-2025")}
+${plKioField("Przewodniczący", "Ewa Sikorska")}
+${plKioField("Zamawiający", "PKP Polskie Linie Kolejowe S.A.")}
+${plKioField("Miejscowość", "Warszawa")}
+<div class="col-md-6"><label>Sygnatura akt / Sposób rozstrzygnięcia</label><ul><li>KIO 2845/25|KIO 2846/25 / oddalone</li></ul></div>
+<div class="col-md-6"><label>Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia</label><ul><li>XXIII Zs 101/25 / KIO 2845/25 / oddala skargę</li></ul></div>
+${plKioField("Tryb postępowania", "przetarg nieograniczony")}
+${plKioField("Rodzaj zamówienia", "roboty budowlane")}
+${plKioField("Izba", "Izba Cywilna")}
+${plKioField("Skarżony organ", "Prezes Urzędu Zamówień Publicznych")}
+${plKioField("Wynik postępowania", "oddala skargę")}
+</div><div>
+${plKioList("Kluczowe przepisy ustawy Pzp", ["art. 226 ust. 1 pkt 5 | art. 239 ust. 1"])}
+${plKioList("Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego", ["rażąco niska cena", "kryteria oceny ofert"])}
+</div></div></div>
+</section></body></html>`;
+
+const PL_KIO_DOCUMENT = `<!DOCTYPE html><html><head><title>2845_2846_25.docx</title></head><body>
+<p>Sygn. akt: KIO 2845/25 KIO 2846/25</p><p>WYROK</p>
+<p>Warszawa, dnia 1 września 2025 roku</p>
+<p>Krajowa Izba Odwoławcza - w składzie: Przewodnicząca: Ewa Sikorska</p>
+<p>orzeka: oddala odwołania.</p></body></html>`;
+
+/** Built from the three payloads directly, as the crawl hands them over. */
+export const plKioFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const built = assemblePlKioDecision({
+      item: { ...PL_KIO_LISTING_ROW },
+      detailHtml: PL_KIO_DETAIL_PAGE,
+      documentHtml: PL_KIO_DOCUMENT,
+    });
+    return await Promise.resolve(
+      built.type === "built"
+        ? built.decision
+        : panic("pl-kio fixture did not build"),
+    );
   },
 });
 

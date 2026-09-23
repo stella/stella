@@ -82,6 +82,8 @@ export const PUBLISHER_GATES = {
    * minutes, each refusal clearing within one.
    */
   "sn-pl": { publisher: "Sąd Najwyższy", intervalMs: 1500 },
+  /** orzeczenia.uzp.gov.pl. */
+  "uzp-pl": { publisher: "Urząd Zamówień Publicznych", intervalMs: 1000 },
   /** rozhodnuti.nsoud.cz. */
   "nsoud-cz": { publisher: "Nejvyšší soud", intervalMs: POLITE_INTERVAL_MS },
   /** vyhledavac.nssoud.cz. */
@@ -146,6 +148,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.SK_US]: "ustavnysud-sk",
   [ADAPTER_KEYS.PL_COURTS]: "saos-pl",
   [ADAPTER_KEYS.PL_SN]: "sn-pl",
+  [ADAPTER_KEYS.PL_KIO]: "uzp-pl",
   [ADAPTER_KEYS.AT_COURTS]: "ris-bka",
   [ADAPTER_KEYS.AT_VFGH]: "ris-bka",
   [ADAPTER_KEYS.AT_VWGH]: "ris-bka",
