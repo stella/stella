@@ -227,13 +227,7 @@ const PickQuestionTrigger = ({
       return (
         <MenuTrigger
           aria-label={label}
-          render={
-            <Button
-              size="xs"
-              type="button"
-              variant="muted"
-            />
-          }
+          render={<Button size="xs" type="button" variant="muted" />}
         >
           <PlusIcon className="size-3" />
           <span className="hidden sm:inline">{label}</span>
