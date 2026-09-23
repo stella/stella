@@ -107,7 +107,6 @@ const PublicLawRefine = ({
     <>
       <Button
         aria-label={t("search.aiRefine")}
-        className="text-muted-foreground"
         disabled={disabled || isPending}
         onClick={() => {
           if (ensureAccount("refineSearch") !== ACCOUNT_GATE_OUTCOME.allowed) {
@@ -118,7 +117,7 @@ const PublicLawRefine = ({
         size="icon-sm"
         title={t("search.aiRefine")}
         type="button"
-        variant="ghost"
+        variant="muted"
       >
         {isPending ? (
           <Loader label={t("search.aiRefine")} size="sm" />
