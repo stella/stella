@@ -65,7 +65,8 @@ the default provider chain (see `getTanStackTextModelById`).
   chat surface, where they are `external_*` functions inside the real
   `execute_typescript` and `discover_tools` tools, the fixtures sit behind
   the production registry runner, and `spawn_subagents` is offered under
-  chat's delegation rule. A read rejected at the boundary, a failed script, a
+  chat's delegation rule unless the skill's frontmatter excludes it, as the
+  shipped skill does. A read rejected at the boundary, a failed script, a
   chat read written before `discover_tools` named it, or work handed to
   subagents is a defect.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)

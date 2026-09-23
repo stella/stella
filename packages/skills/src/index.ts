@@ -1,6 +1,7 @@
 export { BLUEPRINT_IDS, BLUEPRINTS, getBlueprint } from "./blueprints";
 export type { Blueprint, BlueprintId } from "./blueprints";
 export {
+  CHAT_EXCLUDED_TOOLS_METADATA_KEY,
   getSkillResourceKind,
   isAllowedResourcePath,
   listSkillMetadata,
@@ -8,6 +9,7 @@ export {
   loadSkill,
   normalizeResourcePath,
   parseSkillFile,
+  readExcludedChatTools,
   readSkillResource,
 } from "./loader";
 export type {

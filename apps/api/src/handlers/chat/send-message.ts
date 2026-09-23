@@ -248,16 +248,27 @@ const assertDevModelOverride = (
   return validateTanStackDevModelOverride(devModelId, orgAIConfig);
 };
 
+type SubagentToolsAvailableForTurnOptions = {
+  /** The turn's active skill, resolved from the same request the streaming
+   *  tool set is built from, so the prompt flag and the tool agree. */
+  activeSkillContext: ActiveChatSkillContext | null;
+  toolScope: ChatToolScope | undefined;
+};
+
 /**
  * Whether the delegation tool is offered on this turn: only at the top level,
- * and only when the turn's scope (if any) allows `spawn_subagents`. Kept as a
- * top-level helper so the streaming handler stays within its cognitive-
- * complexity budget.
+ * only when the turn's scope (if any) allows `spawn_subagents`, and only when
+ * the active skill (if any) does not exclude it. Kept as a top-level helper so
+ * the streaming handler stays within its cognitive-complexity budget.
  */
-const areSubagentToolsAvailableForTurn = (
-  toolScope: ChatToolScope | undefined,
-): boolean =>
-  areSubagentToolsRegistered({ delegationDepth: 0 }) &&
+export const areSubagentToolsAvailableForTurn = ({
+  activeSkillContext,
+  toolScope,
+}: SubagentToolsAvailableForTurnOptions): boolean =>
+  areSubagentToolsRegistered({
+    delegationDepth: 0,
+    excludedChatTools: activeSkillContext?.excludedChatTools,
+  }) &&
   (toolScope === undefined ||
     scopeAllowsTool(toolScope, SPAWN_SUBAGENTS_TOOL_NAME));
 
@@ -1838,7 +1849,10 @@ export const createSendMessage = (
               disabledNativeToolSlugs,
             }),
             folioAgentDocTools: hasActiveDocxFileClient,
-            subagents: areSubagentToolsAvailableForTurn(body.toolScope),
+            subagents: areSubagentToolsAvailableForTurn({
+              activeSkillContext: validationActiveSkillContext,
+              toolScope: body.toolScope,
+            }),
           },
           userContext: body.userContext,
           userId: user.id,

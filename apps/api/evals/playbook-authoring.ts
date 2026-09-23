@@ -50,6 +50,7 @@ import {
   buildActiveSkillSection,
   SUBAGENT_DELEGATION_SECTION,
 } from "@/api/handlers/chat/chat-prompt";
+import { areSubagentToolsRegistered } from "@/api/handlers/chat/tools/chat-tools";
 import {
   CHAT_CODE_MODE_SYSTEM_PROMPT,
   createChatCodeModeSurface,
@@ -62,6 +63,7 @@ import { SPAWN_SUBAGENTS_TOOL_DEFINITION } from "@/api/handlers/chat/tools/spawn
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
+import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -767,20 +769,10 @@ const BEHAVIOR_SYSTEM_PREAMBLE =
   "You are stella, an assistant in a legal workspace. You act through the " +
   "tools you are given.";
 
-/**
- * The system prompt a chat with the built-in skill active carries: the skill
- * is resolved and rendered by the production active-skill path, from the
- * shipped `SKILL.md`. On the chat surface the code-mode section and the
- * delegation rule that comes with `spawn_subagents` precede it, where
- * `buildPromptParts` (`chat-prompt.ts`) places them.
- */
-const behaviorSystemPrompt = async ({
-  store,
-  surface,
-}: {
-  store: PlaybookStore;
-  surface: BuilderSurface;
-}): Promise<string> => {
+/** The shipped skill, resolved by the production active-skill path. */
+const resolveBehaviorSkill = async (
+  store: PlaybookStore,
+): Promise<ActiveChatSkillContext> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName: PLAYBOOK_BUILDER_SKILL },
     memberRole: { role: store.context.memberRole },
@@ -788,20 +780,53 @@ const behaviorSystemPrompt = async ({
     safeDb: store.context.safeDb,
     userId: store.context.userId,
   });
-  const skill = resolved.isOk()
-    ? resolved.value
-    : panic(
-        `The ${PLAYBOOK_BUILDER_SKILL} skill did not resolve`,
-        resolved.error,
-      );
-  return [
+  if (resolved.isErr()) {
+    return panic(
+      `The ${PLAYBOOK_BUILDER_SKILL} skill did not resolve`,
+      resolved.error,
+    );
+  }
+  return (
+    resolved.value ??
+    panic(`The ${PLAYBOOK_BUILDER_SKILL} skill resolved to no active skill`)
+  );
+};
+
+/**
+ * Whether a chat turn with `skill` active offers `spawn_subagents`: the
+ * production predicate over the skill's frontmatter exclusions, so the eval
+ * measures the shipped turn. The prompt's delegation rule and the tool
+ * follow it together, as in `send-message.ts`.
+ */
+const subagentsOfferedWith = (skill: ActiveChatSkillContext): boolean =>
+  areSubagentToolsRegistered({
+    delegationDepth: 0,
+    excludedChatTools: skill.excludedChatTools,
+  });
+
+/**
+ * The system prompt a chat with the built-in skill active carries, rendered
+ * from the shipped `SKILL.md`. On the chat surface the code-mode section and,
+ * when the skill does not exclude `spawn_subagents`, the delegation rule
+ * precede it, where `buildPromptParts` (`chat-prompt.ts`) places them.
+ */
+const behaviorSystemPrompt = ({
+  skill,
+  surface,
+}: {
+  skill: ActiveChatSkillContext;
+  surface: BuilderSurface;
+}): string =>
+  [
     BEHAVIOR_SYSTEM_PREAMBLE,
     ...(surface === "chat"
-      ? [CHAT_CODE_MODE_SYSTEM_PROMPT, SUBAGENT_DELEGATION_SECTION]
+      ? [
+          CHAT_CODE_MODE_SYSTEM_PROMPT,
+          ...(subagentsOfferedWith(skill) ? [SUBAGENT_DELEGATION_SECTION] : []),
+        ]
       : []),
     buildActiveSkillSection(skill),
   ].join("\n\n");
-};
 
 const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
   const questions = isRecord(input) ? input["questions"] : undefined;
@@ -944,9 +969,12 @@ const mcpMatterTools = (record: Recorder): AnyServerTool[] =>
 const chatMatterTools = ({
   store,
   record,
+  subagentsOffered,
 }: {
   store: PlaybookStore;
   record: Recorder;
+  /** Whether chat would register `spawn_subagents` on this turn. */
+  subagentsOffered: boolean;
 }): AnyServerTool[] => {
   const refRegistry = createChatRefRegistry();
   const listPlaybooks =
@@ -1008,14 +1036,23 @@ const chatMatterTools = ({
   return [
     recordedTool({ tool, record, failureOf: scriptFailureOf }),
     recordedTool({ tool: discovery, record, failureOf: () => null }),
-    recordedTool({ tool: spawnSubagentsStub(), record, failureOf: () => null }),
+    ...(subagentsOffered
+      ? [
+          recordedTool({
+            tool: spawnSubagentsStub(),
+            record,
+            failureOf: () => null,
+          }),
+        ]
+      : []),
   ];
 };
 
 /**
- * `spawn_subagents` as chat registers it, so a run can reach for it; each
- * subtask comes back failed, so the run has to do the work itself and the
- * rest of the flow is still scored. The call itself is a defect.
+ * `spawn_subagents` as chat registers it when the skill does not exclude it,
+ * so a run can reach for it; each subtask comes back failed, so the run has
+ * to do the work itself and the rest of the flow is still scored. The call
+ * itself is a defect.
  */
 const spawnSubagentsStub = (): AnyServerTool =>
   SPAWN_SUBAGENTS_TOOL_DEFINITION.server(({ subagents }) => ({
@@ -1029,12 +1066,14 @@ const spawnSubagentsStub = (): AnyServerTool =>
 const createBehaviorTools = ({
   store,
   scenario,
+  skill,
   surface,
   events,
   currentTurn,
 }: {
   store: PlaybookStore;
   scenario: BuilderScenario;
+  skill: ActiveChatSkillContext;
   surface: BuilderSurface;
   events: BuilderEvent[];
   currentTurn: () => number;
@@ -1092,7 +1131,11 @@ const createBehaviorTools = ({
 
   const matterTools =
     surface === "chat"
-      ? chatMatterTools({ store, record })
+      ? chatMatterTools({
+          store,
+          record,
+          subagentsOffered: subagentsOfferedWith(skill),
+        })
       : mcpMatterTools(record);
 
   return [
@@ -1135,7 +1178,8 @@ const runScenario = async ({
 }): Promise<BehaviorRun> => {
   const store = createPlaybookStore([]);
   const events: BuilderEvent[] = [];
-  const system = await behaviorSystemPrompt({ store, surface });
+  const skill = await resolveBehaviorSkill(store);
+  const system = behaviorSystemPrompt({ skill, surface });
   // The SDK's own processor keeps the conversation, so a follow-up turn
   // carries the assistant's text, tool calls, and tool results the way a
   // chat client sends them back.
@@ -1144,6 +1188,7 @@ const runScenario = async ({
   const tools = createBehaviorTools({
     store,
     scenario,
+    skill,
     surface,
     events,
     currentTurn: () => turnNumber,

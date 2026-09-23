@@ -60,6 +60,7 @@ import {
 } from "@/api/handlers/chat/tools/remember-tool";
 import {
   createSpawnSubagentsTool,
+  SPAWN_SUBAGENTS_TOOL_NAME,
   SUBAGENT_DELEGATION_DEPTH_CAP,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
@@ -154,19 +155,38 @@ export const areTemplateAuthoringToolsRegistered = (
 
 type SubagentToolsRegisteredProps = {
   delegationDepth?: number | undefined;
+  /**
+   * The active skill's `excludedChatTools`, when a skill is active. Naming
+   * `spawn_subagents` withholds the tool for the turn: a skill whose flow
+   * has the user pick each document before it is read cannot let a
+   * subagent, which cannot ask them, read on its behalf.
+   */
+  excludedChatTools?: readonly string[] | undefined;
 };
 
 /**
+ * Chat tool names a skill's `stella-chat-excluded-tools` frontmatter can
+ * withhold. `spawn_subagents` is the one gated tool today; a name outside
+ * this list has no effect, and the registry guard test fails a built-in
+ * skill that declares one. Generalise to a filter over the tool map only
+ * when a second tool needs excluding.
+ */
+export const EXCLUDABLE_CHAT_TOOL_NAMES = [SPAWN_SUBAGENTS_TOOL_NAME] as const;
+
+/**
  * Single source of truth for "is `spawn_subagents` registered on this
- * turn". `getChatTools` uses the same `delegationDepth` comparison to
- * decide registration; prompt construction uses this predicate to
- * decide whether the delegation section may steer the model to the
- * tool.
+ * turn". `getChatTools` uses the same `delegationDepth` comparison and
+ * skill exclusion to decide registration; prompt construction uses this
+ * predicate to decide whether the delegation section may steer the model
+ * to the tool. The skill exclusion is one more reason for `false`, never
+ * a reason for `true`: the depth cap holds regardless.
  */
 export const areSubagentToolsRegistered = ({
   delegationDepth,
+  excludedChatTools,
 }: SubagentToolsRegisteredProps): boolean =>
-  (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP;
+  (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP &&
+  excludedChatTools?.includes(SPAWN_SUBAGENTS_TOOL_NAME) !== true;
 
 type ResolveRegisteredDocxEditModeOptions = {
   activeFile: GetChatToolsProps["activeFile"];
@@ -1002,8 +1022,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // `spawn_subagents`, so a subagent cannot spawn further subagents. The
   // recursive call also forces `hasActiveDocxEditClient: false`, since a
   // nested loop has no client to satisfy that tool's `addToolResult` contract.
+  // The active skill's exclusion narrows the streaming set only: the
+  // validation set stays broad so a thread that used `spawn_subagents`
+  // before the skill was activated still hydrates.
   const delegationDepth = props.delegationDepth ?? 0;
-  const subagentTools = areSubagentToolsRegistered({ delegationDepth })
+  const subagentTools = areSubagentToolsRegistered({
+    delegationDepth,
+    excludedChatTools: forValidation
+      ? undefined
+      : activeSkillContext?.excludedChatTools,
+  })
     ? createSpawnSubagentsTool({
         buildSubagentToolset: (proposalSink) =>
           projectToolMapForSubagent(
