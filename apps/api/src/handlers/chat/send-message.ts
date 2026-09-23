@@ -2074,6 +2074,10 @@ export const createSendMessage = (
                       tools: streamingTools,
                     });
                     if (Result.isError(validatedToolParts)) {
+                      // The response is already streaming, so no outer catch
+                      // settles the turn: without this it stays `running`
+                      // until its lease lapses and the thread is dead.
+                      await lifecycle.failCurrentTurn("internal", true);
                       throw new HandlerError({
                         status: 500,
                         message: "Generated chat tool parts are invalid",
