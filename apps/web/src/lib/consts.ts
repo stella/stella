@@ -80,7 +80,7 @@ export const isMarkdownFile = ({
 export {
   TOOLBAR_ROW_HEIGHT,
   TOOLBAR_ROW_HEIGHT_PX,
-} from "@stll/ui/inspector/layout-tokens";
+} from "@stll/ui/layout-tokens";
 export const TOOLBAR_ROW_MIN_HEIGHT = "min-h-12" as const;
 /** Glyph size inside a rail tab button — matches the `size-3.5`
  * class every built-in rail icon uses. Numeric form is for
