@@ -1,0 +1,121 @@
+import { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
+import { t } from "elysia";
+
+import { entities } from "@/api/db/schema";
+import { collectMissingAncestorIds } from "@/api/handlers/entities/filesystem-tree/get.logic";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
+import { tConditionNode } from "@/api/lib/conditions/contract";
+import { tSafeId } from "@/api/lib/custom-schema";
+import { queryEntities } from "@/api/lib/entities/query-entities";
+import { LIMITS } from "@/api/lib/limits";
+import { tViewSortSchema } from "@/api/lib/views-schema";
+
+const readFilesystemTreeBodySchema = t.Object({
+  filters: t.Optional(
+    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  ),
+  sorts: t.Optional(
+    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  ),
+  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
+  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
+  fieldIds: t.Optional(
+    t.Array(tSafeId("property"), {
+      maxItems: LIMITS.propertiesCount,
+    }),
+  ),
+});
+
+const config = {
+  description:
+    "Read a matter's folders and documents as one unpaginated tree, using " +
+    "the same filters, sorts, and search as the table listings; tasks are " +
+    "excluded. When a filter or search hides intermediate folders, their " +
+    "parent links come back separately as ancestorLinks, so a matched row's " +
+    "full path can still be resolved without those folders entering the tree " +
+    "itself.",
+  permissions: { workspace: ["read"] },
+  mcp: { type: "covered", by: "list_documents" },
+  access: "read",
+  body: readFilesystemTreeBodySchema,
+} satisfies WorkspaceHandlerConfig;
+
+type QueryEntities = typeof queryEntities;
+
+export const createReadFilesystemTreeHandler = (
+  queryEntitiesImpl: QueryEntities = queryEntities,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      workspaceId,
+      session,
+      body,
+      user: currentUser,
+    }) {
+      const result = yield* Result.await(
+        queryEntitiesImpl({
+          safeDb,
+          scope: { type: "matter", workspaceId },
+          currentUserId: currentUser.id,
+          currentOrganizationId: session.activeOrganizationId,
+          filters: arrayOrEmpty(body.filters),
+          sorts: arrayOrEmpty(body.sorts),
+          ...(body.search !== undefined && { search: body.search }),
+          limit: LIMITS.entitiesCount,
+          fieldMode: body.fieldMode ?? "full",
+          fieldIds: arrayOrEmpty(body.fieldIds),
+          excludedKinds: ["task"],
+          previewableForAi: false,
+        }),
+      );
+
+      const isFiltered =
+        (body.filters?.length ?? 0) > 0 ||
+        (body.search?.trim().length ?? 0) > 0;
+
+      // An unfiltered query already returns the whole subtree, so ancestor
+      // backfill only matters when a filter or search can hide intermediates.
+      if (!isFiltered || result.entities.length === 0) {
+        return Result.ok({ entities: result.entities, ancestorLinks: [] });
+      }
+
+      const folderSkeleton = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ entityId: entities.id, parentId: entities.parentId })
+            .from(entities)
+            .where(
+              and(
+                eq(entities.workspaceId, workspaceId),
+                eq(entities.kind, "folder"),
+              ),
+            ),
+        ),
+      );
+      const parentById = new Map(
+        folderSkeleton.map((folder) => [folder.entityId, folder.parentId]),
+      );
+      const missingIds = new Set(
+        collectMissingAncestorIds(result.entities, parentById),
+      );
+
+      // Just the parent links of the folders the filter/search hid, so the
+      // client can resolve a matched row's full ancestor chain (for
+      // cross-matter copy/move dedup) without these folders ever entering the
+      // rendered or selectable tree.
+      const ancestorLinks = folderSkeleton.filter((folder) =>
+        missingIds.has(folder.entityId),
+      );
+
+      return Result.ok({ entities: result.entities, ancestorLinks });
+    },
+  );
+
+const readFilesystemTree = createReadFilesystemTreeHandler();
+
+export default readFilesystemTree;

@@ -269,7 +269,7 @@ export const LIMITS = {
   /** Approval-snapshot history per playbook (one row per `approve` call, never
    *  trimmed). Mirrors `templateVersionsPerTemplate`; the listing is a plain
    *  bounded array (newest first), not cursor-paginated — see
-   *  `list-versions.ts`. */
+   *  `playbooks/versions/list.ts`. */
   playbookDefinitionVersionsPerPlaybook: 50,
   rateTablesPerWorkspace: 50,
   rateTablesPageSizeDefault: 50,

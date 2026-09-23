@@ -9,27 +9,27 @@ import {
 } from "@stll/api-contract";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
-import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
+import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
-import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
-import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
-import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
-import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delete";
+import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
+import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees/remove";
+import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links/create";
+import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links/delete";
 import {
   decodeTaskListCursor,
   listTasksPage,
 } from "@/api/handlers/tasks/list-query";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
+import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/contacts/create";
+import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/contacts/delete";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
-import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-create";
-import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";

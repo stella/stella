@@ -2,10 +2,10 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import updateCellMetadata from "@/api/handlers/fields/cell-metadata/update";
+import markColumnFlag from "@/api/handlers/fields/column-flag/update";
 import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update";
-import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
-import updateCellMetadata from "@/api/handlers/fields/update-cell-metadata";
-import upsertField from "@/api/handlers/fields/upsert-by-id";
+import upsertField from "@/api/handlers/fields/upsert";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
   resourceRealtime,

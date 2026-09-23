@@ -704,7 +704,7 @@ const createTextProperty = async (
   return propertyId;
 };
 
-/** POST /v1/fields/:workspaceId (apps/api/src/handlers/fields/upsert-by-id.ts):
+/** POST /v1/fields/:workspaceId (apps/api/src/handlers/fields/upsert.ts):
  * sets one cell (entity x property) of the matter table. */
 const setTextField = async ({
   client,

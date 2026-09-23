@@ -43,7 +43,7 @@ export const templates = {
   },
   evidence: [
     { type: "capability", id: "templates.fill" },
-    { type: "capability", id: "templates.suggest-fields" },
+    { type: "capability", id: "templates.fields.suggest" },
     { type: "capability", id: "clauses.list" },
     { type: "capability", id: "playbooks.run" },
   ],

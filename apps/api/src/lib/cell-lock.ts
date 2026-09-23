@@ -20,7 +20,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 // `UPDATE entities` that implicitly takes one), acquire that entity
 // lock FIRST and the cell advisory lock SECOND. Reversing the order
 // in any one caller produces a classic AB/BA deadlock against the
-// other handlers, since `update-cell-metadata` and `upsert-by-id`
+// other handlers, since `fields/cell-metadata/update` and `fields/upsert`
 // both touch the same (entity, cell) pair.
 
 export const acquireCellLock = async ({

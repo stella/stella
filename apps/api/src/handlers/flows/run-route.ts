@@ -2,11 +2,11 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import cancelFlowRun from "@/api/handlers/flows/run-cancel";
-import getFlowRun from "@/api/handlers/flows/run-detail";
-import listFlowRuns from "@/api/handlers/flows/run-list";
-import reviewFlowRun from "@/api/handlers/flows/run-review";
-import startFlowRun from "@/api/handlers/flows/run-start";
+import cancelFlowRun from "@/api/handlers/flows/runs/cancel";
+import getFlowRun from "@/api/handlers/flows/runs/get";
+import listFlowRuns from "@/api/handlers/flows/runs/list";
+import reviewFlowRun from "@/api/handlers/flows/runs/review";
+import startFlowRun from "@/api/handlers/flows/runs/start";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
   resourceRealtime,

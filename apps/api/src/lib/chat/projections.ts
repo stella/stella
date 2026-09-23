@@ -1259,7 +1259,7 @@ export const LIST_INVOICES_PROJECTION = v.union([
 
 /**
  * get_usage. Source of truth: `readOrgEntitlementHandler`
- * (`handlers/usage/get-entitlement.ts`): `{ entitlement: null }` when the
+ * (`handlers/usage/entitlement/get.ts`): `{ entitlement: null }` when the
  * organization has no active plan, otherwise the plan/seat/period shape.
  * Entitlement and policy ids are org billing-plan handles, not tenant refs.
  */

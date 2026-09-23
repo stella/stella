@@ -284,7 +284,7 @@ const suggestionScope = (context: SuggestPromptContext): SuggestionScope => {
   switch (context.kind) {
     case "workspace":
       return {
-        feature: "properties.suggest-prompt",
+        feature: "properties.prompt.suggest",
         tenantWorkspaceIds: [context.workspaceId],
         workspaceId: context.workspaceId,
         properties: {},

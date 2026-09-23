@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import listFiles from "@/api/handlers/entities/list-files";
-import listFolders from "@/api/handlers/entities/list-folders";
+import listFiles from "@/api/handlers/entities/files/list";
+import listFolders from "@/api/handlers/entities/folders/list";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

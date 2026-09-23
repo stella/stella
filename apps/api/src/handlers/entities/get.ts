@@ -142,8 +142,8 @@ const config = {
     "Read one document, folder, or task in a matter: its kind, name, current " +
     "version id, creation time and document reference, that version's field " +
     "values, and which field is the current text-extraction source. Use " +
-    "entities.read-version-by-id to read a historical version, and " +
-    "entities.read-versions for the version list.",
+    "entities.versions.get to read a historical version, and " +
+    "entities.versions.list for the version list.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "read_document" },
   access: "read",

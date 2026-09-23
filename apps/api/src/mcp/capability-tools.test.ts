@@ -505,7 +505,7 @@ describe("invoke_capability gates", () => {
   test("missing scope -> missing_scope", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ grantedScopes: ["stella:read"] }),
@@ -519,7 +519,7 @@ describe("invoke_capability gates", () => {
 
   test("compound capability scope rejects a document-only grant", async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "templates.fill-to-matter", input: {} },
+      args: { capability: "templates.fills.create", input: {} },
       context: createContext({
         grantedScopes: ["stella:read", "stella:documents_write"],
       }),
@@ -616,7 +616,7 @@ describe("invoke_capability gates", () => {
 
   test("destructive capability without confirm -> confirmation_required", async () => {
     const result = await call("invoke_capability", {
-      capability: "clauses.categories-delete",
+      capability: "clauses.categories.delete",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("confirmation_required");
@@ -701,7 +701,7 @@ describe("invoke_capability gates", () => {
   test("invalid input -> validation_error with dot-path issues", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" }, query: { status: "bogus" } },
       },
       context: createContext(),
@@ -716,7 +716,7 @@ describe("invoke_capability gates", () => {
   test("validate_only returns without executing", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "Draft category" } },
         validate_only: true,
       },
@@ -727,7 +727,7 @@ describe("invoke_capability gates", () => {
       parseToolPayload<{ valid: boolean; capability: string }>(result),
     ).toEqual({
       valid: true,
-      capability: "clauses.categories-create",
+      capability: "clauses.categories.create",
     });
     // No handler executed, so the org-settings loader was never consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
@@ -756,7 +756,7 @@ describe("invoke_capability names the container matterId", () => {
 
   test("the internal spelling alone is refused, not silently accepted", async () => {
     const issues = await invokeIssues({
-      capability: "time-entries.export-csv",
+      capability: "time-entries.csv.export",
       input: { params: { workspaceId: "ws_1" } },
     });
     expect(issues).toEqual([
@@ -777,7 +777,7 @@ describe("invoke_capability names the container matterId", () => {
       { workspaceId: "ws_2", matterId: "ws_1" },
     ]) {
       const issues = await invokeIssues({
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params },
       });
       expect(issues.map((issue) => issue.path)).toEqual(["params.matterId"]);
@@ -886,7 +886,7 @@ describe("invoke_capability workspace resolution", () => {
   test("inaccessible workspace -> not_found", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_nope" } },
       },
       context: createContext(),
@@ -901,7 +901,7 @@ describe("invoke_capability workspace resolution", () => {
     const pinnedWorkspaceIds: string[] = [];
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_arch" } },
       },
       context: createContext({
@@ -975,7 +975,7 @@ describe("synthesized capability authorization lifetime", () => {
       },
     };
     const synthesized = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-matter",
+      capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -1022,7 +1022,7 @@ describe("synthesized capability authorization lifetime", () => {
       }),
     });
     const synthesized = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-matter",
+      capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -1049,7 +1049,7 @@ describe("synthesized capability authorization lifetime", () => {
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-matter",
+      capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -1071,7 +1071,7 @@ describe("invoke_capability execution", () => {
   test("runs a read capability end-to-end (workspace-resolved)", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -1104,7 +1104,7 @@ describe("invoke_capability execution", () => {
     const { safeDb, scopedDb } = createScopedDbMock(insertTx);
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "Test Category" } },
       },
       context: createContext({ safeDb, scopedDb }),
@@ -1121,7 +1121,7 @@ describe("invoke_capability execution", () => {
   test("a role without permission -> permission_denied", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ memberRole: "intern" }),
@@ -1380,7 +1380,7 @@ describe("invoke_capability credential permission set", () => {
     // not name `clause`, and authority is the AND of the two.
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({
@@ -1394,7 +1394,7 @@ describe("invoke_capability credential permission set", () => {
   test("an action the credential set omits on a resource it names -> permission_denied", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({
@@ -1408,7 +1408,7 @@ describe("invoke_capability credential permission set", () => {
   test("validate_only reports the same refusal as execution would", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
         validate_only: true,
       },
@@ -1426,7 +1426,7 @@ describe("invoke_capability credential permission set", () => {
     // on refusals.
     await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ memberRole: "intern" }),
@@ -1444,7 +1444,7 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
     // config (auditLog: ["read"], held only by owner/admin), so the generic
     // invoke path enforces it too.
     const result = await handleMcpToolCall({
-      args: { capability: "case-law.ingestion.status" },
+      args: { capability: "case-law.ingestion.get" },
       context: createContext({ memberRole: "member" }),
       toolName: "invoke_capability",
     });
@@ -1456,11 +1456,11 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
 
 describe("invoke_capability validate_only permission preflight", () => {
   test("a role lacking the permission -> permission_denied from validate_only", async () => {
-    // case-law.ingestion.status is root-kind with auditLog:["read"] (owner/
+    // case-law.ingestion.get is root-kind with auditLog:["read"] (owner/
     // admin only); validate_only must mirror the wrapper's gate, not report
     // valid: true for a call that would 403 at execution.
     const result = await handleMcpToolCall({
-      args: { capability: "case-law.ingestion.status", validate_only: true },
+      args: { capability: "case-law.ingestion.get", validate_only: true },
       context: createContext({ memberRole: "member" }),
       toolName: "invoke_capability",
     });
@@ -1471,13 +1471,13 @@ describe("invoke_capability validate_only permission preflight", () => {
 
   test("a sufficient role still gets valid: true without executing", async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "case-law.ingestion.status", validate_only: true },
+      args: { capability: "case-law.ingestion.get", validate_only: true },
       context: createContext({ memberRole: "owner" }),
       toolName: "invoke_capability",
     });
     expect(
       parseToolPayload<{ valid: boolean; capability: string }>(result),
-    ).toEqual({ valid: true, capability: "case-law.ingestion.status" });
+    ).toEqual({ valid: true, capability: "case-law.ingestion.get" });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 });
@@ -1492,7 +1492,7 @@ describe("invoke_capability rate limit (fix-3)", () => {
     });
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -1508,14 +1508,14 @@ describe("invoke_capability rate limit (fix-3)", () => {
   test("the limiter is consulted per (organization, capability)", async () => {
     await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
     });
     expect(consumeRateLimitMock).toHaveBeenCalledWith(
-      expect.objectContaining({ capabilityId: "time-entries.export-csv" }),
+      expect.objectContaining({ capabilityId: "time-entries.csv.export" }),
     );
   });
 });
@@ -1573,12 +1573,12 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
 
 describe("invoke_capability validate_only ordering (fix-5)", () => {
   test("validate_only on a workspace capability fails when the workspace is missing", async () => {
-    // time-entries.export-csv declares no params schema, so pre-fix validate_only
+    // time-entries.csv.export declares no params schema, so pre-fix validate_only
     // returned { valid: true } before any workspace check. Now resolution runs
     // first, so a missing workspaceId surfaces as it would on a real invoke.
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: {},
         validate_only: true,
       },
@@ -1593,7 +1593,7 @@ describe("invoke_capability validate_only ordering (fix-5)", () => {
   test("validate_only succeeds once the workspace resolves, still without executing", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
@@ -1604,7 +1604,7 @@ describe("invoke_capability validate_only ordering (fix-5)", () => {
       parseToolPayload<{ valid: boolean; capability: string }>(result),
     ).toEqual({
       valid: true,
-      capability: "time-entries.export-csv",
+      capability: "time-entries.csv.export",
     });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -1627,11 +1627,11 @@ describe("invoke_capability file-response gate (fix-6)", () => {
   });
 
   test("(layer a) a helper-built binary capability is refused pre-execution", async () => {
-    // time-entries.export-pdf returns a Uint8Array (not a Response) via a
+    // time-entries.pdf.export returns a Uint8Array (not a Response) via a
     // helper; the flag refuses it before dispatch.
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-pdf",
+        capability: "time-entries.pdf.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -1890,7 +1890,7 @@ describe("invoke_capability file-input gate", () => {
     ]) {
       expect(declaredFileInput.has(id), id).toBe(true);
     }
-    expect(declaredFileInput.has("time-entries.export-csv")).toBe(false);
+    expect(declaredFileInput.has("time-entries.csv.export")).toBe(false);
   });
 });
 
@@ -1917,7 +1917,7 @@ describe("invoke_capability argument shape validation", () => {
     // dry-run flag silently read as false would EXECUTE the capability.
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: { name: "Dry run intended" } },
         validate_only: "true",
       },
@@ -1934,7 +1934,7 @@ describe("invoke_capability argument shape validation", () => {
 
   test('confirm: "yes" (string) -> validation_error, not confirmation_required', async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "clauses.categories-delete", confirm: "yes" },
+      args: { capability: "clauses.categories.delete", confirm: "yes" },
       context: createContext(),
       toolName: "invoke_capability",
     });
@@ -1946,7 +1946,7 @@ describe("invoke_capability argument shape validation", () => {
 
   test("non-object input -> validation_error", async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "clauses.categories-create", input: "not-an-object" },
+      args: { capability: "clauses.categories.create", input: "not-an-object" },
       context: createContext(),
       toolName: "invoke_capability",
     });
@@ -1959,7 +1959,7 @@ describe("invoke_capability argument shape validation", () => {
   test("non-object input parts -> validation_error naming each part", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "clauses.categories-create",
+        capability: "clauses.categories.create",
         input: { body: "text body", params: 7 },
       },
       context: createContext(),
@@ -2193,7 +2193,7 @@ describe("invoke_capability input normalization", () => {
     // resolution for configs that do not declare it (raw-params read).
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -2210,7 +2210,7 @@ describe("invoke_capability deployment feature gate", () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -2226,7 +2226,7 @@ describe("invoke_capability deployment feature gate", () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
@@ -2239,7 +2239,7 @@ describe("invoke_capability deployment feature gate", () => {
   test("describe_capability refuses a gated-off entry (no schema leak)", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await call("describe_capability", {
-      capability: "time-entries.export-csv",
+      capability: "time-entries.csv.export",
     });
     expect(errorEnvelope(result).code).toBe("feature_disabled");
   });
@@ -2257,7 +2257,7 @@ describe("invoke_capability deployment feature gate", () => {
   test("the same capability works again once the flag is on", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "time-entries.export-csv",
+        capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -2292,7 +2292,7 @@ describe("invoke_capability deployment feature gate", () => {
       .map((entry) => entry.id)
       .filter((id) => !listed.has(id))
       .toSorted();
-    expect(hidden).toContain("usage.get-entitlement");
+    expect(hidden).toContain("usage.entitlement.get");
     expect(
       featureOmittedCapabilityIds(
         (feature) => feature === undefined || !disabledFeatures.has(feature),
@@ -2302,7 +2302,7 @@ describe("invoke_capability deployment feature gate", () => {
 
   test("describe exposes the feature flag on an enabled entry", async () => {
     const result = await call("describe_capability", {
-      capability: "time-entries.export-csv",
+      capability: "time-entries.csv.export",
     });
     const payload = parseToolPayload<{ feature: string | null }>(result);
     expect(payload.feature).toBe("FEATURE_TIME_BILLING");

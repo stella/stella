@@ -16,15 +16,15 @@ import type {
 } from "@/api/db/schema-validators";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
-import { deleteEntityVersionHandler } from "@/api/handlers/entities/delete-version";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import { moveEntityHandler } from "@/api/handlers/entities/move";
 import { renameEntityHandler } from "@/api/handlers/entities/rename";
-import { updateVersionDescriptionHandler } from "@/api/handlers/entities/update-version-description";
-import { updateVersionLabelHandler } from "@/api/handlers/entities/update-version-label";
 import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-sources";
-import type { UpsertFieldContent } from "@/api/handlers/fields/upsert-by-id";
-import { upsertFieldHandler } from "@/api/handlers/fields/upsert-by-id";
+import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
+import { updateVersionDescriptionHandler } from "@/api/handlers/entities/versions/description/update";
+import { updateVersionLabelHandler } from "@/api/handlers/entities/versions/label/update";
+import type { UpsertFieldContent } from "@/api/handlers/fields/upsert";
+import { upsertFieldHandler } from "@/api/handlers/fields/upsert";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

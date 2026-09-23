@@ -42,7 +42,7 @@ const config = {
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
     "Practice jurisdictions are set through " +
-    "organization-settings.update-practice-jurisdictions.",
+    "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,

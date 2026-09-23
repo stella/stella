@@ -20,7 +20,7 @@ export const publicData = {
   evidence: [
     { type: "capability", id: "case-law.analysis.generate" },
     { type: "capability", id: "legislation.search" },
-    { type: "capability", id: "contacts.business-registries-lookup" },
+    { type: "capability", id: "contacts.business-registries.lookup" },
     {
       type: "source",
       path: "packages/legal-atlas/src/runners/registry.ts",

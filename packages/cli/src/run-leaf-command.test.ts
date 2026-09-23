@@ -737,7 +737,7 @@ describe("confirm passthrough (capability invoke)", () => {
     });
     await runLeafCommand({
       context: tty.context,
-      flags: { capability: "clauses.categories-delete", yes: true },
+      flags: { capability: "clauses.categories.delete", yes: true },
       spec: INVOKE_SPEC,
     });
     server.stop();
@@ -756,7 +756,7 @@ describe("confirm passthrough (capability invoke)", () => {
     });
     await runLeafCommand({
       context: tty.context,
-      flags: { capability: "clauses.categories-delete" },
+      flags: { capability: "clauses.categories.delete" },
       spec: INVOKE_SPEC,
     });
     server.stop();
@@ -776,7 +776,7 @@ describe("confirm passthrough (capability invoke)", () => {
     });
     await runLeafCommand({
       context: tty.context,
-      flags: { capability: "clauses.categories-delete" },
+      flags: { capability: "clauses.categories.delete" },
       spec: INVOKE_SPEC,
     });
     server.stop();
@@ -796,7 +796,7 @@ describe("confirm passthrough (capability invoke)", () => {
     });
     await runLeafCommand({
       context: tty.context,
-      flags: { capability: "clauses.categories-delete" },
+      flags: { capability: "clauses.categories.delete" },
       spec: INVOKE_SPEC,
     });
     server.stop();
@@ -813,7 +813,7 @@ describe("confirm passthrough (capability invoke)", () => {
     });
     await runLeafCommand({
       context: tty.context,
-      flags: { capability: "clauses.categories-delete", noInput: true },
+      flags: { capability: "clauses.categories.delete", noInput: true },
       spec: INVOKE_SPEC,
     });
     server.stop();

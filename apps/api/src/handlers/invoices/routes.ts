@@ -2,12 +2,12 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import addEntries from "@/api/handlers/invoices/add-entries";
 import createInvoice from "@/api/handlers/invoices/create";
 import deleteInvoice from "@/api/handlers/invoices/delete";
+import addEntries from "@/api/handlers/invoices/entries/add";
+import removeEntries from "@/api/handlers/invoices/entries/remove";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import readInvoices from "@/api/handlers/invoices/list";
-import removeEntries from "@/api/handlers/invoices/remove-entries";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";

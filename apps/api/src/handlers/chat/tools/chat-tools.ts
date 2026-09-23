@@ -754,7 +754,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //     id used to pin the batch.
   //   - `entity: ["update"]` permission -- this tool overwrites the active
   //     document's content, the same grant `docx-suggestions/create.ts`,
-  //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
+  //     `resolve.ts`, and `entities/versions/upload.ts` require for DOCX edits.
   //     `create_matter_document` checks `entity: ["create"]` instead
   //     because it creates a new document; this tool edits an existing
   //     one, so it checks the "update" action, not "create".

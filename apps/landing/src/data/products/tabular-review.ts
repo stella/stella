@@ -18,8 +18,8 @@ export const tabularReview = {
   evidence: [
     { type: "capability", id: "views.list" },
     { type: "capability", id: "properties.list" },
-    { type: "capability", id: "fields.upsert-by-id" },
-    { type: "capability", id: "reports.export-view" },
+    { type: "capability", id: "fields.upsert" },
+    { type: "capability", id: "reports.views.export" },
   ],
   cta: {
     href: "https://my.stll.app",

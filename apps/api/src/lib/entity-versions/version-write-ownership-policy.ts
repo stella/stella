@@ -26,7 +26,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
   "handlers/entities/create.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
-  "handlers/entities/delete-version.ts": [
+  "handlers/entities/versions/delete.ts": [
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/entities/finalize-desktop-edit-session.ts": [
@@ -37,7 +37,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   "handlers/entities/publish-folio-collab-version.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
-  "handlers/entities/restore-version.ts": [
+  "handlers/entities/versions/restore.ts": [
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
     VERSION_WRITE_CAPABILITY.USE_VERSION_UTILS,
   ],

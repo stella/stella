@@ -21,7 +21,7 @@ const config = {
     "Create an organization style set from an uploaded DOCX, taking that " +
     "document's styles as the stored package. Any upload whose file name " +
     "ends in .docx is accepted whatever media type it declares. Use " +
-    "style-sets.create-from-editor to build one from explicit settings " +
+    "style-sets.from-editor.create to build one from explicit settings " +
     "instead of a file.",
   permissions: { styleSet: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
@@ -38,7 +38,7 @@ const config = {
     },
     alternative: {
       type: "partial",
-      via: ["style-sets.create-from-editor"],
+      via: ["style-sets.from-editor.create"],
       limitation:
         "builds the style set from explicit settings in the body; styles cannot be extracted from an existing DOCX",
     },

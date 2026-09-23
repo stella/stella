@@ -760,9 +760,17 @@ export const internalFailureResult = (
   });
 };
 
+// A name's words in sorted order, so `widgets.delete-part` and
+// `widgets.parts.delete` compare as `delete part widgets` / `delete parts widgets`.
+const sortedWords = (name: string): string =>
+  name.split(/[._-]/u).toSorted().join(" ");
+
 /**
  * Up to `limit` known tool names closest to `target` by Levenshtein distance,
- * used to hint an agent that fat-fingered a tool name. Only candidates within a
+ * used to hint an agent that fat-fingered a tool name. The distance is the
+ * smaller of the plain comparison and the word-order-insensitive one, so a name
+ * whose words were regrouped (`widgets.delete-part` against
+ * `widgets.parts.delete`) still finds its match. Only candidates within a
  * lenient edit budget (roughly half the longer name) are kept, so an unrelated
  * miss returns nothing rather than a confusing suggestion. No dependency: a tiny
  * DP implementation is enough for the short, small candidate set.
@@ -772,9 +780,13 @@ export const closestToolNames = (
   candidates: readonly string[],
   limit = 3,
 ): string[] => {
+  const targetWords = sortedWords(target);
   const scored: { name: string; distance: number }[] = [];
   for (const name of candidates) {
-    const distance = levenshtein(target, name);
+    const distance = Math.min(
+      levenshtein(target, name),
+      levenshtein(targetWords, sortedWords(name)),
+    );
     if (distance <= Math.ceil(name.length / 2)) {
       scored.push({ name, distance });
     }

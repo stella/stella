@@ -11,7 +11,7 @@ import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
-import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
+import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1396,7 +1396,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
   // data, not tenant-authored text.
   // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
   // GET_USAGE_ENTITLED_PROJECTION where they are built
-  // (`readOrgEntitlementHandler`, handlers/usage/get-entitlement.ts).
+  // (`readOrgEntitlementHandler`, handlers/usage/entitlement/get.ts).
   return toolDataResult(entitlement.value);
 };
 

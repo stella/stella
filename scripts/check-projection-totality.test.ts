@@ -66,7 +66,7 @@ describe("isResourceProjectionModule", () => {
   test("classifies a handler whose operation is a basename suffix", () => {
     expect(
       isResourceProjectionModule({
-        relativePath: "apps/api/src/handlers/rates/entries-read.ts",
+        relativePath: "apps/api/src/handlers/rates/entries/list.ts",
         content: "const row = await tx.query.rateEntries.findFirst({});",
       }),
     ).toBe(true);

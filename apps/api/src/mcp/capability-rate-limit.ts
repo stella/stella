@@ -88,7 +88,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
       max: API_RATE_LIMITS.upload.max,
     },
   },
-  "entities.upload-version": {
+  "entities.versions.upload": {
     budget: "capability",
     limit: {
       windowMs: API_RATE_LIMITS.upload.duration,
@@ -112,7 +112,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
       max: API_RATE_LIMITS.skillSource.max,
     },
   },
-  "skills.import-url": {
+  "skills.from-url.import": {
     budget: "skill-source",
     limit: {
       windowMs: API_RATE_LIMITS.skillSource.duration,

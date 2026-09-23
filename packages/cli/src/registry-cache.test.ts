@@ -108,14 +108,14 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
         featureOmittedTools: ["search_decisions"],
-        featureOmittedCapabilities: ["usage.get-entitlement"],
+        featureOmittedCapabilities: ["usage.entitlement.get"],
       }),
     );
     const read = await readCacheFile(filePath);
     expect(read?.grantedScopes).toEqual(["stella:read", "stella:search"]);
     expect(read?.scopeOmittedTools).toEqual(["save_filled_template"]);
     expect(read?.featureOmittedTools).toEqual(["search_decisions"]);
-    expect(read?.featureOmittedCapabilities).toEqual(["usage.get-entitlement"]);
+    expect(read?.featureOmittedCapabilities).toEqual(["usage.entitlement.get"]);
   });
 
   test("a malformed omission attestation drops the whole file (fail closed)", async () => {

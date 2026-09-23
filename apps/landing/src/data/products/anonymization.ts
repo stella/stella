@@ -18,7 +18,7 @@ export const anonymization = {
   evidence: [
     {
       type: "capability",
-      id: "organization-settings.read-anonymization-blacklist",
+      id: "organization-settings.anonymization-blacklist.get",
     },
     {
       type: "capability",

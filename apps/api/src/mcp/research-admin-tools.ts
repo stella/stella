@@ -19,8 +19,8 @@ import {
 } from "@/api/handlers/audit-logs/query";
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
-import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-add";
-import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-remove";
+import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
+import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
   type AssertNoExtraFields,
   type MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
@@ -76,9 +76,9 @@ const RELATION_TYPE_VALUES = [
 
 /** BOE consolidated-law identifier, e.g. BOE-A-1889-4763. Mirrors the routes. */
 const BOE_LAW_ID = /^BOE-[A-Z]-\d{4}-\d+$/u;
-/** BOE search date filters are YYYYMMDD (mirrors legislation/boe-search.ts). */
+/** BOE search date filters are YYYYMMDD (mirrors legislation/boe/search.ts). */
 const BOE_DATE = /^\d{8}$/u;
-/** BOE search cursor is a numeric offset (mirrors legislation/boe-search.ts). */
+/** BOE search cursor is a numeric offset (mirrors legislation/boe/search.ts). */
 const BOE_OFFSET_CURSOR = /^\d{1,5}$/u;
 
 const isBoeOffsetCursor = (value: string): boolean =>

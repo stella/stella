@@ -9,7 +9,7 @@
  * found nothing to suggest; a call failure (BYOK misconfiguration, provider
  * outage, timeout) instead rejects. `suggestTemplateFields` is the throwing
  * primitive for a caller that wants the failure surfaced
- * (`suggest-fields.ts`); `suggestTemplateFieldsOrEmpty` wraps it for the one
+ * (`templates/fields/suggest.ts`); `suggestTemplateFieldsOrEmpty` wraps it for the one
  * caller that wants the documented degrade-to-empty-and-fall-back-to-plain-
  * `{{marker}}`-discovery behaviour (`prepare.ts`), capturing the failure
  * first so it is not silent.

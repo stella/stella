@@ -2,9 +2,9 @@ import type { TSchema } from "@sinclair/typebox";
 import { describe, expect, test } from "bun:test";
 import Elysia, { t } from "elysia";
 
-import fillTemplateById from "@/api/handlers/templates/fill-by-id";
-import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
-import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
+import fillTemplateToWorkspace from "@/api/handlers/templates/fills/create";
+import fillTemplateById from "@/api/handlers/templates/fills/download";
+import fillTemplatePreview from "@/api/handlers/templates/fills/preview";
 
 const invalidValues = [
   "arbitrary string",
@@ -16,9 +16,9 @@ const invalidValues = [
 ];
 
 const storedFillSchemas = [
-  ["fill-by-id", fillTemplateById.config.body],
-  ["fill-preview", fillTemplatePreview.config.body],
-  ["fill-to-matter", fillTemplateToWorkspace.config.body],
+  ["fills.download", fillTemplateById.config.body],
+  ["fills.preview", fillTemplatePreview.config.body],
+  ["fills.create", fillTemplateToWorkspace.config.body],
 ] as const;
 
 const recordOnlySchema = t.Object({

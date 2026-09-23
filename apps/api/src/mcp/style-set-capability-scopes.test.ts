@@ -8,7 +8,7 @@ import { MCP_DOCUMENTS_RESOURCE_SCOPES } from "@/api/mcp/constants";
 describe("style set document capability scopes", () => {
   test("keeps compound custom Style Set consent out of the catalog", () => {
     const stellaStyle = capabilityCatalog.find(
-      ({ id }) => id === "entities.create-blank-document",
+      ({ id }) => id === "entities.blank-document.create",
     );
     const customStyleSet = capabilityCatalog.find(
       ({ id }) => id === "entities.create-document-from-style-set",

@@ -75,7 +75,7 @@ const changesOwnerOfClosedObligation = (
 // work the same way would let anyone with entity:update reassign work out
 // from under its accountable owner without their consent. Restrict that
 // case to admin/owner, same as the other supervisory overrides in this
-// codebase (see catalogue/list-catalogue.ts's canDeleteTeamSkills).
+// codebase (see catalogue/list.ts's canDeleteTeamSkills).
 const selfAssignsOverAnotherOwner = (
   body: UpdateWorkObligationBody,
   existing: LockedWorkObligation,

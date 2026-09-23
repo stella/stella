@@ -355,7 +355,7 @@ const config = {
     "Permanently delete documents, folders, or tasks from one matter, together " +
     "with their versions, field values, and stored files. Refused while any of " +
     "them is read-only or has a document-processing run in flight; unlike " +
-    "entities.delete-version this is a real delete, not a tombstone.",
+    "entities.versions.delete this is a real delete, not a tombstone.",
   permissions: { entity: ["delete"] },
   mcp: { type: "tool", name: "delete_document" },
   body: deleteEntitiesBodySchema,

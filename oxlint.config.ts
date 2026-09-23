@@ -848,7 +848,7 @@ export default defineConfig({
     "require-pagination-cursor-schema/require-pagination-cursor-schema": [
       "error",
       {
-        allowedFiles: ["apps/api/src/handlers/legislation/boe-search.ts"],
+        allowedFiles: ["apps/api/src/handlers/legislation/boe/search.ts"],
       },
     ],
     // Anchored on the timestamp column, so the operand is always required

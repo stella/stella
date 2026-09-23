@@ -17,9 +17,9 @@ export const agent = {
     "ai-info": { to: "ai-info" },
   },
   evidence: [
-    { type: "capability", id: "chat.get-messages" },
+    { type: "capability", id: "chat.messages.list" },
     { type: "capability", id: "skills.list" },
-    { type: "capability", id: "catalogue.list-catalogue" },
+    { type: "capability", id: "catalogue.list" },
     {
       type: "source",
       path: "apps/api/src/handlers/chat/send-message.ts",

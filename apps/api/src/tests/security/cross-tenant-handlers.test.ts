@@ -42,8 +42,8 @@ import readDocumentTranslationRun from "@/api/handlers/document-translations/run
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
-import readVersionById from "@/api/handlers/entities/read-version-by-id";
-import readVersions from "@/api/handlers/entities/read-versions";
+import readVersionById from "@/api/handlers/entities/versions/get";
+import readVersions from "@/api/handlers/entities/versions/list";
 import listEntityViews from "@/api/handlers/entity-views/list";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
@@ -52,7 +52,7 @@ import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list"
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
-import readRateEntries from "@/api/handlers/rates/entries-read";
+import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";

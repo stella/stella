@@ -3,7 +3,7 @@ import Elysia from "elysia";
 import generateDecisionAnalysis from "@/api/handlers/case-law/analysis/generate";
 import expandCaseLawSearch from "@/api/handlers/case-law/decisions/search-expand";
 import refineCaseLawSearch from "@/api/handlers/case-law/decisions/search-refine";
-import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
+import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/get";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
 import deleteMatterLink from "@/api/handlers/case-law/matter-links/delete";

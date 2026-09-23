@@ -2,22 +2,22 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import batchDelete from "@/api/handlers/time-entries/batch-delete";
-import batchUpdate from "@/api/handlers/time-entries/batch-update";
+import batchDelete from "@/api/handlers/time-entries/batch/delete";
+import batchUpdate from "@/api/handlers/time-entries/batch/update";
 import createTimeEntry from "@/api/handlers/time-entries/create";
+import exportCsv from "@/api/handlers/time-entries/csv/export";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
-import exportCsv from "@/api/handlers/time-entries/export-csv";
-import exportLedes from "@/api/handlers/time-entries/export-ledes";
-import exportPdf from "@/api/handlers/time-entries/export-pdf";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
+import exportLedes from "@/api/handlers/time-entries/ledes/export";
 import readTimeEntries from "@/api/handlers/time-entries/list";
+import exportPdf from "@/api/handlers/time-entries/pdf/export";
 import polishTimeEntryNarrative from "@/api/handlers/time-entries/polish-narrative";
 import splitEntry from "@/api/handlers/time-entries/split";
 import createTimeSuggestionDecision from "@/api/handlers/time-entries/suggestions/decisions/create";
 import listTimeSuggestions from "@/api/handlers/time-entries/suggestions/list";
 import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
-import timerStart from "@/api/handlers/time-entries/timer-start";
-import timerStop from "@/api/handlers/time-entries/timer-stop";
+import timerStart from "@/api/handlers/time-entries/timer/start";
+import timerStop from "@/api/handlers/time-entries/timer/stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {

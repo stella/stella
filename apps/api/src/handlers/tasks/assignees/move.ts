@@ -33,8 +33,8 @@ type MoveAssigneeTxResult =
 // Shared task-assignee move logic: removes `fromUserId` and adds `toUserId`
 // (whichever are non-null) in a single transaction, so a kanban lane drag
 // never leaves a task with neither assignee when the add half would have
-// failed on its own. Guards mirror tasks.assignees-add and
-// tasks.assignees-remove: the task must exist, must not be read-only, and a
+// failed on its own. Guards mirror tasks.assignees.add and
+// tasks.assignees.remove: the task must exist, must not be read-only, and a
 // new `toUserId` must be a member of the workspace — all re-checked INSIDE
 // the same transaction that locks the task row (`for("update")`) and does
 // the writes, so a concurrent read-only transition or member removal

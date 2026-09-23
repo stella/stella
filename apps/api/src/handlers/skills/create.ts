@@ -39,7 +39,7 @@ const config = {
     "hyphens, or underscores, must not be one of the reserved commands, and " +
     "must be free in the organization, as must the skill name. Refused once " +
     "the per-user or per-organization skill limit is reached. Use " +
-    "skills.upload or skills.import-url for a packaged skill instead.",
+    "skills.upload or skills.from-url.import for a packaged skill instead.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: createSkillBodySchema,

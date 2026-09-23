@@ -72,6 +72,7 @@ import {
   deriveCapabilityId,
   deriveDomain,
   deriveHandlerImportPath,
+  DOMAIN_ACTION_VERBS,
   findInlineCapabilityMismatches,
   inputSchemaByteSize,
   isAllowedActionVerb,
@@ -299,23 +300,23 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
-  "entities.create-blank-document": "stella:documents_write",
+  "entities.blank-document.create": "stella:documents_write",
   "entities.delete": "stella:documents_write",
-  "entities.delete-version": "stella:documents_write",
+  "entities.versions.delete": "stella:documents_write",
   "entities.move": "stella:documents_write",
   "entities.rename": "stella:documents_write",
-  "entities.restore-version": "stella:documents_write",
-  "entities.update-version-description": "stella:documents_write",
-  "entities.update-version-label": "stella:documents_write",
+  "entities.versions.restore": "stella:documents_write",
+  "entities.versions.description.update": "stella:documents_write",
+  "entities.versions.label.update": "stella:documents_write",
   "entities.upload": "stella:documents_write",
-  "fields.upsert-by-id": "stella:documents_write",
+  "fields.upsert": "stella:documents_write",
   // Creates a translated document from a queued run; the document write
   // happens in the worker, out of sight of the handler's imports.
   "document-translations.runs.create": "stella:documents_write",
   // Filling is template-domain work, but this endpoint persists a new matter
   // entity and is covered by save_filled_template. Generic invocation must
   // therefore require the same document-write consent as the named tool.
-  "templates.fill-to-matter": "stella:documents_write",
+  "templates.fills.create": "stella:documents_write",
 };
 
 /**
@@ -326,7 +327,7 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
  * credential reaches them.
  */
 const ENTRY_ADDITIONAL_SCOPES: Record<string, readonly string[]> = {
-  "entities.copy-to-matter": ["stella:documents_write"],
+  "entities.copy": ["stella:documents_write"],
   "entities.duplicate": ["stella:documents_write"],
 };
 
@@ -366,11 +367,11 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  * delete/remove but that destroy nothing. Kept tight by a stale-entry check (an
  * entry the heuristic would not have escalated fails the export).
  *
- * - `invoices.remove-entries`: unlinks time entries/expenses from an invoice
+ * - `invoices.entries.remove`: unlinks time entries/expenses from an invoice
  *   (`invoiceId: null`); the entries survive and return to the unbilled pool.
  */
 const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
-  "invoices.remove-entries",
+  "invoices.entries.remove",
 ]);
 
 /**
@@ -406,7 +407,7 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
  * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
  * gate is also enforced in the handler config (id -> justification), or the
- * export fails on the hit. Empty: the one prior hit (`case-law.ingestion.status`)
+ * export fails on the hit. Empty: the one prior hit (`case-law.ingestion.get`)
  * moved its admin/owner gate into the handler config (`auditLog: ["read"]`), so
  * no capability endpoint sits under a route hook.
  */
@@ -1007,7 +1008,7 @@ const collectClassGuardErrors = ({
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.status), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
     );
   }
   for (const id of routeHooks.staleWaivers) {
@@ -1235,7 +1236,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       // set plus a reviewed domain list is what stops the surface drifting back
       // into synonym soup (`read` vs `list` vs `get` for the same shape).
       errors.push(
-        `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${[...CANONICAL_ACTION_VERBS].toSorted().join(", ")}, or an explicitly reviewed entry in DOMAIN_ACTION_VERBS. Prefer renaming the handler file to a canonical verb, or splitting a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
+        `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${CANONICAL_ACTION_VERBS.join(", ")}, or a single-word entry in DOMAIN_ACTION_VERBS. Rename the handler file to a canonical verb, or split a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
       );
       return;
     }
@@ -1560,6 +1561,14 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (!presentDomains.has(domain)) {
       errors.push(
         `stale UNMAPPED_DOMAINS entry "${domain}": no catalog capability is in that domain (remove it)`,
+      );
+    }
+  }
+  const presentVerbs = new Set(entries.map(({ id }) => deriveActionVerb(id)));
+  for (const verb of DOMAIN_ACTION_VERBS) {
+    if (!presentVerbs.has(verb)) {
+      errors.push(
+        `stale DOMAIN_ACTION_VERBS entry "${verb}": no catalog capability ends in that verb (remove it)`,
       );
     }
   }

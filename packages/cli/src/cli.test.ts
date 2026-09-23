@@ -245,7 +245,7 @@ describe("stella CLI: server-attested disabled commands", () => {
       listings: [],
       delta: { added: [], removed: [], changed: [] },
       featureOmittedTools: ["get_usage"],
-      featureOmittedCapabilities: ["usage.get-entitlement"],
+      featureOmittedCapabilities: ["usage.entitlement.get"],
     });
   });
 
@@ -284,7 +284,7 @@ describe("stella CLI: server-attested disabled commands", () => {
   test("capability --help marks the gated-off capability", () => {
     const stdout = spawnAgainstServer(["capability", "usage", "--help"]);
     expect(stdout).toMatch(
-      /^ {2}get-entitlement .*\[disabled on this server\]$/mu,
+      /^ {2}entitlement-get .*\[disabled on this server\]$/mu,
     );
   });
 
@@ -293,7 +293,7 @@ describe("stella CLI: server-attested disabled commands", () => {
       .split("\n")
       .filter((line) => line.endsWith("[disabled on this server]"));
     expect(marked).toEqual([
-      "capability usage get-entitlement\t(invoke_capability: usage.get-entitlement) [disabled on this server]",
+      "capability usage entitlement-get\t(invoke_capability: usage.entitlement.get) [disabled on this server]",
       "usage get\t(get_usage) [disabled on this server]",
     ]);
   });

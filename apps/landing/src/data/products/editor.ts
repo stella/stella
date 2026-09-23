@@ -26,7 +26,7 @@ export const editor = {
       path: "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts",
       contains: ["resolveDocxSuggestionRequest", "revertDocxSuggestionRequest"],
     },
-    { type: "capability", id: "entities.read-versions" },
+    { type: "capability", id: "entities.versions.list" },
   ],
   cta: {
     href: "https://my.stll.app",

@@ -136,12 +136,12 @@ without changing any call site behaviour.
     `getModelForRole`.
 - All other AI handlers (`bbox/ai-generate-b-boxes.ts`,
   `handlers/search/ai.ts`,
-  `handlers/entities/organize-suggestions.ts`,
+  `handlers/entities/placements/suggest.ts`,
   `handlers/case-law/polarity/llm-classifier.ts`,
   `handlers/case-law/analysis/generate.ts`,
   `handlers/chat/generate-thread-title.ts`,
   `handlers/properties/preview.ts`,
-  `handlers/properties/suggest-prompt.ts`) — add `scopeKey` to
+  `handlers/properties/prompt/suggest.ts`) — add `scopeKey` to
   `getModelForRole`. For surfaces without an obvious stable id,
   use `${orgId}:${role}:${sha256(input).slice(0, 16)}` so OpenAI
   still gets routing benefit on identical inputs and Anthropic

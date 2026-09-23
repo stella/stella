@@ -38,7 +38,8 @@ const RUN_STEPS = {
 /** Every surface that starts a playbook run, and what starts it there. */
 const RUN_SURFACES = {
   "src/handlers/playbooks/run.ts": "the playbook a user picks",
-  "src/handlers/playbooks/auto-run.ts": "every applicable playbook at once",
+  "src/handlers/playbooks/applicable/run.ts":
+    "every applicable playbook at once",
   "src/lib/workflow/route-playbooks.ts": "the classification trigger",
   "src/mcp/knowledge-tools.ts": "the run_playbook MCP tool",
 } as const;

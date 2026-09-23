@@ -36,7 +36,7 @@ const config = {
     },
     alternative: {
       type: "partial",
-      via: ["style-sets.update-from-editor"],
+      via: ["style-sets.from-editor.update"],
       limitation:
         "replaces the styles from explicit settings in the body; styles cannot be extracted from an existing DOCX",
     },

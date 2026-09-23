@@ -73,11 +73,11 @@ Drop chat attachment persistence as base64 data URLs and move chat uploads to a 
   For image and PDF files, load the stored bytes from S3 and inject a transient AI-SDK-compatible file input, including base64/data-URL conversion if that remains the SDK requirement on the backend, without writing that payload back to the database.
   For DOCX, TXT, CSV, and Markdown files, use the extracted `views` stored on the user-file row and expose them to `display-document`.
 
-- `apps/api/src/handlers/chat/get-messages.ts` and `apps/api/src/handlers/chat/get-workspace-messages.ts`:
+- `apps/api/src/handlers/chat/messages/list.ts` and `apps/api/src/handlers/chat/get-workspace-messages.ts`:
   Return persisted file parts as-is with `stella://file::${id}` URLs.
   Do not convert user-file refs to base64 in read APIs; base64 conversion belongs only to the backend model-execution path.
 
-- `apps/api/src/handlers/chat/delete-thread.ts`:
+- `apps/api/src/handlers/chat/threads/delete.ts`:
   Before deleting the global thread, load the matching global-chat `user_files` rows, delete their S3 objects, then delete those rows and the thread records.
   Use the table as the source of truth; do not scan message JSON to discover files.
 

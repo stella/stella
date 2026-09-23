@@ -20223,7 +20223,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/source-totals.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#1"
@@ -20301,10 +20301,10 @@
             "location": "apps/api/src/handlers/catalogue/catalogue-skill-package.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/catalogue/install-skill.ts#1"
+            "location": "apps/api/src/handlers/catalogue/install.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#1"
+            "location": "apps/api/src/handlers/catalogue/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/catalogue/native-tool-deploy-availability.ts#1"
@@ -20346,7 +20346,7 @@
             "location": "apps/api/src/handlers/chat/data-scope.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/delete-thread.ts#1"
+            "location": "apps/api/src/handlers/chat/threads/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/errors.ts#1"
@@ -20367,13 +20367,13 @@
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-messages.ts#1"
+            "location": "apps/api/src/handlers/chat/messages/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/get-model-options.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-older-messages.ts#1"
+            "location": "apps/api/src/handlers/chat/older-messages/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#1"
@@ -20385,7 +20385,7 @@
             "location": "apps/api/src/handlers/chat/get-thread-title.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-threads.ts#1"
+            "location": "apps/api/src/handlers/chat/threads/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/history-window.ts#1"
@@ -20412,7 +20412,7 @@
             "location": "apps/api/src/handlers/chat/read-file-thread.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/rename-thread.ts#1"
+            "location": "apps/api/src/handlers/chat/threads/rename.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#1"
@@ -20520,7 +20520,7 @@
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/update-thread.ts#1"
+            "location": "apps/api/src/handlers/chat/threads/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#1"
@@ -20553,7 +20553,7 @@
             "location": "apps/api/src/handlers/clauses/search-vector.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/template-slot-preview.ts#15"
+            "location": "apps/api/src/handlers/clauses/template-slots/preview.ts#15"
           },
           {
             "location": "apps/api/src/handlers/clauses/update.ts#1"
@@ -20562,16 +20562,16 @@
             "location": "apps/api/src/handlers/clauses/variants.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-diff.ts#1"
+            "location": "apps/api/src/handlers/clauses/versions/diff.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-restore.ts#1"
+            "location": "apps/api/src/handlers/clauses/versions/restore.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-summarize.ts#1"
+            "location": "apps/api/src/handlers/clauses/versions/summarize.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#1"
+            "location": "apps/api/src/handlers/contacts/business-registries/lookup.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/contact-import-file.ts#1"
@@ -20721,7 +20721,7 @@
             "location": "apps/api/src/handlers/entities/bilingual/create.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/entities/check-stamp.ts#1"
+            "location": "apps/api/src/handlers/entities/stamps/check.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#1"
@@ -20733,7 +20733,7 @@
             "location": "apps/api/src/handlers/entities/clip.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#1"
+            "location": "apps/api/src/handlers/entities/copy.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/copy-utils.ts#1"
@@ -20742,19 +20742,19 @@
             "location": "apps/api/src/handlers/entities/create-blank-document-service.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-blank-document.ts#1"
+            "location": "apps/api/src/handlers/entities/blank-document/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/create-document-from-style-set.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#1"
+            "location": "apps/api/src/handlers/entities/from-legal-source/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/delete-version.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/delete.ts#1"
@@ -20763,7 +20763,7 @@
             "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/download-zip.ts#1"
+            "location": "apps/api/src/handlers/entities/zip/download.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/duplicate.ts#1"
@@ -20778,10 +20778,10 @@
             "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-files.ts#1"
+            "location": "apps/api/src/handlers/entities/files/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-folders.ts#1"
+            "location": "apps/api/src/handlers/entities/folders/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/list.ts#1"
@@ -20796,7 +20796,7 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
+            "location": "apps/api/src/handlers/entities/placements/suggest.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#1"
@@ -20805,7 +20805,7 @@
             "location": "apps/api/src/handlers/entities/read-field-file.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#1"
+            "location": "apps/api/src/handlers/entities/filesystem-tree/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#1"
@@ -20817,19 +20817,19 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#1"
+            "location": "apps/api/src/handlers/entities/summaries/count.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries.ts#1"
+            "location": "apps/api/src/handlers/entities/summaries/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-version-by-id.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-versions.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-window.ts#1"
+            "location": "apps/api/src/handlers/entities/window/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#1"
@@ -20841,19 +20841,19 @@
             "location": "apps/api/src/handlers/entities/request-desktop-edit-takeover.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/restore-version.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/restore.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-description.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/description/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-label.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/label/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/upload-origin.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/upload-version.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/upload.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/upload.ts#1"
@@ -20862,10 +20862,10 @@
             "location": "apps/api/src/handlers/entities/version-diff-sources.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/entities/version-diff.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/diff.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/version-summarize.ts#1"
+            "location": "apps/api/src/handlers/entities/versions/summarize.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entity-views/create.ts#1"
@@ -20925,13 +20925,13 @@
             "location": "apps/api/src/handlers/fields/kanban-placement/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#1"
+            "location": "apps/api/src/handlers/fields/column-flag/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#1"
+            "location": "apps/api/src/handlers/fields/cell-metadata/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/fields/upsert-by-id.ts#1"
+            "location": "apps/api/src/handlers/fields/upsert.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/email-attachment/create.ts#1"
@@ -20964,16 +20964,16 @@
             "location": "apps/api/src/handlers/flows/read.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/flows/run-cancel.ts#1"
+            "location": "apps/api/src/handlers/flows/runs/cancel.ts#1"
           },
           {
             "location": "apps/api/src/handlers/flows/run-read.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/flows/run-review.ts#1"
+            "location": "apps/api/src/handlers/flows/runs/review.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/flows/run-start.ts#1"
+            "location": "apps/api/src/handlers/flows/runs/start.ts#1"
           },
           {
             "location": "apps/api/src/handlers/flows/update.ts#1"
@@ -21015,7 +21015,7 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/routes.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/invoices/add-entries.ts#1"
+            "location": "apps/api/src/handlers/invoices/entries/add.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/create.ts#1"
@@ -21030,7 +21030,7 @@
             "location": "apps/api/src/handlers/invoices/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/invoices/remove-entries.ts#1"
+            "location": "apps/api/src/handlers/invoices/entries/remove.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/transition.ts#1"
@@ -21054,22 +21054,22 @@
             "location": "apps/api/src/handlers/legal-reader/annotations/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-get-law.ts#1"
+            "location": "apps/api/src/handlers/legislation/boe/laws/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-law-structure.ts#1"
+            "location": "apps/api/src/handlers/legislation/boe/law-structure/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-related-laws.ts#1"
+            "location": "apps/api/src/handlers/legislation/boe/related-laws/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-search.ts#1"
+            "location": "apps/api/src/handlers/legislation/boe/search.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-text-block.ts#1"
+            "location": "apps/api/src/handlers/legislation/boe/text-block/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/borme-summary.ts#1"
+            "location": "apps/api/src/handlers/legislation/borme/summary/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/legislation/get.ts#1"
@@ -21273,22 +21273,22 @@
             "location": "apps/api/src/handlers/organization-settings/preview.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/read-ai-availability.ts#1"
+            "location": "apps/api/src/handlers/organization-settings/ai-availability/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#1"
+            "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/read-deepl-availability.ts#1"
+            "location": "apps/api/src/handlers/organization-settings/deepl-availability/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#1"
+            "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#1"
+            "location": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-web-search-key.ts#1"
@@ -21303,7 +21303,7 @@
             "location": "apps/api/src/handlers/playbooks/assert-document-type.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/auto-run.ts#1"
+            "location": "apps/api/src/handlers/playbooks/applicable/run.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/create-shared.ts#1"
@@ -21315,10 +21315,10 @@
             "location": "apps/api/src/handlers/playbooks/derive-ask.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/from-run.ts#11"
+            "location": "apps/api/src/handlers/playbooks/from-run/create.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
+            "location": "apps/api/src/handlers/playbooks/from-starter/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/get.ts#1"
@@ -21327,10 +21327,10 @@
             "location": "apps/api/src/handlers/playbooks/instantiate-starter.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/list-starters.ts#1"
+            "location": "apps/api/src/handlers/playbooks/starters/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/list-versions.ts#1"
+            "location": "apps/api/src/handlers/playbooks/versions/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
@@ -21339,7 +21339,7 @@
             "location": "apps/api/src/handlers/playbooks/recent/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/restore-version.ts#1"
+            "location": "apps/api/src/handlers/playbooks/versions/restore.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/run.ts#1"
@@ -21348,7 +21348,7 @@
             "location": "apps/api/src/handlers/playbooks/update-shared.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/create-batch.ts#1"
+            "location": "apps/api/src/handlers/properties/batch/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/create.ts#1"
@@ -21378,16 +21378,16 @@
             "location": "apps/api/src/handlers/rates/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-create.ts#1"
+            "location": "apps/api/src/handlers/rates/entries/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-delete.ts#1"
+            "location": "apps/api/src/handlers/rates/entries/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-read.ts#1"
+            "location": "apps/api/src/handlers/rates/entries/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-update.ts#1"
+            "location": "apps/api/src/handlers/rates/entries/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/rates/list.ts#1"
@@ -21405,19 +21405,19 @@
             "location": "apps/api/src/handlers/reports/builtin-templates.ts#30"
           },
           {
-            "location": "apps/api/src/handlers/reports/clone-builtin.ts#19"
+            "location": "apps/api/src/handlers/reports/builtins/clone.ts#19"
           },
           {
             "location": "apps/api/src/handlers/reports/export-history.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/reports/export-view.ts#17"
+            "location": "apps/api/src/handlers/reports/views/export.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/reports/list-templates.ts#11"
+            "location": "apps/api/src/handlers/reports/templates/list.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/reports/read-export.ts#13"
+            "location": "apps/api/src/handlers/reports/exports/get.ts#13"
           },
           {
             "location": "apps/api/src/handlers/reports/report-export-notification.ts#1"
@@ -21534,22 +21534,22 @@
             "location": "apps/api/src/handlers/skills/discover.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/from-blueprint.ts#1"
+            "location": "apps/api/src/handlers/skills/from-blueprint/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
+            "location": "apps/api/src/handlers/skills/drafts/generate.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/import-url.ts#1"
+            "location": "apps/api/src/handlers/skills/from-url/import.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/import.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/list-commands.ts#1"
+            "location": "apps/api/src/handlers/skills/commands/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#1"
@@ -21609,7 +21609,7 @@
             "location": "apps/api/src/handlers/skills/upload.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/create-from-editor.ts#1"
+            "location": "apps/api/src/handlers/style-sets/from-editor/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/style-sets/create.ts#1"
@@ -21627,10 +21627,10 @@
             "location": "apps/api/src/handlers/style-sets/preview-from-editor.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/read-editor.ts#1"
+            "location": "apps/api/src/handlers/style-sets/editor/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/read-stella-editor.ts#1"
+            "location": "apps/api/src/handlers/style-sets/stella-editor/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/style-sets/replace.ts#1"
@@ -21639,7 +21639,7 @@
             "location": "apps/api/src/handlers/style-sets/storage.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/update-from-editor.ts#1"
+            "location": "apps/api/src/handlers/style-sets/from-editor/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/style-sets/update.ts#1"
@@ -21648,22 +21648,22 @@
             "location": "apps/api/src/handlers/tasks/assignees/move.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-add.ts#1"
+            "location": "apps/api/src/handlers/tasks/assignees/add.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-remove.ts#1"
+            "location": "apps/api/src/handlers/tasks/assignees/remove.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/calendar.ts#1"
+            "location": "apps/api/src/handlers/tasks/calendar/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-create.ts#1"
+            "location": "apps/api/src/handlers/tasks/entity-links/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#1"
+            "location": "apps/api/src/handlers/tasks/entity-links/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-read.ts#1"
+            "location": "apps/api/src/handlers/tasks/entity-links/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/tasks/get.ts#1"
@@ -21696,19 +21696,19 @@
             "location": "apps/api/src/handlers/template-recipes/recipes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/binding-catalog.ts#1"
+            "location": "apps/api/src/handlers/templates/bindings/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-create.ts#1"
+            "location": "apps/api/src/handlers/templates/categories/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-delete.ts#1"
+            "location": "apps/api/src/handlers/templates/categories/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-list.ts#1"
+            "location": "apps/api/src/handlers/templates/categories/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-update.ts#1"
+            "location": "apps/api/src/handlers/templates/categories/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/categories.ts#1"
@@ -21717,25 +21717,25 @@
             "location": "apps/api/src/handlers/templates/check.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clause-slots.ts#9"
+            "location": "apps/api/src/handlers/templates/clause-slots/list.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-link.ts#1"
+            "location": "apps/api/src/handlers/templates/clauses/link.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-list.ts#1"
+            "location": "apps/api/src/handlers/templates/clauses/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-slot-update.ts#1"
+            "location": "apps/api/src/handlers/templates/clause-slots/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-sync-all.ts#1"
+            "location": "apps/api/src/handlers/templates/outdated-clauses/sync.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-sync.ts#1"
+            "location": "apps/api/src/handlers/templates/clauses/sync.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-unlink.ts#1"
+            "location": "apps/api/src/handlers/templates/clauses/unlink.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/condition-decisions/get.ts#1"
@@ -21744,13 +21744,13 @@
             "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#15"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-blank.ts#1"
+            "location": "apps/api/src/handlers/templates/blank/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-from-style-set.ts#1"
+            "location": "apps/api/src/handlers/templates/from-style-set/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-from-styles.ts#1"
+            "location": "apps/api/src/handlers/templates/from-styles/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/create.ts#1"
@@ -21762,13 +21762,13 @@
             "location": "apps/api/src/handlers/templates/discover.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-by-id.ts#1"
+            "location": "apps/api/src/handlers/templates/fills/download.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-preview.ts#1"
+            "location": "apps/api/src/handlers/templates/fills/preview.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-to-workspace.ts#1"
+            "location": "apps/api/src/handlers/templates/fills/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/fill.ts#1"
@@ -21795,7 +21795,7 @@
             "location": "apps/api/src/handlers/templates/lookup-formats/my-default/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/lookup-preview.ts#1"
+            "location": "apps/api/src/handlers/templates/lookups/preview.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/prefill.ts#1"
@@ -21807,46 +21807,46 @@
             "location": "apps/api/src/handlers/templates/preview.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/save-document.ts#1"
+            "location": "apps/api/src/handlers/templates/document/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/suggest-fields.ts#1"
+            "location": "apps/api/src/handlers/templates/fields/suggest.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-diff.ts#1"
+            "location": "apps/api/src/handlers/templates/versions/diff.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-get.ts#1"
+            "location": "apps/api/src/handlers/templates/versions/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-list.ts#1"
+            "location": "apps/api/src/handlers/templates/versions/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-summarize.ts#1"
+            "location": "apps/api/src/handlers/templates/versions/summarize.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/versions.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-delete.ts#1"
+            "location": "apps/api/src/handlers/time-entries/batch/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-update.ts#1"
+            "location": "apps/api/src/handlers/time-entries/batch/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#1"
+            "location": "apps/api/src/handlers/time-entries/csv/export.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#1"
+            "location": "apps/api/src/handlers/time-entries/ledes/export.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#1"
+            "location": "apps/api/src/handlers/time-entries/pdf/export.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/get.ts#1"
@@ -21876,10 +21876,10 @@
             "location": "apps/api/src/handlers/time-entries/time-entry-insert.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/timer-start.ts#1"
+            "location": "apps/api/src/handlers/time-entries/timer/start.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/timer-stop.ts#1"
+            "location": "apps/api/src/handlers/time-entries/timer/stop.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/update.ts#1"
@@ -21921,7 +21921,7 @@
             "location": "apps/api/src/handlers/usage/create-hosted-setup.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/usage/get-entitlement.ts#1"
+            "location": "apps/api/src/handlers/usage/entitlement/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/usage/get-lane.ts#1"
@@ -21963,7 +21963,7 @@
             "location": "apps/api/src/handlers/views/reorder.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/views/table-export.ts#1"
+            "location": "apps/api/src/handlers/views/table/export.ts#1"
           },
           {
             "location": "apps/api/src/handlers/views/update.ts#1"
@@ -22002,7 +22002,7 @@
             "location": "apps/api/src/handlers/workspaces/archive.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#1"
+            "location": "apps/api/src/handlers/workspaces/cells/retry.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#1"
@@ -22038,7 +22038,7 @@
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-justifications.ts#1"
+            "location": "apps/api/src/handlers/workspaces/justifications/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#1"
@@ -22062,10 +22062,10 @@
             "location": "apps/api/src/handlers/workspaces/read-search-preview.query.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-workflow-status.ts#1"
+            "location": "apps/api/src/handlers/workspaces/workflow/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#1"
+            "location": "apps/api/src/handlers/workspaces/workflow/targets/count.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/routes.ts#1"
@@ -22083,19 +22083,19 @@
             "location": "apps/api/src/handlers/workspaces/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workflow-start.ts#1"
+            "location": "apps/api/src/handlers/workspaces/workflow/start.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#1"
+            "location": "apps/api/src/handlers/workspaces/contacts/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-delete.ts#1"
+            "location": "apps/api/src/handlers/workspaces/contacts/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#1"
+            "location": "apps/api/src/handlers/workspaces/members/add.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#1"
+            "location": "apps/api/src/handlers/workspaces/members/remove.ts#1"
           },
           {
             "location": "apps/api/src/lib/account-deletion-cleanup-queue.ts#1"
@@ -25567,7 +25567,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/entities/download-zip.ts#2"
+            "location": "apps/api/src/handlers/entities/zip/download.ts#2"
           }
         ]
       },
@@ -26410,7 +26410,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/source-totals.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#2"
@@ -26494,7 +26494,7 @@
             "location": "apps/api/src/handlers/case-law/withdraw-document.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#2"
+            "location": "apps/api/src/handlers/catalogue/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#2"
@@ -26506,10 +26506,10 @@
             "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/delete-thread.ts#2"
+            "location": "apps/api/src/handlers/chat/threads/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/delete-thread.ts#3"
+            "location": "apps/api/src/handlers/chat/threads/delete.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/file-thread-mapping.ts#1"
@@ -26530,10 +26530,10 @@
             "location": "apps/api/src/handlers/chat/get-thread-title.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-threads.ts#2"
+            "location": "apps/api/src/handlers/chat/threads/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-threads.ts#3"
+            "location": "apps/api/src/handlers/chat/threads/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/history-window.ts#2"
@@ -26551,7 +26551,7 @@
             "location": "apps/api/src/handlers/chat/persistent-compaction.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/rename-thread.ts#2"
+            "location": "apps/api/src/handlers/chat/threads/rename.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
@@ -26584,7 +26584,7 @@
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/update-thread.ts#2"
+            "location": "apps/api/src/handlers/chat/threads/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#2"
@@ -26617,7 +26617,7 @@
             "location": "apps/api/src/handlers/clauses/variants.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-restore.ts#2"
+            "location": "apps/api/src/handlers/clauses/versions/restore.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/contact-capacity.ts#1"
@@ -26719,7 +26719,7 @@
             "location": "apps/api/src/handlers/entities/clip.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#2"
+            "location": "apps/api/src/handlers/entities/copy.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/copy-utils.ts#2"
@@ -26728,7 +26728,7 @@
             "location": "apps/api/src/handlers/entities/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/delete-version.ts#2"
+            "location": "apps/api/src/handlers/entities/versions/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/delete.ts#2"
@@ -26737,7 +26737,7 @@
             "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/download-zip.ts#3"
+            "location": "apps/api/src/handlers/entities/zip/download.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#2"
@@ -26746,10 +26746,10 @@
             "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-files.ts#2"
+            "location": "apps/api/src/handlers/entities/files/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-folders.ts#2"
+            "location": "apps/api/src/handlers/entities/folders/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/move.ts#2"
@@ -26761,13 +26761,13 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
+            "location": "apps/api/src/handlers/entities/placements/suggest.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
+            "location": "apps/api/src/handlers/entities/filesystem-tree/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#2"
@@ -26779,13 +26779,13 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#2"
+            "location": "apps/api/src/handlers/entities/summaries/count.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries.ts#2"
+            "location": "apps/api/src/handlers/entities/summaries/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-versions.ts#2"
+            "location": "apps/api/src/handlers/entities/versions/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#2"
@@ -26800,13 +26800,13 @@
             "location": "apps/api/src/handlers/entities/respond-desktop-edit-takeover.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/restore-version.ts#2"
+            "location": "apps/api/src/handlers/entities/versions/restore.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-description.ts#2"
+            "location": "apps/api/src/handlers/entities/versions/description/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-label.ts#2"
+            "location": "apps/api/src/handlers/entities/versions/label/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/upload.ts#2"
@@ -26854,16 +26854,16 @@
             "location": "apps/api/src/handlers/feedback/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#11"
+            "location": "apps/api/src/handlers/fields/column-flag/update.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#12"
+            "location": "apps/api/src/handlers/fields/column-flag/update.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#2"
+            "location": "apps/api/src/handlers/fields/cell-metadata/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/fields/upsert-by-id.ts#2"
+            "location": "apps/api/src/handlers/fields/upsert.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/document-properties.ts#1"
@@ -26893,7 +26893,7 @@
             "location": "apps/api/src/handlers/flows/run-read.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/flows/run-start.ts#2"
+            "location": "apps/api/src/handlers/flows/runs/start.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/update.ts#2"
@@ -26905,7 +26905,7 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/invoices/add-entries.ts#2"
+            "location": "apps/api/src/handlers/invoices/entries/add.ts#2"
           },
           {
             "location": "apps/api/src/handlers/invoices/create.ts#2"
@@ -26920,7 +26920,7 @@
             "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/invoices/remove-entries.ts#2"
+            "location": "apps/api/src/handlers/invoices/entries/remove.ts#2"
           },
           {
             "location": "apps/api/src/handlers/invoices/transition.ts#2"
@@ -27145,7 +27145,7 @@
             "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
+            "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update.ts#2"
@@ -27160,10 +27160,10 @@
             "location": "apps/api/src/handlers/playbooks/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/from-run.ts#12"
+            "location": "apps/api/src/handlers/playbooks/from-run/create.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
+            "location": "apps/api/src/handlers/playbooks/versions/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#2"
@@ -27172,13 +27172,13 @@
             "location": "apps/api/src/handlers/playbooks/recent/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/restore-version.ts#2"
+            "location": "apps/api/src/handlers/playbooks/versions/restore.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/update-shared.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/properties/create-batch.ts#2"
+            "location": "apps/api/src/handlers/properties/batch/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/create.ts#2"
@@ -27196,16 +27196,16 @@
             "location": "apps/api/src/handlers/rates/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-create.ts#2"
+            "location": "apps/api/src/handlers/rates/entries/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-delete.ts#2"
+            "location": "apps/api/src/handlers/rates/entries/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-read.ts#2"
+            "location": "apps/api/src/handlers/rates/entries/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-update.ts#2"
+            "location": "apps/api/src/handlers/rates/entries/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/rates/list.ts#2"
@@ -27220,10 +27220,10 @@
             "location": "apps/api/src/handlers/reports/export-history.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/reports/export-view.ts#18"
+            "location": "apps/api/src/handlers/reports/views/export.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/reports/read-export.ts#14"
+            "location": "apps/api/src/handlers/reports/exports/get.ts#14"
           },
           {
             "location": "apps/api/src/handlers/reports/report-export-notification.ts#2"
@@ -27292,7 +27292,7 @@
             "location": "apps/api/src/handlers/skills/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/list-commands.ts#2"
+            "location": "apps/api/src/handlers/skills/commands/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#2"
@@ -27367,13 +27367,13 @@
             "location": "apps/api/src/handlers/tasks/assignees/move.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-remove.ts#2"
+            "location": "apps/api/src/handlers/tasks/assignees/remove.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/tasks/calendar.ts#2"
+            "location": "apps/api/src/handlers/tasks/calendar/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#2"
+            "location": "apps/api/src/handlers/tasks/entity-links/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/tasks/get.ts#2"
@@ -27421,22 +27421,22 @@
             "location": "apps/api/src/handlers/templates/versions.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-delete.ts#2"
+            "location": "apps/api/src/handlers/time-entries/batch/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-update.ts#2"
+            "location": "apps/api/src/handlers/time-entries/batch/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
+            "location": "apps/api/src/handlers/time-entries/csv/export.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#2"
+            "location": "apps/api/src/handlers/time-entries/ledes/export.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
+            "location": "apps/api/src/handlers/time-entries/pdf/export.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/get.ts#2"
@@ -27460,10 +27460,10 @@
             "location": "apps/api/src/handlers/time-entries/time-entry-insert.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/timer-start.ts#2"
+            "location": "apps/api/src/handlers/time-entries/timer/start.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/timer-stop.ts#2"
+            "location": "apps/api/src/handlers/time-entries/timer/stop.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/update.ts#2"
@@ -27493,7 +27493,7 @@
             "location": "apps/api/src/handlers/usage/create-hosted-setup.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/usage/get-entitlement.ts#2"
+            "location": "apps/api/src/handlers/usage/entitlement/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/usage/get-lane.ts#2"
@@ -27565,7 +27565,7 @@
             "location": "apps/api/src/handlers/workspaces/archive.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#2"
+            "location": "apps/api/src/handlers/workspaces/cells/retry.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#2"
@@ -27589,7 +27589,7 @@
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-justifications.ts#2"
+            "location": "apps/api/src/handlers/workspaces/justifications/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#2"
@@ -27607,7 +27607,7 @@
             "location": "apps/api/src/handlers/workspaces/read-search-preview.query.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-workflow-status.ts#2"
+            "location": "apps/api/src/handlers/workspaces/workflow/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
@@ -27619,16 +27619,16 @@
             "location": "apps/api/src/handlers/workspaces/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#2"
+            "location": "apps/api/src/handlers/workspaces/contacts/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-delete.ts#2"
+            "location": "apps/api/src/handlers/workspaces/contacts/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#2"
+            "location": "apps/api/src/handlers/workspaces/members/add.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#2"
+            "location": "apps/api/src/handlers/workspaces/members/remove.ts#2"
           },
           {
             "location": "apps/api/src/lib/account-deletion-effect-store.ts#1"
@@ -29055,7 +29055,7 @@
             "location": "apps/api/src/handlers/case-law/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/catalogue/install-skill.ts#2"
+            "location": "apps/api/src/handlers/catalogue/install.ts#2"
           },
           {
             "location": "apps/api/src/handlers/catalogue/routes.ts#1"
@@ -29067,7 +29067,7 @@
             "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/chat/delete-thread.ts#4"
+            "location": "apps/api/src/handlers/chat/threads/delete.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/export/create.ts#20"
@@ -29076,10 +29076,10 @@
             "location": "apps/api/src/handlers/chat/fork/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-messages.ts#2"
+            "location": "apps/api/src/handlers/chat/messages/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-older-messages.ts#2"
+            "location": "apps/api/src/handlers/chat/older-messages/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#2"
@@ -29091,7 +29091,7 @@
             "location": "apps/api/src/handlers/chat/get-thread-title.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-threads.ts#4"
+            "location": "apps/api/src/handlers/chat/threads/list.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/improve-prompt.ts#2"
@@ -29100,7 +29100,7 @@
             "location": "apps/api/src/handlers/chat/read-file-thread.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/rename-thread.ts#3"
+            "location": "apps/api/src/handlers/chat/threads/rename.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#3"
@@ -29121,13 +29121,13 @@
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/update-thread.ts#3"
+            "location": "apps/api/src/handlers/chat/threads/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/categories-delete.ts#1"
+            "location": "apps/api/src/handlers/clauses/categories/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/categories-update.ts#1"
+            "location": "apps/api/src/handlers/clauses/categories/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#3"
@@ -29154,7 +29154,7 @@
             "location": "apps/api/src/handlers/clauses/import.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/read-version.ts#1"
+            "location": "apps/api/src/handlers/clauses/versions/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/read.ts#3"
@@ -29166,7 +29166,7 @@
             "location": "apps/api/src/handlers/clauses/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/template-slot-preview.ts#16"
+            "location": "apps/api/src/handlers/clauses/template-slots/preview.ts#16"
           },
           {
             "location": "apps/api/src/handlers/clauses/update.ts#3"
@@ -29175,16 +29175,16 @@
             "location": "apps/api/src/handlers/clauses/update.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/clauses/variants-create.ts#1"
+            "location": "apps/api/src/handlers/clauses/variants/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/variants-delete.ts#1"
+            "location": "apps/api/src/handlers/clauses/variants/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/variants-list.ts#1"
+            "location": "apps/api/src/handlers/clauses/variants/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/variants-update.ts#1"
+            "location": "apps/api/src/handlers/clauses/variants/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/variants.ts#3"
@@ -29193,16 +29193,16 @@
             "location": "apps/api/src/handlers/clauses/variants.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-diff.ts#2"
+            "location": "apps/api/src/handlers/clauses/versions/diff.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-restore.ts#3"
+            "location": "apps/api/src/handlers/clauses/versions/restore.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/versions-summarize.ts#2"
+            "location": "apps/api/src/handlers/clauses/versions/summarize.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#2"
+            "location": "apps/api/src/handlers/contacts/business-registries/lookup.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/contact-import-schema.ts#1"
@@ -29337,10 +29337,10 @@
             "location": "apps/api/src/handlers/entities/bilingual/create.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/entities/check-stamp.ts#2"
+            "location": "apps/api/src/handlers/entities/stamps/check.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/check-stamp.ts#3"
+            "location": "apps/api/src/handlers/entities/stamps/check.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#3"
@@ -29358,19 +29358,19 @@
             "location": "apps/api/src/handlers/entities/clip.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#3"
+            "location": "apps/api/src/handlers/entities/copy.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#4"
+            "location": "apps/api/src/handlers/entities/copy.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-blank-document.ts#2"
+            "location": "apps/api/src/handlers/entities/blank-document/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/create-document-from-style-set.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#2"
+            "location": "apps/api/src/handlers/entities/from-legal-source/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/create.ts#3"
@@ -29415,10 +29415,10 @@
             "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-files.ts#3"
+            "location": "apps/api/src/handlers/entities/files/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/list-folders.ts#3"
+            "location": "apps/api/src/handlers/entities/folders/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/list.ts#2"
@@ -29439,16 +29439,16 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
+            "location": "apps/api/src/handlers/entities/placements/suggest.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
+            "location": "apps/api/src/handlers/entities/placements/suggest.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#3"
+            "location": "apps/api/src/handlers/entities/filesystem-tree/get.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#4"
@@ -29460,13 +29460,13 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#3"
+            "location": "apps/api/src/handlers/entities/summaries/count.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-summaries.ts#3"
+            "location": "apps/api/src/handlers/entities/summaries/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-versions.ts#3"
+            "location": "apps/api/src/handlers/entities/versions/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#3"
@@ -29490,10 +29490,10 @@
             "location": "apps/api/src/handlers/entities/status-desktop-edit-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-description.ts#3"
+            "location": "apps/api/src/handlers/entities/versions/description/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/update-version-label.ts#3"
+            "location": "apps/api/src/handlers/entities/versions/label/update.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/upload-version-schema.ts#1"
@@ -29544,19 +29544,19 @@
             "location": "apps/api/src/handlers/fields/kanban-placement/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#13"
+            "location": "apps/api/src/handlers/fields/column-flag/update.ts#13"
           },
           {
             "location": "apps/api/src/handlers/fields/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#3"
+            "location": "apps/api/src/handlers/fields/cell-metadata/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/fields/upsert-by-id.ts#3"
+            "location": "apps/api/src/handlers/fields/upsert.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/fields/upsert-by-id.ts#4"
+            "location": "apps/api/src/handlers/fields/upsert.ts#4"
           },
           {
             "location": "apps/api/src/handlers/files/document-properties.ts#2"
@@ -29616,7 +29616,7 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/routes.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/invoices/add-entries.ts#3"
+            "location": "apps/api/src/handlers/invoices/entries/add.ts#3"
           },
           {
             "location": "apps/api/src/handlers/invoices/create.ts#3"
@@ -29625,7 +29625,7 @@
             "location": "apps/api/src/handlers/invoices/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/invoices/remove-entries.ts#3"
+            "location": "apps/api/src/handlers/invoices/entries/remove.ts#3"
           },
           {
             "location": "apps/api/src/handlers/invoices/routes.ts#1"
@@ -29649,22 +29649,22 @@
             "location": "apps/api/src/handlers/legal-reader/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-get-law.ts#2"
+            "location": "apps/api/src/handlers/legislation/boe/laws/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-law-structure.ts#2"
+            "location": "apps/api/src/handlers/legislation/boe/law-structure/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-related-laws.ts#2"
+            "location": "apps/api/src/handlers/legislation/boe/related-laws/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-search.ts#2"
+            "location": "apps/api/src/handlers/legislation/boe/search.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/boe-text-block.ts#2"
+            "location": "apps/api/src/handlers/legislation/boe/text-block/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/borme-summary.ts#2"
+            "location": "apps/api/src/handlers/legislation/borme/summary/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/legislation/by-eli.ts#3"
@@ -29901,13 +29901,13 @@
             "location": "apps/api/src/handlers/organization-settings/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
+            "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#2"
+            "location": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-web-search-key.ts#2"
@@ -29919,13 +29919,13 @@
             "location": "apps/api/src/handlers/organization-settings/update.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/from-run.ts#13"
+            "location": "apps/api/src/handlers/playbooks/from-run/create.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/from-starter.ts#2"
+            "location": "apps/api/src/handlers/playbooks/from-starter/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/list-versions.ts#3"
+            "location": "apps/api/src/handlers/playbooks/versions/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#3"
@@ -29934,7 +29934,7 @@
             "location": "apps/api/src/handlers/playbooks/recent/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/restore-version.ts#3"
+            "location": "apps/api/src/handlers/playbooks/versions/restore.ts#3"
           },
           {
             "location": "apps/api/src/handlers/playbooks/routes.ts#1"
@@ -29949,7 +29949,7 @@
             "location": "apps/api/src/handlers/playbooks/schema.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/create-batch.ts#3"
+            "location": "apps/api/src/handlers/properties/batch/create.ts#3"
           },
           {
             "location": "apps/api/src/handlers/properties/preview.ts#3"
@@ -29958,10 +29958,10 @@
             "location": "apps/api/src/handlers/properties/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
+            "location": "apps/api/src/handlers/properties/prompt/suggest.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#2"
+            "location": "apps/api/src/handlers/properties/prompt/suggest.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/update.ts#3"
@@ -29973,16 +29973,16 @@
             "location": "apps/api/src/handlers/rates/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-create.ts#3"
+            "location": "apps/api/src/handlers/rates/entries/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-delete.ts#3"
+            "location": "apps/api/src/handlers/rates/entries/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-read.ts#3"
+            "location": "apps/api/src/handlers/rates/entries/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/rates/entries-update.ts#3"
+            "location": "apps/api/src/handlers/rates/entries/update.ts#3"
           },
           {
             "location": "apps/api/src/handlers/rates/list.ts#3"
@@ -29997,13 +29997,13 @@
             "location": "apps/api/src/handlers/rates/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/reports/clone-builtin.ts#20"
+            "location": "apps/api/src/handlers/reports/builtins/clone.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/reports/export-view.ts#19"
+            "location": "apps/api/src/handlers/reports/views/export.ts#19"
           },
           {
-            "location": "apps/api/src/handlers/reports/list-exports.ts#1"
+            "location": "apps/api/src/handlers/reports/exports/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/reports/routes.ts#1"
@@ -30081,16 +30081,16 @@
             "location": "apps/api/src/handlers/skills/discover.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/from-blueprint.ts#2"
+            "location": "apps/api/src/handlers/skills/from-blueprint/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
+            "location": "apps/api/src/handlers/skills/drafts/generate.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/skills/import-url.ts#2"
+            "location": "apps/api/src/handlers/skills/from-url/import.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/import.ts#2"
@@ -30168,7 +30168,7 @@
             "location": "apps/api/src/handlers/style-sets/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/read-editor.ts#2"
+            "location": "apps/api/src/handlers/style-sets/editor/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/style-sets/replace.ts#3"
@@ -30177,7 +30177,7 @@
             "location": "apps/api/src/handlers/style-sets/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/style-sets/update-from-editor.ts#2"
+            "location": "apps/api/src/handlers/style-sets/from-editor/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/style-sets/update.ts#3"
@@ -30189,28 +30189,28 @@
             "location": "apps/api/src/handlers/tasks/assignees/move.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-add.ts#2"
+            "location": "apps/api/src/handlers/tasks/assignees/add.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-add.ts#3"
+            "location": "apps/api/src/handlers/tasks/assignees/add.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-remove.ts#3"
+            "location": "apps/api/src/handlers/tasks/assignees/remove.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/tasks/assignees-remove.ts#4"
+            "location": "apps/api/src/handlers/tasks/assignees/remove.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/tasks/calendar.ts#3"
+            "location": "apps/api/src/handlers/tasks/calendar/list.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-create.ts#2"
+            "location": "apps/api/src/handlers/tasks/entity-links/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#3"
+            "location": "apps/api/src/handlers/tasks/entity-links/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#4"
+            "location": "apps/api/src/handlers/tasks/entity-links/delete.ts#4"
           },
           {
             "location": "apps/api/src/handlers/tasks/routes.ts#1"
@@ -30243,10 +30243,10 @@
             "location": "apps/api/src/handlers/template-recipes/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-delete.ts#2"
+            "location": "apps/api/src/handlers/templates/categories/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories-update.ts#2"
+            "location": "apps/api/src/handlers/templates/categories/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/categories.ts#3"
@@ -30258,37 +30258,37 @@
             "location": "apps/api/src/handlers/templates/check.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clause-slots.ts#10"
+            "location": "apps/api/src/handlers/templates/clause-slots/list.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-link.ts#2"
+            "location": "apps/api/src/handlers/templates/clauses/link.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-list.ts#2"
+            "location": "apps/api/src/handlers/templates/clauses/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-slot-update.ts#2"
+            "location": "apps/api/src/handlers/templates/clause-slots/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-sync-all.ts#2"
+            "location": "apps/api/src/handlers/templates/outdated-clauses/sync.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-sync.ts#2"
+            "location": "apps/api/src/handlers/templates/clauses/sync.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/clauses-unlink.ts#2"
+            "location": "apps/api/src/handlers/templates/clauses/unlink.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/condition-decisions/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-blank.ts#2"
+            "location": "apps/api/src/handlers/templates/blank/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-from-style-set.ts#2"
+            "location": "apps/api/src/handlers/templates/from-style-set/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-from-styles.ts#2"
+            "location": "apps/api/src/handlers/templates/from-styles/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/create.ts#2"
@@ -30300,13 +30300,13 @@
             "location": "apps/api/src/handlers/templates/discover.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-by-id.ts#2"
+            "location": "apps/api/src/handlers/templates/fills/download.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-preview.ts#2"
+            "location": "apps/api/src/handlers/templates/fills/preview.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/fill-to-workspace.ts#2"
+            "location": "apps/api/src/handlers/templates/fills/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/fill.ts#2"
@@ -30333,7 +30333,7 @@
             "location": "apps/api/src/handlers/templates/lookup-formats/my-default/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/lookup-preview.ts#2"
+            "location": "apps/api/src/handlers/templates/lookups/preview.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/prefill.ts#3"
@@ -30348,10 +30348,10 @@
             "location": "apps/api/src/handlers/templates/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/save-document.ts#2"
+            "location": "apps/api/src/handlers/templates/document/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/suggest-fields.ts#2"
+            "location": "apps/api/src/handlers/templates/fields/suggest.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/update.ts#3"
@@ -30360,25 +30360,25 @@
             "location": "apps/api/src/handlers/templates/update.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-diff.ts#2"
+            "location": "apps/api/src/handlers/templates/versions/diff.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-get.ts#2"
+            "location": "apps/api/src/handlers/templates/versions/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-list.ts#2"
+            "location": "apps/api/src/handlers/templates/versions/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/versions-summarize.ts#2"
+            "location": "apps/api/src/handlers/templates/versions/summarize.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/versions.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-delete.ts#3"
+            "location": "apps/api/src/handlers/time-entries/batch/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/batch-update.ts#3"
+            "location": "apps/api/src/handlers/time-entries/batch/update.ts#3"
           },
           {
             "location": "apps/api/src/handlers/time-entries/create.ts#1"
@@ -30390,22 +30390,22 @@
             "location": "apps/api/src/handlers/time-entries/delete.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#3"
+            "location": "apps/api/src/handlers/time-entries/csv/export.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#4"
+            "location": "apps/api/src/handlers/time-entries/csv/export.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#3"
+            "location": "apps/api/src/handlers/time-entries/ledes/export.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#4"
+            "location": "apps/api/src/handlers/time-entries/ledes/export.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#3"
+            "location": "apps/api/src/handlers/time-entries/pdf/export.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#4"
+            "location": "apps/api/src/handlers/time-entries/pdf/export.ts#4"
           },
           {
             "location": "apps/api/src/handlers/time-entries/list.ts#13"
@@ -30435,7 +30435,7 @@
             "location": "apps/api/src/handlers/time-entries/summary/get.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/timer-start.ts#3"
+            "location": "apps/api/src/handlers/time-entries/timer/start.ts#3"
           },
           {
             "location": "apps/api/src/handlers/time-entries/update.ts#3"
@@ -30504,7 +30504,7 @@
             "location": "apps/api/src/handlers/views/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/views/table-export.ts#2"
+            "location": "apps/api/src/handlers/views/table/export.ts#2"
           },
           {
             "location": "apps/api/src/handlers/well-known/routes.ts#11"
@@ -30537,7 +30537,7 @@
             "location": "apps/api/src/handlers/workspaces/anonymization-terms/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#3"
+            "location": "apps/api/src/handlers/workspaces/cells/retry.ts#3"
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#3"
@@ -30570,7 +30570,7 @@
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-justifications.ts#3"
+            "location": "apps/api/src/handlers/workspaces/justifications/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#3"
@@ -30582,7 +30582,7 @@
             "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#2"
+            "location": "apps/api/src/handlers/workspaces/workflow/targets/count.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/routes.ts#2"
@@ -30594,19 +30594,19 @@
             "location": "apps/api/src/handlers/workspaces/update.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workflow-start.ts#2"
+            "location": "apps/api/src/handlers/workspaces/workflow/start.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#3"
+            "location": "apps/api/src/handlers/workspaces/contacts/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#4"
+            "location": "apps/api/src/handlers/workspaces/contacts/create.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#3"
+            "location": "apps/api/src/handlers/workspaces/members/add.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#4"
+            "location": "apps/api/src/handlers/workspaces/members/add.ts#4"
           },
           {
             "location": "apps/api/src/lib/api-handlers.ts#9"
@@ -40455,7 +40455,7 @@
             "location": "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts#23"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
+            "location": "apps/api/src/handlers/entities/placements/suggest.ts#5"
           },
           {
             "location": "apps/api/src/handlers/feedback/intake.ts#26"
@@ -40488,7 +40488,7 @@
             "location": "apps/api/src/handlers/sharepoint/graph-oauth.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
+            "location": "apps/api/src/handlers/skills/drafts/generate.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#4"
@@ -40503,7 +40503,7 @@
             "location": "apps/api/src/handlers/templates/prefill.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/usage/get-entitlement.ts#3"
+            "location": "apps/api/src/handlers/usage/entitlement/get.ts#3"
           },
           {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#4"

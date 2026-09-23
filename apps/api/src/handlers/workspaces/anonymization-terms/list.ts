@@ -11,7 +11,7 @@ const config = {
   description:
     "Read a matter's own always-mask terms with their canonical form, label, " +
     "variants, and enabled flag. Organization-wide terms are not included; " +
-    "read those with organization-settings.read-anonymization-blacklist.",
+    "read those with organization-settings.anonymization-blacklist.get.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   access: "read",
