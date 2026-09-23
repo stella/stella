@@ -229,7 +229,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 97,
+    "count": 96,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/scripts/backfill-image-thumbnails.ts": 1,
@@ -270,7 +270,6 @@
       "apps/api/src/lib/document-translation/run-queue.ts": 1,
       "apps/api/src/lib/entity-deletion-effect-store.ts": 1,
       "apps/api/src/lib/extraction-runs/root-store.ts": 1,
-      "apps/api/src/lib/extraction-runs/store.ts": 1,
       "apps/api/src/lib/flows/automated-run-cap.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
       "apps/api/src/lib/flows/flow-run-worker.ts": 1,
