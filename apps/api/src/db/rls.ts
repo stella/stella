@@ -643,6 +643,37 @@ export const userOrganizationPolicies = () => [
   }),
 ];
 
+// A notification that points into a matter is visible, and can be marked
+// read, only while the recipient can still access that matter. Rows with no
+// matter pointer keep the plain recipient and organization pins.
+const notificationVisibleCheck = sql`(
+  ${userOrganizationCheck} AND (workspace_id IS NULL OR ${workspaceCheck})
+)`;
+
+export const notificationPolicies = () => [
+  p.pgPolicy("user_select", {
+    for: "select",
+    to: stella,
+    using: notificationVisibleCheck,
+  }),
+  p.pgPolicy("user_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: userOrganizationCheck,
+  }),
+  p.pgPolicy("user_update", {
+    for: "update",
+    to: stella,
+    using: notificationVisibleCheck,
+    withCheck: userOrganizationCheck,
+  }),
+  p.pgPolicy("user_delete", {
+    for: "delete",
+    to: stella,
+    using: userOrganizationCheck,
+  }),
+];
+
 export const userFilePolicies = () => [
   p.pgPolicy("user_select", {
     for: "select",
