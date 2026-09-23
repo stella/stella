@@ -27,10 +27,8 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-// `t.UnionEnum` keeps the literal union in the inferred body type, which
-// the web client reads its event and detail types from.
-const literals = <T extends string>(values: readonly T[]) =>
-  t.UnionEnum([...values]);
+// `t.UnionEnum` over the const tuples keeps the literal unions in the
+// inferred body type, which the web client reads its types from.
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),
@@ -38,7 +36,7 @@ const bodySchema = t.Object({
   occurredOn: t.Nullable(
     t.Object({
       date: t.String({ format: "date" }),
-      precision: literals(FACT_DATE_PRECISIONS),
+      precision: t.UnionEnum(FACT_DATE_PRECISIONS),
     }),
   ),
   evidenceKind: t.Nullable(
@@ -47,14 +45,14 @@ const bodySchema = t.Object({
   medium: t.Nullable(
     t.String({ minLength: 1, maxLength: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
   ),
-  confidence: literals(FACT_CONFIDENCES),
+  confidence: t.UnionEnum(FACT_CONFIDENCES),
   interpretationNote: t.Nullable(
     t.String({
       minLength: 1,
       maxLength: FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX,
     }),
   ),
-  scoring: literals(FACT_SCORING),
+  scoring: t.UnionEnum(FACT_SCORING),
 });
 
 const config = {

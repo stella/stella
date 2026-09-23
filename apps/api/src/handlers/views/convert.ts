@@ -19,7 +19,10 @@ import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
-import { avtLayoutError, rejectAvtLayout } from "@/api/lib/views/avt-layout";
+import {
+  avtLayoutErrorDetail,
+  rejectAvtLayout,
+} from "@/api/lib/views/avt-layout";
 import { convertLayout } from "@/api/lib/views/utils";
 
 const config = {
@@ -97,7 +100,7 @@ const convertView = createSafeHandler(
           legalListsEnabled: legalListsDeployed(),
         });
         if (avtRejection !== null) {
-          throw avtLayoutError(avtRejection);
+          throw new HandlerError(avtLayoutErrorDetail(avtRejection));
         }
 
         await tx

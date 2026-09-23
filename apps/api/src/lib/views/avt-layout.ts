@@ -10,7 +10,6 @@ import { and, eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { legalLists } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 export type AvtLayoutRejection = "legal-lists-disabled" | "list-not-found";
@@ -55,7 +54,8 @@ export const rejectAvtLayout = async ({
 const REJECTION_ERRORS = {
   "legal-lists-disabled": {
     status: 422,
-    message: "AVT views need legal lists, which this deployment does not serve.",
+    message:
+      "AVT views need legal lists, which this deployment does not serve.",
   },
   "list-not-found": {
     status: 404,
@@ -66,5 +66,6 @@ const REJECTION_ERRORS = {
   { status: number; message: string }
 >;
 
-export const avtLayoutError = (rejection: AvtLayoutRejection): HandlerError =>
-  new HandlerError(REJECTION_ERRORS[rejection]);
+/** The status and message a handler aborts with for a rejection. */
+export const avtLayoutErrorDetail = (rejection: AvtLayoutRejection) =>
+  REJECTION_ERRORS[rejection];

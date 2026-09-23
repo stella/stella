@@ -8,10 +8,12 @@ import {
 } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import { legalLists } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { rejectAvtLayout } from "@/api/lib/views/avt-layout";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -50,7 +52,8 @@ const check = async (layout: ViewLayout, legalListsEnabled = true) =>
   await testDb.transaction(
     async (tx) =>
       await rejectAvtLayout({
-        tx,
+        // The PGlite handle is the production transaction's test double.
+        tx: asTestRaw<Transaction>(tx),
         workspaceId: ids.wsA1,
         layout,
         legalListsEnabled,

@@ -18,7 +18,10 @@ import {
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
-import { avtLayoutError, rejectAvtLayout } from "@/api/lib/views/avt-layout";
+import {
+  avtLayoutErrorDetail,
+  rejectAvtLayout,
+} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -94,7 +97,7 @@ const createView = createSafeHandler(
           legalListsEnabled: legalListsDeployed(),
         });
         if (avtRejection !== null) {
-          throw avtLayoutError(avtRejection);
+          throw new HandlerError(avtLayoutErrorDetail(avtRejection));
         }
 
         const resolvedTemplateProperties = await resolveTemplateProperties({
