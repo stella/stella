@@ -16,7 +16,7 @@
  *   bun apps/api/scripts/seed-case-law.ts
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
@@ -279,11 +279,15 @@ export async function seedCaseLaw() {
       // (decisions are read from `case_law_decisions`, not the search table).
       // A failure here (e.g. local schema drift in `case_law_search_documents`)
       // must not abort the loop and leave the remaining decisions unseeded.
-      try {
-        await indexDecision(decisionId, ingestionDb);
-      } catch (error) {
+      const indexed = (
+        await Result.tryPromise(
+          async () => await indexDecision(decisionId, ingestionDb),
+        )
+      ).andThen((indexResult) => indexResult);
+      if (Result.isError(indexed)) {
+        const indexError = indexed.error;
         console.warn(
-          `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}): ${error instanceof Error ? error.message : String(error)}`,
+          `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}): ${indexError instanceof Error ? indexError.message : String(indexError)}`,
         );
       }
 
