@@ -325,7 +325,13 @@ describe("active decision section", () => {
               innerJoin: () => ({
                 where: () => ({
                   limit: async () => [
-                    { id: DECISION_ID, country: "CZE", descriptor: null },
+                    {
+                      id: DECISION_ID,
+                      country: "CZE",
+                      descriptor: null,
+                      published: true,
+                      absorption: null,
+                    },
                   ],
                 }),
               }),
