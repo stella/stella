@@ -146,13 +146,18 @@ const runResolve = async (
           canCreateProperties: true,
           recordAuditEvent: noAuditRows,
         });
+        if (resolved.isErr()) {
+          throw new TypeError(
+            `Expected the template to resolve: ${resolved.error.message}`,
+          );
+        }
         if (outcome === "reject-after-resolving") {
           throw new HandlerError({
             status: 500,
             message: "Failed to create view",
           });
         }
-        return resolved;
+        return resolved.value;
       }),
     catch: (cause) =>
       new DatabaseError({ message: "test transaction failed", cause }),
@@ -207,6 +212,8 @@ test("a caller that rejects after resolving keeps no created column", async () =
   });
 });
 
+// Callers abort on the returned rejection; this pins that the resolver wrote
+// nothing before rejecting, even in a transaction that went on to commit.
 test("the resolver rejects an invalid template before writing anything", async () => {
   const workspaceId = await seedWorkspace();
 
@@ -231,18 +238,15 @@ test("the resolver rejects an invalid template before writing anything", async (
       new DatabaseError({ message: "test transaction failed", cause }),
   });
 
-  expect(Result.isError(outcome)).toBe(true);
-  if (!Result.isError(outcome)) {
+  if (!Result.isOk(outcome)) {
+    throw new TypeError("Expected the transaction to complete");
+  }
+  const rejection = outcome.value;
+  if (!rejection.isErr()) {
     throw new TypeError("Expected the resolver to reject the template");
   }
-
-  const abort = transactionAbortError(outcome.error);
-  expect(HandlerError.is(abort)).toBe(true);
-  if (!HandlerError.is(abort)) {
-    throw new TypeError("Expected a HandlerError rejection");
-  }
-  expect(abort.status).toBe(422);
-  expect(abort.message).toBe("Duplicate template property sourceId");
+  expect(rejection.error.status).toBe(422);
+  expect(rejection.error.message).toBe("Duplicate template property sourceId");
 
   expect(await persistedCounts(workspaceId)).toEqual({
     properties: 0,

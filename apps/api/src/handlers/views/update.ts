@@ -121,10 +121,15 @@ const updateView = createSafeHandler(
             }).success,
             recordAuditEvent,
           });
+          // Throwing aborts the transaction; `abortableTx` hands the HandlerError
+          // back as the failure.
+          if (resolvedTemplateProperties.isErr()) {
+            throw resolvedTemplateProperties.error;
+          }
 
           cleanStalePropertyIds(
             parsedLayout,
-            resolvedTemplateProperties.propertyIds,
+            resolvedTemplateProperties.value.propertyIds,
           );
           updates.layout = parsedLayout;
         }
