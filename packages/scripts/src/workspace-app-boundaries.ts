@@ -648,10 +648,7 @@ const violationMessage = (edge: AppBoundaryEdge): string => {
 };
 
 /**
- * This ledger may only shrink. The web/API Eden exceptions disappear when a
- * generated client contract replaces server-graph inference; the rich-chat
- * exception disappears when that contract has a true package owner. The legal
- * atlas/API exceptions disappear when ingestion owns a package-level data-access
+ * This ledger may only shrink. The legal atlas/API exceptions disappear when ingestion owns a package-level data-access
  * boundary. The playground/web locale exception disappears when locale assets
  * have a shared package or generated owner.
  */

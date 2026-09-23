@@ -967,6 +967,15 @@ jobs:
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
+      - name: Web API types drift guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # apps/web type-checks against API types printed from the API's own
+        # inference instead of compiling the API. `--check` fails when the
+        # committed file is stale and asserts each printed type is identical
+        # to the inferred one. Regenerate: `bun --filter @stll/api
+        # gen:web-api-types`.
+        run: bun --filter @stll/api gen:web-api-types --check
+
       - name: Model catalog snapshot drift guard
         if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
