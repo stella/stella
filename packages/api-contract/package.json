@@ -10,6 +10,7 @@
     "./chat": "./src/chat.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
+    "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
     "./case-law-decision-route": "./src/case-law-decision-route.ts",
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",

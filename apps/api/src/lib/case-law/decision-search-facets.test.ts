@@ -1,14 +1,15 @@
 import { expect, test } from "bun:test";
 
 import {
+  COURT_TIER_LABELS,
+  type CourtTierLabel,
+} from "@stll/api-contract/case-law-court-tiers";
+
+import {
   COURT_WEIGHT_SEED,
   courtWeightMapFromSeed,
 } from "@/api/handlers/case-law/court-weight-seed";
-import {
-  COURT_TIER_LABELS,
-  courtTierLabel,
-  type CourtTierLabel,
-} from "@/api/lib/case-law/court-tiers";
+import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   groupCourtsByTier,
   labelSourceBuckets,

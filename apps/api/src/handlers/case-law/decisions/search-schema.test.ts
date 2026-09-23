@@ -2,6 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static } from "elysia";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -19,7 +20,6 @@ import {
   searchDecisionsBodySchema,
   searchDecisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/decisions/search-schema";
-import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import type { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import type { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {

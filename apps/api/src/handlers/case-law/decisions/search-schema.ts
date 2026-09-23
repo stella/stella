@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -12,7 +13,6 @@ import {
   safeHandlerErrorResponseSchema,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
-import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
