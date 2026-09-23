@@ -4,9 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { schedulerJobs } from "@/api/db/schema";
+import { maintenanceScopedDb } from "@/api/lib/db/maintenance-db";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,
@@ -41,8 +40,6 @@ const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
 const CONTINUATION_DELAY_MS = 1000;
 
-const rootScopedDb: ScopedDb = async (run) => await rootDb.transaction(run);
-
 const leaseFence = (job: SchedulerJob) =>
   and(
     eq(schedulerJobs.id, job.id),
@@ -58,7 +55,7 @@ export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
   signal,
 }) => {
   const result = await reconcileCaseLawRawSweeps({
-    scopedDb: rootScopedDb,
+    scopedDb: maintenanceScopedDb,
     limit: SWEEP_LIMIT,
     signal,
   });
@@ -96,17 +93,20 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   signal.throwIfAborted();
   const cursor = parseRowCursor(job.payload);
   const page = await reconcileCaseLawRawLayoutPage({
-    scopedDb: rootScopedDb,
+    scopedDb: maintenanceScopedDb,
     cursor,
     limit: ROW_PAGE_LIMIT,
     mode: RAW_LAYOUT_MODE.APPLY,
     signal,
   });
   // Checkpoint last, and only as far as every row before it is settled.
-  await rootDb
-    .update(schedulerJobs)
-    .set({ payload: { cursor: page.resumeAfter } })
-    .where(leaseFence(job));
+  await maintenanceScopedDb(
+    async (tx) =>
+      await tx
+        .update(schedulerJobs)
+        .set({ payload: { cursor: page.resumeAfter } })
+        .where(leaseFence(job)),
+  );
   logger.info("scheduler.case_law_raw_rows_reconciled", {
     "caseLawRawRows.current": page.counts.current,
     "caseLawRawRows.migrated": page.counts.migrated,
@@ -166,21 +166,27 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
 }) => {
   signal.throwIfAborted();
   const page = await censusCaseLawRawObjectsPage({
-    scopedDb: rootScopedDb,
+    scopedDb: maintenanceScopedDb,
     cursor: parseCensusCursor(job.payload),
     maxKeys: CENSUS_PAGE_KEYS,
     mode: RAW_CENSUS_MODE.APPLY,
     signal,
   });
-  await rootDb
-    .update(schedulerJobs)
-    .set({
-      payload:
-        page.next === null
-          ? null
-          : { sourceId: page.next.sourceId, startAfter: page.next.startAfter },
-    })
-    .where(leaseFence(job));
+  await maintenanceScopedDb(
+    async (tx) =>
+      await tx
+        .update(schedulerJobs)
+        .set({
+          payload:
+            page.next === null
+              ? null
+              : {
+                  sourceId: page.next.sourceId,
+                  startAfter: page.next.startAfter,
+                },
+        })
+        .where(leaseFence(job)),
+  );
   logger.info("scheduler.case_law_raw_objects_censused", {
     "caseLawRawObjects.live": page.counts.live,
     "caseLawRawObjects.reserved": page.counts.reserved,

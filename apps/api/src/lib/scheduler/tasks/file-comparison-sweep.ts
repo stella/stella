@@ -1,7 +1,7 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { maintenanceSafeDb } from "@/api/lib/db/maintenance-db";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
   FILE_COMPARISON_SWEEP_LIMIT,
@@ -18,8 +18,7 @@ type SweepDependencies = {
 
 export const createSweepFileComparisonUploadsTask =
   ({
-    rootSafeDb = async (run) =>
-      await Result.tryPromise(async () => await rootDb.transaction(run)),
+    rootSafeDb = maintenanceSafeDb,
     sweep = sweepExpiredFileComparisonUploads,
   }: SweepDependencies = {}): SchedulerTask =>
   /**

@@ -248,7 +248,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 99,
+    "count": 96,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/scripts/backfill-image-thumbnails.ts": 1,
@@ -277,6 +277,7 @@
       "apps/api/src/lib/db/assert-better-auth-oauth-policy.ts": 1,
       "apps/api/src/lib/db/assert-migrations-applied.ts": 1,
       "apps/api/src/lib/db/feedback-report-store.ts": 1,
+      "apps/api/src/lib/db/maintenance-db.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
       "apps/api/src/lib/desktop-edit-handoffs.ts": 1,
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
@@ -313,13 +314,10 @@
       "apps/api/src/lib/scheduler/jobs.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/scheduler/tasks/buffer-intent-reconciliation.ts": 1,
-      "apps/api/src/lib/scheduler/tasks/case-law-corpus-upload-cleanup.ts": 1,
-      "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts": 1,
       "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts": 1,
       "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 1,
-      "apps/api/src/lib/scheduler/tasks/file-comparison-sweep.ts": 1,
       "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts": 1,
       "apps/api/src/lib/scheduler/tasks/flow-run.ts": 1,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 1,
@@ -347,7 +345,6 @@
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
-      "apps/api/src/scripts/normalize-review-passage-references.ts": 1,
       "apps/api/src/scripts/recompute-chat-data-scope.ts": 1
     }
   },
