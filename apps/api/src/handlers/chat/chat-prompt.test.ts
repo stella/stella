@@ -278,7 +278,6 @@ describe("active decision section", () => {
     ): Promise<T> =>
       await fn(
         // SAFETY: the section runs one relational read off this handle.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
         {
           select: () => ({
             from: () => ({
@@ -296,6 +295,7 @@ describe("active decision section", () => {
               findFirst: async () => await Promise.resolve(DECISION_ROW),
             },
           },
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
         } as unknown as CaseLawPublicReadTransaction,
       );
     // SAFETY: brand-only wrapper; the read never inspects the marker.

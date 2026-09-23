@@ -39,9 +39,9 @@ const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
 // SAFETY: test double — every call this suite exercises is mocked at the
 // `mcp-upstream/connections` module boundary, so `safeDb` is never touched.
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type FakeMcpClient = {

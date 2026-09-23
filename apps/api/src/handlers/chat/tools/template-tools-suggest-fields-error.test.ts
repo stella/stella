@@ -46,9 +46,9 @@ const userId = toSafeId<"user">("user-test");
 // SAFETY: test double — usage metering only touches `safeDb` on a real
 // model step, which never runs here (`suggestTemplateFields` is mocked to
 // reject before any metering call).
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type SuggestFieldsExecute = (
@@ -67,8 +67,8 @@ describe("suggest_template_fields tool error handling", () => {
     });
 
     // SAFETY: invoke the tool's execute directly with a stub call context.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     const execute = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       .execute as unknown as SuggestFieldsExecute;
 
     const rejection: unknown = await execute(

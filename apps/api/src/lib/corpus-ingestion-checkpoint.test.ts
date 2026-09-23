@@ -68,10 +68,10 @@ beforeAll(
       name: "Checkpoint legislation source",
     });
 
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- pglite test transaction is structurally compatible with the production transaction used by ScopedDb
     scopedDb = (async (callback: (tx: unknown) => Promise<unknown>) =>
       await db.transaction(
         async (tx) => await callback(tx),
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- pglite test transaction is structurally compatible with the production transaction used by ScopedDb
       )) as unknown as ScopedDb;
   },
   { timeout: 30_000 },

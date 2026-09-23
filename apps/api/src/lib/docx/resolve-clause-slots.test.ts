@@ -56,8 +56,8 @@ const makeScopedDb = (rows: FakeRows): FakeDb => {
 
   // SAFETY: test stub; resolveClauseSlots only touches the batched relational
   // findMany methods and the select chain modeled above.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(fakeTx)) as unknown as ScopedDb;
 
   return { scopedDb, readCount: () => reads };

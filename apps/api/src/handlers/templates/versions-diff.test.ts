@@ -105,8 +105,8 @@ const makeScopedDb = (versions: StubVersionRow[]): ScopedDb => {
 
   // SAFETY: test stub; the fake tx implements exactly the query
   // surface `loadTemplateVersionDiffSources` touches.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return (async (fn: (t: typeof tx) => unknown) =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(tx)) as unknown as ScopedDb;
 };
 
