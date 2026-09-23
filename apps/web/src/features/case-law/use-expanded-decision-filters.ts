@@ -42,6 +42,8 @@ export const useExpandedDecisionFilters = (
       query.length > 0 &&
       typed.strict === undefined,
   });
-  const alternatives = expansion?.alternatives ?? [];
-  return alternatives.length === 0 ? typed : { ...typed, alternatives };
+  if (expansion === undefined || expansion.alternatives.length === 0) {
+    return typed;
+  }
+  return { ...typed, alternatives: expansion.alternatives };
 };

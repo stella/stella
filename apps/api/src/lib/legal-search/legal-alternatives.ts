@@ -98,7 +98,12 @@ export const normalizeLegalAlternatives = (
     if (!expandable.has(key)) {
       continue;
     }
-    const kept = byKey.get(key) ?? [];
+    // A word proposed twice merges into the list its first entry started.
+    let kept = byKey.get(key);
+    if (kept === undefined) {
+      kept = [];
+      byKey.set(key, kept);
+    }
     for (const alternative of entry.alternatives) {
       const words = corpusTokens(alternative);
       if (
@@ -118,7 +123,6 @@ export const normalizeLegalAlternatives = (
       }
       kept.push(normalized);
     }
-    byKey.set(key, kept);
   }
 
   const alternatives: LegalAlternatives = [];
@@ -134,6 +138,8 @@ export const normalizeLegalAlternatives = (
   }
   return alternatives;
 };
+
+const NO_ALTERNATIVE_WORDS: readonly string[] = [];
 
 /**
  * The alternatives as the query builder reads them, or null when there are
@@ -151,7 +157,12 @@ export const legalAlternativesExpander = (
       entry.alternatives,
     ]),
   );
-  return (term) => byKey.get(functionWordKey(term)) ?? [];
+  // A word the answer does not name is the common case, not a miss: it
+  // simply gets no alternative beside it.
+  return (term) => {
+    const found = byKey.get(functionWordKey(term));
+    return found === undefined ? NO_ALTERNATIVE_WORDS : found;
+  };
 };
 
 /**

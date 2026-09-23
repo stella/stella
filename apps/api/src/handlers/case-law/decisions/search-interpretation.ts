@@ -148,12 +148,13 @@ export const interpretDecisionQuery = (
     // Normalized again here because the request comes from a client: only
     // words this search requires keep alternatives, within the same bounds
     // the endpoint that proposed them applies.
-    legalAlternatives: verbatim
-      ? []
-      : normalizeLegalAlternatives(body.alternatives ?? [], {
-          functionWords,
-          query: body.query,
-        }),
+    legalAlternatives:
+      verbatim || body.alternatives === undefined
+        ? []
+        : normalizeLegalAlternatives(body.alternatives, {
+            functionWords,
+            query: body.query,
+          }),
   };
 };
 
