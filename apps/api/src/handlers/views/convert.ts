@@ -8,22 +8,25 @@ import {
   VIEW_LAYOUT_TYPES,
 } from "@stll/api-contract";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import { avtLayoutError, rejectAvtLayout } from "@/api/lib/views/avt-layout";
 import { convertLayout } from "@/api/lib/views/utils";
 
 const config = {
   description:
     "Convert one view of a matter to another layout type (table, filesystem, " +
     "kanban, calendar, timeline, or avt: document verification against a " +
-    "list's facts), carrying over as much of its filters and sorts as the " +
+    "list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the " +
     "target layout supports. Converting to overview, or to " +
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
@@ -86,7 +89,17 @@ const convertView = createSafeHandler(
     const newLayout = convertLayout(existingLayout, targetType);
 
     yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        const avtRejection = await rejectAvtLayout({
+          tx,
+          workspaceId,
+          layout: newLayout,
+          legalListsEnabled: legalListsDeployed(),
+        });
+        if (avtRejection !== null) {
+          throw avtLayoutError(avtRejection);
+        }
+
         await tx
           .update(workspaceViews)
           .set({ layout: newLayout })

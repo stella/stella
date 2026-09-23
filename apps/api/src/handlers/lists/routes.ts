@@ -2,7 +2,6 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
-import { env } from "@/api/env";
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -32,6 +31,7 @@ import readLatestVerifications from "@/api/handlers/lists/verifications/latest/l
 import readVerifications from "@/api/handlers/lists/verifications/list";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -42,7 +42,7 @@ const legalListRealtimeUpdates = workspaceResourceSetUpdates(
 );
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(env.isDev || env.FEATURE_LEGAL_LISTS))
+  .use(deploymentFeatureGate(legalListsDeployed()))
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

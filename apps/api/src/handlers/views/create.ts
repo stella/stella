@@ -11,12 +11,14 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   parseStoredViewLayout,
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
+import { avtLayoutError, rejectAvtLayout } from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -83,6 +85,16 @@ const createView = createSafeHandler(
             status: 400,
             message: "Views limit reached",
           });
+        }
+
+        const avtRejection = await rejectAvtLayout({
+          tx,
+          workspaceId,
+          layout,
+          legalListsEnabled: legalListsDeployed(),
+        });
+        if (avtRejection !== null) {
+          throw avtLayoutError(avtRejection);
         }
 
         const resolvedTemplateProperties = await resolveTemplateProperties({

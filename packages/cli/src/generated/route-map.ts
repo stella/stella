@@ -49484,7 +49484,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
                 description:
-                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
