@@ -39,6 +39,7 @@ import {
 import type { AstNode } from "./utils.ts";
 
 const FETCH_MODULES = new Map([
+  ["apps/api/src/lib/fetch", new Set(["fetchWithTimeout"])],
   ["@stll/fetch", new Set(["fetchWithTimeout"])],
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/retry",
