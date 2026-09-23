@@ -433,6 +433,8 @@ const useGroupGridGeometry = (
     centerColumns: table.getCenterLeafColumns(),
     endColumns: table.getEndLeafColumns(),
   }).filter((column) => column.getIsVisible());
+  const addPropertyColumn =
+    orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
@@ -443,12 +445,12 @@ const useGroupGridGeometry = (
   const gridStyle: WorkspaceGridStyle = {
     "--workspace-table-columns": getWorkspaceGridTemplateColumns({
       renderColumns,
-      addPropertyColumn: null,
+      addPropertyColumn,
     }),
     minWidth: tableWidth,
   };
 
-  return { table, renderColumns, gridStyle };
+  return { table, renderColumns, addPropertyColumn, gridStyle };
 };
 
 type GroupedAddRowProps = {
@@ -495,7 +497,7 @@ const GroupSkeleton = ({
   tableState,
   totalRows,
 }: GroupSkeletonProps) => {
-  const { renderColumns, gridStyle } = useGroupGridGeometry(
+  const { renderColumns, addPropertyColumn, gridStyle } = useGroupGridGeometry(
     columns,
     tableState,
   );
@@ -515,11 +517,12 @@ const GroupSkeleton = ({
           </WorkspaceGridHead>
         ))}
         <HeaderEndFillerCell
-          addPropertyColumn={null}
+          addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
         />
       </WorkspaceGridRow>
       <WorkspaceTableSkeletonRows
+        addPropertyColumn={addPropertyColumn}
         renderColumns={renderColumns}
         rowCount={skeletonRowCount}
       />
@@ -542,7 +545,7 @@ const GroupSkeleton = ({
             style={{
               gridColumn: getEndFillerGridColumn({
                 renderColumns,
-                addPropertyColumn: null,
+                addPropertyColumn,
               }),
               ...tableEndFillerCellStyle,
             }}

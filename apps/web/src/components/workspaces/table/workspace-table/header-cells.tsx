@@ -47,6 +47,8 @@ type DraggableHeaderCellProps<TRow extends TableRowData> = {
   expandedColumnId: string | null;
   onToggleSelectAll: () => void;
   selectAllState: SelectAllState;
+  /** Replaces the column's own header content, e.g. a section's add-column trigger. */
+  headerTrigger?: ReactNode;
 };
 
 export const DraggableHeaderCell = <TRow extends TableRowData>({
@@ -56,6 +58,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
   expandedColumnId,
   onToggleSelectAll,
   selectAllState,
+  headerTrigger,
 }: DraggableHeaderCellProps<TRow>) => {
   const headerRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
@@ -139,7 +142,9 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
   }, [canReorderColumn, header.column, pinning]);
 
   let headerContent: ReactNode = null;
-  if (header.column.id === selectColId) {
+  if (headerTrigger !== undefined) {
+    headerContent = headerTrigger;
+  } else if (header.column.id === selectColId) {
     // A table whose rows cannot be picked keeps the column for the row
     // numbers alone, so there is nothing for a select-all to act on.
     headerContent =
