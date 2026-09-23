@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.8.3
+
+### Patch Changes
+
+- [#3736](https://github.com/stella/stella/pull/3736) [`223993a`](https://github.com/stella/stella/commit/223993aa1874d00662f6ecd4e7c86de9bfd601bd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `orsr.lookupByIco` only considers search hits whose registration number equals the requested IČO, and returns `null` for an extract that names a different IČO. The ORSR search also matches corporate names, so a company named after another's IČO could previously be returned.
+
 ## 0.8.2
 
 ### Patch Changes
