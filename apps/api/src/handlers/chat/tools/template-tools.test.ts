@@ -33,8 +33,8 @@ const stubScopedDb = (
     },
   };
   // SAFETY: test double — exposes only the surface list_templates touches.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return (async (run: (t: typeof tx) => unknown) =>
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     await run(tx)) as unknown as ScopedDb;
 };
 
@@ -42,9 +42,9 @@ const stubScopedDb = (
  *  these tool-registration tests never trigger (no orgAIConfig), so it is
  *  never invoked. */
 // SAFETY: test double — never called because no AI generation runs here.
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 describe("createTemplateTools", () => {

@@ -358,7 +358,7 @@ describe("workspace hygiene", () => {
       expect.arrayContaining([
         {
           message:
-            "devDependencies.oxlint-tsgolint must be 7.0.2001; found 0.25.0",
+            "devDependencies.oxlint-tsgolint must be 7.0.2002; found 0.25.0",
           path: "package.json",
         },
         {
@@ -408,7 +408,7 @@ const createWorkspaceRoot = ({
     devDependencies: {
       "@stll/oxlint-config": "0.7.0",
       "@typescript/native": "npm:typescript@7.0.2",
-      "oxlint-tsgolint": "7.0.2001",
+      "oxlint-tsgolint": "7.0.2002",
       typescript: "catalog:",
       ultracite: "catalog:",
       ...rootDevDependencies,

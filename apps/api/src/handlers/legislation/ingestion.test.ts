@@ -65,8 +65,8 @@ beforeAll(
     ]);
 
     // Test shim: run each scopedDb callback directly against the pglite db.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test-only ScopedDb shim
     scopedDb = ((fn: (tx: unknown) => unknown) =>
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test-only ScopedDb shim
       fn(db)) as unknown as ScopedDb;
   },
   { timeout: 30_000 },

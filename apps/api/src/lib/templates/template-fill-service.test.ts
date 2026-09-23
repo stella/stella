@@ -67,8 +67,8 @@ const stubScopedDb = (): ScopedDb => {
   };
   // SAFETY: test stub; the required-fields path under test never reaches
   // clause-slot or template-row queries (no templateId is passed).
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return (async (fn: (tx: unknown) => Promise<unknown>) =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(fakeTx)) as unknown as ScopedDb;
 };
 
@@ -462,8 +462,8 @@ describe("fillStoredTemplateDocx use recording", () => {
     };
     // SAFETY: test stub; this fill touches the template row, registry
     // credential configuration, and the use-counter update counted above.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
     return { scopedDb, updates: () => updates };
   };
@@ -672,8 +672,8 @@ describe("describeStoredTemplate gated blocks", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (the DOCX comes from the fake S3 below).
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
@@ -765,8 +765,8 @@ describe("describeStoredTemplate array shape", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (S3 is exercised separately below via fake-s3).
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 

@@ -16,9 +16,9 @@ const fakeUserId = toSafeId<"user">("user_test");
 /** ScopedDb stub that must never be reached: definition validation
  *  rejects before any DB access. */
 // SAFETY: test stub; shape satisfies ScopedDb interface for handler mocks
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const throwingScopedDb = (async () => {
   throw new Error("scopedDb must not be called for invalid definitions");
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as ScopedDb;
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
