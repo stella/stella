@@ -337,6 +337,7 @@ const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
 const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
 ): Promise<ParsedSkillPackage> => {
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files);
   if (entries.length > LIMITS.agentSkillArchiveFilesMax) {

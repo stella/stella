@@ -41,7 +41,7 @@ const prepareDocumentTranslation = createSafeHandler<
   );
 
   const inspection = await Result.tryPromise({
-    try: async () => await inspectDocxComments(loaded.buffer),
+    try: async () => await inspectDocxComments(loaded.scanned),
     catch: (cause) => cause,
   });
   if (Result.isError(inspection)) {

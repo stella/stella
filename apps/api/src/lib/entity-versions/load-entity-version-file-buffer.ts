@@ -22,9 +22,10 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -169,7 +170,7 @@ export const readEntityVersionFile = async (
   file: EntityVersionFile,
   organizationId: SafeId<"organization">,
   signal?: AbortSignal,
-): Promise<Result<ArrayBuffer, HandlerError>> => {
+): Promise<Result<ScannedFile, HandlerError>> => {
   if (file.sizeBytes > FILE_SIZE_LIMIT_BYTES.document) {
     return Result.err(
       new HandlerError({
@@ -182,15 +183,16 @@ export const readEntityVersionFile = async (
 
   return await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readStoredFile({
+        key: createFileKey({
           organizationId,
           workspaceId: file.workspaceId,
           fileId: file.fileId,
           mimeType: file.mimeType,
         }),
-        signal,
-      ),
+        mimeType: file.mimeType,
+        ...(signal === undefined ? {} : { signal }),
+      }),
     catch: (cause) =>
       new HandlerError({
         status: 500,
@@ -206,6 +208,8 @@ type LoadEntityVersionFileBufferOptions = ResolveEntityVersionFileOptions & {
 
 export type EntityVersionFileBuffer = EntityVersionFile & {
   buffer: ArrayBuffer;
+  /** The same bytes as a parser input; the file key proves they were scanned. */
+  scanned: ScannedFile;
 };
 
 export const loadEntityVersionFileBuffer = async ({
@@ -218,11 +222,15 @@ export const loadEntityVersionFileBuffer = async ({
   if (Result.isError(file)) {
     return file;
   }
-  const buffer = await readEntityVersionFile(file.value, organizationId);
-  if (Result.isError(buffer)) {
-    return buffer;
+  const scanned = await readEntityVersionFile(file.value, organizationId);
+  if (Result.isError(scanned)) {
+    return scanned;
   }
-  return Result.ok({ ...file.value, buffer: buffer.value });
+  return Result.ok({
+    ...file.value,
+    buffer: scanned.value.bytes,
+    scanned: scanned.value,
+  });
 };
 
 type LoadEntityVersionDocxBufferOptions = Omit<

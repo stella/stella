@@ -11,6 +11,14 @@
 //   v.parse(fileKeySchema, stagingKey)     // the brand's own schema, reused
 //   mintScannedFile({ ... })               // the mint, reused
 //   Object.create(ScannedFile.prototype)   // instance without the constructor
+//   import { parseDocx } from "@stll/folio-core/server"  // parser on raw bytes
+//   FolioDocxReviewer.fromBuffer(bytes)    // the same, through the reviewer
+//
+// folio-core parses raw bytes, so its DOCX entry points are reached through
+// `lib/file-scan/document-parsers.ts`, which takes a `ScannedFile`. The other
+// owners are the extraction worker (it receives scanned bytes over stdin) and
+// `document-translation/docx-review.ts` (its exports take a `ScannedFile`;
+// its other parses re-read its own serializer output). Tests are exempt.
 //
 // Neither brand needs a cast: `FileKey` is a valibot brand and `ScannedFile` a
 // class with a private constructor, so casts are banned everywhere. The mint
@@ -40,8 +48,34 @@ const BRAND_MODULES = new Set([
   "@/api/lib/file-scan/scanned-file",
 ]);
 
-// Minting exports and the modules allowed to import them. The mint lives
-// apart from the scanner so stored-file readers do not bundle the scanner.
+const FOLIO_SOURCES = new Set(["@stll/folio-core", "@stll/folio-core/server"]);
+
+const FOLIO_BYTE_PARSERS = new Set([
+  "applyDocxXmlPatchProposal",
+  "applyFolioAIEditsToBuffer",
+  "compareDocx",
+  "compareDocxVersions",
+  "createBilingualDocx",
+  "docxToMarkdown",
+  "extractDocumentStyleSetFromDocx",
+  "extractDocxText",
+  "inspectDocxPackage",
+  "materializeYjsDocx",
+  "parseDocx",
+  "readBilingualDocx",
+]);
+
+const FOLIO_OWNERS = [
+  "apps/api/src/lib/file-scan/document-parsers.ts",
+  "apps/api/src/lib/search/extraction-worker.ts",
+  "apps/api/src/lib/document-translation/docx-review.ts",
+];
+
+const isTestFile = (filename: string): boolean =>
+  filename.endsWith(".test.ts") || filename.includes("apps/api/src/tests/");
+
+// Minting exports and the modules allowed to import them (path fragments). The
+// mint lives apart from the scanner so stored-file readers do not bundle it.
 const RESTRICTED_IMPORTS = new Map([
   [
     "@/api/lib/file-key",
@@ -59,8 +93,26 @@ const RESTRICTED_IMPORTS = new Map([
       owners: [
         "apps/api/src/lib/file-scan/scan-upload.ts",
         "apps/api/src/lib/file-scan/stored-file.ts",
+        "apps/api/src/lib/file-scan/publisher-document.ts",
+        "apps/api/src/lib/file-scan/document-parsers.ts",
         "apps/api/src/tests/helpers/scanned-file.ts",
       ],
+    },
+  ],
+  [
+    "@/api/lib/file-scan/document-parsers",
+    {
+      name: "derivedScannedFile",
+      messageId: "derivedImport",
+      owners: ["apps/api/src/lib/document-translation/docx-review.ts"],
+    },
+  ],
+  [
+    "@/api/lib/file-scan/publisher-document",
+    {
+      name: "publisherDocument",
+      messageId: "publisherImport",
+      owners: ["apps/api/src/handlers/case-law/ingestion/adapters/"],
     },
   ],
 ]);
@@ -80,6 +132,18 @@ export default eslintCompatPlugin({
             "createUserFileKey, so unscanned bytes cannot reach a parser.",
           mintImport:
             "Do not import mintScannedFile; use scanUpload or readStoredFile.",
+          derivedImport:
+            "Do not import derivedScannedFile; folio output comes back as a " +
+            "ScannedFile from the document-parsers wrappers.",
+          publisherImport:
+            "publisherDocument is for case-law adapters' publisher downloads; " +
+            "scan other bytes with scanUpload.",
+          folioParserImport:
+            "Do not import {{name}} from folio-core; use the ScannedFile " +
+            "wrapper in @/api/lib/file-scan/document-parsers.",
+          folioReviewerFromBuffer:
+            "Do not call FolioDocxReviewer.fromBuffer on raw bytes; use " +
+            "openScannedDocxReviewer from @/api/lib/file-scan/document-parsers.",
           schemaImport:
             "Do not import fileKeySchema; build keys with createFileKey or " +
             "createUserFileKey (tests: testFileKey).",
@@ -93,11 +157,15 @@ export default eslintCompatPlugin({
         const brandNamespaces = new Set<string>();
         const typeAliases = new Map<string, unknown>();
         const pendingCasts: PendingCast[] = [];
+        const reviewerLocals = new Set<string>();
 
-        const filenameEndsWithAny = (suffixes: readonly string[]): boolean => {
+        const filenameMatchesAny = (fragments: readonly string[]): boolean => {
           const filename = filenameForContext(context);
-          return suffixes.some((suffix) => filename.endsWith(suffix));
+          return fragments.some((fragment) => filename.includes(fragment));
         };
+        const folioExempt = (): boolean =>
+          isTestFile(filenameForContext(context)) ||
+          filenameMatchesAny(FOLIO_OWNERS);
 
         // The brand a type annotation names, following same-file aliases.
         const brandOf = (
@@ -145,6 +213,7 @@ export default eslintCompatPlugin({
             brandNamespaces.clear();
             typeAliases.clear();
             pendingCasts.length = 0;
+            reviewerLocals.clear();
             const filename = filenameForContext(context);
             return (
               filename.includes("apps/api/src/") ||
@@ -161,6 +230,31 @@ export default eslintCompatPlugin({
               return;
             }
             const source = node.source.value;
+            if (FOLIO_SOURCES.has(source) && node.importKind !== "type") {
+              for (const specifier of node.specifiers) {
+                const imported = getImportedName(specifier);
+                if (
+                  imported === null ||
+                  (isAstNode(specifier) && specifier.importKind === "type")
+                ) {
+                  continue;
+                }
+                if (imported === "FolioDocxReviewer") {
+                  const local = getImportLocalName(specifier);
+                  if (local !== null) {
+                    reviewerLocals.add(local);
+                  }
+                  continue;
+                }
+                if (FOLIO_BYTE_PARSERS.has(imported) && !folioExempt()) {
+                  context.report({
+                    node: specifier,
+                    messageId: "folioParserImport",
+                    data: { name: imported },
+                  });
+                }
+              }
+            }
             if (BRAND_MODULES.has(source)) {
               for (const specifier of node.specifiers) {
                 if (
@@ -185,7 +279,7 @@ export default eslintCompatPlugin({
             const restricted = RESTRICTED_IMPORTS.get(source);
             if (
               restricted === undefined ||
-              filenameEndsWithAny(restricted.owners)
+              filenameMatchesAny(restricted.owners)
             ) {
               return;
             }
@@ -210,6 +304,19 @@ export default eslintCompatPlugin({
           },
           TSTypeAssertion(node) {
             pendingCasts.push({ node, typeAnnotation: node.typeAnnotation });
+          },
+          CallExpression(node) {
+            const { callee } = node;
+            if (
+              isAstNode(callee) &&
+              callee.type === "MemberExpression" &&
+              isIdentifier(callee.property, "fromBuffer") &&
+              isIdentifier(callee.object) &&
+              reviewerLocals.has(callee.object.name) &&
+              !folioExempt()
+            ) {
+              context.report({ node, messageId: "folioReviewerFromBuffer" });
+            }
           },
           MemberExpression(node) {
             if (

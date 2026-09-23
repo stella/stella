@@ -1,11 +1,12 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
 import { Result } from "better-result";
 
-import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
+import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -157,8 +158,9 @@ export const fetchAndPrepareFiles = async (
           fileId: meta.fileId,
           mimeType: DOCX_MIME_TYPE,
         });
-        const docxBuffer = await readS3ArrayBuffer(fileKey);
-        const reviewer = await FolioDocxReviewer.fromBuffer(docxBuffer);
+        const reviewer = await openScannedDocxReviewer(
+          await readStoredFile({ key: fileKey, mimeType: DOCX_MIME_TYPE }),
+        );
         const blocks = reviewer.getContent();
         return {
           kind: "docx",

@@ -889,8 +889,11 @@
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 0,
-    "files": {}
+    "count": 2,
+    "files": {
+      "apps/api/src/lib/docx/extract-text.ts": 1,
+      "apps/api/src/lib/style-set-editor.ts": 1
+    }
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
     "count": 0,
@@ -909,6 +912,22 @@
     "files": {
       "apps/api/src/handlers/chat/history-window.ts": 2,
       "apps/api/src/handlers/workspaces/list.ts": 1
+    }
+  },
+  "no-raw-zip-load-suppressions": {
+    "count": 13,
+    "files": {
+      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 1,
+      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1,
+      "apps/api/src/handlers/templates/prepare-template.ts": 1,
+      "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
+      "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
+      "apps/api/src/lib/docx/discover-placeholders.ts": 1,
+      "apps/api/src/lib/docx/discover-template.ts": 1,
+      "apps/api/src/lib/docx/patch-template.ts": 3,
+      "apps/api/src/lib/docx/strip-custom-xml-manifest.ts": 1,
+      "apps/api/src/lib/docx/write-field-filters.ts": 1,
+      "apps/api/src/lib/skills/skill-package.ts": 1
     }
   },
   "no-db-await-in-loop-suppressions": {

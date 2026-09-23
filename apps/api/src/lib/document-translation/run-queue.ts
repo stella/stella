@@ -2,10 +2,6 @@ import { Result, panic } from "better-result";
 import { type Queue, Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
-import {
-  createBilingualDocx,
-  readBilingualDocx,
-} from "@stll/folio-core/server";
 import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
@@ -101,7 +97,13 @@ import {
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  createBilingualDocxFromScanned,
+  readScannedBilingualDocx,
+} from "@/api/lib/file-scan/document-parsers";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -410,7 +412,7 @@ const setRunFailed = async (
 const loadPinnedSource = async (
   actor: RunActor,
   run: ClaimedRun,
-): Promise<Result<ArrayBuffer, DocumentTranslationRunErrorCode>> => {
+): Promise<Result<ScannedFile, DocumentTranslationRunErrorCode>> => {
   const file = await resolveEntityVersionFile({
     safeDb: actor.safeDb,
     workspaceId: actor.workspaceId,
@@ -797,12 +799,12 @@ const translateDocxWithAI = async (
 const translateBilingualWithAI = async (
   actor: RunActor,
   run: ClaimedRun,
-  source: ArrayBuffer,
+  source: ScannedFile,
   context: BilingualAIContext,
 ): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
   const conversion = await Result.tryPromise({
     try: async () =>
-      await createBilingualDocx(source, {
+      await createBilingualDocxFromScanned(source, {
         targetStyleSuffix: run.targetLang,
         borders: "none",
         tableLayout: BILINGUAL_TABLE_LAYOUT,
@@ -813,7 +815,7 @@ const translateBilingualWithAI = async (
     return Result.err("unsupported_format");
   }
   const manifest = await Result.tryPromise({
-    try: async () => await readBilingualDocx(conversion.value.buffer),
+    try: async () => await readScannedBilingualDocx(conversion.value.file),
     catch: (cause) => cause,
   });
   if (Result.isError(manifest)) {
@@ -990,7 +992,18 @@ const translateBilingualWithAI = async (
     rows,
     new Set(formattedTranslations.keys()),
   );
-  const applied = await applyAiEditsToDocx(formattedBuffer.value, operations);
+  // The formatting pass rewrote the package outside folio, so its output is
+  // scanned before folio parses it again.
+  const scannedFormatted = await scanUpload({
+    bytes: formattedBuffer.value,
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: run.sourceFileName,
+  });
+  if (Result.isError(scannedFormatted)) {
+    captureError(scannedFormatted.error, { runId: actor.runId });
+    return Result.err("format_validation_failed");
+  }
+  const applied = await applyAiEditsToDocx(scannedFormatted.value, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, { runId: actor.runId });
     return Result.err("format_validation_failed");
@@ -1038,11 +1051,11 @@ const executeRun = async (
   if (Result.isError(loaded)) {
     return loaded.error;
   }
-  let source = loaded.value;
+  let sourceFile = loaded.value;
   let comments: DocxCommentTranslationUnit[] = [];
   if (run.sourceMimeType === DOCX_MIME_TYPE) {
     const prepared = await Result.tryPromise({
-      try: async () => await resolveDocxToFinal(source),
+      try: async () => await resolveDocxToFinal(sourceFile),
       catch: (cause) => cause,
     });
     if (Result.isError(prepared)) {
@@ -1051,9 +1064,9 @@ const executeRun = async (
         ? "unsupported_review_markup"
         : "unsupported_format";
     }
-    source = prepared.value;
+    sourceFile = prepared.value;
     const readComments = await Result.tryPromise({
-      try: async () => await readDocxCommentTranslationUnits(source),
+      try: async () => await readDocxCommentTranslationUnits(sourceFile),
       catch: (cause) => cause,
     });
     if (Result.isError(readComments)) {
@@ -1098,7 +1111,12 @@ const executeRun = async (
       }
       commentTranslations = translatedComments.value;
     }
-    output = await translateWithDeepL(actor, run, source, apiKey.value);
+    output = await translateWithDeepL(
+      actor,
+      run,
+      sourceFile.bytes,
+      apiKey.value,
+    );
   } else {
     const context = await Result.tryPromise({
       try: async () => await createAIContext(actor, run),
@@ -1120,12 +1138,17 @@ const executeRun = async (
       commentTranslations = translatedComments.value;
     }
     if (run.output === DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED) {
-      output = await translateDocxWithAI(actor, run, source, context.value);
+      output = await translateDocxWithAI(
+        actor,
+        run,
+        sourceFile.bytes,
+        context.value,
+      );
     } else {
       output = await translateBilingualWithAI(
         actor,
         run,
-        source,
+        sourceFile,
         context.value,
       );
     }
@@ -1135,14 +1158,21 @@ const executeRun = async (
   }
   let completedOutput = output.value;
   if (comments.length > 0) {
+    // The comment policy parses the translated document; DeepL returns it
+    // from a third party, so it is scanned like an upload first.
+    const scannedOutput = await scanUpload({
+      bytes: completedOutput.buffer,
+      declaredMimeType: completedOutput.mimeType,
+      fileName: completedOutput.fileName,
+    });
+    if (Result.isError(scannedOutput)) {
+      return "format_validation_failed";
+    }
     const withComments = await Result.tryPromise({
       try: async () =>
         await applyDocxCommentPolicy({
-          source,
-          output:
-            completedOutput.buffer instanceof Uint8Array
-              ? copyToArrayBuffer(completedOutput.buffer)
-              : completedOutput.buffer,
+          source: sourceFile,
+          output: scannedOutput.value,
           policy: commentPolicy,
           translations: commentTranslations,
         }),

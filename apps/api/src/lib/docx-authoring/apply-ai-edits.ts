@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 
-import { applyFolioAIEditsToBuffer } from "@stll/folio-core/server";
 import type {
   ApplyFolioAIEditsToBufferResult,
   FolioAIEditOperation,
 } from "@stll/folio-core/server";
 
 import { DocxAuthoringError } from "@/api/lib/docx-authoring/document";
+import { applyFolioAIEditsToScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 /** The author every edit applied by stella is attributed to. */
 const STELLA_EDIT_AUTHOR = "Stella";
@@ -18,12 +19,12 @@ const STELLA_EDIT_AUTHOR = "Stella";
  * version history is the review trail.
  */
 export const applyAiEditsToDocx = async (
-  buffer: ArrayBuffer,
+  file: ScannedFile,
   operations: FolioAIEditOperation[],
 ): Promise<Result<ApplyFolioAIEditsToBufferResult, DocxAuthoringError>> =>
   await Result.tryPromise({
     try: async () =>
-      await applyFolioAIEditsToBuffer(buffer, operations, {
+      await applyFolioAIEditsToScannedDocx(file, operations, {
         author: STELLA_EDIT_AUTHOR,
         mode: "direct",
       }),

@@ -5,6 +5,7 @@
  */
 
 import {
+  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- template storage has no scan boundary yet (SW-0013)
   extractDocxText,
   type ExtractedDocxParagraph,
 } from "@stll/folio-core/server";

@@ -7,8 +7,6 @@
 
 import { Result } from "better-result";
 
-import { readBilingualDocx } from "@stll/folio-core/server";
-
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -23,6 +21,7 @@ import {
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 
 const PREPARE_TIMEOUT_MS = 150_000;
 
@@ -69,7 +68,7 @@ const prepareBilingualTranslation = createSafeHandler(
     );
 
     const manifest = await Result.tryPromise({
-      try: async () => await readBilingualDocx(loaded.buffer),
+      try: async () => await readScannedBilingualDocx(loaded.scanned),
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {

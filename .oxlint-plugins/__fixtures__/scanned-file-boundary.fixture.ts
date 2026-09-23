@@ -1,7 +1,19 @@
+// A folio parser on raw bytes skips the scan.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
+// Type-only imports of folio stay valid.
+import type { ParseOptions } from "@stll/folio-core/server";
+
 // The brand's schema would mint keys from any string.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { fileKeySchema } from "@/api/lib/file-key";
 import type * as keys from "@/api/lib/file-key";
+// Only the translation review module may wrap its own output.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+// Publisher downloads are for case-law adapters only.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 // The scan module's mint would wrap unscanned bytes.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -36,6 +48,11 @@ const _namespacedKey = stagingKey as keys.FileKey;
 const _laterAliasKey = stagingKey as LaterKey;
 type LaterKey = FileKey;
 
+// The reviewer parses raw bytes too.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+const _reviewer = FolioDocxReviewer.fromBuffer(bytes);
+declare const parseOptions: ParseOptions;
+
 // Instances built around the private constructor.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 const _fromPrototype: unknown = Object.create(ScannedFile.prototype);
@@ -46,6 +63,11 @@ const _otherKey = stagingKey as OtherKey;
 const _scannedBytes = scanned.bytes;
 
 export const __scannedFileBoundaryFixture = {
+  parseDocx,
+  derivedScannedFile,
+  publisherDocument,
+  parseOptions,
+  _reviewer,
   fileKeySchema,
   mintScannedFile,
   _forgedFile,

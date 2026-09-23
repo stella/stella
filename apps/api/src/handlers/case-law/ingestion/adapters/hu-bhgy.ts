@@ -51,7 +51,6 @@
 import { Result, panic } from "better-result";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
-import { parseDocx } from "@stll/folio-core/server";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
@@ -112,6 +111,8 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { logger } from "@/api/lib/observability/logger";
@@ -704,13 +705,23 @@ const decisionIdentifiers = (
  */
 const readHuBhgyDocument = async (
   document: DecisionDocument,
-): Promise<FolioDocument> =>
-  document.contentType === RTF_CONTENT_TYPE
-    ? readRtf(document.bytes)
-    : await parseDocx(document.bytes, {
-        detectVariables: false,
-        preloadFonts: false,
-      });
+): Promise<FolioDocument> => {
+  if (document.contentType === RTF_CONTENT_TYPE) {
+    return readRtf(document.bytes);
+  }
+  return await parseScannedDocx(
+    publisherDocument({
+      bytes: document.bytes,
+      mimeType: DOCX_CONTENT_TYPE,
+      fileName: "decision.docx",
+      adapterKey: ADAPTER_KEYS.HU_BHGY,
+    }),
+    {
+      detectVariables: false,
+      preloadFonts: false,
+    },
+  );
+};
 
 type HuBhgyBuildResult =
   | { type: "built"; decision: IngestionResult }

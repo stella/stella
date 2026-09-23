@@ -12,8 +12,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createBilingualDocx } from "@stll/folio-core/server";
-
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -24,6 +22,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-parsers";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -109,7 +108,7 @@ export const createBilingualEntityHandler = (
         try: async () =>
           await withTimeout(
             async () =>
-              await createBilingualDocx(loaded.buffer, {
+              await createBilingualDocxFromScanned(loaded.scanned, {
                 targetStyleSuffix: body.targetLang,
                 borders: body.borders ?? "none",
                 tableLayout: BILINGUAL_TABLE_LAYOUT,

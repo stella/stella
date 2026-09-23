@@ -22,7 +22,10 @@ import type { ScanResult } from "@/api/lib/file-scan/types";
 
 type ScannedFileSource =
   | { type: "scan"; scan: ScanResult; warnings: string[] | null }
-  | { type: "stored"; key: FileKey };
+  | { type: "stored"; key: FileKey }
+  | { type: "publisher"; adapterKey: string }
+  /** folio re-serialized a `ScannedFile` (tracked changes resolved, edits applied). */
+  | { type: "derived"; from: ScannedFileSource };
 
 type ScannedFileFields = {
   bytes: ArrayBuffer;
@@ -34,8 +37,9 @@ type ScannedFileFields = {
 let mint: (fields: ScannedFileFields) => ScannedFile;
 
 /**
- * Mints a `ScannedFile`. Only `scan-upload.ts`, `stored-file.ts`, and the test
- * helper may import this (enforced by `scanned-file-boundary`); it lives apart
+ * Mints a `ScannedFile`. Only `scan-upload.ts`, `stored-file.ts`,
+ * `publisher-document.ts`, `document-parsers.ts`, and the test helper may
+ * import this (enforced by `scanned-file-boundary`); it lives apart
  * from the scanner so stored-file readers do not bundle the scanner's native
  * addon.
  */

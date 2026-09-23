@@ -41,6 +41,20 @@ describe("style set source extraction", () => {
     expect(fileName.endsWith(".docx")).toBe(true);
   });
 
+  test("refuses a source the security scan rejects before parsing it", async () => {
+    // Declared as DOCX but not a ZIP package: the scan rejects it, so the
+    // style extractor never sees the bytes.
+    const source = new File(["not a zip package"], "firm-styles.docx", {
+      type: DOCX_MIME_TYPE,
+    });
+
+    const result = await extractStyleSetBuffer(source, "Firm Style");
+    expect(Result.isError(result) ? result.error.status : null).toBe(422);
+    expect(Result.isError(result) ? result.error.issues : null).toEqual([
+      expect.objectContaining({ code: "corrupt-zip" }),
+    ]);
+  });
+
   test("stores formatting without source document content", async () => {
     const sourceText = "PRIVATE SOURCE AGREEMENT";
     const sourceBytes = await createDocx(

@@ -12,6 +12,12 @@ import {
 
 import type { DocumentTranslationCommentPolicy } from "@/api/lib/document-translation/contract";
 import { DOCX_MAX_ENTRY_BYTES } from "@/api/lib/docx-archive";
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
+// This module owns its folio parses: its exports take a `ScannedFile`, and the
+// other parses re-read its own serializer output to verify it
+// (`scanned-file-boundary` lists it as an owner).
 
 const COMMENTS_PART_PATH = "word/comments.xml";
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
@@ -107,16 +113,17 @@ const assertCommentMetadataPreserved = async (
 };
 
 export const inspectDocxComments = async (
-  buffer: ArrayBuffer,
+  file: ScannedFile,
 ): Promise<{ hasComments: boolean }> => {
-  const reviewer = await openReviewer(buffer);
+  const reviewer = await openReviewer(file.bytes);
   return { hasComments: flattenComments(reviewer).length > 0 };
 };
 
 /** Resolve tracked revisions in every editable Word story to the Final view. */
 export const resolveDocxToFinal = async (
-  buffer: ArrayBuffer,
-): Promise<ArrayBuffer> => {
+  file: ScannedFile,
+): Promise<ScannedFile> => {
+  const buffer = file.bytes;
   const reviewer = await openReviewer(buffer);
   for (const { handle } of reviewer.listStories()) {
     if (!reviewer.resolveReviewedStory({ story: handle, view: "final" })) {
@@ -142,13 +149,13 @@ export const resolveDocxToFinal = async (
       });
     }
   }
-  return output;
+  return derivedScannedFile(file, output);
 };
 
 export const readDocxCommentTranslationUnits = async (
-  buffer: ArrayBuffer,
+  file: ScannedFile,
 ): Promise<DocxCommentTranslationUnit[]> =>
-  flattenComments(await openReviewer(buffer));
+  flattenComments(await openReviewer(file.bytes));
 
 const equalIds = (left: readonly number[], right: readonly number[]): boolean =>
   left.length === right.length &&
@@ -307,8 +314,8 @@ const replaceCommentContent = (
 };
 
 type ApplyDocxCommentPolicyOptions = {
-  source: ArrayBuffer;
-  output: ArrayBuffer;
+  source: ScannedFile;
+  output: ScannedFile;
   policy: DocumentTranslationCommentPolicy;
   translations: ReadonlyMap<number, string>;
 };
@@ -338,11 +345,13 @@ const inspectCommentsPart = async (
 
 /** Restore source comment metadata and apply the user's selected text policy. */
 export const applyDocxCommentPolicy = async ({
-  source,
-  output,
+  source: sourceFile,
+  output: outputFile,
   policy,
   translations,
 }: ApplyDocxCommentPolicyOptions): Promise<ArrayBuffer> => {
+  const source = sourceFile.bytes;
+  const output = outputFile.bytes;
   await assertCommentAnchorsPreserved(source, output);
   const [sourcePartInspection, outputPartInspection] = await Promise.all([
     inspectCommentsPart(source),

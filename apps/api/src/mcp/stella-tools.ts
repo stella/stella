@@ -18,7 +18,6 @@ import {
 } from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
-import { docxToMarkdown } from "@stll/folio-core/server";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -77,6 +76,8 @@ import {
   selectCurrentExtractedContent,
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
+import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -88,7 +89,6 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
@@ -1552,16 +1552,17 @@ const loadCurrentVersionDocxMarkdown = async ({
     try: async () =>
       await (context.testDependencies?.withTimeout ?? withTimeout)(
         async (signal) => {
-          const buffer = await readS3ArrayBuffer(
-            createFileKey({
+          const stored = await readStoredFile({
+            key: createFileKey({
               organizationId: context.organizationId,
               workspaceId: document.workspaceId,
               fileId: file.id,
               mimeType: DOCX_MIME_TYPE,
             }),
+            mimeType: DOCX_MIME_TYPE,
             signal,
-          );
-          return await docxToMarkdown(buffer);
+          });
+          return await scannedDocxToMarkdown(stored);
         },
         {
           label: "read_content_across_matters:docx-to-markdown",

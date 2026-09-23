@@ -1660,6 +1660,7 @@ const fetchFormex = async (
   ) {
     return await response.text();
   }
+  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const archive = await JSZip.loadAsync(await response.arrayBuffer());
   const entry = Object.values(archive.files).find((file) => !file.dir);
   return await entry?.async("string");

@@ -6,6 +6,7 @@ import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -50,11 +51,20 @@ export const extractStyleSetBuffer = async (
     return Result.err(validated.error);
   }
 
+  const scanned = await scanUploadForHandler({
+    bytes: await file.arrayBuffer(),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: sanitizeFilenamePreservingExtension(file.name),
+  });
+  if (Result.isError(scanned)) {
+    return scanned;
+  }
+
   return await Result.tryPromise({
     try: async () =>
       await createTemplateBuffer({
         type: "style-source",
-        buffer: Buffer.from(await file.arrayBuffer()),
+        file: scanned.value,
         name,
       }),
     catch: (cause) =>

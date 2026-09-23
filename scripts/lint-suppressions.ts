@@ -174,6 +174,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "unbounded Drizzle list reads",
   },
   {
+    rule: "no-raw-zip-load/no-raw-zip-load",
+    tier: "data-volume",
+    guards: "archive entries inflated without the loadDocxArchive size caps",
+  },
+  {
     rule: "no-db-await-in-loop/no-db-await-in-loop",
     tier: "data-volume",
     guards: "per-row database round-trips inside a loop (N+1)",

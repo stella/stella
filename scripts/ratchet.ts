@@ -2997,6 +2997,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-unowned-file-version-write/no-unowned-file-version-write": 0,
   "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,
   "scanned-file-boundary/scanned-file-boundary": 0,
+  "no-raw-zip-load/no-raw-zip-load": 0,
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,

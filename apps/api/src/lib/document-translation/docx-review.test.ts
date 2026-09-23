@@ -11,6 +11,8 @@ import {
 } from "@stll/folio-core/server";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   applyDocxCommentPolicy,
@@ -63,12 +65,15 @@ const createReviewedDocx = async (): Promise<ArrayBuffer> => {
   return await createDocx(document);
 };
 
+const docxFile = (bytes: ArrayBuffer) =>
+  testScannedFile({ bytes, mimeType: DOCX_MIME_TYPE });
+
 const createThreadedReviewedDocx = async (): Promise<{
   replyId: number;
   source: ArrayBuffer;
 }> => {
   const reviewer = await FolioDocxReviewer.fromBuffer(
-    await resolveDocxToFinal(await createReviewedDocx()),
+    (await resolveDocxToFinal(docxFile(await createReviewedDocx()))).bytes,
   );
   const reply = reviewer.replyTo(10, {
     author: "Reply reviewer",
@@ -119,11 +124,11 @@ const commentParagraphIds = (commentsXml: string): string[] => {
 
 describe("DOCX final-view and comment handling", () => {
   test("resolves tracked revisions to Final and retains comments", async () => {
-    const source = await createReviewedDocx();
+    const source = docxFile(await createReviewedDocx());
     expect(await inspectDocxComments(source)).toEqual({ hasComments: true });
 
     const output = await resolveDocxToFinal(source);
-    const reviewer = await FolioDocxReviewer.fromBuffer(output);
+    const reviewer = await FolioDocxReviewer.fromBuffer(output.bytes);
 
     expect(reviewer.getChanges()).toHaveLength(0);
     expect(
@@ -138,7 +143,9 @@ describe("DOCX final-view and comment handling", () => {
   });
 
   test("applies each comment retention policy without changing attribution", async () => {
-    const source = await resolveDocxToFinal(await createReviewedDocx());
+    const source = await resolveDocxToFinal(
+      docxFile(await createReviewedDocx()),
+    );
     const translation = new Map([[10, "Translated comment"]]);
     const cases = [
       ["original", "Original comment"],
@@ -157,7 +164,7 @@ describe("DOCX final-view and comment handling", () => {
           }),
       ),
     );
-    const before = await loadDocxArchive(source);
+    const before = await loadDocxArchive(source.bytes);
     const beforeCommentsXml = await before.readEntryString("word/comments.xml");
     const unchangedPaths = Object.keys(before.zip.files).filter(
       (path) => path !== "word/comments.xml" && !before.zip.files[path]?.dir,
@@ -233,8 +240,8 @@ describe("DOCX final-view and comment handling", () => {
     const inspected = await Promise.all(
       cases.map(async ([policy, expectedRoot, expectedReply]) => {
         const output = await applyDocxCommentPolicy({
-          source,
-          output: source,
+          source: docxFile(source),
+          output: docxFile(source),
           policy,
           translations,
         });
@@ -303,10 +310,10 @@ describe("DOCX final-view and comment handling", () => {
     document.package.document.content = [
       { type: "paragraph", content: [run("Body"), reference] },
     ];
-    const source = await createDocx(document);
+    const source = docxFile(await createDocx(document));
 
     const output = await resolveDocxToFinal(source);
-    const reviewer = await FolioDocxReviewer.fromBuffer(output);
+    const reviewer = await FolioDocxReviewer.fromBuffer(output.bytes);
     const endnoteStory = reviewer
       .listStories()
       .find(({ handle }) => handle.type === "endnote");

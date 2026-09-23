@@ -625,7 +625,7 @@ const executeRun = async (
   }
 
   const operations = buildOperations(rows, translated);
-  const applied = await applyAiEditsToDocx(loaded.value.buffer, operations);
+  const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, {
       runId: actor.runId,

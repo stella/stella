@@ -7,7 +7,6 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
-import { docxToMarkdown } from "@stll/folio-core/server";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
@@ -46,6 +45,7 @@ import {
 } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
+import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import {
   FileScanRejectedError,
   scanUpload,
@@ -459,7 +459,7 @@ export const hydrateFilePart = async ({
       const markdown = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            (await docxToMarkdown(bytes)).slice(
+            (await scannedDocxToMarkdown(stored)).slice(
               0,
               LIMITS.chatContextFileMaxChars,
             ),

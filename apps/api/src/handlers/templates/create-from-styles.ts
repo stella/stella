@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
@@ -57,6 +58,14 @@ const createTemplateFromStylesHandler = async function* ({
     );
   }
 
+  const scanned = yield* Result.await(
+    scanUploadForHandler({
+      bytes: await styleSource.arrayBuffer(),
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: sanitizeFilenamePreservingExtension(styleSource.name),
+    }),
+  );
+
   // Folio reads only sanitized style resources, then creates a fresh package.
   // Source text, relationships, media, comments, and revisions are excluded.
   const buffer = yield* Result.await(
@@ -64,7 +73,7 @@ const createTemplateFromStylesHandler = async function* ({
       try: async () =>
         await createTemplateBuffer({
           type: "style-source",
-          buffer: Buffer.from(await styleSource.arrayBuffer()),
+          file: scanned,
           name,
         }),
       catch: (cause) =>

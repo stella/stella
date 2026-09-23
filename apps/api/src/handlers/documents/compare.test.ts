@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  compareDocx,
   createDocx,
   createEmptyDocument,
   type CompareDocxError,
@@ -18,7 +17,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { compareScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -161,14 +163,14 @@ const createHarness = ({
   };
   const { safeDb, scopedDb } = createScopedDbMock(tx);
   const applyDispositionMock = mock(
-    async (buffer: ArrayBuffer, _disposition: "keep" | "accept" | "reject") =>
-      buffer,
+    async (file: ScannedFile, _disposition: "keep" | "accept" | "reject") =>
+      file,
   );
   let comparisonIndex = 0;
   const compareDocxMock = mock(
     async (
-      base: ArrayBuffer,
-      target: ArrayBuffer,
+      base: ScannedFile,
+      target: ScannedFile,
       options: Parameters<Dependencies["compareDocx"]>[2],
     ) => {
       if (realCompareDocx !== undefined) {
@@ -200,7 +202,11 @@ const createHarness = ({
   const readEntityVersionFileMock = mock(
     async (file: Parameters<Dependencies["readEntityVersionFile"]>[0]) =>
       Result.ok(
-        readBuffers?.get(file.fileName) ?? new Uint8Array([1, 2, 3]).buffer,
+        testScannedFile({
+          bytes:
+            readBuffers?.get(file.fileName) ?? new Uint8Array([1, 2, 3]).buffer,
+          mimeType: DOCX_MIME_TYPE,
+        }),
       ),
   );
   const withTimeoutMock = mock(
@@ -443,7 +449,7 @@ describe("documents.compare", () => {
       expect(baseText).not.toBe(targetText);
 
       const harness = createHarness({
-        compareDocx,
+        compareDocx: compareScannedDocx,
         readBuffers: new Map([
           ["Agreement v1.docx", baseBuffer],
           ["Agreement v2.docx", targetBuffer],
