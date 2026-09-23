@@ -199,10 +199,7 @@ export const fixtureHasCleanCase = (source: string, ruleId: string): boolean =>
   source.split("\n").some((line) => {
     const marker = /(?:\/\/|\/\*)\s*expect-clean:\s*(?<rules>[^*]+)/u.exec(line)
       ?.groups?.["rules"];
-    return (
-      marker !== undefined &&
-      marker.split(",").some((rule) => rule.trim() === ruleId)
-    );
+    return marker?.split(",").some((rule) => rule.trim() === ruleId) === true;
   });
 
 for (const file of pluginFiles) {
