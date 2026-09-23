@@ -12,7 +12,7 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
-import { latestDocumentVerificationOptions } from "@/features/avt/queries";
+import { latestVerificationsOptions } from "@/features/avt/queries";
 import type {
   VerificationRunStatus,
   VerificationRunSummary,
@@ -45,6 +45,12 @@ export const DocumentVerifications = ({
     onStarted: onOpenRun,
   });
   const confirmation = verification.sizeConfirmation;
+  const { data: latestByEntity, isPending } = useQuery(
+    latestVerificationsOptions({
+      workspaceId,
+      entityIds: [...new Set(files.map((file) => file.entityId))],
+    }),
+  );
 
   if (files.length === 0) {
     return (
@@ -61,6 +67,8 @@ export const DocumentVerifications = ({
           <DocumentRow
             file={file}
             key={`${file.entityId}:${file.fieldId}`}
+            latest={latestByEntity?.get(file.entityId) ?? null}
+            loading={isPending}
             listId={listId}
             onOpenRun={onOpenRun}
             onVerify={(target) => {
@@ -70,7 +78,6 @@ export const DocumentVerifications = ({
               verification.startingFor?.entityId === file.entityId &&
               verification.startingFor.fileFieldId === file.fieldId
             }
-            workspaceId={workspaceId}
           />
         ))}
       </ul>
@@ -82,7 +89,10 @@ export const DocumentVerifications = ({
             return;
           }
           detached(
-            verification.start(confirmation.target, confirmation.estimatedUnits),
+            verification.start(
+              confirmation.target,
+              confirmation.estimatedUnits,
+            ),
             "avt.confirm-verification-size",
           );
         }}
@@ -94,7 +104,8 @@ export const DocumentVerifications = ({
 };
 
 type DocumentRowProps = {
-  workspaceId: string;
+  latest: VerificationRunSummary | null;
+  loading: boolean;
   listId: string;
   file: WorkspaceFile;
   starting: boolean;
@@ -103,7 +114,8 @@ type DocumentRowProps = {
 };
 
 const DocumentRow = ({
-  workspaceId,
+  latest,
+  loading,
   listId,
   file,
   starting,
@@ -112,13 +124,6 @@ const DocumentRow = ({
 }: DocumentRowProps) => {
   const t = useTranslations();
   const canVerify = usePermissions({ entity: ["update"] });
-  const { data: latest, isPending } = useQuery(
-    latestDocumentVerificationOptions({
-      workspaceId,
-      entityId: file.entityId,
-      fileFieldId: file.fieldId,
-    }),
-  );
   const active = latest?.status === "queued" || latest?.status === "running";
 
   return (
@@ -127,11 +132,15 @@ const DocumentRow = ({
         <p className="truncate text-sm font-medium" dir="auto">
           {file.name ?? file.fileName}
         </p>
-        {!isPending && <LatestRunSummary latest={latest ?? null} listId={listId} />}
+        {!loading && <LatestRunSummary latest={latest} listId={listId} />}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {latest !== undefined && latest !== null && (
-          <Button onClick={() => onOpenRun(latest.id)} size="sm" variant="ghost">
+        {latest !== null && (
+          <Button
+            onClick={() => onOpenRun(latest.id)}
+            size="sm"
+            variant="ghost"
+          >
             <FileCheckIcon />
             {t("avt.documents.open")}
           </Button>
@@ -146,7 +155,7 @@ const DocumentRow = ({
           variant="outline"
         >
           <PlayIcon />
-          {latest === undefined || latest === null
+          {latest === null
             ? t("avt.documents.verify")
             : t("avt.documents.verifyAgain")}
         </Button>

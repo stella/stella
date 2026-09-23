@@ -9,8 +9,7 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -20,7 +19,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
   tSafeId,
@@ -29,8 +27,11 @@ import {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
-import type { ClaimState } from "@/api/lib/lists/verification/contract";
+import {
+  CLAIM_COUNT_COLUMNS,
+  RUN_SUMMARY_COLUMNS,
+  serializeRunSummary,
+} from "@/api/lib/lists/verification/run-summary";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
@@ -38,19 +39,6 @@ const runCursor = createTimestampIdCursorCodec({
   column: legalListVerificationRuns.createdAt,
   brandId: brandPersistedListVerificationRunId,
 });
-
-const stateFilterCount = (state: ClaimState): SQL<number> =>
-  sql<number>`count(${legalListClaims.id}) filter (where ${legalListClaims.state} = ${state})::int`;
-
-/** Total over the claim states, so a new state cannot go uncounted. */
-const CLAIM_COUNT_COLUMNS = {
-  supported: stateFilterCount(CLAIM_STATE.SUPPORTED),
-  tension: stateFilterCount(CLAIM_STATE.TENSION),
-  contradicted: stateFilterCount(CLAIM_STATE.CONTRADICTED),
-  nocover: stateFilterCount(CLAIM_STATE.NOCOVER),
-  notverifiable: stateFilterCount(CLAIM_STATE.NOTVERIFIABLE),
-  recordconflict: stateFilterCount(CLAIM_STATE.RECORDCONFLICT),
-} as const satisfies Record<ClaimState, SQL<number>>;
 
 const config = {
   description:
@@ -100,15 +88,7 @@ const readVerifications = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
-            id: legalListVerificationRuns.id,
-            status: legalListVerificationRuns.status,
-            errorCode: legalListVerificationRuns.errorCode,
-            entityVersionId: legalListVerificationRuns.entityVersionId,
-            listId: sql<
-              SafeId<"legalList">
-            >`(${legalListVerificationRuns.evidence} ->> 'listId')`,
-            createdAt: legalListVerificationRuns.createdAt,
-            finishedAt: legalListVerificationRuns.finishedAt,
+            ...RUN_SUMMARY_COLUMNS,
             createdAtCursor: runCursor.cursorValue.as("created_at_cursor"),
             ...CLAIM_COUNT_COLUMNS,
           })
@@ -169,26 +149,7 @@ const readVerifications = createSafeHandler(
       limit,
       cursorForItem: (run) => runCursor.encode(run.createdAtCursor, run.id),
     });
-    return Result.ok({
-      ...page,
-      items: page.items.map((run) => ({
-        id: run.id,
-        status: run.status,
-        errorCode: run.errorCode,
-        entityVersionId: run.entityVersionId,
-        listId: run.listId,
-        createdAt: run.createdAt.toISOString(),
-        finishedAt: run.finishedAt?.toISOString() ?? null,
-        claimCounts: {
-          supported: run.supported,
-          tension: run.tension,
-          contradicted: run.contradicted,
-          nocover: run.nocover,
-          notverifiable: run.notverifiable,
-          recordconflict: run.recordconflict,
-        } satisfies Record<ClaimState, number>,
-      })),
-    });
+    return Result.ok({ ...page, items: page.items.map(serializeRunSummary) });
   },
 );
 

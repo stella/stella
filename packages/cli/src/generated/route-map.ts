@@ -28601,6 +28601,78 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "verifications-latest-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "verifications-latest-list",
+                ],
+                capabilityId: "lists.verifications.latest.list",
+                description:
+                  "Read the latest list verification of each named document, in one call: its status, failure code, the list it checked against, when it started and finished, and claim counts per verdict state. A document never verified is absent from the answer. Earlier runs are in lists.verifications.list.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: true,
+                    part: "body",
+                    partPath: "entityIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityIds"],
+                      properties: {
+                        entityIds: {
+                          minItems: 1,
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             "verifications-list": {
               kind: "capability-leaf",
               spec: {

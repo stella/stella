@@ -219,6 +219,8 @@ export const VERIFICATION_LIMITS = {
   FACTS_PER_RUN_MAX: 500,
   /** Sources pinned per fact, oldest first. */
   SOURCES_PER_FACT_MAX: 5,
+  /** Documents one latest-verification read may name. */
+  LATEST_READ_DOCUMENTS_MAX: 200,
   /** Characters of a fact's text or a source quote pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
 } as const;

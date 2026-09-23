@@ -8,10 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
-import {
-  avtKeys,
-  latestDocumentVerificationOptions,
-} from "@/features/avt/queries";
+import { avtKeys, latestVerificationsOptions } from "@/features/avt/queries";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -53,7 +50,6 @@ export const useStartVerification = ({
   const start = async (target: VerificationTarget, confirmedUnits?: number) => {
     setSizeConfirmation(null);
     setStartingFor(target);
-    const documentKey = { workspaceId, ...target };
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .verifications.post({
@@ -74,15 +70,20 @@ export const useStartVerification = ({
         // Another tab (or a reload that raced this click) already started a
         // run for this document: open that one.
         await queryClient.invalidateQueries({
-          queryKey: avtKeys.documentRuns(documentKey),
+          queryKey: avtKeys.latestAll(workspaceId),
         });
         const latest = await Result.tryPromise(
           async () =>
             await queryClient.fetchQuery(
-              latestDocumentVerificationOptions(documentKey),
+              latestVerificationsOptions({
+                workspaceId,
+                entityIds: [target.entityId],
+              }),
             ),
         );
-        const active = Result.isError(latest) ? null : latest.value;
+        const active = Result.isError(latest)
+          ? null
+          : (latest.value.get(target.entityId) ?? null);
         if (active?.status === "queued" || active?.status === "running") {
           onStarted(active.id);
           return;
@@ -100,7 +101,7 @@ export const useStartVerification = ({
     }
 
     await queryClient.invalidateQueries({
-      queryKey: avtKeys.documentRuns(documentKey),
+      queryKey: avtKeys.latestAll(workspaceId),
     });
     onStarted(response.data.runId);
   };

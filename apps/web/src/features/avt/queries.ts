@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { VerificationRunStatus } from "@/features/avt/types";
 import { api } from "@/lib/api";
@@ -23,24 +24,28 @@ export const runPollInterval = (
     }
     default: {
       status satisfies never;
-      return false;
+      return panic(`Unhandled verification status: ${String(status)}`);
     }
   }
 };
 
-type DocumentKey = {
+type LatestVerificationsKey = {
   workspaceId: string;
-  entityId: string;
-  fileFieldId: string;
+  entityIds: readonly string[];
 };
 
 export const avtKeys = {
   all: (workspaceId: string) => ["avt", workspaceId] as const,
   run: (workspaceId: string, runId: string) =>
     [...avtKeys.all(workspaceId), "run", runId] as const,
-  documentRuns: ({ workspaceId, entityId, fileFieldId }: DocumentKey) =>
-    [...avtKeys.all(workspaceId), "document", entityId, fileFieldId] as const,
+  latestAll: (workspaceId: string) =>
+    [...avtKeys.all(workspaceId), "latest"] as const,
+  latest: ({ workspaceId, entityIds }: LatestVerificationsKey) =>
+    [...avtKeys.latestAll(workspaceId), [...entityIds].toSorted()] as const,
 };
+
+/** Documents per latest-verification request, the endpoint's cap. */
+const LATEST_READ_CHUNK = 200;
 
 export const verificationRunOptions = (workspaceId: string, runId: string) =>
   queryOptions({
@@ -58,22 +63,51 @@ export const verificationRunOptions = (workspaceId: string, runId: string) =>
     refetchInterval: (query) => runPollInterval(query.state.data?.status),
   });
 
-/** The document's latest verification; its history stays in the API. */
-export const latestDocumentVerificationOptions = (key: DocumentKey) =>
+/**
+ * The latest verification of each document, one request per 200 documents
+ * rather than one per document. Polls while any of them is still running.
+ */
+export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
   queryOptions({
-    queryKey: avtKeys.documentRuns(key),
+    queryKey: avtKeys.latest(key),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        .verifications.get({
-          query: {
-            entityId: toSafeId<"entity">(key.entityId),
-            fileFieldId: toSafeId<"field">(key.fileFieldId),
-            limit: 1,
-          },
-          fetch: { signal },
-        });
-      return unwrapEden(response).items.at(0) ?? null;
+      const chunks: string[][] = [];
+      for (
+        let start = 0;
+        start < key.entityIds.length;
+        start += LATEST_READ_CHUNK
+      ) {
+        chunks.push(key.entityIds.slice(start, start + LATEST_READ_CHUNK));
+      }
+      const pages = await Promise.all(
+        chunks.map(async (entityIds) =>
+          unwrapEden(
+            await api
+              .lists({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+              .verifications.latest.post(
+                {
+                  entityIds: entityIds.map((id) => toSafeId<"entity">(id)),
+                },
+                { fetch: { signal } },
+              ),
+          ),
+        ),
+      );
+      return new Map(
+        pages.flatMap((page) => page.runs).map((run) => [run.entityId, run]),
+      );
     },
-    refetchInterval: (query) => runPollInterval(query.state.data?.status),
+    enabled: key.entityIds.length > 0,
+    refetchInterval: (query) => {
+      const runs = query.state.data;
+      if (runs === undefined) {
+        return false;
+      }
+      for (const run of runs.values()) {
+        if (runPollInterval(run.status) !== false) {
+          return runPollInterval(run.status);
+        }
+      }
+      return false;
+    },
   });
