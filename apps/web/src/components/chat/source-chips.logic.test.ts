@@ -102,6 +102,47 @@ describe("external source extraction from tool output", () => {
     );
   });
 
+  test("keeps the stella decision behind a case-law result's publisher URL", () => {
+    const sources: ExternalSourceEntry[] = [];
+    const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
+
+    collectExternalSources(
+      {
+        results: [
+          {
+            appUrl: null,
+            caseNumber: "23 Cdo 5068/2014",
+            decisionId,
+            sourceUrl: "https://example.org/decisions/23-cdo-5068-2014",
+          },
+        ],
+      },
+      sources,
+    );
+
+    expect(sources).toHaveLength(1);
+    expect(sources.at(0)?.caseLawDecision).toEqual({
+      caseNumber: "23 Cdo 5068/2014",
+      decisionId,
+    });
+  });
+
+  test("names no stella decision for a record without a stella decision id", () => {
+    const sources: ExternalSourceEntry[] = [];
+
+    collectExternalSources(
+      {
+        caseNumber: "23 Cdo 5068/2014",
+        decisionId: "ECLI:CZ:NS:2017:23.CDO.5068.2014.1",
+        sourceUrl: "https://example.org/decisions/23-cdo-5068-2014",
+      },
+      sources,
+    );
+
+    expect(sources).toHaveLength(1);
+    expect(sources.at(0)?.caseLawDecision).toBeUndefined();
+  });
+
   test("extracts decision text from generic sourceUrl plus nested texts output", () => {
     const sources: ExternalSourceEntry[] = [];
 

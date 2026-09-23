@@ -2,9 +2,11 @@ import { isBusinessRegistrySlug } from "@stll/api-contract";
 
 import type {
   BusinessRegistrySourceReference,
+  CaseLawDecisionSourceReference,
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
 import type { ChatSourceDocument } from "@/lib/api-contract";
+import { isCaseLawDecisionId } from "@/lib/case-law-route";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type SourceDocumentEntry = {
@@ -105,6 +107,27 @@ const getBusinessRegistryReference = (
     return undefined;
   }
   return { registry, companyId: companyId.trim() };
+};
+
+/**
+ * A case-law tool result names the decision by its stella id beside the
+ * publisher's URL. The id is stella's only when the tool is: a connector's
+ * `decisionId` is its own, so the caller drops this for connector output.
+ */
+const getCaseLawDecisionReference = (
+  value: Record<string, unknown>,
+): CaseLawDecisionSourceReference | undefined => {
+  const decisionId = value["decisionId"];
+  const caseNumber = value["caseNumber"];
+  if (
+    typeof decisionId !== "string" ||
+    !isCaseLawDecisionId(decisionId) ||
+    typeof caseNumber !== "string" ||
+    caseNumber.trim().length === 0
+  ) {
+    return undefined;
+  }
+  return { caseNumber: caseNumber.trim(), decisionId: decisionId.trim() };
 };
 
 const collectTextValue = (value: unknown, depth = 0): string | undefined => {
@@ -246,6 +269,7 @@ export const collectExternalSources = (
     if (safeUrl) {
       sources.push({
         businessRegistry: getBusinessRegistryReference(value, url),
+        caseLawDecision: getCaseLawDecisionReference(value),
         url: safeUrl,
         title:
           getStringField(value, [
@@ -288,6 +312,7 @@ export const dedupeExternalSources = (
         ? {
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
+            caseLawDecision: source.caseLawDecision ?? existing.caseLawDecision,
             connectorSlug: source.connectorSlug ?? existing.connectorSlug,
             iconHref: source.iconHref ?? existing.iconHref,
             provider: source.provider ?? existing.provider,
