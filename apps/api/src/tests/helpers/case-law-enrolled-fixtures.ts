@@ -86,6 +86,11 @@ import {
   normalizePlSnDetail,
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+import {
+  assemblePlTkDecision,
+  plTkRawPartsOf,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
@@ -1926,5 +1931,89 @@ export const huBhgyFixture = (): EnrolledAdapterFixture => ({
     return built.type === "unkeyable"
       ? panic("hu-bhgy fixture did not build")
       : built.decision;
+  },
+});
+
+// ── PL TK fixture ────────────────────────────────────────
+
+/** One labelled row of a record, in the portal's own markup. */
+const plTkProp = (label: string, value: string): string =>
+  `<div class="prop"><span class="name">${label}</span><span class="value">${value}</span></div>`;
+
+const plTkCaseLink = (caseNumber: string): string =>
+  `<a href="/ipo/Sprawa?cid=1&amp;sprawa=1"><span class="sygnatura">${caseNumber}</span></a>`;
+
+const plTkPanel = (title: string, content: string): string =>
+  `<div class="ui-panel"><div class="ui-panel-titlebar"><span class="ui-panel-title">${title}</span></div><div class="ui-panel-content">${content}</div></div>`;
+
+const plTkTree = (act: string, provision: string): string =>
+  `<ul class="ui-tree-container"><li data-nodetype="AktNormatywnySlownik"><span class="ui-treenode-content"><span class="ui-treenode-label"><span>${act}</span></span></span><ul class="ui-treenode-children"><li data-nodetype="AktNormatywnyPrzedmiot"><span class="ui-treenode-content"><span class="ui-treenode-label">${provision}</span></span></li></ul></li></ul>`;
+
+/**
+ * A case page carrying every label the portal is known to print, each with a
+ * value: no one captured case states them all (a transfer, a joined case and
+ * a signalling decision do not meet in one case), and a disposition is only
+ * exercised where the decision built from the fixture can be checked for it.
+ */
+const PL_TK_CASE_PAGE = `<html><body><form id="sprawaForm"><div id="sprawaForm:tabView">
+<div id="sprawaForm:tabView:metryka">
+${plTkProp("Sygnatura", '<span class="sygnaturaBig">SK 14/11</span>')}
+${plTkProp("Data wpływu do TK", "11 kwietnia 2011")}
+${plTkProp("Data wpływu do STK", "29 czerwca 2011")}
+${plTkProp("Pochodzi z", plTkCaseLink("Ts 104/11"))}
+${plTkProp("Przeniesiona do", plTkCaseLink("SK 44/26"))}
+${plTkProp("Sprawy dołączone", plTkCaseLink("SK 42/12"))}
+${plTkProp("Sygnalizacja w sprawie", plTkCaseLink("S 1/13"))}
+${plTkPanel("Podmiot w sprawie", '<ul><li class="ui-datalist-item">Rzecznik Praw Obywatelskich - wnioskodawca</li></ul>')}
+${plTkPanel("Przedmiot sprawy", plTkTree("Ustawa z dnia 17. 11. 1964r. Kodeks postępowania cywilnego", "art. 357 par. 1"))}
+${plTkPanel("Wzorce", plTkTree("Konstytucja z dnia 2. 04. 1997r. Konstytucja Rzeczypospolitej Polskiej", "art. 45 ust. 1"))}
+</div>
+<div id="sprawaForm:tabView:dok_9897">
+${plTkProp("Rodzaj orzeczenia", "Wyrok")}
+${plTkProp("Data", "22 października 2013")}
+${plTkProp("Dotyczy", "Sporządzenie uzasadnienia postanowienia")}
+${plTkProp("Miejsce publikacji", '<table><tbody><tr><td><a href="https://otkzu.trybunal.gov.pl/2013/7A/101">OTK ZU 7A/2013, poz. 101</a></td></tr></tbody></table>')}
+<div class="ui-datatable"><div class="ui-datatable-header">Skład</div><table><tbody id="sprawaForm:tabView:dataTable_9897_data">
+<tr><td><a href="/ipo/Szukaj?sedzia=370">Stanisław Rymar</a></td><td>przewodniczący</td></tr>
+<tr><td><a href="/ipo/Szukaj?sedzia=332">Stanisław Biernat</a></td><td>sprawozdawca</td></tr>
+<tr><td><a href="/ipo/Szukaj?sedzia=285">Marek Kotlinowski</a></td><td></td></tr>
+</tbody></table></div>
+<a id="sprawaForm:tabView:pobierzDoc9897" href="/ipo/downloadOrzeczenieDoc?dok=1">Pobierz</a>
+<div id="tekst_9897"><span class="wyrok_wyrokTK"><p>WYROK</p><p>Sygn. akt SK 14/11</p>
+<div class="wyrok_sentencja"><div class="wyrok_sentencja_tytul">orzeka:</div><div>Art. 357 § 1 jest niezgodny z art. 45 ust. 1 Konstytucji.</div></div>
+<div class="wyrok_zdanieodrebne"><div class="wyrok_naglowekNumerowany"><p>Zdanie odrębne</p></div>
+<div class="wyrok_akapitCaly"><div class="wyrok_akapitNr"><a name="akapit1">1</a></div><div class="wyrok_akapitNumerowany">sędziego TK Marka Kotlinowskiego</div></div>
+<div class="wyrok_akapitCaly"><div class="wyrok_akapitNr"><a name="akapit2">2</a></div><div class="wyrok_akapitNumerowany">Nie zgadzam się z wyrokiem.</div></div>
+</div></span></div>
+</div>
+<div id="sprawaForm:tabView:dokumentyWSprawie"><div class="ui-datalist"><div class="ui-datalist-header">Dokumenty w sprawie</div><ul><li class="ui-datalist-item"><a href="/ipo/dok?dok=1%2FSK_14_11_skarga.pdf">SK 14/11 - skarga konstytucyjna [1 MB]</a></li></ul></div></div>
+</div></form></body></html>`;
+
+const PL_TK_LISTING_ROW: PlTkListingRow = {
+  stage: "merits",
+  documentId: "9897",
+  caseId: "1",
+  caseNumber: "SK 14/11",
+  decisionForm: "Wyrok",
+  decisionDate: "2013-10-22",
+  subject: "Sporządzenie uzasadnienia postanowienia",
+  rowHtml:
+    '<tr data-ri="0" role="row"><td role="gridcell"><div id="wyszukiwanie:dataTable:0:dokument_:dokument"><a href="/ipo/Sprawa?cid=1&amp;dokument=9897&amp;sprawa=1"><span class="sygnatura">SK 14/11</span></a><br />Wyrok z dnia 22 października 2013 r.<br /></div></td></tr>',
+  defect: undefined,
+};
+
+/** Built through the adapter's own assembler, from the row and the page. */
+export const plTkFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const built = assemblePlTkDecision({
+      row: PL_TK_LISTING_ROW,
+      casePage: PL_TK_CASE_PAGE,
+      rawParts: plTkRawPartsOf(PL_TK_LISTING_ROW, PL_TK_CASE_PAGE),
+    });
+    return await Promise.resolve(
+      built.type === "unkeyable"
+        ? panic("pl-tk fixture did not build")
+        : built.decision,
+    );
   },
 });

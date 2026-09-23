@@ -84,6 +84,8 @@ export const PUBLISHER_GATES = {
   "sn-pl": { publisher: "Sąd Najwyższy", intervalMs: 1500 },
   /** orzeczenia.uzp.gov.pl. */
   "uzp-pl": { publisher: "Urząd Zamówień Publicznych", intervalMs: 1000 },
+  /** ipo.trybunal.gov.pl. */
+  "trybunal-pl": { publisher: "Trybunał Konstytucyjny", intervalMs: 1500 },
   /** rozhodnuti.nsoud.cz. */
   "nsoud-cz": { publisher: "Nejvyšší soud", intervalMs: POLITE_INTERVAL_MS },
   /** vyhledavac.nssoud.cz. */
@@ -149,6 +151,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_COURTS]: "saos-pl",
   [ADAPTER_KEYS.PL_SN]: "sn-pl",
   [ADAPTER_KEYS.PL_KIO]: "uzp-pl",
+  [ADAPTER_KEYS.PL_TK]: "trybunal-pl",
   [ADAPTER_KEYS.AT_COURTS]: "ris-bka",
   [ADAPTER_KEYS.AT_VFGH]: "ris-bka",
   [ADAPTER_KEYS.AT_VWGH]: "ris-bka",
