@@ -11,6 +11,11 @@ const _staticLoad = ZipArchive.loadAsync(bytes);
 // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load
 const _instanceLoad = new ZipArchive().loadAsync(bytes);
 
+// An instance held in a variable first.
+const archive = new ZipArchive();
+// oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load
+const _variableLoad = archive.loadAsync(bytes);
+
 // Writing an archive, and an unrelated loadAsync, stay valid.
 const _writer = new ZipArchive();
 const _unrelated = other.loadAsync(bytes);
@@ -18,6 +23,7 @@ const _unrelated = other.loadAsync(bytes);
 export const __noRawZipLoadFixture = {
   _staticLoad,
   _instanceLoad,
+  _variableLoad,
   _writer,
   _unrelated,
 };

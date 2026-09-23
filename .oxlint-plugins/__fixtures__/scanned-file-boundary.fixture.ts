@@ -1,6 +1,7 @@
 // A folio parser on raw bytes skips the scan.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
+import * as folio from "@stll/folio-core/server";
 // Type-only imports of folio stay valid.
 import type { ParseOptions } from "@stll/folio-core/server";
 
@@ -53,6 +54,12 @@ type LaterKey = FileKey;
 const _reviewer = FolioDocxReviewer.fromBuffer(bytes);
 declare const parseOptions: ParseOptions;
 
+// A namespace import reaches the same parsers.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+const _namespaceParse = folio.parseDocx(bytes);
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+const _namespaceReviewer = folio.FolioDocxReviewer.fromBuffer(bytes);
+
 // Instances built around the private constructor.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 const _fromPrototype: unknown = Object.create(ScannedFile.prototype);
@@ -68,6 +75,8 @@ export const __scannedFileBoundaryFixture = {
   publisherDocument,
   parseOptions,
   _reviewer,
+  _namespaceParse,
+  _namespaceReviewer,
   fileKeySchema,
   mintScannedFile,
   _forgedFile,

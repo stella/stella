@@ -101,9 +101,10 @@ import {
   createBilingualDocxFromScanned,
   readScannedBilingualDocx,
 } from "@/api/lib/file-scan/document-parsers";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanFile } from "@/api/lib/file-scan/scan";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";

@@ -321,14 +321,15 @@ const loadInput = async ({
     declaredMimeType: DOCX_MIME_TYPE,
     fileName: row.declaredName,
   });
-  if (Result.isError(scanned) && !FileScanRejectedError.is(scanned.error)) {
-    return await refuse(
-      "One of the files to compare could not be scanned",
-      "Retry the comparison; if it repeats, stage the files again.",
-    );
-  }
   if (Result.isError(scanned)) {
-    const { rejection } = scanned.error;
+    const scanError = scanned.error;
+    if (!FileScanRejectedError.is(scanError)) {
+      return await refuse(
+        "One of the files to compare could not be scanned",
+        "Retry the comparison; if it repeats, stage the files again.",
+      );
+    }
+    const { rejection } = scanError;
     await discardInput({
       context,
       deleteObject: dependencies.deleteObject,

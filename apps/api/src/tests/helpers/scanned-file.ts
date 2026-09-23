@@ -1,7 +1,7 @@
-import { getScanWarnings } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ScanResult } from "@/api/lib/file-scan/types";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 
 /**

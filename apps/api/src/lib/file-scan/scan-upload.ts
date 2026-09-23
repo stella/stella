@@ -8,9 +8,10 @@ import type { ApiFileSecurityRejection } from "@stll/api-contract";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanFile } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 
 export class FileScanRejectedError extends TaggedError(
   "FileScanRejectedError",

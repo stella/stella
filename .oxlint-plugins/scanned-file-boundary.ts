@@ -158,6 +158,7 @@ export default eslintCompatPlugin({
         const typeAliases = new Map<string, unknown>();
         const pendingCasts: PendingCast[] = [];
         const reviewerLocals = new Set<string>();
+        const folioNamespaces = new Set<string>();
 
         const filenameMatchesAny = (fragments: readonly string[]): boolean => {
           const filename = filenameForContext(context);
@@ -214,6 +215,7 @@ export default eslintCompatPlugin({
             typeAliases.clear();
             pendingCasts.length = 0;
             reviewerLocals.clear();
+            folioNamespaces.clear();
             const filename = filenameForContext(context);
             return (
               filename.includes("apps/api/src/") ||
@@ -232,6 +234,14 @@ export default eslintCompatPlugin({
             const source = node.source.value;
             if (FOLIO_SOURCES.has(source) && node.importKind !== "type") {
               for (const specifier of node.specifiers) {
+                if (
+                  isAstNode(specifier) &&
+                  specifier.type === "ImportNamespaceSpecifier" &&
+                  isIdentifier(specifier.local)
+                ) {
+                  folioNamespaces.add(specifier.local.name);
+                  continue;
+                }
                 const imported = getImportedName(specifier);
                 if (
                   imported === null ||
@@ -308,13 +318,39 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             const { callee } = node;
             if (
-              isAstNode(callee) &&
-              callee.type === "MemberExpression" &&
-              isIdentifier(callee.property, "fromBuffer") &&
-              isIdentifier(callee.object) &&
-              reviewerLocals.has(callee.object.name) &&
-              !folioExempt()
+              !isAstNode(callee) ||
+              callee.type !== "MemberExpression" ||
+              folioExempt()
             ) {
+              return;
+            }
+            // `folio.parseDocx(bytes)` through a namespace import.
+            if (
+              isIdentifier(callee.object) &&
+              folioNamespaces.has(callee.object.name) &&
+              isIdentifier(callee.property) &&
+              FOLIO_BYTE_PARSERS.has(callee.property.name)
+            ) {
+              context.report({
+                node,
+                messageId: "folioParserImport",
+                data: { name: callee.property.name },
+              });
+              return;
+            }
+            if (!isIdentifier(callee.property, "fromBuffer")) {
+              return;
+            }
+            // `FolioDocxReviewer.fromBuffer` or `folio.FolioDocxReviewer.fromBuffer`.
+            const reviewer = callee.object;
+            const isReviewer =
+              (isIdentifier(reviewer) && reviewerLocals.has(reviewer.name)) ||
+              (isAstNode(reviewer) &&
+                reviewer.type === "MemberExpression" &&
+                isIdentifier(reviewer.object) &&
+                folioNamespaces.has(reviewer.object.name) &&
+                isIdentifier(reviewer.property, "FolioDocxReviewer"));
+            if (isReviewer) {
               context.report({ node, messageId: "folioReviewerFromBuffer" });
             }
           },

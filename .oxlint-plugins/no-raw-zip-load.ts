@@ -43,10 +43,12 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const jszipLocals = new Set<string>();
+        // Variables initialized with `new JSZip()`.
+        const instanceLocals = new Set<string>();
 
         const isJszipRef = (node: unknown): boolean => {
           if (isIdentifier(node)) {
-            return jszipLocals.has(node.name);
+            return jszipLocals.has(node.name) || instanceLocals.has(node.name);
           }
           return (
             isAstNode(node) &&
@@ -59,6 +61,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             jszipLocals.clear();
+            instanceLocals.clear();
             const filename = filenameForContext(context);
             if (
               filename.endsWith(
@@ -90,6 +93,18 @@ export default eslintCompatPlugin({
               if (isIdentifier(local)) {
                 jszipLocals.add(local.name);
               }
+            }
+          },
+          VariableDeclarator(node) {
+            const { id, init } = node;
+            if (
+              isIdentifier(id) &&
+              isAstNode(init) &&
+              init.type === "NewExpression" &&
+              isIdentifier(init.callee) &&
+              jszipLocals.has(init.callee.name)
+            ) {
+              instanceLocals.add(id.name);
             }
           },
           CallExpression(node) {

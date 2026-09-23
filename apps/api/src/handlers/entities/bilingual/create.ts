@@ -23,7 +23,8 @@ import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-enti
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-parsers";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanFile } from "@/api/lib/file-scan/scan";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

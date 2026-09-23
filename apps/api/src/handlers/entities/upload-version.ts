@@ -7,7 +7,8 @@ import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { scanFile } from "@/api/lib/file-scan/scan";
+import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
