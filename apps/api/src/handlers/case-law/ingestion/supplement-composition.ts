@@ -55,6 +55,26 @@ export type SupplementJudgmentSelection<TCandidate> =
   | { type: "none" }
   | { type: "ambiguous"; candidates: readonly TCandidate[] };
 
+type SupplementCanJoinOptions = {
+  target: DecisionSupplementTarget;
+  candidate: SupplementJudgmentCandidate;
+};
+
+/**
+ * Whether a ruling is one a supplement can belong to: it carries one of the
+ * target's decision types and, where the supplement is dated, a date at or
+ * before it, since reasons are written on or after the ruling they explain.
+ */
+export const supplementCanJoin = ({
+  target: { decisionTypes, latestDecisionDate },
+  candidate: { decisionDate, decisionType },
+}: SupplementCanJoinOptions): boolean =>
+  decisionType !== null &&
+  decisionTypes.includes(decisionType) &&
+  (decisionDate === null ||
+    latestDecisionDate === undefined ||
+    decisionDate <= latestDecisionDate);
+
 type SelectSupplementJudgmentOptions<TCandidate> = {
   target: DecisionSupplementTarget;
   candidates: readonly TCandidate[];
@@ -64,9 +84,8 @@ type SelectSupplementJudgmentOptions<TCandidate> = {
  * The ruling a supplement belongs to, among the decisions under its court
  * and docket.
  *
- * A candidate must carry one of the target's decision types and, where the
- * supplement is dated, a date at or before it: reasons are written on or
- * after the ruling they explain. Of those, the latest-dated one is the
+ * A candidate must be one the supplement can join (`supplementCanJoin`).
+ * Of those, the latest-dated one is the
  * judgment, because a docket that holds several rulings (an order, then the
  * judgment) is explained by reasons dated after the last of them.
  *
@@ -78,16 +97,12 @@ type SelectSupplementJudgmentOptions<TCandidate> = {
 export const selectSupplementJudgment = <
   TCandidate extends SupplementJudgmentCandidate,
 >({
-  target: { decisionTypes, latestDecisionDate },
+  target,
   candidates,
 }: SelectSupplementJudgmentOptions<TCandidate>): SupplementJudgmentSelection<TCandidate> => {
-  const eligible = candidates.filter(
-    ({ decisionDate, decisionType }) =>
-      decisionType !== null &&
-      decisionTypes.includes(decisionType) &&
-      (decisionDate === null ||
-        latestDecisionDate === undefined ||
-        decisionDate <= latestDecisionDate),
+  const { latestDecisionDate } = target;
+  const eligible = candidates.filter((candidate) =>
+    supplementCanJoin({ target, candidate }),
   );
   const [only, ...others] = eligible;
   if (only === undefined) {
@@ -258,11 +273,13 @@ const INCOMING_JUDGMENT = Symbol("incoming-judgment");
 /**
  * The supplements a judgment's document is composed from.
  *
- * Every supplement already merged into this judgment stays with it, and a
- * parked one joins it when the judgment, as this write states it, is the
- * one `selectSupplementJudgment` picks among the docket's rulings. A
- * supplement merged into another decision stays there: moving it would
- * leave its text in that decision's stored document.
+ * A supplement already merged into this judgment stays with it while the
+ * judgment, as this write states it, is still one the supplement can join; a
+ * publisher correction to either side that ends that lets this write drop
+ * it, and `processSupplement` then places it anew. A parked one joins when
+ * the judgment is the one `selectSupplementJudgment` picks among the
+ * docket's rulings. A supplement merged into another decision stays there:
+ * moving it would leave its text in that decision's stored document.
  */
 export const selectComposableSupplements = async (
   tx: Transaction,
@@ -294,16 +311,17 @@ export const selectComposableSupplements = async (
   });
   return supplements
     .filter((row) => {
+      const target = {
+        decisionTypes: row.judgmentDecisionTypes,
+        latestDecisionDate: row.latestDecisionDate ?? undefined,
+      };
       if (row.decisionId !== null) {
-        return row.decisionId === decisionId;
+        return (
+          row.decisionId === decisionId &&
+          supplementCanJoin({ target, candidate: judgment })
+        );
       }
-      const selection = selectSupplementJudgment({
-        target: {
-          decisionTypes: row.judgmentDecisionTypes,
-          latestDecisionDate: row.latestDecisionDate ?? undefined,
-        },
-        candidates,
-      });
+      const selection = selectSupplementJudgment({ target, candidates });
       return (
         selection.type === "judgment" &&
         selection.judgment.marker === INCOMING_JUDGMENT
@@ -386,12 +404,15 @@ export const composeWithStoredSupplements = async ({
   ...options
 }: PlanSupplementCompositionOptions & {
   scopedDb: ScopedDb;
-}): Promise<IngestionResult> =>
-  composeDecisionWithSupplements(
-    options.observation,
-    (await scopedDb(async (tx) => await planSupplementComposition(tx, options)))
-      ?.supplements ?? [],
+}): Promise<IngestionResult> => {
+  const plan = await scopedDb(
+    async (tx) => await planSupplementComposition(tx, options),
   );
+  return composeDecisionWithSupplements(
+    options.observation,
+    plan === null ? [] : plan.supplements,
+  );
+};
 
 /** Whether two compositions took in the same versions of the same supplements. */
 export const sameSupplementVersions = (
@@ -407,6 +428,39 @@ export const sameSupplementVersions = (
       supplement.sourceHash === other.sourceHash
     );
   });
+
+type DetachSupplementOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  sourceDocumentId: string;
+  /** The judgment it is detached from; a row merged elsewhere is left. */
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+/**
+ * Record that a judgment's stored document no longer holds this supplement,
+ * which parks it again. For a caller that has just written that judgment
+ * without it. Whether the row was still that judgment's.
+ */
+export const detachSupplement = async (
+  tx: Transaction,
+  { sourceId, sourceDocumentId, decisionId }: DetachSupplementOptions,
+): Promise<boolean> => {
+  // audit: skip — background case-law ingestion; public case-law data
+  const detached = await tx
+    .update(caseLawDecisionSupplements)
+    .set({ decisionId: null, mergedSourceHash: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(caseLawDecisionSupplements.sourceId, sourceId),
+        eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+        eq(caseLawDecisionSupplements.decisionId, decisionId),
+      ),
+    )
+    .returning({
+      sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
+    });
+  return detached.length > 0;
+};
 
 type MarkSupplementsMergedOptions = {
   sourceId: SafeId<"caseLawSource">;

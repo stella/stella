@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -67,6 +68,7 @@ import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/sour
 import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import {
   composeDecisionWithSupplements,
+  detachSupplement,
   lockSupplementTarget,
   markSupplementsMerged,
   planSupplementComposition,
@@ -74,6 +76,7 @@ import {
   selectComposableSupplements,
   selectRulingsUnder,
   selectSupplementJudgment,
+  supplementCanJoin,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type {
   StoredSupplement,
@@ -268,6 +271,12 @@ export const PROCESS_DECISION_RETRY_REASON = {
   CONTENTION: "contention",
   CORPUS_WRITE: "corpus-write",
   SOURCE_RAW_WRITE: "source-raw-write",
+} as const;
+
+/** Why a supplement's placement is retried beyond its writes' own reasons. */
+export const SUPPLEMENT_RETRY_REASON = {
+  /** Its standalone row still stands beside its judgment. */
+  ABSORB: "supplement-absorb",
 } as const;
 
 export type ProcessResult =
@@ -995,55 +1004,74 @@ type AbsorbComposedSupplementRowsOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   judgmentId: SafeId<"caseLawDecision">;
-  supplements: readonly StoredSupplement[];
+  supplements: readonly Pick<StoredSupplement, "kind" | "sourceDocumentId">[];
+  /** Test seam; production absorbs through the corpus stores. */
+  absorb?: typeof absorbStandaloneSupplementRow;
 };
+
+type AbsorbComposedSupplementRowsOutcome =
+  | { type: "absorbed" }
+  /** Rows still standing beside the judgment; see the function comment. */
+  | { type: "incomplete"; sourceDocumentIds: string[] };
 
 /**
  * Take the standalone rows of supplements this judgment now holds out of the
  * corpus. Runs after the judgment's write committed, since the withdrawal
- * reaches object storage. A failure leaves the row standing and is reported
- * rather than holding the page: the judgment is already right, and the
- * supplement's next observation, or the fold, absorbs the row again.
+ * reaches object storage. A row that stays standing is reported, not thrown:
+ * the judgment is already right. The caller decides whether to hold its
+ * cursor; either way the reconciliation reads a merged supplement whose row
+ * still stands as not held, so it is listed and placed again.
  */
 const absorbComposedSupplementRows = async ({
   scopedDb,
   sourceId,
   judgmentId,
   supplements,
-}: AbsorbComposedSupplementRowsOptions): Promise<void> => {
-  for (const { kind, sourceDocumentId } of supplements) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each absorption withdraws one row's document from object storage before its own transaction
-    const absorbed = await absorbStandaloneSupplementRow({
-      scopedDb,
-      sourceId,
-      kind,
-      sourceDocumentId,
-      judgmentId,
-    });
-    if (Result.isError(absorbed)) {
-      logger.error(SUPPLEMENT_ABSORB_FAILED, {
+  absorb = absorbStandaloneSupplementRow,
+}: AbsorbComposedSupplementRowsOptions): Promise<AbsorbComposedSupplementRowsOutcome> => {
+  // One at a time: each absorption takes the citation graph lock.
+  const standing = await mapWithConcurrency({
+    items: supplements,
+    limit: 1,
+    operation: async ({ kind, sourceDocumentId }) => {
+      const absorbed = await absorb({
+        scopedDb,
         sourceId,
-        judgmentId,
+        kind,
         sourceDocumentId,
-        ...errorSystemFields(absorbed.error),
-        "error.detail": wrappedErrorDetail(absorbed.error),
-      });
-      captureError(absorbed.error, {
-        sourceId,
-        step: "absorbComposedSupplementRows",
-      });
-      continue;
-    }
-    if (absorbed.value.type === "withdraw-incomplete") {
-      logger.error(SUPPLEMENT_ABSORB_FAILED, {
-        sourceId,
         judgmentId,
-        sourceDocumentId,
-        "error.detail":
-          "a corpus object still holds the standalone row's document",
       });
-    }
-  }
+      if (Result.isError(absorbed)) {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          ...errorSystemFields(absorbed.error),
+          "error.detail": wrappedErrorDetail(absorbed.error),
+        });
+        captureError(absorbed.error, {
+          sourceId,
+          step: "absorbComposedSupplementRows",
+        });
+        return [sourceDocumentId];
+      }
+      if (absorbed.value.type === "withdraw-incomplete") {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          "error.detail":
+            "a corpus object still holds the standalone row's document",
+        });
+        return [sourceDocumentId];
+      }
+      return [];
+    },
+  });
+  const sourceDocumentIds = standing.flat();
+  return sourceDocumentIds.length === 0
+    ? { type: "absorbed" }
+    : { type: "incomplete", sourceDocumentIds };
 };
 
 /**
@@ -1412,7 +1440,8 @@ const processDecisionAttempt = async ({
     };
   }
 
-  const composedSupplements = composition?.supplements ?? [];
+  const composedSupplements =
+    composition === null ? [] : composition.supplements;
   const result = composeDecisionWithSupplements(observed, composedSupplements);
 
   const synchronizeSettledProjection = async (): Promise<void> => {
@@ -2784,14 +2813,24 @@ const processDecisionAttempt = async ({
 
   const writeStatus = rowWrite.value;
   switch (writeStatus) {
-    case DECISION_ROW_WRITE_STATUS.APPLIED:
-      await absorbComposedSupplementRows({
+    case DECISION_ROW_WRITE_STATUS.APPLIED: {
+      // The judgment itself is written; a row left standing is not a reason
+      // to observe it again. The reconciliation lists that supplement again.
+      const absorbed = await absorbComposedSupplementRows({
         scopedDb,
         sourceId,
         judgmentId: decisionId,
         supplements: composedSupplements,
       });
+      if (absorbed.type === "incomplete") {
+        logger.warn(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId: decisionId,
+          "error.detail": `left for reconciliation: ${absorbed.sourceDocumentIds.join(", ")}`,
+        });
+      }
       break;
+    }
     case DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED:
       if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
         return {
@@ -3020,7 +3059,8 @@ export type SupplementDisposition =
   | { type: "standalone"; reason: SupplementStandaloneReason }
   /**
    * Its judgment is redacted. A takedown covers the reasons of the decision
-   * it took down, so the supplement is parked and nothing is published.
+   * it took down, so the supplement is parked, nothing is published, and a
+   * standalone row it already has is absorbed into the judgment.
    */
   | { type: "withheld"; judgmentId: SafeId<"caseLawDecision"> };
 
@@ -3031,7 +3071,9 @@ export type ProcessSupplementResult =
     }
   | {
       status: typeof PROCESS_DECISION_STATUS.RETRYABLE;
-      reason: (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON];
+      reason:
+        | (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON]
+        | typeof SUPPLEMENT_RETRY_REASON.ABSORB;
     };
 
 export type ProcessSupplementOptions = {
@@ -3053,6 +3095,8 @@ export type ProcessSupplementOptions = {
   polarityRules?: RuleCache | undefined;
   /** Test seam; production writes the object store. */
   writeRaw?: WriteRawSourcePayload;
+  /** Test seam; production absorbs through the corpus stores. */
+  absorb?: typeof absorbStandaloneSupplementRow;
 };
 
 type SupplementJudgmentRow = {
@@ -3084,6 +3128,7 @@ export const processSupplement = async ({
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
   polarityRules,
   writeRaw = writeRawSourcePayload,
+  absorb = absorbStandaloneSupplementRow,
 }: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
   const { sourceDocumentId } = supplement.document;
   const document = sanitizeResult(supplement.document);
@@ -3198,9 +3243,93 @@ export const processSupplement = async ({
   });
   const { row, rulings, selection } = placed;
 
+  /**
+   * Take the supplement out of a judgment a correction says it no longer
+   * belongs to, then place it again. The former holder is written first, and
+   * its write leaves the supplement out (`selectComposableSupplements`); only
+   * once its stored document no longer holds the text is the association
+   * dropped, so a failure on the way keeps the association and the next
+   * observation starts over.
+   */
+  const leaveFormerHolder = async (
+    formerId: SafeId<"caseLawDecision">,
+  ): Promise<ProcessSupplementResult> => {
+    const rebuiltFormer = await rebuildStoredJudgment({
+      judgmentId: formerId,
+      scopedDb,
+      reparseStoredRaw,
+      readStoredRaw,
+    });
+    if (rebuiltFormer.type === "unreadable") {
+      logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
+        sourceId,
+        judgmentId: formerId,
+        sourceDocumentId,
+        "error.detail": rebuiltFormer.detail,
+      });
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: {
+          type: "standalone",
+          reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
+        },
+      };
+    }
+    const rewritten = await processDecision({
+      input: rebuiltFormer.result,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      corpus,
+      polarityRules,
+    });
+    if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+      return rewritten;
+    }
+    const detached = await scopedDb(
+      async (tx) =>
+        await detachSupplement(tx, {
+          sourceId,
+          sourceDocumentId,
+          decisionId: formerId,
+        }),
+    );
+    if (!detached) {
+      // Moved by a concurrent placement; the next observation settles it.
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+      };
+    }
+    return await processSupplement({
+      supplement,
+      sourceId,
+      scopedDb,
+      observedAt,
+      nextObservationOrder,
+      reparseStoredRaw,
+      readStoredRaw,
+      corpus,
+      polarityRules,
+      writeRaw,
+      absorb,
+    });
+  };
+
   // A merged supplement stays with its judgment even where a ruling stored
   // since would now be picked: its text is in that judgment's document, and
-  // moving it would leave the text there.
+  // moving it would leave the text there. Only a correction that leaves the
+  // holder no longer a ruling it can join moves it.
+  if (row.decisionId !== null) {
+    const holder = rulings.find(({ id }) => id === row.decisionId);
+    if (
+      holder === undefined ||
+      !supplementCanJoin({ target: supplement.target, candidate: holder })
+    ) {
+      return await leaveFormerHolder(row.decisionId);
+    }
+  }
   const judgment: SupplementJudgmentRow | null = (() => {
     if (row.decisionId !== null) {
       const holder = rulings.find(({ id }) => id === row.decisionId);
@@ -3258,25 +3387,42 @@ export const processSupplement = async ({
         : SUPPLEMENT_STANDALONE_REASON.NO_JUDGMENT,
     );
   }
-  if (judgment.redacted) {
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      disposition: { type: "withheld", judgmentId: judgment.id },
-    };
-  }
-
-  const merged = async (): Promise<ProcessSupplementResult> => {
-    await absorbComposedSupplementRows({
+  /**
+   * Take the supplement's standalone row, if any, out of the corpus behind
+   * its judgment, then report `disposition`. A row left standing holds the
+   * cursor: reporting the placement done would leave a second public copy.
+   */
+  const absorbed = async (
+    disposition: SupplementDisposition,
+  ): Promise<ProcessSupplementResult> => {
+    const outcome = await absorbComposedSupplementRows({
       scopedDb,
       sourceId,
       judgmentId: judgment.id,
-      supplements: [{ ...content, sourceDocumentId }],
+      supplements: [{ kind: supplement.kind, sourceDocumentId }],
+      absorb,
     });
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      disposition: { type: "merged", judgmentId: judgment.id },
-    };
+    switch (outcome.type) {
+      case "absorbed":
+        return { status: PROCESS_DECISION_STATUS.COMPLETE, disposition };
+      case "incomplete":
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          reason: SUPPLEMENT_RETRY_REASON.ABSORB,
+        };
+      default: {
+        outcome satisfies never;
+        return panic(`Unhandled absorption: ${JSON.stringify(outcome)}`);
+      }
+    }
   };
+
+  if (judgment.redacted) {
+    return await absorbed({ type: "withheld", judgmentId: judgment.id });
+  }
+
+  const merged = async (): Promise<ProcessSupplementResult> =>
+    await absorbed({ type: "merged", judgmentId: judgment.id });
 
   if (
     row.decisionId === judgment.id &&
@@ -3335,10 +3481,9 @@ export const processSupplement = async ({
     after?.decisionId === judgment.id &&
     after.mergedSourceHash === after.sourceHash
   ) {
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      disposition: { type: "merged", judgmentId: judgment.id },
-    };
+    // The judgment's write absorbed the row already, or reported that it
+    // could not; asking again settles which.
+    return await merged();
   }
   return await standalone(
     SUPPLEMENT_STANDALONE_REASON.JUDGMENT_WITHOUT_DOCUMENT,

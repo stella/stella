@@ -45,7 +45,7 @@ export const SUPPLEMENT_FOLD_OUTCOME = {
   MERGED: "merged",
   /** No stored ruling is its judgment; kept as standalone reasons. */
   STANDALONE: "standalone",
-  /** Its judgment is redacted; the row is left exactly as it is. */
+  /** Its judgment is redacted; the row is absorbed into it, unpublished. */
   WITHHELD: "withheld",
   /** The payload re-parses to a decision of its own, not a supplement. */
   NOT_A_SUPPLEMENT: "not-a-supplement",

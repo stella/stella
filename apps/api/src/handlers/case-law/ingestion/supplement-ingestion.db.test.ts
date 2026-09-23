@@ -30,6 +30,7 @@ import type {
 import {
   buildPlItem,
   normalizeSaosDumpItem,
+  PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
@@ -38,6 +39,7 @@ import {
   processDecision,
   processSupplement,
   runIngestionPipeline,
+  SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -447,6 +449,148 @@ describe("reasons published apart from their ruling", () => {
       (await decisionBy(fixture.sourceId, "339002")).fulltext,
     ).not.toContain(REASONS_TEXT);
   });
+});
+
+/**
+ * The reasons stored as a decision of their own beside a stored ruling, as
+ * every row stored before supplements existed is.
+ */
+const ingestStandaloneReasons = async (fixture: Fixture) => {
+  const { document } = supplementOf(REASONS);
+  return await ingestDecision(fixture, {
+    ...document,
+    decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
+    metadata: {
+      ...document.metadata,
+      decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
+    },
+  });
+};
+
+describe("the standalone row of reasons already stored", () => {
+  test("is taken down with a redacted ruling", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    await db
+      .update(caseLawDecisions)
+      // A takedown erases the payload with it.
+      .set({
+        redactedAt: new Date("2026-09-23T09:00:00.000Z"),
+        contentHash: null,
+        documentAst: null,
+        fulltext: null,
+        sections: null,
+      })
+      .where(eq(caseLawDecisions.id, ruling.id));
+    await ingestStandaloneReasons(fixture);
+    expect(await publishedIds(fixture.sourceId)).toContain("339001");
+
+    const placed = await ingestSupplement(fixture, supplementOf(REASONS));
+
+    expect(placed).toEqual({
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "withheld", judgmentId: ruling.id },
+    });
+    expect(await publishedIds(fixture.sourceId)).not.toContain("339001");
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    expect(standalone.fulltext).toBeNull();
+    expect(await citationsOf(standalone.id)).toEqual([]);
+  });
+
+  test("holds the placement until it is absorbed, then converges", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    // The ruling holds the reasons, and their standalone row still stands:
+    // the state an absorption that failed after the merge leaves.
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestStandaloneReasons(fixture);
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    const place = async (
+      absorb?: Parameters<typeof processSupplement>[0]["absorb"],
+    ) =>
+      await processSupplement({
+        supplement: supplementOf(REASONS),
+        sourceId: fixture.sourceId,
+        scopedDb,
+        observedAt: new Date("2026-09-23T10:00:00.000Z"),
+        nextObservationOrder: fixture.nextObservationOrder,
+        reparseStoredRaw,
+        readStoredRaw,
+        ...(absorb === undefined ? {} : { absorb }),
+      });
+
+    // A corpus object outlived its delete: the row keeps its document.
+    const held = await place(
+      async () =>
+        await Promise.resolve(
+          Result.ok({
+            type: "withdraw-incomplete" as const,
+            decisionId: standalone.id,
+          }),
+        ),
+    );
+
+    expect(held).toEqual({
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      reason: SUPPLEMENT_RETRY_REASON.ABSORB,
+    });
+    expect(await publishedIds(fixture.sourceId)).toContain("339001");
+
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    expect(await place()).toEqual({
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "merged", judgmentId: ruling.id },
+    });
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+  });
+});
+
+test("reasons a correction moves to another docket leave their former ruling for the new one", async () => {
+  const fixture = await newSource();
+  const OTHER_DOCKET = "IV Ka 96/18";
+  await ingestDecision(fixture, decisionOf(RULING));
+  await ingestDecision(
+    fixture,
+    decisionOf(
+      saosRow({
+        id: 339_003,
+        judgmentType: "SENTENCE",
+        judgmentDate: "2018-03-22",
+        caseNumber: OTHER_DOCKET,
+        body: RULING_TEXT,
+      }),
+    ),
+  );
+  await ingestSupplement(fixture, supplementOf(REASONS));
+  const former = await decisionBy(fixture.sourceId, "339002");
+  expect(former.fulltext).toContain(REASONS_TEXT);
+
+  const placed = await ingestSupplement(
+    fixture,
+    supplementOf(
+      saosRow({
+        id: 339_001,
+        judgmentType: "REASONS",
+        judgmentDate: "2018-04-19",
+        caseNumber: OTHER_DOCKET,
+        body: REASONS_TEXT,
+      }),
+    ),
+  );
+
+  const corrected = await decisionBy(fixture.sourceId, "339003");
+  expect(placed).toEqual({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    disposition: { type: "merged", judgmentId: corrected.id },
+  });
+  expect(corrected.fulltext).toContain(REASONS_TEXT);
+  expect((await decisionBy(fixture.sourceId, "339002")).fulltext).not.toContain(
+    REASONS_TEXT,
+  );
+  expect((await supplementRow(fixture.sourceId, "339001")).decisionId).toBe(
+    corrected.id,
+  );
 });
 
 test("reasons parked while their ruling is being written are composed by that write", async () => {
