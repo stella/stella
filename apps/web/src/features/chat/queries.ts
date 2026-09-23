@@ -22,9 +22,9 @@ import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
-import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
+import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {

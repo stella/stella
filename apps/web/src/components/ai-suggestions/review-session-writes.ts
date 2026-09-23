@@ -10,7 +10,7 @@
  */
 
 import { detached } from "@/lib/detached";
-import { LifecycleRegistry } from "@/lib/lifecycle-registry";
+import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 type ReviewSessionWrites = {
   inFlight: Set<Promise<void>>;

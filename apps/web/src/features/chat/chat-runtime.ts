@@ -40,9 +40,9 @@ import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatFetchClient } from "./chat-fetch";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";

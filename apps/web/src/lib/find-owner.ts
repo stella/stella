@@ -12,8 +12,8 @@ import type {
   FindScope,
 } from "@/lib/find-owner.logic";
 import { HOTKEYS } from "@/lib/hotkeys";
-import { LifecycleRegistry } from "@/lib/lifecycle-registry";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 type FindSurface = {
   bar: RefObject<HTMLElement | null> | undefined;
