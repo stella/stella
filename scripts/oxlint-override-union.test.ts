@@ -15,13 +15,17 @@
 // scope stays possible but never accidental.
 
 import { expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 
 import config from "../oxlint.config.ts";
-
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-
-const LINTED_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/u;
+import {
+  isRecord,
+  lintedRepoFiles,
+  readScopes,
+  ruleIsOff,
+  ruleOptions,
+  scopeMatches,
+  stringArray,
+} from "./oxlint-config-scopes.ts";
 
 // Rules whose configuration is a list of restrictions rather than a knob, so a
 // narrower scope is expected to inherit what a broader scope already forbids.
@@ -100,26 +104,9 @@ const DELIBERATE_NARROWINGS = [
   },
 ] as const;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const stringArray = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : [];
-
 const readString = (source: Record<string, unknown>, key: string) => {
   const value = source[key];
   return typeof value === "string" ? value : undefined;
-};
-
-/** `["error", …options]` → the options; anything else → no options. */
-const ruleOptions = (value: unknown): unknown[] =>
-  Array.isArray(value) ? value.slice(1) : [];
-
-const ruleIsOff = (value: unknown) => {
-  const severity = Array.isArray(value) ? value[0] : value;
-  return severity === "off" || severity === 0;
 };
 
 const pathKey = (
@@ -130,7 +117,7 @@ const pathKey = (
   const scope =
     importNames.length === 0
       ? `path:${name}`
-      : `path:${name}#${[...importNames].sort((a, b) => a.localeCompare(b)).join(",")}`;
+      : `path:${name}#${[...importNames].toSorted((a, b) => a.localeCompare(b)).join(",")}`;
   // A ban that lets type-only imports through forbids less than one that does
   // not, so the two must never compare equal.
   return allowTypeImports ? `${scope}+types` : scope;
@@ -273,13 +260,13 @@ const restrictedPropertyKeys = (options: unknown): string[] => {
     }
     if (object !== undefined) {
       keys.push(
-        `object:${object}#allow:${stringArray(option["allowProperties"]).sort().join(",")}`,
+        `object:${object}#allow:${stringArray(option["allowProperties"]).toSorted().join(",")}`,
       );
       continue;
     }
     if (property !== undefined) {
       keys.push(
-        `property:${property}#allow:${stringArray(option["allowObjects"]).sort().join(",")}`,
+        `property:${property}#allow:${stringArray(option["allowObjects"]).toSorted().join(",")}`,
       );
     }
   }
@@ -302,61 +289,6 @@ const covers = (effective: ReadonlySet<string>, wanted: string) => {
   const separator = wanted.indexOf("#");
   return separator > 0 && effective.has(wanted.slice(0, separator));
 };
-
-type ScopeConfig = {
-  scope: string;
-  files: string[];
-  excludeFiles: string[];
-  rules: Record<string, unknown>;
-};
-
-const readScopes = (root: unknown): ScopeConfig[] => {
-  if (!isRecord(root)) {
-    return [];
-  }
-  const scopes: ScopeConfig[] = [];
-  const baseRules = root["rules"];
-  if (isRecord(baseRules)) {
-    scopes.push({
-      scope: "<base>",
-      files: ["**"],
-      excludeFiles: [],
-      rules: baseRules,
-    });
-  }
-  const overrides = Array.isArray(root["overrides"]) ? root["overrides"] : [];
-  for (const override of overrides) {
-    if (!isRecord(override)) {
-      continue;
-    }
-    const rules = override["rules"];
-    if (!isRecord(rules)) {
-      continue;
-    }
-    const files = stringArray(override["files"]);
-    if (files.length === 0) {
-      continue;
-    }
-    scopes.push({
-      scope: files.join(", "),
-      files,
-      excludeFiles: stringArray(override["excludeFiles"]),
-      rules,
-    });
-  }
-  return scopes;
-};
-
-const globCache = new Map<string, Bun.Glob>();
-const matches = (pattern: string, file: string) => {
-  const cached = globCache.get(pattern) ?? new Bun.Glob(pattern);
-  globCache.set(pattern, cached);
-  return cached.match(file);
-};
-
-const scopeMatches = (scope: ScopeConfig, file: string) =>
-  scope.files.some((pattern) => matches(pattern, file)) &&
-  !scope.excludeFiles.some((pattern) => matches(pattern, file));
 
 type Drop = { rule: string; scope: string; entry: string };
 
@@ -399,21 +331,6 @@ const findDrops = (
     }
   }
   return [...drops.values()];
-};
-
-const lintedRepoFiles = () => {
-  const result = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: repoRoot });
-  if (!result.success) {
-    throw new Error("git ls-files failed; cannot resolve the override scopes");
-  }
-  const files = new TextDecoder()
-    .decode(result.stdout)
-    .split("\0")
-    .filter((file) => LINTED_FILE_PATTERN.test(file));
-  if (files.length === 0) {
-    throw new Error("git ls-files returned no lintable files");
-  }
-  return files;
 };
 
 test("resolves overrides by replacement, last match first", () => {
@@ -491,7 +408,7 @@ test("every restriction-shaped rule with options is tracked", () => {
     }
   }
   const sorted = (names: Iterable<string>) =>
-    [...names].sort((a, b) => a.localeCompare(b));
+    [...names].toSorted((a, b) => a.localeCompare(b));
   expect(sorted(configured)).toEqual(sorted(TRACKED_RULES));
 });
 
@@ -519,7 +436,7 @@ test("every restriction field is accounted for in the comparison key", () => {
     }
   }
 
-  expect([...new Set(unhandledEntryFields)].sort()).toEqual([]);
+  expect([...new Set(unhandledEntryFields)].toSorted()).toEqual([]);
 });
 
 test("no override silently drops an inherited restriction", () => {
@@ -538,7 +455,7 @@ test("no override silently drops an inherited restriction", () => {
   );
 
   const sorted = (values: Iterable<string>) =>
-    [...values].sort((a, b) => a.localeCompare(b));
+    [...values].toSorted((a, b) => a.localeCompare(b));
   // Both directions: an undeclared drop is the bug this guard exists for, and
   // a declared drop that no longer happens means the table is stale.
   expect(sorted(observed)).toEqual(sorted(declared));
