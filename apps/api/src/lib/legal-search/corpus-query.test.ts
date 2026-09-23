@@ -453,6 +453,38 @@ test("a long query's later words still carry their stems", () => {
   );
 });
 
+// Legal alternatives spend what the stems leave: every word keeps its stems,
+// and a word's alternatives are granted whole or not at all.
+test("legal alternatives never cost a word its stems or break the budget", () => {
+  const legalAlternatives: CorpusTermExpander = (term) =>
+    term === "kauce" ? ["jistota", "záloha", "peněžitá jistota"] : [];
+  const clause = corpusFreeTextClause(
+    "vrácení kauce nájemce pronajímatel byt smlouva",
+    { legalAlternatives, stemming: CS_STEMMING },
+  );
+
+  expect(clause).not.toBeNull();
+  for (const group of clauseGroups(clause ?? "")) {
+    expect(group).toContain('text_stem:"');
+  }
+  expect(countLeaves(clause ?? "")).toBeLessThanOrEqual(
+    CORPUS_QUERY_LEAF_BUDGET,
+  );
+  const kauce = clauseGroups(clause ?? "").at(1) ?? "";
+  const granted = ["jistota", "záloha", "peněžitá jistota"].filter(
+    (alternative) => kauce.includes(`"${alternative}"`),
+  );
+  expect([0, 3]).toContain(granted.length);
+});
+
+test("a phrase never gains legal alternatives", () => {
+  expect(
+    corpusFreeTextClause('"vrácení kauce"', {
+      legalAlternatives: () => ["jistota"],
+    }),
+  ).toBe('("vrácení kauce")');
+});
+
 const STEM_FIELDS = ["text_stem", "headnote_stem"] as const;
 
 const wordArbitrary = fc

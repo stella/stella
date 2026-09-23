@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import generateDecisionAnalysis from "@/api/handlers/case-law/analysis/generate";
+import expandCaseLawSearch from "@/api/handlers/case-law/decisions/search-expand";
 import refineCaseLawSearch from "@/api/handlers/case-law/decisions/search-refine";
 import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
@@ -28,6 +29,10 @@ const authenticatedCaseLawRoute = new Elysia({
   .post("/decisions/search/refine", refineCaseLawSearch.handler, {
     body: refineCaseLawSearch.config.body,
     permissions: refineCaseLawSearch.config.permissions,
+  })
+  .post("/decisions/search/expand", expandCaseLawSearch.handler, {
+    body: expandCaseLawSearch.config.body,
+    permissions: expandCaseLawSearch.config.permissions,
   });
 
 /**

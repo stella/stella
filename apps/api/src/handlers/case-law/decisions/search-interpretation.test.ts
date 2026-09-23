@@ -138,6 +138,32 @@ describe("interpretDecisionQuery", () => {
     expect(clauseOf(body)).toBe('("jak" AND "a" AND "kdy")');
   });
 
+  test("legal alternatives apply to the words searched, never under strict", () => {
+    const body = request({
+      query: "vrácení kauce",
+      alternatives: [
+        { term: "kauce", alternatives: ["jistota"] },
+        { term: "nájem", alternatives: ["pacht"] },
+      ],
+    });
+
+    expect(interpret(body).legalAlternatives).toEqual([
+      { term: "kauce", alternatives: ["jistota"] },
+    ]);
+    expect(interpret({ ...body, strict: true }).legalAlternatives).toEqual([]);
+    // What the reader is told was searched stays the words they typed.
+    expect(interpret(body).queryUsed).toBe("vrácení kauce");
+  });
+
+  test("an identifier carries no legal alternatives", () => {
+    const body = request({
+      query: "22 Cdo 1000/2020",
+      alternatives: [{ term: "Cdo", alternatives: ["dovolání"] }],
+    });
+
+    expect(interpret(body).legalAlternatives).toEqual([]);
+  });
+
   test("a query of content words alone is unchanged", () => {
     const body = request({ query: "nájemné výpověď" });
 

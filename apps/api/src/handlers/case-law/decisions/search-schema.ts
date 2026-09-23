@@ -22,6 +22,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
@@ -52,6 +53,11 @@ export const searchDecisionsBodySchema = t.Object({
   // judgment is written the way a question is asked. A caller that knows
   // every word matters — a quoted statutory formula, a name — asks for this.
   strict: t.Optional(t.Boolean()),
+  // Legal-vocabulary alternatives for the query's words ("kauce" beside
+  // "jistota"), as the authenticated expansion endpoint proposed them. ORed in
+  // beside each word, never instead of it; ignored under `strict` and for an
+  // identifier. Absent, the search matches the words as typed.
+  alternatives: t.Optional(tLegalAlternatives),
 });
 
 const searchWarningSchema = t.Object(

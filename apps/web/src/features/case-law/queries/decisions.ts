@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -22,7 +22,20 @@ import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
+/**
+ * Legal-vocabulary alternatives for a search's words, as the expansion
+ * endpoint answers them and the search accepts them.
+ */
+export type CaseLawQueryAlternatives = NonNullable<
+  Parameters<typeof api.case.decisions.search.post>[0]["alternatives"]
+>;
+
 export type DecisionListFilters = {
+  /**
+   * Words ORed in beside the reader's own. Present only when there are some,
+   * so a search without them keeps the key the route loader primed.
+   */
+  alternatives?: CaseLawQueryAlternatives;
   court?: string;
   country: string;
   dateFrom?: string;
@@ -241,6 +254,9 @@ export const decisionsInfiniteOptions = (
             ...(listFilters.strict !== undefined && {
               strict: listFilters.strict,
             }),
+            ...(listFilters.alternatives !== undefined && {
+              alternatives: listFilters.alternatives,
+            }),
           },
           { fetch: { signal } },
         );
@@ -341,6 +357,50 @@ type RefineCaseLawQueryOptions = {
  */
 export const refineCaseLawQuery = async (body: RefineCaseLawQueryOptions) =>
   unwrapEden(await api.case.decisions.search.refine.post(body));
+
+type CaseLawQueryExpansionOptions = {
+  country: string;
+  query: string;
+  /** Reports a failed expansion; the search then runs as typed. */
+  onFailure: (error: unknown) => void;
+};
+
+const NO_ALTERNATIVES: CaseLawQueryAlternatives = [];
+
+/**
+ * The legal-vocabulary alternatives the model proposes for a search, for a
+ * signed-in reader. Held for the session, so every page of one search is
+ * asked with the same alternatives the first page was; the server pins them
+ * in the cursor either way. A failure is reported and degrades to none: the
+ * expansion may widen a search, never stop one.
+ */
+export const caseLawQueryExpansionOptions = ({
+  country,
+  onFailure,
+  query,
+}: CaseLawQueryExpansionOptions) =>
+  queryOptions({
+    queryKey: [...caseLawDecisionKeys.all, "expansion", { country, query }],
+    queryFn: async ({ signal }) => {
+      const result = await Result.tryPromise(async () =>
+        unwrapEden(
+          await api.case.decisions.search.expand.post(
+            { country, query },
+            { fetch: { signal } },
+          ),
+        ),
+      );
+      if (result.isOk()) {
+        return result.value.alternatives;
+      }
+      if (!signal.aborted) {
+        onFailure(result.error);
+      }
+      return NO_ALTERNATIVES;
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
 
 export const decisionOptions = (decisionId: string) =>
   queryOptions({

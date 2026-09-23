@@ -11,6 +11,10 @@ import {
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  type LegalAlternatives,
+  normalizeLegalAlternatives,
+} from "@/api/lib/legal-search/legal-alternatives";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 
 /**
@@ -98,24 +102,30 @@ export type DecisionQueryInterpretation = {
   droppedFunctionWords: readonly string[];
   /** What the clause builder drops, or null to require every word. */
   functionWords: ReadonlySet<string> | null;
+  /**
+   * The legal-vocabulary alternatives the clause builder ORs in, normalized
+   * against this query; empty where the search matches the words as typed.
+   */
+  legalAlternatives: LegalAlternatives;
 };
 
 /**
- * Which of a request's words the search will require.
+ * Which of a request's words the search will require, and which alternatives
+ * it will accept beside them.
  *
- * Two requests never drop a word. `strict` is the caller asking for every one
- * of them, and an identifier is a docket or an ECLI, whose parts are not
- * words at all and whose fall-through to the text index exists precisely to
- * find the decision it names.
+ * Two requests never drop or add a word. `strict` is the caller asking for
+ * exactly the words typed, and an identifier is a docket or an ECLI, whose
+ * parts are not words at all and whose fall-through to the text index exists
+ * precisely to find the decision it names.
  */
 export const interpretDecisionQuery = (
   body: SearchDecisionsBody,
   intent: DecisionQueryIntent,
 ): DecisionQueryInterpretation => {
-  const functionWords =
-    body.strict === true || intent.type === "identifier"
-      ? null
-      : functionWordsFor(
+  const verbatim = body.strict === true || intent.type === "identifier";
+  const functionWords = verbatim
+    ? null
+    : functionWordsFor(
           caseLawQueryLanguage({
             jurisdiction: body.country,
             language: body.language,
@@ -133,6 +143,15 @@ export const interpretDecisionQuery = (
       dropped.length === 0 ? body.query : formatCorpusQueryTokens(required),
     droppedFunctionWords: dropped,
     functionWords,
+    // Normalized again here because the request comes from a client: only
+    // words this search requires keep alternatives, within the same bounds
+    // the endpoint that proposed them applies.
+    legalAlternatives: verbatim
+      ? []
+      : normalizeLegalAlternatives(body.alternatives ?? [], {
+          functionWords,
+          query: body.query,
+        }),
   };
 };
 
