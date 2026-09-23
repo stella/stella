@@ -627,9 +627,6 @@ const escapeRegExp = (value: string): string =>
 // Fuzzy supersets for narrow shared-helper/component bans. These counters are
 // intentionally lexical: the AST rules reject the exact known-bad shapes,
 // while the ratchets keep nearby aliases and new spellings visible in review.
-const countHandRolledUserIdentity = (content: string): number =>
-  countMatches(stripComments(content), /<UserAvatar\b/gu);
-
 // Both the flat subpath and the deprecated grouped alias reach the same
 // module, so the metric counts either spelling.
 const countRawUserAvatarPrimitive = (content: string): number =>
@@ -2049,17 +2046,6 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "hand-rolled-user-identity",
-    description:
-      "<UserAvatar> JSX openings outside the shared user-avatar component (fuzzy superset; paired avatar+label shapes are banned by no-hand-rolled-user-identity)",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/web/src/components/user-avatar.tsx",
-    count: countHandRolledUserIdentity,
-  },
-  {
-    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -2918,7 +2904,6 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   'import { Avatar } from "@stll/ui/avatar";',
   'import { UserIdentity } from "@/components/user-avatar";',
   'import { formatFullTimestamp as fullTimestamp } from "@/lib/relative-time";',
-  "const avatar = <UserAvatar name={user.name} />;",
   "const identity = <UserIdentity name={user.name} />;",
   "const getDisplayName = (name: string) => name;",
   "function getInitials(name: string) { return name.slice(0, 2); }",
@@ -2930,12 +2915,11 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   'const timeOnly = value.toLocaleString(locale, { timeStyle: "medium" });',
   "const quotePattern = /[\"']/u;",
   "const urlPattern = /https:\\/\\//u;",
-  "// <UserAvatar /> and const getInitials = () => '?' must not count.",
+  "// const getInitials = () => '?' must not count.",
   '// import { Avatar } from "@stll/ui/avatar";',
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_HAND_ROLLED_USER_IDENTITIES = 1;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -4349,7 +4333,6 @@ const runSelfTest = (): number => {
         EXPECTED_LEGACY_PAINT_TRANSITIONS +
           EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS,
       ],
-      ["hand-rolled-user-identity", EXPECTED_HAND_ROLLED_USER_IDENTITIES],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [

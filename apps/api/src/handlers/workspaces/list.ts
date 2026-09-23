@@ -138,8 +138,8 @@ const readWorkspaces = createSafeRootHandler(
               sql`${max(entities.updatedAt)} DESC NULLS LAST`,
               user.name,
             )
-            // Member rows fan out across the page's workspaces, so the cap is
-            // per workspace, not a single-workspace bound.
+            // Membership writes cap each workspace at workspaceMembersCount, so
+            // this bound holds every member of every workspace on the page.
             .limit(wsIds.length * LIMITS.workspaceMembersCount),
         ]);
 

@@ -59,7 +59,11 @@ export const RunLauncher = ({
   const { data: flowsData } = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
-  const { data: entities } = useQuery(entitySummariesOptions(workspaceId));
+  const {
+    data: entities,
+    isError: entitiesFailed,
+    refetch: refetchEntities,
+  } = useQuery(entitySummariesOptions(workspaceId));
 
   const enabledFlows =
     flowsData && "items" in flowsData
@@ -166,8 +170,22 @@ export const RunLauncher = ({
           value={entityFilter}
         />
         <div className="grid max-h-56 gap-1 overflow-y-auto rounded-md border p-2">
-          {filteredEntities === undefined && (
+          {filteredEntities === undefined && !entitiesFailed && (
             <Skeleton className="m-2 h-4 w-2/3" />
+          )}
+          {filteredEntities === undefined && entitiesFailed && (
+            <div className="flex items-center gap-2 p-2 text-xs">
+              <span className="text-muted-foreground">{t("common.error")}</span>
+              <Button
+                onClick={() =>
+                  detached(refetchEntities(), "flows.retry-run-entities")
+                }
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
           )}
           {filteredEntities?.length === 0 && (
             <p className="text-muted-foreground p-2 text-xs">

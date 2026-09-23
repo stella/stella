@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -31,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -329,10 +331,8 @@ const FlowEditorForm = ({
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: workspacesData } = useQuery(
-    workspacesNavigationOptions(organizationId),
-  );
-  const workspaces = workspacesData?.workspaces;
+  const workspacesQuery = useQuery(workspacesNavigationOptions(organizationId));
+  const workspaces = toWorkspaceOptions(workspacesQuery);
 
   const updateStep = (index: number, next: FlowStep) => {
     setSteps((prev) =>
@@ -616,8 +616,63 @@ const FlowEditorForm = ({
 // ── Trigger section ───────────────────────────────────
 
 type WorkspaceOption = { id: string; name: string };
-// Undefined while the matter list is still loading.
-type WorkspaceOptions = WorkspaceOption[] | undefined;
+
+type WorkspaceOptions =
+  | { status: "loading" }
+  | { status: "failed"; retry: () => void }
+  | { status: "ready"; items: WorkspaceOption[] };
+
+type WorkspacesQueryState = {
+  data: { workspaces: WorkspaceOption[] } | undefined;
+  isError: boolean;
+  refetch: () => Promise<unknown>;
+};
+
+const toWorkspaceOptions = ({
+  data,
+  isError,
+  refetch,
+}: WorkspacesQueryState): WorkspaceOptions => {
+  if (data !== undefined) {
+    return { status: "ready", items: data.workspaces };
+  }
+  if (isError) {
+    return {
+      status: "failed",
+      retry: () => detached(refetch(), "flow-editor.retry-workspaces"),
+    };
+  }
+  return { status: "loading" };
+};
+
+/** What a matter picker shows while it has no matter list to offer. */
+const WorkspaceOptionsNotice = ({
+  workspaces,
+}: {
+  workspaces: WorkspaceOptions;
+}) => {
+  const t = useTranslations();
+  switch (workspaces.status) {
+    case "ready":
+      return null;
+    case "loading":
+      return <Skeleton className="m-2 h-4 w-2/3" />;
+    case "failed":
+      return (
+        <div className="flex items-center gap-2 p-2 text-xs">
+          <span className="text-muted-foreground">{t("common.error")}</span>
+          <Button onClick={workspaces.retry} size="sm" variant="ghost">
+            {t("common.retry")}
+          </Button>
+        </div>
+      );
+    default:
+      workspaces satisfies never;
+      return panic(
+        `Unhandled workspace options: ${JSON.stringify(workspaces)}`,
+      );
+  }
+};
 
 const TriggerSection = ({
   trigger,
@@ -729,11 +784,13 @@ const ScheduleConfig = ({
             <SelectValue placeholder={t("common.selectAMatter")} />
           </SelectTrigger>
           <SelectPopup>
-            {workspaces?.map((workspace) => (
-              <SelectItem key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </SelectItem>
-            ))}
+            <WorkspaceOptionsNotice workspaces={workspaces} />
+            {workspaces.status === "ready" &&
+              workspaces.items.map((workspace) => (
+                <SelectItem key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
           </SelectPopup>
         </Select>
       </div>
@@ -933,22 +990,24 @@ const FileUploadConfig = ({
         </label>
         {fileUpload.workspaceScope.type === "selected" && (
           <div className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2">
-            {workspaces?.map((workspace) => (
-              <label
-                className="flex items-center gap-2 text-sm"
-                key={workspace.id}
-              >
-                <Checkbox
-                  checked={isWorkspaceSelected(workspace.id)}
-                  onCheckedChange={(checked) =>
-                    toggleWorkspace(workspace.id, checked)
-                  }
-                />
-                <span className="truncate" dir="auto">
-                  {workspace.name}
-                </span>
-              </label>
-            ))}
+            <WorkspaceOptionsNotice workspaces={workspaces} />
+            {workspaces.status === "ready" &&
+              workspaces.items.map((workspace) => (
+                <label
+                  className="flex items-center gap-2 text-sm"
+                  key={workspace.id}
+                >
+                  <Checkbox
+                    checked={isWorkspaceSelected(workspace.id)}
+                    onCheckedChange={(checked) =>
+                      toggleWorkspace(workspace.id, checked)
+                    }
+                  />
+                  <span className="truncate" dir="auto">
+                    {workspace.name}
+                  </span>
+                </label>
+              ))}
           </div>
         )}
       </div>
