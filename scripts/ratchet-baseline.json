@@ -229,7 +229,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 96,
+    "count": 97,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/scripts/backfill-image-thumbnails.ts": 1,
@@ -326,7 +326,8 @@
       "apps/api/src/lib/web-search/load-org-keys.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
-      "apps/api/src/scripts/backfill-property-roles.ts": 1
+      "apps/api/src/scripts/backfill-property-roles.ts": 1,
+      "apps/api/src/scripts/recompute-chat-data-scope.ts": 1
     }
   },
   "landing-inline-clipboard-writes": {

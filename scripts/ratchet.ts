@@ -714,7 +714,7 @@ const countRootConnectionImportsAs = (
     if (
       ts.isImportDeclaration(node) &&
       isRootConnectionModule(node.moduleSpecifier) &&
-      node.importClause?.isTypeOnly !== true
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
     ) {
       const bindingsNode = node.importClause?.namedBindings;
       if (
