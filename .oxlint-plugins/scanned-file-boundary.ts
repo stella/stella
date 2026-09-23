@@ -71,7 +71,7 @@ const FOLIO_OWNERS = [
   "apps/api/src/lib/document-translation/docx-review.ts",
 ];
 
-const isTestFile = (filename: string): boolean =>
+const isApiTestFile = (filename: string): boolean =>
   filename.endsWith(".test.ts") || filename.includes("apps/api/src/tests/");
 
 // Minting exports and the modules allowed to import them (path fragments). The
@@ -165,7 +165,7 @@ export default eslintCompatPlugin({
           return fragments.some((fragment) => filename.includes(fragment));
         };
         const folioExempt = (): boolean =>
-          isTestFile(filenameForContext(context)) ||
+          isApiTestFile(filenameForContext(context)) ||
           filenameMatchesAny(FOLIO_OWNERS);
 
         // The brand a type annotation names, following same-file aliases.

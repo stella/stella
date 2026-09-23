@@ -25,6 +25,7 @@ const _folderLoad = folder?.loadAsync(bytes);
 
 // Writing an archive, and an unrelated loadAsync, stay valid.
 const _writer = new ZipArchive();
+// expect-clean: no-raw-zip-load/no-raw-zip-load
 const _unrelated = other.loadAsync(bytes);
 
 export const __noRawZipLoadFixture = {
