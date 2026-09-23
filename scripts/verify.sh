@@ -3,8 +3,9 @@
 # Local mirror of the required package checks in .github/workflows/ci.yml:
 # one command for local package validation without reverse-engineering
 # the workflow. Passing here covers package checks, not the entire
-# `ci-result`: builds still run in CI, and e2e, service-backed suites, and
-# release-image smokes run in the merge queue.
+# `ci-result`: the web and landing builds still run in CI, and browser and
+# e2e suites, service-backed suites, release images, and the mobile, Windows,
+# and desktop Rust checks run in the merge queue.
 #
 # Keep the check list in sync with ci.yml when adding or removing
 # checks there.

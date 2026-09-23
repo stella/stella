@@ -287,6 +287,13 @@ test("only an unlabelled pull request skips heavy suites or passes a superseded 
       results: { "ci-tests": "cancelled" },
     }),
   ).toBe(0);
+  // A timed-out sibling reads as cancelled; the failure still stands.
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "ci-tests": "cancelled", "code-quality": "failure" },
+    }),
+  ).toBe(1);
   expect(
     evaluateResult({
       event: EVENT.pullRequest,

@@ -36,11 +36,8 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       # `fast` runs guards, lint, typecheck, unit tests, and builds. `full`
       # adds the heavy suites (browsers, services, release images, other
-      # platforms): on merge_group and workflow_dispatch, and on a pull
-      # request labelled `ci:full`, which a merge that bypasses the queue
-      # needs (ci-full-label.yml dispatches this workflow when the label is
-      # added). Every heavy job gates on `suite_depth == 'full'`.
-      suite_depth: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')) && 'full' || 'fast' }}
+      # platforms). Every heavy job gates on `suite_depth == 'full'`.
+      suite_depth: ${{ steps.depth.outputs.suite_depth }}
       changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -62,6 +59,30 @@ jobs:
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
+      - name: Resolve suite depth
+        id: depth
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Full on merge_group and workflow_dispatch, and on a pull request
+          # labelled `ci:full`, which a merge that bypasses the queue needs.
+          # The labels are read live rather than from the event payload, so
+          # re-running a pull request run after the label is added (what
+          # ci-full-label.yml does) plans full depth.
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
+          if grep -Fxq 'ci:full' <<< "$labels"; then
+            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check if PR is trusted
         id: check
         env:
@@ -3178,15 +3199,15 @@ jobs:
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
               fi
-              cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
-              if [[ -n "$cancelled" ]]; then
-                echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
-                exit 0
-              fi
-              failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+              # A failure stands even when a sibling job was cancelled.
+              failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
                 echo "::error::CI checks failed: $failed"
                 exit 1
+              fi
+              cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
+              if [[ -n "$cancelled" ]]; then
+                echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
               ;;
             *)

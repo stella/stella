@@ -1,9 +1,11 @@
 name: CI full label
 
-# Adding `ci:full` to a pull request runs CI Checks at full depth on its head,
-# so a merge that bypasses the merge queue still has the heavy suites behind
-# it. Later pushes pick the label up from the pull_request payload. Listening
-# to `labeled` here instead of in ci.yml keeps other labels from restarting CI.
+# Adding `ci:full` to a pull request re-runs its CI Checks run on the head, and
+# ci-plan reads the label live to plan full depth, so a merge that bypasses the
+# merge queue still has the heavy suites behind it. It stays a pull_request run:
+# the changeset and release gates apply, and its `ci-result` replaces the fast
+# one on the same head. Listening to `labeled` here instead of in ci.yml keeps
+# other labels from restarting CI.
 #
 # pull_request_target runs this file from the base branch with a write token:
 # it never checks out or runs pull request code, and reads only event fields
@@ -15,25 +17,35 @@ on:
 permissions: {}
 
 jobs:
-  dispatch:
+  rerun:
     if: github.event.label.name == 'ci:full'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: write
     steps:
-      - name: Run CI Checks at full depth on the pull request head
+      - name: Re-run CI Checks on the pull request head
         env:
-          BASE_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          # A dispatch can only target a branch of this repository.
-          if [[ "$HEAD_REPO" != "$BASE_REPO" ]]; then
-            echo "::error::Pull request #$PR_NUMBER comes from $HEAD_REPO; a full run is only available through the merge queue."
-            exit 1
+          read -r run_id status < <(
+            gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=1" \
+              --jq '.workflow_runs[0] | "\(.id) \(.status)"'
+          )
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "No CI Checks run for #$PR_NUMBER at $HEAD_SHA yet; the next one reads the label."
+            exit 0
           fi
-          gh workflow run ci.yml --repo "$BASE_REPO" --ref "$HEAD_REF"
-          echo "Dispatched CI Checks at full depth for #$PR_NUMBER ($HEAD_REF)."
+          # A run that planned before the label cannot change depth, and a
+          # run in progress cannot be re-run.
+          if [[ "$status" != "completed" ]]; then
+            gh run cancel "$run_id" --repo "$REPO"
+            until [[ "$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)" == "completed" ]]; do
+              sleep 10
+            done
+          fi
+          gh run rerun "$run_id" --repo "$REPO"
+          echo "Re-running CI Checks run $run_id for #$PR_NUMBER at full depth."
