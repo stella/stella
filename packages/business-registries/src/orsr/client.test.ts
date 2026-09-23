@@ -35,6 +35,11 @@ const urlOf = (input: URL | Request | string): string => {
   return input.url;
 };
 
+// The ESET extract relabelled with another IČO, for search fixtures that
+// have no extract of their own.
+const withExtractIco = (extract: unknown, ico: string): unknown =>
+  JSON.parse(JSON.stringify(extract).replaceAll("31333532", () => ico));
+
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -84,7 +89,10 @@ describe("lookupByIco (fixture)", () => {
 
   test("parses Volkswagen Slovakia search hit and uses Sa file reference", async () => {
     const search = await readFixture<unknown>("search-by-ico-volkswagen.json");
-    const extract = await readFixture<unknown>("extract-eset.json");
+    const extract = withExtractIco(
+      await readFixture<unknown>("extract-eset.json"),
+      "35757442",
+    );
     let lastExtractUrl = "";
     restore = installFetchStub(async (input) => {
       const url = urlOf(input);
@@ -144,6 +152,97 @@ describe("lookupByIco (fixture)", () => {
     await lookupByIco("31333532");
     expect(lastExtractUrl).toContain("vlozka=3586");
     expect(lastExtractUrl).not.toContain("vlozka=999");
+  });
+
+  test("ignores name matches whose IČO differs from the requested one", async () => {
+    const extract = await readFixture<unknown>("extract-eset.json");
+    let lastExtractUrl = "";
+    // The search filter also matches corporate names, so a newer company
+    // named after the target's IČO comes back with a higher internal id.
+    const withNameMatch = {
+      filteredCount: 2,
+      data: [
+        {
+          id: 5994,
+          fileReference: { section: "Sro", insertNumber: 3586, court: "B" },
+          registrationNumber: "31333532",
+          corporateBodyFullName: "ESET, spol. s r.o.",
+        },
+        {
+          id: 999_999,
+          fileReference: { section: "Sro", insertNumber: 777, court: "B" },
+          registrationNumber: "54303346",
+          corporateBodyFullName: "31333532 s.r.o.",
+        },
+      ],
+    };
+    restore = installFetchStub(async (input) => {
+      const url = urlOf(input);
+      if (url.includes("/extract")) {
+        lastExtractUrl = url;
+        return jsonResponse(extract);
+      }
+      return jsonResponse(withNameMatch);
+    });
+    const company = await lookupByIco("31333532");
+    expect(lastExtractUrl).toContain("vlozka=3586");
+    expect(company?.ico).toBe("31333532");
+  });
+
+  test("returns null when no hit carries the requested IČO", async () => {
+    let extractCalled = false;
+    restore = installFetchStub(async (input) => {
+      if (urlOf(input).includes("/extract")) {
+        extractCalled = true;
+      }
+      return jsonResponse({
+        filteredCount: 1,
+        data: [
+          {
+            id: 1,
+            fileReference: { section: "Sro", insertNumber: 1, court: "B" },
+            registrationNumber: "54303346",
+            corporateBodyFullName: "31333532 s.r.o.",
+          },
+        ],
+      });
+    });
+    expect(await lookupByIco("31333532")).toBeNull();
+    expect(extractCalled).toBe(false);
+  });
+
+  test("returns null for an extract that names a different IČO", async () => {
+    const search = await readFixture<unknown>("search-by-ico-eset.json");
+    const extract = withExtractIco(
+      await readFixture<unknown>("extract-eset.json"),
+      "35757442",
+    );
+    restore = installFetchStub(async (input) =>
+      jsonResponse(urlOf(input).includes("/extract") ? extract : search),
+    );
+    expect(await lookupByIco("31333532")).toBeNull();
+  });
+
+  test("ignores hits whose registration number is not a string", async () => {
+    let extractCalled = false;
+    restore = installFetchStub(async (input) => {
+      if (urlOf(input).includes("/extract")) {
+        extractCalled = true;
+      }
+      return jsonResponse({
+        filteredCount: 1,
+        data: [
+          {
+            id: 1,
+            fileReference: { section: "Sro", insertNumber: 1, court: "B" },
+            registrationNumber: null,
+            corporateBodyFullName: "31333532 s.r.o.",
+          },
+        ],
+      });
+    });
+    expect(await lookupByIco("31333532")).toBeNull();
+    expect(extractCalled).toBe(false);
   });
 
   test("returns null when the search yields no hits", async () => {

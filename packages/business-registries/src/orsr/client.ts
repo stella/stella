@@ -117,16 +117,22 @@ const buildSearchUrl = (filterValue: string, take?: number): string => {
 
 const pickLatestHit = (
   hits: OrsrRawSearchHit[] | undefined,
+  ico: string,
 ): OrsrRawSearchHit | null => {
-  if (!hits || hits.length === 0) {
-    return null;
-  }
+  // The search filter matches the corporate name as well as the
+  // registration number, so a company whose name contains these digits is
+  // also a hit. Only exact IČO matches are candidates.
+  const matching = (hits ?? []).filter(
+    // The response guard only checks `id`, so a null or non-string
+    // registration number must be excluded here, not normalized.
+    (hit) =>
+      typeof hit.registrationNumber === "string" &&
+      normalizeIco(hit.registrationNumber) === ico,
+  );
   // Re-registrations preserve the IČO but mint a fresh internal `id`;
   // the highest internal id is the live record (or, for terminated
-  // entities, the final registry state). Sort descending so the
-  // primary lookup path always sees the most recent entry.
-  const sorted = hits.toSorted((a, b) => b.id - a.id);
-  return sorted.at(0) ?? null;
+  // entities, the final registry state).
+  return matching.toSorted((a, b) => b.id - a.id).at(0) ?? null;
 };
 
 const dedupeLatestHitsByIco = (
@@ -177,7 +183,8 @@ const dedupeLatestHitsByIco = (
  * (struck-off) entities still resolve; the parser surfaces the
  * terminated status via `OrsrCompany.status`.
  *
- * @returns The entity, or `null` if the IČO is not on file.
+ * @returns The entity, or `null` if the IČO is not on file (including when
+ *   the fetched extract names a different IČO).
  * @throws {OrsrValidationError} when the IČO fails MOD-11
  * @throws {OrsrAPIError} on upstream HTTP errors
  * @throws {OrsrRequestError} on network failures
@@ -192,7 +199,7 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
     buildSearchUrl(normalized),
     isOrsrSearchResponse,
   );
-  const hit = pickLatestHit(searchData.data);
+  const hit = pickLatestHit(searchData.data, normalized);
   if (!hit) {
     return null;
   }
@@ -215,7 +222,14 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
     `${EXTRACT_URL}?${extractParams.toString()}`,
     isOrsrExtractResponse,
   );
-  return parseExtract(extract);
+  const company = parseExtract(extract);
+  // The extract is fetched by file reference, not by IČO. A record naming a
+  // different entity means the registry holds no record for this IČO at that
+  // reference, so it is reported as not on file rather than returned.
+  if (company !== null && normalizeIco(company.ico) !== normalized) {
+    return null;
+  }
+  return company;
 };
 
 export type SearchOptions = {
