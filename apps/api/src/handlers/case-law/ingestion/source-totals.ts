@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -38,11 +38,18 @@ const SOURCE_READ_LIMIT = 100;
 
 /**
  * `reportedTotal` is a PostgreSQL `integer`. A larger value is rejected here
- * so the caller gets the same boundary `TypeError` as any other unusable
+ * so the caller gets the same `SourceReportedTotalError` as any other unusable
  * number, instead of a numeric-overflow raised mid-transaction by the
  * database, which a batched caller cannot attribute to one source.
  */
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+/** A reported total the sources table cannot hold or the domain cannot mean. */
+export class SourceReportedTotalError extends TaggedError(
+  "SourceReportedTotalError",
+)<{
+  message: string;
+}> {}
 
 type SetSourceReportedTotalOptions = {
   scopedDb: ScopedDb;
@@ -67,7 +74,8 @@ export type SourceReportedTotal = {
  * reports holding nothing, and storing it would read downstream as complete
  * coverage of an empty corpus), anything not a whole number (a parse that
  * yielded NaN or infinity, a fraction), and anything past the column's
- * range. Callers report the `TypeError` rather than restating these rules.
+ * range. Callers report the `SourceReportedTotalError` rather than restating
+ * these rules.
  *
  * Returns false when no source carries `adapterKey`.
  */
@@ -83,12 +91,14 @@ export const setSourceReportedTotal = async ({
     total <= 0 ||
     total > POSTGRES_INTEGER_MAX
   ) {
-    throw new TypeError(
-      `reported total must be a positive integer no greater than ${POSTGRES_INTEGER_MAX}, got: ${total}`,
-    );
+    throw new SourceReportedTotalError({
+      message: `reported total must be a positive integer no greater than ${POSTGRES_INTEGER_MAX}, got: ${total}`,
+    });
   }
   if (Number.isNaN(asOf.getTime())) {
-    throw new TypeError("reported total asOf must be a valid date");
+    throw new SourceReportedTotalError({
+      message: "reported total asOf must be a valid date",
+    });
   }
 
   return await scopedDb(async (tx) => {

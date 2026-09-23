@@ -4,6 +4,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
+import { panic, TaggedError } from "better-result";
 
 import {
   buildDocumentVersionUploadReservationInput,
@@ -18,16 +19,16 @@ import { createUploadTargetController } from "./upload-target";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
 
-class UploadAppError extends Error {
-  override readonly name = "UploadAppError";
-}
+class UploadAppError extends TaggedError("UploadAppError")<{
+  message: string;
+}> {}
 
 const fileInput = document.querySelector<HTMLInputElement>("#file");
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const targetElement = document.querySelector<HTMLElement>("#target");
 if (!fileInput || !uploadButton || !statusElement || !targetElement) {
-  throw new TypeError("Document upload app markup is incomplete");
+  panic("Document upload app markup is incomplete");
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -91,7 +92,9 @@ const callCapability = async (
   });
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
-    throw new UploadAppError(message ?? `Capability ${capability} failed`);
+    throw new UploadAppError({
+      message: message ?? `Capability ${capability} failed`,
+    });
   }
   const payload = parsePayload(result);
   return isRecord(payload) && "result" in payload ? payload["result"] : payload;
@@ -101,7 +104,9 @@ const parseReservation = (
   value: unknown,
 ): { headers: Record<string, string>; uploadId: string; url: string } => {
   if (!isRecord(value)) {
-    throw new TypeError("stella returned an invalid upload reservation");
+    throw new UploadAppError({
+      message: "stella returned an invalid upload reservation",
+    });
   }
   const { headers, uploadId, url } = value;
   if (
@@ -109,12 +114,16 @@ const parseReservation = (
     typeof url !== "string" ||
     !isRecord(headers)
   ) {
-    throw new TypeError("stella returned an invalid upload reservation");
+    throw new UploadAppError({
+      message: "stella returned an invalid upload reservation",
+    });
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      throw new TypeError("stella returned invalid upload headers");
+      throw new UploadAppError({
+        message: "stella returned invalid upload headers",
+      });
     }
     headerEntries.push([key, headerValue]);
   }
@@ -183,6 +192,7 @@ const uploadSelectedFile = async (): Promise<void> => {
     );
     uploadId = reservation.uploadId;
     setStatus("Uploading…", "idle");
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- browser upload to the presigned URL Stella's upload reservation returned
     const put = await fetchWithTimeout(reservation.url, {
       method: "PUT",
       headers: reservation.headers,
@@ -190,9 +200,9 @@ const uploadSelectedFile = async (): Promise<void> => {
       timeoutMs: UPLOAD_TIMEOUT_MS,
     });
     if (!put.ok) {
-      throw new UploadAppError(
-        `Storage rejected the upload (HTTP ${put.status})`,
-      );
+      throw new UploadAppError({
+        message: `Storage rejected the upload (HTTP ${put.status})`,
+      });
     }
 
     setStatus("Scanning and saving…", "idle");

@@ -167,11 +167,21 @@ const workflowKey = (
     suffix: field,
   });
 
+class WorkflowRunStateReplyError extends TaggedError(
+  "WorkflowRunStateReplyError",
+)<{
+  message: string;
+  reply: unknown;
+}> {}
+
 const parseOptionalStringReply = (reply: unknown): string | null => {
   if (reply === null || typeof reply === "string") {
     return reply;
   }
-  throw new TypeError("Redis GET returned a non-string workflow value");
+  throw new WorkflowRunStateReplyError({
+    message: "Redis GET returned a non-string workflow value",
+    reply,
+  });
 };
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>

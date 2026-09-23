@@ -146,7 +146,7 @@ const digestOf = async (query: string): Promise<string> => {
   const rows: DigestRow[] = await client.unsafe(query);
   const row = rows.at(0);
   if (row === undefined || typeof row.digest !== "string") {
-    throw new TypeError(`digest query returned no digest: ${query}`);
+    panic(`digest query returned no digest: ${query}`);
   }
   return row.digest;
 };

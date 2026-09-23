@@ -591,7 +591,7 @@ describe.skipIf(!rustfsReachable)(
       // native reader here; production reads still use the cancellable helper
       // until Bun's native API accepts an AbortSignal.
       const nativeFile = getS3().file(probeKey);
-      // oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read -- Bun 1.4 native-reader integration smoke.
+      // oxlint-disable-next-line s3-object-boundary/no-native-s3-object-read -- Bun 1.4 native-reader integration smoke.
       const downloaded = new Uint8Array(await nativeFile.arrayBuffer());
       expect(downloaded).toEqual(HELLO_BYTES);
     });

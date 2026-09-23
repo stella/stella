@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
@@ -125,7 +126,7 @@ const fixture = async () => {
       .select()
       .from(bufferObjectCleanupIntents)
       .where(
-        sql`${bufferObjectCleanupIntents.objectKey} LIKE ${`${ids.orgA}/templates/${templateId}/%`}`,
+        sql`${bufferObjectCleanupIntents.objectKey} LIKE ${`${escapeLike(ids.orgA)}/templates/${escapeLike(templateId)}/%`}`,
       ),
     audits: await testDb
       .select()

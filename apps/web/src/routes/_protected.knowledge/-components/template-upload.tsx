@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -42,7 +43,7 @@ export const TemplateUpload = ({
       }
       const { data } = response;
       if (data instanceof Response) {
-        throw new TypeError("Unexpected response shape");
+        panic("Unexpected response shape");
       }
       return { file, data };
     },
@@ -77,7 +78,7 @@ export const TemplateUpload = ({
       }
       const { data } = discovered;
       if (data instanceof Response) {
-        throw new TypeError("Unexpected response shape");
+        panic("Unexpected response shape");
       }
       return { file: prepared, data };
     },

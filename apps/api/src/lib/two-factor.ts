@@ -17,6 +17,7 @@ export const getUserEmailAndTwoFactorEnabled = async (
 > =>
   await Result.tryPromise({
     try: async () => {
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the caller's own email and two-factor flag by their session user id
       const rows = await rootDb
         .select({ email: user.email, twoFactorEnabled: user.twoFactorEnabled })
         .from(user)

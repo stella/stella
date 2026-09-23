@@ -209,6 +209,7 @@ export const legacyAiSdkFilePartToTanStack = (
   part: LegacyAiSdkFilePart,
 ): ChatAttachmentPart =>
   createChatAttachmentPart({
+    // oxlint-disable-next-line security-guards/no-raw-filename-write -- converts an already persisted message part; the filename is display metadata, never a storage path
     filename: part.filename,
     mimeType: part.mediaType,
     placeholder: part.placeholder,

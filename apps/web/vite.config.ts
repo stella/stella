@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -127,7 +128,7 @@ const ensurePluginOption = (option: unknown, label: string): PluginOption => {
     return option;
   }
 
-  throw new TypeError(`Invalid Vite plugin option from ${label}`);
+  return panic(`Invalid Vite plugin option from ${label}`);
 };
 
 // The exact default asset-base expression `@stll/anonymize-wasm` compiles

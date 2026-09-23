@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { constants as fsConstants, existsSync, readFileSync } from "node:fs";
 import {
@@ -133,7 +134,7 @@ export const validateProductMediaManifest = (
     !Array.isArray(value["recordings"]) ||
     !value["recordings"].every(isRecording)
   ) {
-    throw new TypeError(`${PRODUCT_MEDIA_MANIFEST_PATH} is malformed`);
+    panic(`${PRODUCT_MEDIA_MANIFEST_PATH} is malformed`);
   }
 
   const assets = value["assets"];
@@ -141,16 +142,14 @@ export const validateProductMediaManifest = (
   const paths = new Set<string>();
   for (const asset of assets) {
     if (paths.has(asset.path)) {
-      throw new TypeError(
-        `${PRODUCT_MEDIA_MANIFEST_PATH} repeats asset path ${asset.path}`,
-      );
+      panic(`${PRODUCT_MEDIA_MANIFEST_PATH} repeats asset path ${asset.path}`);
     }
     const extension = nodePath.extname(asset.path);
     if (
       (extension === ".jpg" && asset.contentType !== "image/jpeg") ||
       (extension === ".mp4" && asset.contentType !== "video/mp4")
     ) {
-      throw new TypeError(
+      panic(
         `${PRODUCT_MEDIA_MANIFEST_PATH} has the wrong content type for ${asset.path}`,
       );
     }
@@ -161,16 +160,14 @@ export const validateProductMediaManifest = (
   for (const recording of recordings) {
     const key = `${recording.captureId}:${recording.theme}`;
     if (recordingKeys.has(key)) {
-      throw new TypeError(
-        `${PRODUCT_MEDIA_MANIFEST_PATH} repeats recording ${key}`,
-      );
+      panic(`${PRODUCT_MEDIA_MANIFEST_PATH} repeats recording ${key}`);
     }
     for (const path of recordingArtifactPaths(
       recording.captureId,
       recording.theme,
     )) {
       if (!paths.has(path)) {
-        throw new TypeError(
+        panic(
           `${PRODUCT_MEDIA_MANIFEST_PATH} recording ${key} is missing ${path}`,
         );
       }
@@ -179,7 +176,7 @@ export const validateProductMediaManifest = (
   }
 
   if (recordings.length * 2 !== assets.length) {
-    throw new TypeError(
+    panic(
       `${PRODUCT_MEDIA_MANIFEST_PATH} must pair every video with one poster`,
     );
   }
@@ -265,9 +262,7 @@ const readRecordingEntries = async (
   );
   const parsed: unknown = JSON.parse(await readFile(path, "utf-8"));
   if (!isRecord(parsed) || !Array.isArray(parsed["entries"])) {
-    throw new TypeError(
-      "recordings-manifest.json must contain an entries array",
-    );
+    panic("recordings-manifest.json must contain an entries array");
   }
   return parsed["entries"].map((entry, index) => {
     if (
@@ -275,9 +270,7 @@ const readRecordingEntries = async (
       typeof entry["captureId"] !== "string" ||
       (entry["theme"] !== "dark" && entry["theme"] !== "light")
     ) {
-      throw new TypeError(
-        `recordings-manifest.json entry ${index} is malformed`,
-      );
+      panic(`recordings-manifest.json entry ${index} is malformed`);
     }
     return {
       captureId: entry["captureId"],

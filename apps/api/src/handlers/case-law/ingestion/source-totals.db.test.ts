@@ -16,6 +16,7 @@ import {
   readSourceReportedTotals,
   refreshSourceStoredTotal,
   setSourceReportedTotal,
+  SourceReportedTotalError,
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -142,7 +143,7 @@ test.each([
     origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
   }).catch((error: unknown) => error);
 
-  expect(rejection).toBeInstanceOf(TypeError);
+  expect(rejection).toBeInstanceOf(SourceReportedTotalError);
 
   expect(await readTrio(adapterKey)).toEqual({
     reportedTotal: null,

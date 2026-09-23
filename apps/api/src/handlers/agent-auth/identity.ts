@@ -137,6 +137,7 @@ const mapIdJagOutcome = (
           registration_id: ceremony.registrationId,
           registration_type: "identity_assertion",
           claim_url: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
+          // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- the step-up response hands the claim token to the requesting agent by design
           claim_token: ceremony.claimToken,
           claim_token_expires: new Date(
             Temporal.Now.instant().epochMilliseconds +

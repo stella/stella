@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   applyReplacements,
   directPropertyValue,
@@ -30,7 +32,7 @@ export const syncLockfileWorkspaceVersions = (
     text: lockText,
   });
   if (lockText[workspacesStart] !== "{") {
-    throw new TypeError("bun.lock workspaces property must be an object");
+    panic("bun.lock workspaces property must be an object");
   }
   const replacements: JsonTextReplacement[] = Object.entries(
     workspaceVersions,
@@ -43,7 +45,7 @@ export const syncLockfileWorkspaceVersions = (
       text: lockText,
     });
     if (lockText[workspaceStart] !== "{") {
-      throw new TypeError(`bun.lock workspace ${workspace} must be an object`);
+      panic(`bun.lock workspace ${workspace} must be an object`);
     }
     const versionStart = directPropertyValue({
       label: LABEL,

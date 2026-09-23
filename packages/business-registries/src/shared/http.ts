@@ -76,6 +76,7 @@ export const performRegistryRequest = async (
     options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS,
   );
   try {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- shared request helper; each registry client builds the URL from its fixed registry API base
     return await fetch(options.url, {
       ...options.init,
       signal: requestSignal,

@@ -14,6 +14,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { authSchema } from "@/api/db/auth-schema";
+import { escapeLike } from "@/api/lib/escape-like";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {
@@ -1680,7 +1681,7 @@ const accountIssuersTrustedStatement = sql`
         OR (provider_id = ${AUTH_PROVIDER_IDS.GOOGLE}
             AND issuer IS DISTINCT FROM ${ACCOUNT_ISSUERS.GOOGLE})
         OR (provider_id = ${AUTH_PROVIDER_IDS.MICROSOFT}
-            AND (issuer NOT LIKE ${`${ACCOUNT_ISSUERS.MICROSOFT_PREFIX}%${ACCOUNT_ISSUERS.MICROSOFT_SUFFIX}`}
+            AND (issuer NOT LIKE ${`${escapeLike(ACCOUNT_ISSUERS.MICROSOFT_PREFIX)}%${escapeLike(ACCOUNT_ISSUERS.MICROSOFT_SUFFIX)}`}
                  OR account_id IS NOT DISTINCT FROM user_id))
   ) AS "passed"
 `;

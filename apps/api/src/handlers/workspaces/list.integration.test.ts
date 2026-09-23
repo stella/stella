@@ -19,7 +19,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import readWorkspaces from "./list";
 
-// Evidence for the `no-unscoped-user-query` waiver on the `user` import: every
+// Evidence for the `no-unscoped-user-query` waiver on the members query: every
 // identity in the payload arrives through `workspace_members` rows of the
 // organization's own matters. `user` is readable under RLS for any member of
 // the active organization (`auth_user_select`), so organization membership

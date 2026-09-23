@@ -73,6 +73,7 @@ import {
   displayedNameExpr,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
@@ -485,6 +486,7 @@ const internalSortKey = ({
     case "_name":
       return textSortKey({ direction, expr: displayedNameExpr() });
     case "_created-by":
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped
       return defaultNullableTextSortKey({
         direction,
         expr: sql`(
@@ -581,8 +583,8 @@ const buildSearchSortKeys = (search: string | undefined): EntitySortKey[] => {
       direction: "asc",
       expr: sql`CASE
         WHEN ${normalizedTitle} = ${normalizedSearch} THEN 0
-        WHEN ${normalizedTitle} LIKE ${`${normalizedSearch}%`} THEN 1
-        WHEN ${normalizedTitle} LIKE ${`%${normalizedSearch}%`} THEN 2
+        WHEN ${normalizedTitle} LIKE ${`${escapeLike(normalizedSearch)}%`} THEN 1
+        WHEN ${normalizedTitle} LIKE ${`%${escapeLike(normalizedSearch)}%`} THEN 2
         ELSE 3
       END`,
     }),
@@ -1373,7 +1375,7 @@ const buildSearchConditions = ({
       WHERE sd.entity_id = ${entities.id}
         AND sd.organization_id = ${organizationId}
         AND sd.workspace_id = ${entities.workspaceId}
-        AND sd.title ILIKE ${`%${trimmed}%`}
+        AND sd.title ILIKE ${`%${escapeLike(trimmed)}%`}
     )`,
   ];
 };

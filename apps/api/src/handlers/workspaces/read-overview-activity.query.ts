@@ -23,7 +23,6 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends.
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -146,6 +145,7 @@ export const readOverviewActivityActorRows = async ({
       .where(and(...conditions))
       .as("historical_activity_actors");
     const identityCondition =
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
       search === ""
         ? sql`true`
         : (or(
@@ -153,6 +153,7 @@ export const readOverviewActivityActorRows = async ({
             ilike(user.email, `%${escapeLike(search)}%`),
           ) ?? sql`false`);
 
+    // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
     return await tx
       .selectDistinct({
         deletedAt: user.deletedAt,
@@ -891,6 +892,7 @@ export const readOverviewActivityPage = async ({
           ),
         ];
         const actors =
+          // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
           actorIds.length === 0
             ? []
             : await tx

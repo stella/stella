@@ -298,6 +298,7 @@ export const resolveMentionTargets = async (
 
   // The actor is the authenticated caller and their own row is always visible
   // to them, so a miss here is a broken invariant, not an absent name.
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the authenticated actor's own name by their user id
   const actorRow = await tx
     .select({ name: user.name })
     .from(user)
@@ -314,6 +315,7 @@ export const resolveMentionTargets = async (
     ...new Set(mentioned.flatMap((email) => [email, email.toLowerCase()])),
   ];
 
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- mention candidates are restricted to members of the current workspace through workspaceMembers
   const members = await tx
     .select({ userId: user.id })
     .from(user)

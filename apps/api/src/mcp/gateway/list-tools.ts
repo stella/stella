@@ -1,4 +1,5 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 
 import {
   isExternalMcpToolName,
@@ -352,7 +353,7 @@ const toWireValue = (value: unknown): WireValue => {
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new TypeError("MCP tool input schema contains a non-JSON value");
+      return panic("MCP tool input schema contains a non-JSON value");
     }
     return value;
   }
@@ -370,7 +371,7 @@ const toWireValue = (value: unknown): WireValue => {
   // Reject instead of silently changing the schema contract. In particular,
   // replacing an unsupported member with null can turn `description`,
   // `properties`, `$defs`, or `items` into an invalid keyword value.
-  throw new TypeError("MCP tool input schema contains a non-JSON value");
+  return panic("MCP tool input schema contains a non-JSON value");
 };
 
 const convertInputSchema = (schema: McpToolInputSchema): WireInputSchema => {

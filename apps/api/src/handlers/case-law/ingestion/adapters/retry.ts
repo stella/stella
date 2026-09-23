@@ -34,6 +34,7 @@ export const fetchPublisher = async (
   { adapterKey, ...init }: PublisherFetchInit,
 ): Promise<Response> => {
   await reservePublisherSlot(adapterKey, init.signal);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- pacing wrapper; each caller's target is checked where fetchWithRetry is called
   return await fetchWithTimeout(url, init);
 };
 

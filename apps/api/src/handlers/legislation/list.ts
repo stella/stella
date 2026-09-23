@@ -271,7 +271,7 @@ const actNumberCondition = (
   const anchored =
     collection === undefined ? `(^|/)${tail}$` : `/${collection}/${tail}$`;
   return sql`(
-    ${legislationDocuments.eli} LIKE ${`%${tail}`}
+    ${legislationDocuments.eli} LIKE ${`%${escapeLike(tail)}`}
     AND ${legislationDocuments.eli} ~ ${anchored}
   )`;
 };

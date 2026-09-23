@@ -1,10 +1,12 @@
+import { panic } from "better-result";
+
 export class BoundedSet<T> {
   private readonly limit: number;
   private readonly values = new Set<T>();
 
   constructor(limit: number) {
     if (limit < 1) {
-      throw new RangeError("BoundedSet limit must be positive");
+      panic("BoundedSet limit must be positive");
     }
     this.limit = limit;
   }
@@ -36,7 +38,7 @@ export class BoundedMap<K, V> {
 
   constructor(limit: number) {
     if (limit < 1) {
-      throw new RangeError("BoundedMap limit must be positive");
+      panic("BoundedMap limit must be positive");
     }
     this.limit = limit;
   }

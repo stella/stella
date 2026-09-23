@@ -1181,6 +1181,7 @@ export const reopenCitationsForDecisionIdentifiers = async (
     decisionDate,
   }: ReopenCitationsForDecisionIdentifiersOptions,
 ): Promise<number> => {
+  // audit: skip — reopens derived public case-law citation resolutions
   if (identifiers.length === 0) {
     return 0;
   }

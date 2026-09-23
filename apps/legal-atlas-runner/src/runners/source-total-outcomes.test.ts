@@ -99,7 +99,7 @@ const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => ({
   total: 2,
 }));
 
-describe("selectDueCountingAdapters", () => {
+describe("selectDueCountingAdapters freshness window", () => {
   const capable = [czUs, czRegional];
 
   test("a restart does not re-ask a publisher that answered recently", () => {

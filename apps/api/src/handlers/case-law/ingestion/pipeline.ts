@@ -887,6 +887,7 @@ const settleRuleVerdicts = async (
   rows: readonly (typeof caseLawCitations.$inferInsert)[],
   observedAt: Date,
 ): Promise<(typeof caseLawCitations.$inferInsert)[]> => {
+  // audit: skip — background polarity rule match counters; public case-law data
   const matches = polarityMatchesByRule(rows);
   if (matches.size === 0) {
     return [...rows];

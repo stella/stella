@@ -513,6 +513,7 @@ const confirmerEmailMatchesHint = async (
   userId: SafeId<"user">,
   loginHint: string,
 ): Promise<boolean> => {
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the confirming caller's own email by their session user id
   const rows = await rootDb
     .select({ email: user.email })
     .from(user)

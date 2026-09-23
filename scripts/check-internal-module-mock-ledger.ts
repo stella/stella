@@ -22,7 +22,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const parseLedger = (text: string, label: string): string[] => {
   const parsed: unknown = JSON.parse(text);
   if (!Array.isArray(parsed) || !parsed.every((e) => typeof e === "string")) {
-    throw new TypeError(`${label} must be a JSON array of strings`);
+    panic(`${label} must be a JSON array of strings`);
   }
   return parsed;
 };

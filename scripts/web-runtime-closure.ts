@@ -8,6 +8,8 @@
 // runtime-loadable shape. scripts/stage-web-runtime.ts stages that closure;
 // scripts/stage-web-runtime.test.ts guards the derivation.
 
+import { panic } from "better-result";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -34,13 +36,13 @@ export const findExternalRuntimeWorkspacePaths = (
   source: unknown,
 ): string[] => {
   if (!isRecord(source)) {
-    throw new TypeError("bun.lock must contain an object");
+    panic("bun.lock must contain an object");
   }
 
   const packages = source["packages"];
   const workspaces = source["workspaces"];
   if (!isRecord(packages) || !isRecord(workspaces)) {
-    throw new TypeError("bun.lock must contain packages and workspaces maps");
+    panic("bun.lock must contain packages and workspaces maps");
   }
 
   const visited = new Set<string>();
@@ -87,7 +89,7 @@ export const findExternalRuntimeWorkspacePaths = (
     }
     const resolution = entry.at(0);
     if (typeof resolution !== "string") {
-      throw new TypeError(`bun.lock package ${entryKey} has no resolution`);
+      panic(`bun.lock package ${entryKey} has no resolution`);
     }
 
     // The chain that reproduces this entry's key, so children resolve their
@@ -120,7 +122,7 @@ export const findExternalRuntimeWorkspacePaths = (
   // when its resolution differs from the hoisted copy.
   const webWorkspace = workspaces["apps/web"];
   if (!isRecord(webWorkspace) || typeof webWorkspace["name"] !== "string") {
-    throw new TypeError("bun.lock apps/web workspace must have a name");
+    panic("bun.lock apps/web workspace must have a name");
   }
   const webChain = [webWorkspace["name"]];
   const isWorkspaceResolved = (name: string): boolean => {

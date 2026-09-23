@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -181,7 +182,7 @@ export const LinkClauseDialog = ({
         throw toAPIError(response.error);
       }
       if (response.data instanceof Response) {
-        throw new TypeError("Unexpected response shape");
+        panic("Unexpected response shape");
       }
       return response.data;
     },

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -60,6 +60,11 @@ true satisfies MissingDefaultChatAnonEntityLabel extends never ? true : never;
 
 export const DEFAULT_CHAT_ANON_ENTITY_LABELS =
   DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES;
+
+/** Input exceeds a bound this package enforces before running the pipeline. */
+export class ChatAnonInputLimitError extends TaggedError(
+  "ChatAnonInputLimitError",
+)<{ message: string }> {}
 
 /** Maximum exact values one anonymization call may force into detection. */
 export const FORCED_SENSITIVE_VALUES_MAX = 256;
@@ -404,7 +409,9 @@ const allocateLiteralPlaceholderSentinel = ({
     }
   }
 
-  throw new RangeError("literal placeholder sentinel space exhausted");
+  throw new ChatAnonInputLimitError({
+    message: "literal placeholder sentinel space exhausted",
+  });
 };
 
 const restoreLiteralPlaceholders = (
@@ -499,17 +506,17 @@ const forcedSensitiveGazetteerEntries = ({
   workspaceId: string;
 }): GazetteerEntry[] => {
   if (forcedSensitiveValues.length > FORCED_SENSITIVE_VALUES_MAX) {
-    throw new RangeError(
-      `forcedSensitiveValues exceeds ${String(FORCED_SENSITIVE_VALUES_MAX)} entries`,
-    );
+    throw new ChatAnonInputLimitError({
+      message: `forcedSensitiveValues exceeds ${String(FORCED_SENSITIVE_VALUES_MAX)} entries`,
+    });
   }
 
   const values = new Set<string>();
   for (const value of forcedSensitiveValues) {
     if (value.length > FORCED_SENSITIVE_VALUE_MAX_LENGTH) {
-      throw new RangeError(
-        `forced sensitive value exceeds ${String(FORCED_SENSITIVE_VALUE_MAX_LENGTH)} characters`,
-      );
+      throw new ChatAnonInputLimitError({
+        message: `forced sensitive value exceeds ${String(FORCED_SENSITIVE_VALUE_MAX_LENGTH)} characters`,
+      });
     }
     if (value.length > 0 && text.includes(value)) {
       values.add(value);

@@ -48,6 +48,7 @@ export const getUserEmail = async (
 ): Promise<Result<string, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the caller's own email by their session user id
       const rows = await rootDb
         .select({ email: user.email })
         .from(user)

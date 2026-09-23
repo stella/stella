@@ -10,6 +10,7 @@ import type {
 
 import {
   buildChatAnonPipelineConfig,
+  ChatAnonInputLimitError,
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
@@ -603,7 +604,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
           (_, index) => `sensitive-${String(index)}`,
         ),
       }),
-    ).rejects.toBeInstanceOf(RangeError);
+    ).rejects.toBeInstanceOf(ChatAnonInputLimitError);
 
     expect(
       runChatAnonPipeline({
@@ -615,7 +616,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
           "x".repeat(FORCED_SENSITIVE_VALUE_MAX_LENGTH + 1),
         ],
       }),
-    ).rejects.toBeInstanceOf(RangeError);
+    ).rejects.toBeInstanceOf(ChatAnonInputLimitError);
   });
 
   test("passes all entities through when no exclusions are provided", async () => {

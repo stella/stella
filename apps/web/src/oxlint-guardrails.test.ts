@@ -254,7 +254,7 @@ describe("custom oxlint guardrails", () => {
 
   test("devtools shell lazy-loads TanStack panels", () => {
     const pluginSource = readRootFixture(
-      ".oxlint-plugins/no-static-devtools-import.ts",
+      ".oxlint-plugins/restricted-import.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
     const devRootSource = readRootFixture(
@@ -285,9 +285,9 @@ describe("custom oxlint guardrails", () => {
     expect(tableDevtoolsGateSource).toContain("state.tanstackDevtools");
     expect(tableDevtoolsGateSource).toContain("table-devtools");
 
-    expect(pluginSource).toContain("DEVTOOLS_PACKAGES");
+    expect(pluginSource).toContain('"no-static-devtools-import": [');
     expect(pluginSource).toContain("@tanstack/react-table-devtools");
-    expect(pluginSource).toContain("DYNAMIC_ONLY_MODULES");
+    expect(pluginSource).toContain("dynamicImports: DYNAMIC_IMPORTS.allowed");
     expect(pluginSource).toContain("staticDevtoolsPackage");
     expect(pluginSource).toContain("staticDevtoolsModule");
     expect(configSource).toContain(

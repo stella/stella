@@ -120,6 +120,7 @@ export const fetchWithResolvedAddress = async ({
         const request = (
           url.protocol === "https:" ? requestHttps : requestHttp
         )(
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- this is the safe outbound boundary: the target was validated and its DNS answer pinned above
           {
             ...AUTO_SELECT_FAMILY_OPTIONS,
             headers: headersToObject(requestHeaders),
@@ -249,6 +250,7 @@ export const fetchStreamWithResolvedAddress = async ({
         const request = (
           url.protocol === "https:" ? requestHttps : requestHttp
         )(
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- this is the safe outbound boundary: the target was validated and its DNS answer pinned above
           {
             ...AUTO_SELECT_FAMILY_OPTIONS,
             headers: headersToObject(requestHeaders),

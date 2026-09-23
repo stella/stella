@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /** Maximum descriptors exposed by one email preview. */
@@ -26,7 +27,7 @@ export const createEmailAttachmentDescriptor = ({
   secret,
 }: EmailAttachmentDescriptorInput & { secret: string }): string => {
   if (!Number.isSafeInteger(attachmentIndex) || attachmentIndex < 0) {
-    throw new RangeError("Email attachment index is out of bounds");
+    panic("Email attachment index is out of bounds");
   }
 
   const digest = createHmac("sha256", secret)

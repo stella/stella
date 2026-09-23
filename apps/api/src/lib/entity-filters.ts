@@ -582,7 +582,7 @@ const compilePropertyPredicate = (
     propertyValueMatches(
       propertyId,
       (v) => sql`LOWER(${v}) = LOWER(${text})`,
-      (v) => sql`${v} ILIKE ${`%${text}%`}`,
+      (v) => sql`${v} ILIKE ${`%${escapeLike(text)}%`}`,
     );
   switch (node.op) {
     case "contains":
@@ -591,9 +591,9 @@ const compilePropertyPredicate = (
       // NOT EXISTS so absent/empty fields count as "does not contain".
       return sql`NOT ${contains()}`;
     case "starts_with":
-      return same((v) => sql`${v} ILIKE ${`${text}%`}`);
+      return same((v) => sql`${v} ILIKE ${`${escapeLike(text)}%`}`);
     case "ends_with":
-      return same((v) => sql`${v} ILIKE ${`%${text}`}`);
+      return same((v) => sql`${v} ILIKE ${`%${escapeLike(text)}`}`);
     case "is_not_empty":
       return same((v) => sql`${v} <> ''`);
     case "is_empty":
@@ -892,6 +892,7 @@ const internalSortExpr = (
       return dir(sql`${entities.displayName}`);
     }
     case "_created-by": {
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped
       const sub = sql`(
         SELECT ${user.name} FROM ${user}
         WHERE ${user.id} = ${entities.createdBy}

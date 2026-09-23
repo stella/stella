@@ -11,6 +11,7 @@ import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/li
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { SANDBOX_READ_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
+import { SandboxError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * A `@tanstack/ai-code-mode` `IsolateDriver` backed by Stella's own hardened
@@ -89,7 +90,10 @@ const toExecutionSuccess = <T>(
 // eslint-disable-next-line typescript/no-unnecessary-type-parameters -- T is imposed by the third-party IsolateDriver.execute<T> contract; runtime validation is JSON-shape only
 const validateSandboxOutput = <T>(value: unknown): T => {
   if (!isJsonValue<T>(value)) {
-    throw new TypeError("Sandbox output must be JSON-compatible");
+    throw new SandboxError({
+      reason: "non-serialisable-return",
+      message: "Sandbox output must be JSON-compatible",
+    });
   }
   return value;
 };

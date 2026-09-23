@@ -15,15 +15,12 @@ describe("secret guardrails", () => {
     );
 
     expect(pluginSource).toContain("apiKey.trim()");
-    expect(pluginSource).toContain('node.callee?.type === "MemberExpression"');
     expect(pluginSource).toContain(
-      "checkExpression(context, node.callee, contextLabel)",
+      "findSecrets(expression.object, hits, seen)",
     );
-    expect(pluginSource).toContain("isMaskedSecretValue(prop.value)");
-    expect(pluginSource).toContain(
-      "checkExpression(context, prop.key, contextLabel)",
-    );
-    expect(pluginSource).toContain('case "SpreadElement":');
+    expect(pluginSource).toContain("isMaskingCall(value)");
+    expect(pluginSource).toContain("findSecrets(property.key, hits, seen)");
+    expect(pluginSource).toContain('property.type === "SpreadElement"');
   });
 
   test("secret brands are minted only at the MCP decrypt boundary", () => {

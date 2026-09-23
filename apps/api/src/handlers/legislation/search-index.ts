@@ -142,6 +142,7 @@ export const indexLegislationDocument = async (
     const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
     await scopedDb(async (tx) => {
+      // audit: skip — search index maintenance; rebuilds derived state
       await setCorpusBackfillStatementTimeout(tx);
       await tx.execute(sql`
     INSERT INTO legislation_search_documents (

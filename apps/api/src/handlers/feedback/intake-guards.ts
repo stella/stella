@@ -1,3 +1,5 @@
+import { TaggedError } from "better-result";
+
 import { Temporal } from "@stll/time";
 /**
  * Abuse guards for the public, unauthenticated feedback intake
@@ -133,6 +135,13 @@ export const createFeedbackIntakeGuards = ({
   return { consumeCounter };
 };
 
+class FeedbackIntakeRedisReplyError extends TaggedError(
+  "FeedbackIntakeRedisReplyError",
+)<{
+  message: string;
+  reply: unknown;
+}> {}
+
 const evalCounter = async ({
   commandTimeoutMs,
   key,
@@ -151,7 +160,10 @@ const evalCounter = async ({
   });
   const count = Number(rawCount);
   if (!Number.isFinite(count)) {
-    throw new TypeError("Redis returned a non-numeric counter value");
+    throw new FeedbackIntakeRedisReplyError({
+      message: "Redis returned a non-numeric counter value",
+      reply: rawCount,
+    });
   }
   return count;
 };
