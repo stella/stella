@@ -211,7 +211,7 @@ describe("lookupByIco (fixture)", () => {
     expect(extractCalled).toBe(false);
   });
 
-  test("refuses an extract that names a different IČO", async () => {
+  test("returns null for an extract that names a different IČO", async () => {
     const search = await readFixture<unknown>("search-by-ico-eset.json");
     const extract = withExtractIco(
       await readFixture<unknown>("extract-eset.json"),
@@ -220,10 +220,29 @@ describe("lookupByIco (fixture)", () => {
     restore = installFetchStub(async (input) =>
       jsonResponse(urlOf(input).includes("/extract") ? extract : search),
     );
-    expect(lookupByIco("31333532")).rejects.toMatchObject({
-      name: "OrsrAPIError",
-      httpStatus: 200,
+    expect(await lookupByIco("31333532")).toBeNull();
+  });
+
+  test("ignores hits whose registration number is not a string", async () => {
+    let extractCalled = false;
+    restore = installFetchStub(async (input) => {
+      if (urlOf(input).includes("/extract")) {
+        extractCalled = true;
+      }
+      return jsonResponse({
+        filteredCount: 1,
+        data: [
+          {
+            id: 1,
+            fileReference: { section: "Sro", insertNumber: 1, court: "B" },
+            registrationNumber: null,
+            corporateBodyFullName: "31333532 s.r.o.",
+          },
+        ],
+      });
     });
+    expect(await lookupByIco("31333532")).toBeNull();
+    expect(extractCalled).toBe(false);
   });
 
   test("returns null when the search yields no hits", async () => {

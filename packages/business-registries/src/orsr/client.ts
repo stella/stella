@@ -123,8 +123,10 @@ const pickLatestHit = (
   // registration number, so a company whose name contains these digits is
   // also a hit. Only exact IČO matches are candidates.
   const matching = (hits ?? []).filter(
+    // The response guard only checks `id`, so a null or non-string
+    // registration number must be excluded here, not normalized.
     (hit) =>
-      hit.registrationNumber !== undefined &&
+      typeof hit.registrationNumber === "string" &&
       normalizeIco(hit.registrationNumber) === ico,
   );
   // Re-registrations preserve the IČO but mint a fresh internal `id`;
@@ -181,7 +183,8 @@ const dedupeLatestHitsByIco = (
  * (struck-off) entities still resolve; the parser surfaces the
  * terminated status via `OrsrCompany.status`.
  *
- * @returns The entity, or `null` if the IČO is not on file.
+ * @returns The entity, or `null` if the IČO is not on file (including when
+ *   the fetched extract names a different IČO).
  * @throws {OrsrValidationError} when the IČO fails MOD-11
  * @throws {OrsrAPIError} on upstream HTTP errors
  * @throws {OrsrRequestError} on network failures
@@ -220,14 +223,11 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
     isOrsrExtractResponse,
   );
   const company = parseExtract(extract);
-  // The extract is fetched by file reference, not by IČO; refuse a record
-  // that names a different entity rather than return the wrong company.
+  // The extract is fetched by file reference, not by IČO. A record naming a
+  // different entity means the registry holds no record for this IČO at that
+  // reference, so it is reported as not on file rather than returned.
   if (company !== null && normalizeIco(company.ico) !== normalized) {
-    throw new OrsrAPIError({
-      message: "ORSR extract IČO does not match the requested IČO",
-      httpStatus: 200,
-      upstreamMessage: null,
-    });
+    return null;
   }
   return company;
 };
