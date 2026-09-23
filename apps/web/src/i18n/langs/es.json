@@ -3003,7 +3003,8 @@
       "summary": {
         "forParty": "para {role}",
         "noSide": "ninguna parte",
-        "proposedFromReferences": "posiciones propuestas a partir de las referencias"
+        "proposedFromReferences": "posiciones propuestas a partir de las referencias",
+        "unnamedReferences": "{count, plural, one {# documento de referencia} other {# documentos de referencia}}"
       },
       "targetAsReference": "El documento revisado no puede ser su propia referencia.",
       "targetColumn": "Este documento",

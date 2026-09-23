@@ -18,6 +18,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
+import {
+  readableReferenceWorkspaces,
+  referenceWorkspacesByPosition,
+} from "@/api/lib/document-review/reference-visibility";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 
@@ -156,6 +160,26 @@ const createPlaybookFromRun = createSafeRootHandler(
         new HandlerError({
           status: 422,
           message: "This review run has no positions to save.",
+        }),
+      );
+    }
+
+    // Positions derived from reference documents are written in those
+    // documents' terms, so the saved playbook is built only by a reader who
+    // can open every matter the positions were derived from.
+    const readable = yield* readableReferenceWorkspaces({
+      safeDb,
+      basis: run.basis,
+    });
+    const derivedFrom = [
+      ...referenceWorkspacesByPosition(run.basis).values(),
+    ].flat();
+    if (derivedFrom.some((id) => !readable.has(id))) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "Saving this review as a playbook needs access to every reference document it used.",
         }),
       );
     }

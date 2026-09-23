@@ -28,6 +28,12 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
 import { resolvePlaybookStaleness } from "@/api/lib/document-review/playbook-staleness";
+import {
+  findingForReader,
+  readableReferenceWorkspaces,
+  referencesForReader,
+  referenceWorkspacesByPosition,
+} from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
@@ -169,9 +175,19 @@ export const readDocumentReviewRunDetail = async function* ({
         );
   const definition = definitions.at(0);
 
+  const readable = yield* readableReferenceWorkspaces({
+    safeDb,
+    basis: run.basis,
+  });
+  const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
+
   return {
     run: {
       ...run,
+      basis: {
+        ...run.basis,
+        references: referencesForReader(run.basis.references, readable),
+      },
       createdAt: run.createdAt.toISOString(),
       startedAt: run.startedAt === null ? null : run.startedAt.toISOString(),
       finishedAt: run.finishedAt === null ? null : run.finishedAt.toISOString(),
@@ -187,7 +203,12 @@ export const readDocumentReviewRunDetail = async function* ({
       positionId: finding.positionId,
       positionTitle: finding.positionTitle,
       outcome: finding.outcome,
-      payload: finding.payload,
+      payload: {
+        finding: findingForReader(finding.payload.finding, {
+          positionWorkspaces,
+          readable,
+        }),
+      },
       decision: finding.decision,
       flags: finding.flags,
       decidedBy: finding.decidedBy,

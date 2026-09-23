@@ -2600,6 +2600,8 @@ const useRunBasisLabels = () => {
     proposedFromReferencesLabel: t(
       "inspector.review.summary.proposedFromReferences",
     ),
+    unnamedReferencesLabel: (count: number) =>
+      t("inspector.review.summary.unnamedReferences", { count }),
     sideLabel:
       role === null
         ? t("inspector.review.summary.noSide")

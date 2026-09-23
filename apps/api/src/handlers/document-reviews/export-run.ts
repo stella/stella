@@ -28,6 +28,12 @@ import {
   readReferencePassageTexts,
   referencePassageIds,
 } from "@/api/lib/document-review/reference-passages";
+import {
+  findingForReader,
+  readableReferenceWorkspaces,
+  referencesForReader,
+  referenceWorkspacesByPosition,
+} from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -134,10 +140,28 @@ const exportDocumentReviewRun = createSafeHandler(
           ),
       ),
     );
-    const rows = buildIssuesTableRows({
+    const readable = yield* readableReferenceWorkspaces({
+      safeDb,
       basis: run.basis,
+    });
+    const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
+    const basis = {
+      ...run.basis,
+      references: referencesForReader(run.basis.references, readable),
+    };
+    const rows = buildIssuesTableRows({
+      basis,
       passageTextById,
-      findings,
+      findings: findings.map(({ positionTitle, decision, payload }) => ({
+        positionTitle,
+        decision,
+        payload: {
+          finding: findingForReader(payload.finding, {
+            positionWorkspaces,
+            readable,
+          }),
+        },
+      })),
     });
     const exportName = `${withoutExtension(run.targetName)}${FILE_SUFFIX}`;
     const table: ExportTableInput = {
@@ -165,7 +189,7 @@ const exportDocumentReviewRun = createSafeHandler(
       case "docx":
         body = await renderIssuesTableDocx({
           title: exportName,
-          basisLine: describeIssuesTableBasis(run.basis),
+          basisLine: describeIssuesTableBasis(basis),
           rows,
         });
         break;
