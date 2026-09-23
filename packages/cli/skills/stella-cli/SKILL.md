@@ -243,7 +243,7 @@ are omitted here.
   - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
   - `--title` — One line naming the problem, not the symptom's location. (string)
   - `--what-happened` — What stella actually did. (string)
-  - `--approval-token` — The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour. (string)
+  - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
 - `stella invoice list`
   - optional: --matter-id, --invoice-id

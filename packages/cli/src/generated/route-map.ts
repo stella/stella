@@ -6899,8 +6899,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "approval_token",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour.",
+                description: "From prepare_feedback; covers only that report.",
                 required: true,
               },
             ],
@@ -7018,7 +7017,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   maxLength: 128,
                   description:
-                    "The approval_token prepare_feedback returned with this report. It only covers that exact report, for one hour.",
+                    "From prepare_feedback; covers only that report.",
                 },
                 confirm: {
                   type: "boolean",
