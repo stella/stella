@@ -248,7 +248,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 97,
+    "count": 99,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/scripts/backfill-image-thumbnails.ts": 1,
@@ -314,6 +314,7 @@
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/scheduler/tasks/buffer-intent-reconciliation.ts": 1,
       "apps/api/src/lib/scheduler/tasks/case-law-corpus-upload-cleanup.ts": 1,
+      "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts": 1,
       "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts": 1,
       "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts": 1,
@@ -346,6 +347,7 @@
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
+      "apps/api/src/scripts/normalize-review-passage-references.ts": 1,
       "apps/api/src/scripts/recompute-chat-data-scope.ts": 1
     }
   },
