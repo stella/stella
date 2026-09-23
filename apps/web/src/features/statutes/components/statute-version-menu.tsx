@@ -25,23 +25,29 @@ const ROW_LABELLED_STATUSES: ReadonlySet<StatuteDisplayStatus> = new Set([
 
 type RowStatusLabelOptions = {
   displayStatus: StatuteDisplayStatus | null;
+  inForce: boolean;
   label: (status: StatuteDisplayStatus) => string;
   status: string;
 };
 
-/** The in-force row and statuses its position cannot imply; nothing else. */
+/**
+ * The in-force row and statuses its position cannot imply; nothing else.
+ * "In force" is the API's default marker, not the stored status: an older
+ * consolidation can keep `current` with an overlapping open-ended window.
+ */
 const rowStatusLabel = ({
   displayStatus,
+  inForce,
   label,
   status,
 }: RowStatusLabelOptions): string | null => {
+  if (inForce) {
+    return label("current");
+  }
   if (displayStatus === null) {
     return status;
   }
-  if (displayStatus === "current" || ROW_LABELLED_STATUSES.has(displayStatus)) {
-    return label(displayStatus);
-  }
-  return null;
+  return ROW_LABELLED_STATUSES.has(displayStatus) ? label(displayStatus) : null;
 };
 
 type StatuteVersionMenuProps = {
@@ -99,7 +105,7 @@ export const StatuteVersionMenu = ({
           validFrom: version.versionValidFrom,
           validTo: version.versionValidTo,
         })
-      : t("statutes.inForceSince", { date: futureDate });
+      : t("lawHome.inForceFrom", { date: futureDate });
   };
 
   return (
@@ -127,10 +133,12 @@ export const StatuteVersionMenu = ({
           />
           {rows.map(({ displayStatus, version }) => {
             const selected = version.id === currentVersionId;
+            const inForce = version.isDefault;
             // The dot's colour says future or past; only the version in
             // force, and a status the colour cannot tell apart, get a label.
             const rowLabel = rowStatusLabel({
               displayStatus,
+              inForce,
               label: (key) => t(STATUTE_STATUS_LABEL_KEYS[key]),
               status: version.status,
             });
@@ -141,7 +149,7 @@ export const StatuteVersionMenu = ({
                   aria-current={selected ? "true" : undefined}
                   className={cn(
                     "hover:bg-muted focus-visible:ring-ring grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                    displayStatus === "current" ? "py-3" : "py-2",
+                    inForce ? "py-3" : "py-2",
                     selected && "bg-muted/60",
                   )}
                   disabled={selected}
@@ -158,10 +166,8 @@ export const StatuteVersionMenu = ({
                     <span
                       className={cn(
                         "block text-sm tabular-nums",
-                        displayStatus === "current" && "font-semibold",
-                        displayStatus !== "current" &&
-                          !selected &&
-                          "text-muted-foreground",
+                        inForce && "font-semibold",
+                        !inForce && !selected && "text-muted-foreground",
                       )}
                     >
                       {versionLabel(version)}
@@ -170,9 +176,7 @@ export const StatuteVersionMenu = ({
                       <span
                         className={cn(
                           "text-2xs mt-0.5 block font-medium tracking-wide uppercase",
-                          displayStatus === "current"
-                            ? "text-success"
-                            : "text-muted-foreground",
+                          inForce ? "text-success" : "text-muted-foreground",
                         )}
                       >
                         {rowLabel}
