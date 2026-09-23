@@ -35,7 +35,7 @@ export const loadPublicDecisionRoute = async ({
   });
 
 type PublicDecisionHeadContext = {
-  loaderData: PublicCaseLawDecision | undefined;
+  loaderData?: PublicCaseLawDecision | undefined;
   params: PublicDecisionRouteParams;
 };
 
