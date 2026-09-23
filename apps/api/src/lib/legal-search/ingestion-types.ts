@@ -233,11 +233,17 @@ export type DecisionSupplement = {
  */
 export type StoredRawReader = (key: string) => Promise<Uint8Array | null>;
 
-/** A stored raw payload read that could not tell whether the object exists. */
+/** A stored raw payload read that returned no payload. */
 export class StoredRawReadError extends TaggedError("StoredRawReadError")<{
   message: string;
   key: string;
   cause: unknown;
+  /**
+   * The object is there but can never be read as a payload (past the size
+   * ceiling): asking again gives the same answer. Otherwise the store did
+   * not answer, and another attempt may.
+   */
+  permanent: boolean;
 }> {}
 
 /**
@@ -260,6 +266,7 @@ export const storedRawResultReader =
           message: `Stored payload read failed for ${key}`,
           key,
           cause,
+          permanent: false,
         }),
     });
 

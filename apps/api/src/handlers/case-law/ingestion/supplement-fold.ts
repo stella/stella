@@ -202,7 +202,9 @@ export const foldStoredSupplements = async ({
     if (Result.isError(read)) {
       return {
         ...base,
-        outcome: SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
+        outcome: read.error.permanent
+          ? SUPPLEMENT_FOLD_OUTCOME.REJECTED
+          : SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
         detail: read.error.message,
       };
     }

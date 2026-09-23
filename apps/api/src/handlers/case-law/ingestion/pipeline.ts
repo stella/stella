@@ -186,7 +186,11 @@ import {
   PG_ERROR,
   pgErrorFields,
 } from "@/api/lib/pg-error";
-import { isMissingS3ObjectError, readS3ObjectBounded } from "@/api/lib/s3";
+import {
+  isMissingS3ObjectError,
+  readS3ObjectBounded,
+  S3ObjectBudgetError,
+} from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
@@ -3500,6 +3504,17 @@ export const processSupplement = async ({
       sourceDocumentId,
       "error.detail": rebuilt.detail,
     });
+    if (row.decisionId === judgment.id) {
+      // The judgment still publishes an earlier version; a standalone row
+      // would be a second public copy of the same reasons.
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: {
+          type: "standalone",
+          reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
+        },
+      };
+    }
     return await standalone(SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE);
   }
   const written = await processDecision({
@@ -3600,7 +3615,9 @@ const rebuildStoredJudgment = async ({
   }
   const read = await readStoredRaw(row.sourceRawS3Key);
   if (Result.isError(read)) {
-    return { type: "read-failed", error: read.error };
+    return read.error.permanent
+      ? { type: "unreadable", detail: read.error.message }
+      : { type: "read-failed", error: read.error };
   }
   const raw = read.value;
   if (raw === null) {
@@ -3690,6 +3707,7 @@ export const readStoredRawFromS3: StoredRawResultReader = async (key) => {
       message: `Stored payload read failed for ${key}`,
       key,
       cause: read.error,
+      permanent: read.error instanceof S3ObjectBudgetError,
     }),
   );
 };
