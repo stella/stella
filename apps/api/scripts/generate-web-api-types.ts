@@ -78,15 +78,17 @@ const createApiProgram = ({
   }
   const options = { ...config.options, noEmit: true, incremental: false };
   const host = ts.createCompilerHost(options);
-  const { getSourceFile, fileExists, readFile } = host;
+  const getSourceFile = host.getSourceFile.bind(host);
+  const fileExists = host.fileExists.bind(host);
+  const readFile = host.readFile.bind(host);
   host.fileExists = (fileName) =>
-    virtualFiles.has(fileName) || fileExists.call(host, fileName);
+    virtualFiles.has(fileName) || fileExists(fileName);
   host.readFile = (fileName) =>
-    virtualFiles.get(fileName) ?? readFile.call(host, fileName);
+    virtualFiles.get(fileName) ?? readFile(fileName);
   host.getSourceFile = (fileName, languageVersion, ...rest) => {
     const text = virtualFiles.get(fileName);
     return text === undefined
-      ? getSourceFile.call(host, fileName, languageVersion, ...rest)
+      ? getSourceFile(fileName, languageVersion, ...rest)
       : ts.createSourceFile(fileName, text, languageVersion, true);
   };
   // Ambient declarations (asset modules) the API sources rely on.
@@ -133,9 +135,9 @@ const NODE_MODULES_PACKAGE = /\/node_modules\/((?:@[^/]+\/)?[^/]+)\//u;
 const GLOBAL_TYPE_PACKAGES = new Set(["typescript", "bun-types", "@types/bun"]);
 
 const packageOfFile = (fileName: string): string | undefined => {
-  const workspace = WORKSPACE_PACKAGE_SOURCE.exec(fileName);
-  if (workspace !== null) {
-    return `@stll/${workspace[1]}`;
+  const workspaceDirectory = WORKSPACE_PACKAGE_SOURCE.exec(fileName)?.[1];
+  if (workspaceDirectory !== undefined) {
+    return `@stll/${workspaceDirectory}`;
   }
   const lastNodeModules = fileName.lastIndexOf("/node_modules/");
   if (lastNodeModules === -1) {
@@ -184,10 +186,12 @@ const isInterfaceOrClass = (objectFlags: number): boolean =>
 
 // A declaration in a script file, or inside `declare global` in a module.
 const isGlobalDeclaration = (declaration: ts.Node): boolean => {
-  for (let node = declaration.parent; node !== undefined; node = node.parent) {
-    if (ts.isModuleDeclaration(node)) {
-      return hasFlag(node.flags, ts.NodeFlags.GlobalAugmentation);
-    }
+  const enclosingModule = ts.findAncestor(
+    declaration.parent,
+    ts.isModuleDeclaration,
+  );
+  if (enclosingModule !== undefined) {
+    return hasFlag(enclosingModule.flags, ts.NodeFlags.GlobalAugmentation);
   }
   return !ts.isExternalModule(declaration.getSourceFile());
 };
