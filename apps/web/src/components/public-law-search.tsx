@@ -1,12 +1,9 @@
-import {
-  LoaderIcon,
-  MessageSquareTextIcon,
-  WandSparklesIcon,
-} from "lucide-react";
+import { MessageSquareTextIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
@@ -124,7 +121,7 @@ const PublicLawRefine = ({
         variant="ghost"
       >
         {isPending ? (
-          <LoaderIcon aria-hidden="true" className="size-4 animate-spin" />
+          <Loader label={t("search.aiRefine")} size="sm" />
         ) : (
           <WandSparklesIcon aria-hidden="true" className="size-4" />
         )}

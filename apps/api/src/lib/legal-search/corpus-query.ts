@@ -318,11 +318,16 @@ const legalAlternativeLeaves = (
   switch (policy) {
     case "verbatim":
       return [];
-    case "expandable":
-      return legalAlternatives(token.value).flatMap((alternative) => [
-        quoteCorpusValue(alternative),
-        ...stemLeaves(alternative, stemming),
-      ]);
+    case "expandable": {
+      const leaves: string[] = [];
+      for (const alternative of legalAlternatives(token.value)) {
+        leaves.push(
+          quoteCorpusValue(alternative),
+          ...stemLeaves(alternative, stemming),
+        );
+      }
+      return leaves;
+    }
     default:
       policy satisfies never;
       return panic(`Unhandled policy: ${String(policy)}`);
