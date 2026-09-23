@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Comparar lado a lado",
     "compareTitle": "Alterações entre versões",
     "compareUnavailable": "Não foi possível comparar as versões.",
+    "compareUnstructured": "Uma das versões está disponível apenas como texto simples, por isso não é possível compará-las.",
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",

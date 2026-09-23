@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Nebeneinander vergleichen",
     "compareTitle": "Änderungen zwischen den Fassungen",
     "compareUnavailable": "Die Fassungen konnten nicht verglichen werden.",
+    "compareUnstructured": "Eine der Fassungen liegt nur als reiner Text vor, daher lassen sich die beiden nicht vergleichen.",
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",

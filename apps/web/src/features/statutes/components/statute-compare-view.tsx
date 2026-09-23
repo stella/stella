@@ -12,7 +12,6 @@ import {
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -34,10 +33,12 @@ import type {
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
 import {
+  actCompareSide,
   compareStatuteBlocks,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
+  provisionCompareSide,
   resolveCompareVersions,
   visibleCompareGroups,
 } from "@/features/statutes/statute-compare";
@@ -94,9 +95,13 @@ const GROUP_OVERSCAN = 6;
 type CompareNavigate = (next: StatuteCompareSearch) => void;
 
 type StatuteCompareViewProps = {
-  /** The consolidation the route resolved, and its already-parsed blocks. */
+  /**
+   * The consolidation the route resolved, and its already-parsed blocks:
+   * null when its AST is absent or unparseable and the reader prints its
+   * plain text instead.
+   */
   onScreen: PublicStatute;
-  onScreenBlocks: readonly Block[];
+  onScreenBlocks: readonly Block[] | null;
   versions: readonly PublicStatuteVersion[];
   /** The other consolidation's opening day, from the `compare` param. */
   compare: string;
@@ -217,21 +222,10 @@ const readyBlocks = (blocks: readonly Block[]): CompareSideState => ({
   blocks,
 });
 
-/**
- * A consolidation's blocks as the reader prints them, list depth and notes
- * included. The masthead the reader lifts out of the text is not compared:
- * it names the act, which both sides share, so it is shown once, above the
- * rows, when the reader asks for the unchanged text too.
- */
-const readerBlocks = (
-  blocks: readonly Block[],
-  statuteTitle: string,
-): readonly Block[] => prepareStatuteReader({ blocks, statuteTitle }).blocks;
-
 type ActComparisonProps = {
   frame: CompareFrame;
   onScreen: PublicStatute;
-  onScreenBlocks: readonly Block[];
+  onScreenBlocks: readonly Block[] | null;
   onShowChange: (show: StatuteCompareShow) => void;
   other: PublicStatuteVersion;
   show: StatuteCompareShow;
@@ -252,22 +246,27 @@ const ActComparison = ({
   const t = useTranslations();
   const showUnchangedId = useId();
   const { data, isError } = useQuery(statuteOptions(other.id));
-  const otherAst =
-    data === undefined ? null : parseDocumentAst(data.documentAst);
   // One title for both sides: the masthead is found by the act's citation,
-  // which no consolidation changes.
+  // which no consolidation changes. The masthead the reader lifts out of the
+  // text is not compared: it names the act, which both sides share, so it is
+  // shown once, above the rows, when the reader asks for the unchanged text.
   const sides = orderSides({
     frame,
-    onScreen: readyBlocks(readerBlocks(onScreenBlocks, onScreen.title)),
+    onScreen: actCompareSide({
+      blocks: onScreenBlocks,
+      statuteTitle: onScreen.title,
+    }),
     onScreenId: onScreen.id,
     other:
-      otherAst === null
+      data === undefined
         ? { type: "loading" }
-        : readyBlocks(readerBlocks(otherAst.blocks, onScreen.title)),
+        : actCompareSide({
+            blocks: parseDocumentAst(data.documentAst)?.blocks ?? null,
+            statuteTitle: onScreen.title,
+          }),
   });
-  const failed = isError || (data !== undefined && otherAst === null);
   const masthead =
-    show === STATUTE_COMPARE_SHOW.all
+    show === STATUTE_COMPARE_SHOW.all && onScreenBlocks !== null
       ? prepareStatuteReader({
           blocks: onScreenBlocks,
           statuteTitle: onScreen.title,
@@ -299,7 +298,7 @@ const ActComparison = ({
       title={t("statutes.compareTitle")}
     >
       <CompareBody
-        failed={failed}
+        failed={isError}
         frame={frame}
         masthead={masthead}
         show={show}
@@ -312,7 +311,7 @@ const ActComparison = ({
 type ProvisionComparisonProps = {
   frame: CompareFrame;
   onScreen: PublicStatute;
-  onScreenBlocks: readonly Block[];
+  onScreenBlocks: readonly Block[] | null;
   onWholeAct: () => void;
   other: PublicStatuteVersion;
   provision: string;
@@ -336,29 +335,13 @@ const ProvisionComparison = ({
   const { data, isError } = useQuery(
     provisionInVersionOptions({ anchor: provision, documentId: other.id }),
   );
-  const heading = resolveDocumentHeadingAnchor(onScreenBlocks, provision);
-  const onScreenProvision = provisionPreviewBlocks(
-    onScreenBlocks,
-    provision,
-    undefined,
-  );
-  // A preview carries text without block kinds or inline formatting, so both
-  // sides are read the way the preview reads a block: a kind or a run of
-  // formatting on one side only would count as a change.
+  const heading =
+    onScreenBlocks === null
+      ? null
+      : resolveDocumentHeadingAnchor(onScreenBlocks, provision);
   const sides = orderSides({
     frame,
-    onScreen:
-      onScreenProvision === null
-        ? { type: "absent" }
-        : readyBlocks(
-            onScreenProvision.map((block) =>
-              paragraphFromPreview({
-                anchorId: block.anchorId,
-                id: block.id,
-                text: block.plainText,
-              }),
-            ),
-          ),
+    onScreen: provisionCompareSide({ blocks: onScreenBlocks, provision }),
     onScreenId: onScreen.id,
     other: otherProvisionSide(data),
   });
@@ -487,6 +470,10 @@ const CompareBody = ({
   switch (sides.type) {
     case "loading":
       return <CompareSkeleton />;
+    case "unstructured":
+      return (
+        <CompareMessage>{t("statutes.compareUnstructured")}</CompareMessage>
+      );
     case "neither":
       return (
         <CompareMessage>{t("statutes.compareProvisionNeither")}</CompareMessage>

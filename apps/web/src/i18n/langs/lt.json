@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Palyginti greta",
     "compareTitle": "Pakeitimai tarp redakcijų",
     "compareUnavailable": "Redakcijų palyginti nepavyko.",
+    "compareUnstructured": "Viena iš redakcijų prieinama tik kaip paprastas tekstas, todėl jų palyginti negalima.",
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
     "compareWithVersion": "Palyginti su redakcija {version}",

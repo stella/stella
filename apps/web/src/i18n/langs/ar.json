@@ -4279,6 +4279,7 @@
     "compareSideBySide": "مقارنة جنبًا إلى جنب",
     "compareTitle": "التعديلات بين الصيغ",
     "compareUnavailable": "تعذرت مقارنة الصيغ.",
+    "compareUnstructured": "إحدى الصيغتين متاحة كنص عادي فقط، لذا تتعذر المقارنة بينهما.",
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",

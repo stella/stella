@@ -9,6 +9,7 @@ import type {
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
 
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareShow } from "@/features/statutes/statute-compare-search";
@@ -18,6 +19,10 @@ import {
   isWhitespaceReplacement,
 } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import {
+  paragraphFromPreview,
+  prepareStatuteReader,
+} from "@/features/statutes/statute-reader-blocks";
 
 /** What the comparison pairs blocks by: a heading only pairs a heading. */
 type CompareBlockKind = "heading" | "text";
@@ -482,14 +487,84 @@ export const visibleCompareGroups = (
     ? groups
     : groups.filter((group) => group.status === "changed");
 
-/** One consolidation's wording of the compared text, as far as it is known. */
+/**
+ * One consolidation's wording of the compared text, as far as it is known.
+ * `unstructured` is a consolidation without a usable document AST: the reader
+ * prints its plain text instead, and there are no blocks to align.
+ */
 export type CompareSideState =
   | { type: "loading" }
   | { type: "absent" }
+  | { type: "unstructured" }
   | { type: "ready"; blocks: readonly Block[] };
+
+type ActCompareSideOptions = {
+  /** The parsed AST's blocks, or null when it is absent or unparseable. */
+  blocks: readonly Block[] | null;
+  statuteTitle: string;
+};
+
+/**
+ * A whole consolidation as the comparison reads it: its blocks as the reader
+ * prints them, list depth and notes included. A consolidation the reader
+ * shows as plain text (no AST, or one with nothing left to print) is
+ * `unstructured`, never an empty act, or the other side would read as added
+ * or deleted whole.
+ */
+export const actCompareSide = ({
+  blocks,
+  statuteTitle,
+}: ActCompareSideOptions): CompareSideState => {
+  if (blocks === null) {
+    return { type: "unstructured" };
+  }
+  const prepared = prepareStatuteReader({ blocks, statuteTitle }).blocks;
+
+  return prepared.length === 0
+    ? { type: "unstructured" }
+    : { type: "ready", blocks: prepared };
+};
+
+type ProvisionCompareSideOptions = {
+  /** The parsed AST's blocks, or null when it is absent or unparseable. */
+  blocks: readonly Block[] | null;
+  /** The provision heading's anchor. */
+  provision: string;
+};
+
+/**
+ * One provision of a consolidation already in memory, narrowed by the rule
+ * the API applies to the other side. A preview carries text without block
+ * kinds or inline formatting, so this side is read the way the preview reads
+ * a block: a kind or a run of formatting on one side only would count as a
+ * change.
+ */
+export const provisionCompareSide = ({
+  blocks,
+  provision,
+}: ProvisionCompareSideOptions): CompareSideState => {
+  if (blocks === null) {
+    return { type: "unstructured" };
+  }
+  const owned = provisionPreviewBlocks(blocks, provision, undefined);
+
+  return owned === null
+    ? { type: "absent" }
+    : {
+        type: "ready",
+        blocks: owned.map((block) =>
+          paragraphFromPreview({
+            anchorId: block.anchorId,
+            id: block.id,
+            text: block.plainText,
+          }),
+        ),
+      };
+};
 
 export type PairedCompareSides =
   | { type: "loading" }
+  | { type: "unstructured" }
   | {
       type: "both";
       older: readonly Block[];
@@ -511,6 +586,11 @@ export const pairCompareSides = ({
   older: CompareSideState;
   newer: CompareSideState;
 }): PairedCompareSides => {
+  // Settled without waiting for the other side: nothing it answers makes
+  // plain text comparable.
+  if (older.type === "unstructured" || newer.type === "unstructured") {
+    return { type: "unstructured" };
+  }
   if (older.type === "loading" || newer.type === "loading") {
     return { type: "loading" };
   }

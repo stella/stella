@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Comparar en paralelo",
     "compareTitle": "Cambios entre versiones",
     "compareUnavailable": "No se han podido comparar las versiones.",
+    "compareUnstructured": "Una de las versiones solo está disponible como texto plano, por lo que no se pueden comparar.",
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",

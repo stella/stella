@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Porovnať vedľa seba",
     "compareTitle": "Zmeny medzi verziami",
     "compareUnavailable": "Verzie sa nepodarilo porovnať.",
+    "compareUnstructured": "Jedna z verzií je dostupná len ako obyčajný text, preto ich nemožno porovnať.",
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
     "compareWithVersion": "Porovnať so znením {version}",

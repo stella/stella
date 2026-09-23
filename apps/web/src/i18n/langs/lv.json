@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Salīdzināt blakus",
     "compareTitle": "Izmaiņas starp redakcijām",
     "compareUnavailable": "Redakcijas neizdevās salīdzināt.",
+    "compareUnstructured": "Viena no redakcijām ir pieejama tikai kā vienkāršs teksts, tāpēc tās nevar salīdzināt.",
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",

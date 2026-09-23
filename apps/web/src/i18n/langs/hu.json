@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Összehasonlítás egymás mellett",
     "compareTitle": "Változások a változatok között",
     "compareUnavailable": "A változatokat nem sikerült összehasonlítani.",
+    "compareUnstructured": "Az egyik változat csak egyszerű szövegként érhető el, ezért a kettő nem hasonlítható össze.",
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",

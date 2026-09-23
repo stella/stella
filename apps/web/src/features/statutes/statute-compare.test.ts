@@ -4,10 +4,12 @@ import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
+  actCompareSide,
   compareStatuteBlocks,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
+  provisionCompareSide,
   resolveCompareVersions,
   splitDiffSides,
   visibleCompareGroups,
@@ -301,6 +303,42 @@ describe("pairCompareSides", () => {
       pairCompareSides({ newer: { type: "absent" }, older: { type: "absent" } })
         .type,
     ).toBe("neither");
+  });
+});
+
+describe("a consolidation without a usable AST", () => {
+  const blocks = [text("(1) Wording.")];
+  const unstructured = { type: "unstructured" } as const;
+
+  // The reader prints such a consolidation's plain text; read as an empty
+  // act, the other side would be listed as added or deleted whole, and two
+  // of them would read as identical.
+  test("is unstructured, never an empty act", () => {
+    expect(actCompareSide({ blocks: null, statuteTitle: "Act" })).toEqual(
+      unstructured,
+    );
+    expect(actCompareSide({ blocks: [], statuteTitle: "Act" })).toEqual(
+      unstructured,
+    );
+    expect(provisionCompareSide({ blocks: null, provision: "par_1" })).toEqual(
+      unstructured,
+    );
+  });
+
+  test("settles the comparison whatever the other side answers", () => {
+    for (const other of [
+      { type: "loading" },
+      { type: "absent" },
+      { type: "ready", blocks },
+      unstructured,
+    ] as const) {
+      expect(pairCompareSides({ newer: unstructured, older: other })).toEqual(
+        unstructured,
+      );
+      expect(pairCompareSides({ newer: other, older: unstructured })).toEqual(
+        unstructured,
+      );
+    }
   });
 });
 

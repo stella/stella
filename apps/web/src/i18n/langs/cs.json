@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Porovnat vedle sebe",
     "compareTitle": "Změny mezi verzemi",
     "compareUnavailable": "Verze se nepodařilo porovnat.",
+    "compareUnstructured": "Jedna z verzí je k dispozici jen jako prostý text, proto je nelze porovnat.",
     "compareVersionMissing": "Verze k porovnání v historii tohoto předpisu není.",
     "compareWholeAct": "Porovnat celý předpis",
     "compareWithVersion": "Porovnat se zněním {version}",

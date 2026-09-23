@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Compare side by side",
     "compareTitle": "Changes between versions",
     "compareUnavailable": "The comparison could not be prepared.",
+    "compareUnstructured": "One of these versions is available only as plain text, so the two cannot be compared.",
     "compareVersionMissing": "The version to compare with is not in this act's history.",
     "compareWholeAct": "Compare the whole act",
     "compareWithVersion": "Compare with {version}",

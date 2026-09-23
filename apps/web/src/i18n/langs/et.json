@@ -4279,6 +4279,7 @@
     "compareSideBySide": "Võrdle kõrvuti",
     "compareTitle": "Muudatused redaktsioonide vahel",
     "compareUnavailable": "Redaktsioone ei õnnestunud võrrelda.",
+    "compareUnstructured": "Üks redaktsioonidest on saadaval ainult lihttekstina, seega ei saa neid võrrelda.",
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
