@@ -1,3 +1,9 @@
+/**
+ * `20260923170000_document_review_passage_references_by_id`: rows written
+ * before passages were addressed by id are reduced to the ids the current
+ * schema stores, and a replay changes nothing.
+ */
+
 import {
   afterAll,
   beforeAll,
@@ -7,11 +13,6 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-/**
- * `20260923170000_document_review_passage_references_by_id`: rows written
- * before passages were addressed by id are reduced to the ids the current
- * schema stores, and a replay changes nothing.
- */
 import nodePath from "node:path";
 
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
