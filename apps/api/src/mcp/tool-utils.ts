@@ -10,9 +10,13 @@ import {
   AGENT_INPUT_NORMALIZATION_KIND,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
 
 import { env } from "@/api/env";
-import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
 import { createStatuteSlug } from "@/api/handlers/legislation/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -1198,120 +1202,21 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-const slugifyCaseNumber = (caseNumber: string) =>
-  slugifyCaseLawPathSegment(caseNumber);
-
-const UNKNOWN_COURT_SEGMENT = "unknown-court";
-const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
-
-/**
- * A case-law URL segment, folded exactly as the persisted slug was.
- *
- * These segments address rows whose slug the API already generated, so the
- * two folds have to agree on every step, length included: `case_number` and
- * `slug` are both `varchar(256)`, and NFKD expansion can push a long case
- * number's slug past the column the persisted one was truncated to. A
- * segment folded without that truncation would address a slug nobody stored.
- * Delegating leaves one implementation rather than two that must be kept
- * equal by hand.
- */
-export const slugifyCaseLawPathSegment = (value: string): string =>
-  createCaseLawDecisionSlug(value);
-
-const normalizeCaseLawStoredSlug = (
-  slug: string | null | undefined,
-): string | null => {
-  if (!slug?.trim()) {
-    return null;
-  }
-
-  return slugifyCaseLawPathSegment(slug);
-};
-
-const normalizeCaseLawLanguageSegment = (
-  language: string | null | undefined,
-): string | null => {
-  const normalized = language?.trim().toLowerCase().replace(/_/gu, "-");
-  if (!normalized || !LANGUAGE_SEGMENT_REGEX.test(normalized)) {
-    return null;
-  }
-
-  return normalized;
-};
-
-const isCaseLawLanguageAlternate = (
-  alternate: unknown,
-): alternate is { language: string } =>
-  typeof alternate === "object" &&
-  alternate !== null &&
-  "language" in alternate &&
-  typeof alternate.language === "string";
-
-const getCaseLawLanguageAlternateCount = (
-  languageAlternates: readonly unknown[] | null | undefined,
-): number => {
-  if (!languageAlternates) {
-    return 0;
-  }
-
-  const languages = new Set<string>();
-  for (const alternate of languageAlternates) {
-    if (!isCaseLawLanguageAlternate(alternate)) {
-      continue;
-    }
-
-    const normalized = normalizeCaseLawLanguageSegment(alternate.language);
-    if (normalized !== null) {
-      languages.add(normalized);
-    }
-  }
-
-  return languages.size;
-};
-
-type CaseLawDecisionUrlInput = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-  slug?: string | null | undefined;
-};
-
 export const isPublicLawAppUrlEnabled = (): boolean =>
   env.isDev || env.FEATURE_PUBLIC_LAW;
 
 export const buildCaseLawDecisionAppUrl = (
-  input: CaseLawDecisionUrlInput,
+  input: CaseLawDecisionRouteInput,
 ): string | null =>
   isPublicLawAppUrlEnabled() ? buildCaseLawDecisionUrl(input) : null;
 
-export const buildCaseLawDecisionUrl = ({
-  caseNumber,
-  country,
-  court,
-  language,
-  languageAlternates,
-  slug,
-}: CaseLawDecisionUrlInput) => {
-  const languageSegment = normalizeCaseLawLanguageSegment(language);
-  const courtSegment =
-    court.trim().length > 0
-      ? slugifyCaseLawPathSegment(court)
-      : UNKNOWN_COURT_SEGMENT;
-  const basePath = `${getAppBaseUrl()}/law/${country.toLowerCase()}/cases/${courtSegment}`;
-  const decisionSlug =
-    normalizeCaseLawStoredSlug(slug) ?? slugifyCaseNumber(caseNumber);
-
-  if (
-    languageSegment !== null &&
-    getCaseLawLanguageAlternateCount(languageAlternates) > 1
-  ) {
-    return `${basePath}/${languageSegment}/${decisionSlug}`;
-  }
-
-  return `${basePath}/${decisionSlug}`;
-};
+/**
+ * The route shape is owned by `@stll/api-contract/case-law-decision-route`, so
+ * an agent-facing URL and the web route cannot address different pages: a
+ * decision without a stored slug links by id, not by case number.
+ */
+export const buildCaseLawDecisionUrl = (input: CaseLawDecisionRouteInput) =>
+  `${getAppBaseUrl()}${createCaseLawDecisionPath(createCaseLawDecisionRouteParams(input))}`;
 
 /**
  * The plain text of one corpus document: its stored plain-text consolidation

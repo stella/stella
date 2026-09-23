@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
@@ -31,7 +32,6 @@ import {
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import { useFormatter } from "@/i18n/formatting-context";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";

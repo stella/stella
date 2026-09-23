@@ -19,7 +19,6 @@ import type {
   SkillResourceTabId,
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
-import { getInspectorView } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import {
   adoptLegalDocumentChatThread,
@@ -42,17 +41,13 @@ export const isGenericInspectorTab = (
   tab: InspectorTab,
 ): tab is Extract<InspectorTab, { type: "view" }> => tab.type === "view";
 
+// A view tab with an owner route belongs to that page: it closes when the
+// route leaves the match set and is never persisted.
 const isMainViewBoundTab = (tab: InspectorTab): boolean => {
   if (tab.type === "pdf") {
     return tab.metadataLane === "expanded";
   }
-  if (tab.type !== "view") {
-    return false;
-  }
-  return (
-    tab.ownerRouteId !== undefined &&
-    getInspectorView(tab.viewType)?.navigationPolicy === "close-on-route-leave"
-  );
+  return tab.type === "view" && tab.ownerRouteId !== undefined;
 };
 
 const dropSupersededFileSuggestion = (
@@ -676,25 +671,24 @@ export const createInspectorTabsSlice = (
       state.flashSeq += 1;
     }),
 
-  closeTabsForRoute: (routeId) =>
+  closeTabsOutsideRoutes: (routeIds) =>
     set((state) => {
       const removed = new Set<string>();
       state.tabs = state.tabs.filter((tab) => {
-        if (!isGenericInspectorTab(tab) || tab.ownerRouteId !== routeId) {
-          return true;
-        }
-        const registration = getInspectorView(tab.viewType);
-        if (registration?.navigationPolicy !== "close-on-route-leave") {
+        if (
+          !isGenericInspectorTab(tab) ||
+          tab.ownerRouteId === undefined ||
+          routeIds.has(tab.ownerRouteId)
+        ) {
           return true;
         }
         removed.add(tab.id);
         return false;
       });
-      if (
-        removed.size > 0 &&
-        state.activeId !== null &&
-        removed.has(state.activeId)
-      ) {
+      if (removed.size === 0) {
+        return;
+      }
+      if (state.activeId !== null && removed.has(state.activeId)) {
         state.activeId = state.tabs.at(0)?.id ?? null;
       }
       for (const tabId of removed) {

@@ -45,7 +45,6 @@ registerInspectorView<ProvisionViewPayload>({
   type: PROVISION_VIEW,
   render: ProvisionView,
   railIcon: ProvisionRailIcon,
-  navigationPolicy: "persist",
   validate: isProvisionViewPayload,
   ariaLabel: (tab) => tab.label,
 });

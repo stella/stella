@@ -1,4 +1,4 @@
-import { normalizeCaseLawLanguageSegment } from "@/lib/case-law-route";
+import { normalizeCaseLawLanguageSegment } from "@stll/api-contract/case-law-decision-route";
 
 type CaseLawLanguageVariant = { language: string };
 

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
-import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
@@ -21,7 +20,6 @@ import {
   parseOptionalCursor,
   resolveWindowBounds,
   serializeToolResult,
-  slugifyCaseLawPathSegment,
   structuredErrorResult,
   toPlainTextSnippet,
   validationErrorResult,
@@ -37,6 +35,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // the test env preload; getAppBaseUrl() strips any trailing slash.
 const BASE = "http://localhost:3000";
 const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
+const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
+const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
 
 describe("MCP ISO date contract", () => {
   test("accepts ISO dates and rejects out-of-range date components", () => {
@@ -91,184 +91,32 @@ describe("MCP workspace authorization lifetime", () => {
   });
 });
 
-describe("slugifyCaseLawPathSegment", () => {
-  test("lowercases, strips diacritics, and collapses runs to single hyphens", () => {
-    expect(slugifyCaseLawPathSegment("Nejvyšší soud")).toBe("nejvyssi-soud");
-  });
-
-  test("collapses non-alphanumerics and trims leading/trailing hyphens", () => {
-    expect(slugifyCaseLawPathSegment("  29 Cdo 123/2024  ")).toBe(
-      "29-cdo-123-2024",
-    );
-  });
-
-  test("falls back to 'unknown' when nothing alphanumeric remains", () => {
-    expect(slugifyCaseLawPathSegment("///")).toBe("unknown");
-    expect(slugifyCaseLawPathSegment("")).toBe("unknown");
-  });
-
-  test("agrees with the persisted slug generator", () => {
-    // These segments address rows whose slug the API already generated, so
-    // the two folds must agree. This used to be a hand-copied NFKD strip.
-    const segments = [
-      "Nejvyšší soud",
-      "Ústavní soud České republiky",
-      "Najvyšší súd Slovenskej republiky",
-      "Sąd Najwyższy — Izba Cywilna",
-      "Oberster Gerichtshof (Österreich)",
-      "29 Cdo 123/2024",
-      "II. ÚS 251/04",
-      "ﬁnanční ročník²",
-      "  ---  ",
-    ];
-
-    for (const segment of segments) {
-      expect(slugifyCaseLawPathSegment(segment)).toBe(
-        createCaseLawDecisionSlug(segment),
-      );
-    }
-  });
-
-  test("truncates like the persisted slug on an expanding case number", () => {
-    // `case_number` and `slug` are both varchar(256), and NFKD expands the
-    // ligature threefold, so a full-width case number slugifies past the
-    // column its persisted slug was truncated to. A URL built without that
-    // truncation would address a slug nobody stored.
-    const caseNumber = "ﬃ".repeat(256);
-    const slug = slugifyCaseLawPathSegment(caseNumber);
-
-    expect(slug.length).toBeLessThanOrEqual(256);
-    expect(slug).toBe(createCaseLawDecisionSlug(caseNumber));
-  });
-});
-
 describe("buildCaseLawDecisionUrl", () => {
-  test("uses a stored slug verbatim (re-slugified) over the case number", () => {
+  test("prefixes the shared decision path with the app base URL", () => {
     expect(
       buildCaseLawDecisionUrl({
         caseNumber: "29 Cdo 123/2024",
         country: "CZE",
         court: "Nejvyšší soud",
+        decisionId: DECISION_ID,
         slug: "official-stable-slug",
       }),
     ).toBe(`${BASE}/law/cze/cases/nejvyssi-soud/official-stable-slug`);
   });
 
-  test("derives the decision slug from the case number when no stored slug", () => {
+  test("links a decision without a stored slug by id, not by case number", () => {
+    // A case-number slug is a segment `by-slug` cannot resolve.
     expect(
       buildCaseLawDecisionUrl({
-        caseNumber: "29 Cdo 123/2024",
+        caseNumber: "23 Cdo 5068/2014",
         country: "CZE",
         court: "Nejvyšší soud",
+        decisionId: DECISION_ID,
+        slug: null,
       }),
-    ).toBe(`${BASE}/law/cze/cases/nejvyssi-soud/29-cdo-123-2024`);
-  });
-
-  test("lowercases the country and slugifies the court segment", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "C-123/24",
-        country: "DEU",
-        court: "Bundesgerichtshof",
-        slug: "x",
-      }),
-    ).toBe(`${BASE}/law/deu/cases/bundesgerichtshof/x`);
-  });
-
-  test("uses the unknown-court segment for a blank court", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "   ",
-        slug: "s",
-      }),
-    ).toBe(`${BASE}/law/cze/cases/unknown-court/s`);
-  });
-
-  test("inserts the language segment only when more than one language alternate exists", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "cs",
-        languageAlternates: [{ language: "cs" }, { language: "en" }],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/cs/s`);
-  });
-
-  test("omits the language segment when the decision has no alternates", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "cs",
-        languageAlternates: [],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/s`);
-  });
-
-  test("omits the language segment when the language code is not a valid BCP-47-ish tag", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "not a language",
-        languageAlternates: [{ language: "cs" }, { language: "en" }],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/s`);
-  });
-
-  test("normalizes underscores in the language tag to hyphens", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "CS_CZ",
-        languageAlternates: [{ language: "cs-CZ" }, { language: "en" }],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/cs-cz/s`);
-  });
-
-  test("counts distinct normalized language alternates", () => {
-    const url = buildCaseLawDecisionUrl({
-      caseNumber: "1/24",
-      country: "CZE",
-      court: "NS",
-      slug: "s",
-      language: "cs",
-      languageAlternates: [
-        { language: "cs" },
-        { language: "CS" }, // dedupes with "cs" after normalization
-        { language: "en" },
-        { language: "??" }, // invalid -> ignored
-        "not-an-object", // malformed -> ignored
-      ],
-    });
-
-    // Two distinct valid languages (cs, en) > 1 -> language segment present.
-    expect(url).toBe(`${BASE}/law/cze/cases/ns/cs/s`);
-  });
-
-  test("omits the language segment when distinct alternates do not exceed one", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "cs",
-        languageAlternates: [{ language: "cs" }, { language: "CS" }],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/s`);
+    ).toBe(
+      `${BASE}/law/cze/cases/nejvyssi-soud/23-cdo-5068-2014--${COMPACT_DECISION_ID}`,
+    );
   });
 });
 
@@ -280,6 +128,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     caseNumber: "1/24",
     country: "CZE",
     court: "NS",
+    decisionId: DECISION_ID,
     slug: "s",
   };
 

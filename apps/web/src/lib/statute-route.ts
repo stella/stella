@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
-import { decodeCompactUuid, encodeCompactUuid } from "@stll/uuid-codec";
+import { decodeUuidSuffix, encodeCompactUuid } from "@stll/uuid-codec";
 
 import type { useFormatter } from "@/i18n/formatting-context";
 
@@ -86,17 +86,13 @@ const ID_ROUTE_PARAM_SEPARATOR = "--";
 export const extractStatuteDocumentIdFromRouteParam = (
   param: string,
 ): string | null => {
-  const separator = param.lastIndexOf(ID_ROUTE_PARAM_SEPARATOR);
-  if (separator === -1) {
-    return null;
-  }
-
   // Trimmed because the param reaches here URL-decoded: a pasted address whose
   // segment ended in an encoded space resolved before the codec moved out, and
   // the decoder itself takes the segment exactly as it is spelled.
-  const decoded = decodeCompactUuid(
-    param.slice(separator + ID_ROUTE_PARAM_SEPARATOR.length).trim(),
-  );
+  const decoded = decodeUuidSuffix({
+    segment: param.trim(),
+    separator: ID_ROUTE_PARAM_SEPARATOR,
+  });
   return Result.isError(decoded) ? null : decoded.value;
 };
 

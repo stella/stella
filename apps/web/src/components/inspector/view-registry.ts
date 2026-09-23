@@ -5,6 +5,8 @@ import { panic } from "better-result";
 
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 
+import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
+
 /**
  * Module-global registry of inspector view kinds. Each route (or
  * shared module) registers the renderer + rail icon for the
@@ -17,8 +19,6 @@ import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
  * stale renderers.
  */
 export type InspectorViewKind = string;
-
-export type InspectorNavigationPolicy = "persist" | "close-on-route-leave";
 
 /**
  * Compile-time bound enforcing payloads that survive HTML's
@@ -80,7 +80,7 @@ export type InspectorViewTab<P> = {
   id: string;
   label: string;
   payload: P;
-  ownerRouteId?: string | undefined;
+  ownerRouteId?: InspectorOwnerRouteId | undefined;
 };
 
 export type InspectorViewRenderProps<P> = {
@@ -104,7 +104,6 @@ export type InspectorViewRegistration<P = unknown> = {
    * fade. Defaults to the shared dim.
    */
   railIconInactive?: InspectorEntityTabInactiveIcon | undefined;
-  navigationPolicy?: InspectorNavigationPolicy | undefined;
   /**
    * Runtime payload validator. Required for kinds whose payloads
    * cross the BroadcastChannel sync (otherwise re-hydrated tabs

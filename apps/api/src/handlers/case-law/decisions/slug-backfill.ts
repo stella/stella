@@ -1,12 +1,13 @@
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
-  createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

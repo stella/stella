@@ -24,6 +24,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
   LandingButton,
@@ -58,11 +62,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-  resolveCaseLawRouteCountry,
-} from "@/lib/case-law-route";
+import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
 import { pageTitle } from "@/lib/page-title";

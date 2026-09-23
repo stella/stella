@@ -22,6 +22,7 @@ import {
   type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
+import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import { isFolioBlockId } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -54,7 +55,6 @@ import { env } from "@/env";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { useVerifiedOfficeCitationTarget } from "@/hooks/use-verified-office-citation-target";
-import { parseCaseLawDecisionPath } from "@/lib/case-law-route";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {

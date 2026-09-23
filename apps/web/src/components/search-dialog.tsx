@@ -28,6 +28,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -144,7 +145,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";

@@ -4,6 +4,11 @@ import {
   DECISION_READ_RESOLUTION,
   type DecisionReadResolution,
 } from "@stll/api-contract/case-law-decision-resolution";
+import {
+  type CaseLawDecisionRouteParams,
+  extractCaseLawDecisionIdFromIdRouteParam,
+  isCaseLawDecisionId,
+} from "@stll/api-contract/case-law-decision-route";
 import { stellaToast } from "@stll/ui/toast";
 
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -13,11 +18,8 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
-  type CaseLawDecisionRouteParams,
   decodeCaseLawDecisionRef,
   defaultCaseLawCountryForLocale,
-  extractCaseLawDecisionIdFromIdRouteParam,
-  isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

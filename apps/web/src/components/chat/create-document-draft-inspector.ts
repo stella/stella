@@ -13,7 +13,6 @@ registerInspectorView<CreateDocumentDraftPayload>({
   type: CREATE_DOCUMENT_DRAFT_VIEW,
   render: CreateDocumentDraftInspector,
   railIcon: CreateDocumentDraftRailIcon,
-  navigationPolicy: "persist",
   validate: isCreateDocumentDraftPayload,
   ariaLabel: (tab) => tab.label,
   maxMounted: 1,

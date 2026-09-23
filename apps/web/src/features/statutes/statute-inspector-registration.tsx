@@ -42,7 +42,6 @@ registerInspectorView<StatuteViewPayload>({
   type: STATUTE_VIEW,
   render: StatuteView,
   railIcon: StatuteRailIcon,
-  navigationPolicy: "persist",
   validate: isStatuteViewPayload,
   ariaLabel: (tab) => tab.label,
 });

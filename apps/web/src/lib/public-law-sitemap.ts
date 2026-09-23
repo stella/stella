@@ -1,5 +1,10 @@
 import * as v from "valibot";
 
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import {
@@ -11,10 +16,6 @@ import {
   type CaseLawLanguageAlternateLink,
   createCaseLawLanguageAlternateLinks,
 } from "@/lib/case-law-language-alternates";
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-} from "@/lib/case-law-route";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawCrawlAllowed,

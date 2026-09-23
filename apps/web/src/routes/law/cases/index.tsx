@@ -20,6 +20,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import {
   type DecisionQueryIntent,
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
@@ -129,11 +133,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-  resolveCaseLawRouteCountry,
-} from "@/lib/case-law-route";
+import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {

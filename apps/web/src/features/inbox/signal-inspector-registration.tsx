@@ -41,7 +41,6 @@ registerInspectorView<InboxSignalViewPayload>({
   type: INBOX_SIGNAL_VIEW,
   render: SignalView,
   railIcon: SignalRailIcon,
-  navigationPolicy: "persist",
   validate: isInboxSignalViewPayload,
   ariaLabel: (tab) => tab.label,
 });

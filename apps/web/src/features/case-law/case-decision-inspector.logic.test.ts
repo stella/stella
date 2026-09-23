@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   CASE_DECISION_VIEW,
@@ -27,10 +31,14 @@ describe("case decision inspector", () => {
       label: "4 As 3/2008 · Nejvyšší správní soud",
       payload: {
         caseNumber: "4 As 3/2008",
-        country: "cz",
-        court: "nejvyssi-spravni-soud",
+        country: "CZ",
+        court: "Nejvyšší správní soud",
         decisionId: "d4f1bfe6-f7e4-42a2-9d4f-fd121ea90b34",
-        slug: "4-as-3-2008",
+        route: {
+          country: "cz",
+          court: "nejvyssi-spravni-soud",
+          slug: "4-as-3-2008",
+        },
       },
     });
   });
@@ -50,6 +58,10 @@ describe("case decision inspector", () => {
     expect(isCaseDecisionViewPayload({ ...payload, decisionId: "" })).toBe(
       false,
     );
+    // A tab persisted before the route moved under `route` is dropped rather
+    // than read with its URL segments as the decision's name.
+    const { route, ...unrouted } = payload;
+    expect(isCaseDecisionViewPayload({ ...unrouted, ...route })).toBe(false);
     // The terms survive structured-clone synchronization between windows, and
     // an empty string is not a find anyone asked for.
     expect(
@@ -155,6 +167,42 @@ describe("case decision inspector", () => {
         hash: "p-12",
       },
     ]);
+  });
+
+  // Every tab factory takes a decision record. A payload handed back in (a
+  // details tab opened from a reader tab) must name the same decision the
+  // same way, never its URL segments, and route to the same decision.
+  test("a tab rebuilt from its own payload names and routes the same decision", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          caseNumber: fc.string({ minLength: 1 }),
+          country: fc.constantFrom("CZE", "POL", "SVK", "EU"),
+          court: fc.constantFrom(
+            "Nejvyšší soud",
+            "Sąd Najwyższy",
+            "Court of Justice",
+          ),
+          decisionId: fc.uuid(),
+          slug: fc.option(fc.stringMatching(/^[a-z0-9-]{1,40}$/u), {
+            nil: null,
+          }),
+        }),
+        (decision) => {
+          const first = createCaseDecisionViewTab(decision);
+          const again = createCaseDecisionViewTab(first.payload);
+
+          expect(again.label).toBe(first.label);
+          expect(again.payload.court).toBe(decision.court);
+          expect(again.payload.route.court).toBe(first.payload.route.court);
+          // No stored slug reaches the rebuild, so it routes by id.
+          expect(
+            extractCaseLawDecisionIdFromIdRouteParam(again.payload.route.slug),
+          ).toBe(decision.decisionId);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("intercepts only an unmodified primary click", () => {

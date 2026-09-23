@@ -92,7 +92,6 @@ registerInspectorView<ToolDetailPayload>({
   type: "tool-detail",
   render: ToolDetailViewRenderer,
   railIcon: ToolDetailRailIconRenderer,
-  navigationPolicy: "close-on-route-leave",
   validate: isToolDetailPayload,
 });
 

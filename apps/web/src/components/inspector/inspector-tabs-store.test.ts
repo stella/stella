@@ -895,7 +895,6 @@ describe("revive suggestion", () => {
   test("route-owned view tab: user close suggests, owner unmount close clears", () => {
     registerInspectorView<{ templateId: string }>({
       type: "test-bound-view",
-      navigationPolicy: "close-on-route-leave",
       railIcon: () => null,
       render: () => null,
       validate: (value): value is { templateId: string } =>
@@ -929,10 +928,9 @@ describe("revive suggestion", () => {
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
-  test("route cleanup removes group assignments for closed tabs", () => {
+  test("route leave removes group assignments for closed tabs", () => {
     registerInspectorView<{ templateId: string }>({
       type: "test-grouped-bound-view",
-      navigationPolicy: "close-on-route-leave",
       railIcon: () => null,
       render: () => null,
       validate: (value): value is { templateId: string } =>
@@ -952,9 +950,32 @@ describe("revive suggestion", () => {
     const groupId = store.createGroup({ name: "Templates", color: "blue" });
     store.setTabGroup("test-grouped-bound-view:tpl-1", groupId);
 
-    store.closeTabsForRoute("/_protected/knowledge/templates");
+    store.closeTabsOutsideRoutes(new Set(["__root__"]));
 
     expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
+  });
+
+  test("a route-owned tab lives exactly as long as its owner route is matched", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ id: toChatThreadId("thread-1") });
+    store.openView({
+      type: "test-owned-view",
+      id: "test-owned-view:1",
+      label: "Owned",
+      payload: {},
+      ownerRouteId: "/_protected/knowledge/tools",
+    });
+    const tabIds = () =>
+      useInspectorTabsStore.getState().tabs.map(({ id }) => id);
+
+    store.closeTabsOutsideRoutes(
+      new Set(["__root__", "/_protected", "/_protected/knowledge/tools"]),
+    );
+    expect(tabIds()).toEqual(["thread-1", "test-owned-view:1"]);
+
+    store.closeTabsOutsideRoutes(new Set(["__root__", "/_protected"]));
+    expect(tabIds()).toEqual(["thread-1"]);
+    expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
   });
 
   test("rejects assignment to a missing custom group", () => {
@@ -1615,11 +1636,25 @@ describe("Inspector tab broadcast", () => {
           label: "1 Test 1",
           payload: {
             caseNumber: "1 Test 1",
-            country: "cz",
-            court: "court",
+            country: "CZE",
+            court: "Court",
             decisionId: "decision-1",
-            slug: "decision",
+            route: { country: "cze", court: "court", slug: "decision" },
             extraContent: "must not persist",
+          },
+        },
+        {
+          type: "view",
+          viewType: "case-law-decision-details",
+          id: "case-law-decision-details:decision-1",
+          label: "1 Test 1",
+          ownerRouteId: "/law/$country/cases/$court/$slug",
+          payload: {
+            caseNumber: "1 Test 1",
+            country: "CZE",
+            court: "Court",
+            decisionId: "decision-1",
+            route: { country: "cze", court: "court", slug: "decision" },
           },
         },
         {
@@ -1668,10 +1703,10 @@ describe("Inspector tab broadcast", () => {
           label: "1 Test 1",
           payload: {
             caseNumber: "1 Test 1",
-            country: "cz",
-            court: "court",
+            country: "CZE",
+            court: "Court",
             decisionId: "decision-1",
-            slug: "decision",
+            route: { country: "cze", court: "court", slug: "decision" },
           },
         },
         {

@@ -1174,7 +1174,6 @@ export const TemplateStudioRailIcon = (
 ) => <LayoutTemplateIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
 
 registerInspectorView<TemplateStudioPayload>({
-  navigationPolicy: "close-on-route-leave",
   railIcon: TemplateStudioRailIcon,
   render: TemplateStudioInspectorView,
   type: TEMPLATE_STUDIO_VIEW,

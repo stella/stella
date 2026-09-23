@@ -492,6 +492,11 @@ const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
     return reference;
   }
   if (tab.type === "view") {
+    // A route-owned tab belongs to the page that seeded it; restored on a
+    // reload that lands elsewhere, it would describe a page nobody opened.
+    if (tab.ownerRouteId !== undefined) {
+      return null;
+    }
     const persistence = getInspectorPersistenceReference(tab.viewType);
     if (persistence === undefined || !persistence.validate(tab.payload)) {
       return null;

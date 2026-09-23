@@ -14,6 +14,7 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
+import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -39,11 +40,14 @@ const AuthenticatedCaseLawWorkspace = lazy(async () => {
 type PublicDecisionViewerProps = {
   decision: PublicCaseLawDecision;
   initialSearchQuery?: string | undefined;
+  /** The decision route rendering the page, which owns its details tab. */
+  routeId: InspectorOwnerRouteId;
 };
 
 export function PublicDecisionViewer({
   decision,
   initialSearchQuery,
+  routeId,
 }: PublicDecisionViewerProps) {
   const decisionId = extractId(decision.id);
   // The block the URL names. A results row that could not open beside the
@@ -125,7 +129,11 @@ export function PublicDecisionViewer({
 
   return (
     <main className="flex min-h-0 flex-1 overflow-hidden">
-      <DecisionDetailsTab decision={decision} key={decision.id} />
+      <DecisionDetailsTab
+        decision={decision}
+        key={decision.id}
+        routeId={routeId}
+      />
       <ChromeHeaderActions>
         <OpenOriginalButton
           className="hidden md:inline-flex"
@@ -216,10 +224,12 @@ const GuestDecisionWorkspace = ({
 
 /**
  * The facts of the decision on screen live in the inspector, not above the
- * text. The tab opens with the page and then belongs to the decision, not to
- * the page: leaving takes the text away, and the tab keeps offering to bring
- * it back. It never takes the focus away from a decision the reader had open
- * on the side, so a swap lands on the decision, not on its facts.
+ * text. The tab belongs to the page: the facts of a decision whose text is
+ * gone describe nothing, so leaving closes it and a reload elsewhere does not
+ * restore it. Unmount closes it too: the next decision on the same route is
+ * a new page. A details tab the reader opened before arriving is theirs and
+ * stays. The seed never takes the focus away from a decision the reader had
+ * open on the side, so a swap lands on the decision, not on its facts.
  *
  * It also owns the pane state for the whole decision mount: this effect runs
  * before the chat tab's, and both seed with `pane: "keep"`, so the pane is
@@ -227,8 +237,10 @@ const GuestDecisionWorkspace = ({
  */
 const DecisionDetailsTab = ({
   decision,
+  routeId,
 }: {
   decision: PublicCaseLawDecision;
+  routeId: InspectorOwnerRouteId;
 }) => {
   useMountEffect(() => {
     const store = useInspectorTabsStore.getState();
@@ -242,16 +254,19 @@ const DecisionDetailsTab = ({
     // other inspector already carries the reader's own expand or collapse,
     // which persists across pages, so the seed leaves it alone.
     const seedsIntoEmptyInspector = store.tabs.length === 0;
+    const tab = createCaseDecisionDetailsTab({
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    });
+    const openedByReader = store.tabs.some(({ id }) => id === tab.id);
     store.openView({
-      ...createCaseDecisionDetailsTab({
-        caseNumber: decision.caseNumber,
-        country: decision.country,
-        court: decision.court,
-        decisionId: decision.id,
-        language: decision.language,
-        languageAlternates: decision.languageAlternates,
-        slug: decision.slug,
-      }),
+      ...tab,
+      ...(openedByReader ? {} : { ownerRouteId: routeId }),
       pane: INSPECTOR_PANE_INTENT.keep,
     });
     if (keepActive !== null) {
@@ -260,6 +275,14 @@ const DecisionDetailsTab = ({
     if (seedsIntoEmptyInspector) {
       store.setMinimized(true);
     }
+    return () => {
+      const seeded = useInspectorTabsStore
+        .getState()
+        .tabs.find(({ id }) => id === tab.id);
+      if (seeded?.type === "view" && seeded.ownerRouteId === routeId) {
+        useInspectorTabsStore.getState().closeTab(tab.id);
+      }
+    };
   });
   return null;
 };

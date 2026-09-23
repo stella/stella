@@ -1889,8 +1889,8 @@ export const TemplateStudioPage = ({
 
 // The template settings live as a single tab in the app's right-side
 // inspector. The page (above) owns the document + actions and seeds the shared
-// session store this view reads from. `close-on-route-leave` is a backstop; the
-// page also closes the tab on unmount.
+// session store this view reads from. Its owner route closes the tab on
+// leave; the page also closes it on unmount, before the session resets.
 /** A paragraph node carrying marker text ("" for the empty body line). */
 const markerParagraph = (
   state: EditorState,
