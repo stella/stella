@@ -528,6 +528,24 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_UODO]: {
+    key: ADAPTER_KEYS.PL_UODO,
+    name: "Polish Data Protection Authority (Prezes UODO)",
+    publisher: "Prezes Urzędu Ochrony Danych Osobowych",
+    publicHomeUrl: "https://orzeczenia.uodo.gov.pl",
+    ...ADAPTER_JURISDICTIONS.POL,
+    // Poland issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // The authority's own decisions start in 2018; the court rulings the
+      // portal files beside them reach back to a 1981 judgment, and the
+      // search filters on that date.
+      type: "decision-date",
+      fromInclusive: "1981-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",

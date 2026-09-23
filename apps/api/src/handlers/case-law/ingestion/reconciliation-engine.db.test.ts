@@ -23,6 +23,7 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
@@ -1663,6 +1664,48 @@ test("a merged supplement whose standalone row still stands is listed again", as
     summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+test("a record kind declared complete without a document is held on its record alone", async () => {
+  // The data-protection authority's portal lists decisions, whose bodies it
+  // serves, beside court rulings it files as records only. Both are stored
+  // under the no-document marker when they carry no text: the decision
+  // because its body failed, the ruling by design. Only the first is missing.
+  const decisionUrn = "urn:ndoc:gov:pl:uodo:2022:dkn_5131_45";
+  const rulingUrn = "urn:ndoc:court:pl:sa:2023:ii_sa-wa_996";
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  for (const sourceDocumentId of [decisionUrn, rulingUrn]) {
+    await seedDecision({
+      sourceId,
+      caseNumber: sourceDocumentId,
+      sourceDocumentId,
+      isListingOnly: true,
+    });
+  }
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [decisionUrn, rulingUrn].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { refid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    heldRequiresDetail: true,
+    heldWithoutDetail: plUodoHeldWithoutDetail,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  // The decision was hunted again; the ruling was left alone.
+  expect(builds).toEqual([{ refid: decisionUrn }]);
 });
 
 test("a failed item build reports the SQLSTATE without logging any message text", async () => {

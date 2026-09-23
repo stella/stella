@@ -66,6 +66,7 @@ import {
   plNcourtFixture,
   plSnFixture,
   plTkFixture,
+  plUodoFixture,
   skCourtsFixture,
   skUsFixture,
   type AtRisFixtureAdapter,
@@ -156,6 +157,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
   [ADAPTER_KEYS.PL_KIO]: [{ kind: "built", fixture: plKioFixture }],
   [ADAPTER_KEYS.PL_KIS]: [{ kind: "built", fixture: plKisFixture }],
+  [ADAPTER_KEYS.PL_UODO]: [{ kind: "built", fixture: plUodoFixture }],
 } as const satisfies Record<AdapterKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────

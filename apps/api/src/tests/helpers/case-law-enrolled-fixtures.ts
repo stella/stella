@@ -98,8 +98,15 @@ import {
   plTkRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import {
+  assemblePlUodoDecision,
+  normalizePlUodoRow,
+  plUodoBodyFrom,
+  plUodoRawPartsOf,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
@@ -2244,5 +2251,94 @@ export const plKisFixture = (): EnrolledAdapterFixture => ({
     return built.type === "built"
       ? built.decision
       : panic("pl-kis fixture did not build");
+  },
+});
+
+// ── PL UODO fixture ──────────────────────────────────────
+
+/** One decision year as the portal's search listed it, verbatim. */
+const PL_UODO_LISTING = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uodo-listing-2023.json.gz",
+  import.meta.url,
+);
+
+/** The body the portal served for the decision below. */
+const PL_UODO_BODY = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/pl-uodo-dkn-5131-45-2022.xml",
+  import.meta.url,
+);
+
+/** A decision the listing links to the administrative-court ruling on it. */
+const PL_UODO_DECISION_URN = "urn:ndoc:gov:pl:uodo:2022:dkn_5131_45";
+
+/**
+ * The captured record, with the keys other records carry and this one leaves
+ * out added in the shapes the portal serves them: the journal fields a common
+ * court's record states as `null`, a dated event naming the ruling by docket,
+ * and a subject term from the legislation index.
+ */
+const plUodoUnionRow = (
+  row: Record<string, unknown>,
+): Record<string, unknown> => {
+  const publicator = isRecord(row["publicator"]) ? row["publicator"] : {};
+  const dates: unknown[] = Array.isArray(row["dates"]) ? row["dates"] : [];
+  const terms: unknown[] = Array.isArray(row["terms"]) ? row["terms"] : [];
+  return {
+    ...row,
+    publicator: {
+      ...publicator,
+      volnumber: null,
+      docnumber: null,
+      pagefrom: null,
+      pageto: null,
+    },
+    dates: [
+      ...dates,
+      {
+        date: "2024-01-15",
+        use: "validation",
+        type: "direct",
+        status: "final",
+        scope: "*",
+        text: { pl: "w zakresie punktu 1)" },
+        refid: "urn:ndoc:court:pl:sa:2023:ii_sa-wa_996",
+        refname: "II SA/Wa 996/23",
+      },
+    ],
+    terms: [
+      ...terms,
+      { name: { pl: "ochrona danych osobowych" }, base: "isap", scope: "*" },
+    ],
+  };
+};
+
+/**
+ * Built from the captured record and body through the adapter's own
+ * assembly, so the guards read back exactly the envelope a crawl stores.
+ */
+export const plUodoFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const listed = await readGzipJson(PL_UODO_LISTING);
+    const rows: unknown[] = Array.isArray(listed) ? listed : [];
+    const captured = rows
+      .filter(isRecord)
+      .find((row) => row["refid"] === PL_UODO_DECISION_URN);
+    if (captured === undefined) {
+      return panic("the pl-uodo listing fixture lost its decision");
+    }
+    const listing = plUodoUnionRow(captured);
+    const row = normalizePlUodoRow(listing);
+    const body = plUodoBodyFrom(
+      row,
+      new Uint8Array(await Bun.file(PL_UODO_BODY).arrayBuffer()),
+    );
+    const built = assemblePlUodoDecision({
+      row,
+      body,
+      rawParts: plUodoRawPartsOf(listing, body),
+    });
+    return built.type === "built"
+      ? built.decision
+      : panic(`pl-uodo fixture did not build: ${built.type}`);
   },
 });

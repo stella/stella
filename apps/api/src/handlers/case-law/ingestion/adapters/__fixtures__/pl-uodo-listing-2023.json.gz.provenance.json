@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "41fec24cabdc047b6e32c6c113d47ffaccaedef7bba969c7fd8e046b5cc65778",
+  "sourceUrl": "https://orzeczenia.uodo.gov.pl/api/documents/search/PublicDocument/2023-01-01,2023-12-31?count=100&from=0&order=%2Bid&fields=*%2Cmtime",
+  "capturedAt": "2026-09-23T10:21:49.883Z",
+  "note": "one decision year, the reconciliation slice listing's page: UODO decisions, court rulings, legislation and guidance side by side"
+}

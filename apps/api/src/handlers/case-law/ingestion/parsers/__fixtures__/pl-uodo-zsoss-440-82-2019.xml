@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Created to version 4.0.3  by 'docproc.py' ver. 1.0.16, 'Tue Apr 15 08:06:17 UTC 2025'  -->
+<xPart xVersion="4.0.3" xml:space="preserve" xVolType="UODO" xYear="2019" xLang="pl" xFlag="checked">
+<xName>Decyzja</xName>
+<xTitle>ZSOŚS.440.82.2019</xTitle>
+<xBlock>
+<xUnit xIsTitle="true" xType="bran" xBookmark="B1"><xName> </xName><xTitle> </xTitle>
+    <xUnit xType="none" xBookmark="n0"><xName> </xName>
+        <xText>Na podstawie art. 105 ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:2096">Dz. U. z 2018 r. poz. 2096</xLexLink> ze zm.), art. 7 ust. 1 ustawy z dnia 10 maja 2018 r. o ochronie danych osobowych (Dz. U. poz. 1000 ze zm.) oraz art. 5 ust. 1 pkt 6 ustawy z dnia 14 grudnia 2018 r. o ochronie danych osobowych przetwarzanych w związku z zapobieganiem i zwalczaniem przestępczości (<xLexLink xRef="urn:ndoc:pro:pl:durp:2019:125">Dz. U. z 2019 r. poz. 125</xLexLink>),</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n0a"><xName> </xName>
+        <xText>po przeprowadzeniu postępowania administracyjnego w sprawie skargi Pana D. B., zam. w W., na udostępnienie osobie nieuprawnionej jego danych osobowych przez Prokuraturę Okręgową w W.,</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n0b"><xName> </xName>
+        <xText>umarzam postępowanie</xText>
+    </xUnit>
+</xUnit>
+<xUnit xIsTitle="true" xType="bran" xBookmark="B2"><xName> </xName><xTitle>Uzasadnienie</xTitle>
+    <xUnit xType="none" xBookmark="n1"><xName> </xName>
+        <xText>Do Urzędu Ochrony Danych Osobowych (dalej <xCx>„UODO”</xCx>) wpłynęła (…) czerwca 2019 r. skarga Pana D. B., zam. w W. (dalej <xCx>„Skarżący”</xCx>), dotycząca udostępnienia nieuprawnionej osobie jego danych osobowych przez Prokuraturę Okręgową w W. (dalej <xCx>„Prokuratura”</xCx>).</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n2"><xName> </xName>
+        <xText>W odpowiedzi na skargę, pismem z (…) lipca 2019 r., Prezes UODO wezwał Skarżącego do usunięcia braków formalnych skargi poprzez:</xText>
+        <xUnit xType="pint" xBookmark="n2:p1"><xName xSffx=")">1</xName>
+            <xText>określenie, w jakim zakresie zostało dokonane naruszenie prawa Skarżącego do ochrony danych osobowych przez podmiot wskazany w skardze, tj. dokładne i pełne doprecyzowanie, jakie dane osobowe Skarżącego uległy naruszeniu;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n2:p2"><xName xSffx=")">2</xName>
+            <xText>wskazanie, podjęcia jakich działań znajdujących podstawę w przepisach ustawy o ochronie danych osobowych, Skarżący oczekuje od Prezesa Urzędu Ochrony Danych Osobowych. Skarżący, w swoim piśmie do Prezesa UODO z (…) lipca 2019 r., usunął braki formalne skargi, wskazując w nim dane osobowe, których ochrona została naruszona oraz formułując żądanie skargi.</xText>
+        </xUnit>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n3"><xName> </xName>
+        <xText>Wobec powyższego, Prezes UODO wszczął postępowanie administracyjne związane ze skargą, a następnie, pismem z (…) lipca 2019 r., zwrócił się do Prokuratora Okręgowego w W. o wyjaśnienia w sprawie. W odpowiedzi na ww. pismo, Prokurator Okręgowy w W. skierował do Prezesa UODO pismo z (…) sierpnia 2019 r., w którym wyjaśnił, że <xCx>„nie jest możliwe złożenie wyjaśnień oraz przedłożenie dowodów w żądanym w piśmie zakresie w oparciu o podstawę prawną, jaką jest przepis art. 5 ust. 1 pkt 6 ustawy z dnia 14 grudnia 2018 roku o ochronie danych osobowych przetwarzanych w związku z zapobieganiem i zwalczaniem przestępczości (<xLexLink xRef="urn:ndoc:pro:pl:durp:2019:125">Dz. U. z 2019 r., poz. 125</xLexLink>) (…)”</xCx>. Ponadto Prokurator Okręgowy w W. wskazał, że zakresem regulacji ww. ustawy <xCx>„(…) objęty jest również sposób prowadzenia nadzoru nad ochroną danych osobowych przetwarzanych przez właściwe organy w celach, o których mowa powyżej, z wyłączeniem danych osobowych przetwarzanych przez prokuraturę i sądy. Wobec powyższego, Prezes Urzędu Ochrony Danych Osobowych (…) nie jest organem właściwym do przeprowadzania nadzoru nad ochroną danych osobowych przetwarzanych przez Prokuraturę Okręgową.”</xCx> Prokurator Okręgowy w W. podniósł również, że w myśl art. 191a § 1 pkt 2) ustawy z dnia 28 stycznia 2016 r. Prawo o prokuraturze (<xLexLink xRef="urn:ndoc:pro:pl:durp:2019:740">Dz. U. z 2019 r. poz. 740</xLexLink>), nadzór nad przetwarzaniem danych osobowych w ramach realizacji zadań określonych w art. 2 tej ustawy, których administratorami są powszechne jednostki organizacyjne prokuratury zgodnie z art. 13 § 6, wykonuje w zakresie działalności prokuratury okręgowej – prokurator regionalny.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n4"><xName> </xName>
+        <xText>Wobec powyższego, w związku z brakiem kompetencji Prezesa UODO do merytorycznego rozstrzygnięcia niniejszej sprawy, postępowanie wszczęte w rezultacie złożonej przez Skarżącego skargi należało umorzyć jako bezprzedmiotowe, stosownie do treści art. 105 § 1 ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego (dalej <xCx>„Kpa”</xCx>). W doktrynie prawniczej wskazuje się, że bezprzedmiotowość postępowania administracyjnego, o której stanowi art. 105 § 1 Kpa, oznacza brak któregokolwiek elementu stosunku materialnoprawnego skutkujący tym, że nie można załatwić sprawy przez rozstrzygnięcie jej co do istoty. Umorzenie postępowania administracyjnego stanowi orzeczenie formalne, kończące postępowanie, bez jego merytorycznego rozstrzygnięcia (wyrok Naczelnego Sądu Administracyjnego w Warszawie z 21 września 2010 r., <xLexLink xRef="urn:ndoc:court:pl:sa:2009:ii_osk_1393">II OSK 1393/09</xLexLink>). Ustalenie przez organ publiczny zaistnienia przesłanki, o której mowa w art. 105 § 1 Kpa, zobowiązuje go, jak podkreśla się w doktrynie i orzecznictwie, do umorzenia postępowania, ponieważ nie ma wówczas podstaw do rozstrzygnięcia sprawy co do istoty, a dalsze prowadzenie postępowania w takiej sytuacji stanowiłoby o jego wadliwości, mającej istotny wpływ na wynik sprawy.</xText>
+    </xUnit>
+</xUnit>
+</xBlock>
+</xPart>

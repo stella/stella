@@ -56,6 +56,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: async () => (await import("./hu-bhgy")).huBhgyAdapter,
   [ADAPTER_KEYS.PL_KIS]: async () => (await import("./pl-kis")).plKisAdapter,
+  [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>
