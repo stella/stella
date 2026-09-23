@@ -30,12 +30,20 @@ export const SHADCN_LINT_JS_PLUGINS = [
   { name: SHADCN_PLUGIN, specifier: "@shadcn/lint" },
 ] satisfies ExternalPluginEntry[];
 
-/** Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`. */
+/**
+ * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
+ *
+ * The last one is not a design rule: it is an API size-bound guard whose
+ * findings need scope analysis, so no lexical `scripts/ratchet.ts` counter can
+ * measure it. It rides this per-file, oxlint-measured backlog because it is
+ * the one debt mechanism that counts with the rule itself.
+ */
 export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
   "shadcn/no-arbitrary-values",
   "no-raw-overflow-scroll/no-raw-overflow-scroll",
   "no-imported-class-constant/no-imported-class-constant",
+  "require-bounded-request-schema/require-bounded-request-schema",
 ] as const;
 
 export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
@@ -235,7 +243,7 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
  * What the measuring pass enables: the tracked shadcn rules under the same
  * options the repository lint uses, and nothing else from the preset. A
  * diagnostic the baseline script cannot map is then a rule that arrived
- * without a ratchet decision, which it reports instead of dropping. The two
+ * without a ratchet decision, which it reports instead of dropping. The
  * local rules are scoped by file in `oxlint.config.ts`, and the design config
  * reuses those overrides, so they stay off at the top level here.
  */
@@ -248,6 +256,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "shadcn/require-static-classes": "off",
   "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
   "no-imported-class-constant/no-imported-class-constant": "off",
+  "require-bounded-request-schema/require-bounded-request-schema": "off",
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

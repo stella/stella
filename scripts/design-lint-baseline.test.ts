@@ -18,6 +18,7 @@ const backlog = (
   "shadcn/no-arbitrary-values": arbitrary,
   "no-raw-overflow-scroll/no-raw-overflow-scroll": overflow,
   "no-imported-class-constant/no-imported-class-constant": imported,
+  "require-bounded-request-schema/require-bounded-request-schema": {},
 });
 
 test("a count above its baseline regresses, a clean file goes stale, a fall improves", () => {
@@ -89,11 +90,16 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-imported-class-constant(no-imported-class-constant)",
       "no-imported-class-constant/no-imported-class-constant",
     ],
+    [
+      "require-bounded-request-schema(require-bounded-request-schema)",
+      "require-bounded-request-schema/require-bounded-request-schema",
+    ],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
     "no-imported-class-constant",
+    "require-bounded-request-schema",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
     DESIGN_LINT_BACKLOG_RULES.length,

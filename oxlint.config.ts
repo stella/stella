@@ -297,6 +297,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
   ]),
+  fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
+    "require-bounded-request-schema/require-bounded-request-schema",
+  ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
   ]),
@@ -1209,6 +1212,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
+    "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -3735,6 +3739,24 @@ export default defineConfig({
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
         "no-native-s3-object-read/no-native-s3-object-read": "error",
         "no-native-s3-object-write/no-native-s3-object-write": "error",
+      },
+    },
+    {
+      // Size bounds at the API's input and upstream boundaries. Request
+      // schemas are where Elysia enforces a length for every entry point, and
+      // a buffered upstream body is memory spent before any code can refuse
+      // it. Existing debt is carried per file in
+      // scripts/design-lint-baseline.json and switched off there by
+      // `designLintBacklogOverrides` below.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/tests/**",
+      ],
+      rules: {
+        "require-bounded-request-schema/require-bounded-request-schema":
+          "error",
       },
     },
     {
