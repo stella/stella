@@ -144,6 +144,12 @@ export const useClaimReviewActions = (scope: RunScope) => {
       );
     },
     onError: (error, _variables, context) => rollback(error, context),
+    // The answer names only the claims it marked; a claim someone else
+    // decided meanwhile keeps its predicted review until the run is read
+    // again, so the server's fold replaces every prediction.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: runKey });
+    },
   });
 
   return {
