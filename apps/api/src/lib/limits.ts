@@ -758,6 +758,14 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
 } as const;
 
 /**
+ * Sign-in codes delivered to one existing account's address per window of
+ * the new-account email counter (`NEW_ACCOUNT_OTP_RATE_LIMITS.email`). The
+ * same counter is consumed for every request, so this only sets a higher
+ * ceiling for addresses that already have an account.
+ */
+export const EXISTING_ACCOUNT_OTP_EMAIL_MAX = 10;
+
+/**
  * Fixed production response delay for sign-in email-OTP requests. Delivery and
  * suppression continue independently so provider latency cannot reveal account
  * state through the HTTP response.

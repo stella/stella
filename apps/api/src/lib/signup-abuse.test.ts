@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
-import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import {
+  EXISTING_ACCOUNT_OTP_EMAIL_MAX,
+  NEW_ACCOUNT_OTP_RATE_LIMITS,
+} from "@/api/lib/limits";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 
 import {
@@ -52,6 +55,31 @@ describe("new-account OTP abuse policy", () => {
     expect(result).toEqual({
       status: "allowed",
       reason: "existing_account",
+    });
+  });
+
+  test("stops delivering codes to an existing account past its own ceiling", async () => {
+    const evaluate = async (count: number) =>
+      await evaluateNewAccountOtpPolicy({
+        accountExists: async () => true,
+        clientIp: "192.0.2.1",
+        context: {
+          increment: async () => ({
+            count,
+            nextReset: new Date(Date.now() + 60_000),
+            start: Date.now(),
+          }),
+        },
+        email: "user@example.com",
+      });
+
+    expect(await evaluate(EXISTING_ACCOUNT_OTP_EMAIL_MAX)).toEqual({
+      status: "allowed",
+      reason: "existing_account",
+    });
+    expect(await evaluate(EXISTING_ACCOUNT_OTP_EMAIL_MAX + 1)).toEqual({
+      status: "rate_limited",
+      reason: "email",
     });
   });
 
