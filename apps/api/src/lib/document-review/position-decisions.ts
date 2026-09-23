@@ -12,8 +12,9 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings } from "@/api/db/schema";
+import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_REVIEW_DECISION } from "@/api/lib/document-review/run-contract";
 
@@ -26,7 +27,9 @@ export type PositionDecisionSummary = {
   /**
    * The text the most recently accepted fix for this position carried — a
    * replacement term for a parameter fix, a whole block otherwise. Null when no
-   * accepted finding proposed an edit.
+   * accepted finding proposed an edit. A fix graded against a reference is
+   * counted only when the reader can open every matter the position's
+   * passages came from, the rule `reference-visibility.ts` applies to a run.
    */
   latestAcceptedFixText: string | null;
 };
@@ -56,10 +59,36 @@ export const readPositionDecisionOverlay = async ({
 
   // A fix is one of three shapes; two of them name their text `text` and the
   // parameter one names it `replace`. Exactly one is ever present.
-  const fixText = sql`coalesce(
-    ${documentReviewFindings.payload}->'finding'->'fix'->>'replace',
-    ${documentReviewFindings.payload}->'finding'->'fix'->>'text'
+  // The position's passages as the run pinned them; every matter they came
+  // from must be one the transaction's reader can open.
+  const passageWorkspaceIds = sql`(
+    SELECT passage->>'workspaceId'
+      FROM ${documentReviewRuns} run,
+           jsonb_array_elements(
+             run.basis->'playbook'->'definitionSnapshot'->'positions'->'items'
+           ) AS position(item),
+           jsonb_array_elements(
+             COALESCE(item->'standard'->'passages', '[]'::jsonb)
+           ) AS passage
+     WHERE run.id = ${documentReviewFindings.runId}
+       AND item->>'sourceId' = ${documentReviewFindings.positionId}::text
   )`;
+  const fixReadable = sql`(
+    ${documentReviewFindings.payload}->'finding'->>'standardSource' IS DISTINCT FROM 'reference'
+    OR NOT EXISTS (
+      SELECT 1 FROM ${passageWorkspaceIds} AS source(workspace_id)
+       WHERE source.workspace_id::uuid NOT IN (
+         SELECT aw.authorized_workspace_id
+           FROM ${stellaAuthorizedWorkspaces} aw
+       )
+    )
+  )`;
+  const fixText = sql`CASE WHEN ${fixReadable}
+    THEN coalesce(
+      ${documentReviewFindings.payload}->'finding'->'fix'->>'replace',
+      ${documentReviewFindings.payload}->'finding'->'fix'->>'text'
+    )
+  END`;
   const accepted = sql`${documentReviewFindings.decision} = ${DOCUMENT_REVIEW_DECISION.ACCEPTED}`;
 
   const rows = await tx
