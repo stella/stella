@@ -13,6 +13,7 @@ import {
   createInspectorTabsSlice,
   isGenericInspectorTab,
 } from "@/components/inspector/inspector-tabs-slice";
+import { subscribeResolvedRouteIds } from "@/lib/resolved-route-ids";
 
 export type {
   ChatTab,
@@ -42,6 +43,12 @@ export {
 export const useInspectorTabsStore = create<InspectorTabsStore>()(
   immer((set) => createInspectorTabsSlice(set)),
 );
+
+// A route-owned inspector tab describes its page; once the page is no
+// longer matched, the tab goes with it.
+subscribeResolvedRouteIds((routeIds) => {
+  useInspectorTabsStore.getState().closeTabsOutsideRoutes(routeIds);
+});
 
 export const initializeInspectorTabBroadcast = (
   scope: InspectorBroadcastScope,

@@ -4,7 +4,6 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { enableMapSet } from "immer";
 
 import { installDocxDocumentCacheInvalidation } from "@/components/docx/docx-document-cache";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   DefaultErrorComponent,
   DefaultNotFoundComponent,
@@ -18,6 +17,7 @@ import {
 } from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { publishResolvedRouteIds } from "@/lib/resolved-route-ids";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { routeTree } from "@/routeTree.gen";
 
@@ -67,13 +67,9 @@ export function getRouter() {
     resolveCaughtRouteTemplate(router.state.matches);
 
   router.subscribe("onResolved", () => {
-    // A route-owned inspector tab describes its page; once the page is no
-    // longer matched, the tab goes with it.
-    useInspectorTabsStore
-      .getState()
-      .closeTabsOutsideRoutes(
-        new Set(router.state.matches.map(({ routeId }) => routeId)),
-      );
+    publishResolvedRouteIds(
+      new Set(router.state.matches.map(({ routeId }) => routeId)),
+    );
     // Report the matched route template (e.g. `/workspaces/$workspaceId`),
     // not the resolved pathname. Templates aggregate into a small, stable
     // set of routes; resolved paths embed per-resource ids that fragment
