@@ -83,6 +83,7 @@ import {
 } from "./stream-chat";
 import {
   createChatMessageIdMapper,
+  createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
@@ -314,6 +315,66 @@ const createScriptedAdapter = (
       runId: resolvedRunId,
       threadId: resolvedThreadId,
       finishReason: "tool_calls",
+      model,
+      timestamp,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+/** Answers the model turn with one text reply, as a model reading a tool result does. */
+const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
+  kind: "text",
+  name: "text-reply",
+  model: "text-reply",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ model, runId, threadId }) {
+    const resolvedRunId = runId ?? "run-1";
+    const resolvedThreadId = threadId ?? "thread-1";
+    const messageId = "provider-reply";
+    const timestamp = Date.now();
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId,
+      role: "assistant",
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: text,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.RUN_FINISHED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      finishReason: "stop",
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
@@ -753,6 +814,216 @@ describe("native interrupt boundary persistence", () => {
   });
 });
 
+describe("native continuation persistence", () => {
+  const owningMessageId = toSafeId<"chatMessage">(
+    "11111111-1111-4111-8111-111111111111",
+  );
+  const userMessage: ChatMessage = {
+    id: "user-1",
+    role: "user",
+    parts: [{ content: "Create a draft playbook named Repro", type: "text" }],
+  };
+  const savePlaybookTool = toolDefinition({
+    name: "save_playbook",
+    description: "Server tool behind an approval",
+    inputSchema: draftToolInputSchema,
+    needsApproval: true,
+  }).server(async () => ({ playbookId: "playbook-1" }));
+
+  /** The owning assistant message as the client replays it once the user approves. */
+  const approvedOwningMessage = ({
+    id,
+    toolCallId,
+  }: {
+    id: string;
+    toolCallId: string;
+  }): ChatMessage => ({
+    id,
+    role: "assistant",
+    parts: [
+      {
+        approval: {
+          approved: true,
+          id: `approval_${toolCallId}`,
+          needsApproval: true,
+        },
+        arguments: '{"name":"Repro","source":"@title Repro"}',
+        id: toolCallId,
+        input: { name: "Repro", source: "@title Repro" },
+        name: "save_playbook",
+        state: "approval-responded",
+        type: "tool-call",
+      },
+    ],
+  });
+
+  /** Resume an approval the way `streamChat` wires a continuation. */
+  const continueTurn = async ({
+    messages,
+    owningAssistantMessageId,
+    parentRunId,
+    reply,
+    runId,
+    toolCallId,
+  }: {
+    messages: ChatMessage[];
+    owningAssistantMessageId: string;
+    parentRunId: string;
+    reply: string;
+    runId: string;
+    toolCallId: string;
+  }) => {
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      initialMessages: messages,
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    const terminal: { finish: ProcessedStreamFinishEvent | null } = {
+      finish: null,
+    };
+    const emitted = await collectChunks(
+      processServerChatStream({
+        ...uncutTurnSignals(),
+        existingMessageIds: new Set(messages.map(({ id }) => id)),
+        getResponseMessage: () => responseMessage,
+        mapMessageId: createTurnMessageIdMapper(
+          toSafeId<"chatMessage">(owningAssistantMessageId),
+        ),
+        onFinish: (event) => {
+          terminal.finish = event;
+        },
+        processor,
+        source: chat({
+          adapter: createTextReplyAdapter(reply),
+          agentLoopStrategy: maxIterations(3),
+          messages,
+          parentRunId,
+          resume: [
+            {
+              interruptId: `approval_${toolCallId}`,
+              payload: { approved: true },
+              status: "resolved",
+            },
+          ],
+          runId,
+          threadId: "thread-1",
+          tools: [savePlaybookTool],
+        }),
+      }),
+    );
+    return { emitted, finish: terminal.finish };
+  };
+
+  const firstContinuation = async () =>
+    await continueTurn({
+      messages: [
+        userMessage,
+        approvedOwningMessage({ id: owningMessageId, toolCallId: "call-1" }),
+      ],
+      owningAssistantMessageId: owningMessageId,
+      parentRunId: "run-1",
+      reply: "Saved the draft.",
+      runId: "run-2",
+      toolCallId: "call-1",
+    });
+
+  test("persists the approved tool's result and the follow-up on the owning assistant message", async () => {
+    const messages = [
+      userMessage,
+      approvedOwningMessage({ id: owningMessageId, toolCallId: "call-1" }),
+    ];
+    const { emitted, finish } = await firstContinuation();
+
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toEqual({ type: "completed" });
+    expect(finish?.responseMessage.id).toBe(owningMessageId);
+    expect(finish?.responseMessage.parts).toMatchObject([
+      {
+        id: "call-1",
+        name: "save_playbook",
+        output: { playbookId: "playbook-1" },
+        state: "complete",
+        type: "tool-call",
+      },
+      { state: "complete", toolCallId: "call-1", type: "tool-result" },
+      { content: "Saved the draft.", type: "text" },
+    ]);
+
+    // The browser continues the replayed message from the same chunks: one
+    // assistant message, carrying the parts the server persisted.
+    const clientProcessor = new StreamProcessor({ initialMessages: messages });
+    for (const chunk of emitted) {
+      clientProcessor.processChunk(chunk);
+    }
+    clientProcessor.finalizeStream();
+    const clientAssistantMessages = clientProcessor
+      .getMessages()
+      .filter((message) => message.role === "assistant");
+    expect(
+      clientAssistantMessages.map((message) => toChatMessage(message)?.parts),
+    ).toEqual([finish?.responseMessage.parts]);
+  });
+
+  test("resumes a later approval in the thread against the persisted continuation", async () => {
+    const firstTurn = await firstContinuation();
+    const persistedOwningMessage: ChatMessage = {
+      id: owningMessageId,
+      parts: firstTurn.finish?.responseMessage.parts ?? [],
+      role: "assistant",
+    };
+    const secondOwningMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const secondUserMessage: ChatMessage = {
+      id: "user-2",
+      role: "user",
+      parts: [{ content: "Save another one", type: "text" }],
+    };
+    const secondOwningMessage = approvedOwningMessage({
+      id: secondOwningMessageId,
+      toolCallId: "call-2",
+    });
+    const resumeSecondApproval = async (firstOwningMessage: ChatMessage) =>
+      await continueTurn({
+        messages: [
+          userMessage,
+          firstOwningMessage,
+          secondUserMessage,
+          secondOwningMessage,
+        ],
+        owningAssistantMessageId: secondOwningMessageId,
+        parentRunId: "run-3",
+        reply: "Saved the second draft.",
+        runId: "run-4",
+        toolCallId: "call-2",
+      });
+
+    const secondTurn = await resumeSecondApproval(persistedOwningMessage);
+    expect(
+      secondTurn.emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toBe(false);
+    expect(secondTurn.finish?.outcome).toEqual({ type: "completed" });
+    expect(secondTurn.finish?.responseMessage.id).toBe(secondOwningMessageId);
+
+    // The fixture must express the fault: an approved call persisted without
+    // its result is rebuilt by the loop as a pending interrupt, so the batch
+    // that resolves only the second approval is rejected.
+    const staleTurn = await resumeSecondApproval(
+      approvedOwningMessage({ id: owningMessageId, toolCallId: "call-1" }),
+    );
+    expect(
+      staleTurn.emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toBe(true);
+    expect(staleTurn.finish?.outcome).toMatchObject({ type: "failed" });
+  });
+});
+
 describe("outgoing chat stream message ids", () => {
   test("requires an input-complete event before ask-user takes terminal ownership", async () => {
     const messageId = toSafeId<"chatMessage">(
@@ -1081,6 +1352,95 @@ describe("outgoing chat stream message ids", () => {
     ]);
   });
 
+  test("folds a continuation's snapshot messages into the owning assistant message", async () => {
+    const owningMessageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const savedCall = {
+      id: "call-1",
+      type: "function",
+      function: {
+        name: "save_playbook",
+        arguments: '{"name":"Repro","source":"@title Repro"}',
+      },
+    } as const;
+    const nextCall = {
+      id: "call-2",
+      type: "function",
+      function: {
+        name: "save_playbook",
+        arguments: '{"name":"Again","source":"@title Again"}',
+      },
+    } as const;
+
+    const chunks = await collectChunks(
+      remapOutgoingMessageIds({
+        existingMessageIds: new Set(["user-1", owningMessageId]),
+        mapMessageId: createTurnMessageIdMapper(owningMessageId),
+        source: streamChunks([
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              { id: "user-1", role: "user", content: "Save the draft" },
+              {
+                id: owningMessageId,
+                role: "assistant",
+                content: "Saving the draft",
+                toolCalls: [savedCall],
+              },
+              {
+                id: "call-1-result",
+                role: "tool",
+                toolCallId: "call-1",
+                content: '{"playbookId":"playbook-1"}',
+              },
+              {
+                id: "provider-message-2",
+                role: "assistant",
+                content: "Saving another",
+                toolCalls: [nextCall],
+              },
+            ],
+          },
+          {
+            type: EventType.TOOL_CALL_START,
+            parentMessageId: "provider-message-2",
+            toolCallId: "call-2",
+            toolCallName: "save_playbook",
+          },
+        ]),
+      }),
+    );
+    expect(chunks).toEqual([
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          { id: "user-1", role: "user", content: "Save the draft" },
+          // The resumed run's iteration folds into the message it continues,
+          // which the snapshot already carries from history.
+          {
+            id: owningMessageId,
+            role: "assistant",
+            content: "Saving the draft\n\nSaving another",
+            toolCalls: [savedCall, nextCall],
+          },
+          {
+            id: "call-1-result",
+            role: "tool",
+            toolCallId: "call-1",
+            content: '{"playbookId":"playbook-1"}',
+          },
+        ],
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: owningMessageId,
+        toolCallId: "call-2",
+        toolCallName: "save_playbook",
+      },
+    ]);
+  });
+
   test("normalizes tanstack generated final assistant ids before persistence", () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
@@ -1130,23 +1490,19 @@ describe("outgoing chat stream message ids", () => {
     );
   });
 
-  test("preserves a persisted owning assistant id at terminal persistence", () => {
+  test("persists a continuation's assistant output under the owning assistant id", () => {
     const owningMessageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
-    );
-    const replacementMessageId = toSafeId<"chatMessage">(
-      "22222222-2222-4222-8222-222222222222",
     );
 
     expect(
       normalizeFinalAssistantMessageId({
-        mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+        mapMessageId: createTurnMessageIdMapper(owningMessageId),
         message: {
-          id: owningMessageId,
+          id: "provider-reply",
           role: "assistant",
           parts: [{ content: "Approved action completed.", type: "text" }],
         },
-        preservedMessageId: owningMessageId,
       }).id,
     ).toBe(owningMessageId);
   });
@@ -1154,9 +1510,6 @@ describe("outgoing chat stream message ids", () => {
   test("passes the owning assistant id through terminal turn finalization", async () => {
     const owningMessageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
-    );
-    const replacementMessageId = toSafeId<"chatMessage">(
-      "22222222-2222-4222-8222-222222222222",
     );
     let persistedMessageId: string | undefined;
     const stream = processServerChatStream({
@@ -1168,11 +1521,10 @@ describe("outgoing chat stream message ids", () => {
         role: "assistant",
         parts: [{ content: "Approved action completed.", type: "text" }],
       }),
-      mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+      mapMessageId: createTurnMessageIdMapper(owningMessageId),
       onFinish: ({ responseMessage }) => {
         persistedMessageId = responseMessage.id;
       },
-      preservedTerminalMessageId: owningMessageId,
       processor: new StreamProcessor(),
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
