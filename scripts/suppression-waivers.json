@@ -143,16 +143,6 @@
       "evidence": "apps/api/src/lib/files/utils.ts#resolveUploadMime"
     },
     {
-      "id": "SW-0020",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/workspaces/list.ts",
-      "symbol": "readWorkspaces",
-      "count": 1,
-      "reason": "user rows are joined via RLS-scoped workspaceMembers filtered by org-derived wsIds",
-      "evidence": "apps/api/src/handlers/workspaces/list.integration.test.ts"
-    },
-    {
       "id": "SW-0021",
       "kind": "permanent",
       "rule": "security-guards/no-unscoped-user-query",
