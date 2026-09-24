@@ -427,7 +427,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1022,
+    "count": 1024,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -454,7 +454,7 @@
       "apps/api/src/handlers/chat/compaction.ts": 2,
       "apps/api/src/handlers/chat/send-message.ts": 5,
       "apps/api/src/handlers/chat/stream-chat.ts": 3,
-      "apps/api/src/handlers/chat/subagent-runner.ts": 3,
+      "apps/api/src/handlers/chat/subagent-runner.ts": 2,
       "apps/api/src/handlers/chat/third-party-boundary.ts": 5,
       "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts": 8,
       "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 3,
@@ -512,7 +512,7 @@
       "apps/api/src/lib/agent-skills/skill-tools.ts": 17,
       "apps/api/src/lib/ai-config-loader-core.ts": 1,
       "apps/api/src/lib/ai-provider-probe.ts": 3,
-      "apps/api/src/lib/auth.ts": 12,
+      "apps/api/src/lib/auth.ts": 13,
       "apps/api/src/lib/bilingual/formatting.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 9,
       "apps/api/src/lib/business-registries/dispatch.ts": 3,
@@ -584,8 +584,8 @@
       "apps/api/src/lib/workflow/run-state-store.ts": 1,
       "apps/api/src/mcp/api-key-auth.ts": 7,
       "apps/api/src/mcp/apps/document-upload/app.ts": 5,
-      "apps/api/src/mcp/auth.ts": 8,
-      "apps/api/src/mcp/context.ts": 1,
+      "apps/api/src/mcp/auth.ts": 9,
+      "apps/api/src/mcp/context.ts": 2,
       "apps/api/src/mcp/gateway/external-tools.ts": 1,
       "apps/api/src/mcp/gateway/rate-limit.ts": 1,
       "apps/api/src/mcp/gateway/skills.ts": 1,
@@ -1123,7 +1123,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 76,
+    "count": 77,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -1151,6 +1151,7 @@
       "apps/api/src/handlers/search/ai.ts": 2,
       "apps/api/src/handlers/views/table/export.ts": 1,
       "apps/api/src/lib/account-deletion-steps.ts": 1,
+      "apps/api/src/lib/auth-artifacts.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
@@ -1246,7 +1247,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 319,
+    "count": 317,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1328,7 +1329,6 @@
       "apps/api/src/lib/report-export-recovery.ts": 2,
       "apps/api/src/lib/s3.ts": 2,
       "apps/api/src/lib/safe-outbound-fetch.ts": 2,
-      "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 4,
       "apps/api/src/lib/skills/skill-package.ts": 2,
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
@@ -1457,7 +1457,7 @@
     }
   },
   "eslint-spelled-suppression-directives": {
-    "count": 238,
+    "count": 239,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1508,6 +1508,7 @@
       "apps/api/src/handlers/workspaces/list.ts": 1,
       "apps/api/src/lib/account-deletion-steps.ts": 3,
       "apps/api/src/lib/analytics/posthog.ts": 1,
+      "apps/api/src/lib/auth-artifacts.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/document-reference.ts": 2,
       "apps/api/src/lib/email/ses.ts": 1,
@@ -1804,7 +1805,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 287,
+    "count": 288,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1827,6 +1828,7 @@
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
       "apps/api/src/lib/anonymization-write-cap.ts": 1,
       "apps/api/src/lib/api-handlers.ts": 1,
+      "apps/api/src/lib/api-key-plugin-configs.ts": 1,
       "apps/api/src/lib/array.ts": 1,
       "apps/api/src/lib/audit-log.constants.ts": 1,
       "apps/api/src/lib/audit-log.ts": 1,
@@ -2096,7 +2098,7 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 137,
+    "count": 138,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -2234,6 +2236,7 @@
       "apps/web/src/lib/value-types.ts": 1,
       "apps/web/src/lib/web-search": 1,
       "apps/web/src/lib/workspace-realtime.ts": 1,
+      "apps/web/src/lib/workspace-sse-connection.logic.ts": 1,
       "apps/web/src/lib/workspaces": 1
     }
   }

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -8,6 +8,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
+import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
@@ -37,11 +38,9 @@ export const revokeDesktopRegistryCredential = async ({
       .where(
         and(
           eq(apikey.id, keyId),
-          eq(apikey.configId, DESKTOP_REGISTRY_KEY_CONFIG),
           eq(apikey.referenceId, userId),
           eq(apikey.enabled, true),
-          sql`${apikey.metadata}::text::jsonb ->> 'organizationId' = ${organizationId}`,
-          sql`${apikey.metadata}::text::jsonb ->> 'purpose' = ${DESKTOP_REGISTRY_KEY_CONFIG}`,
+          desktopRegistryKeyOrganizationScope(organizationId),
         ),
       )
       .returning({ id: apikey.id });

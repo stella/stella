@@ -13,6 +13,7 @@ import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
@@ -31,6 +32,7 @@ const runSubagentCalls: RunSubagentCall[] = [];
 let runSubagentImpl: (
   options: RunSubagentOptions,
 ) => Promise<RunSubagentResult> = async () => ({
+  outcome: "completed",
   text: "done",
   usage: undefined,
 });
@@ -154,9 +156,13 @@ const rawBoundary: ChatThirdPartyBoundary = { type: "raw" };
 const passthroughSafeDb: SafeDb = async (fn) =>
   Result.ok(await fn(asTestRaw<Transaction>({})));
 
-const buildTool = () => {
+const buildTool = (
+  buildSubagentToolset: (
+    sink: SubagentProposalSink,
+  ) => ChatToolMap = (): ChatToolMap => ({}),
+) => {
   const tools = createSpawnSubagentsTool({
-    buildSubagentToolset: (): ChatToolMap => ({}),
+    buildSubagentToolset,
     organizationId,
     orgAIConfig: null,
     safeDb: passthroughSafeDb,
@@ -197,7 +203,11 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
     nextAssertUsageAvailableResult = { ok: true, available: 1000 };
-    runSubagentImpl = async () => ({ text: "subtask done", usage: undefined });
+    runSubagentImpl = async () => ({
+      outcome: "completed",
+      text: "subtask done",
+      usage: undefined,
+    });
 
     try {
       const execute = buildTool();
@@ -244,6 +254,7 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       }),
     };
     runSubagentImpl = async () => ({
+      outcome: "completed",
       text: "should never run",
       usage: undefined,
     });
@@ -283,7 +294,11 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
     env.ANTHROPIC_API_KEY = "sk-test";
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
-    runSubagentImpl = async () => ({ text: "ok", usage: undefined });
+    runSubagentImpl = async () => ({
+      outcome: "completed",
+      text: "ok",
+      usage: undefined,
+    });
 
     try {
       const execute = buildTool();
@@ -324,7 +339,11 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
           throw abortError;
         }
       }
-      return { text: "finished before abort", usage: undefined };
+      return {
+        outcome: "completed",
+        text: "finished before abort",
+        usage: undefined,
+      };
     };
 
     try {
@@ -344,6 +363,78 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
       if (Result.isError(outcome)) {
         expect(outcome.error.cause).toBe(abortError);
       }
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  });
+});
+
+describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
+  test("reports a run without a complete answer as a failed subtask, not as a finding", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    const cutOff =
+      "The subagent's answer was cut off at the model's output limit.";
+    runSubagentImpl = async () => ({
+      message: cutOff,
+      outcome: "failed",
+      reason: "length",
+      usage: undefined,
+    });
+
+    try {
+      const execute = buildTool();
+      const result = await execute({ subagents: [{ task: "a" }] }, {});
+
+      expect(result.results).toEqual([
+        { error: cutOff, index: 0, status: "failed" },
+      ]);
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  });
+
+  test("keeps the writes a run proposed before it stopped short", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    const cutOff =
+      "The subagent's answer was cut off at the model's output limit.";
+    let sink: SubagentProposalSink | undefined;
+    runSubagentImpl = async () => {
+      sink?.record({ toolName: "update_field", args: { value: "x" } });
+      return {
+        message: cutOff,
+        outcome: "failed",
+        reason: "length",
+        usage: undefined,
+      };
+    };
+
+    try {
+      const execute = buildTool((proposalSink) => {
+        sink = proposalSink;
+        return {};
+      });
+      const result = await execute({ subagents: [{ task: "a" }] }, {});
+
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0]).toMatchObject({ index: 0, status: "failed" });
+      expect(result.results[0]?.error).toStartWith(cutOff);
+      expect(result.results[0]?.error).toContain(
+        '1. update_field {"value":"x"}',
+      );
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
       env.AI_PROVIDER = previousProvider;

@@ -24,9 +24,11 @@
 // the full member chain `<object>.<path...>` on the global, including the
 // optional-chained form and the `window.` / `globalThis.` / `self.` prefixes,
 // so a sibling member of the same object (`navigator.clipboard.readText` next
-// to `navigator.clipboard.writeText`) is untouched. A value reached through an
-// alias, a re-export of a local binding, or a computed member access is out of
-// scope.
+// to `navigator.clipboard.writeText`) is untouched. A `member-call` row matches
+// a call of the named method on any receiver, including the optional-chained
+// form, in files under one of its `within` prefixes; the method name alone is
+// too common to confine repository-wide. A value reached through an alias, a
+// re-export of a local binding, or a computed member access is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -63,6 +65,14 @@ type GlobalMemberEntry = {
   reversedMemberPath: readonly string[];
 };
 
+type MemberCallEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  method: string;
+  within: readonly string[];
+};
+
 const stringsFrom = (value: unknown): readonly string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -86,6 +96,7 @@ const allowedPathsFrom = (entry: object, enforcement: object): string[] => {
 type ConfiguredEntries = {
   importEntries: ImportEntry[];
   globalMemberEntries: GlobalMemberEntry[];
+  memberCallEntries: MemberCallEntry[];
 };
 
 const configuredEntries = (context: {
@@ -93,13 +104,15 @@ const configuredEntries = (context: {
 }): ConfiguredEntries => {
   const importEntries: ImportEntry[] = [];
   const globalMemberEntries: GlobalMemberEntry[] = [];
+  const memberCallEntries: MemberCallEntry[] = [];
+  const configured = { importEntries, globalMemberEntries, memberCallEntries };
   const options = context.options?.[0];
   if (typeof options !== "object" || options === null) {
-    return { importEntries, globalMemberEntries };
+    return configured;
   }
   const entries = Reflect.get(options, "entries");
   if (!Array.isArray(entries)) {
-    return { importEntries, globalMemberEntries };
+    return configured;
   }
 
   for (const entry of entries) {
@@ -148,10 +161,19 @@ const configuredEntries = (context: {
         object,
         reversedMemberPath: memberPath.toReversed(),
       });
+      continue;
+    }
+    if (kind === "member-call") {
+      const method = Reflect.get(enforcement, "method");
+      const within = stringsFrom(Reflect.get(enforcement, "within"));
+      if (typeof method !== "string" || within.length === 0) {
+        continue;
+      }
+      memberCallEntries.push({ id, owner, paths, method, within });
     }
   }
 
-  return { importEntries, globalMemberEntries };
+  return configured;
 };
 
 // A listed path is either a file (matched as a filename suffix, so the same
@@ -275,6 +297,7 @@ export default eslintCompatPlugin({
         let activeImports: readonly ImportEntry[] = [];
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
         let importerPath = "";
+        let activeMemberCalls: readonly MemberCallEntry[] = [];
 
         // `specifiers` is `null` when the declaration reaches every export
         // (a star re-export or a dynamic import), which matches any row.
@@ -311,7 +334,8 @@ export default eslintCompatPlugin({
             const filename = filenameForContext(context);
             importerPath = repoRelativeFilename(context);
             configured ??= configuredEntries(context);
-            const { importEntries, globalMemberEntries } = configured;
+            const { importEntries, globalMemberEntries, memberCallEntries } =
+              configured;
             const applies = (entry: { paths: readonly string[] }) =>
               !entry.paths.some((allowedPath) =>
                 coversFile(allowedPath, filename),
@@ -319,7 +343,16 @@ export default eslintCompatPlugin({
 
             activeImports = importEntries.filter(applies);
             activeGlobalMembers = globalMemberEntries.filter(applies);
-            return activeImports.length > 0 || activeGlobalMembers.length > 0;
+            activeMemberCalls = memberCallEntries.filter(
+              (entry) =>
+                applies(entry) &&
+                entry.within.some((prefix) => coversFile(prefix, filename)),
+            );
+            return (
+              activeImports.length > 0 ||
+              activeGlobalMembers.length > 0 ||
+              activeMemberCalls.length > 0
+            );
           },
           ImportDeclaration(node) {
             reportOwnedBinding(node, node.source.value, node.specifiers);
@@ -344,6 +377,17 @@ export default eslintCompatPlugin({
               return;
             }
             reportOwnedBinding(node, node.source.value, null);
+          },
+          CallExpression(node) {
+            for (const entry of activeMemberCalls) {
+              if (isMemberStep(node.callee, entry.method)) {
+                context.report({
+                  node,
+                  messageId: "unownedUse",
+                  data: { id: entry.id, owner: entry.owner },
+                });
+              }
+            }
           },
           MemberExpression(node) {
             if (node.computed) {

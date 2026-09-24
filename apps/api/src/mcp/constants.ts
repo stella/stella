@@ -142,6 +142,9 @@ export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 export const STELLA_MCP_ORGANIZATION_HEADER = "x-stella-organization";
 export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
 
+/** Access-token claim naming the membership row the token was issued under. */
+export const MCP_MEMBER_ID_CLAIM = "member_id";
+
 /**
  * Why an authenticated tools/list projection left a static tool out. A client
  * diffs its baked-in registry against that projection, so an omission the

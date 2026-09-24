@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
@@ -11,7 +11,11 @@ import {
   session as sessionTable,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
+import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
+import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 
 /** A statement that is awaited for its effect; no caller here reads the rows. */
@@ -42,113 +46,173 @@ type AuthArtifactTransaction = {
   ) => { set: (values: PgUpdateSetSource<TTable>) => ExecutableWhereStep };
 };
 
-type RevokeOrganizationMemberAuthArtifactsOptions = {
+type MemberCredentialScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
 
-export const revokeOrganizationMemberAuthArtifacts = async (
+type RevokeMemberCredentials = (
   tx: AuthArtifactTransaction,
-  { organizationId, userId }: RevokeOrganizationMemberAuthArtifactsOptions,
-): Promise<void> => {
-  await tx
-    .delete(oauthAccessToken)
-    .where(
-      and(
-        eq(oauthAccessToken.userId, userId),
-        eq(oauthAccessToken.referenceId, organizationId),
-      ),
-    );
+  scope: MemberCredentialScope,
+) => Promise<void>;
 
-  await tx
-    .delete(oauthRefreshToken)
-    .where(
-      and(
-        eq(oauthRefreshToken.userId, userId),
-        eq(oauthRefreshToken.referenceId, organizationId),
-      ),
-    );
+/**
+ * Which of a user's API keys belong to one organization, for every
+ * configuration registered on the API key plugin. Total over the registered
+ * configurations, so registering a new one does not compile until member
+ * removal knows how to find that configuration's keys.
+ *
+ * Each predicate is its configuration's single tenant scope, shared with that
+ * configuration's own revocation path: `apikey` denies the scoped `stella`
+ * role, so these rows arrive with no RLS behind them and the `WHERE` clause is
+ * the only tenant boundary there is.
+ */
+const API_KEY_ORGANIZATION_SCOPE = {
+  [DESKTOP_REGISTRY_KEY_CONFIG]: desktopRegistryKeyOrganizationScope,
+  [MACHINE_API_KEY_CONFIG_ID]: machineApiKeyOrganizationScope,
+} as const satisfies Record<
+  ApiKeyConfigId,
+  (organizationId: SafeId<"organization">) => SQL | undefined
+>;
 
-  // Org-scoped consent grants die with the membership: leaving them behind
-  // would keep the organization listed on the ex-member's connected-apps
+/**
+ * Every kind of credential a member can hold in an organization, and how
+ * leaving that organization ends it. Membership removal runs all of them in
+ * one transaction; none may rely on a verifier re-checking membership later,
+ * because re-inviting the same person restores exactly that membership.
+ */
+const MEMBER_CREDENTIAL_REVOCATION = {
+  oauthAccessToken: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(oauthAccessToken)
+      .where(
+        and(
+          eq(oauthAccessToken.userId, userId),
+          eq(oauthAccessToken.referenceId, organizationId),
+        ),
+      );
+  },
+  oauthRefreshToken: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(oauthRefreshToken)
+      .where(
+        and(
+          eq(oauthRefreshToken.userId, userId),
+          eq(oauthRefreshToken.referenceId, organizationId),
+        ),
+      );
+  },
+  // Org-scoped consent grants end with the membership: leaving them behind
+  // would keep the organization listed on the former member's connected-apps
   // page and let a client silently re-mint tokens on the next authorize.
-  await tx
-    .delete(oauthConsent)
-    .where(
-      and(
-        eq(oauthConsent.userId, userId),
-        eq(oauthConsent.referenceId, organizationId),
-      ),
-    );
-
-  await tx
-    .delete(sessionTable)
-    .where(
-      and(
-        eq(sessionTable.userId, userId),
-        eq(sessionTable.activeOrganizationId, organizationId),
-      ),
-    );
-
-  // auth.md agent registrations/delegations bound to this member in this org:
-  // their access tokens are already gone above; drop the ceremony state and
-  // the (iss,sub) delegation so a re-added member never inherits a stale link.
-  await tx
-    .delete(agentRegistration)
-    .where(
-      and(
-        eq(agentRegistration.boundUserId, userId),
-        eq(agentRegistration.boundOrganizationId, organizationId),
-      ),
-    );
-
-  await tx
-    .delete(agentDelegation)
-    .where(
-      and(
-        eq(agentDelegation.userId, userId),
-        eq(agentDelegation.organizationId, organizationId),
-      ),
-    );
-
-  // Machine API keys the departing member holds *in this organization*.
-  //
-  // Without this the keys only stop working incidentally: `api-key-auth.ts`
-  // resolves the owner's `member` row and rejects the credential when there is
-  // none. Re-invite the same person and that row comes back, and with it every
-  // machine key they ever minted here — an offboarding that silently undoes
-  // itself, and a leaked key that revocation-by-removal never actually killed.
+  oauthConsent: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(oauthConsent)
+      .where(
+        and(
+          eq(oauthConsent.userId, userId),
+          eq(oauthConsent.referenceId, organizationId),
+        ),
+      );
+  },
+  // Deleting the session also ends every JWT access token minted under it:
+  // the provider's introspection treats a token whose `sid` is gone as
+  // inactive.
+  session: async (tx, { organizationId, userId }: MemberCredentialScope) => {
+    await tx
+      .delete(sessionTable)
+      .where(
+        and(
+          eq(sessionTable.userId, userId),
+          eq(sessionTable.activeOrganizationId, organizationId),
+        ),
+      );
+  },
+  // auth.md agent registrations and delegations bound to this member in this
+  // org: their access tokens are already gone above; drop the ceremony state
+  // and the (iss,sub) delegation so a re-added member starts without a link.
+  agentRegistration: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(agentRegistration)
+      .where(
+        and(
+          eq(agentRegistration.boundUserId, userId),
+          eq(agentRegistration.boundOrganizationId, organizationId),
+        ),
+      );
+  },
+  agentDelegation: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(agentDelegation)
+      .where(
+        and(
+          eq(agentDelegation.userId, userId),
+          eq(agentDelegation.organizationId, organizationId),
+        ),
+      );
+  },
+  // API keys the departing member holds *in this organization*, under every
+  // registered configuration.
   //
   // Disabled, not deleted, matching `handlers/api-keys/revoke.ts`: the row
-  // carries the audit trail and the `start` prefix an operator needs to match a
-  // leaked credential back to the key that leaked, and a deleted row takes both
-  // with it. `resolveMachineApiKeySession` checks `enabled` before it looks at
-  // membership, so a disabled key stays dead across a re-invite. (Account
-  // deletion is the one path that does delete these rows: there the owner is
-  // gone entirely and there is no operator left to audit on behalf of.)
+  // carries the audit trail and the `start` prefix an operator needs to match
+  // an exposed credential back to its key, and a deleted row takes both with
+  // it. Every key verifier checks `enabled` before it looks at membership, so
+  // a disabled key stays disabled across a re-invite. (Account deletion is the
+  // one path that does delete these rows: there the owner is gone entirely.)
   //
   // The scope is both halves and must stay both halves: `referenceId` is the
-  // owner (the plugin runs with `references: "user"`) and the metadata
-  // predicate is the organization. A member of two organizations who leaves one
-  // keeps working in the other, so narrowing to either half alone is wrong in a
-  // different direction — owner-only would revoke keys in organizations they
-  // are still a member of, organization-only would revoke their colleagues'.
-  // The organization half is applied in SQL via the shared scope helper, never
-  // post-filtered: `apikey` denies the scoped `stella` role, so these rows
-  // arrive with no RLS behind them and the `WHERE` clause is the only tenant
-  // boundary there is.
-  await tx
-    .update(apikey)
-    .set({ enabled: false, updatedAt: new Date() })
-    .where(
-      and(
-        eq(apikey.referenceId, userId),
-        machineApiKeyOrganizationScope(organizationId),
-        // Already-revoked rows are left alone so `updated_at` keeps pointing at
-        // the revocation that actually happened.
-        eq(apikey.enabled, true),
-      ),
+  // owner (every configuration runs with `references: "user"`) and the
+  // configuration's predicate is the organization. A member of two
+  // organizations who leaves one keeps working in the other, so owner-only
+  // would revoke keys in organizations they still belong to, and
+  // organization-only would revoke their colleagues'.
+  apiKey: async (tx, { organizationId, userId }: MemberCredentialScope) => {
+    const organizationScopes = Object.values(API_KEY_ORGANIZATION_SCOPE).map(
+      (scope) => scope(organizationId),
     );
+    await tx
+      .update(apikey)
+      .set({ enabled: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(apikey.referenceId, userId),
+          or(...organizationScopes),
+          // Already-revoked rows are left alone so `updated_at` keeps pointing
+          // at the revocation that actually happened.
+          eq(apikey.enabled, true),
+        ),
+      );
+  },
+} as const satisfies Record<string, RevokeMemberCredentials>;
+
+/**
+ * End every credential one member holds in one organization. Runs inside the
+ * caller's transaction so the membership row and its credentials go together.
+ */
+export const revokeOrganizationMemberAuthArtifacts = async (
+  tx: AuthArtifactTransaction,
+  scope: MemberCredentialScope,
+): Promise<void> => {
+  for (const revoke of Object.values(MEMBER_CREDENTIAL_REVOCATION)) {
+    // eslint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one statement per credential kind, a fixed set sharing one transaction
+    await revoke(tx, scope);
+  }
 };
 
 type RevokeOAuthClientAuthArtifactsOptions = {

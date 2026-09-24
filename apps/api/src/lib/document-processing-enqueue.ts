@@ -1,8 +1,8 @@
-import type { Job } from "bullmq";
-
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
 export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
@@ -69,64 +69,30 @@ export const countPendingDocumentProcessingJobs = async (): Promise<number> => {
 export const enqueueDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
 ): Promise<void> => {
-  const jobId = createBullMqJobId(DOCUMENT_PROCESSING_QUEUE_NAME, runId);
-  const existing = await getQueue().getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === "failed") {
-      await existing.retry();
-      return;
-    }
-    if (state !== "completed") {
-      return;
-    }
-    await existing.remove();
-  }
-
-  await getQueue().add(DOCUMENT_PROCESSING_OCR_JOB_NAME, { runId }, { jobId });
+  await requeueDeterministicJob({
+    data: { runId },
+    jobId: createBullMqJobId(DOCUMENT_PROCESSING_QUEUE_NAME, runId),
+    name: DOCUMENT_PROCESSING_OCR_JOB_NAME,
+    queue: getQueue(),
+  });
 };
 
-type ExistingDocumentDeadlineScoutJob = Pick<
-  Job<DocumentDeadlineScoutJobData>,
-  "getState" | "remove" | "retry"
->;
-
-type DocumentDeadlineScoutQueue = {
-  add: (
-    name: string,
-    data: DocumentDeadlineScoutJobData,
-    options: { jobId: string },
-  ) => Promise<unknown>;
-  getJob: (
-    jobId: string,
-  ) => Promise<ExistingDocumentDeadlineScoutJob | null | undefined>;
-};
-
+// PostgreSQL is authoritative: a completed job whose run is still pending may
+// have finished just before the worker could persist success, so it is
+// replayed rather than read as proof the scan happened.
 export const enqueueDocumentDeadlineScoutJob = async ({
   scoutQueue,
   job,
 }: {
-  scoutQueue: DocumentDeadlineScoutQueue;
+  scoutQueue: RequeueableQueue<DocumentDeadlineScoutJobData>;
   job: DocumentDeadlineScoutJobData;
 }): Promise<void> => {
-  const jobId = createBullMqJobId(DEADLINE_SCOUT_QUEUE_NAME, job.sourceRunId);
-  const existing = await scoutQueue.getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === "failed") {
-      await existing.retry();
-      return;
-    }
-    if (state === "completed") {
-      // PostgreSQL still says pending. The old job may have completed just
-      // before the worker could persist success, so replay it from the
-      // authoritative run instead of treating queue history as durability.
-      await existing.remove();
-    } else {
-      return;
-    }
-  }
-  await scoutQueue.add(DEADLINE_SCOUT_JOB_NAME, job, { jobId });
+  await requeueDeterministicJob({
+    data: job,
+    jobId: createBullMqJobId(DEADLINE_SCOUT_QUEUE_NAME, job.sourceRunId),
+    name: DEADLINE_SCOUT_JOB_NAME,
+    queue: scoutQueue,
+  });
 };
 
 /** Enqueue one deterministic scout job; duplicate delivery converges by run ID. */

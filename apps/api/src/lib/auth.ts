@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -41,6 +42,7 @@ import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
+import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import {
@@ -52,6 +54,7 @@ import {
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
+  getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
@@ -60,7 +63,6 @@ import {
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { desktopRegistryKeyConfig } from "@/api/lib/business-registries/desktop/config";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
@@ -84,15 +86,6 @@ import {
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import {
-  MACHINE_API_KEY_CONFIG_ID,
-  MACHINE_API_KEY_EXPIRY,
-  MACHINE_API_KEY_LENGTH,
-  MACHINE_API_KEY_NAME_MAX_LENGTH,
-  MACHINE_API_KEY_PREFIX,
-  MACHINE_API_KEY_RATE_LIMIT,
-  MACHINE_API_KEY_START_LENGTH,
-} from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
@@ -129,9 +122,13 @@ import {
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
-import { includes } from "@/api/lib/type-guards";
+import { includes, isRecord } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { MCP_ALL_RESOURCE_SCOPES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import {
+  MCP_ALL_RESOURCE_SCOPES,
+  MCP_MEMBER_ID_CLAIM,
+  MCP_OAUTH_SCOPES,
+} from "@/api/mcp/constants";
 
 /** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
@@ -779,6 +776,25 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
+ * Whether the current auth request is the organization page's continue step.
+ * The provider re-enters its authorize logic from that endpoint under the
+ * authorize path, so the step is recognised by the request it answers.
+ */
+const isOrganizationPageContinuation = (): boolean => {
+  const endpoint = tryGetCurrentAuthEndpointContext();
+  const request = endpoint?.request;
+  if (!request || request.method !== "POST") {
+    return false;
+  }
+  return (
+    new URL(request.url).pathname ===
+      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
+    isRecord(endpoint.body) &&
+    endpoint.body["postLogin"] === true
+  );
+};
+
+/**
  * Keeps signed OAuth interaction state, including native-client loopback URIs,
  * out of CDN-visible URLs. It must run after the OAuth provider so it can
  * rewrite both its navigation response and its fetch-mode redirect object.
@@ -1024,48 +1040,7 @@ const createAuth = () => {
         jwt: { issuer: getAuthIssuerUrl() },
       }),
       lastLoginMethod(),
-      // Machine (CI / agent / CLI) credentials. Lifecycle runs through the
-      // org-scoped handlers in `handlers/api-keys/`, which is where the
-      // permission and audit-log requirements live; this registration only
-      // establishes how a key is minted, stored, and verified.
-      apiKey([
-        desktopRegistryKeyConfig,
-        {
-          configId: MACHINE_API_KEY_CONFIG_ID,
-          // `referenceId` must hold a **user** id. The MCP credential path feeds
-          // it straight into the same member/RLS authorization the JWT path uses,
-          // and that requires a principal with a `member` row. `"organization"`
-          // would store an org id there and leave nothing to authorize as.
-          references: "user",
-          defaultPrefix: MACHINE_API_KEY_PREFIX,
-          defaultKeyLength: MACHINE_API_KEY_LENGTH,
-          startingCharactersConfig: {
-            shouldStore: true,
-            charactersLength: MACHINE_API_KEY_START_LENGTH,
-          },
-          // A key nobody can identify is a key nobody revokes.
-          requireName: true,
-          // Match the HTTP boundary schema (defaults to 32 otherwise), so a name
-          // our schema accepts is never rejected by the plugin with its own 400.
-          maximumNameLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
-          enableMetadata: true,
-          // Deliberately off. Enabling it would let any `x-api-key` header mint a
-          // mock user session on *every* better-auth endpoint, turning a scoped
-          // machine credential into a full interactive session and bypassing the
-          // explicit scope gating the MCP path applies. The only thing that may
-          // consume one of these keys is `mcp/api-key-auth.ts`, which resolves it
-          // and then re-authorizes it from scratch.
-          enableSessionForAPIKeys: false,
-          // Hashing stays on (the plugin stores a SHA-256 digest): `disableKeyHashing`
-          // would put recoverable secrets in the table.
-          rateLimit: MACHINE_API_KEY_RATE_LIMIT,
-          keyExpiration: {
-            defaultExpiresIn: MACHINE_API_KEY_EXPIRY.defaultSeconds,
-            minExpiresIn: MACHINE_API_KEY_EXPIRY.minDays,
-            maxExpiresIn: MACHINE_API_KEY_EXPIRY.maxDays,
-          },
-        },
-      ]),
+      apiKey([...API_KEY_PLUGIN_CONFIGS]),
       emailOTP({
         // Pin the security-relevant OTP parameters explicitly rather than
         // inheriting library defaults, so a better-auth upgrade cannot
@@ -1294,12 +1269,19 @@ const createAuth = () => {
               return false;
             }
 
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
+            // The organization page continues the authorization once the user
+            // has picked; the provider asks this predicate again on that step,
+            // so the pick itself has to end the redirect.
+            if (activeOrganizationId && isOrganizationPageContinuation()) {
+              return false;
+            }
+
             const organizations: { id: string }[] =
               await auth.api.listOrganizations({
                 headers,
               });
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
 
             return (
               organizations.length !== 1 ||
@@ -1325,9 +1307,31 @@ const createAuth = () => {
             return activeOrganizationId;
           },
         },
-        customAccessTokenClaims: ({ referenceId }) => ({
-          org_id: referenceId,
-        }),
+        customAccessTokenClaims: async ({ referenceId, user }) => {
+          if (!referenceId || !user) {
+            return { org_id: referenceId };
+          }
+          // `member_id` pins the token to the membership row that minted it,
+          // so a later membership of the same user in the same organization
+          // (removal followed by re-invitation) is a different identity.
+          const row = await rootDb
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.userId, user.id),
+                eq(member.organizationId, referenceId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows.at(0));
+          if (!row) {
+            throw new APIError("FORBIDDEN", {
+              message: "The user is not a member of this organization",
+            });
+          }
+          return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+        },
       }),
       oauthUiFragmentBridgePlugin,
     ],
@@ -1564,6 +1568,7 @@ type MemberAuthorizationLookup = {
 };
 
 type MemberAuthorization = {
+  memberId: string;
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
@@ -1578,7 +1583,7 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ role: member.role })
+      .select({ memberId: member.id, role: member.role })
       .from(member)
       .where(
         and(
@@ -1589,7 +1594,9 @@ export const resolveMemberAuthorization = async (
       .limit(1)
       .then((rows) => rows.at(0));
 
-    return row ? { role: row.role, workspace: null } : null;
+    return row
+      ? { memberId: row.memberId, role: row.role, workspace: null }
+      : null;
   }
 
   const membershipExists = exists(
@@ -1605,6 +1612,7 @@ export const resolveMemberAuthorization = async (
   );
   const row = await db
     .select({
+      memberId: member.id,
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
@@ -1635,10 +1643,11 @@ export const resolveMemberAuthorization = async (
   }
 
   if (row.workspaceId === null || row.workspaceStatus === null) {
-    return { role: row.role, workspace: null };
+    return { memberId: row.memberId, role: row.role, workspace: null };
   }
 
   return {
+    memberId: row.memberId,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
   };

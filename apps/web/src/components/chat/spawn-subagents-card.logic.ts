@@ -1,3 +1,57 @@
+import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+
+export type SpawnSubagentsToolCallState = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "spawn_subagents" }
+>["state"];
+
+export const SPAWN_SUBAGENTS_CALL_STATUS = {
+  awaitingApproval: "awaitingApproval",
+  running: "running",
+  declined: "declined",
+  done: "done",
+  failed: "failed",
+} as const;
+
+export type SpawnSubagentsCallStatus =
+  (typeof SPAWN_SUBAGENTS_CALL_STATUS)[keyof typeof SPAWN_SUBAGENTS_CALL_STATUS];
+
+// `approval-requested` waits on the user, so nothing executes yet;
+// `approval-responded` hands off into execution unless the answer was a
+// decline (see `getSpawnSubagentsCallStatus`). `error` is terminal: a call
+// hydrated in that state never produces output.
+export const SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE = {
+  "awaiting-input": SPAWN_SUBAGENTS_CALL_STATUS.running,
+  "input-streaming": SPAWN_SUBAGENTS_CALL_STATUS.running,
+  "input-complete": SPAWN_SUBAGENTS_CALL_STATUS.running,
+  "approval-requested": SPAWN_SUBAGENTS_CALL_STATUS.awaitingApproval,
+  "approval-responded": SPAWN_SUBAGENTS_CALL_STATUS.running,
+  complete: SPAWN_SUBAGENTS_CALL_STATUS.done,
+  error: SPAWN_SUBAGENTS_CALL_STATUS.failed,
+} as const satisfies Record<
+  SpawnSubagentsToolCallState,
+  SpawnSubagentsCallStatus
+>;
+
+type SpawnSubagentsCallStatusInput = {
+  /** The user's answer, once an approval was responded to. */
+  approval?: { approved?: boolean | undefined } | undefined;
+  state: SpawnSubagentsToolCallState;
+};
+
+/**
+ * A declined approval is `approval-responded` with `approved: false`, and it
+ * stays in that state for good: nothing runs after it, so it must not read as
+ * execution in progress.
+ */
+export const getSpawnSubagentsCallStatus = ({
+  approval,
+  state,
+}: SpawnSubagentsCallStatusInput): SpawnSubagentsCallStatus =>
+  state === "approval-responded" && approval?.approved === false
+    ? SPAWN_SUBAGENTS_CALL_STATUS.declined
+    : SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE[state];
+
 // Historical persisted tool-call arguments can contain provider-emitted nulls.
 type SpawnSubagent = {
   task: string;

@@ -21,6 +21,7 @@ import {
   finishRunSuccess,
   runSchedulerOnce,
   type SchedulerDb,
+  startLeaseHeartbeat,
 } from "./runner";
 import type { SchedulerTask, SchedulerTaskRegistry } from "./types";
 
@@ -735,6 +736,7 @@ describe("zombie completion guard holds on every write path", () => {
     await finishRunSkipped({
       db,
       job,
+      reason: "SchedulerAborted",
       runId: terminalRun.id,
       leaseToken: "runner-a",
       startedAt: RUN_STARTED_AT,
@@ -824,6 +826,7 @@ describe("stale-token completion preserves a same-runner re-acquired lease", () 
     await finishRunSkipped({
       db,
       job,
+      reason: "SchedulerAborted",
       leaseToken: STALE_TOKEN,
       runId: staleRun.id,
       startedAt: RUN_STARTED_AT,
@@ -847,5 +850,66 @@ describe("stale-token completion preserves a same-runner re-acquired lease", () 
     });
 
     await expectFreshLeaseIntact(freshLease);
+  });
+});
+
+describe("lease heartbeat", () => {
+  // A database the runner cannot reach: every renewal rejects.
+  const unreachableDb = asTestRaw<SchedulerDb>({
+    update: () => ({
+      set: () => ({
+        where: () => ({
+          returning: async () =>
+            await Promise.reject(new Error("connection refused")),
+        }),
+      }),
+    }),
+  });
+
+  test("stops the task once renewals have failed for a whole lease", async () => {
+    const { promise: lost, resolve: onLeaseLost } =
+      Promise.withResolvers<undefined>();
+    let lostCount = 0;
+    const heartbeat = startLeaseHeartbeat({
+      db: unreachableDb,
+      intervalMs: 5,
+      jobId: "job",
+      leaseMs: 40,
+      leaseToken: "token",
+      onLeaseLost: () => {
+        lostCount += 1;
+        onLeaseLost(undefined);
+      },
+      runnerId: "runner",
+      signal: new AbortController().signal,
+    });
+
+    try {
+      await lost;
+      await Bun.sleep(30);
+      expect(lostCount).toBe(1);
+    } finally {
+      heartbeat.stop();
+    }
+  });
+
+  test("keeps the task while failed renewals are still within the lease", async () => {
+    let lostCount = 0;
+    const heartbeat = startLeaseHeartbeat({
+      db: unreachableDb,
+      intervalMs: 5,
+      jobId: "job",
+      leaseMs: 60_000,
+      leaseToken: "token",
+      onLeaseLost: () => {
+        lostCount += 1;
+      },
+      runnerId: "runner",
+      signal: new AbortController().signal,
+    });
+
+    await Bun.sleep(50);
+    heartbeat.stop();
+    expect(lostCount).toBe(0);
   });
 });

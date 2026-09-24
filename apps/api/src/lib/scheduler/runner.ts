@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
@@ -45,6 +45,7 @@ export type { SchedulerDb };
 
 type RunSchedulerOnceOptions = {
   db?: SchedulerDb;
+  heartbeatIntervalMs?: number;
   runnerId?: string;
   limit?: number;
   leaseMs?: number;
@@ -75,6 +76,7 @@ type SchedulerLoop = {
 
 export const runSchedulerOnce = async ({
   db = rootDb,
+  heartbeatIntervalMs,
   leaseMs = DEFAULT_LEASE_MS,
   limit = DEFAULT_JOB_LIMIT,
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
@@ -94,6 +96,12 @@ export const runSchedulerOnce = async ({
 
   if (!Number.isInteger(maxSweepDurationMs) || maxSweepDurationMs < 1) {
     return panic("Scheduler sweep duration must be a positive integer");
+  }
+
+  const renewEveryMs =
+    heartbeatIntervalMs ?? defaultHeartbeatIntervalMs(leaseMs);
+  if (!Number.isInteger(renewEveryMs) || renewEveryMs < 1) {
+    return panic("Scheduler heartbeat interval must be a positive integer");
   }
 
   const deadline = now() + maxSweepDurationMs;
@@ -128,6 +136,7 @@ export const runSchedulerOnce = async ({
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- executes the job just leased; the next claim depends on this run finishing
     const status = await runJob({
       db,
+      heartbeatIntervalMs: renewEveryMs,
       job,
       leaseMs,
       maxRuntimeMs,
@@ -263,13 +272,11 @@ export const acquireNextDueJob = async ({
     return null;
   }
 
-  const now = new Date();
-  const leaseExpiresAt = new Date(now.getTime() + leaseMs);
   return await db.transaction(async (tx) => {
     const [candidate] = await tx
       .select()
       .from(schedulerJobs)
-      .where(dueJobPredicate(now, runnableTasks))
+      .where(dueJobPredicate(runnableTasks))
       .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
       .limit(1)
       .for("update", { skipLocked: true });
@@ -281,15 +288,12 @@ export const acquireNextDueJob = async ({
     const [job] = await tx
       .update(schedulerJobs)
       .set({
-        lockedAt: now,
+        lockedAt: sql`now()`,
         lockedBy: leaseToken,
-        lockedUntil: leaseExpiresAt,
+        lockedUntil: leaseExpiry(leaseMs),
       })
       .where(
-        and(
-          eq(schedulerJobs.id, candidate.id),
-          dueJobPredicate(now, runnableTasks),
-        ),
+        and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(runnableTasks)),
       )
       .returning();
 
@@ -303,15 +307,25 @@ export const acquireNextDueJob = async ({
 // can run it. Registration retires such rows, but only at startup, so a build
 // that declares a new task leaves every older replica able to claim it until
 // they stop; the claim itself has to hold the line.
-const dueJobPredicate = (now: Date, runnableTasks: string[]) =>
+//
+// Lease times are read and written on the database clock, so replicas whose
+// clocks disagree still agree on when a lease expires.
+const dueJobPredicate = (runnableTasks: string[]) =>
   and(
     inArray(schedulerJobs.task, runnableTasks),
     eq(schedulerJobs.enabled, true),
-    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-    lte(schedulerJobs.nextRunAt, now),
-    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-    or(isNull(schedulerJobs.lockedUntil), lte(schedulerJobs.lockedUntil, now)),
+    lte(schedulerJobs.nextRunAt, sql`now()`),
+    or(
+      isNull(schedulerJobs.lockedUntil),
+      lte(schedulerJobs.lockedUntil, sql`now()`),
+    ),
   );
+
+const leaseExpiry = (leaseMs: number) =>
+  sql`now() + ${leaseMs}::integer * interval '1 millisecond'`;
+
+const defaultHeartbeatIntervalMs = (leaseMs: number): number =>
+  Math.max(DEFAULT_POLL_INTERVAL_MS, Math.floor(leaseMs / 3));
 
 type LeaseHeartbeat = {
   stop: () => void;
@@ -319,44 +333,76 @@ type LeaseHeartbeat = {
 
 type StartLeaseHeartbeatOptions = {
   db: SchedulerDb;
+  intervalMs: number;
   jobId: string;
   leaseMs: number;
   leaseToken: string;
+  onLeaseLost: () => void;
   runnerId: string;
   signal: AbortSignal;
 };
 
-const startLeaseHeartbeat = ({
+// A renewal that matches no row means the lease token no longer owns the job:
+// the lease expired and another runner claimed it. The task is stopped through
+// its signal rather than left running beside the new owner until the ceiling.
+// Renewals that keep failing are treated the same way once `leaseMs` has passed
+// since the start of the last one that succeeded: by then the lease may have
+// expired and been claimed, and this runner cannot tell otherwise.
+export const startLeaseHeartbeat = ({
   db,
+  intervalMs,
   jobId,
   leaseMs,
   leaseToken,
+  onLeaseLost,
   runnerId,
   signal,
 }: StartLeaseHeartbeatOptions): LeaseHeartbeat => {
-  const intervalMs = Math.max(
-    DEFAULT_POLL_INTERVAL_MS,
-    Math.floor(leaseMs / 3),
-  );
+  let stopped = false;
+  let lost = false;
+  // The claim just set the lease, so it runs from here at the latest.
+  let lastRenewedAt = performance.now();
+
+  const markLost = () => {
+    if (lost || stopped) {
+      return;
+    }
+    lost = true;
+    clearInterval(timer);
+    logger.warn("scheduler.lease_lost", {
+      "scheduler.job_id": jobId,
+      "scheduler.runner_id": runnerId,
+    });
+    onLeaseLost();
+  };
 
   const renew = async () => {
     if (signal.aborted) {
       return;
     }
 
-    await db
+    const attemptStartedAt = performance.now();
+    const renewed = await db
       .update(schedulerJobs)
-      .set({
-        lockedUntil: new Date(
-          Temporal.Now.instant().epochMilliseconds + leaseMs,
-        ),
-      })
+      .set({ lockedUntil: leaseExpiry(leaseMs) })
       .where(
         and(
           eq(schedulerJobs.id, jobId),
           eq(schedulerJobs.lockedBy, leaseToken),
         ),
-      );
+      )
+      .returning({ id: schedulerJobs.id });
+
+    // A renewal still in flight when the run completed matches no row because
+    // the completion released the lease, not because another runner took it.
+    if (stopped) {
+      return;
+    }
+    if (renewed.length > 0) {
+      lastRenewedAt = attemptStartedAt;
+      return;
+    }
+    markLost();
   };
 
   const timer = setInterval(() => {
@@ -367,6 +413,9 @@ const startLeaseHeartbeat = ({
           "scheduler.runner_id": runnerId,
           "error.type": errorTag(error),
         });
+        if (performance.now() - lastRenewedAt >= leaseMs) {
+          markLost();
+        }
       }),
       "scheduler-runner.renew",
     );
@@ -374,6 +423,7 @@ const startLeaseHeartbeat = ({
 
   return {
     stop: () => {
+      stopped = true;
       clearInterval(timer);
     },
   };
@@ -381,6 +431,7 @@ const startLeaseHeartbeat = ({
 
 type RunJobOptions = {
   db: SchedulerDb;
+  heartbeatIntervalMs: number;
   job: SchedulerJob;
   leaseMs: number;
   maxRuntimeMs: number;
@@ -393,6 +444,7 @@ type RunJobStatus = "failed" | "skipped" | "success";
 
 const runJob = async ({
   db,
+  heartbeatIntervalMs,
   job,
   leaseMs,
   maxRuntimeMs,
@@ -413,15 +465,28 @@ const runJob = async ({
   if (signal?.aborted) {
     controller.abort();
     signal.removeEventListener("abort", abortListener);
-    await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
+    await finishRunSkipped({
+      db,
+      job,
+      leaseToken,
+      reason: "SchedulerAborted",
+      runId,
+      startedAt,
+    });
     return "skipped";
   }
 
+  let leaseLost = false;
   const heartbeat = startLeaseHeartbeat({
     db,
+    intervalMs: heartbeatIntervalMs,
     jobId: job.id,
     leaseMs,
     leaseToken,
+    onLeaseLost: () => {
+      leaseLost = true;
+      controller.abort();
+    },
     runnerId,
     signal: controller.signal,
   });
@@ -498,6 +563,7 @@ const runJob = async ({
     aborted: controller.signal.aborted,
     db,
     job,
+    leaseLost,
     leaseToken,
     maxRuntimeMs,
     raceError,
@@ -515,6 +581,7 @@ type ResolveRunOutcomeOptions = {
   continuationAt: Date | undefined;
   db: SchedulerDb;
   job: SchedulerJob;
+  leaseLost: boolean;
   leaseToken: string;
   maxRuntimeMs: number;
   raceError: unknown;
@@ -528,19 +595,22 @@ type ResolveRunOutcomeOptions = {
 // Single-homed post-race classification, in strict precedence:
 //   1. the ceiling fired  -> timeout failure: the result is a zombie, the lease
 //      was already released, and the job must be rescheduled.
-//   2. the race fulfilled  -> success, even if the parent signal aborted
+//   2. the lease was lost  -> skip: another runner owns the job now, so this
+//      execution records nothing on the job, whatever the task returned.
+//   3. the race fulfilled  -> success, even if the parent signal aborted
 //      mid-flight. A finished unit of work is recorded once; re-running it (by
 //      skipping and leaving nextRunAt due) would duplicate side effects, which
 //      is exactly the idempotency bug this ceiling exists to prevent. Recording
 //      a real completion is always safe during graceful shutdown.
-//   3. the race rejected while the controller was aborted -> skip: the task did
+//   4. the race rejected while the controller was aborted -> skip: the task did
 //      not finish, it bailed on the abort, so leave it due to run again.
-//   4. the race rejected on its own -> failure.
+//   5. the race rejected on its own -> failure.
 const resolveRunOutcome = async ({
   aborted,
   continuationAt,
   db,
   job,
+  leaseLost,
   leaseToken,
   maxRuntimeMs,
   raceError,
@@ -574,6 +644,18 @@ const resolveRunOutcome = async ({
     return "failed";
   }
 
+  if (leaseLost) {
+    await finishRunSkipped({
+      db,
+      job,
+      leaseToken,
+      reason: "SchedulerLeaseLost",
+      runId,
+      startedAt,
+    });
+    return "skipped";
+  }
+
   if (!raceRejected) {
     await finishRunSuccess({
       db,
@@ -587,7 +669,14 @@ const resolveRunOutcome = async ({
   }
 
   if (aborted) {
-    await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
+    await finishRunSkipped({
+      db,
+      job,
+      leaseToken,
+      reason: "SchedulerAborted",
+      runId,
+      startedAt,
+    });
     return "skipped";
   }
 
@@ -746,13 +835,20 @@ export const finishRunSuccess = async ({
   });
 };
 
+type SchedulerSkipReason = "SchedulerAborted" | "SchedulerLeaseLost";
+
+type FinishRunSkippedOptions = FinishRunOptions & {
+  reason: SchedulerSkipReason;
+};
+
 export const finishRunSkipped = async ({
   db,
   job,
   leaseToken,
+  reason,
   runId,
   startedAt,
-}: FinishRunOptions): Promise<void> => {
+}: FinishRunSkippedOptions): Promise<void> => {
   const finishedAt = new Date();
 
   await completeRun({
@@ -767,7 +863,7 @@ export const finishRunSkipped = async ({
     runId,
     runValues: {
       durationMs: durationMs(startedAt, finishedAt),
-      error: "SchedulerAborted",
+      error: reason,
       finishedAt,
       status: "skipped",
     },

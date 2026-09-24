@@ -1,6 +1,6 @@
 import { runGatedTests } from "./run-gated-tests";
 
 process.exitCode = await runGatedTests({
-  requiredEnv: ["DATABASE_URL"],
-  script: "test:postgres",
+  requiredEnv: ["REDIS_URL"],
+  script: "test:valkey",
 });

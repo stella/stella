@@ -1,3 +1,19 @@
+import {
+  AccessDeniedException,
+  BedrockRuntimeServiceException,
+  ConflictException,
+  InternalServerException,
+  ModelErrorException,
+  ModelNotReadyException,
+  ModelStreamErrorException,
+  ModelTimeoutException,
+  ResourceNotFoundException,
+  ServiceQuotaExceededException,
+  ServiceUnavailableException,
+  ThrottlingException,
+  ValidationException,
+} from "@aws-sdk/client-bedrock-runtime";
+import * as BedrockRuntime from "@aws-sdk/client-bedrock-runtime";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -7,6 +23,7 @@ import {
   providerStatusCode,
   providerStatusFields,
 } from "@/api/lib/ai-error";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -514,5 +531,214 @@ describe("isUnanticipatedAIFailure", () => {
     });
 
     expect(isUnanticipatedAIFailure(error)).toBe(true);
+  });
+});
+
+// Bedrock is reached through the AWS SDK, whose service exceptions carry the
+// HTTP status at `$metadata.httpStatusCode`, a `$fault` side and the exception
+// name. An exception thrown in-band from a Converse event stream carries the
+// name and `$fault` but no HTTP status.
+const bedrockMetadata = (httpStatusCode?: number) =>
+  httpStatusCode === undefined ? {} : { httpStatusCode };
+
+const BEDROCK_EXCEPTION_CASES = [
+  {
+    error: new AccessDeniedException({
+      $metadata: bedrockMetadata(403),
+      message: "You don't have access to the model",
+    }),
+    kind: "unknown",
+  },
+  {
+    error: new ConflictException({
+      $metadata: bedrockMetadata(400),
+      message: "Conflict",
+    }),
+    kind: "unknown",
+  },
+  {
+    error: new InternalServerException({
+      $metadata: bedrockMetadata(500),
+      message: "Internal server error",
+    }),
+    kind: "provider_unavailable",
+  },
+  {
+    error: new ModelErrorException({
+      $metadata: bedrockMetadata(424),
+      message: "The model failed to process the request",
+    }),
+    kind: "unknown",
+  },
+  {
+    error: new ModelNotReadyException({
+      $metadata: bedrockMetadata(429),
+      message: "Model is not ready",
+    }),
+    kind: "provider_unavailable",
+  },
+  {
+    error: new ModelStreamErrorException({
+      $metadata: bedrockMetadata(424),
+      message: "Stream error",
+    }),
+    kind: "provider_unavailable",
+  },
+  {
+    error: new ModelTimeoutException({
+      $metadata: bedrockMetadata(408),
+      message: "Model timed out",
+    }),
+    kind: "provider_unavailable",
+  },
+  {
+    error: new ResourceNotFoundException({
+      $metadata: bedrockMetadata(404),
+      message: "Model not found",
+    }),
+    kind: "model_unavailable",
+  },
+  {
+    error: new ServiceQuotaExceededException({
+      $metadata: bedrockMetadata(400),
+      message: "Service quota exceeded",
+    }),
+    kind: "quota_exhausted",
+  },
+  {
+    error: new ServiceUnavailableException({
+      $metadata: bedrockMetadata(503),
+      message: "Service unavailable",
+    }),
+    kind: "provider_unavailable",
+  },
+  {
+    error: new ThrottlingException({
+      $metadata: bedrockMetadata(429),
+      message: "Too many requests",
+    }),
+    kind: "quota_exhausted",
+  },
+  {
+    error: new ValidationException({
+      $metadata: bedrockMetadata(400),
+      message: "Malformed input request",
+    }),
+    kind: "unknown",
+  },
+] as const satisfies readonly {
+  error: BedrockRuntimeServiceException;
+  kind: AIErrorKind;
+}[];
+
+describe("AWS SDK service exceptions", () => {
+  test("every Bedrock runtime exception has a decided kind", () => {
+    // A new exception in an SDK release fails here until it is given one.
+    const exported = Object.values(BedrockRuntime)
+      .flatMap((value) =>
+        typeof value === "function" &&
+        value.prototype instanceof BedrockRuntimeServiceException
+          ? [value.name]
+          : [],
+      )
+      .toSorted();
+
+    expect(
+      BEDROCK_EXCEPTION_CASES.map(({ error }): string => error.name).toSorted(),
+    ).toEqual(exported);
+  });
+
+  test("names each exception at its HTTP status", () => {
+    for (const { error, kind } of BEDROCK_EXCEPTION_CASES) {
+      expect({ name: error.name, kind: classifyAIError(error) }).toEqual({
+        name: error.name,
+        kind,
+      });
+      expect(providerStatusFields(error)).toEqual({
+        "error.provider.status": String(error.$metadata.httpStatusCode),
+      });
+    }
+  });
+
+  test("names an in-band stream exception that carries no status", () => {
+    const throttled = new ThrottlingException({
+      $metadata: bedrockMetadata(),
+      message: "Too many requests",
+    });
+    const unavailable = new ServiceUnavailableException({
+      $metadata: bedrockMetadata(),
+      message: "Service unavailable",
+    });
+
+    expect(classifyAIError(throttled)).toBe("quota_exhausted");
+    expect(classifyAIError(unavailable)).toBe("provider_unavailable");
+    expect(providerStatusCode(throttled)).toBeNull();
+    expect(providerStatusFields(throttled)).toEqual({});
+  });
+
+  test("keeps access denied and validation failures unnamed", () => {
+    // A 403 is ambiguous (model access, region, account state) and a 400 is
+    // this request's own shape, so neither is given a kind; the status is
+    // still logged so the failure sink can tell them apart.
+    const denied = new AccessDeniedException({
+      $metadata: bedrockMetadata(403),
+      message: "You don't have access to the model",
+    });
+    const invalid = new ValidationException({
+      $metadata: bedrockMetadata(400),
+      message: "Malformed input request",
+    });
+
+    expect(classifyAIError(denied)).toBe("unknown");
+    expect(providerStatusFields(denied)).toEqual({
+      "error.provider.status": "403",
+    });
+    expect(classifyAIError(invalid)).toBe("unknown");
+    expect(providerStatusFields(invalid)).toEqual({
+      "error.provider.status": "400",
+    });
+  });
+
+  test("reads the exception through the wrappers the AI stack adds", () => {
+    const throttled = new ThrottlingException({
+      $metadata: bedrockMetadata(429),
+      message: "Too many requests",
+    });
+    // `chat({ outputSchema })` rethrows as `new Error(message, { cause })`;
+    // the generation helper answers with a 502 `HandlerError`.
+    const wrappers = [
+      new Error(throttled.message, { cause: throttled }),
+      new HandlerError({
+        status: 502,
+        message: throttled.message,
+        cause: throttled,
+      }),
+    ];
+
+    for (const wrapped of wrappers) {
+      expect(classifyAIError(wrapped)).toBe("quota_exhausted");
+      expect(providerStatusFields(wrapped)).toEqual({
+        "error.provider.status": "429",
+      });
+    }
+  });
+
+  test("ignores a metadata status outside the HTTP range", () => {
+    for (const httpStatusCode of [0, 99, 600]) {
+      const error = new ValidationException({
+        $metadata: bedrockMetadata(httpStatusCode),
+        message: "Malformed input request",
+      });
+
+      expect(providerStatusCode(error)).toBeNull();
+      expect(providerStatusFields(error)).toEqual({});
+    }
+  });
+
+  test("does not name a plain error that only shares an exception name", () => {
+    const error = new Error("Too many requests");
+    error.name = "ThrottlingException";
+
+    expect(classifyAIError(error)).toBe("unknown");
   });
 });

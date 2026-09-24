@@ -100,6 +100,16 @@ export const providerStatusCode = (error: unknown): number | null => {
     }
   }
 
+  // An AWS SDK service exception (Bedrock) keeps the response status in its
+  // `$metadata`.
+  const metadata = error["$metadata"];
+  if (isRecord(metadata)) {
+    const metadataStatus = metadata["httpStatusCode"];
+    if (isHttpStatus(metadataStatus)) {
+      return metadataStatus;
+    }
+  }
+
   // TanStack's RUN_ERROR contract carries `code` as a string, while raw
   // provider events can carry the same HTTP status as a number. Accept either
   // representation here; symbolic provider codes still need an explicit
@@ -147,6 +157,44 @@ const isProviderCredentialRejection = (error: unknown): boolean => {
     (hasProviderCredentialRejectionMarker(body["code"]) ||
       hasProviderCredentialRejectionMarker(body["type"]))
   );
+};
+
+const AWS_FAULTS = new Set(["client", "server"]);
+
+// Bedrock runtime exceptions named by the AWS SDK. The name decides where the
+// status alone would mislead or is absent: an exception thrown in-band from a
+// Converse event stream carries no HTTP status, and `ModelNotReadyException`
+// answers 429 for a model that is still loading, not for exhausted quota.
+// `AccessDeniedException` (403) keeps the provider-403 policy below: it is
+// ambiguous between model access, region and account state. A
+// `ValidationException` (400) describes this request, not a provider state.
+// Both stay `unknown`, and their status is still logged.
+const AWS_EXCEPTION_KINDS = {
+  AccessDeniedException: "unknown",
+  InternalServerException: "provider_unavailable",
+  ModelNotReadyException: "provider_unavailable",
+  ModelStreamErrorException: "provider_unavailable",
+  ModelTimeoutException: "provider_unavailable",
+  ResourceNotFoundException: "model_unavailable",
+  ServiceQuotaExceededException: "quota_exhausted",
+  ServiceUnavailableException: "provider_unavailable",
+  ThrottlingException: "quota_exhausted",
+  ValidationException: "unknown",
+} as const satisfies Record<string, AIErrorKind>;
+
+type AwsExceptionName = keyof typeof AWS_EXCEPTION_KINDS;
+
+const isAwsExceptionName = (name: unknown): name is AwsExceptionName =>
+  typeof name === "string" && Object.hasOwn(AWS_EXCEPTION_KINDS, name);
+
+// `$fault` marks an AWS SDK service exception; the name alone does not, since
+// any error can be named `ThrottlingException`.
+const awsExceptionKind = (error: unknown): AIErrorKind | null => {
+  if (!isRecord(error) || !AWS_FAULTS.has(String(error["$fault"]))) {
+    return null;
+  }
+  const name = error["name"];
+  return isAwsExceptionName(name) ? AWS_EXCEPTION_KINDS[name] : null;
 };
 
 const isProviderError = (error: unknown): boolean =>
@@ -231,6 +279,10 @@ const classifyAIErrorInternal = (
     if (causeKind !== "unknown") {
       return causeKind;
     }
+  }
+  const awsKind = awsExceptionKind(error);
+  if (awsKind !== null) {
+    return awsKind;
   }
   if (isProviderError(error)) {
     const statusCode = providerStatusCode(error);

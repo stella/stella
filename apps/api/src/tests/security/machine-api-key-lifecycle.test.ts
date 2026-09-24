@@ -211,7 +211,9 @@ describe("machine key tenant filter", () => {
       "utf-8",
     );
 
-    expect(source).toContain("machineApiKeyOrganizationScope(organizationId)");
+    expect(source).toContain(
+      "[MACHINE_API_KEY_CONFIG_ID]: machineApiKeyOrganizationScope",
+    );
     expect(source).toContain("eq(apikey.referenceId, userId)");
     // Disabled, not deleted: the audit trail and `start` prefix have to survive.
     expect(source).toContain("update(apikey)");

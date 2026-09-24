@@ -14,7 +14,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
-import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { getMcpResourceUrl, MCP_MEMBER_ID_CLAIM } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpTokenVerificationError,
@@ -44,6 +44,12 @@ export type McpSession = {
     | { type: "delegated_user" };
   /** Optional server-issued attenuation; absent means the full live access set. */
   workspaceIds?: string[];
+  /**
+   * The membership row an OAuth access token was issued under; the session
+   * opens only while that row is the user's current membership. Absent on
+   * credentials that carry no such claim.
+   */
+  memberId?: string;
 };
 
 /** Which kind of credential opened a session, for telemetry and reporting. */
@@ -126,7 +132,9 @@ export const isMcpSession = (value: unknown): value is McpSession =>
   value["organizationId"].length > 0 &&
   isStringArray(value["scopes"]) &&
   (!("credential" in value) || isMcpCredential(value["credential"])) &&
-  (!("workspaceIds" in value) || isStringArray(value["workspaceIds"]));
+  (!("workspaceIds" in value) || isStringArray(value["workspaceIds"])) &&
+  (!("memberId" in value) ||
+    (typeof value["memberId"] === "string" && value["memberId"].length > 0));
 
 export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const userId = payload.sub;
@@ -151,6 +159,15 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   if (rawWorkspaceIds !== undefined && !isStringArray(rawWorkspaceIds)) {
     throw new McpAuthenticationError({
       message: "Token has invalid workspace_ids claim",
+    });
+  }
+  const rawMemberId = payload[MCP_MEMBER_ID_CLAIM];
+  if (
+    rawMemberId !== undefined &&
+    (typeof rawMemberId !== "string" || rawMemberId.length === 0)
+  ) {
+    throw new McpAuthenticationError({
+      message: "Token has invalid member_id claim",
     });
   }
 
@@ -185,6 +202,7 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
     organizationId: rawOrganizationId,
     scopes,
     ...(rawWorkspaceIds === undefined ? {} : { workspaceIds: rawWorkspaceIds }),
+    ...(rawMemberId === undefined ? {} : { memberId: rawMemberId }),
   };
 };
 

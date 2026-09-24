@@ -13,15 +13,9 @@ const responseCookiePairs = (res: Response): [string, string][] =>
       return [part.slice(0, separator), part.slice(separator + 1)];
     });
 
-type CreateHumanSessionOptions = {
-  email: string;
-  orgName: string;
-  orgSlugPrefix: string;
-};
-
 /**
- * Create a verified user (password-less email OTP), an org, and an active
- * session cookie header.
+ * A signed-in browser: its cookie jar and the auth calls that change what the
+ * jar holds.
  *
  * Cookies live in a jar, not a fixed header: auth mutations reissue the
  * signed session_data snapshot (cookieCache), and getSession serves that
@@ -29,11 +23,16 @@ type CreateHumanSessionOptions = {
  * sign-in would keep serving the pre-set-active session forever. Browsers
  * adopt the refreshed cookie automatically; the jar mirrors that.
  */
-export const createHumanSession = async ({
-  email,
-  orgName,
-  orgSlugPrefix,
-}: CreateHumanSessionOptions) => {
+export type HumanBrowser = {
+  email: string;
+  userId: string;
+  cookieHeader: () => string;
+  headers: () => Headers;
+  setActiveOrganization: (organizationId: string) => Promise<void>;
+};
+
+/** Sign a verified user in (password-less email OTP), creating them if new. */
+export const signInHuman = async (email: string): Promise<HumanBrowser> => {
   const auth = getAuth();
   await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
   const otp = readDevOtp(email);
@@ -48,24 +47,60 @@ export const createHumanSession = async ({
   const cookieHeader = () =>
     [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
   const headers = () => new Headers({ cookie: cookieHeader() });
+  const session = await auth.api.getSession({ headers: headers() });
+  if (!session?.user) {
+    panic("sign-in produced no session");
+  }
+  return {
+    email,
+    userId: session.user.id,
+    cookieHeader,
+    headers,
+    setActiveOrganization: async (organizationId) => {
+      const setActiveRes = await auth.api.setActiveOrganization({
+        body: { organizationId },
+        headers: headers(),
+        asResponse: true,
+      });
+      if (!setActiveRes.ok) {
+        panic(`setActiveOrganization failed: ${String(setActiveRes.status)}`);
+      }
+      for (const [name, value] of responseCookiePairs(setActiveRes)) {
+        jar.set(name, value);
+      }
+    },
+  };
+};
+
+type CreateHumanSessionOptions = {
+  email: string;
+  orgName: string;
+  orgSlugPrefix: string;
+};
+
+/**
+ * Create a verified user (password-less email OTP), an org, and an active
+ * session cookie header.
+ */
+export const createHumanSession = async ({
+  email,
+  orgName,
+  orgSlugPrefix,
+}: CreateHumanSessionOptions) => {
+  const auth = getAuth();
+  const browser = await signInHuman(email);
   const org = await auth.api.createOrganization({
     body: { name: orgName, slug: `${orgSlugPrefix}-${Bun.randomUUIDv7()}` },
-    headers: headers(),
+    headers: browser.headers(),
   });
-  const setActiveRes = await auth.api.setActiveOrganization({
-    body: { organizationId: org.id },
-    headers: headers(),
-    asResponse: true,
-  });
-  for (const [name, value] of responseCookiePairs(setActiveRes)) {
-    jar.set(name, value);
-  }
-  const session = await auth.api.getSession({ headers: headers() });
+  await browser.setActiveOrganization(org.id);
+  const session = await auth.api.getSession({ headers: browser.headers() });
   if (!session?.user || !session.session.activeOrganizationId) {
     panic("session not active for org");
   }
   return {
-    cookieHeader: cookieHeader(),
+    browser,
+    cookieHeader: browser.cookieHeader(),
     email,
     userId: session.user.id,
     organizationId: session.session.activeOrganizationId,

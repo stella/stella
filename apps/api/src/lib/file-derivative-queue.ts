@@ -26,6 +26,11 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -903,6 +908,12 @@ export const FILE_DERIVATIVE_REQUEUE_OUTCOME = {
 export type FileDerivativeRequeueOutcome =
   (typeof FILE_DERIVATIVE_REQUEUE_OUTCOME)[keyof typeof FILE_DERIVATIVE_REQUEUE_OUTCOME];
 
+const REQUEUE_OUTCOME_FOR_QUEUE = {
+  [QUEUE_REQUEUE_OUTCOME.QUEUE_OWNED]:
+    FILE_DERIVATIVE_REQUEUE_OUTCOME.QUEUE_OWNED,
+  [QUEUE_REQUEUE_OUTCOME.REQUEUED]: FILE_DERIVATIVE_REQUEUE_OUTCOME.REQUEUED,
+} as const satisfies Record<QueueRequeueOutcome, FileDerivativeRequeueOutcome>;
+
 type RequeueFileDerivativeArgs = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
@@ -978,26 +989,8 @@ export const requeueFileDerivative = async (
     return FILE_DERIVATIVE_REQUEUE_OUTCOME.NOT_STUCK;
   }
 
-  // The job id is deterministic, and BullMQ ignores an `add` whose id is
-  // already known: a retained completed/failed job would silently swallow
-  // every retry. Reclaim that id, but keep the dead job's derivative object
-  // id so the retry writes over what the previous attempt left in storage
-  // instead of orphaning it.
-  const jobId = createBullMqJobId(workspaceId, fieldId, kind);
-  const derivativeQueue = getDerivativeQueue();
-  const priorJob = await derivativeQueue.getJob(jobId);
-  let derivativeFileId = allocateDerivativeFile();
-  if (priorJob) {
-    const state = await priorJob.getState();
-    if (state !== "completed" && state !== "failed") {
-      return FILE_DERIVATIVE_REQUEUE_OUTCOME.QUEUE_OWNED;
-    }
-    derivativeFileId = resolveQueuedFileObject(priorJob.data.derivativeFileId);
-    await priorJob.remove();
-  }
-
   const jobData = {
-    derivativeFileId,
+    derivativeFileId: allocateDerivativeFile(),
     entityId,
     fieldId,
     organizationId,
@@ -1005,8 +998,23 @@ export const requeueFileDerivative = async (
     workspaceId,
   };
 
+  let outcome: QueueRequeueOutcome;
   try {
-    await derivativeQueue.add(jobName, jobData, { jobId });
+    outcome = await requeueDeterministicJob({
+      data: jobData,
+      jobId: createBullMqJobId(workspaceId, fieldId, kind),
+      name: jobName,
+      queue: getDerivativeQueue(),
+      // A job the queue retains keeps its derivative object id, so the rerun
+      // writes over what the previous attempt left in storage instead of
+      // orphaning it.
+      reclaimData: (previous) => ({
+        ...jobData,
+        derivativeFileId: resolveQueuedFileObject(
+          previous.data.derivativeFileId,
+        ),
+      }),
+    });
   } catch (error) {
     await markFailed(kind, jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
       (markError: unknown) => {
@@ -1016,5 +1024,5 @@ export const requeueFileDerivative = async (
     throw error;
   }
 
-  return FILE_DERIVATIVE_REQUEUE_OUTCOME.REQUEUED;
+  return REQUEUE_OUTCOME_FOR_QUEUE[outcome];
 };
