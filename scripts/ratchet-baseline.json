@@ -1416,7 +1416,7 @@
     }
   },
   "eslint-spelled-suppression-directives": {
-    "count": 239,
+    "count": 236,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1464,7 +1464,6 @@
       "apps/api/src/handlers/uploads/update.ts": 3,
       "apps/api/src/handlers/views/table/export.ts": 1,
       "apps/api/src/handlers/workspaces/delete.ts": 1,
-      "apps/api/src/handlers/workspaces/list.ts": 1,
       "apps/api/src/lib/account-deletion-steps.ts": 3,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/auth-artifacts.ts": 1,
@@ -1562,7 +1561,6 @@
       "packages/errors/src/dev-error.ts": 1,
       "packages/money/src/cents.ts": 2,
       "packages/money/src/index.ts": 2,
-      "packages/scripts/src/dev-runner.ts": 2,
       "packages/template-conditions/src/compute.ts": 1,
       "packages/ui/src/components/combobox.tsx": 1,
       "packages/ui/src/components/hex-color-picker.tsx": 3,
