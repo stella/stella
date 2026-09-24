@@ -5,6 +5,7 @@ import {
   type DecisionReadResolution,
 } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  type CaseLawDecisionLanguageAlternate,
   type CaseLawDecisionRouteParams,
   extractCaseLawDecisionIdFromIdRouteParam,
   isCaseLawDecisionId,
@@ -65,7 +66,7 @@ const toResolvedDecision = ({
   court: string;
   id: string;
   language: string | null;
-  languageAlternates: readonly unknown[] | null;
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
   slug: string | null;
 }): ResolvedDecision => ({
   caseNumber,

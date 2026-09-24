@@ -34958,6 +34958,11 @@ type Tafda8a9ee4 = (T27402211cc & {
   court: string;
   country: string;
   decisionDate: T432e07d100;
+  slug: T432e07d100;
+  language: string;
+  languageAlternates: ReadonlyArray<{
+    language: string;
+  }>;
 }) | (T27402211cc & {
   type: "chat";
   resource: {

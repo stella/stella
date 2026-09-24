@@ -13,6 +13,7 @@ import {
   normalizeCaseLawLanguageSegment,
   parseCaseLawDecisionPath,
 } from "./case-law-decision-route";
+import type { CaseLawDecisionLanguageAlternate } from "./case-law-decision-route";
 
 const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
@@ -139,7 +140,7 @@ describe("createCaseLawDecisionRouteParams", () => {
   test("counts distinct, valid language alternates only", () => {
     const multilingual = (
       language: string,
-      languageAlternates: readonly unknown[],
+      languageAlternates: readonly CaseLawDecisionLanguageAlternate[],
     ) =>
       routeParams({ language, languageAlternates, slug: "s" }).language ?? null;
 
@@ -152,7 +153,6 @@ describe("createCaseLawDecisionRouteParams", () => {
         { language: "CS" },
         { language: "en" },
         { language: "??" },
-        "not-an-object",
       ]),
     ).toBe("cs");
     expect(

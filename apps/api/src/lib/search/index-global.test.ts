@@ -22,7 +22,7 @@ import {
 
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, rootDbTestDouble);
+) => await searchGlobalWithDatabase(query, { database: rootDbTestDouble });
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
