@@ -4,8 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { schedulerJobs } from "@/api/db/schema";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,
@@ -20,16 +20,14 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
-import type {
-  SchedulerDb,
-  SchedulerJob,
-  SchedulerTask,
-} from "@/api/lib/scheduler/types";
+import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
 
 /**
  * The three recurring passes that keep per-decision raw storage honest.
  * They run in the API process, whose role may list and delete raw objects;
- * the ingestion worker only records what it needs swept.
+ * the ingestion worker only records what it needs swept. The corpus side
+ * goes through the corpus write boundary; only the lease-fenced checkpoint
+ * uses the scheduler's own handle.
  */
 
 export const RECONCILE_CASE_LAW_RAW_SWEEPS_TASK =
@@ -44,11 +42,6 @@ const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
 const CONTINUATION_DELAY_MS = 1000;
 
-const rootScopedDb =
-  (db: SchedulerDb): ScopedDb =>
-  async (run) =>
-    await db.transaction(run);
-
 const leaseFence = (job: SchedulerJob) =>
   and(
     eq(schedulerJobs.id, job.id),
@@ -60,12 +53,11 @@ const leaseFence = (job: SchedulerJob) =>
 
 /** Delete the raw prefixes owed a sweep: erased decisions, lost writes. */
 export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
-  db,
   logger,
   signal,
 }) => {
   const result = await reconcileCaseLawRawSweeps({
-    scopedDb: rootScopedDb(db),
+    scopedDb: getCaseLawIngestionDb(),
     limit: SWEEP_LIMIT,
     signal,
   });
@@ -104,7 +96,7 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   signal.throwIfAborted();
   const cursor = parseRowCursor(job.payload);
   const page = await reconcileCaseLawRawLayoutPage({
-    scopedDb: rootScopedDb(db),
+    scopedDb: getCaseLawIngestionDb(),
     cursor,
     limit: ROW_PAGE_LIMIT,
     mode: RAW_LAYOUT_MODE.APPLY,
@@ -175,7 +167,7 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
 }) => {
   signal.throwIfAborted();
   const page = await censusCaseLawRawObjectsPage({
-    scopedDb: rootScopedDb(db),
+    scopedDb: getCaseLawIngestionDb(),
     cursor: parseCensusCursor(job.payload),
     maxKeys: CENSUS_PAGE_KEYS,
     mode: RAW_CENSUS_MODE.APPLY,
