@@ -135,7 +135,7 @@
     "@valibot/to-json-schema": "^1.8.0",
     "better-auth": "catalog:",
     "better-result": "catalog:",
-    "bullmq": "^6.3.6",
+    "bullmq": "^6.3.8",
     "cheerio": "^1.2.0",
     "client-zip": "^2.5.1",
     "diff": "catalog:",
