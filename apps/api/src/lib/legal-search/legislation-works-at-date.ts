@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -25,6 +26,9 @@ export type WorkAtDateRequest = {
   asOf: string;
 };
 
+/** A consolidation of the same Work opening after the requested date. */
+const laterVersion = alias(legislationDocuments, "later_version");
+
 const resolvedWorkSchema = v.object({
   key: v.string(),
   id: v.pipe(v.string(), v.uuid()),
@@ -36,8 +40,10 @@ const resolvedWorkSchema = v.object({
  *
  * A Work repealed before that date answers with its last consolidation: a
  * court keeps applying an ended act to the facts it governed, and that
- * wording is the one it read. Only a date before the corpus's first
- * consolidation of the Work goes unanswered.
+ * wording is the one it read. That fallback holds only past the Work's final
+ * consolidation: a date before its first one, or inside a stretch between two
+ * consolidations the corpus does not cover, goes unanswered, as the single
+ * point-in-time read leaves it.
  *
  * The dates differ per Work, so the windows are joined against a values list
  * rather than folded into one predicate: every request keeps its own `as_of`
@@ -79,6 +85,18 @@ export const resolveWorksAtDate = async (
         JOIN ${legislationSources}
           ON ${legislationSources.id} = ${legislationDocuments.sourceId}
        WHERE ${publishedLegislationDocument}
+         AND (${inForceOn(
+           legislationDocuments.versionValidFrom,
+           legislationDocuments.versionValidTo,
+           sql`w.as_of`,
+         )}
+              OR NOT EXISTS (
+                SELECT 1
+                  FROM ${legislationDocuments} AS ${laterVersion}
+                 WHERE ${laterVersion.country} = w.country
+                   AND ${laterVersion.eli} = w.eli
+                   AND ${laterVersion.versionValidFrom} > w.as_of
+              ))
        ORDER BY w.key,
                 ${inForceOn(
                   legislationDocuments.versionValidFrom,

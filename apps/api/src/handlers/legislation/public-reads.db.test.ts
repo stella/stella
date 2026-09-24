@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -1501,15 +1501,67 @@ describe("batched point-in-time statute resolve", () => {
     ]);
   });
 
+  test("leaves a date between two consolidations unanswered", async () => {
+    // The corpus holds a Work's wording up to 2009 and again from 2012, but
+    // not in between: a date in that stretch is uncovered, not the older
+    // wording, while a date past the last consolidation still reads it.
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    const earlier = createSafeId<"legislationDocument">();
+    const later = createSafeId<"legislationDocument">();
+    const eli = "CZ/2001/77";
+    await owner.insert(legislationDocuments).values([
+      seedDocument({
+        id: earlier,
+        sourceId: openSourceId,
+        eli,
+        title: "Gapped Act",
+        versionValidFrom: "2002-01-01",
+        versionValidTo: "2010-01-01",
+      }),
+      seedDocument({
+        id: later,
+        sourceId: openSourceId,
+        eli,
+        title: "Gapped Act",
+        versionValidFrom: "2012-01-01",
+        versionValidTo: "2015-01-01",
+      }),
+    ]);
+
+    try {
+      const { items } = await resolveStatutesHandler(
+        {
+          works: ["2005-06-01", "2011-06-01", "2013-06-01", "2020-06-01"].map(
+            (asOf) => ({ country: "CZE", eli, asOf }),
+          ),
+        },
+        legislationDb,
+      );
+
+      expect(items.map((item) => item.statute?.id ?? null)).toEqual([
+        earlier,
+        null,
+        later,
+        later,
+      ]);
+    } finally {
+      await owner
+        .delete(legislationDocuments)
+        .where(inArray(legislationDocuments.id, [earlier, later]));
+    }
+  });
+
   test("prefers the consolidation in force over an older one left open", async () => {
     const { items } = await resolveStatutesHandler(
       { works: [{ country: "CZE", eli: civilCode, asOf: "2016-06-01" }] },
       legislationDb,
     );
 
-    expect(items[0]?.statute?.id).toBe(
-      expectDocumentId(await readAsOf("2016-06-01")),
-    );
+    const resolvedId: string | undefined = items[0]?.statute?.id;
+    expect(resolvedId).toBe(expectDocumentId(await readAsOf("2016-06-01")));
   });
 
   test("matches the ELI exactly, not an act sharing its digits", async () => {
