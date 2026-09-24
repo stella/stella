@@ -26,7 +26,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
   loadCitationCourtWeightEntries,
-  tryRecomputeCitationAuthorityBatch,
+  tryAdvanceCitationAuthoritySweep,
 } from "@/api/handlers/case-law/citation-authority";
 import {
   countPendingCitations,
@@ -205,12 +205,11 @@ const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
 // that is the fetch gap and nothing else.
 const SK_DOCUMENT_PAGE_SIZE = 20;
 const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
-// Citation authority decays slowly; a periodic full recompute keeps the
-// materialized ranking signal fresh without per-cycle cost. The first
-// recompute runs shortly after startup rather than a full interval in: a
-// process whose lifetime is shorter than the interval would otherwise
-// never recompute at all. The startup delay keeps a process that exits
-// quickly after boot from adding a whole-corpus recompute to every start.
+// Citation authority decays slowly; a pass over the corpus every interval
+// keeps the materialized ranking signal fresh without per-cycle cost. The
+// pass's position is persisted, so a process whose lifetime is shorter than a
+// pass still moves it forward. The startup delay keeps a process that exits
+// quickly after boot from adding a batch to every start.
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
 // Decisions per statement, and the gap between two statements. Together they
@@ -1105,10 +1104,8 @@ export const runCaseLawIngest = async (
   // current, in bounded batches. The whole-corpus form was one UPDATE over
   // every decision, which on this corpus outruns its statement timeout and
   // rolls back — spending the work and keeping none of it, every time. A batch
-  // is bounded by its row count, and `citation_authority_computed_at` is the
-  // only bookkeeping: recomputing a decision stamps it and takes it out of the
-  // set, so a replaced task resumes without anything having been persisted
-  // about where it was.
+  // is a keyset slice, it writes only the decisions whose value moved, and its
+  // position is persisted with it, so a replaced task resumes the pass.
   //
   // Runs via the ingestion role outside the DB slot. The try-lock is per batch
   // rather than per sweep, so a rolling deployment costs one batch's
@@ -1116,7 +1113,8 @@ export const runCaseLawIngest = async (
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     let consecutiveFailures = 0;
-    let recomputedSinceLog = 0;
+    let writtenSinceLog = 0;
+    let scannedSinceLog = 0;
     while (true) {
       if (isDraining()) {
         return;
@@ -1131,49 +1129,40 @@ export const runCaseLawIngest = async (
             "[citation-authority] Idle (no resolved citations to rank yet)",
           );
         } else {
-          // A rolling window, not a pinned one: the sweep is continuous and
-          // has no start, and a row recomputed an interval ago is due again
-          // whatever this process was doing then. Expressed as an age so both
-          // the boundary and the stamp come from PostgreSQL — a host clock
-          // running ahead of the database would otherwise leave every row it
-          // just stamped still older than the boundary, and the walk would
-          // rewrite the same oldest rows forever.
-          //
           // The weights load inside the deadline that covers the work they
           // feed: their loader reads through the API's root pool on a cache
           // miss, and a reaped connection there would otherwise wedge the
           // recompute loop with nothing watching it.
-          const batch = await runWithHardDeadline(
+          const step = await runWithHardDeadline(
             "citation-authority",
             BACKFILL_HARD_DEADLINE_MS,
             async () => {
               const courtWeightEntries = await loadCitationCourtWeightEntries();
               return await ingestionDb(
                 async (tx) =>
-                  await tryRecomputeCitationAuthorityBatch(tx, {
+                  await tryAdvanceCitationAuthoritySweep(tx, {
                     limit: CITATION_AUTHORITY_BATCH_SIZE,
-                    window: {
-                      type: "olderThan",
-                      ms: CITATION_AUTHORITY_INTERVAL_MS,
-                    },
+                    intervalMs: CITATION_AUTHORITY_INTERVAL_MS,
                     courtWeightEntries,
                   }),
               );
             },
           );
-          if (batch === null) {
+          if (step === null) {
             outcome = RECOMPUTE_OUTCOME.SKIPPED;
-          } else if (batch.recomputed === 0) {
+          } else if (step.type === "current") {
             outcome = RECOMPUTE_OUTCOME.CURRENT;
-            if (recomputedSinceLog > 0) {
-              logInfo(
-                `[citation-authority] Sweep complete (${recomputedSinceLog} decisions recomputed)`,
-              );
-              recomputedSinceLog = 0;
-            }
           } else {
             outcome = RECOMPUTE_OUTCOME.ADVANCED;
-            recomputedSinceLog += batch.recomputed;
+            scannedSinceLog += step.batch.scanned;
+            writtenSinceLog += step.batch.written;
+            if (step.passComplete) {
+              logInfo(
+                `[citation-authority] Pass complete (${scannedSinceLog} decisions examined, ${writtenSinceLog} rewritten)`,
+              );
+              scannedSinceLog = 0;
+              writtenSinceLog = 0;
+            }
           }
         }
       } catch (error) {

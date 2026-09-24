@@ -236,6 +236,11 @@ const scopedDb: ScopedDb = async (callback) => {
           if (table === caseLawCorpusUploadIntents) {
             return [{ status: intentStatus }];
           }
+          if ("holdsDocument" in selection) {
+            // The document-less payload guard: the row holds no document,
+            // and this refresh's empty payload differs from what it holds.
+            return [{ holdsDocument: false, differs: true }];
+          }
           if ("id" in selection && "redactedAt" in selection) {
             // The batch reserves by locking every decision it packs and
             // keeping the ones no redaction has claimed.
@@ -495,11 +500,15 @@ describe("processDecision — canonical storage mode", () => {
       packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
     ).toEqual([decisionId]);
     expect(updatedDecisionRows[0]).toMatchObject({
-      fulltext: "Recovered decision text.",
       sourceHash: "recovered-detail-hash",
       sourceObservationHash: "listing-only-replay-hash",
       sourceObservationOrder: 2n,
     });
+    // The row already holds the payload it is replaying, so the claim does
+    // not copy it back in; the pack above carries it from the row.
+    for (const column of ["fulltext", "sections", "documentAst"]) {
+      expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+    }
     expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
     expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
     expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
@@ -594,29 +603,31 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    // An empty payload contributes no member, so the batch transfers nothing.
+    // An empty payload has nothing to store, so nothing is transferred or
+    // reserved: the row is written settled, with no pointers, at once.
     expect(transferredPacks).toEqual([]);
-    const settled = updatedDecisionRows.at(-1);
-    expect(settled).toMatchObject({
+    expect(events).not.toContain("intent-reserve");
+    expect(updatedDecisionRows).toEqual([]);
+    const inserted = insertedRows.at(0);
+    expect(inserted).toMatchObject({
       corpusMirrorStatus: "settled",
       textS3Key: null,
       normalizedS3Key: null,
       astS3Key: null,
       contentHash: null,
     });
-    // Nothing in object storage backs this row, so the settle must not
-    // trim the Postgres payload columns.
-    expect(settled).not.toHaveProperty("fulltext");
+    // Nothing in object storage backs this row, so its Postgres payload
+    // columns are what it holds.
+    expect(inserted?.["documentAst"]).toEqual(decision.documentAst);
     // A row a reader cannot open is stored unpublished under the packed
     // layout too: the marker is decided by the write that proves the row
     // holds no document, never by where a payload would have lived.
     expect(
-      partialObservationFromMetadata(insertedRows.at(0)?.["metadata"]),
+      partialObservationFromMetadata(inserted?.["metadata"]),
     ).toMatchObject({ isListingOnly: true });
-    expect(events.at(-1)).toBe("intent-delete");
   });
 
-  test("skips the corpus PUT when a settled row already records the payload", async () => {
+  test("leaves a settled row's payload alone when only the publisher page moved", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
@@ -653,15 +664,71 @@ describe("processDecision — canonical storage mode", () => {
     });
     // An unchanged payload contributes no member either.
     expect(transferredPacks).toEqual([]);
-    // The mirror settles back onto the pointers it already held.
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
+    // Nor does it touch the row's pointers or copy the document back into
+    // the row: the metadata refresh is the only write, and the payload
+    // columns are at most held to the trimmed shape canonical settles to.
+    expect(updatedDecisionRows).toHaveLength(1);
+    const updatedRow = updatedDecisionRows.at(0) ?? {};
+    for (const column of ["fulltext", "sections", "documentAst"]) {
+      expect(updatedRow[column] ?? null).toBeNull();
+    }
+    for (const column of [
+      "corpusMirrorStatus",
+      "textS3Key",
+      "normalizedS3Key",
+      "astS3Key",
+      "contentHash",
+    ]) {
+      expect(updatedDecisionRows.at(0)).not.toHaveProperty(column);
+    }
+    expect(updatedDecisionRows.at(0)).toMatchObject({
+      sourceHash: decision.rawHash,
+    });
+    expect(events).not.toContain("intent-reserve");
+  });
+
+  test("moves an unchanged payload whose jurisdiction moved", async () => {
+    // The corpus keys carry the jurisdiction partition, so the same document
+    // restated under another country is not the write the row records: it
+    // must land under the new partition rather than be kept where it was.
+    const decisionId = createSafeId<"caseLawDecision">();
+    const recorded = recordedCorpusWrite(decisionId);
+    existingDecision = {
+      id: decisionId,
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
       corpusMirrorStatus: "settled",
+      contentHash: recorded.contentHash,
       textS3Key: recorded.textKey,
       normalizedS3Key: recorded.sectionsKey,
       astS3Key: recorded.astKey,
-      contentHash: recorded.contentHash,
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    const moved = { ...decision, country: "CZE" };
+    // Not vacuous: the payload is the one the row records.
+    expect(
+      realCorpusStorage.corpusContentHash(
+        caseLawCanonicalPayload(sanitizeResult(moved)),
+      ),
+    ).toBe(recorded.contentHash);
+
+    await processDecision({
+      input: moved,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
-    expect(events.at(-1)).toBe("intent-delete");
+
+    expect(transferredPacks).toHaveLength(1);
+    expect(updatedDecisionRows.at(0)).toMatchObject({
+      corpusMirrorStatus: "pending",
+    });
   });
 
   test("a pending mirror settles once and then stops writing", async () => {

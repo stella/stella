@@ -278,7 +278,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
       "case_law_citation_resolution_progress",
-      "case_law_raw_sweeps"
+      "case_law_raw_sweeps",
+      "case_law_citation_authority_sweep"
     TO stella_ingestion
   `,
   `

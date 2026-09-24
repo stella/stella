@@ -77,6 +77,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",
+  // Where the citation-authority sweep is in its pass; only the sweep writes it.
+  "case_law_citation_authority_sweep",
   // Dormant compatibility tables retained until the rolling-deploy and
   // rollback window closes; their existing migration grants SELECT only.
   "case_law_citation_resolution_census_runs",

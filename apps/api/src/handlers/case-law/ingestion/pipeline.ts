@@ -10,6 +10,8 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import type { PgInsertValue } from "drizzle-orm/pg-core";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
@@ -37,6 +39,7 @@ import {
 } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
+  classifyCitationsBeforeWrite,
   lockCitationGraph,
   reopenCitationsForDecisionIdentifiers,
   reopenCitationsForKeys,
@@ -157,6 +160,7 @@ import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
+  planCorpusDocumentWrite,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -208,6 +212,7 @@ import {
   readS3ObjectBounded,
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
+import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
@@ -341,6 +346,11 @@ const DECISION_ROW_WRITE_STATUS = {
   WINNER_PENDING: "winner-pending",
   WINNER_REDACTED: "winner-redacted",
   WINNER_SETTLED: "winner-settled",
+  /**
+   * The row this attempt planned against changed its payload before the
+   * write, while this observation still owns it: plan again from the row.
+   */
+  STALE_PAYLOAD: "stale-payload",
 } as const;
 
 type DecisionRowWriteStatus =
@@ -510,6 +520,14 @@ type ProcessDecisionOptions = Omit<
 };
 
 type SourceObservation = { order: bigint };
+
+/** The row as read still predates this observation, so it may write it. */
+const observationStillOwns = (
+  row: { sourceObservationOrder: bigint | null } | undefined,
+  order: bigint,
+): boolean =>
+  row !== undefined &&
+  (row.sourceObservationOrder === null || row.sourceObservationOrder < order);
 
 const storedObservationPrecedes = ({ order }: SourceObservation) =>
   or(
@@ -901,6 +919,199 @@ const settleRuleVerdicts = async (
   );
 };
 
+type CitationRow = typeof caseLawCitations.$inferInsert;
+
+const textOrNull = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+/**
+ * The columns of a citation row that the document and the rules decide. Two
+ * rows equal on these are the same citation, whatever the resolver has since
+ * made of either.
+ */
+const citationContent = (row: {
+  citationText: string;
+  citationKey?: string | null | undefined;
+  identifierType?: string | null | undefined;
+  normalizedIdentifierValue?: string | null | undefined;
+  citedDecisionTypeHint?: string | null | undefined;
+  citedCourtHint?: string | null | undefined;
+  citedSheetNumber?: string | null | undefined;
+  citedDecisionDate?: string | null | undefined;
+  kind?: string | undefined;
+  sectionIndex?: number | null | undefined;
+  polarity?: string | null | undefined;
+  polarityRuleId?: string | null | undefined;
+}): string =>
+  JSON.stringify([
+    row.citationText,
+    row.citationKey ?? null,
+    row.identifierType ?? null,
+    row.normalizedIdentifierValue ?? null,
+    row.citedDecisionTypeHint ?? null,
+    row.citedCourtHint ?? null,
+    row.citedSheetNumber ?? null,
+    row.citedDecisionDate ?? null,
+    row.kind ?? CITATION_KIND.PRECEDENT,
+    row.sectionIndex ?? null,
+    row.polarity ?? null,
+    row.polarityRuleId ?? null,
+  ]);
+
+/**
+ * Make a decision's citation rows say what its document now says, touching
+ * only the rows that differ.
+ *
+ * A refresh usually carries the document it carried last time, and its
+ * citations are then the rows already stored: deleting and re-inserting them
+ * would write every row twice and throw away the resolver's answers, which
+ * the insert then had to recompute with an update per row. So stored rows are
+ * matched to incoming ones by content, as a multiset: a match is kept as it
+ * is, a stored row nothing matches is deleted, and only an incoming row
+ * nothing matches is written.
+ *
+ * A written row is settled before it is inserted, by the resolver's own
+ * doctrine, so it goes in once with its outcome. A kept row keeps its outcome:
+ * whatever changes the answer for it (a decision arriving under its key, this
+ * decision's identity moving) reopens it through the paths that exist for
+ * that, and those are settled here too, as before.
+ *
+ * Runs under the citation-graph lock, which the caller takes first.
+ */
+const writeDecisionCitations = async (
+  tx: Transaction,
+  {
+    decisionId,
+    rows,
+    observedAt,
+    stored,
+  }: {
+    decisionId: SafeId<"caseLawDecision">;
+    rows: readonly CitationRow[];
+    observedAt: Date;
+    /** Whether the decision may already hold citation rows. */
+    stored: boolean;
+  },
+): Promise<void> => {
+  const unmatched = new Map<string, SafeId<"caseLawCitation">[]>();
+  if (stored) {
+    // Read as text, so the comparison sees the values as the writer spells
+    // them rather than as a driver chose to parse a date or a number.
+    const storedRows = executedRows(
+      await tx.execute(sql`
+        SELECT id::text AS id,
+               citation_text,
+               citation_key,
+               identifier_type,
+               normalized_identifier_value,
+               cited_decision_type_hint,
+               cited_court_hint,
+               cited_sheet_number,
+               cited_decision_date::text AS cited_decision_date,
+               kind,
+               section_index,
+               polarity,
+               polarity_rule_id::text AS polarity_rule_id
+          FROM ${caseLawCitations}
+         WHERE citing_decision_id = ${decisionId}::uuid
+      `),
+    );
+    for (const row of storedRows) {
+      if (!isRecord(row) || typeof row["id"] !== "string") {
+        return panic("stored citation row has no id");
+      }
+      const key = citationContent({
+        citationText: textOrNull(row["citation_text"]) ?? "",
+        citationKey: textOrNull(row["citation_key"]),
+        identifierType: textOrNull(row["identifier_type"]),
+        normalizedIdentifierValue: textOrNull(
+          row["normalized_identifier_value"],
+        ),
+        citedDecisionTypeHint: textOrNull(row["cited_decision_type_hint"]),
+        citedCourtHint: textOrNull(row["cited_court_hint"]),
+        citedSheetNumber: textOrNull(row["cited_sheet_number"]),
+        citedDecisionDate: textOrNull(row["cited_decision_date"]),
+        kind: textOrNull(row["kind"]) ?? CITATION_KIND.PRECEDENT,
+        sectionIndex:
+          row["section_index"] === null || row["section_index"] === undefined
+            ? null
+            : Number(row["section_index"]),
+        polarity: textOrNull(row["polarity"]),
+        polarityRuleId: textOrNull(row["polarity_rule_id"]),
+      });
+      const id = brandPersistedCaseLawCitationId(row["id"]);
+      const ids = unmatched.get(key);
+      if (ids === undefined) {
+        unmatched.set(key, [id]);
+      } else {
+        ids.push(id);
+      }
+    }
+  }
+
+  const incoming: CitationRow[] = [];
+  let kept = 0;
+  for (const row of rows) {
+    const matches = unmatched.get(citationContent(row));
+    if (matches !== undefined && matches.length > 0) {
+      matches.pop();
+      kept += 1;
+    } else {
+      incoming.push(row);
+    }
+  }
+
+  // audit: skip — derived citation graph of public case law, not a user action
+  const removed = [...unmatched.values()].flat();
+  if (removed.length > 0) {
+    // One jsonb parameter, so the statement text does not grow with the
+    // number of rows removed.
+    await tx
+      .delete(caseLawCitations)
+      .where(
+        sql`${caseLawCitations.id} IN (SELECT jsonb_array_elements_text(${JSON.stringify(removed)}::text::jsonb)::uuid)`,
+      );
+  }
+
+  if (incoming.length > 0) {
+    const written: (CitationRow & { id: SafeId<"caseLawCitation"> })[] = [];
+    for (const row of await settleCitationPolarity(tx, incoming, observedAt)) {
+      written.push({ ...row, id: createSafeId<"caseLawCitation">() });
+    }
+    const resolutions = await classifyCitationsBeforeWrite(tx, {
+      citingDecisionId: decisionId,
+      citations: written.map((row) => ({
+        id: row.id,
+        citationKey: row.citationKey ?? null,
+        identifierType: row.identifierType ?? null,
+        normalizedIdentifierValue: row.normalizedIdentifierValue ?? null,
+        citedDecisionTypeHint: row.citedDecisionTypeHint ?? null,
+        citedCourtHint: row.citedCourtHint ?? null,
+        citedSheetNumber: row.citedSheetNumber ?? null,
+        citedDecisionDate: row.citedDecisionDate ?? null,
+      })),
+    });
+    const settled: PgInsertValue<typeof caseLawCitations>[] = [];
+    for (const row of written) {
+      const resolution = resolutions.get(row.id);
+      settled.push(
+        resolution === undefined
+          ? row
+          : { ...row, ...resolution, resolutionAttemptedAt: sql`now()` },
+      );
+    }
+    // audit: skip — derived citation graph of public case law, not a user action
+    await tx.insert(caseLawCitations).values(settled);
+  }
+
+  // A kept row can be pending: this decision's identity moved and its own
+  // citations were reopened above, or an arrival elsewhere reopened them.
+  // Settle those in the transaction too, as the walk would.
+  if (kept > 0) {
+    await resolveCitationsForDecision(tx, decisionId);
+  }
+};
+
 /**
  * The polarity each citation row is published with. A reviewed citation takes
  * its review first, so a rule neither labels it nor counts it as a match.
@@ -1010,6 +1221,95 @@ const rowHoldsDocument = sql<boolean>`(
     and ${notInArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
+
+/**
+ * The columns a refresh compares against the stored row before writing them,
+ * and the SQL type each one is bound as for that comparison. A key that is
+ * not a decision column fails to typecheck where `storedRowDiffers` reads it
+ * off the table.
+ */
+const REFRESH_COMPARED_COLUMN_TYPES = {
+  caseNumber: "text",
+  citationKey: "text",
+  sourceDocumentId: "text",
+  ecli: "text",
+  court: "text",
+  country: "text",
+  language: "text",
+  sheetNumber: "text",
+  languageGroupKey: "text",
+  decisionDate: "date",
+  decisionType: "text",
+  sourceUrl: "text",
+  documentUrl: "text",
+  parserVersion: "smallint",
+  fulltext: "text",
+  sections: "jsonb",
+  documentAst: "jsonb",
+  corpusMirrorStatus: "text",
+  textS3Key: "text",
+  normalizedS3Key: "text",
+  astS3Key: "text",
+  contentHash: "text",
+} as const;
+
+type RefreshComparedColumn = keyof typeof REFRESH_COMPARED_COLUMN_TYPES;
+
+const isRefreshComparedColumn = (key: string): key is RefreshComparedColumn =>
+  Object.hasOwn(REFRESH_COMPARED_COLUMN_TYPES, key);
+
+/**
+ * A value as the comparison binds it. jsonb goes through `::text::jsonb`,
+ * never a bare `::jsonb`: the cast fixes the bind parameter's type, and the
+ * driver would then JSON-encode the already-serialized string.
+ */
+const boundRefreshValue = (
+  column: RefreshComparedColumn,
+  value: unknown,
+): SQL => {
+  const type = REFRESH_COMPARED_COLUMN_TYPES[column];
+  if (value === null) {
+    return sql`NULL::${sql.raw(type)}`;
+  }
+  return type === "jsonb"
+    ? sql`${JSON.stringify(value)}::text::jsonb`
+    : sql`${value}::${sql.raw(type)}`;
+};
+
+/**
+ * SQL for "writing these values would change the stored row". A key whose
+ * value is `undefined` is skipped, as the update itself skips it.
+ */
+const storedRowDiffers = (values: Record<string, unknown>): SQL => {
+  const terms = Object.entries(values).flatMap(([key, value]) => {
+    if (value === undefined) {
+      return [];
+    }
+    if (!isRefreshComparedColumn(key)) {
+      return panic(`Refresh cannot compare column ${key}`);
+    }
+    return [
+      sql`${caseLawDecisions[key]} IS DISTINCT FROM ${boundRefreshValue(key, value)}`,
+    ];
+  });
+  return terms.length === 0 ? sql`false` : sql`(${sql.join(terms, sql` OR `)})`;
+};
+
+/**
+ * SQL for "writing this payload changes what the decision says". A
+ * preserved payload says what it said: trimming it to the corpus is a change
+ * of storage, not of the decision. A written document is taken as changed
+ * rather than compared, which would read megabytes to learn it.
+ */
+const payloadChangedSql = (
+  plan: CorpusWritePlan,
+  written: Record<string, unknown>,
+): SQL => {
+  if (plan.type === "preserve-stored") {
+    return sql`false`;
+  }
+  return "fulltext" in written ? sql`true` : storedRowDiffers(written);
+};
 
 /**
  * The same question, asked ahead of the write. Answered as a boolean
@@ -2281,16 +2581,51 @@ const processDecisionAttempt = async ({
       corpusPayload.text || hasUsableAst(corpusPayload.ast),
     );
 
-    const corpusPlan: CorpusWritePlan =
-      preserveStoredDocument && pendingMirrorPayload === null
-        ? { type: "preserve-stored" }
-        : planCorpusWrite(corpus.mode);
+    // A payload with no document has nothing to put in the corpus: its
+    // mirror write stores nothing and settles the row with no pointers.
+    // Writing that settled state directly is the same row, without taking it
+    // through pending and back on every refresh of a document-less decision.
+    const modePlan: CorpusWritePlan =
+      mirrorCarriesDocument || pendingMirrorPayload !== null
+        ? planCorpusWrite(corpus.mode)
+        : { type: "postgres-only" };
 
-    const postgresPayload = {
-      fulltext: corpusPayload.text,
-      sections: corpusPayload.sections,
-      documentAst: corpusPayload.ast,
-    };
+    // The publisher's page can move while the document it carries does not.
+    // A settled row that already records this exact payload in the corpus
+    // keeps it: writing it back into the row as pending, only for the settle
+    // to put the same pointers back, rewrites the whole document for nothing.
+    // Asked of the corpus write's own planner, which compares the keys and
+    // not the hash alone: a payload whose jurisdiction moved must still land
+    // under its new partition. The write is fenced on the recorded hash, so
+    // a payload replaced since the read is not taken for this one.
+    const storedPayloadUnchanged =
+      existing !== undefined &&
+      modePlan.type !== "postgres-only" &&
+      existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
+      corpusCarriesDocument(existing.contentHash) &&
+      planCorpusDocumentWrite({
+        ...corpusPayload,
+        stored: storedCorpusWrite(existing),
+      }).type === "skipped-unchanged";
+
+    const corpusPlan: CorpusWritePlan =
+      (preserveStoredDocument && pendingMirrorPayload === null) ||
+      storedPayloadUnchanged
+        ? { type: "preserve-stored" }
+        : modePlan;
+
+    // A pending mirror's payload was read out of the row, and the write that
+    // replays it is fenced on the observation that stored it, so the row
+    // already holds exactly this payload. Writing it back would copy the
+    // whole document into a new row version to say the same thing.
+    const postgresPayload =
+      pendingMirrorPayload === null
+        ? {
+            fulltext: corpusPayload.text,
+            sections: corpusPayload.sections,
+            documentAst: corpusPayload.ast,
+          }
+        : {};
 
     const payloadColumns = (() => {
       switch (corpusPlan.type) {
@@ -2318,10 +2653,18 @@ const processDecisionAttempt = async ({
             }),
           };
         case "preserve-stored":
-          // Every payload column, and every pointer into object storage,
-          // stays exactly as stored. Leaving them out of the update is
-          // what preserves them.
-          return {};
+          // Every pointer into object storage stays exactly as stored.
+          // Leaving the payload out of the update is what preserves it,
+          // except where the corpus is confirmed to hold this exact payload
+          // and the mode keeps it only there: those columns converge to
+          // the trimmed shape the settle would have left.
+          return storedPayloadUnchanged &&
+            corpusPayloadDisposition({
+              mode: corpus.mode,
+              written: storedCorpusWrite(existing),
+            }) === "trim"
+            ? { ...TRIMMED_CORPUS_PAYLOAD_COLUMNS }
+            : {};
         default: {
           corpusPlan satisfies never;
           return panic(`Unhandled corpus write plan: ${String(corpusPlan)}`);
@@ -2353,6 +2696,7 @@ const processDecisionAttempt = async ({
       mirrorCarriesDocument,
       payloadColumns,
       pendingMirrorPayload,
+      storedPayloadUnchanged,
     };
   };
   const {
@@ -2365,6 +2709,7 @@ const processDecisionAttempt = async ({
     mirrorCarriesDocument,
     payloadColumns,
     pendingMirrorPayload,
+    storedPayloadUnchanged,
   } = await preparePersistenceInputs();
 
   /**
@@ -2416,17 +2761,20 @@ const processDecisionAttempt = async ({
   ): Promise<{
     citationKey: string | null;
     country: string;
+    language: string;
     decisionDate: string | null;
     metadata: Record<string, unknown> | null;
     identifiers: {
       type: (typeof identifierRows)[number]["type"];
       normalizedValue: string;
+      value: string;
     }[];
   } | null> => {
     const rows = await tx
       .select({
         citationKey: caseLawDecisions.citationKey,
         country: caseLawDecisions.country,
+        language: caseLawDecisions.language,
         decisionDate: caseLawDecisions.decisionDate,
         metadata: caseLawDecisions.metadata,
       })
@@ -2442,6 +2790,7 @@ const processDecisionAttempt = async ({
       .select({
         type: caseLawDecisionIdentifiers.type,
         normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
+        value: caseLawDecisionIdentifiers.value,
       })
       .from(caseLawDecisionIdentifiers)
       .where(eq(caseLawDecisionIdentifiers.decisionId, id));
@@ -2451,6 +2800,7 @@ const processDecisionAttempt = async ({
   const resolutionIdentityChanged = (previous: {
     citationKey: string | null;
     country: string;
+    language: string;
     decisionDate: string | null;
     identifiers: {
       type: (typeof identifierRows)[number]["type"];
@@ -2472,8 +2822,41 @@ const processDecisionAttempt = async ({
       identifiersChanged ||
       previous.citationKey !== incomingCitationKey ||
       previous.country !== result.country ||
+      // The citing language picks which manifestation of a multilingual
+      // target an edge lands on, and this decision's own language is what
+      // other citers' edges pick by.
+      previous.language !== result.language ||
       (persistedDecisionDate !== undefined &&
         previous.decisionDate !== persistedDecisionDate)
+    );
+  };
+
+  /**
+   * Whether the identifier rows this write replaces differ from the ones it
+   * writes, stated values included: the search document is built from them.
+   */
+  const identifiersRewritten = (
+    previous: {
+      identifiers: {
+        type: string;
+        normalizedValue: string;
+        value: string;
+      }[];
+    } | null,
+  ): boolean => {
+    if (previous === null) {
+      return false;
+    }
+    const key = (identifier: {
+      type: string;
+      normalizedValue: string;
+      value: string;
+    }) =>
+      `${identifier.type}\u0000${identifier.normalizedValue}\u0000${identifier.value}`;
+    const incoming = new Set(identifierRows.map(key));
+    return (
+      previous.identifiers.length !== incoming.size ||
+      previous.identifiers.some((identifier) => !incoming.has(key(identifier)))
     );
   };
 
@@ -2534,6 +2917,33 @@ const processDecisionAttempt = async ({
     });
   };
 
+  // The status of a write that another writer's row state turned away. The
+  // payload fence is this observation's only when it still owns the row.
+  const lostRowWriteStatus = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+    { payloadFenced }: { payloadFenced: boolean },
+  ): Promise<DecisionRowWriteStatus> => {
+    const winner = await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: id } },
+      columns: {
+        corpusMirrorStatus: true,
+        redactedAt: true,
+        sourceObservationOrder: true,
+      },
+    });
+    if (winner?.redactedAt) {
+      await sweepRawWriteLostToErasureTx(tx, id);
+      return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
+    }
+    if (payloadFenced && observationStillOwns(winner, observationOrder)) {
+      return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
+    }
+    return winner?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+      ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
+      : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
+  };
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -2575,30 +2985,64 @@ const processDecisionAttempt = async ({
           ? null
           : await replacedDecisionState(tx, existing.id);
 
+        // The row's stated identity and description, as this observation
+        // reads them. Compared against the stored row below so that
+        // `updated_at` moves only when one of them, or the payload, does.
+        const describedColumns = preservesExistingDetail
+          ? {}
+          : {
+              caseNumber: result.caseNumber,
+              citationKey: incomingCitationKey,
+              sourceDocumentId: persistedSourceDocumentId,
+              ecli: result.ecli,
+              court: result.court,
+              country: result.country,
+              language: result.language,
+              sheetNumber: result.sheetNumber,
+              languageGroupKey,
+              decisionDate: persistedDecisionDate,
+              decisionType: result.decisionType,
+              sourceUrl: result.sourceUrl,
+              documentUrl: result.documentUrl,
+              parserVersion: result.parserVersion ?? 0,
+            };
+        const describedMetadata = preservesExistingDetail
+          ? undefined
+          : preserveStoredTextAfterParseFailure({
+              incomingMetadata: result.metadata,
+              storedMetadata: replacedState?.metadata ?? null,
+              textFields: result.textFields,
+            });
+        const describedMetadataSql: SQL =
+          describedMetadata === undefined
+            ? sql`${caseLawDecisions.metadata}`
+            : sql`${JSON.stringify(describedMetadata)}::text::jsonb`;
+        // An inline observation with no document marks a row that holds none
+        // as listing-only. Decided in the statement, against the row's own
+        // payload, which this statement leaves as it is whenever the marker
+        // can apply: the document-less payload goes through its own guarded
+        // statement below.
+        const markedMetadata: SQL | undefined =
+          storesUnpublishedWithoutDocument && pendingMirrorPayload === null
+            ? sql`CASE WHEN ${rowHoldsDocument} THEN ${describedMetadataSql} ELSE ${metadataMarkedListingOnly(describedMetadataSql)} END`
+            : undefined;
+        const metadataWrite = markedMetadata ?? describedMetadata;
+        const writtenPayload = payloadNeedsGuard ? {} : payloadColumns;
+        const contentChanged = sql`(
+          ${identifiersRewritten(replacedState)}::boolean
+          OR ${payloadChangedSql(corpusPlan, writtenPayload)}
+          OR ${storedRowDiffers(describedColumns)}
+          OR ${caseLawDecisions.metadata} IS DISTINCT FROM ${markedMetadata ?? describedMetadataSql}
+        )`;
+
         const updated = await tx
           .update(caseLawDecisions)
           .set({
+            ...describedColumns,
+            ...(metadataWrite === undefined ? {} : { metadata: metadataWrite }),
             ...(preservesExistingDetail
               ? {}
               : {
-                  caseNumber: result.caseNumber,
-                  citationKey: incomingCitationKey,
-                  sourceDocumentId: persistedSourceDocumentId,
-                  ecli: result.ecli,
-                  court: result.court,
-                  country: result.country,
-                  language: result.language,
-                  sheetNumber: result.sheetNumber,
-                  languageGroupKey,
-                  decisionDate: persistedDecisionDate,
-                  decisionType: result.decisionType,
-                  sourceUrl: result.sourceUrl,
-                  documentUrl: result.documentUrl,
-                  metadata: preserveStoredTextAfterParseFailure({
-                    incomingMetadata: result.metadata,
-                    storedMetadata: replacedState?.metadata ?? null,
-                    textFields: result.textFields,
-                  }),
                   sourceRaw: null,
                   // A failed upload writes no pointer at all: the one this
                   // attempt read may since have been moved, and writing it
@@ -2607,9 +3051,8 @@ const processDecisionAttempt = async ({
                   ...(s3UploadFailed
                     ? {}
                     : { sourceRawS3Key, sourceRawContentType }),
-                  parserVersion: result.parserVersion ?? 0,
                 }),
-            ...(payloadNeedsGuard ? {} : payloadColumns),
+            ...writtenPayload,
             // Partial observations preserve the authoritative detail hash.
             // When S3 upload failed, keeping the old hash also makes the next
             // cycle retry instead of permanently accepting a stale raw source.
@@ -2620,7 +3063,10 @@ const processDecisionAttempt = async ({
             sourceObservedAt: observedAt,
             sourceObservationOrder: observationOrder,
             sourceObservationHash: result.rawHash,
-            updatedAt: new Date(),
+            // A new observation of the same decision is not a modification:
+            // the row moves in the recent-activity reads and the search
+            // refresh only when what it says changed.
+            updatedAt: sql`CASE WHEN ${contentChanged} THEN now() ELSE ${caseLawDecisions.updatedAt} END`,
           })
           .where(
             and(
@@ -2631,6 +3077,14 @@ const processDecisionAttempt = async ({
                 ? eq(
                     caseLawDecisions.corpusMirrorStatus,
                     CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                  )
+                : undefined,
+              storedPayloadUnchanged
+                ? and(
+                    sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
+                    sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
+                    sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
+                    sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
                   )
                 : undefined,
               pendingMirrorPayload === null
@@ -2663,58 +3117,44 @@ const processDecisionAttempt = async ({
           // A newer observation owns the row. Its durable mirror state
           // decides whether this page may advance: a pending winner still
           // needs the source page as its replay path.
-          const winner = await tx.query.caseLawDecisions.findFirst({
-            where: { id: { eq: existing.id } },
-            columns: { corpusMirrorStatus: true, redactedAt: true },
+          // When it is still this observation's to write, the miss was the
+          // payload fence: another write replaced what the plan compared
+          // against.
+          return await lostRowWriteStatus(tx, existing.id, {
+            payloadFenced: storedPayloadUnchanged,
           });
-          if (winner?.redactedAt) {
-            await sweepRawWriteLostToErasureTx(tx, existing.id);
-            return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
-          }
-          return winner?.corpusMirrorStatus ===
-            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-            ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
-            : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
         }
 
         if (payloadNeedsGuard) {
-          const payloadApplied = (
+          // The row is locked by the update above, so what this reads is
+          // what the write below would see. A row that holds a document is
+          // not overwritten by one that carries none; a row that already
+          // holds this document-less payload is not rewritten with it.
+          const payloadState = (
             await tx
-              .update(caseLawDecisions)
-              .set({
-                ...payloadColumns,
-                // Decided with the write: the marker says the row holds no
-                // document, and this WHERE is the only place that is known.
-                ...(storesUnpublishedWithoutDocument
-                  ? {
-                      metadata: metadataMarkedListingOnly(
-                        caseLawDecisions.metadata,
-                      ),
-                    }
-                  : {}),
+              .select({
+                holdsDocument: rowHoldsDocument,
+                differs: sql<boolean>`${storedRowDiffers(payloadColumns)}`,
               })
+              .from(caseLawDecisions)
               .where(
                 and(
                   eq(caseLawDecisions.id, existing.id),
                   isNull(caseLawDecisions.redactedAt),
-                  sql`not ${rowHoldsDocument}`,
                 ),
               )
-              .returning({ id: caseLawDecisions.id })
+              .limit(1)
           ).at(0);
-          if (!payloadApplied) {
-            const winner = await tx.query.caseLawDecisions.findFirst({
-              where: { id: { eq: existing.id } },
-              columns: { corpusMirrorStatus: true, redactedAt: true },
+          if (payloadState === undefined || payloadState.holdsDocument) {
+            return await lostRowWriteStatus(tx, existing.id, {
+              payloadFenced: false,
             });
-            if (winner?.redactedAt) {
-              await sweepRawWriteLostToErasureTx(tx, existing.id);
-              return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
-            }
-            return winner?.corpusMirrorStatus ===
-              CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-              ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
-              : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
+          }
+          if (payloadState.differs) {
+            await tx
+              .update(caseLawDecisions)
+              .set({ ...payloadColumns, updatedAt: new Date() })
+              .where(eq(caseLawDecisions.id, existing.id));
           }
         }
 
@@ -2787,16 +3227,12 @@ const processDecisionAttempt = async ({
         // overlapping resolver batch. Re-entrant when a reopen helper above
         // already acquired it for this transaction.
         await lockCitationGraph(tx);
-        await tx
-          .delete(caseLawCitations)
-          .where(eq(caseLawCitations.citingDecisionId, existing.id));
-
-        if (citationRows.length > 0) {
-          await tx
-            .insert(caseLawCitations)
-            .values(await settleCitationPolarity(tx, citationRows, observedAt));
-          await resolveCitationsForDecision(tx, existing.id);
-        }
+        await writeDecisionCitations(tx, {
+          decisionId: existing.id,
+          rows: citationRows,
+          observedAt,
+          stored: true,
+        });
 
         await reconcileStableProjection(tx, existing.id, projectionLock);
         return DECISION_ROW_WRITE_STATUS.APPLIED;
@@ -2862,14 +3298,17 @@ const processDecisionAttempt = async ({
       await announceDecisionIdentifiers(tx, decisionRow.id, identifierRows);
 
       if (citationRows.length > 0) {
-        await tx
-          .insert(caseLawCitations)
-          .values(await settleCitationPolarity(tx, citationRows, observedAt));
-        // Resolve what was just written, in the transaction that wrote it.
+        // Settled as they are written, in the transaction that writes them.
         // One indexed lookup per citation against the fetch and parse this
         // page already paid for; without it every new citation waits for the
         // standing walk to come round, and the citator trails the crawl.
-        await resolveCitationsForDecision(tx, decisionRow.id);
+        await lockCitationGraph(tx);
+        await writeDecisionCitations(tx, {
+          decisionId: decisionRow.id,
+          rows: citationRows,
+          observedAt,
+          stored: false,
+        });
       }
       await reconcileStableProjection(tx, decisionRow.id, projectionLock);
       return DECISION_ROW_WRITE_STATUS.APPLIED;
@@ -3016,6 +3455,27 @@ const processDecisionAttempt = async ({
         inserted: false,
         searchVectorFailed: false,
       };
+    case DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD:
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt,
+        observationOrder,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
+        corpus,
+        corpusBatch,
+        judges,
+        polarityRules,
+      });
     default:
       writeStatus satisfies never;
       return panic(`Unhandled write status: ${String(writeStatus)}`);

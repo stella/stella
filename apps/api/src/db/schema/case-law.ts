@@ -13,6 +13,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
+import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
 import {
@@ -259,6 +260,9 @@ const STATUTE_CITATION_COUNT_STATUS_SQL_VALUES =
 const CITATION_RESOLUTION_SCOPE_SQL_VALUES = CITATION_RESOLUTION_SCOPES.map(
   (scope) => sql.raw(`'${scope}'`),
 );
+
+const CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES =
+  CITATION_AUTHORITY_SWEEP_SCOPES.map((scope) => sql.raw(`'${scope}'`));
 
 const RULE_SOURCE_SQL_VALUES = RULE_SOURCES.map((source) =>
   sql.raw(`'${source}'`),
@@ -520,13 +524,17 @@ export const caseLawDecisions = p.pgTable(
      * computes. Precomputed by the post-ingestion citation pass so
      * search reads it instead of recomputing the citation-graph
      * aggregate per query. Decays slowly with time; refreshed on a
-     * schedule. `citationAuthorityComputedAt` tracks staleness.
+     * schedule, whose position lives in `case_law_citation_authority_sweep`.
      */
     citationAuthority: p
       .doublePrecision("citation_authority")
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
+    /**
+     * Retired: the sweep no longer stamps rows it recomputes. Kept for one
+     * release so a task from the previous one can still write it.
+     */
     citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     /**
      * Object-storage keys for the canonical corpus payloads. Populated
@@ -699,29 +707,13 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
-    // The authority sweep's whole bookkeeping. It takes the least recently
-    // computed decisions older than its staleness boundary, and recomputing
-    // one stamps it with the current instant, which puts it past the boundary:
-    // the walk advances by doing its work, with no cursor to persist. That
-    // only holds if the ordering is an index range rather than a sort of the
-    // corpus, so the direction and null placement here have to match the
-    // statement's ORDER BY exactly. Never-computed rows sort first, which is
-    // what makes the same mechanism serve the initial backfill.
+    // The previous authority sweep's order, kept for the length of one
+    // rollout: a task still on the previous revision sorts by it. Removal
+    // condition: that release fully rolled out; drop this declaration and the
+    // index together in a follow-up migration.
     p
       .index("case_law_decisions_authority_due_idx")
       .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
-    // Indexes of the retired projection's markers, dropped with the columns.
-    p.index("case_law_decisions_indexed_idx").on(t.indexedHash, t.contentHash),
-    p
-      .index("case_law_decisions_corpus_pending_idx")
-      .on(t.id)
-      .where(
-        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
-      ),
-    p
-      .index("case_law_decisions_corpus_hash_pending_idx")
-      .on(t.id)
-      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     // The resolver's candidate lookup, answered entirely from the index. The
     // key alone finds the candidates; jurisdiction and date are what decide
     // between them, and the target id is what gets written. Carrying all four
@@ -796,25 +788,6 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
-      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
-    // The attempt-led index the one above replaces, kept for the length of
-    // one rollout. A migration lands before the deployment finishes, so
-    // tasks still on the previous revision go on ordering the tier by
-    // attempt count, and without this each of their queue refills would
-    // sort the whole backlog. Declared rather than merely left in the
-    // database so the schema states what the database holds.
-    //
-    // Removal condition: every runner on the date-led order, i.e. the
-    // release carrying it fully rolled out. Drop this declaration and the
-    // index together in a follow-up migration.
-    p
-      .index("case_law_decisions_document_pending_idx")
-      .on(
-        t.sourceId,
-        t.documentFetchAttempts,
-        t.decisionDate.desc().nullsLast(),
-        t.id,
-      )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     // Same rule as on the citation side: null means "does not canonicalize",
     // and an empty string would make every such decision a candidate for
@@ -1827,7 +1800,6 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
       )
       .where(isNotNull(t.workEli)),
-    p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
     p.check(
       "provision_citations_unit_values",
       sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,
@@ -2031,6 +2003,34 @@ export const caseLawCitationResolutionProgress = p.pgTable(
     p.check(
       "case_law_citation_resolution_progress_cursor_pair",
       sql`(${t.cursorCitingDecisionId} IS NULL) = (${t.cursorCitationId} IS NULL)`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Where the citation-authority sweep is in its current pass.
+ *
+ * The pass walks decisions in id order and writes only the ones whose value
+ * moved, so the schedule cannot live on the rows it leaves alone. One row:
+ * the decision the last batch stopped on (null between passes) and when the
+ * current or last pass began, which is what says the next one is due.
+ */
+export const caseLawCitationAuthoritySweep = p.pgTable(
+  "case_law_citation_authority_sweep",
+  {
+    scope: p.text({ enum: CITATION_AUTHORITY_SWEEP_SCOPES }).primaryKey(),
+    cursorDecisionId: safeUuid<"caseLawDecision">("cursor_decision_id"),
+    passStartedAt: timestamptz("pass_started_at"),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_citation_authority_sweep_scope_values",
+      sql`${t.scope} IN (${sql.join(
+        CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES,
+        sql.raw(","),
+      )})`,
     ),
     ...globalCaseLawPolicies(),
   ],
