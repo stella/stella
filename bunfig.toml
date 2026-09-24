@@ -15,13 +15,6 @@ minimumReleaseAgeExcludes = [
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
   # platform binary in the same exception: Bun otherwise skips quarantined
   # optional bindings and leaves the executable unavailable.
-  "turbo", # quarantine-expires: 2026-09-23T21:07:36.588Z
-  "@turbo/darwin-64", # quarantine-expires: 2026-09-23T21:06:33.765Z
-  "@turbo/darwin-arm64", # quarantine-expires: 2026-09-23T21:06:43.359Z
-  "@turbo/linux-64", # quarantine-expires: 2026-09-23T21:07:09.636Z
-  "@turbo/linux-arm64", # quarantine-expires: 2026-09-23T21:07:48.063Z
-  "@turbo/windows-64", # quarantine-expires: 2026-09-23T21:07:04.983Z
-  "@turbo/windows-arm64", # quarantine-expires: 2026-09-23T21:07:33.596Z
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
