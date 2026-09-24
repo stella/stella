@@ -40,6 +40,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -1644,8 +1645,20 @@ const fetchFormex = async (
   if (manifestation === undefined) {
     return undefined;
   }
-  const contentUrl = `${manifestation.uri.replace("http://", "https://")}/DOC_1`;
-  const response = await fetchPublisher(contentUrl, {
+  // The address comes from the notice, so it is held to Cellar's host.
+  const contentUrl = publisherTarget(
+    ADAPTER_KEYS.EU_ECJ,
+    `${manifestation.uri.replace("http://", "https://")}/DOC_1`,
+  );
+  if (Result.isError(contentUrl)) {
+    logger.warn("case_law.ingestion.formex_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      reason: contentUrl.error.message,
+      url: contentUrl.error.url,
+    });
+    return undefined;
+  }
+  const response = await fetchPublisher(contentUrl.value, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1658,7 +1671,7 @@ const fetchFormex = async (
     logger.warn("case_law.ingestion.formex_unavailable", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       httpStatus: response.status,
-      url: contentUrl,
+      url: contentUrl.value,
     });
     return undefined;
   }
