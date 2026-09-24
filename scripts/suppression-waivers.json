@@ -141,26 +141,6 @@
       "count": 1,
       "reason": "resolveUploadMime reads only a validated extension from the name; nothing is stored from it",
       "evidence": "apps/api/src/lib/files/utils.ts#resolveUploadMime"
-    },
-    {
-      "id": "SW-0021",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts",
-      "symbol": "readOverviewActivityActorRows",
-      "count": 2,
-      "reason": "actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends",
-      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
-    },
-    {
-      "id": "SW-0022",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts",
-      "symbol": "readOverviewActivityPage",
-      "count": 1,
-      "reason": "actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends",
-      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
     }
   ]
 }

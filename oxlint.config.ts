@@ -3543,6 +3543,11 @@ export default defineConfig({
                 reason:
                   "operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by",
               },
+              {
+                file: "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts",
+                reason:
+                  "actor ids come only from audit rows already scoped to the authorized organization and workspace; a membership join would erase retained attribution after membership ends",
+              },
             ],
           },
         ],
