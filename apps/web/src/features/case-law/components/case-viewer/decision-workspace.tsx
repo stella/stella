@@ -72,13 +72,7 @@ type DecisionWorkspaceDecision = Pick<
   | "metadata"
   | "sourceAttributionUrl"
   | "textFields"
-> & {
-  /**
-   * Never sent by the public read: `useDecisionAnalysis` mirrors a finished
-   * analysis into the decision's cache entry, so a remount reads it here.
-   */
-  analysis?: unknown;
-};
+>;
 
 type DecisionWorkspaceBaseProps = {
   decision: DecisionWorkspaceDecision;
@@ -171,8 +165,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     target: annotationTarget,
   });
   // Only an account may start a run, so only this branch polls. Everything
-  // below reads `analysisState` alone: a gated reader's state never leaves
-  // `idle`, which draws the offer rather than an empty analysis column.
+  // below reads `analysisState` alone: a gated reader never starts a run, so
+  // its state stays `idle` (the offer rather than an empty analysis column)
+  // unless this session already fetched the finished analysis.
   const analysisRunnable = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
@@ -212,7 +207,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
-    useDecisionAnalysis(decisionId, decision.analysis ?? null);
+    useDecisionAnalysis(decisionId);
   const generate = useCallback(async () => {
     if (!ensureAIAvailable) {
       return;
