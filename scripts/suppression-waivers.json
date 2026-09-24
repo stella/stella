@@ -126,11 +126,11 @@
       "id": "SW-0016",
       "kind": "permanent",
       "rule": "security-guards/no-raw-filename-write",
-      "file": "apps/api/src/handlers/templates/fill-to-workspace.ts",
+      "file": "apps/api/src/handlers/templates/fills/create.ts",
       "symbol": "fillTemplateToWorkspace",
       "count": 1,
       "reason": "resolveDocumentFileName passes the requested name through sanitizeFilename",
-      "evidence": "apps/api/src/handlers/templates/fill-to-workspace.ts#resolveDocumentFileName"
+      "evidence": "apps/api/src/handlers/templates/fills/create.ts#resolveDocumentFileName"
     },
     {
       "id": "SW-0017",
