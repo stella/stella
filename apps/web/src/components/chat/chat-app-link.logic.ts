@@ -1,0 +1,60 @@
+import { Result } from "better-result";
+
+import {
+  type CaseLawDecisionRouteParams,
+  parseCaseLawDecisionPath,
+} from "@stll/api-contract/case-law-decision-route";
+import {
+  parseStatutePath,
+  type StatuteRouteParams,
+} from "@stll/api-contract/statute-route";
+
+/** A statute page's address, and the provision anchor it lands on, if any. */
+export type StatuteLink = {
+  anchor: string | null;
+  params: StatuteRouteParams;
+};
+
+/**
+ * What an http link in a chat answer names. A link to one of this app's own
+ * decision or statute pages is that record, not a web page to preview: a tool
+ * hands the model those URLs, and a user pastes them.
+ */
+export type ChatHttpLink =
+  | { type: "decision"; params: CaseLawDecisionRouteParams }
+  | { type: "statute"; link: StatuteLink }
+  | { type: "external" };
+
+const readAnchor = (hash: string): string | null => {
+  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (fragment === "") {
+    return null;
+  }
+
+  return Result.try(() => decodeURIComponent(fragment)).unwrapOr(null);
+};
+
+/** `appOrigins`: the origins this app answers on (the page's, the public URL). */
+export const classifyChatHttpLink = (
+  url: URL,
+  appOrigins: ReadonlySet<string>,
+): ChatHttpLink => {
+  if (!appOrigins.has(url.origin)) {
+    return { type: "external" };
+  }
+
+  const decision = parseCaseLawDecisionPath(url.pathname);
+  if (decision !== null) {
+    return { type: "decision", params: decision };
+  }
+
+  const statute = parseStatutePath(url.pathname);
+  if (statute !== null) {
+    return {
+      type: "statute",
+      link: { anchor: readAnchor(url.hash), params: statute },
+    };
+  }
+
+  return { type: "external" };
+};

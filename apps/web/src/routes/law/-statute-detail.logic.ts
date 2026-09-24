@@ -6,7 +6,6 @@ import * as v from "valibot";
 import {
   createStatutePath,
   createStatuteRouteParams,
-  extractStatuteDocumentIdFromRouteParam,
   normalizeStatuteVersionSegment,
   type StatuteRouteParams,
   toStatuteCountrySegment,
@@ -23,6 +22,7 @@ import type {
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
 import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
+import { resolveStatuteRoute } from "@/features/statutes/statute-route-resolution";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicLawCanonicalUrl,
@@ -30,7 +30,6 @@ import {
   createStatuteJsonLd,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the
@@ -311,75 +310,38 @@ export const loadPublicStatuteRoute = async ({
   queryClient,
   search,
 }: LoadPublicStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
-  const country = toStatuteCountrySegment(params.country);
-  if (!isPublicStatuteCountry(country)) {
-    notFound({ throw: true });
-  }
-  const requestedDate =
-    normalizeStatuteVersionSegment(params.version) ?? search.asOf;
-  const readBySlug = async (slug: string, asOf: string | undefined) =>
-    await ensureRouteQueryData(
-      queryClient,
-      statuteBySlugOptions(
-        asOf === undefined ? { country, slug } : { country, slug, asOf },
-      ),
-    );
+  const resolution = await resolveStatuteRoute(
+    { ...params, asOf: search.asOf },
+    {
+      byId: async (documentId) =>
+        await ensureRouteQueryData(
+          queryClient,
+          publicStatuteOptions(documentId),
+        ),
+      bySlug: async (key) =>
+        await ensureRouteQueryData(queryClient, statuteBySlugOptions(key)),
+    },
+  );
 
-  // The id form addresses one consolidation of a Work the corpus holds no
-  // slug for. It names that text directly, so a date cannot narrow it; once
-  // the backfill mints a slug, the canonical address below moves the reader on.
-  const routeDocumentId = extractStatuteDocumentIdFromRouteParam(params.slug);
-  if (routeDocumentId !== null) {
-    const addressed = await ensureRouteQueryData(
-      queryClient,
-      publicStatuteOptions(routeDocumentId),
-    );
-
-    if (addressed === null) {
+  switch (resolution.type) {
+    case "unserved":
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
+    case "missing":
       return statuteNotFound();
-    }
-
-    return await settleStatuteRoute({
-      hash,
-      params,
-      queryClient,
-      search,
-      statute: addressed,
-      work: addressed,
-    });
+    case "found":
+      return await settleStatuteRoute({
+        hash,
+        params,
+        queryClient,
+        search,
+        statute: resolution.statute,
+        work: resolution.work,
+      });
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
   }
-
-  const addressed = await readBySlug(params.slug, requestedDate);
-  if (addressed !== null) {
-    return await settleStatuteRoute({
-      hash,
-      params,
-      queryClient,
-      search,
-      statute: addressed,
-      work: addressed,
-    });
-  }
-
-  if (requestedDate === undefined) {
-    return statuteNotFound();
-  }
-
-  // Nothing was in force on the requested day; the Work still has chrome to
-  // answer with, so it is read without one.
-  const work = await readBySlug(params.slug, undefined);
-  if (work === null) {
-    return statuteNotFound();
-  }
-
-  return await settleStatuteRoute({
-    hash,
-    params,
-    queryClient,
-    search,
-    statute: null,
-    work,
-  });
 };
 
 export const createPublicStatuteHead = ({
