@@ -19,6 +19,13 @@ on:
 permissions:
   contents: read
 
+# Each deploy ships the whole site at its commit, so a newer push makes an
+# older deploy redundant. Without this, an older run's retry re-dispatches
+# its stale commit after a newer one and the site ends up behind main.
+concurrency:
+  group: deploy-landing-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     # Belt-and-suspenders: the trigger above already restricts to
@@ -113,12 +120,49 @@ jobs:
               --exit-status
           }
 
+          # The private workflow keeps one running and one pending deploy; a
+          # newer dispatch replaces the pending one, which ends as cancelled.
+          # A newer deploy that is still running or already succeeded covers
+          # this commit, so neither a failure nor a retry is warranted.
+          superseded() {
+            [[ -n "$run_id" ]] || return 1
+            local created_at newer
+            created_at="$(
+              gh run view "$run_id" \
+                --repo "$PRIVATE_WORKFLOWS_REPO" \
+                --json createdAt \
+                --jq .createdAt
+            )" || return 1
+            newer="$(
+              gh run list \
+                --repo "$PRIVATE_WORKFLOWS_REPO" \
+                --workflow deploy-landing.yml \
+                --limit 20 \
+                --json createdAt,status,conclusion \
+                --jq "[.[] | select(.createdAt > \"$created_at\") | select(.status != \"completed\" or .conclusion == \"success\")] | length"
+            )" || return 1
+            [[ "$newer" -gt 0 ]]
+          }
+
+          run_id=""
           if attempt_deploy; then
+            exit 0
+          fi
+          if superseded; then
+            echo "::notice::A newer landing deploy supersedes ${SOURCE_SHA}."
             exit 0
           fi
           echo "::warning::Landing deploy failed; retrying once in 3 minutes." >&2
           sleep 180
-          attempt_deploy
+          run_id=""
+          if attempt_deploy; then
+            exit 0
+          fi
+          if superseded; then
+            echo "::notice::A newer landing deploy supersedes ${SOURCE_SHA}."
+            exit 0
+          fi
+          exit 1
 
       - name: Ping IndexNow with sitemap URLs
         # The key file is hosted at apps/landing/public/<key>.txt so
