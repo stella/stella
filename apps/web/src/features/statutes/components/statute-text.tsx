@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -15,11 +16,16 @@ import type {
   AnchorPresentation,
   TextAnchor,
 } from "@/components/legal-reader/document-ast-text";
+import {
+  holdLanding,
+  readerBlockByAnchor,
+} from "@/components/legal-reader/reader-landing";
 import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * What a provision's incoming citations are filed under: the work's own
@@ -42,6 +48,11 @@ type StatuteTextProps = {
   documentId: string;
   fulltext: string | null;
   language: string;
+  /**
+   * The rendered block the reader was sent to. It keeps a marker, and the
+   * text lands on it once it is shown.
+   */
+  landingAnchorId?: string | undefined;
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
   statuteTitle: string;
@@ -107,6 +118,7 @@ export const StatuteText = ({
   citationWork,
   documentId,
   fulltext,
+  landingAnchorId,
   language,
   masthead,
   provisionCitationCounts,
@@ -116,12 +128,26 @@ export const StatuteText = ({
 }: StatuteTextProps) => {
   const t = useTranslations();
   const { open } = useInspectorView();
+  const articleRef = useRef<HTMLElement | null>(null);
+
+  // The same arrival the decision reader makes: straight onto the block, held
+  // there while the page around it settles.
+  useExternalSyncEffect(() => {
+    const article = articleRef.current;
+    if (article === null || landingAnchorId === undefined) {
+      return undefined;
+    }
+    const target = readerBlockByAnchor(article, landingAnchorId);
+    return target === null ? undefined : holdLanding({ article, target });
+  }, [landingAnchorId]);
+
   if (blocks.length > 0) {
     const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
     return (
       <article
         className="reader-statute text-card-foreground text-start"
         lang={language}
+        ref={articleRef}
         style={READER_STYLE}
       >
         {masthead !== null && <StatuteMasthead masthead={masthead} />}
@@ -156,6 +182,7 @@ export const StatuteText = ({
               anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
+              landing={block.anchorId === landingAnchorId}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
             />
@@ -199,6 +226,7 @@ type StatuteBlockProps = {
   anchorPresentation: AnchorPresentation;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
+  landing?: boolean | undefined;
   /** What a provision heading offers beside its designation. */
   provisionAccessory?:
     | ((provision: ProvisionHeadingLine) => ReactNode)
@@ -215,6 +243,7 @@ export const StatuteBlock = ({
   anchorPresentation,
   anchorsByPieceId,
   block,
+  landing = false,
   provisionAccessory,
   rangesByPieceId,
 }: StatuteBlockProps) => {
@@ -229,6 +258,7 @@ export const StatuteBlock = ({
       anchorPresentation={anchorPresentation}
       anchorsByPieceId={anchorsByPieceId}
       block={block}
+      landing={landing}
       headingPresentation={
         provision === null
           ? undefined
