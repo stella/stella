@@ -1664,8 +1664,6 @@
       "apps/api/src/handlers/playbooks/starters.ts": 3,
       "apps/api/src/handlers/time-entries/get.ts": 1,
       "apps/api/src/handlers/time-entries/list.ts": 2,
-      "apps/api/src/lib/bilingual/run-queue.ts": 1,
-      "apps/api/src/lib/document-review/run-queue.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 2,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 2,

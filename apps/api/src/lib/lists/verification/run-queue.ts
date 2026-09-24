@@ -17,8 +17,6 @@ import { and, asc, eq, inArray, lt, or } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   fields,
   legalListClaims,
@@ -33,10 +31,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import {
-  QUEUE_REQUEUE_OUTCOME,
-  requeueDeterministicJob,
-} from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -52,22 +46,22 @@ import type {
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
-  scanPendingRows,
+  requeueQueuedRuns,
 } from "@/api/lib/queue-reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
+import type {
+  QueuedRunCursorRow,
+  ReconcileQueuedRunsResult,
+} from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedListVerificationRunId,
-  brandPersistedUserId,
-  brandValidatedWorkflowActorKey,
-} from "@/api/lib/safe-id-boundaries";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
+import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import {
   formatModelRef,
   getTanStackTextModelInfoForRole,
@@ -81,7 +75,6 @@ const JOB_ATTEMPTS = 1;
  *  under `STUCK_RUNNING_MS`, which catches a worker that died. */
 const RUN_TIMEOUT_MS = 15 * 60 * 1000;
 const SERVICE_TIER = "standard" as const;
-const JANITOR_INTERVAL_MS = 5 * 60 * 1000;
 const STUCK_RUNNING_MS = 30 * 60 * 1000;
 /** Younger `queued` rows may simply be backlogged. */
 const STUCK_QUEUED_MS = DAY_IN_MS;
@@ -136,17 +129,19 @@ export const enqueueListVerificationRun = async (
 /**
  * Fail runs a hard worker death left behind: a `kill -9` emits no `failed`
  * event, and the claim guard makes a stalled re-delivery a no-op, so the row
- * would hold its document's active slot forever. Cross-workspace, hence the
- * root handle.
+ * would hold its document's active slot forever. Cross-workspace, so it runs
+ * on the scheduler's handle.
  */
-export const reconcileStuckListVerificationRuns = async (): Promise<number> => {
+export const reconcileStuckListVerificationRuns = async (
+  db: Pick<SchedulerDb, "update">,
+): Promise<number> => {
   const runningCutoff = new Date(
     Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
   );
   const queuedCutoff = new Date(
     Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
   );
-  const recovered = await rootDb
+  const recovered = await db
     .update(legalListVerificationRuns)
     .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
     .where(
@@ -170,22 +165,11 @@ const runCursorCodec = createTimestampIdCursorCodec({
   brandId: brandPersistedListVerificationRunId,
 });
 
-type QueuedRunRow = {
-  createdCursor: string;
-  id: SafeId<"legalListVerificationRun">;
-  organizationId: SafeId<"organization">;
-  requestedBy: string | null;
-  workspaceId: SafeId<"workspace">;
-};
+type QueuedRunRow = QueuedRunCursorRow<"legalListVerificationRun">;
 
 type ReconcileQueuedOptions = {
-  db?: Pick<typeof rootDb, "select">;
+  db: Pick<SchedulerDb, "select">;
   queue?: RequeueableQueue<ListVerificationJobData>;
-};
-
-type ReconcileQueuedResult = ReconcileScanResult & {
-  /** Runs whose requester's account is gone: counted, left to the janitor. */
-  unattributed: number;
 };
 
 /**
@@ -195,11 +179,9 @@ type ReconcileQueuedResult = ReconcileScanResult & {
  * job id is the run id and only a `queued` row is claimable.
  */
 export const reconcileQueuedListVerificationRuns = async ({
-  db = rootDb,
+  db,
   queue = getQueue(),
-}: ReconcileQueuedOptions = {}): Promise<ReconcileQueuedResult> => {
-  let unattributed = 0;
-
+}: ReconcileQueuedOptions): Promise<ReconcileQueuedRunsResult> => {
   const after = (cursor: QueuedRunRow | null) =>
     cursor === null
       ? undefined
@@ -229,62 +211,13 @@ export const reconcileQueuedListVerificationRuns = async ({
       )
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  const handle = async (run: QueuedRunRow): Promise<boolean> => {
-    if (run.requestedBy === null) {
-      unattributed += 1;
-      return false;
-    }
-    const { data, name, opts } = runJob({
-      organizationId: run.organizationId,
-      runId: run.id,
-      userId: brandPersistedUserId(run.requestedBy),
-      workspaceId: run.workspaceId,
-    });
-    const outcome = await Result.tryPromise({
-      try: async () =>
-        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: run.id });
-      return false;
-    }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
-  };
-
-  const scan = await scanPendingRows({ handle, readPage });
-  return { ...scan, unattributed };
+  return await requeueQueuedRuns({ queue, readPage, runJob });
 };
 
-type RunActor = {
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
-  runId: SafeId<"legalListVerificationRun">;
-};
+type RunActor = RootRunActor<"legalListVerificationRun">;
 
-const brandActor = (data: ListVerificationJobData): RunActor => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
-  const userId = brandPersistedUserId(data.userId);
-  const tenant = {
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  };
-  return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
-    userId,
-    runId: brandPersistedListVerificationRunId(data.runId),
-    scopedDb: createRootScopedDb(tenant),
-    safeDb: createRootSafeDb(tenant),
-  };
-};
+const brandActor = (data: ListVerificationJobData): RunActor =>
+  createRootRunActor(data, brandPersistedListVerificationRunId);
 
 type ClaimedRun = {
   fileFieldId: SafeId<"field">;
@@ -615,21 +548,6 @@ export const initListVerificationRunWorker = () => {
     }),
   );
 
-  const closeJanitor = startNonOverlappingInterval({
-    intervalMs: JANITOR_INTERVAL_MS,
-    run: async () => {
-      const recovered = await reconcileStuckListVerificationRuns();
-      if (recovered > 0) {
-        logger.warn("list_verification_run.recovered_stuck", {
-          count: String(recovered),
-        });
-      }
-    },
-    onError: (error) => {
-      captureError(error, { operation: "list_verification_run.reconcile" });
-    },
-  });
-
   logger.info("list_verification_run.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
   });
@@ -637,7 +555,6 @@ export const initListVerificationRunWorker = () => {
   return {
     queues: [QUEUE_NAME] as const,
     close: async () => {
-      await closeJanitor();
       await worker.close();
     },
   };

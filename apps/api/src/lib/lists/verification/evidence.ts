@@ -7,6 +7,7 @@
  * longer says where the fact comes from.
  */
 
+import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -130,18 +131,13 @@ export const readVerificationEvidence = async ({
               VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX,
           );
 
-  const sourcesByFact = new Map<
-    SafeId<"entity">,
-    VerificationEvidenceSource[]
-  >();
+  const sourcesByFact = new Map<SafeId<"entity">, VerificationEvidenceSource[]>(
+    facts.map((fact) => [fact.factEntityId, []]),
+  );
   for (const { itemEntityId, quote, ...source } of sources) {
-    const pinned = { ...source, quote: quote === null ? null : clip(quote) };
-    const bucket = sourcesByFact.get(itemEntityId);
-    if (bucket === undefined) {
-      sourcesByFact.set(itemEntityId, [pinned]);
-    } else {
-      bucket.push(pinned);
-    }
+    sourcesByFact
+      .get(itemEntityId)
+      ?.push({ ...source, quote: quote === null ? null : clip(quote) });
   }
 
   return {
@@ -157,7 +153,9 @@ export const readVerificationEvidence = async ({
         medium: fact.medium,
         confidence: fact.confidence,
         interpretationNote: fact.interpretationNote,
-        sources: sourcesByFact.get(fact.factEntityId) ?? [],
+        sources:
+          sourcesByFact.get(fact.factEntityId) ??
+          panic("list verification evidence lost a fact's source bucket"),
       })),
     },
   };

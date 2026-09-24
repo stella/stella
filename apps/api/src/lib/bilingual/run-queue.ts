@@ -47,10 +47,6 @@ import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import {
-  QUEUE_REQUEUE_OUTCOME,
-  requeueDeterministicJob,
-} from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
@@ -65,7 +61,7 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
-  scanPendingRows,
+  requeueQueuedRuns,
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -208,8 +204,6 @@ export const reconcileQueuedBilingualRuns = async ({
   db = rootDb,
   queue = getQueue(),
 }: ReconcileQueuedBilingualRunsOptions = {}): Promise<ReconcileQueuedBilingualRunsResult> => {
-  let unattributed = 0;
-
   const after = (cursor: QueuedBilingualRunRow | null) => {
     if (cursor === null) {
       return undefined;
@@ -241,31 +235,7 @@ export const reconcileQueuedBilingualRuns = async ({
       )
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  const handle = async (run: QueuedBilingualRunRow): Promise<boolean> => {
-    if (run.requestedBy === null) {
-      unattributed += 1;
-      return false;
-    }
-    const { data, name, opts } = runJob({
-      organizationId: run.organizationId,
-      runId: run.id,
-      userId: brandPersistedUserId(run.requestedBy),
-      workspaceId: run.workspaceId,
-    });
-    const outcome = await Result.tryPromise({
-      try: async () =>
-        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: run.id });
-      return false;
-    }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
-  };
-
-  const scan = await scanPendingRows({ handle, readPage });
-  return { ...scan, unattributed };
+  return await requeueQueuedRuns({ queue, readPage, runJob });
 };
 
 export const initBilingualRunWorker = () => {

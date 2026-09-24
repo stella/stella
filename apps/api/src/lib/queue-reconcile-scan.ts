@@ -9,10 +9,18 @@
  * page's contents.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
 export const RECONCILE_SCAN_PAGE_SIZE = 100;
@@ -37,6 +45,21 @@ const RECONCILE_MAX_PAGES = 20;
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
+};
+
+/** A queued run as a requeue sweep reads it: its keyset cursor and the actor
+ *  its job is rebuilt from. */
+export type QueuedRunCursorRow<TRun extends SafeIdType> = {
+  createdCursor: string;
+  id: SafeId<TRun>;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+export type ReconcileQueuedRunsResult = ReconcileScanResult & {
+  /** Runs whose requester's account is gone: counted, left to the janitor. */
+  unattributed: number;
 };
 
 /**
@@ -132,4 +155,60 @@ export const scanPendingRows = async <Row>({
 
   await walk(null, 0);
   return { handedOff, scanned };
+};
+
+type RequeueQueuedRunsOptions<TRun extends SafeIdType, DataType> = {
+  queue: RequeueableQueue<DataType>;
+  readPage: (
+    cursor: QueuedRunCursorRow<TRun> | null,
+  ) => Promise<readonly QueuedRunCursorRow<TRun>[]>;
+  /** Rebuilds the run's job exactly as it was first enqueued. */
+  runJob: (args: {
+    organizationId: SafeId<"organization">;
+    runId: SafeId<TRun>;
+    userId: SafeId<"user">;
+    workspaceId: SafeId<"workspace">;
+  }) => { data: DataType; name: string; opts: { jobId: string } };
+};
+
+/**
+ * Walk a run table's `queued` rows and hand each one the queue no longer holds
+ * back to it under its own job id. A row without a requester cannot rebuild
+ * its job's actor: it is counted and left to the staleness janitor.
+ */
+export const requeueQueuedRuns = async <TRun extends SafeIdType, DataType>({
+  queue,
+  readPage,
+  runJob,
+}: RequeueQueuedRunsOptions<
+  TRun,
+  DataType
+>): Promise<ReconcileQueuedRunsResult> => {
+  let unattributed = 0;
+
+  const handle = async (run: QueuedRunCursorRow<TRun>): Promise<boolean> => {
+    if (run.requestedBy === null) {
+      unattributed += 1;
+      return false;
+    }
+    const { data, name, opts } = runJob({
+      organizationId: run.organizationId,
+      runId: run.id,
+      userId: brandPersistedUserId(run.requestedBy),
+      workspaceId: run.workspaceId,
+    });
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(outcome)) {
+      captureError(outcome.error, { runId: run.id });
+      return false;
+    }
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  };
+
+  const scan = await scanPendingRows({ handle, readPage });
+  return { ...scan, unattributed };
 };

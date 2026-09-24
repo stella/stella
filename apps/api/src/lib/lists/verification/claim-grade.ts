@@ -150,13 +150,18 @@ const normalizeGrade = (
     }
     case "recordconflict": {
       const conflict = raw.conflict;
-      const [first, second] = conflict?.factIds ?? [];
+      const invalidConflict =
+        "is a record conflict without exactly two different supplied facts, their values and the verdict under each";
+      if (conflict === null) {
+        return Result.err(invalidConflict);
+      }
+      const [first, second] = conflict.factIds;
       const a = first === undefined ? undefined : factIdByPromptId.get(first);
       const b = second === undefined ? undefined : factIdByPromptId.get(second);
-      const [valueA, valueB] = conflict?.values ?? [];
-      const [ifA, ifB] = conflict?.verdictIfGoverning ?? [];
+      const [valueA, valueB] = conflict.values;
+      const [ifA, ifB] = conflict.verdictIfGoverning;
       if (
-        conflict?.factIds.length !== 2 ||
+        conflict.factIds.length !== 2 ||
         a === undefined ||
         b === undefined ||
         a === b ||
@@ -165,9 +170,7 @@ const normalizeGrade = (
         ifA === undefined ||
         ifB === undefined
       ) {
-        return Result.err(
-          "is a record conflict without exactly two different supplied facts, their values and the verdict under each",
-        );
+        return Result.err(invalidConflict);
       }
       return Result.ok({
         state: raw.verdict,

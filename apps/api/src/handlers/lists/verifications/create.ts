@@ -248,7 +248,12 @@ const createVerification = createSafeHandler(
       // A never-enqueued run must not hold the document's active slot.
       yield* Result.await(
         safeDb(async (tx) => {
-          // audit: skip — failure bookkeeping on the run audited just above.
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+            resourceId: runId,
+            metadata: { status: "failed", errorCode: "enqueue_failed" },
+          });
           await tx
             .update(legalListVerificationRuns)
             .set({
