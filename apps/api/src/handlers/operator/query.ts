@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, asc, gte } from "drizzle-orm";
+import { and, asc, sql } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -143,8 +143,11 @@ export const queryRegistrationsPage = async function* ({
 }) {
   const { limit } = filter;
 
-  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-  const conditions: SQL[] = [gte(user.createdAt, filter.since)];
+  // The lower bound is caller-supplied, never read back from the database;
+  // it is cast explicitly so the comparison keeps the column's precision.
+  const conditions: SQL[] = [
+    sql`${user.createdAt} >= ${filter.since.toISOString()}::timestamptz`,
+  ];
   if (filter.cursor) {
     const cursor = registrationCursor.decode(filter.cursor);
     if (cursor) {
