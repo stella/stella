@@ -232,22 +232,24 @@ type NewAccountEmailOtpPolicyOptions = {
   rateLimitContext?: Pick<RateLimitContext, "increment">;
 };
 
-export const assertNewAccountEmailAllowedForCreation = ({
+export const checkNewAccountEmailAllowedForCreation = ({
   email,
   path,
 }: {
   email: string;
   path: string | undefined;
-}): void => {
+}): Result<void, APIError> => {
   if (path !== SIGN_IN_EMAIL_OTP_PATH || !isDisposableEmailAddress(email)) {
-    return;
+    return Result.ok(undefined);
   }
 
-  throw new APIError("BAD_REQUEST", {
-    code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
-    message:
-      "Temporary email addresses are not allowed. Use a permanent email address.",
-  });
+  return Result.err(
+    new APIError("BAD_REQUEST", {
+      code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
+      message:
+        "Temporary email addresses are not allowed. Use a permanent email address.",
+    }),
+  );
 };
 
 export const getNewAccountEmailOtpAction = async (
@@ -418,20 +420,21 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   resolveSession: (
     ctx: TContext & AuthoritativeSessionPathContext,
   ) => Promise<TwoFactorManageSession>;
-}): Promise<boolean> => {
+}): Promise<Result<boolean, APIError>> => {
   const path = ctx.path;
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
-    return false;
+    return Result.ok(false);
   }
   const request = ctx.request;
   if (request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
   const session = await resolveSession({ ...ctx, path, request });
-  if (TWO_FACTOR_MANAGE_PATHS.has(path)) {
-    await requireTwoFactorManageOtp({ body: ctx.body, session });
+  if (!TWO_FACTOR_MANAGE_PATHS.has(path)) {
+    return Result.ok(true);
   }
-  return true;
+  const gate = await requireTwoFactorManageOtp({ body: ctx.body, session });
+  return gate.map(() => true);
 };
 
 /**
@@ -457,23 +460,25 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
 const requireTwoFactorManageOtp = async ({
   body,
   session,
-}: RequireTwoFactorManageOtpArgs): Promise<void> => {
+}: RequireTwoFactorManageOtpArgs): Promise<Result<void, APIError>> => {
   if (!session) {
-    return;
+    return Result.ok(undefined);
   }
 
   if (
     session.user["twoFactorEnabled"] !== true &&
     !isTransactionalEmailConfigured()
   ) {
-    return;
+    return Result.ok(undefined);
   }
 
   if (!isSixDigitOtpBody(body)) {
-    throw new APIError("BAD_REQUEST", {
-      message:
-        "Verification code required to change two-factor authentication settings",
-    });
+    return Result.err(
+      new APIError("BAD_REQUEST", {
+        message:
+          "Verification code required to change two-factor authentication settings",
+      }),
+    );
   }
 
   const verifyResult = await verifyConfirmationOtp({
@@ -482,19 +487,24 @@ const requireTwoFactorManageOtp = async ({
     code: body.otp,
   });
 
-  if (Result.isError(verifyResult)) {
-    // Only wrong/expired codes are a client error. An infrastructure failure
-    // (e.g. the database is down) surfaces as a 500 from verifyConfirmationOtp;
-    // preserve that so it is not misreported to the user as an invalid code.
-    if (verifyResult.error.status >= 500) {
-      throw new APIError("INTERNAL_SERVER_ERROR", {
-        message: "Could not verify the two-factor settings change",
-      });
-    }
-    throw new APIError("BAD_REQUEST", {
-      message: "Invalid verification code",
-    });
+  if (Result.isOk(verifyResult)) {
+    return Result.ok(undefined);
   }
+  // Only wrong/expired codes are a client error. An infrastructure failure
+  // (e.g. the database is down) surfaces as a 500 from verifyConfirmationOtp;
+  // preserve that so it is not misreported to the user as an invalid code.
+  if (verifyResult.error.status >= 500) {
+    return Result.err(
+      new APIError("INTERNAL_SERVER_ERROR", {
+        message: "Could not verify the two-factor settings change",
+      }),
+    );
+  }
+  return Result.err(
+    new APIError("BAD_REQUEST", {
+      message: "Invalid verification code",
+    }),
+  );
 };
 
 /** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
@@ -549,20 +559,22 @@ export const ensureDisplayName = <T extends Record<string, unknown>>(
 };
 
 /**
- * Validates a timezone identifier via the Intl API.
- * Throws an APIError if the value is present and not a
+ * Validates a timezone identifier via the Intl API: a present value must be a
  * recognised IANA timezone.
  */
-const validateTimezoneId = (timezoneId: unknown): void => {
-  if (typeof timezoneId === "string" && timezoneId !== "UTC") {
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
-    } catch {
-      throw new APIError("BAD_REQUEST", {
-        message: "Invalid timezone identifier",
-      });
-    }
+const validateTimezoneId = (timezoneId: unknown): Result<void, APIError> => {
+  if (typeof timezoneId !== "string" || timezoneId === "UTC") {
+    return Result.ok(undefined);
   }
+  return Result.try({
+    try: () => {
+      Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
+    },
+    catch: () =>
+      new APIError("BAD_REQUEST", {
+        message: "Invalid timezone identifier",
+      }),
+  });
 };
 
 const normalizeOptionalPreference = (
@@ -574,54 +586,60 @@ const normalizeOptionalPreference = (
     fieldName: string;
     maxLength: number;
   },
-): string | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === null) {
-    return null;
+): Result<string | null | undefined, APIError> => {
+  if (value === undefined || value === null) {
+    return Result.ok(value);
   }
 
   if (typeof value !== "string") {
-    throw new APIError("BAD_REQUEST", {
-      message: `${fieldName} must be a string`,
-    });
+    return Result.err(
+      new APIError("BAD_REQUEST", {
+        message: `${fieldName} must be a string`,
+      }),
+    );
   }
 
   const trimmed = value.trim();
   if (trimmed.length > maxLength) {
-    throw new APIError("BAD_REQUEST", {
-      message: `${fieldName} is too long`,
-    });
+    return Result.err(
+      new APIError("BAD_REQUEST", {
+        message: `${fieldName} is too long`,
+      }),
+    );
   }
 
-  return trimmed.length > 0 ? trimmed : null;
+  return Result.ok(trimmed.length > 0 ? trimmed : null);
 };
 
 const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
   user: TUser,
-) => {
-  const preferredName = normalizeOptionalPreference(user["preferredName"], {
-    fieldName: "Preferred name",
-    maxLength: PREFERRED_NAME_MAX_LENGTH,
-  });
-  const wordEditShortcut = normalizeOptionalPreference(
-    user["wordEditShortcut"],
-    {
-      fieldName: "Word edit shortcut",
-      maxLength: WORD_EDIT_SHORTCUT_MAX_LENGTH,
-    },
-  );
-  const userShortcuts = normalizeUserShortcutsField(user["userShortcuts"]);
+) =>
+  Result.gen(function* () {
+    const preferredName = yield* normalizeOptionalPreference(
+      user["preferredName"],
+      {
+        fieldName: "Preferred name",
+        maxLength: PREFERRED_NAME_MAX_LENGTH,
+      },
+    );
+    const wordEditShortcut = yield* normalizeOptionalPreference(
+      user["wordEditShortcut"],
+      {
+        fieldName: "Word edit shortcut",
+        maxLength: WORD_EDIT_SHORTCUT_MAX_LENGTH,
+      },
+    );
+    const userShortcuts = yield* normalizeUserShortcutsField(
+      user["userShortcuts"],
+    );
 
-  return {
-    ...user,
-    ...(preferredName !== undefined ? { preferredName } : {}),
-    ...(wordEditShortcut !== undefined ? { wordEditShortcut } : {}),
-    ...(userShortcuts !== undefined ? { userShortcuts } : {}),
-  };
-};
+    return Result.ok({
+      ...user,
+      ...(preferredName !== undefined ? { preferredName } : {}),
+      ...(wordEditShortcut !== undefined ? { wordEditShortcut } : {}),
+      ...(userShortcuts !== undefined ? { userShortcuts } : {}),
+    });
+  });
 
 const getSessionActiveOrganizationId = (
   session: unknown,
@@ -974,29 +992,41 @@ const createAuth = () => {
       user: {
         create: {
           before: async (user, ctx) => {
-            assertNewAccountEmailAllowedForCreation({
-              email: user.email,
-              path: ctx?.path,
+            const data = Result.gen(function* () {
+              yield* checkNewAccountEmailAllowedForCreation({
+                email: user.email,
+                path: ctx?.path,
+              });
+              yield* validateTimezoneId(user["timezoneId"]);
+              // Email-OTP and some social providers leave `name` blank.
+              // The `notNull` schema constraint allows empty strings, which
+              // surfaces as a blank "Author" everywhere the user is shown.
+              // Default to the email local-part so the column is never empty.
+              // Then trim `preferredName` / `wordEditShortcut` (Word author /
+              // initials prefs) before persisting.
+              return normalizeUserPreferences(ensureDisplayName(user));
             });
-            validateTimezoneId(user["timezoneId"]);
-            // Email-OTP and some social providers leave `name` blank.
-            // The `notNull` schema constraint allows empty strings, which
-            // surfaces as a blank "Author" everywhere the user is shown.
-            // Default to the email local-part so the column is never empty.
-            // Then trim `preferredName` / `wordEditShortcut` (Word author /
-            // initials prefs) before persisting.
-            const data = normalizeUserPreferences(ensureDisplayName(user));
+            // Better Auth rejects a database hook by the APIError it throws.
+            if (Result.isError(data)) {
+              throw data.error;
+            }
             const detectedCountry = detectedCountryFromRequestContext(ctx);
             return await Promise.resolve({
-              data: detectedCountry ? { ...data, detectedCountry } : data,
+              data: detectedCountry
+                ? { ...data.value, detectedCountry }
+                : data.value,
             });
           },
         },
         update: {
           before: async (user) => {
-            validateTimezoneId(user["timezoneId"]);
-            const data = normalizeUserPreferences(ensureDisplayName(user));
-            return await Promise.resolve({ data });
+            const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
+              normalizeUserPreferences(ensureDisplayName(user)),
+            );
+            if (Result.isError(data)) {
+              throw data.error;
+            }
+            return await Promise.resolve({ data: data.value });
           },
         },
       },
@@ -1345,13 +1375,18 @@ const createAuth = () => {
           return loopbackRegistration;
         }
 
-        if (
+        const authoritative =
           await resolveAuthoritativeSessionForSensitiveAuthPath({
             ctx,
             resolveSession: async ({ path, request }) =>
               await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
-          })
-        ) {
+          });
+        // Better Auth rejects a request from a `before` hook by the APIError
+        // it throws.
+        if (Result.isError(authoritative)) {
+          throw authoritative.error;
+        }
+        if (authoritative.value) {
           return undefined;
         }
 
@@ -1379,76 +1414,80 @@ const createAuth = () => {
           return;
         }
 
-        try {
-          const { user, session } = newSession;
+        const notified = await Result.tryPromise({
+          try: async () => {
+            const { user, session } = newSession;
 
-          const previousSessions = await rootDb.query.session.findMany({
-            where: {
-              userId: user.id,
-              id: { ne: session.id },
-            },
-            orderBy: { createdAt: "desc" },
-            limit: LIMITS.newDeviceLoginSessionScanLimit,
-            columns: {
-              ipAddress: true,
-              userAgent: true,
-            },
-          });
+            const previousSessions = await rootDb.query.session.findMany({
+              where: {
+                userId: user.id,
+                id: { ne: session.id },
+              },
+              orderBy: { createdAt: "desc" },
+              limit: LIMITS.newDeviceLoginSessionScanLimit,
+              columns: {
+                ipAddress: true,
+                userAgent: true,
+              },
+            });
 
-          if (previousSessions.length === 0) {
-            return;
-          }
-
-          const knownIPs = new Set<string>();
-          const knownDevices = new Set<string>();
-          for (const previous of previousSessions) {
-            if (previous.ipAddress) {
-              knownIPs.add(previous.ipAddress);
+            if (previousSessions.length === 0) {
+              return;
             }
-            const previousDeviceKey = newDeviceLoginDeviceKey(
-              parseUserAgent(previous.userAgent),
+
+            const knownIPs = new Set<string>();
+            const knownDevices = new Set<string>();
+            for (const previous of previousSessions) {
+              if (previous.ipAddress) {
+                knownIPs.add(previous.ipAddress);
+              }
+              const previousDeviceKey = newDeviceLoginDeviceKey(
+                parseUserAgent(previous.userAgent),
+              );
+              if (previousDeviceKey !== null) {
+                knownDevices.add(previousDeviceKey);
+              }
+            }
+
+            const currentDevice = parseUserAgent(session.userAgent);
+            const deviceKey = newDeviceLoginDeviceKey(currentDevice);
+            const currentIpAddress = session.ipAddress;
+            const isNewIP =
+              typeof currentIpAddress === "string" &&
+              !knownIPs.has(currentIpAddress);
+            const isNewDevice =
+              deviceKey !== null && !knownDevices.has(deviceKey);
+
+            if (!isNewIP && !isNewDevice) {
+              return;
+            }
+
+            const deviceLabel =
+              currentDevice.browser && currentDevice.os
+                ? `${currentDevice.browser} on ${currentDevice.os}`
+                : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
+            const lang = extractLangFromRequest(ctx.request);
+            const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
+              session.createdAt,
             );
-            if (previousDeviceKey !== null) {
-              knownDevices.add(previousDeviceKey);
-            }
-          }
 
-          const currentDevice = parseUserAgent(session.userAgent);
-          const deviceKey = newDeviceLoginDeviceKey(currentDevice);
-          const currentIpAddress = session.ipAddress;
-          const isNewIP =
-            typeof currentIpAddress === "string" &&
-            !knownIPs.has(currentIpAddress);
-          const isNewDevice =
-            deviceKey !== null && !knownDevices.has(deviceKey);
-
-          if (!isNewIP && !isNewDevice) {
-            return;
-          }
-
-          const deviceLabel =
-            currentDevice.browser && currentDevice.os
-              ? `${currentDevice.browser} on ${currentDevice.os}`
-              : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
-          const lang = extractLangFromRequest(ctx.request);
-          const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
-            session.createdAt,
-          );
-
-          ctx.context.runInBackground(
-            sendNewDeviceLoginEmail({
-              email: user.email,
-              device: deviceLabel,
-              ipAddress: session.ipAddress ?? "Unknown",
-              time: formattedTime,
-              sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
-              lang,
-            }).catch((error: unknown) => {
-              captureError(error, { source: "new-device-login-email" });
-            }),
-          );
-        } catch (error) {
-          captureError(error, { source: "new-device-login-hook" });
+            ctx.context.runInBackground(
+              sendNewDeviceLoginEmail({
+                email: user.email,
+                device: deviceLabel,
+                ipAddress: session.ipAddress ?? "Unknown",
+                time: formattedTime,
+                sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                lang,
+              }).catch((error: unknown) => {
+                captureError(error, { source: "new-device-login-email" });
+              }),
+            );
+          },
+          catch: (cause) => cause,
+        });
+        if (Result.isError(notified)) {
+          captureError(notified.error, { source: "new-device-login-hook" });
         }
       }),
     },

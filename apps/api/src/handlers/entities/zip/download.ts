@@ -25,10 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  FetchBoundaryError,
-  HandlerError,
-} from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
@@ -64,13 +61,6 @@ type ArchiveFile = {
 type FetchedFile =
   | { type: "file"; path: string; data: Uint8Array }
   | { type: "error"; path: string; fileId: string };
-
-const redactedPresignedUrl = (presignedUrl: string): string => {
-  const url = new URL(presignedUrl);
-  url.search = "";
-  url.hash = "";
-  return url.toString();
-};
 
 /**
  * Collect every descendant of `parentId` with the fields needed to
@@ -257,25 +247,30 @@ const downloadZipHandler = async function* ({
     const presignedUrl = getS3().presign(key, {
       expiresIn: PRESIGN_TTL_SECONDS,
     });
-    const redactedUrl = redactedPresignedUrl(presignedUrl);
-    const fetched = await Result.tryPromise(async () => {
-      const response = await fetchWithTimeout(presignedUrl, {
-        timeoutMs: FETCH_TIMEOUT_MS,
-      });
-      if (!response.ok) {
-        throw new FetchBoundaryError({
-          url: redactedUrl,
-          status: response.status,
-          statusText: response.statusText,
-          message: `storage responded ${response.status}`,
-        });
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    });
-    if (Result.isError(fetched)) {
-      return { type: "error", path: file.path, fileId: file.fileId };
+    // A failed file becomes an entry in the archive's error manifest, so
+    // the failure itself carries nothing further.
+    const failed: FetchedFile = {
+      type: "error",
+      path: file.path,
+      fileId: file.fileId,
+    };
+    const response = await Result.tryPromise(
+      async () =>
+        await fetchWithTimeout(presignedUrl, { timeoutMs: FETCH_TIMEOUT_MS }),
+    );
+    if (Result.isError(response) || !response.value.ok) {
+      return failed;
     }
-    return { type: "file", path: file.path, data: fetched.value };
+    // Annotated so the unbounded-body read below stays visible to
+    // no-unbounded-response-body.
+    const storageResponse: Response = response.value;
+    const data = await Result.tryPromise(
+      async () => new Uint8Array(await storageResponse.arrayBuffer()),
+    );
+    if (Result.isError(data)) {
+      return failed;
+    }
+    return { type: "file", path: file.path, data: data.value };
   };
 
   const archiveEntries = async function* () {

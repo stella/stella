@@ -1,10 +1,11 @@
+import type { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import {
   collectTemplateProperties,
@@ -459,16 +460,22 @@ describe("collectTemplateProperties", () => {
 });
 
 const rejectionOf = async (
-  pending: Promise<unknown>,
+  pending: Promise<Result<unknown, HandlerError>>,
 ): Promise<HandlerError> => {
-  const outcome = await pending.then(
-    () => null,
-    (error: unknown) => error,
-  );
-  if (!HandlerError.is(outcome)) {
+  const outcome = await pending;
+  if (!outcome.isErr()) {
     throw new Error("resolveTemplateProperties resolved instead of rejecting");
   }
-  return outcome;
+  return outcome.error;
+};
+
+const resolvedValueOf = <T>(outcome: Result<T, HandlerError>): T => {
+  if (outcome.isErr()) {
+    throw new Error(
+      `resolveTemplateProperties rejected: ${outcome.error.message}`,
+    );
+  }
+  return outcome.value;
 };
 
 describe("resolveTemplateProperties", () => {
@@ -643,7 +650,7 @@ describe("resolveTemplateProperties", () => {
     if (createdId === undefined) {
       throw new TypeError("Expected the resolver to create one column");
     }
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: {
         ...layout,
         columnOrder: ["existing_property", createdId],
@@ -695,7 +702,7 @@ describe("resolveTemplateProperties", () => {
     if (createdId === undefined) {
       throw new TypeError("Expected the resolver to create one column");
     }
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: {
         ...layout,
         columnOrder: [createdId],
@@ -725,7 +732,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -733,6 +740,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(1);
     const persistedTool = createdPropertyRows().at(0)?.tool;
@@ -773,7 +781,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -781,6 +789,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(1);
     expect(createdPropertyRows().at(0)).toEqual(
@@ -915,7 +924,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -972,7 +981,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
@@ -1028,7 +1037,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
@@ -1076,7 +1085,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1169,7 +1178,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1213,7 +1222,7 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1242,7 +1251,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1250,6 +1259,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(1);
     expect(createdPropertyRows().at(0)).toEqual(
@@ -1282,7 +1292,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1290,6 +1300,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(1);
     expect(createdPropertyRows().at(0)).toEqual(
@@ -1312,7 +1323,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1320,6 +1331,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(1);
     expect(createdPropertyRows().at(0)).toEqual(
@@ -1374,7 +1386,7 @@ describe("resolveTemplateProperties", () => {
       columnPinning: [],
     };
 
-    await resolveTemplateProperties({
+    const resolved = await resolveTemplateProperties({
       tx,
       workspaceId,
       layout,
@@ -1382,6 +1394,7 @@ describe("resolveTemplateProperties", () => {
       canCreateProperties: true,
       recordAuditEvent: noopAuditRecorder,
     });
+    resolvedValueOf(resolved);
 
     expect(createdPropertyIds()).toHaveLength(2);
     expect(createdPropertyRows().map(({ role }) => role)).toEqual([
@@ -1440,7 +1453,7 @@ describe("resolveTemplateProperties", () => {
     if (createdId === undefined) {
       throw new TypeError("Expected the resolver to create one column");
     }
-    expect(result).toEqual({
+    expect(resolvedValueOf(result)).toEqual({
       layout: {
         ...layout,
         columnOrder: [createdId],

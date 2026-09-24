@@ -1,4 +1,5 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
+import { Result } from "better-result";
 import type { JWTPayload } from "jose";
 import * as v from "valibot";
 
@@ -136,17 +137,21 @@ export const isMcpSession = (value: unknown): value is McpSession =>
   (!("memberId" in value) ||
     (typeof value["memberId"] === "string" && value["memberId"].length > 0));
 
-export const extractMcpSession = (payload: JWTPayload): McpSession => {
+export const extractMcpSession = (
+  payload: JWTPayload,
+): Result<McpSession, McpAuthenticationError> => {
   const userId = payload.sub;
   if (!userId) {
-    throw new McpAuthenticationError({ message: "Token missing sub claim" });
+    return Result.err(
+      new McpAuthenticationError({ message: "Token missing sub claim" }),
+    );
   }
 
   const rawOrganizationId = payload["org_id"];
   if (typeof rawOrganizationId !== "string" || rawOrganizationId.length === 0) {
-    throw new McpAuthenticationError({
-      message: "Token missing org_id claim",
-    });
+    return Result.err(
+      new McpAuthenticationError({ message: "Token missing org_id claim" }),
+    );
   }
 
   const rawScopes = payload["scope"];
@@ -157,38 +162,48 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const rawRunId = payload["run_id"];
   const rawWorkspaceIds = payload["workspace_ids"];
   if (rawWorkspaceIds !== undefined && !isStringArray(rawWorkspaceIds)) {
-    throw new McpAuthenticationError({
-      message: "Token has invalid workspace_ids claim",
-    });
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Token has invalid workspace_ids claim",
+      }),
+    );
   }
   const rawMemberId = payload[MCP_MEMBER_ID_CLAIM];
   if (
     rawMemberId !== undefined &&
     (typeof rawMemberId !== "string" || rawMemberId.length === 0)
   ) {
-    throw new McpAuthenticationError({
-      message: "Token has invalid member_id claim",
-    });
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Token has invalid member_id claim",
+      }),
+    );
   }
 
   let credential: NonNullable<McpSession["credential"]>;
   if (rawPurpose === AGENT_RUN_TOKEN_PURPOSE) {
     if (typeof rawRunId !== "string" || rawRunId.length === 0) {
-      throw new McpAuthenticationError({
-        message: "Agent-run token missing run_id claim",
-      });
+      return Result.err(
+        new McpAuthenticationError({
+          message: "Agent-run token missing run_id claim",
+        }),
+      );
     }
     if (rawWorkspaceIds === undefined) {
-      throw new McpAuthenticationError({
-        message: "Agent-run token missing workspace_ids claim",
-      });
+      return Result.err(
+        new McpAuthenticationError({
+          message: "Agent-run token missing workspace_ids claim",
+        }),
+      );
     }
     credential = { type: "agent_run", runId: rawRunId };
   } else {
     if (rawRunId !== undefined) {
-      throw new McpAuthenticationError({
-        message: "Token run_id claim requires agent-run purpose",
-      });
+      return Result.err(
+        new McpAuthenticationError({
+          message: "Token run_id claim requires agent-run purpose",
+        }),
+      );
     }
     credential =
       typeof rawClientId === "string" && rawClientId.length > 0
@@ -196,14 +211,14 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
         : { type: "delegated_user" };
   }
 
-  return {
+  return Result.ok({
     credential,
     userId,
     organizationId: rawOrganizationId,
     scopes,
     ...(rawWorkspaceIds === undefined ? {} : { workspaceIds: rawWorkspaceIds }),
     ...(rawMemberId === undefined ? {} : { memberId: rawMemberId }),
-  };
+  });
 };
 
 /**
@@ -262,6 +277,10 @@ export const classifyMcpTokenVerificationError = (
  * Both paths produce the same `McpSession`, which `resolveMcpSessionContext`
  * then authorizes identically: same member lookup, same RLS identity.
  */
+export type McpAuthenticationFailure =
+  | McpAuthenticationError
+  | McpTokenVerificationError;
+
 export const authenticateMcpRequest = async (
   bearerToken: string,
   {
@@ -273,23 +292,21 @@ export const authenticateMcpRequest = async (
       | typeof defaultResolveMachineApiKeySession
       | undefined;
   } = {},
-): Promise<McpSession> => {
+): Promise<Result<McpSession, McpAuthenticationFailure>> => {
   if (isMachineApiKeyCredential(bearerToken)) {
-    try {
-      return await resolveApiKeySession(bearerToken, { mode });
-    } catch (error) {
-      throw classifyMcpTokenVerificationError(error);
-    }
+    return await Result.tryPromise({
+      try: async () => await resolveApiKeySession(bearerToken, { mode }),
+      catch: classifyMcpTokenVerificationError,
+    });
   }
 
-  try {
-    const payload = await getVerifyBearerToken()(
-      bearerToken,
-      getMcpAccessTokenVerificationOptions(mode),
-    );
-
-    return extractMcpSession(payload);
-  } catch (error) {
-    throw classifyMcpTokenVerificationError(error);
-  }
+  const payload = await Result.tryPromise({
+    try: async () =>
+      await getVerifyBearerToken()(
+        bearerToken,
+        getMcpAccessTokenVerificationOptions(mode),
+      ),
+    catch: classifyMcpTokenVerificationError,
+  });
+  return payload.andThen(extractMcpSession);
 };

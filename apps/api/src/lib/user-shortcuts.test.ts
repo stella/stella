@@ -1,18 +1,33 @@
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 
+const normalized = (value: unknown) => {
+  const result = normalizeUserShortcutsField(value);
+  return Result.isError(result)
+    ? panic(`Unexpected rejection: ${result.error.message}`)
+    : result.value;
+};
+
+const rejectionOf = (value: unknown): string => {
+  const result = normalizeUserShortcutsField(value);
+  return Result.isError(result)
+    ? result.error.message
+    : panic("Expected the shortcuts to be rejected");
+};
+
 describe("normalizeUserShortcutsField", () => {
   test("passes through an absent field and clears empties", () => {
-    expect(normalizeUserShortcutsField(undefined)).toBeUndefined();
-    expect(normalizeUserShortcutsField(null)).toBeNull();
-    expect(normalizeUserShortcutsField("")).toBeNull();
-    expect(normalizeUserShortcutsField("   ")).toBeNull();
-    expect(normalizeUserShortcutsField("{}")).toBeNull();
+    expect(normalized(undefined)).toBeUndefined();
+    expect(normalized(null)).toBeNull();
+    expect(normalized("")).toBeNull();
+    expect(normalized("   ")).toBeNull();
+    expect(normalized("{}")).toBeNull();
   });
 
   test("canonically re-serializes a valid map with sorted keys", () => {
-    const result = normalizeUserShortcutsField(
+    const result = normalized(
       JSON.stringify({ toggleChat: "Mod+J", search: "Mod+P" }),
     );
     expect(result).toBe(
@@ -21,34 +36,24 @@ describe("normalizeUserShortcutsField", () => {
   });
 
   test("rejects non-JSON and non-object shapes", () => {
-    expect(() => normalizeUserShortcutsField("not json")).toThrow(
-      "Invalid keyboard shortcuts",
-    );
-    expect(() => normalizeUserShortcutsField("[]")).toThrow(
-      "Invalid keyboard shortcuts",
-    );
-    expect(() => normalizeUserShortcutsField("42")).toThrow(
-      "Invalid keyboard shortcuts",
-    );
-    expect(() => normalizeUserShortcutsField(42)).toThrow(
-      "Invalid keyboard shortcuts",
-    );
+    expect(rejectionOf("not json")).toBe("Invalid keyboard shortcuts");
+    expect(rejectionOf("[]")).toBe("Invalid keyboard shortcuts");
+    expect(rejectionOf("42")).toBe("Invalid keyboard shortcuts");
+    expect(rejectionOf(42)).toBe("Invalid keyboard shortcuts");
   });
 
   test("rejects non-string binding values", () => {
-    expect(() =>
-      normalizeUserShortcutsField(JSON.stringify({ search: 5 })),
-    ).toThrow("Invalid keyboard shortcuts");
-    expect(() =>
-      normalizeUserShortcutsField(JSON.stringify({ search: "" })),
-    ).toThrow("Invalid keyboard shortcuts");
+    expect(rejectionOf(JSON.stringify({ search: 5 }))).toBe(
+      "Invalid keyboard shortcuts",
+    );
+    expect(rejectionOf(JSON.stringify({ search: "" }))).toBe(
+      "Invalid keyboard shortcuts",
+    );
   });
 
   test("rejects an oversized blob", () => {
     const huge = JSON.stringify({ search: "M".repeat(5000) });
-    expect(() => normalizeUserShortcutsField(huge)).toThrow(
-      "Invalid keyboard shortcuts",
-    );
+    expect(rejectionOf(huge)).toBe("Invalid keyboard shortcuts");
   });
 
   test("rejects too many entries", () => {
@@ -56,7 +61,7 @@ describe("normalizeUserShortcutsField", () => {
     for (let i = 0; i < 100; i += 1) {
       many[`k${i}`] = "Mod+A";
     }
-    expect(() => normalizeUserShortcutsField(JSON.stringify(many))).toThrow(
+    expect(rejectionOf(JSON.stringify(many))).toBe(
       "Invalid keyboard shortcuts",
     );
   });

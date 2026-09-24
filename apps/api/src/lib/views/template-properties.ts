@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { deepEquals } from "bun";
 import { eq } from "drizzle-orm";
 
@@ -187,13 +188,10 @@ const addDependencySourceIds = (
  * Resolve a view's template columns against the workspace, creating the columns
  * the template asks for that do not exist yet.
  *
- * Every rejection throws a `HandlerError` rather than returning one. This runs
- * inside its caller's transaction, and returning from a transaction callback
- * commits whatever it has already written: a rejection raised part-way through
- * the creation loop would persist the columns, dependency rows, and audit
- * events written so far while the handler answered an error. Throwing aborts
- * the transaction, and callers recover the error with `transactionAbortError`
- * so the response is unchanged.
+ * Every rejection is returned as a `HandlerError`. This runs inside its
+ * caller's transaction, and returning from a transaction callback commits
+ * whatever it has already written, so a caller must abort on the rejection by
+ * throwing it inside `abortableTx`, which hands it back unchanged.
  */
 export const resolveTemplateProperties = async ({
   tx,
@@ -202,19 +200,27 @@ export const resolveTemplateProperties = async ({
   templateProperties,
   canCreateProperties,
   recordAuditEvent,
-}: ResolveTemplatePropertiesOptions): Promise<ResolveTemplatePropertiesResult> => {
+}: ResolveTemplatePropertiesOptions): Promise<
+  Result<ResolveTemplatePropertiesResult, HandlerError>
+> => {
   if (!templateProperties || templateProperties.length === 0) {
     const existing = await readExistingProperties(tx, workspaceId);
     const systemFile = findSystemFileProperty(existing);
     prependSystemFileToColumnOrder(layout, systemFile);
-    return {
+    return Result.ok({
       layout,
       propertyIds: existing.map((property) => property.id),
-    };
+    });
   }
 
   const roleResolution = getTemplateRoleResolution(templateProperties);
-  assertTemplatePropertiesValid(templateProperties, roleResolution);
+  const validation = validateTemplateProperties(
+    templateProperties,
+    roleResolution,
+  );
+  if (validation.isErr()) {
+    return Result.err(validation.error);
+  }
 
   await lockWorkspacePropertyWrites(tx, workspaceId);
 
@@ -280,11 +286,13 @@ export const resolveTemplateProperties = async ({
         roleResolution,
       })
     ) {
-      throw new HandlerError({
-        status: 422,
-        message:
-          "Document type classifier role is attached to an incompatible column",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message:
+            "Document type classifier role is attached to an incompatible column",
+        }),
+      );
     }
 
     const existingByShape = findUniquePropertyByShape(
@@ -305,17 +313,21 @@ export const resolveTemplateProperties = async ({
     }
 
     if (!canCreateProperties) {
-      throw new HandlerError({
-        status: 403,
-        message: "Missing permission to create template columns",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Missing permission to create template columns",
+        }),
+      );
     }
 
     if (projectedPropertyCount >= LIMITS.propertiesCount) {
-      throw new HandlerError({
-        status: 400,
-        message: "Properties limit reached",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Properties limit reached",
+        }),
+      );
     }
 
     createdPropertySourceIds.add(templateProperty.sourceId);
@@ -329,10 +341,12 @@ export const resolveTemplateProperties = async ({
       createdPropertySourceIds,
     })
   ) {
-    throw new HandlerError({
-      status: 422,
-      message: "Circular template dependency detected",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Circular template dependency detected",
+      }),
+    );
   }
 
   const auditEvents: AuditEvent[] = [];
@@ -399,7 +413,7 @@ export const resolveTemplateProperties = async ({
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
   prependSystemFileToColumnOrder(layout, systemFileProperty);
 
-  return { layout, propertyIds: nextPropertyIds };
+  return Result.ok({ layout, propertyIds: nextPropertyIds });
 };
 
 const readExistingProperties = (
@@ -639,38 +653,47 @@ const hasTemplateDependencyCycle = ({
   return false;
 };
 
-// Throws on the first invalid template column. Runs before any write, but
-// throws for the same reason the rest of the resolver does: one rejection form
-// for one caller contract.
-const assertTemplatePropertiesValid = (
+// Rejects on the first invalid template column.
+const validateTemplateProperties = (
   templateProperties: readonly ViewTemplateProperty[],
   roleResolution: TemplateRoleResolution,
-): void => {
+): Result<void, HandlerError> => {
   const sourceIds = new Set<string>();
   const roles = new Set<NonNullable<typeof properties.$inferSelect.role>>();
 
   for (const templateProperty of templateProperties) {
     if (sourceIds.has(templateProperty.sourceId)) {
-      throw new HandlerError({
-        status: 422,
-        message: "Duplicate template property sourceId",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Duplicate template property sourceId",
+        }),
+      );
     }
     sourceIds.add(templateProperty.sourceId);
 
-    assertTemplatePropertyConfigValid(templateProperty, roleResolution);
+    const config = validateTemplatePropertyConfig(
+      templateProperty,
+      roleResolution,
+    );
+    if (config.isErr()) {
+      return config;
+    }
 
     const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
     if (role) {
       if (roles.has(role)) {
-        throw new HandlerError({
-          status: 422,
-          message: "Duplicate template property role",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Duplicate template property role",
+          }),
+        );
       }
       roles.add(role);
     }
   }
+  return Result.ok();
 };
 
 const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
@@ -698,29 +721,33 @@ const isDocumentTypeClassifierShape = ({
 }: DocumentTypeClassifierShape): boolean =>
   content.type === "single-select" && tool.type === "ai-model";
 
-const assertTemplatePropertyConfigValid = (
+const validateTemplatePropertyConfig = (
   templateProperty: ViewTemplateProperty,
   roleResolution: TemplateRoleResolution,
-): void => {
+): Result<void, HandlerError> => {
   if (
     resolveTemplatePropertyRole(templateProperty, roleResolution) &&
     !isDocumentTypeClassifierShape(templateProperty)
   ) {
-    throw new HandlerError({
-      status: 422,
-      message:
-        "Document type classifier templates must be AI single-select columns",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message:
+          "Document type classifier templates must be AI single-select columns",
+      }),
+    );
   }
 
   if (
     templateProperty.content.type === "file" &&
     templateProperty.tool.type !== "manual-input"
   ) {
-    throw new HandlerError({
-      status: 422,
-      message: "File template columns must use manual input",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "File template columns must use manual input",
+      }),
+    );
   }
 
   if (
@@ -728,17 +755,19 @@ const assertTemplatePropertyConfigValid = (
     templateProperty.dependencies &&
     templateProperty.dependencies.length > 0
   ) {
-    throw new HandlerError({
-      status: 422,
-      message: "Only AI template columns can declare dependencies",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Only AI template columns can declare dependencies",
+      }),
+    );
   }
 
   if (
     templateProperty.content.type !== "single-select" &&
     templateProperty.content.type !== "multi-select"
   ) {
-    return;
+    return Result.ok();
   }
 
   const fallback = templateProperty.content.fallback;
@@ -748,11 +777,14 @@ const assertTemplatePropertyConfigValid = (
       (option) => option.value === fallback,
     )
   ) {
-    throw new HandlerError({
-      status: 400,
-      message: "Fallback must match one of the supplied options",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Fallback must match one of the supplied options",
+      }),
+    );
   }
+  return Result.ok();
 };
 
 const normalizePropertyName = (name: string): string =>

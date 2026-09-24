@@ -633,10 +633,12 @@ const translateDocxWithAI = async (
   source: ArrayBuffer,
   context: BilingualAIContext,
 ): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
-  const extracted = await Result.tryPromise({
-    try: async () => await extractDocxTranslationSegments(source),
-    catch: (cause) => cause,
-  });
+  const extracted = (
+    await Result.tryPromise({
+      try: async () => await extractDocxTranslationSegments(source),
+      catch: (cause) => cause,
+    })
+  ).andThen((document) => document);
   if (Result.isError(extracted)) {
     return Result.err(
       DocxTranslationError.is(extracted.error) &&
@@ -733,17 +735,19 @@ const translateDocxWithAI = async (
   if (!(await transitionStage(actor, "translating", "assembling"))) {
     return Result.err("internal");
   }
-  const applied = await Result.tryPromise({
-    try: async () =>
-      await applyDocxTranslationSegments(
-        source,
-        allSegments.map((segment) => ({
-          segmentId: segment.segmentId,
-          taggedText: translated.get(segment.segmentId) ?? segment.taggedText,
-        })),
-      ),
-    catch: (cause) => cause,
-  });
+  const applied = (
+    await Result.tryPromise({
+      try: async () =>
+        await applyDocxTranslationSegments(
+          source,
+          allSegments.map((segment) => ({
+            segmentId: segment.segmentId,
+            taggedText: translated.get(segment.segmentId) ?? segment.taggedText,
+          })),
+        ),
+      catch: (cause) => cause,
+    })
+  ).andThen((patched) => patched);
   if (Result.isError(applied)) {
     captureError(applied.error, { runId: actor.runId });
     return Result.err("format_validation_failed");
@@ -1019,10 +1023,12 @@ const executeRun = async (
   let sourceFile = loaded.value;
   let comments: DocxCommentTranslationUnit[] = [];
   if (run.sourceMimeType === DOCX_MIME_TYPE) {
-    const prepared = await Result.tryPromise({
-      try: async () => await resolveDocxToFinal(sourceFile),
-      catch: (cause) => cause,
-    });
+    const prepared = (
+      await Result.tryPromise({
+        try: async () => await resolveDocxToFinal(sourceFile),
+        catch: (cause) => cause,
+      })
+    ).andThen((resolved) => resolved);
     if (Result.isError(prepared)) {
       captureError(prepared.error, { runId: actor.runId });
       return DocxReviewError.is(prepared.error)
@@ -1030,10 +1036,12 @@ const executeRun = async (
         : "unsupported_format";
     }
     sourceFile = prepared.value;
-    const readComments = await Result.tryPromise({
-      try: async () => await readDocxCommentTranslationUnits(sourceFile),
-      catch: (cause) => cause,
-    });
+    const readComments = (
+      await Result.tryPromise({
+        try: async () => await readDocxCommentTranslationUnits(sourceFile),
+        catch: (cause) => cause,
+      })
+    ).andThen((units) => units);
     if (Result.isError(readComments)) {
       captureError(readComments.error, { runId: actor.runId });
       return "unsupported_format";
@@ -1133,16 +1141,18 @@ const executeRun = async (
     if (Result.isError(scannedOutput)) {
       return "format_validation_failed";
     }
-    const withComments = await Result.tryPromise({
-      try: async () =>
-        await applyDocxCommentPolicy({
-          source: sourceFile,
-          output: scannedOutput.value,
-          policy: commentPolicy,
-          translations: commentTranslations,
-        }),
-      catch: (cause) => cause,
-    });
+    const withComments = (
+      await Result.tryPromise({
+        try: async () =>
+          await applyDocxCommentPolicy({
+            source: sourceFile,
+            output: scannedOutput.value,
+            policy: commentPolicy,
+            translations: commentTranslations,
+          }),
+        catch: (cause) => cause,
+      })
+    ).andThen((patched) => patched);
     if (Result.isError(withComments)) {
       captureError(withComments.error, { runId: actor.runId });
       return "format_validation_failed";

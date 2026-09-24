@@ -14,7 +14,7 @@ import type {
   ReadResourceResult,
   Resource,
 } from "@modelcontextprotocol/server";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -196,10 +196,12 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("returns a generic 401 for token validation failures", async () => {
-    authenticateMcpRequestMock.mockRejectedValue(
-      new McpAuthenticationError({
-        message: "Token missing org_id claim",
-      }),
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.err(
+        new McpAuthenticationError({
+          message: "Token missing org_id claim",
+        }),
+      ),
     );
 
     const response = await handleMcpHttpRequest(
@@ -221,11 +223,13 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("returns a generic 403 for organization access failures", async () => {
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockRejectedValue(
       new McpOrganizationAccessError({
         message: "User is not a member of this organization",
@@ -259,11 +263,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("captures unexpected transport errors as a retryable 5xx, not a 401", async () => {
     const error = new Error("database connection refused");
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockRejectedValue(error);
 
     const response = await handleMcpHttpRequest(
@@ -289,11 +295,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("captures modern handler failures and preserves the retryable transport contract", async () => {
     const error = new Error("database connection refused");
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockRejectedValue(error);
 
     const response = await handleMcpHttpRequest(
@@ -311,11 +319,13 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("builds a fresh modern server for each authenticated session", async () => {
-    authenticateMcpRequestMock.mockImplementation((token: string) => ({
-      organizationId: token === "first" ? "org_1" : "org_2",
-      scopes: ["stella:read"],
-      userId: token === "first" ? "user_1" : "user_2",
-    }));
+    authenticateMcpRequestMock.mockImplementation((token: string) =>
+      Result.ok({
+        organizationId: token === "first" ? "org_1" : "org_2",
+        scopes: ["stella:read"],
+        userId: token === "first" ? "user_1" : "user_2",
+      }),
+    );
     resolveMcpSessionContextMock.mockImplementation(
       (session: { organizationId: string }) => ({
         organizationId: session.organizationId,
@@ -381,11 +391,17 @@ describe("handleMcpHttpRequest", () => {
       panic("Canonical upload and picker tool definitions are missing");
     }
 
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read", "stella:documents_write", "stella:matters_write"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: [
+          "stella:read",
+          "stella:documents_write",
+          "stella:matters_write",
+        ],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     listMcpToolsMock.mockResolvedValue(toMcpTools(definitions));
     getMcpToolRequiredScopesHintMock.mockReturnValue([
@@ -530,11 +546,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("the law audience serves the corpus tools under its own server name", async () => {
     const context = { type: "law-mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:search", "stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:search", "stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     listMcpToolsMock.mockResolvedValue(toMcpTools(LAW_MCP_TOOL_DEFINITIONS));
 
@@ -589,7 +607,7 @@ describe("handleMcpHttpRequest", () => {
       message: "Token verification is temporarily unavailable",
       cause: new Error("Jwks failed: fetch failed"),
     });
-    authenticateMcpRequestMock.mockRejectedValue(error);
+    authenticateMcpRequestMock.mockResolvedValue(Result.err(error));
 
     const response = await handleMcpHttpRequest(
       new Request("http://localhost/mcp", {
@@ -610,11 +628,13 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("keeps the authenticated notification stream open until the client cancels", async () => {
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
 
     const response = await handleMcpHttpRequest(
@@ -651,11 +671,13 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("refuses session termination with 405", async () => {
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
 
     const response = await handleMcpHttpRequest(
       new Request("http://localhost/mcp", {
@@ -689,12 +711,14 @@ describe("handleMcpHttpRequest", () => {
       identifyOrganizationGroup: () => undefined,
       flush: async () => await Promise.resolve(),
     });
-    authenticateMcpRequestMock.mockResolvedValue({
-      credential: { clientId: "client_1", type: "oauth_client" },
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        credential: { clientId: "client_1", type: "oauth_client" },
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
 
     const response = await handleMcpHttpRequest(
@@ -743,12 +767,14 @@ describe("handleMcpHttpRequest", () => {
       identifyOrganizationGroup: () => undefined,
       flush: async () => await Promise.resolve(),
     });
-    authenticateMcpRequestMock.mockResolvedValue({
-      credential: { clientId: "client_1", type: "oauth_client" },
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        credential: { clientId: "client_1", type: "oauth_client" },
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
 
     const response = await handleMcpHttpRequest(
@@ -775,11 +801,13 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("keeps POST buffered and DELETE non-streaming", async () => {
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
 
     const requests = [
@@ -803,11 +831,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("answers a gateway load fault during tools/call with a retryable internal_error, not unknown_tool", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read", "stella:skills"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read", "stella:skills"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
     // The dynamic-gateway definition load fails (backing store outage). This
@@ -841,11 +871,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("passes granted scopes to tool listing", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     listMcpToolsMock.mockResolvedValue([
       {
@@ -893,11 +925,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("rejects tool calls missing the required scope before dynamic resolution", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     getMcpToolRequiredScopesHintMock.mockReturnValue(["stella:skills"]);
 
@@ -941,11 +975,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("rejects tool calls missing an additional compound scope", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:documents_write"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:documents_write"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     getMcpToolRequiredScopesHintMock.mockReturnValue([
       "stella:documents_write",
@@ -992,11 +1028,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("early scope rejection requests the complete compound scope set", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     getMcpToolRequiredScopesHintMock.mockReturnValue([
       "stella:documents_write",
@@ -1033,11 +1071,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("returns an unknown_tool envelope with closest-name hints", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     // No scope hint and no resolved definition: the tool name is unknown. The
     // closest visible name (scope-filtered list) is suggested.
@@ -1075,11 +1115,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("does not fuzzy match unusually long unknown tool names", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
     getMcpToolDefinitionMock.mockResolvedValue(undefined);
@@ -1116,11 +1158,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("lists static resources for the request mode", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     listMcpResourcesMock.mockReturnValue([
       {
@@ -1150,11 +1194,13 @@ describe("handleMcpHttpRequest", () => {
 
   test("reads a resource by uri for the request mode", async () => {
     const context = { type: "mcp-context" };
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue(context);
     readMcpResourceMock.mockReturnValue({
       contents: [
@@ -1202,11 +1248,13 @@ describe("MCP transport conformance", () => {
   });
 
   const authenticateSession = () => {
-    authenticateMcpRequestMock.mockResolvedValue({
-      organizationId: "org_1",
-      scopes: ["stella:read"],
-      userId: "user_1",
-    });
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
   };
 
@@ -1264,8 +1312,8 @@ describe("MCP transport conformance", () => {
   });
 
   test("names the RFC 6750 error code once a presented token is rejected", async () => {
-    authenticateMcpRequestMock.mockRejectedValue(
-      new McpAuthenticationError({ message: "Token expired" }),
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.err(new McpAuthenticationError({ message: "Token expired" })),
     );
 
     const response = await handleMcpHttpRequest(toolsListRequest());
@@ -1311,8 +1359,8 @@ describe("MCP transport conformance", () => {
   });
 
   test("reads no body before the token is accepted", async () => {
-    authenticateMcpRequestMock.mockRejectedValue(
-      new McpAuthenticationError({ message: "Token expired" }),
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.err(new McpAuthenticationError({ message: "Token expired" })),
     );
     let pulls = 0;
     // `start` fills the queue, so any pull is the handler reading the body.

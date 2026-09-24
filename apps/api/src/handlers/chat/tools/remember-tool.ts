@@ -96,99 +96,124 @@ export const createRememberTool = ({
     inputSchema: toTanStackToolSchema(rememberToolInputSchema),
     outputSchema: toTanStackToolSchema(rememberToolOutputSchema),
   }).server(async ({ content, kind, scope }) => {
-    const resolvedScope = scope ?? "user";
+    // A plain async function rather than `Result.gen`: the generator would
+    // re-raise a rejected await as a `Panic` instead of its own error.
+    const saved = await (async (): Promise<
+      Result<{ status: "saved" }, ChatToolError>
+    > => {
+      const resolvedScope = scope ?? "user";
 
-    if (resolvedScope === "workspace" && workspaceId === null) {
-      throw new ChatToolError({
-        kind: "invalid-input",
-        message:
-          "Workspace-scoped memory is only available when the chat is connected to a matter.",
-      });
-    }
+      if (resolvedScope === "workspace" && workspaceId === null) {
+        return Result.err(
+          new ChatToolError({
+            kind: "invalid-input",
+            message:
+              "Workspace-scoped memory is only available when the chat is connected to a matter.",
+          }),
+        );
+      }
 
-    if (resolvedScope === "workspace" && !canManageWorkspaceMemory) {
-      throw new ChatToolError({
-        kind: "invalid-input",
-        message: "You do not have permission to manage shared matter memory.",
-      });
-    }
+      if (resolvedScope === "workspace" && !canManageWorkspaceMemory) {
+        return Result.err(
+          new ChatToolError({
+            kind: "invalid-input",
+            message:
+              "You do not have permission to manage shared matter memory.",
+          }),
+        );
+      }
 
-    const resolvedKind = kind ?? "preference";
-    if (resolvedScope === "user" && MATTER_KINDS.has(resolvedKind)) {
-      throw new ChatToolError({
-        kind: "invalid-input",
-        message: `Kind "${resolvedKind}" is only allowed on matter-scoped memory.`,
-      });
-    }
+      const resolvedKind = kind ?? "preference";
+      if (resolvedScope === "user" && MATTER_KINDS.has(resolvedKind)) {
+        return Result.err(
+          new ChatToolError({
+            kind: "invalid-input",
+            message: `Kind "${resolvedKind}" is only allowed on matter-scoped memory.`,
+          }),
+        );
+      }
 
-    // The stored content is replayed into future system prompts across
-    // this scope, so refuse anything carrying model-control sequences
-    // before it can become a persistent injection vector.
-    const sanitized = sanitizeMemoryContent(content);
-    if (Result.isError(sanitized)) {
-      throw new ChatToolError({
-        kind: "invalid-input",
-        message:
-          "That memory could not be saved because it contained control or model-instruction sequences.",
-      });
-    }
+      // The stored content is replayed into future system prompts across
+      // this scope, so refuse anything carrying model-control sequences
+      // before it can become a persistent injection vector.
+      const sanitizedContentResult = sanitizeMemoryContent(content).mapError(
+        () =>
+          new ChatToolError({
+            kind: "invalid-input",
+            message:
+              "That memory could not be saved because it contained control or model-instruction sequences.",
+          }),
+      );
+      if (Result.isError(sanitizedContentResult)) {
+        return Result.err(sanitizedContentResult.error);
+      }
+      const sanitizedContent = sanitizedContentResult.value;
 
-    const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
-    const memoryWorkspaceId =
-      resolvedScope === "workspace" ? workspaceId : null;
-    const identity = (() => {
-      if (resolvedScope === "user") {
+      const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
+      const memoryWorkspaceId =
+        resolvedScope === "workspace" ? workspaceId : null;
+      const identity = (() => {
+        if (resolvedScope === "user") {
+          return createMemoryDedupIdentity({
+            scope: resolvedScope,
+            userId,
+            workspaceId: null,
+            kind: resolvedKind,
+            content: sanitizedContent,
+            sourceDataWorkspaceIds,
+          });
+        }
+        if (workspaceId === null) {
+          return panic("Validated workspace memory lost its workspace ID");
+        }
         return createMemoryDedupIdentity({
           scope: resolvedScope,
-          userId,
-          workspaceId: null,
+          userId: null,
+          workspaceId,
           kind: resolvedKind,
-          content: sanitized.value,
+          content: sanitizedContent,
           sourceDataWorkspaceIds,
         });
+      })();
+
+      const insertResult = await safeDb(
+        async (tx) =>
+          await persistExplicitMemory({
+            tx,
+            recordAuditEvent,
+            values: {
+              organizationId,
+              scope: resolvedScope,
+              userId: resolvedScope === "user" ? userId : null,
+              workspaceId: memoryWorkspaceId,
+              kind: resolvedKind,
+              content: sanitizedContent,
+              dedupKey: identity.dedupKey,
+              language: null,
+              sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
+              source: "tool",
+              status: "active",
+              pinned: false,
+              createdBy: userId,
+            },
+          }),
+      );
+
+      if (Result.isError(insertResult)) {
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to save memory.",
+            cause: insertResult.error,
+          }),
+        );
       }
-      if (workspaceId === null) {
-        return panic("Validated workspace memory lost its workspace ID");
-      }
-      return createMemoryDedupIdentity({
-        scope: resolvedScope,
-        userId: null,
-        workspaceId,
-        kind: resolvedKind,
-        content: sanitized.value,
-        sourceDataWorkspaceIds,
-      });
+      return Result.ok({ status: "saved" } as const);
     })();
-
-    const insertResult = await safeDb(
-      async (tx) =>
-        await persistExplicitMemory({
-          tx,
-          recordAuditEvent,
-          values: {
-            organizationId,
-            scope: resolvedScope,
-            userId: resolvedScope === "user" ? userId : null,
-            workspaceId: memoryWorkspaceId,
-            kind: resolvedKind,
-            content: sanitized.value,
-            dedupKey: identity.dedupKey,
-            language: null,
-            sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
-            source: "tool",
-            status: "active",
-            pinned: false,
-            createdBy: userId,
-          },
-        }),
-    );
-
-    if (Result.isError(insertResult)) {
-      throw new ChatToolError({
-        kind: "server-defect",
-        message: "Failed to save memory.",
-        cause: insertResult.error,
-      });
+    // TanStack AI reports a tool failure by the error its server function
+    // throws.
+    if (Result.isError(saved)) {
+      throw saved.error;
     }
-    return { status: "saved" } as const;
+    return saved.value;
   });

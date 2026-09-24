@@ -123,9 +123,7 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
   fake.failNext({ method: "COPY", code: "AccessDenied", status: 403 });
   const copiedS3Keys: string[] = [];
 
-  // bun-types declares `.rejects.toBe` as void, so capture the rejection
-  // explicitly for both type-aware lint and the runtime assertion.
-  const rejection: unknown = await copyFileObject({
+  const copied = await copyFileObject({
     sourceEntityId: documentId,
     sourceFileId: fileContent.id,
     sourceKey,
@@ -133,12 +131,12 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
     organizationId,
     targetWorkspaceId: workspaceId,
     copiedS3Keys,
-  }).then(
-    () => null,
-    (error: unknown) => error,
-  );
+  });
 
-  expect(rejection).toMatchObject({ message: "Failed to copy object" });
+  if (!Result.isError(copied)) {
+    throw new TypeError("Expected the ambiguous copy to fail");
+  }
+  expect(copied.error).toMatchObject({ message: "Failed to copy object" });
   const attempted = fake.requests.filter(({ method }) => method === "COPY");
   expect(attempted).toHaveLength(1);
   // The reserved key is the key the copy actually addressed, not a guess.
@@ -708,9 +706,8 @@ describe("duplicate entity", () => {
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
 
-    // The nested folder is the third entity in copy order, so the root and
-    // the document (and the document's copied object) are already written
-    // when the copy rejects.
+    // The nested folder is the third entity in copy order: the document's
+    // object is already copied when the copy rejects it.
     const brokenSubtree = [
       ...sourceEntities.slice(0, 2),
       {

@@ -7,7 +7,7 @@ import { parsePlainDate } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -127,21 +127,118 @@ const updateEntityFieldsOutputSchema = v.strictObject({
   newValue: v.string(),
 });
 
+type UpdateEntityFieldsOutput = v.InferOutput<
+  typeof updateEntityFieldsOutputSchema
+>;
+
 const requireAllowedWorkspaceId = ({
   allowedIds,
   workspaceId,
 }: {
   allowedIds: ReadonlySet<string>;
   workspaceId: SafeId<"workspace">;
-}): SafeId<"workspace"> => {
-  if (!allowedIds.has(workspaceId)) {
-    throw new ChatToolError({
-      kind: "not-found",
-      message: "Matter not in the allowed set.",
-    });
-  }
+}): Result<SafeId<"workspace">, ChatToolError> =>
+  allowedIds.has(workspaceId)
+    ? Result.ok(workspaceId)
+    : Result.err(
+        new ChatToolError({
+          kind: "not-found",
+          message: "Matter not in the allowed set.",
+        }),
+      );
 
-  return workspaceId;
+type FieldContentForValueArgs = {
+  content: PropertyContent;
+  value: string | number | string[] | null;
+};
+
+/**
+ * The field content a tool value writes for a property, or `null` when an
+ * `int` property is cleared (nothing is written for an empty value).
+ */
+export const fieldContentForValue = ({
+  content: propertyContent,
+  value,
+}: FieldContentForValueArgs): Result<FieldContent | null, ChatToolError> => {
+  const invalid = (message: string) =>
+    Result.err(new ChatToolError({ kind: "invalid-input", message }));
+  const propType = propertyContent.type;
+  switch (propType) {
+    case "file":
+      return invalid(
+        'Property is "file"; use the document creation or upload tools instead.',
+      );
+    case "money":
+    case "person":
+      return invalid(
+        `Property is "${propType}"; set it from the workspace UI.`,
+      );
+    case "text": {
+      if (typeof value !== "string") {
+        return invalid(
+          `Property is "text"; pass a string value, not ${typeof value}.`,
+        );
+      }
+      return Result.ok({ version: 1, type: "text", value });
+    }
+    case "single-select": {
+      if (value !== null && typeof value !== "string") {
+        return invalid(
+          `Property is "single-select"; pass a string or null, not ${typeof value}.`,
+        );
+      }
+      if (
+        value !== null &&
+        "options" in propertyContent &&
+        Array.isArray(propertyContent.options)
+      ) {
+        const valid = new Set(
+          propertyContent.options.flatMap((option) =>
+            isRecord(option) && typeof option.value === "string"
+              ? [option.value]
+              : [],
+          ),
+        );
+        if (!valid.has(value)) {
+          return invalid(
+            `Invalid option "${value}". Valid: ${[...valid].join(", ")}`,
+          );
+        }
+      }
+      return Result.ok({ version: 1, type: "single-select", value });
+    }
+    case "multi-select": {
+      if (!Array.isArray(value)) {
+        return invalid('Property is "multi-select"; pass an array of strings.');
+      }
+      return Result.ok({ version: 1, type: "multi-select", value });
+    }
+    case "date": {
+      if (
+        value !== null &&
+        (typeof value !== "string" || parsePlainDate(value) === null)
+      ) {
+        return invalid(
+          'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
+        );
+      }
+      return Result.ok({ version: 1, type: "date", value });
+    }
+    case "int": {
+      if (value !== null && typeof value !== "number") {
+        return invalid(
+          `Property is "int"; pass a number or null, not ${typeof value}.`,
+        );
+      }
+      return Result.ok(
+        value === null
+          ? null
+          : { version: 1, type: "int", value, currency: null },
+      );
+    }
+    default:
+      return panic("Unhandled property type in update-entity-fields tool");
+  }
 };
 
 export const createWorkspaceTools = ({
@@ -190,239 +287,164 @@ export const createWorkspaceTools = ({
       ),
       outputSchema: toTanStackToolSchema(updateEntityFieldsOutputSchema),
     }).server(async (input) => {
-      const resolvedMatter = refRegistry.resolveMatterRefs([input.matterRef]);
-      if (Result.isError(resolvedMatter)) {
-        throw resolvedMatter.error;
-      }
-      const allowedWorkspaceId = requireAllowedWorkspaceId({
-        allowedIds: allowedWorkspaceIdSet,
-        workspaceId:
-          resolvedMatter.value.at(0) ??
-          panic("resolved matter ref list is unexpectedly empty"),
-      });
-      const resolvedEntity = refRegistry.resolveEntityRefTargets([
-        input.entityRef,
-      ]);
-      if (Result.isError(resolvedEntity)) {
-        throw resolvedEntity.error;
-      }
-      const entityTarget =
-        resolvedEntity.value.at(0) ??
-        panic("resolved entity ref list is unexpectedly empty");
-      if (entityTarget.workspaceId !== allowedWorkspaceId) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: `Entity "${input.entityRef}" does not belong to matter "${input.matterRef}".`,
+      // Ref resolution is synchronous; the database work below stays outside
+      // `Result.gen`, whose generator would re-raise a rejected query as a
+      // `Panic` instead of the query's own error.
+      const target = Result.gen(function* () {
+        const resolvedMatter = yield* refRegistry.resolveMatterRefs([
+          input.matterRef,
+        ]);
+        const allowedWorkspaceId = yield* requireAllowedWorkspaceId({
+          allowedIds: allowedWorkspaceIdSet,
+          workspaceId:
+            resolvedMatter.at(0) ??
+            panic("resolved matter ref list is unexpectedly empty"),
         });
-      }
-      const entityId = entityTarget.entityId;
-      const resolvedProperty = refRegistry.resolvePropertyRefs([
-        input.propertyRef,
-      ]);
-      if (Result.isError(resolvedProperty)) {
-        throw resolvedProperty.error;
-      }
-      const propertyId =
-        resolvedProperty.value.at(0) ??
-        panic("resolved property ref list is unexpectedly empty");
-      const { value } = input;
-      const property = await scopedDb((tx) =>
-        tx.query.properties.findFirst({
-          columns: { id: true, content: true },
-          where: {
-            id: { eq: propertyId },
-            workspaceId: { eq: allowedWorkspaceId },
-          },
-        }),
-      );
-
-      if (!property) {
-        throw new ChatToolError({
-          kind: "not-found",
-          message: `Property "${input.propertyRef}" not found in matter "${input.matterRef}". Discover property refs with external_list_properties.`,
-        });
-      }
-
-      const propType = property.content.type;
-
-      let content!: FieldContent;
-      switch (propType) {
-        case "file":
-          throw new ChatToolError({
-            kind: "invalid-input",
-            message:
-              'Property is "file"; use the document creation or upload tools instead.',
-          });
-        case "money":
-        case "person":
-          throw new ChatToolError({
-            kind: "invalid-input",
-            message: `Property is "${propType}"; set it from the workspace UI.`,
-          });
-        case "text": {
-          if (typeof value !== "string") {
-            throw new ChatToolError({
+        const resolvedEntity = yield* refRegistry.resolveEntityRefTargets([
+          input.entityRef,
+        ]);
+        const entityTarget =
+          resolvedEntity.at(0) ??
+          panic("resolved entity ref list is unexpectedly empty");
+        if (entityTarget.workspaceId !== allowedWorkspaceId) {
+          return Result.err(
+            new ChatToolError({
               kind: "invalid-input",
-              message: `Property is "text"; pass a string value, not ${typeof value}.`,
-            });
-          }
-          content = { version: 1, type: "text", value };
-          break;
+              message: `Entity "${input.entityRef}" does not belong to matter "${input.matterRef}".`,
+            }),
+          );
         }
-        case "single-select": {
-          if (value !== null && typeof value !== "string") {
-            throw new ChatToolError({
+        const entityId = entityTarget.entityId;
+        const resolvedProperty = yield* refRegistry.resolvePropertyRefs([
+          input.propertyRef,
+        ]);
+        const propertyId =
+          resolvedProperty.at(0) ??
+          panic("resolved property ref list is unexpectedly empty");
+        return Result.ok({ allowedWorkspaceId, entityId, propertyId });
+      });
+      if (Result.isError(target)) {
+        throw target.error;
+      }
+      const { allowedWorkspaceId, entityId, propertyId } = target.value;
+      const updated = await (async (): Promise<
+        Result<UpdateEntityFieldsOutput, ChatToolError>
+      > => {
+        const { value } = input;
+        const property = await scopedDb((tx) =>
+          tx.query.properties.findFirst({
+            columns: { id: true, content: true },
+            where: {
+              id: { eq: propertyId },
+              workspaceId: { eq: allowedWorkspaceId },
+            },
+          }),
+        );
+
+        if (!property) {
+          return Result.err(
+            new ChatToolError({
+              kind: "not-found",
+              message: `Property "${input.propertyRef}" not found in matter "${input.matterRef}". Discover property refs with external_list_properties.`,
+            }),
+          );
+        }
+
+        const fieldContent = fieldContentForValue({
+          content: property.content,
+          value,
+        });
+        if (Result.isError(fieldContent)) {
+          return Result.err(fieldContent.error);
+        }
+        const content = fieldContent.value;
+
+        const entity = await scopedDb((tx) =>
+          tx.query.entities.findFirst({
+            columns: { id: true, currentVersionId: true, readOnly: true },
+            where: {
+              id: { eq: entityId },
+              workspaceId: { eq: allowedWorkspaceId },
+            },
+          }),
+        );
+
+        if (!entity) {
+          return Result.err(
+            new ChatToolError({
+              kind: "not-found",
+              message: `Entity "${input.entityRef}" not found.`,
+            }),
+          );
+        }
+        if (entity.readOnly) {
+          return Result.err(
+            new ChatToolError({
               kind: "invalid-input",
-              message: `Property is "single-select"; pass a string or null, not ${typeof value}.`,
-            });
-          }
-          if (
-            value !== null &&
-            "options" in property.content &&
-            Array.isArray(property.content.options)
-          ) {
-            const valid = new Set(
-              property.content.options.flatMap((option) =>
-                isRecord(option) && typeof option.value === "string"
-                  ? [option.value]
-                  : [],
+              message: `Entity "${input.entityRef}" is read-only.`,
+            }),
+          );
+        }
+
+        if (!entity.currentVersionId) {
+          return Result.err(
+            new ChatToolError({
+              kind: "not-found",
+              message: `Entity "${input.entityRef}" has no current version and cannot be updated.`,
+            }),
+          );
+        }
+
+        const versionId = entity.currentVersionId;
+        const isEmpty =
+          value === null ||
+          value === "" ||
+          (Array.isArray(value) && value.length === 0);
+
+        await scopedDb(async (tx) => {
+          // audit: skip — MCP tool execution metadata; audit happens at the parent user action
+          await tx
+            .delete(fields)
+            .where(
+              and(
+                eq(fields.propertyId, propertyId),
+                eq(fields.entityVersionId, versionId),
               ),
             );
-            if (!valid.has(value)) {
-              throw new ChatToolError({
-                kind: "invalid-input",
-                message: `Invalid option "${value}". Valid: ${[...valid].join(", ")}`,
-              });
-            }
-          }
-          content = {
-            version: 1,
-            type: "single-select",
-            value,
-          };
-          break;
-        }
-        case "multi-select": {
-          if (!Array.isArray(value)) {
-            throw new ChatToolError({
-              kind: "invalid-input",
-              message: 'Property is "multi-select"; pass an array of strings.',
+
+          if (!isEmpty && content !== null) {
+            await tx.insert(fields).values({
+              workspaceId: allowedWorkspaceId,
+              propertyId,
+              entityVersionId: versionId,
+              content,
             });
           }
-          content = {
-            version: 1,
-            type: "multi-select",
-            value,
-          };
-          break;
-        }
-        case "date": {
-          if (
-            value !== null &&
-            (typeof value !== "string" || parsePlainDate(value) === null)
-          ) {
-            throw new ChatToolError({
-              kind: "invalid-input",
-              message:
-                'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
-            });
-          }
-          content = { version: 1, type: "date", value };
-          break;
-        }
-        case "int": {
-          if (value !== null && typeof value !== "number") {
-            throw new ChatToolError({
-              kind: "invalid-input",
-              message: `Property is "int"; pass a number or null, not ${typeof value}.`,
-            });
-          }
-          if (value !== null) {
-            content = {
-              version: 1,
-              type: "int",
-              value,
-              currency: null,
-            };
-          }
-          break;
-        }
-        default:
-          panic("Unhandled property type in update-entity-fields tool");
-      }
 
-      const entity = await scopedDb((tx) =>
-        tx.query.entities.findFirst({
-          columns: { id: true, currentVersionId: true, readOnly: true },
-          where: {
-            id: { eq: entityId },
-            workspaceId: { eq: allowedWorkspaceId },
-          },
-        }),
-      );
+          await tx
+            .update(entities)
+            .set({ updatedAt: new Date() })
+            .where(eq(entities.id, entityId));
 
-      if (!entity) {
-        throw new ChatToolError({
-          kind: "not-found",
-          message: `Entity "${input.entityRef}" not found.`,
+          await enqueueEntitySearchRepairs(tx, [entityId]);
         });
-      }
-      if (entity.readOnly) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: `Entity "${input.entityRef}" is read-only.`,
+
+        flushEntitySearchRepairs([entityId]).catch(captureError);
+
+        return Result.ok({
+          success: true as const,
+          entityRef: input.entityRef,
+          propertyRef: input.propertyRef,
+          newValue:
+            isEmpty || content === null ? "" : formatFieldValue(content),
         });
+      })();
+      // TanStack AI reports a tool failure by the error its server function
+      // throws.
+      if (Result.isError(updated)) {
+        throw updated.error;
       }
-
-      if (!entity.currentVersionId) {
-        throw new ChatToolError({
-          kind: "not-found",
-          message: `Entity "${input.entityRef}" has no current version and cannot be updated.`,
-        });
-      }
-
-      const versionId = entity.currentVersionId;
-      const isEmpty =
-        value === null ||
-        value === "" ||
-        (Array.isArray(value) && value.length === 0);
-
-      await scopedDb(async (tx) => {
-        // audit: skip — MCP tool execution metadata; audit happens at the parent user action
-        await tx
-          .delete(fields)
-          .where(
-            and(
-              eq(fields.propertyId, propertyId),
-              eq(fields.entityVersionId, versionId),
-            ),
-          );
-
-        if (!isEmpty) {
-          await tx.insert(fields).values({
-            workspaceId: allowedWorkspaceId,
-            propertyId,
-            entityVersionId: versionId,
-            content,
-          });
-        }
-
-        await tx
-          .update(entities)
-          .set({ updatedAt: new Date() })
-          .where(eq(entities.id, entityId));
-
-        await enqueueEntitySearchRepairs(tx, [entityId]);
-      });
-
-      flushEntitySearchRepairs([entityId]).catch(captureError);
-
-      return {
-        success: true,
-        entityRef: input.entityRef,
-        propertyRef: input.propertyRef,
-        newValue: isEmpty ? "" : formatFieldValue(content),
-      };
+      return updated.value;
     }),
   };
 };

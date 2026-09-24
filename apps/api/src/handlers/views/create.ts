@@ -95,8 +95,16 @@ const createView = createSafeHandler(
           }).success,
           recordAuditEvent,
         });
+        // Throwing aborts the transaction; `abortableTx` hands the HandlerError
+        // back as the failure.
+        if (resolvedTemplateProperties.isErr()) {
+          throw resolvedTemplateProperties.error;
+        }
 
-        cleanStalePropertyIds(layout, resolvedTemplateProperties.propertyIds);
+        cleanStalePropertyIds(
+          layout,
+          resolvedTemplateProperties.value.propertyIds,
+        );
 
         const [maxRow] = await tx
           .select({

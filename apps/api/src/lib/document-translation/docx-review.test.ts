@@ -1,3 +1,4 @@
+import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as slimdom from "slimdom";
 
@@ -20,6 +21,7 @@ import {
   readDocxCommentTranslationUnits,
   resolveDocxToFinal,
 } from "./docx-review";
+import type { DocxReviewError } from "./docx-review";
 
 const createReviewedDocx = async (): Promise<ArrayBuffer> => {
   const document = createEmptyDocument();
@@ -68,12 +70,22 @@ const createReviewedDocx = async (): Promise<ArrayBuffer> => {
 const docxFile = (bytes: ArrayBuffer) =>
   testScannedFile({ bytes, mimeType: DOCX_MIME_TYPE });
 
+const okValue = <T>(result: Result<T, DocxReviewError>): T => {
+  if (result.isErr()) {
+    throw new Error(
+      `Expected the DOCX operation to succeed: ${result.error.message}`,
+    );
+  }
+  return result.value;
+};
+
 const createThreadedReviewedDocx = async (): Promise<{
   replyId: number;
   source: ArrayBuffer;
 }> => {
   const reviewer = await FolioDocxReviewer.fromBuffer(
-    (await resolveDocxToFinal(docxFile(await createReviewedDocx()))).bytes,
+    okValue(await resolveDocxToFinal(docxFile(await createReviewedDocx())))
+      .bytes,
   );
   const reply = reviewer.replyTo(10, {
     author: "Reply reviewer",
@@ -125,9 +137,11 @@ const commentParagraphIds = (commentsXml: string): string[] => {
 describe("DOCX final-view and comment handling", () => {
   test("resolves tracked revisions to Final and retains comments", async () => {
     const source = docxFile(await createReviewedDocx());
-    expect(await inspectDocxComments(source)).toEqual({ hasComments: true });
+    expect(okValue(await inspectDocxComments(source))).toEqual({
+      hasComments: true,
+    });
 
-    const output = await resolveDocxToFinal(source);
+    const output = okValue(await resolveDocxToFinal(source));
     const reviewer = await FolioDocxReviewer.fromBuffer(output.bytes);
 
     expect(reviewer.getChanges()).toHaveLength(0);
@@ -137,14 +151,14 @@ describe("DOCX final-view and comment handling", () => {
         .map((block) => block.text)
         .join("\n"),
     ).toBe("kept inserted new-position anchor");
-    expect(await readDocxCommentTranslationUnits(output)).toEqual([
+    expect(okValue(await readDocxCommentTranslationUnits(output))).toEqual([
       { id: 10, text: "Original comment" },
     ]);
   });
 
   test("applies each comment retention policy without changing attribution", async () => {
-    const source = await resolveDocxToFinal(
-      docxFile(await createReviewedDocx()),
+    const source = okValue(
+      await resolveDocxToFinal(docxFile(await createReviewedDocx())),
     );
     const translation = new Map([[10, "Translated comment"]]);
     const cases = [
@@ -154,14 +168,15 @@ describe("DOCX final-view and comment handling", () => {
     ] as const;
 
     const outputs = await Promise.all(
-      cases.map(
-        async ([policy]) =>
+      cases.map(async ([policy]) =>
+        okValue(
           await applyDocxCommentPolicy({
             source,
             output: source,
             policy,
             translations: translation,
           }),
+        ),
       ),
     );
     const before = await loadDocxArchive(source.bytes);
@@ -239,12 +254,14 @@ describe("DOCX final-view and comment handling", () => {
 
     const inspected = await Promise.all(
       cases.map(async ([policy, expectedRoot, expectedReply]) => {
-        const output = await applyDocxCommentPolicy({
-          source: docxFile(source),
-          output: docxFile(source),
-          policy,
-          translations,
-        });
+        const output = okValue(
+          await applyDocxCommentPolicy({
+            source: docxFile(source),
+            output: docxFile(source),
+            policy,
+            translations,
+          }),
+        );
         const [reviewer, archive] = await Promise.all([
           FolioDocxReviewer.fromBuffer(output),
           loadDocxArchive(output),
@@ -312,7 +329,7 @@ describe("DOCX final-view and comment handling", () => {
     ];
     const source = docxFile(await createDocx(document));
 
-    const output = await resolveDocxToFinal(source);
+    const output = okValue(await resolveDocxToFinal(source));
     const reviewer = await FolioDocxReviewer.fromBuffer(output.bytes);
     const endnoteStory = reviewer
       .listStories()
@@ -326,5 +343,32 @@ describe("DOCX final-view and comment handling", () => {
           })?.changes
         : null,
     ).toEqual([]);
+  });
+
+  test("returns a review error for bytes that are not a DOCX", async () => {
+    const result = await resolveDocxToFinal(
+      docxFile(new TextEncoder().encode("not a docx").buffer),
+    );
+
+    expect(result.isErr() && result.error.message).toBe(
+      "Could not parse the DOCX review structure",
+    );
+  });
+
+  test("returns a review error when a comment has no translation", async () => {
+    const source = okValue(
+      await resolveDocxToFinal(docxFile(await createReviewedDocx())),
+    );
+
+    const result = await applyDocxCommentPolicy({
+      source,
+      output: source,
+      policy: "translated",
+      translations: new Map(),
+    });
+
+    expect(result.isErr() && result.error.message).toBe(
+      "Translation is missing for comment 10",
+    );
   });
 });

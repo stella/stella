@@ -1,4 +1,6 @@
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { JWTPayload } from "jose";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
@@ -12,6 +14,20 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+
+const sessionFrom = (payload: JWTPayload) => {
+  const session = extractMcpSession(payload);
+  return Result.isError(session)
+    ? panic(`Unexpected rejection: ${session.error.message}`)
+    : session.value;
+};
+
+const rejectionOf = (payload: JWTPayload): string => {
+  const session = extractMcpSession(payload);
+  return Result.isError(session)
+    ? session.error.message
+    : panic("Expected the token to be rejected");
+};
 
 describe("extractMcpSession", () => {
   test("uses explicit auth endpoints for MCP access token verification", () => {
@@ -46,7 +62,7 @@ describe("extractMcpSession", () => {
 
   test("builds an MCP session from OAuth resource token claims", () => {
     expect(
-      extractMcpSession({
+      sessionFrom({
         org_id: "org_123",
         scope: "stella:read stella:search",
         sub: "user_123",
@@ -61,7 +77,7 @@ describe("extractMcpSession", () => {
 
   test("preserves the verified OAuth client for later provenance resolution", () => {
     expect(
-      extractMcpSession({
+      sessionFrom({
         azp: "agent-client-123",
         org_id: "org_123",
         scope: "stella:read",
@@ -76,17 +92,17 @@ describe("extractMcpSession", () => {
   });
 
   test("rejects tokens without a user subject", () => {
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         org_id: "org_123",
         scope: "stella:read",
       }),
-    ).toThrow("Token missing sub claim");
+    ).toBe("Token missing sub claim");
   });
 
   test("preserves a server-issued workspace attenuation", () => {
     expect(
-      extractMcpSession({
+      sessionFrom({
         org_id: "org_123",
         scope: "stella:read",
         sub: "user_123",
@@ -97,7 +113,7 @@ describe("extractMcpSession", () => {
 
   test("preserves agent-run provenance and workspace attenuation", () => {
     expect(
-      extractMcpSession({
+      sessionFrom({
         org_id: "org_123",
         purpose: "agent-run",
         run_id: "run_123",
@@ -115,56 +131,56 @@ describe("extractMcpSession", () => {
   });
 
   test("rejects agent-run tokens without a run id or workspace attenuation", () => {
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         org_id: "org_123",
         purpose: "agent-run",
         scope: "stella:read",
         sub: "user_123",
         workspace_ids: ["workspace_1"],
       }),
-    ).toThrow("Agent-run token missing run_id claim");
+    ).toBe("Agent-run token missing run_id claim");
 
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         org_id: "org_123",
         purpose: "agent-run",
         run_id: "run_123",
         scope: "stella:read",
         sub: "user_123",
       }),
-    ).toThrow("Agent-run token missing workspace_ids claim");
+    ).toBe("Agent-run token missing workspace_ids claim");
   });
 
   test("rejects an unclassified run id", () => {
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         org_id: "org_123",
         run_id: "run_123",
         scope: "stella:read",
         sub: "user_123",
       }),
-    ).toThrow("Token run_id claim requires agent-run purpose");
+    ).toBe("Token run_id claim requires agent-run purpose");
   });
 
   test("rejects a malformed workspace attenuation", () => {
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         org_id: "org_123",
         scope: "stella:read",
         sub: "user_123",
         workspace_ids: ["workspace_1", 42],
       }),
-    ).toThrow("Token has invalid workspace_ids claim");
+    ).toBe("Token has invalid workspace_ids claim");
   });
 
   test("rejects tokens without an organization claim", () => {
-    expect(() =>
-      extractMcpSession({
+    expect(
+      rejectionOf({
         scope: "stella:read",
         sub: "user_123",
       }),
-    ).toThrow("Token missing org_id claim");
+    ).toBe("Token missing org_id claim");
   });
 });
 

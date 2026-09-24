@@ -4,9 +4,9 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -32,127 +32,148 @@ export type MoveEntityHandlerProps = {
   body: MoveEntityBodySchema;
 };
 
+type LockMoveOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  body: MoveEntityBodySchema;
+};
+
+type LockedMove = {
+  kind: EntityKind;
+  oldParentId: SafeId<"entity"> | null;
+};
+
+/**
+ * Lock the entity (and target folder) and decide whether the move may
+ * proceed. Reads and row locks only: the caller writes after an `Ok`, so a
+ * rejection returned from its transaction commits nothing.
+ */
+const lockMove = async ({
+  tx,
+  workspaceId,
+  body,
+}: LockMoveOptions): Promise<Result<LockedMove, HandlerError>> => {
+  // Lock the entity row to prevent concurrent moves.
+  const entityRows = await tx
+    .select({
+      id: entities.id,
+      kind: entities.kind,
+      parentId: entities.parentId,
+      readOnly: entities.readOnly,
+    })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.id, body.entityId),
+        eq(entities.workspaceId, workspaceId),
+      ),
+    )
+    .for("update");
+  const entity = entityRows.at(0);
+
+  if (!entity) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Entity not found" }),
+    );
+  }
+  if (entity.readOnly) {
+    return Result.err(
+      new HandlerError({ status: 409, message: "Entity is read-only" }),
+    );
+  }
+
+  const locked = { kind: entity.kind, oldParentId: entity.parentId };
+  if (body.parentId === null) {
+    return Result.ok(locked);
+  }
+
+  // Prevent moving to itself.
+  if (body.entityId === body.parentId) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Cannot move an entity into itself",
+      }),
+    );
+  }
+
+  // Lock and verify the target parent is a folder
+  // in the same workspace.
+  const parentRows = await tx
+    .select({ id: entities.id, kind: entities.kind })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.id, body.parentId),
+        eq(entities.workspaceId, workspaceId),
+      ),
+    )
+    .for("update");
+  const parent = parentRows.at(0);
+
+  if (!parent) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity not found in this workspace",
+      }),
+    );
+  }
+
+  if (parent.kind !== "folder") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity must be a folder",
+      }),
+    );
+  }
+
+  // If the entity being moved is a folder, prevent cycles
+  // by checking that the target parent is not a descendant.
+  if (entity.kind === "folder") {
+    const relation = await readAncestorRelation({
+      tx,
+      startId: body.parentId,
+      targetAncestorId: body.entityId,
+      workspaceId,
+    });
+
+    if (relation === "descendant") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot move a folder into one of its descendants",
+        }),
+      );
+    }
+    if (relation === "depth-exceeded") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "Cannot verify the move target: the folder chain is nested too deeply",
+        }),
+      );
+    }
+  }
+
+  return Result.ok(locked);
+};
+
 export const moveEntityHandler = async function* ({
   safeDb,
   workspaceId,
   recordAuditEvent,
   body,
 }: MoveEntityHandlerProps) {
-  yield* Result.await(
-    abortableTx(safeDb, async (tx) => {
-      // Lock the entity row to prevent concurrent moves.
-      const entityRows = await tx
-        .select({
-          id: entities.id,
-          kind: entities.kind,
-          parentId: entities.parentId,
-          readOnly: entities.readOnly,
-        })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.id, body.entityId),
-            eq(entities.workspaceId, workspaceId),
-          ),
-        )
-        .for("update");
-      const entity = entityRows.at(0);
-
-      if (!entity) {
-        throw new HandlerError({ status: 404, message: "Entity not found" });
+  const moved = yield* Result.await(
+    safeDb(async (tx) => {
+      const locked = await lockMove({ tx, workspaceId, body });
+      if (Result.isError(locked)) {
+        return locked;
       }
-      if (entity.readOnly) {
-        throw new HandlerError({ status: 409, message: "Entity is read-only" });
-      }
-
-      if (body.parentId === null) {
-        const oldParentId = entity.parentId;
-
-        await tx
-          .update(entities)
-          .set({ parentId: null, updatedAt: new Date() })
-          .where(eq(entities.id, body.entityId));
-        await tx
-          .update(workspaces)
-          .set({ lastActivityAt: new Date() })
-          .where(eq(workspaces.id, workspaceId));
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: body.entityId,
-          metadata: { kind: entity.kind },
-          changes: {
-            parentId: {
-              old: oldParentId,
-              new: null,
-            },
-          },
-        });
-        return {};
-      }
-
-      // Prevent moving to itself.
-      if (body.entityId === body.parentId) {
-        throw new HandlerError({
-          status: 400,
-          message: "Cannot move an entity into itself",
-        });
-      }
-
-      // Lock and verify the target parent is a folder
-      // in the same workspace.
-      const parentRows = await tx
-        .select({ id: entities.id, kind: entities.kind })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.id, body.parentId),
-            eq(entities.workspaceId, workspaceId),
-          ),
-        )
-        .for("update");
-      const parent = parentRows.at(0);
-
-      if (!parent) {
-        throw new HandlerError({
-          status: 400,
-          message: "Parent entity not found in this workspace",
-        });
-      }
-
-      if (parent.kind !== "folder") {
-        throw new HandlerError({
-          status: 400,
-          message: "Parent entity must be a folder",
-        });
-      }
-
-      // If the entity being moved is a folder, prevent cycles
-      // by checking that the target parent is not a descendant.
-      if (entity.kind === "folder") {
-        const relation = await readAncestorRelation({
-          tx,
-          startId: body.parentId,
-          targetAncestorId: body.entityId,
-          workspaceId,
-        });
-
-        if (relation === "descendant") {
-          throw new HandlerError({
-            status: 400,
-            message: "Cannot move a folder into one of its descendants",
-          });
-        }
-        if (relation === "depth-exceeded") {
-          throw new HandlerError({
-            status: 400,
-            message:
-              "Cannot verify the move target: the folder chain is nested too deeply",
-          });
-        }
-      }
-
-      const oldParentId = entity.parentId;
+      const { kind, oldParentId } = locked.value;
 
       await tx
         .update(entities)
@@ -168,7 +189,7 @@ export const moveEntityHandler = async function* ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: body.entityId,
-        metadata: { kind: entity.kind },
+        metadata: { kind },
         changes: {
           parentId: {
             old: oldParentId,
@@ -177,9 +198,10 @@ export const moveEntityHandler = async function* ({
         },
       });
 
-      return {};
+      return Result.ok();
     }),
   );
+  yield* moved;
 
   syncWorkspaceSearchActivity(workspaceId).catch(captureError);
 

@@ -1363,14 +1363,11 @@ type ParsedToolResultContent =
   | { type: "json"; value: unknown }
   | { type: "text"; value: string };
 
-const parseToolResultContent = (content: string): ParsedToolResultContent => {
-  try {
-    const value: unknown = JSON.parse(content);
-    return { type: "json", value };
-  } catch {
-    return { type: "text", value: content };
-  }
-};
+const parseToolResultContent = (content: string): ParsedToolResultContent =>
+  Result.try((): ParsedToolResultContent => ({
+    type: "json",
+    value: JSON.parse(content),
+  })).unwrapOr({ type: "text", value: content });
 
 const safeStringifyToolResultContent = ({
   fallback,
@@ -1379,33 +1376,23 @@ const safeStringifyToolResultContent = ({
   fallback: string;
   value: unknown;
 }): string => {
-  try {
-    const serialized: unknown = JSON.stringify(value);
-    return typeof serialized === "string" ? serialized : fallback;
-  } catch {
-    return fallback;
-  }
+  const serialized = Result.try((): unknown => JSON.stringify(value)).unwrapOr(
+    fallback,
+  );
+  return typeof serialized === "string" ? serialized : fallback;
 };
 
-const safeParseToolArguments = (argumentsJson: string): unknown => {
-  try {
-    const parsed: unknown = JSON.parse(argumentsJson);
-    return parsed;
-  } catch {
-    return argumentsJson;
-  }
-};
+const safeParseToolArguments = (argumentsJson: string): unknown =>
+  Result.try((): unknown => JSON.parse(argumentsJson)).unwrapOr(argumentsJson);
 
 const safeStringifyToolArguments = (value: unknown): string => {
   if (typeof value === "string") {
     return value;
   }
-  try {
-    const serialized: unknown = JSON.stringify(value);
-    return typeof serialized === "string" ? serialized : "{}";
-  } catch {
-    return "{}";
-  }
+  const serialized = Result.try((): unknown => JSON.stringify(value)).unwrapOr(
+    "{}",
+  );
+  return typeof serialized === "string" ? serialized : "{}";
 };
 
 // Stella tools that run on real data (DB queries, mutations, scope-widening
@@ -1458,15 +1445,16 @@ export const prepareToolsForThirdParty = ({
     wrapped[key] = {
       ...current,
       execute: async (input, context) => {
-        if (policy.requiresAnonymization && boundary.type === "raw") {
-          throw new HandlerError({
-            status: 422,
-            message:
-              "External chat tools require anonymized mode before stella can call them.",
-          });
-        }
-
         if (boundary.type === "raw") {
+          if (policy.requiresAnonymization) {
+            // The tool runtime reports a failed call by the error its execute
+            // function throws.
+            throw new HandlerError({
+              status: 422,
+              message:
+                "External chat tools require anonymized mode before stella can call them.",
+            });
+          }
           const outputValue: unknown = await execute(input, context);
           return outputValue;
         }
@@ -1481,10 +1469,14 @@ export const prepareToolsForThirdParty = ({
         }
 
         const outputValue: unknown = await execute(toolInput, context);
-        return await anonymizeToolOutputForThirdParty({
+        const anonymized = await anonymizeToolOutputForThirdParty({
           boundary,
           outputValue,
         });
+        if (Result.isError(anonymized)) {
+          throw anonymized.error;
+        }
+        return anonymized.value;
       },
     };
   }
@@ -1507,7 +1499,15 @@ export const prepareMcpToolSourceForThirdParty = ({
     ...source,
     tools: async (options) => {
       const tools = await source.tools(options);
-      return await prepareMcpServerToolsForThirdParty({ boundary, tools });
+      const prepared = await prepareMcpServerToolsForThirdParty({
+        boundary,
+        tools,
+      });
+      // The MCP source contract reports a failed listing by rejecting.
+      if (Result.isError(prepared)) {
+        throw prepared.error;
+      }
+      return prepared.value;
     },
   };
 };
@@ -1614,10 +1614,10 @@ const prepareMcpProviderMetadataForThirdParty = async ({
   index?: number;
   inputKeyRestorations: Map<string, string>;
   prepared: AnyServerTool;
-}): Promise<void> => {
+}): Promise<Result<void, BoundaryRefusal>> => {
   const field = MCP_PROVIDER_METADATA_FIELDS.at(index);
   if (field === undefined) {
-    return;
+    return Result.ok(undefined);
   }
   const providerValue: unknown = Reflect.get(prepared, field);
   if (providerValue !== undefined) {
@@ -1628,7 +1628,7 @@ const prepareMcpProviderMetadataForThirdParty = async ({
       value: providerValue,
     });
     if (Result.isError(preparedMetadata)) {
-      throw preparedMetadata.error;
+      return Result.err(preparedMetadata.error);
     }
     if (field === "inputSchema") {
       collectMcpInputKeyRestorations({
@@ -1639,7 +1639,7 @@ const prepareMcpProviderMetadataForThirdParty = async ({
     }
     Reflect.set(prepared, field, preparedMetadata.value);
   }
-  await prepareMcpProviderMetadataForThirdParty({
+  return await prepareMcpProviderMetadataForThirdParty({
     boundary,
     index: index + 1,
     inputKeyRestorations,
@@ -1657,13 +1657,17 @@ const prepareMcpServerToolsForThirdParty = async ({
   index?: number;
   prepared?: AnyServerTool[];
   tools: AnyServerTool[];
-}): Promise<AnyServerTool[]> => {
+}): Promise<Result<AnyServerTool[], BoundaryRefusal>> => {
   const tool = tools.at(index);
   if (tool === undefined) {
-    return prepared;
+    return Result.ok(prepared);
   }
 
-  prepared.push(await prepareMcpServerToolForThirdParty(boundary, tool));
+  const preparedTool = await prepareMcpServerToolForThirdParty(boundary, tool);
+  if (Result.isError(preparedTool)) {
+    return Result.err(preparedTool.error);
+  }
+  prepared.push(preparedTool.value);
   return await prepareMcpServerToolsForThirdParty({
     boundary,
     index: index + 1,
@@ -1675,7 +1679,7 @@ const prepareMcpServerToolsForThirdParty = async ({
 const prepareMcpServerToolForThirdParty = async (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   tool: AnyServerTool,
-): Promise<AnyServerTool> => {
+): Promise<Result<AnyServerTool, BoundaryRefusal>> => {
   reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tool });
   const prepared = { ...tool };
   const providerName: unknown = Reflect.get(prepared, "name");
@@ -1687,22 +1691,25 @@ const prepareMcpServerToolForThirdParty = async (
       text: providerName,
     });
     if (Result.isError(nameCheck)) {
-      throw nameCheck.error;
+      return Result.err(nameCheck.error);
     }
   }
   const inputKeyRestorations = new Map<string, string>();
-  await prepareMcpProviderMetadataForThirdParty({
+  const metadata = await prepareMcpProviderMetadataForThirdParty({
     boundary,
     inputKeyRestorations,
     prepared,
   });
+  if (Result.isError(metadata)) {
+    return Result.err(metadata.error);
+  }
 
   const execute = prepared.execute;
   if (!execute) {
-    return prepared;
+    return Result.ok(prepared);
   }
 
-  return {
+  return Result.ok({
     ...prepared,
     execute: async (input, context) => {
       const outputValue: unknown = await execute(
@@ -1712,12 +1719,18 @@ const prepareMcpServerToolForThirdParty = async (
         }),
         context,
       );
-      return await anonymizeToolOutputForThirdParty({
+      const anonymized = await anonymizeToolOutputForThirdParty({
         boundary,
         outputValue,
       });
+      // The tool runtime reports a failed call by the error its execute
+      // function throws.
+      if (Result.isError(anonymized)) {
+        throw anonymized.error;
+      }
+      return anonymized.value;
     },
-  };
+  });
 };
 
 const anonymizeToolOutputForThirdParty = async ({
@@ -1726,7 +1739,7 @@ const anonymizeToolOutputForThirdParty = async ({
 }: {
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   outputValue: unknown;
-}): Promise<unknown> => {
+}): Promise<Result<unknown, BoundaryRefusal>> => {
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary,
     value: outputValue,
@@ -1744,7 +1757,7 @@ const anonymizeToolOutputForThirdParty = async ({
   });
 
   if (Result.isError(anonymizedOutput)) {
-    throw anonymizedOutput.error;
+    return Result.err(anonymizedOutput.error);
   }
 
   preparedOutput = anonymizedOutput.value;
@@ -1753,8 +1766,8 @@ const anonymizeToolOutputForThirdParty = async ({
     replacements,
   });
   if (Result.isError(anonymizedBatch)) {
-    throw anonymizedBatch.error;
+    return Result.err(anonymizedBatch.error);
   }
 
-  return preparedOutput;
+  return Result.ok(preparedOutput);
 };

@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -11,6 +12,7 @@ import { getMcpResourceScopes, MCP_MODES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /**
  * Machine API keys as an MCP credential.
@@ -229,11 +231,14 @@ describe("resolveMachineApiKeySession", () => {
     givenMemberRole("member");
 
     const fromKey = await resolveMachineApiKeySession(CREDENTIAL);
-    const fromJwt = extractMcpSession({
+    const extracted = extractMcpSession({
       org_id: ORG_ID,
       scope: SCOPES.join(" "),
       sub: OWNER_USER_ID,
     });
+    const fromJwt = Result.isError(extracted)
+      ? panic(`Unexpected rejection: ${extracted.error.message}`)
+      : extracted.value;
 
     expect({
       organizationId: fromKey.organizationId,
@@ -497,7 +502,7 @@ describe("authenticateMcpRequest credential dispatch", () => {
       resolveApiKeySession: resolveMachineApiKeySession,
     });
 
-    expect(session.userId).toBe(OWNER_USER_ID);
+    expect(Result.isOk(session) && session.value.userId).toBe(OWNER_USER_ID);
     expect(verifyApiKey).toHaveBeenCalled();
   });
 
@@ -515,16 +520,15 @@ describe("authenticateMcpRequest credential dispatch", () => {
       mode: "law",
       resolveApiKeySession: resolveMachineApiKeySession,
     });
-    expect(onLaw.userId).toBe(OWNER_USER_ID);
+    expect(Result.isOk(onLaw) && onLaw.value.userId).toBe(OWNER_USER_ID);
 
     const onDefault = await authenticateMcpRequest(CREDENTIAL, {
       mode: "default",
       resolveApiKeySession: resolveMachineApiKeySession,
-    }).then(
-      () => null,
-      (error: unknown) => error,
+    });
+    expect(Result.isError(onDefault) && onDefault.error).toBeInstanceOf(
+      McpAuthenticationError,
     );
-    expect(onDefault).toBeInstanceOf(Error);
   });
 
   test("never falls back to the API key verifier for a JWT-shaped credential", async () => {
@@ -534,9 +538,9 @@ describe("authenticateMcpRequest credential dispatch", () => {
     // invalid.
     const { authenticateMcpRequest } = await import("@/api/mcp/auth");
 
-    await authenticateMcpRequest("header.payload.signature").catch(
-      () => undefined,
-    );
+    const rejected = await authenticateMcpRequest("header.payload.signature");
+
+    expect(Result.isError(rejected)).toBe(true);
 
     expect(verifyApiKey).not.toHaveBeenCalled();
   });

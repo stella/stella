@@ -17,7 +17,11 @@ import { panic, Result } from "better-result";
 
 import { detached } from "@/api/lib/detached";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
-import { isMcpSession, type McpSession } from "@/api/mcp/auth";
+import {
+  isMcpSession,
+  type McpAuthenticationFailure,
+  type McpSession,
+} from "@/api/mcp/auth";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
@@ -124,7 +128,7 @@ type McpServerDependencies = {
   authenticateMcpRequest: (
     token: string,
     options: { mode: McpMode },
-  ) => Promise<McpSession>;
+  ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
@@ -1004,8 +1008,32 @@ export const createMcpHttpRequestHandler = ({
       return accessDeniedResponse({ denial: "missing_credentials", mode });
     }
 
+    // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
+    // else (a token-verification infrastructure outage surfaced as
+    // `McpTokenVerificationError`, a bug in session resolution, or a transport
+    // fault) is a server-side problem, not a bad token: capture it and return
+    // a retryable 5xx so the client backs off instead of dropping into a
+    // re-consent loop.
+    const failureResponse = (error: unknown): Response => {
+      if (error instanceof McpAuthenticationError) {
+        return accessDeniedResponse({ denial: "invalid_token", mode });
+      }
+
+      captureError(error, {
+        phase: "transport",
+        mode,
+        source: "mcp",
+      });
+
+      return retryableServerErrorResponse();
+    };
+
     try {
-      const session = await authenticateMcpRequest(token, { mode });
+      const authenticated = await authenticateMcpRequest(token, { mode });
+      if (Result.isError(authenticated)) {
+        return failureResponse(authenticated.error);
+      }
+      const session = authenticated.value;
 
       // Refuse session termination only after the token is accepted, so an
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
@@ -1057,23 +1085,7 @@ export const createMcpHttpRequestHandler = ({
         return accessDeniedResponse({ denial: "organization_forbidden", mode });
       }
 
-      // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
-      // else (a token-verification infrastructure outage surfaced as
-      // `McpTokenVerificationError`, a bug in session resolution, or a transport
-      // fault) is a server-side problem, not a bad token: capture it and return
-      // a retryable 5xx so the client backs off instead of dropping into a
-      // re-consent loop.
-      if (error instanceof McpAuthenticationError) {
-        return accessDeniedResponse({ denial: "invalid_token", mode });
-      }
-
-      captureError(error, {
-        phase: "transport",
-        mode,
-        source: "mcp",
-      });
-
-      return retryableServerErrorResponse();
+      return failureResponse(error);
     }
     // No teardown here on purpose. The handler owns instance lifetime and a
     // response body may still be streaming when this returns; closing it here

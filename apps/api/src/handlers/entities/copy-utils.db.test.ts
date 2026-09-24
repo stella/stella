@@ -4,7 +4,6 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { transactionAbortError } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -34,12 +33,12 @@ import type {
 } from "./copy-utils";
 
 /**
- * `copyEntities` runs inside its caller's transaction, so how it reports a
- * rejection decides what survives it: returning a failure commits every row
- * written before the rejection, throwing aborts the transaction. Only a real
- * transaction can tell the two apart, which is what this suite is for — a
- * subtree that fails on its third entity must leave nothing behind, because
- * the caller then deletes the storage objects those rows would point at.
+ * `copyEntities` runs inside its caller's transaction, and returning a failure
+ * from it commits every row written before the rejection, so every rejection
+ * has to be decided before the first write. Only a real transaction can show
+ * that, which is what this suite is for — a subtree that fails on its third
+ * entity must leave nothing behind, because the caller then deletes the
+ * storage objects those rows would point at.
  *
  * The same goes for what a move does to a printed verification code: the
  * globally unique index is the whole reason the code moves off the source row
@@ -230,24 +229,26 @@ const runCopy = async (
   matter: SeededMatter,
   sources: WritableEntitySnapshot[],
 ) =>
-  await Result.tryPromise(
-    async () =>
-      await testDb.transaction(async (tx: TestDatabaseTransaction) => {
-        await tx.execute(sql.raw("RESET ROLE"));
-        return await copyEntities({
-          organizationId: matter.organizationId,
-          tx: asTestRaw<Transaction>(tx),
-          targetWorkspaceId: matter.workspaceId,
-          targetParentId: null,
-          userId: matter.userId,
-          recordAuditEvent: noAuditRows,
-          sourceEntityId: rootId,
-          sourceEntities: sources,
-          transfer: { type: "copy" },
-          fieldMapping: { type: "omit" },
-        });
-      }),
-  );
+  (
+    await Result.tryPromise(
+      async () =>
+        await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          return await copyEntities({
+            organizationId: matter.organizationId,
+            tx: asTestRaw<Transaction>(tx),
+            targetWorkspaceId: matter.workspaceId,
+            targetParentId: null,
+            userId: matter.userId,
+            recordAuditEvent: noAuditRows,
+            sourceEntityId: rootId,
+            sourceEntities: sources,
+            transfer: { type: "copy" },
+            fieldMapping: { type: "omit" },
+          });
+        }),
+    )
+  ).andThen((copied) => copied);
 
 const persistedCounts = async (matter: SeededMatter) => ({
   entities: await testDb.$count(
@@ -343,15 +344,14 @@ test("a subtree that fails mid-loop persists no copy at all", async () => {
     throw new TypeError("Expected the copy transaction to abort");
   }
 
-  // The rejection the handlers answer with is unchanged by the abort: it
-  // reaches them as the same 400 it always was.
-  const abort = transactionAbortError(outcome.error);
-  expect(HandlerError.is(abort)).toBe(true);
-  if (!HandlerError.is(abort)) {
-    throw new Error("Expected a HandlerError to abort the copy transaction");
+  // The handlers answer with the rejection unchanged: the same 400 it
+  // always was.
+  const rejection = outcome.error;
+  if (!HandlerError.is(rejection)) {
+    throw new Error("Expected a HandlerError to reject the copy");
   }
-  expect(abort.status).toBe(400);
-  expect(abort.message).toBe("Entity has no current version");
+  expect(rejection.status).toBe(400);
+  expect(rejection.message).toBe("Entity has no current version");
 
   // The two entities written before the rejection are gone with it, and so
   // are their versions, fields, and search marks.
@@ -570,35 +570,37 @@ test("a move carries every version with its frozen stamp and verification code",
   const targetMatter = await seedTargetMatter(sourceMatter);
   const document = await seedDocumentHistory(sourceMatter);
 
-  const outcome = await Result.tryPromise(
-    async () =>
-      await testDb.transaction(async (tx: TestDatabaseTransaction) => {
-        await tx.execute(sql.raw("RESET ROLE"));
-        const result = await copyEntities({
-          organizationId: sourceMatter.organizationId,
-          tx: asTestRaw<Transaction>(tx),
-          targetWorkspaceId: targetMatter.workspaceId,
-          targetParentId: null,
-          userId: sourceMatter.userId,
-          recordAuditEvent: noAuditRows,
-          sourceEntityId: document.entityId,
-          sourceEntities: [
-            seededSnapshot({
-              document,
-              propertyId: targetMatter.propertyId,
-              carried: document.versions,
-            }),
-          ],
-          sourceWorkspaceId: sourceMatter.workspaceId,
-          transfer: { type: "move" },
-          fieldMapping: { type: "omit" },
-        });
-        // What the handler does next, in the same transaction: the codes must
-        // be off the source rows before those rows are gone.
-        await tx.delete(entities).where(eq(entities.id, document.entityId));
-        return result;
-      }),
-  );
+  const outcome = (
+    await Result.tryPromise(
+      async () =>
+        await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          const result = await copyEntities({
+            organizationId: sourceMatter.organizationId,
+            tx: asTestRaw<Transaction>(tx),
+            targetWorkspaceId: targetMatter.workspaceId,
+            targetParentId: null,
+            userId: sourceMatter.userId,
+            recordAuditEvent: noAuditRows,
+            sourceEntityId: document.entityId,
+            sourceEntities: [
+              seededSnapshot({
+                document,
+                propertyId: targetMatter.propertyId,
+                carried: document.versions,
+              }),
+            ],
+            sourceWorkspaceId: sourceMatter.workspaceId,
+            transfer: { type: "move" },
+            fieldMapping: { type: "omit" },
+          });
+          // What the handler does next, in the same transaction: the codes must
+          // be off the source rows before those rows are gone.
+          await tx.delete(entities).where(eq(entities.id, document.entityId));
+          return result;
+        }),
+    )
+  ).andThen((moved) => moved);
 
   if (!Result.isOk(outcome)) {
     throw new TypeError("Expected the move transaction to commit");
@@ -683,32 +685,34 @@ test("a copy mints new codes and leaves the source's codes in place", async () =
     throw new TypeError("Expected the seeded current version to carry a code");
   }
 
-  const outcome = await Result.tryPromise(
-    async () =>
-      await testDb.transaction(async (tx: TestDatabaseTransaction) => {
-        await tx.execute(sql.raw("RESET ROLE"));
-        return await copyEntities({
-          organizationId: sourceMatter.organizationId,
-          tx: asTestRaw<Transaction>(tx),
-          targetWorkspaceId: targetMatter.workspaceId,
-          targetParentId: null,
-          userId: sourceMatter.userId,
-          recordAuditEvent: noAuditRows,
-          sourceEntityId: document.entityId,
-          // The copy loader supplies the current version alone.
-          sourceEntities: [
-            seededSnapshot({
-              document,
-              propertyId: targetMatter.propertyId,
-              carried: [sourceCurrent],
-            }),
-          ],
-          sourceWorkspaceId: sourceMatter.workspaceId,
-          transfer: { type: "copy" },
-          fieldMapping: { type: "omit" },
-        });
-      }),
-  );
+  const outcome = (
+    await Result.tryPromise(
+      async () =>
+        await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          return await copyEntities({
+            organizationId: sourceMatter.organizationId,
+            tx: asTestRaw<Transaction>(tx),
+            targetWorkspaceId: targetMatter.workspaceId,
+            targetParentId: null,
+            userId: sourceMatter.userId,
+            recordAuditEvent: noAuditRows,
+            sourceEntityId: document.entityId,
+            // The copy loader supplies the current version alone.
+            sourceEntities: [
+              seededSnapshot({
+                document,
+                propertyId: targetMatter.propertyId,
+                carried: [sourceCurrent],
+              }),
+            ],
+            sourceWorkspaceId: sourceMatter.workspaceId,
+            transfer: { type: "copy" },
+            fieldMapping: { type: "omit" },
+          });
+        }),
+    )
+  ).andThen((copied) => copied);
 
   if (!Result.isOk(outcome)) {
     throw new TypeError("Expected the copy transaction to commit");
