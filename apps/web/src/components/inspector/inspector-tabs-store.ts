@@ -13,7 +13,7 @@ import {
   createInspectorTabsSlice,
   isGenericInspectorTab,
 } from "@/components/inspector/inspector-tabs-slice";
-import { subscribeResolvedRouteIds } from "@/lib/resolved-route-ids";
+import { resolvedRouteIdsStore } from "@/components/inspector/resolved-route-ids";
 
 export type {
   ChatTab,
@@ -45,10 +45,19 @@ export const useInspectorTabsStore = create<InspectorTabsStore>()(
 );
 
 // A route-owned inspector tab describes its page; once the page is no
-// longer matched, the tab goes with it.
-subscribeResolvedRouteIds((routeIds) => {
-  useInspectorTabsStore.getState().closeTabsOutsideRoutes(routeIds);
-});
+// longer matched, the tab goes with it. The store can load after the
+// router has resolved, so it applies the last resolution first.
+const closeTabsOutsideResolvedRoutes = ({
+  routeIds,
+}: {
+  routeIds: ReadonlySet<string> | null;
+}) => {
+  if (routeIds !== null) {
+    useInspectorTabsStore.getState().closeTabsOutsideRoutes(routeIds);
+  }
+};
+closeTabsOutsideResolvedRoutes(resolvedRouteIdsStore.getState());
+resolvedRouteIdsStore.subscribe(closeTabsOutsideResolvedRoutes);
 
 export const initializeInspectorTabBroadcast = (
   scope: InspectorBroadcastScope,

@@ -11,6 +11,7 @@ import {
   initializeInspectorTabBroadcast,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { resolvedRouteIdsStore } from "@/components/inspector/resolved-route-ids";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import {
   decisionChatKey,
@@ -976,6 +977,27 @@ describe("revive suggestion", () => {
     store.closeTabsOutsideRoutes(new Set(["__root__", "/_protected"]));
     expect(tabIds()).toEqual(["thread-1"]);
     expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
+  });
+
+  test("a router resolution that leaves the owner route closes its tab", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openView({
+      type: "test-owned-view",
+      id: "test-owned-view:router",
+      label: "Owned",
+      payload: {},
+      ownerRouteId: "/_protected/knowledge/tools",
+    });
+
+    resolvedRouteIdsStore.setState({
+      routeIds: new Set(["__root__", "/_protected/knowledge/tools"]),
+    });
+    expect(useInspectorTabsStore.getState().tabs.map(({ id }) => id)).toEqual([
+      "test-owned-view:router",
+    ]);
+
+    resolvedRouteIdsStore.setState({ routeIds: new Set(["__root__"]) });
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
   });
 
   test("rejects assignment to a missing custom group", () => {

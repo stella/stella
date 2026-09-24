@@ -4,6 +4,7 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { enableMapSet } from "immer";
 
 import { installDocxDocumentCacheInvalidation } from "@/components/docx/docx-document-cache";
+import { resolvedRouteIdsStore } from "@/components/inspector/resolved-route-ids";
 import {
   DefaultErrorComponent,
   DefaultNotFoundComponent,
@@ -17,7 +18,6 @@ import {
 } from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { publishResolvedRouteIds } from "@/lib/resolved-route-ids";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { routeTree } from "@/routeTree.gen";
 
@@ -67,9 +67,9 @@ export function getRouter() {
     resolveCaughtRouteTemplate(router.state.matches);
 
   router.subscribe("onResolved", () => {
-    publishResolvedRouteIds(
-      new Set(router.state.matches.map(({ routeId }) => routeId)),
-    );
+    resolvedRouteIdsStore.setState({
+      routeIds: new Set(router.state.matches.map(({ routeId }) => routeId)),
+    });
     // Report the matched route template (e.g. `/workspaces/$workspaceId`),
     // not the resolved pathname. Templates aggregate into a small, stable
     // set of routes; resolved paths embed per-resource ids that fragment
