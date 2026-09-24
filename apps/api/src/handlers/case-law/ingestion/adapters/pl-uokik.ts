@@ -21,6 +21,16 @@
  * the register reuses numbers across series, so it is the docket, never the
  * key.
  *
+ * The court rulings a decision page attaches (the regional court's, the
+ * appeal court's, the Supreme Court's) are rows of their own, keyed by the
+ * decision's UNID and the file's name, filed under the court, docket, date and
+ * kind their own header states, and keyed as the courts' own sources key the
+ * same judgments. A ruling whose header states none of that readably (a scan,
+ * most of the older ones) is kept unpublished, never filed under a guess. The
+ * crawl reads them when it reads the decision's page; the year census does
+ * not, so a ruling the register attaches to a decision after the crawl passed
+ * it is read only when that page is read again.
+ *
  * The crawl walks the flat view oldest first (`NavigateReverse`), counting
  * positions from its oldest end, where a newly published decision never lands:
  * it carries a recent date, so it enters near the top. Every page re-reads the
@@ -56,6 +66,7 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   defineSourceAdapter,
   EMPTY_AST,
@@ -87,16 +98,24 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlUokikDocument } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import {
+  parsePlUokikDocument,
+  plUokikDocumentLines,
+  readPlUokikRulingHeader,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import type {
   ParsePlUokikDocumentInput,
   ParsePlUokikDocumentOutput,
+  PlUokikRulingHeader,
+  PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import {
   absentDecisionTextFields,
@@ -1169,10 +1188,13 @@ const pageMetadataOf = ({
     ),
     // The courts publish their own rulings; the register's copies are linked
     // by name and address, and never fetched.
+    // Each ruling is a row of its own, under the identity named here.
     appealRulings: fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).map((file) => ({
       name: file.name,
       title: file.title,
       documentUrl: addressOf(id, file),
+      sourceDocumentId:
+        id === undefined ? undefined : plUokikRulingId(id, file.name),
     })),
     ...(otherFields.length === 0 ? {} : { otherFields }),
     ...(unlabelled.length === 0 ? {} : { unlabelledFields: unlabelled }),
@@ -1362,10 +1384,199 @@ export const assemblePlUokikDecision = async ({
     : { type: "built", decision };
 };
 
+// ── Court rulings on a decision's appeal ─────────────────
+
+/**
+ * The identity a ruling file is stored under: the decision's UNID and the
+ * file's name, which is how the register addresses it. A name too long to
+ * key on is keyed by its digest instead, never cut.
+ */
+export const plUokikRulingId = (unid: string, name: string): string => {
+  const readable = `${unid}/${name}`;
+  return isPersistableSourceDocumentId(readable)
+    ? readable
+    : `${unid}/sha256:${new Bun.CryptoHasher("sha256").update(name).digest("hex")}`;
+};
+
+/** The envelope part naming which of the decision page's files a row is. */
+const RULING_NAME_PART = "ruling-file-name";
+
+const RULING_OBJECT = "ruling-file";
+
+/**
+ * Why a ruling is kept without its text or its header: the file was not a
+ * PDF with text, or its own header does not state what the row is keyed by.
+ */
+export type PlUokikRulingStatus =
+  | PlUokikRulingUnread
+  | Exclude<PlUokikFileStatus, typeof PL_UOKIK_FILE_STATUS.READ>;
+
+/** The decision a ruling was filed under, as the ruling row links it. */
+export type PlUokikDecisionLink = {
+  sourceDocumentId: string;
+  caseNumber: string;
+  decisionDate: string | undefined;
+};
+
+export type AssemblePlUokikRulingOptions = {
+  entry: Record<string, unknown>;
+  detailHtml: string;
+  unid: string;
+  file: PlUokikFile;
+  fetched: PlUokikFetchedFile;
+  decision: PlUokikDecisionLink;
+};
+
+/**
+ * The keys the same judgment is stored under by the sources that publish the
+ * courts' own copies: the Supreme Court's and the common courts'.
+ */
+const rulingKeysOf = (header: PlUokikRulingHeader): string[] => {
+  const keyed = {
+    caseNumber: header.caseNumber,
+    court: header.court,
+    decisionDate: header.decisionDate,
+    decisionType: header.decisionType,
+  };
+  const supreme = plSupremeCourtRulingKeys(keyed);
+  return supreme.length > 0 ? supreme : plCommonCourtRulingKeys(keyed);
+};
+
+/**
+ * One court ruling the register attaches to a decision, as a row of its own.
+ * Its court, docket, date and kind are what its own header states; a ruling
+ * whose header does not state them, or whose file holds no text, is kept on
+ * what the register states about it and not published.
+ */
+export const assemblePlUokikRuling = async ({
+  decision,
+  detailHtml,
+  entry,
+  fetched,
+  file,
+  unid,
+}: AssemblePlUokikRulingOptions): Promise<IngestionResult> => {
+  const id = plUokikRulingId(unid, file.name);
+  const documentUrl = plUokikFileUrl(unid, file.name) ?? undefined;
+  const sourceUrl = plUokikDetailUrl(unid);
+  const bytes = fetched.bytes;
+  const header =
+    bytes === undefined
+      ? undefined
+      : readPlUokikRulingHeader(await plUokikDocumentLines([bytes]));
+  const read = header?.type === "read" ? header.header : undefined;
+  const unread = header?.type === "unread" ? header.reason : undefined;
+  const status: PlUokikRulingStatus | undefined =
+    fetched.status === PL_UOKIK_FILE_STATUS.READ ? unread : fetched.status;
+  const document =
+    read === undefined || bytes === undefined
+      ? { type: "no-text" as const }
+      : await readDocument({
+          pdfs: [bytes],
+          caseNumber: read.caseNumber,
+          court: read.court,
+          decisionDate: read.decisionDate,
+          decisionType: read.decisionType,
+          sourceUrl,
+          documentUrl,
+          documentId: id,
+          keywords: [],
+        });
+  const parsed = document.type === "read" ? document.output : undefined;
+  if (status !== undefined) {
+    logger.warn("case_law.ingestion.record_quarantined", {
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+      sourceDocumentId: id,
+      reason: status,
+    });
+  }
+  const sourceRaw = encodeSourceRawEnvelope({
+    ...plUokikRawPartsOf(entry, detailHtml),
+    [RULING_NAME_PART]: file.name,
+  });
+  const caseNumber = read?.caseNumber ?? id;
+  return {
+    caseNumber,
+    ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
+    sourceDocumentId: id,
+    court: read?.court ?? "",
+    country: PL_UOKIK_COUNTRY,
+    language: PL_UOKIK_LANGUAGE,
+    ...(read === undefined
+      ? {}
+      : { decisionDate: read.decisionDate, decisionType: read.decisionType }),
+    ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
+    // A ruling whose header could not be read is kept, not published: what
+    // it is keyed and filed by would otherwise be a guess.
+    ...(read === undefined ? { isListingOnly: true } : {}),
+    sourceUrl,
+    ...(documentUrl === undefined ? {} : { documentUrl }),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      court: read?.court ?? "",
+      decisionDate: read?.decisionDate,
+      decisionType: read?.decisionType,
+      recordClass: "court-ruling",
+      uokikDecision: decision,
+      attachmentName: file.name,
+      attachmentTitle: file.title,
+      attachmentStatus: fetched.status,
+      attachmentSha256: bytes === undefined ? undefined : sha256(bytes),
+      ...(read === undefined
+        ? { rulingStatus: status }
+        : {
+            divisionAsPrinted: read.divisionAsPrinted,
+            rulingKeys: rulingKeysOf(read),
+            crossSourceKey: {
+              court: read.court,
+              caseNumber: read.caseNumber,
+              decisionDate: read.decisionDate,
+              decisionType: read.decisionType,
+            },
+          }),
+    }),
+    rawHash: hashContent(
+      [sourceRaw, ...(bytes === undefined ? [] : [sha256(bytes)])].join("\n"),
+    ),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
+    documentAst: parsed?.documentAst ?? EMPTY_AST,
+    sourceRaw,
+    ...(bytes === undefined
+      ? {}
+      : {
+          sourceRawObjects: {
+            [RULING_OBJECT]: { bytes, contentType: "application/pdf" },
+          },
+        }),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  };
+};
+
+/**
+ * Whether a build also reads the court rulings the decision page attaches.
+ * The crawl does; the census does not, because it stores the one row it asks
+ * about and would spend the requests for nothing.
+ */
+export const PL_UOKIK_RULINGS = {
+  FETCH: "fetch",
+  SKIP: "skip",
+} as const;
+
+type PlUokikRulingsMode =
+  (typeof PL_UOKIK_RULINGS)[keyof typeof PL_UOKIK_RULINGS];
+
 type BuildOptions = {
   cursor: string;
   entry: Record<string, unknown>;
+  rulings: PlUokikRulingsMode;
   signal?: AbortSignal | undefined;
+};
+
+/** One listed row as built: the decision, and the rulings filed under it. */
+type PlUokikObservation = {
+  built: PlUokikBuildResult;
+  rulings: IngestionResult[];
 };
 
 /**
@@ -1376,29 +1587,32 @@ type BuildOptions = {
 const buildPlUokikDecision = async ({
   cursor,
   entry,
+  rulings: rulingsMode,
   signal,
-}: BuildOptions): Promise<Result<PlUokikBuildResult, AdapterFetchError>> => {
+}: BuildOptions): Promise<Result<PlUokikObservation, AdapterFetchError>> => {
   const row = normalizePlUokikRow(entry);
   if (row.unid === undefined) {
-    return Result.ok(
-      await assemblePlUokikDecision({
+    return Result.ok({
+      built: await assemblePlUokikDecision({
         entry,
         rawParts: plUokikRawPartsOf(entry, undefined),
       }),
-    );
+      rulings: [],
+    });
   }
   const fetched = await fetchDetail({ cursor, unid: row.unid, signal });
   if (Result.isError(fetched)) {
     return fetched;
   }
   if (fetched.value.type === "absent") {
-    return Result.ok(
-      await assemblePlUokikDecision({
+    return Result.ok({
+      built: await assemblePlUokikDecision({
         entry,
         rawParts: plUokikRawPartsOf(entry, undefined),
         detailStatus: fetched.value.status,
       }),
-    );
+      rulings: [],
+    });
   }
   const { html } = fetched.value;
   const detail = parsePlUokikDetail(html);
@@ -1414,13 +1628,38 @@ const buildPlUokikDecision = async ({
     }
     files.push(got.value);
   }
-  return Result.ok(
-    await assemblePlUokikDecision({
-      entry,
-      rawParts: plUokikRawPartsOf(entry, html),
-      files,
-    }),
-  );
+  const built = await assemblePlUokikDecision({
+    entry,
+    rawParts: plUokikRawPartsOf(entry, html),
+    files,
+  });
+  if (rulingsMode === PL_UOKIK_RULINGS.SKIP || built.type !== "built") {
+    return Result.ok({ built, rulings: [] });
+  }
+  const decision: PlUokikDecisionLink = {
+    sourceDocumentId: row.unid,
+    caseNumber: built.decision.caseNumber,
+    decisionDate: built.decision.decisionDate,
+  };
+  const rulings: IngestionResult[] = [];
+  for (const file of fieldFiles(detail ?? undefined, PL_UOKIK_LABEL.RULINGS)) {
+    // One file at a time, behind the publisher's gate.
+    const got = await fetchFile({ cursor, unid: row.unid, file, signal });
+    if (Result.isError(got)) {
+      return got;
+    }
+    rulings.push(
+      await assemblePlUokikRuling({
+        entry,
+        detailHtml: html,
+        unid: row.unid,
+        file,
+        fetched: got.value,
+        decision,
+      }),
+    );
+  }
+  return Result.ok({ built, rulings });
 };
 
 /**
@@ -1431,6 +1670,15 @@ const buildPlUokikDecision = async ({
 const reparsePlUokikStoredRaw = async (
   stored: StoredRawReparseInput,
 ): Promise<StoredRawReparseOutcome> => {
+  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  if (parts?.[RULING_NAME_PART] !== undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail:
+        "a court ruling is read from its stored PDF, which a replay does not read",
+    };
+  }
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
@@ -1615,9 +1863,7 @@ const PL_UOKIK_SOURCE_SURFACES = {
     listing: storedSourceSurface(RAW_PART.LISTING),
     detail: storedSourceSurface(RAW_PART.DETAIL),
     "decision-file": storedSourceSurface(FILE_OBJECT),
-    "ruling-file": excludedSourceSurface(
-      "the courts' own rulings on the appeal, which the courts publish themselves; the row links each by name and address",
-    ),
+    "ruling-file": storedSourceSurface(RULING_OBJECT),
     "open-document-page": excludedSourceSurface(
       "the same decision's plain page, which states its files and none of the table the kept page does",
     ),
@@ -1783,17 +2029,22 @@ const collectDecisions = async (
       return Result.ok({ decisions, aborted: true });
     }
     // One decision at a time, behind the publisher's gate.
-    const attempted = await buildPlUokikDecision({ cursor, entry, signal });
+    const attempted = await buildPlUokikDecision({
+      cursor,
+      entry,
+      rulings: PL_UOKIK_RULINGS.FETCH,
+      signal,
+    });
     if (Result.isError(attempted)) {
       return attempted;
     }
-    const built = attempted.value;
+    const { built, rulings } = attempted.value;
     switch (built.type) {
       case "built":
       case "detail-unavailable":
         // The crawl keeps a row stored on its view row; only the census
         // refuses it, so the page is asked for again there.
-        decisions.push(built.decision);
+        decisions.push(built.decision, ...rulings);
         break;
       case "unkeyable":
         logger.warn("case_law.ingestion.record_unidentifiable", {
@@ -2146,12 +2397,15 @@ const buildPlUokikFromPayload = async (
   const attempted = await buildPlUokikDecision({
     cursor: normalizePlUokikRow(payload).unid ?? "",
     entry: payload,
+    // The census stores the one row it asks about; the rulings filed under a
+    // decision reach the corpus through the crawl that reads its page.
+    rulings: PL_UOKIK_RULINGS.SKIP,
     ...(signal === undefined ? {} : { signal }),
   });
   if (Result.isError(attempted)) {
     return await Promise.reject(attempted.error);
   }
-  const built = attempted.value;
+  const { built } = attempted.value;
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };

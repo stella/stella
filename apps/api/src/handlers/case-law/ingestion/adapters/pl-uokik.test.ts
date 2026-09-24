@@ -21,6 +21,8 @@ import type {
   IngestionResult,
   StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
   assemblePlUokikDecision,
   encodePlUokikCursor,
@@ -40,9 +42,11 @@ import {
   plUokikNextSlice,
   plUokikPreviousSlice,
   plUokikRawPartsOf,
+  plUokikRulingId,
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
+import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -107,6 +111,12 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+/** The first decision file a captured page links, by name. */
+const decisionFileOf = async (unid: string): Promise<string> =>
+  parsePlUokikDetail(await pageOf(unid))?.fields.find(
+    ({ label }) => label === "Decyzja",
+  )?.files[0]?.name ?? panic(`${unid} links no decision file`);
+
 // ── A model of the register ──────────────────────────────
 
 type RegisterModel = {
@@ -122,7 +132,8 @@ type RegisterModel = {
 };
 
 const DETAIL_PATH = /^\/bp\/dec_prez\.nsf\/1\/(?<unid>[0-9A-F]{32})$/u;
-const FILE_PATH = /^\/bp\/dec_prez\.nsf\/0\/(?<unid>[0-9A-F]{32})\/\$FILE\//u;
+const FILE_PATH =
+  /^\/bp\/dec_prez\.nsf\/0\/(?<unid>[0-9A-F]{32})\/\$FILE\/(?<name>.+)$/u;
 
 /** A row renumbered to the position it holds in the model's view. */
 const atPosition = (entry: Entry, position: number): Entry => ({
@@ -168,8 +179,13 @@ const answerRegister = (model: RegisterModel, url: URL): Response => {
       ? new Response("Not found", { status: 404 })
       : new Response(page, { headers: { "Content-Type": "text/html" } });
   }
-  const file = FILE_PATH.exec(url.pathname)?.groups?.["unid"];
-  const bytes = file === undefined ? undefined : model.files.get(file);
+  const file = FILE_PATH.exec(url.pathname)?.groups;
+  const bytes =
+    file === undefined
+      ? undefined
+      : model.files.get(
+          `${file["unid"] ?? ""}/${decodeURIComponent(file["name"] ?? "")}`,
+        );
   return bytes === undefined
     ? new Response("Not found", { status: 404 })
     : new Response(bytes, { headers: { "Content-Type": "application/pdf" } });
@@ -201,7 +217,9 @@ const registerOverFixtures = async (
     [NUMBERLESS, await pageOf(NUMBERLESS)],
     [APPEALED, await pageOf(APPEALED)],
   ]),
-  files: new Map([[WITH_RULINGS, await pdfBytes()]]),
+  files: new Map([
+    [`${WITH_RULINGS}/${await decisionFileOf(WITH_RULINGS)}`, await pdfBytes()],
+  ]),
   requests: [],
 });
 
@@ -498,7 +516,7 @@ describe("a decision with no text to read", () => {
     const entries = await capturedEntries();
     const model = await registerOverFixtures([entryOf(entries, WITH_RULINGS)]);
     model.files.set(
-      WITH_RULINGS,
+      `${WITH_RULINGS}/${await decisionFileOf(WITH_RULINGS)}`,
       Uint8Array.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]),
     );
     serveRegister(model);
@@ -605,7 +623,11 @@ describe("the crawl over the view", () => {
     const model = await registerOverFixtures();
     serveRegister(model);
     const walk = await walkCrawl(null);
-    const ids = idsOf(walk.decisions);
+    const ids = idsOf(
+      walk.decisions.filter(
+        ({ metadata }) => metadata["recordClass"] !== "court-ruling",
+      ),
+    );
     expect(ids.toSorted()).toEqual(model.entries.map(unidOf).toSorted());
     expect(new Set(ids).size).toBe(ids.length);
     // Oldest first: the 2009 rows before any 2011 row.
@@ -779,6 +801,219 @@ describe("the year census", () => {
         entryOf(entries, FILELESS),
       ),
     ).toEqual({ type: "detail-unavailable" });
+  });
+});
+
+// ── Court rulings ────────────────────────────────────────
+
+/** RLU-17/2007: its appeal went through both courts to the Supreme Court. */
+const APPEALED_TO_SUPREME = "E1054A6198F37B72C1257EC6007B8007";
+
+const RULING_FILES = {
+  "Wyrok VI ACa 527_08.pdf": "pl-uokik-ruling-vi-aca-527-08.pdf",
+  "Postanowienie III SK 17_09.pdf": "pl-uokik-ruling-iii-sk-17-09.pdf",
+  "Wyrok XVII AmA 73_07.pdf": "pl-uokik-ruling-xvii-ama-73-07.pdf",
+} as const;
+
+const PARSER_FIXTURES = new URL("../parsers/__fixtures__/", import.meta.url);
+
+/** The register serving RLU-17/2007's row, page and the three ruling files. */
+const registerWithRulings = async (): Promise<RegisterModel> => {
+  const window = entriesOf(
+    await Bun.file(new URL("pl-uokik-view-2007-window.json", FIXTURES)).json(),
+  );
+  const model = await registerOverFixtures([
+    entryOf(window, APPEALED_TO_SUPREME),
+  ]);
+  model.pages.set(APPEALED_TO_SUPREME, await pageOf(APPEALED_TO_SUPREME));
+  for (const [name, fixture] of Object.entries(RULING_FILES)) {
+    model.files.set(
+      `${APPEALED_TO_SUPREME}/${name}`,
+      new Uint8Array(
+        await Bun.file(new URL(fixture, PARSER_FIXTURES)).arrayBuffer(),
+      ),
+    );
+  }
+  return model;
+};
+
+const rulingNamed = (
+  decisions: readonly IngestionResult[],
+  name: string,
+): IngestionResult =>
+  decisions.find(
+    ({ sourceDocumentId }) =>
+      sourceDocumentId === plUokikRulingId(APPEALED_TO_SUPREME, name),
+  ) ?? panic(`no ruling row for ${name}`);
+
+describe("the court rulings a decision page attaches", () => {
+  test("become rows of their own, filed under the court their header names", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    expect(decisions).toHaveLength(4);
+    const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    expect(appeal.court).toBe("Sąd Apelacyjny w Warszawie");
+    expect(appeal.caseNumber).toBe("VI ACa 527/08");
+    expect(appeal.decisionDate).toBe("2008-09-29");
+    expect(appeal.decisionType).toBe("wyrok");
+    expect(appeal.isListingOnly).toBeUndefined();
+    expect(appeal.fulltext).toContain("oddala apelację");
+    expect(appeal.metadata["divisionAsPrinted"]).toBe("VI Wydział Cywilny");
+    expect(appeal.sourceRawObjects?.["ruling-file"]?.contentType).toBe(
+      "application/pdf",
+    );
+    const supreme = rulingNamed(decisions, "Postanowienie III SK 17_09.pdf");
+    expect(supreme.court).toBe("Sąd Najwyższy");
+    expect(supreme.caseNumber).toBe("III SK 17/09");
+    expect(supreme.decisionType).toBe("postanowienie");
+  });
+
+  test("each links the decision it reviewed, and the decision links each back", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const decision =
+      decisions.find(
+        ({ sourceDocumentId }) => sourceDocumentId === APPEALED_TO_SUPREME,
+      ) ?? panic("no decision row");
+    const linked = decision.metadata["appealRulings"];
+    const ids = (Array.isArray(linked) ? linked : []).map((ruling) =>
+      isRecord(ruling) ? ruling["sourceDocumentId"] : undefined,
+    );
+    expect(new Set(ids)).toEqual(
+      new Set(
+        Object.keys(RULING_FILES).map((name) =>
+          plUokikRulingId(APPEALED_TO_SUPREME, name),
+        ),
+      ),
+    );
+    for (const name of Object.keys(RULING_FILES)) {
+      expect(rulingNamed(decisions, name).metadata["uokikDecision"]).toEqual({
+        sourceDocumentId: APPEALED_TO_SUPREME,
+        caseNumber: decision.caseNumber,
+        decisionDate: decision.decisionDate,
+      });
+    }
+  });
+
+  test("carry the keys the courts' own copies of the same rulings are stored under", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    // The common courts' judgments API and SAOS key a judgment by court,
+    // signature, date and kind.
+    expect(appeal.metadata["rulingKeys"]).toEqual(
+      plCommonCourtRulingKeys({
+        caseNumber: "VI ACa 527/08",
+        court: "Sąd Apelacyjny w Warszawie",
+        decisionDate: "2008-09-29",
+        decisionType: "wyrok",
+      }),
+    );
+    expect(appeal.metadata["crossSourceKey"]).toEqual({
+      court: "Sąd Apelacyjny w Warszawie",
+      caseNumber: "VI ACa 527/08",
+      decisionDate: "2008-09-29",
+      decisionType: "wyrok",
+    });
+    // The Supreme Court's own adapter keys it by docket, date and kind.
+    expect(
+      rulingNamed(decisions, "Postanowienie III SK 17_09.pdf").metadata[
+        "rulingKeys"
+      ],
+    ).toEqual(
+      plSupremeCourtRulingKeys({
+        caseNumber: "III SK 17/09",
+        court: "Sąd Najwyższy",
+        decisionDate: "2009-07-02",
+        decisionType: "postanowienie",
+      }),
+    );
+  });
+
+  test("a scan is kept on what the register states and not published, never keyed by a guess", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const scan = rulingNamed(decisions, "Wyrok XVII AmA 73_07.pdf");
+    expect(scan.isListingOnly).toBe(true);
+    expect(scan.caseNumberIsPlaceholder).toBe(true);
+    expect(scan.court).toBe("");
+    expect(scan.metadata["rulingStatus"]).toBe(PL_UOKIK_RULING_UNREAD.NO_TEXT);
+    expect(scan.metadata["rulingKeys"]).toBeUndefined();
+  });
+
+  test("a ruling file answering 404 is kept with the reason; one answering 500 fails the page", async () => {
+    const model = await registerWithRulings();
+    model.files.delete(`${APPEALED_TO_SUPREME}/Wyrok VI ACa 527_08.pdf`);
+    serveRegister(model);
+    const { decisions } = await walkCrawl(null);
+    expect(
+      rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf").metadata[
+        "rulingStatus"
+      ],
+    ).toBe(PL_UOKIK_FILE_STATUS.NOT_FOUND);
+
+    const failing = await registerWithRulings();
+    const answer = answerRegister;
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(
+        typeof input === "string" || input instanceof URL ? input : input.url,
+      );
+      return await Promise.resolve(
+        url.pathname.includes("VI%20ACa")
+          ? new Response("", { status: 500 })
+          : answer(failing, url),
+      );
+    });
+    expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
+  });
+
+  test("the census builds the decision alone, spending no request on its rulings", async () => {
+    const model = await registerWithRulings();
+    serveRegister(model);
+    const window = entriesOf(
+      await Bun.file(
+        new URL("pl-uokik-view-2007-window.json", FIXTURES),
+      ).json(),
+    );
+    const outcome = await plUokikAdapter.reconciliation.buildDecision(
+      entryOf(window, APPEALED_TO_SUPREME),
+    );
+    expect(outcome.type).toBe("built");
+    expect(
+      model.requests.filter(({ pathname }) =>
+        Object.keys(RULING_FILES).some((name) =>
+          decodeURIComponent(pathname).endsWith(name),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a ruling's stored envelope is not replayed as a decision", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    const replayed = await plUokikAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(appeal.sourceRaw ?? ""),
+      contentType: appeal.sourceRawContentType ?? null,
+      caseNumber: appeal.caseNumber,
+      sourceDocumentId: appeal.sourceDocumentId ?? null,
+      language: appeal.language,
+      court: appeal.court,
+      ecli: null,
+      decisionDate: appeal.decisionDate ?? null,
+      decisionType: appeal.decisionType ?? null,
+      sourceUrl: appeal.sourceUrl ?? null,
+      documentUrl: appeal.documentUrl ?? null,
+      metadata: appeal.metadata,
+    });
+    expect(replayed?.type).toBe("rejected");
+  });
+
+  test("a file name too long to key on is keyed by its digest", () => {
+    const long = `${"a".repeat(400)}.pdf`;
+    const id = plUokikRulingId(APPEALED_TO_SUPREME, long);
+    expect(id.startsWith(`${APPEALED_TO_SUPREME}/sha256:`)).toBe(true);
+    expect(plUokikRulingId(APPEALED_TO_SUPREME, long)).toBe(id);
   });
 });
 

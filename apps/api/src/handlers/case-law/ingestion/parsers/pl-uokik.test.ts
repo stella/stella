@@ -10,9 +10,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   parsePlUokikDocument,
+  PL_UOKIK_RULING_UNREAD,
   plUokikDocumentLines,
+  readPlUokikRulingHeader,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import type { ParsePlUokikDocumentInput } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import {
@@ -162,5 +165,177 @@ describe("a UOKiK decision PDF", () => {
 
   test("no file with a text layer is no document, not an empty one", async () => {
     expect(await parsePlUokikDocument(inputOf([]))).toBeNull();
+  });
+});
+
+// ── Court rulings the register attaches ──────────────────
+
+const RULING_FIXTURES = {
+  appeal: new URL(
+    "__fixtures__/pl-uokik-ruling-vi-aca-527-08.pdf",
+    import.meta.url,
+  ),
+  supreme: new URL(
+    "__fixtures__/pl-uokik-ruling-iii-sk-17-09.pdf",
+    import.meta.url,
+  ),
+  scan: new URL(
+    "__fixtures__/pl-uokik-ruling-xvii-ama-73-07.pdf",
+    import.meta.url,
+  ),
+} as const;
+
+const headerOf = async (fixture: URL) =>
+  readPlUokikRulingHeader(await plUokikDocumentLines([await bytesOf(fixture)]));
+
+/** Lines as a text layer states them, for headers no capture holds. */
+const typeset = (lines: readonly string[]): PlSnLine[] =>
+  lines.map((text) => ({
+    type: "text",
+    runs: [{ text, bold: false }],
+    indented: false,
+  }));
+
+describe("a court ruling's header", () => {
+  test("an appeal court judgment states its court, docket, date and kind", async () => {
+    expect(await headerOf(RULING_FIXTURES.appeal)).toEqual({
+      type: "read",
+      header: {
+        decisionType: "wyrok",
+        // The text layer misprints the label as `Sygrs. akt`.
+        caseNumber: "VI ACa 527/08",
+        decisionDate: "2008-09-29",
+        court: "Sąd Apelacyjny w Warszawie",
+        divisionAsPrinted: "VI Wydział Cywilny",
+      },
+    });
+  });
+
+  test("a Supreme Court order is read through its font's letter substitution", async () => {
+    expect(await headerOf(RULING_FIXTURES.supreme)).toEqual({
+      type: "read",
+      header: {
+        decisionType: "postanowienie",
+        caseNumber: "III SK 17/09",
+        decisionDate: "2009-07-02",
+        court: "Sąd Najwyższy",
+        divisionAsPrinted: undefined,
+      },
+    });
+  });
+
+  test("a scan states nothing, and says so", async () => {
+    expect(await headerOf(RULING_FIXTURES.scan)).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.NO_TEXT,
+    });
+  });
+
+  test("an authority's decision is not a ruling", async () => {
+    expect(await headerOf(DOK_9_2011)).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.KIND_NOT_READ,
+    });
+  });
+
+  test("the docket and court a ruling cites below its header are never its own", () => {
+    expect(
+      readPlUokikRulingHeader(
+        typeset([
+          "WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ",
+          "Dnia 29 września 2008 r.",
+          "Sąd Apelacyjny w Warszawie VI Wydział Cywilny w składzie:",
+          "od wyroku Sądu Okręgowego w Warszawie sygn. akt XVII AmA 73/07",
+        ]),
+      ),
+    ).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.DOCKET_NOT_READ,
+    });
+    expect(
+      readPlUokikRulingHeader(
+        typeset([
+          "Sygn. akt VI ACa 527/08",
+          "WYROK",
+          "Dnia 29 września 2008 r.",
+          "Protokolant: sekr. sąd.",
+          "na skutek apelacji od wyroku Sądu Okręgowego w Warszawie",
+        ]),
+      ),
+    ).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.COURT_NOT_READ,
+    });
+  });
+
+  test.each([
+    ["a court the index does not name", "Sąd Wojskowy w Warszawie w składzie:"],
+    ["no court at all", "Komisja w składzie:"],
+  ])("%s is not read as a court", (_, courtLine) => {
+    expect(
+      readPlUokikRulingHeader(
+        typeset([
+          "Sygn. akt VI ACa 527/08",
+          "WYROK",
+          "Dnia 29 września 2008 r.",
+          courtLine,
+        ]),
+      ),
+    ).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.COURT_NOT_READ,
+    });
+  });
+
+  test.each([
+    ["a date that is not a day", "Dnia 31 lutego 2008 r."],
+    ["a month in no calendar", "Dnia 3 brumaire 2008 r."],
+  ])("%s is not a date", (_, dateLine) => {
+    expect(
+      readPlUokikRulingHeader(
+        typeset([
+          "Sygn. akt VI ACa 527/08",
+          "WYROK",
+          dateLine,
+          "Sąd Apelacyjny w Warszawie w składzie:",
+        ]),
+      ),
+    ).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.DATE_NOT_READ,
+    });
+  });
+
+  test("a docket the grammar does not read is not a docket", () => {
+    expect(
+      readPlUokikRulingHeader(
+        typeset([
+          "Sygn. akt RKR 51/2006",
+          "WYROK",
+          "Dnia 29 września 2008 r.",
+          "Sąd Apelacyjny w Warszawie w składzie:",
+        ]),
+      ),
+    ).toEqual({
+      type: "unread",
+      reason: PL_UOKIK_RULING_UNREAD.DOCKET_NOT_READ,
+    });
+  });
+
+  test("a ruling's text is kept whole, word for word", async () => {
+    const pdfs = [await bytesOf(RULING_FIXTURES.appeal)];
+    const parsed = await parsePlUokikDocument({
+      ...inputOf(pdfs),
+      caseNumber: "VI ACa 527/08",
+      court: "Sąd Apelacyjny w Warszawie",
+      decisionType: "wyrok",
+    });
+    const result = validateAst(
+      buildValidationHtml(await printedLines(pdfs)),
+      parsed?.documentAst.blocks ?? [],
+    );
+    expect(result.issues.filter(({ code }) => LOSS_CODES.has(code))).toEqual(
+      [],
+    );
   });
 });

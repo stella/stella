@@ -107,6 +107,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
   assemblePlUokikDecision,
+  assemblePlUokikRuling,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
@@ -2465,6 +2466,81 @@ export const plUokikFixture = (): EnrolledAdapterFixture => ({
             sourceId: PL_UOKIK_SOURCE_ID,
             documentId: PL_UOKIK_DECISION_UNID,
             bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
+});
+
+/** A decision whose appeal reached the appeal court, with its ruling file. */
+const PL_UOKIK_RULING_UNID = "E1054A6198F37B72C1257EC6007B8007";
+
+const PL_UOKIK_RULING_WINDOW = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-view-2007-window.json",
+  import.meta.url,
+);
+
+const PL_UOKIK_RULING_DETAIL = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-detail-e1054a6198f37b72c1257ec6007b8007.html",
+  import.meta.url,
+);
+
+const PL_UOKIK_RULING_PDF = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/pl-uokik-ruling-vi-aca-527-08.pdf",
+  import.meta.url,
+);
+
+/**
+ * An appeal court judgment the register attaches to RLU-17/2007, built as a
+ * row of its own through the adapter's assembly, with its file's object
+ * reference closed into the envelope the way the pipeline closes it.
+ */
+export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const view: unknown = await Bun.file(PL_UOKIK_RULING_WINDOW).json();
+    const listed: unknown[] =
+      isRecord(view) && Array.isArray(view["viewentry"])
+        ? view["viewentry"]
+        : [];
+    const entry =
+      listed
+        .filter(isRecord)
+        .find((item) => item["@unid"] === PL_UOKIK_RULING_UNID) ??
+      panic("the pl-uokik ruling window lost its decision");
+    const bytes = new Uint8Array(
+      await Bun.file(PL_UOKIK_RULING_PDF).arrayBuffer(),
+    );
+    const decision = await assemblePlUokikRuling({
+      entry,
+      detailHtml: await Bun.file(PL_UOKIK_RULING_DETAIL).text(),
+      unid: PL_UOKIK_RULING_UNID,
+      file: { name: "Wyrok VI ACa 527_08.pdf", title: undefined },
+      fetched: {
+        name: "Wyrok VI ACa 527_08.pdf",
+        status: PL_UOKIK_FILE_STATUS.READ,
+        bytes,
+      },
+      decision: {
+        sourceDocumentId: PL_UOKIK_RULING_UNID,
+        caseNumber: "RLU-17/2007",
+        decisionDate: "2007-05-16",
+      },
+    });
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes: payload, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: PL_UOKIK_SOURCE_ID,
+            documentId: decision.sourceDocumentId ?? PL_UOKIK_RULING_UNID,
+            bytes: payload,
             contentType,
           }),
         ],
