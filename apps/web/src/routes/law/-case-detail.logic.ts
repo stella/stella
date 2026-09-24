@@ -16,7 +16,10 @@ import {
   decisionBySlugOptions,
   decisionOptions,
 } from "@/features/case-law/queries/decisions";
-import { decisionProvisionsInfiniteOptions } from "@/features/case-law/queries/provisions";
+import {
+  decisionProvisionsForLinkingOptions,
+  decisionProvisionsInfiniteOptions,
+} from "@/features/case-law/queries/provisions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
 import {
@@ -121,6 +124,14 @@ const primeDecisionProvisions = (
       captureError,
     ),
     "case-law.provisions-prefetch",
+  );
+  detached(
+    prefetchNonCriticalQuery(
+      queryClient,
+      routeQueryOptions(decisionProvisionsForLinkingOptions(decisionId)),
+      captureError,
+    ),
+    "case-law.provision-links-prefetch",
   );
   detached(
     prefetchNonCriticalQuery(

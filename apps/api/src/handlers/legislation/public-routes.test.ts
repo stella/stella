@@ -3,6 +3,7 @@ import nodePath from "node:path";
 
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import { LIMITS } from "@/api/lib/limits";
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readHandlerSource = async (file: string) =>
@@ -58,6 +59,24 @@ describe("public statute routes", () => {
       new Request(
         "http://localhost/law/statutes/by-eli?eli=CZ%2F2012%2F89&asOf=yesterday",
       ),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  test("rejects a resolve batch past its limit before handler execution", async () => {
+    const work = { country: "CZE", eli: "CZ/2012/89", asOf: "2021-01-01" };
+    const response = await publicLegislationRoute.handle(
+      new Request("http://localhost/law/statutes/resolve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          works: Array.from(
+            { length: LIMITS.legislationResolveWorksMax + 1 },
+            () => work,
+          ),
+        }),
+      }),
     );
 
     expect(response.status).toBe(422);

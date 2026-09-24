@@ -590,6 +590,12 @@ export const LIMITS = {
   legislationAstCacheMaxHeapBytes: 96 * 1024 * 1024,
   /** Provisions one batch read may ask for, each up to the text budget above. */
   legislationProvisionBatchMax: 20,
+  /**
+   * Works one batched point-in-time resolve may ask for. A decision reader
+   * links every act its text cites, and a plenary decision can cite dozens;
+   * each is one indexed probe of the Work key, joined in a single statement.
+   */
+  legislationResolveWorksMax: 200,
   /** Works (one canonical URL each) in one statute sitemap shard. */
   statuteSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */

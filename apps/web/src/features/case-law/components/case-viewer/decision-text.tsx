@@ -134,6 +134,79 @@ type DecisionTextProps = {
 /** No match is the find's own: nothing carries the active mark. */
 const NO_ACTIVE_MATCH = -1;
 
+/** How long a landing holds its passage while the page around it settles. */
+const LANDING_HOLD_MS = 4000;
+
+/** Input that means the reader has taken the scroll position over. */
+const READER_SCROLL_INPUT = [
+  "keydown",
+  "pointerdown",
+  "touchstart",
+  "wheel",
+] as const;
+
+const scrollingAncestor = (element: HTMLElement): HTMLElement | null => {
+  for (
+    let ancestor = element.parentElement;
+    ancestor !== null;
+    ancestor = ancestor.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(ancestor);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return ancestor;
+    }
+  }
+  return null;
+};
+
+/**
+ * Lands on the passage and keeps it there while the page settles. Panels
+ * above the text arrive after it, each at full height at once, and an engine
+ * without scroll anchoring would leave the passage pushed down by them. The
+ * hold ends the moment the reader scrolls, types or clicks, or once the
+ * page has had time to settle.
+ */
+const holdLanding = ({
+  article,
+  target,
+}: {
+  article: HTMLElement;
+  target: HTMLElement;
+}): (() => void) => {
+  const land = () => {
+    target.scrollIntoView({
+      behavior: "instant",
+      block: "center",
+      inline: "nearest",
+    });
+  };
+  land();
+
+  // The panels are the text's siblings, not its children, so what grows is
+  // the content of whatever scrolls the text.
+  const observer = new ResizeObserver(land);
+  const scroller = scrollingAncestor(article);
+  for (const content of scroller?.children ?? [article]) {
+    observer.observe(content);
+  }
+  const { ownerDocument } = article;
+  const release = () => {
+    observer.disconnect();
+    clearTimeout(timeout);
+    for (const type of READER_SCROLL_INPUT) {
+      ownerDocument.removeEventListener(type, release, { capture: true });
+    }
+  };
+  const timeout = setTimeout(release, LANDING_HOLD_MS);
+  for (const type of READER_SCROLL_INPUT) {
+    ownerDocument.addEventListener(type, release, {
+      capture: true,
+      passive: true,
+    });
+  }
+  return release;
+};
+
 const DECISION_REFERENCE_ID = "decision-reference";
 
 const supplementBlockAnchorId = (pieceId: string, start: number): string =>
@@ -958,7 +1031,7 @@ export const DecisionText = ({
   useExternalSyncEffect(() => {
     const article = articleRef.current;
     if (!article) {
-      return;
+      return undefined;
     }
 
     // The match wins where there is one; a landing passage the query does not
@@ -977,7 +1050,7 @@ export const DecisionText = ({
             `[data-anchor="${CSS.escape(landingAnchorId)}"]`,
           ));
     if (!target) {
-      return;
+      return undefined;
     }
 
     // A match inside the folded reporter apparatus is invisible while its
@@ -991,11 +1064,18 @@ export const DecisionText = ({
       disclosure.open = true;
     }
 
-    target.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
+    // Stepping between matches is a move the reader makes, so it glides.
+    // Landing is arrival: the passage may be screens away while the page is
+    // still settling, and an animation over that distance is a wait.
+    if (landingAnchorId === undefined) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+      return undefined;
+    }
+    return holdLanding({ article, target });
   }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
 
   // A separate opinion is bylined where the court's own text does not say

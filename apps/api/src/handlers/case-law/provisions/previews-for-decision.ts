@@ -1,37 +1,26 @@
 import { panic } from "better-result";
-import { eq, inArray, sql } from "drizzle-orm";
-import * as v from "valibot";
+import { eq, inArray } from "drizzle-orm";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
-import {
-  caseLawDecisions,
-  legislationDocuments,
-  legislationSources,
-} from "@/api/db/schema";
+import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   buildProvisionPreview,
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
-import {
-  inForceOn,
-  versionSortKey,
-} from "@/api/lib/legal-search/legislation-validity-window";
 import {
   readVersionBlocks,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationVersionAstRow } from "@/api/lib/legal-search/legislation-version-blocks";
+import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import type { Page } from "@/api/lib/pagination";
-import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 const PREVIEWS_READ_STEP = "decisionProvisionPreviews.corpusAst";
 
@@ -62,11 +51,6 @@ const previewKeyOf = (
   documentId: SafeId<"legislationDocument">,
   anchor: string,
 ): string => `${documentId}#${anchor}`;
-
-const resolvedWorkSchema = v.object({
-  key: v.string(),
-  id: v.pipe(v.string(), v.uuid()),
-});
 
 /**
  * The date a citation's wording is read at: the version the reference itself
@@ -117,14 +101,10 @@ type ResolvedWorks = {
 };
 
 /**
- * The consolidation each requested Work had in force on its own date, in one
- * round trip.
- *
- * The dates differ per Work, so the windows are joined against a values list
- * rather than folded into one predicate: every request keeps its own `as_of`
- * and the canonical `inForceOn` rule decides all of them at once. Ordering
- * repeats the point-in-time read's tie-break, so a Work resolved here and the
- * same Work resolved by `by-eli` cannot disagree.
+ * The consolidation each requested Work had in force on its own date, read
+ * with the columns a preview needs. The resolve is the one the public batch
+ * read uses, so the wording a preview quotes and the consolidation a link
+ * opens are the same row.
  */
 const resolveWorkVersions = async (
   requests: readonly WorkRequest[],
@@ -135,43 +115,8 @@ const resolveWorkVersions = async (
     return { versionByWork };
   }
 
-  const values = sql.join(
-    requests.map(
-      (request) =>
-        sql`(${request.key}, ${request.country}, ${request.eli}, ${request.asOf}::date)`,
-    ),
-    sql`, `,
-  );
-
   const { works, versions } = await legislationDb(async (tx) => {
-    const resolved = executedRows(
-      await tx.execute(sql`
-        SELECT w.key AS key, ${legislationDocuments.id} AS id
-          FROM (VALUES ${values}) AS w(key, country, eli, as_of)
-          JOIN ${legislationDocuments}
-            ON ${legislationDocuments.country} = w.country
-           AND ${legislationDocuments.eli} = w.eli
-           AND ${inForceOn(
-             legislationDocuments.versionValidFrom,
-             legislationDocuments.versionValidTo,
-             sql`w.as_of`,
-           )}
-          JOIN ${legislationSources}
-            ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-         WHERE ${publishedLegislationDocument}
-         ORDER BY w.key,
-                  ${versionSortKey(legislationDocuments.versionValidFrom)} DESC,
-                  ${legislationDocuments.language} ASC,
-                  ${legislationDocuments.id} DESC
-      `),
-    ).map((row) => v.parse(resolvedWorkSchema, row));
-
-    const idByWork = new Map<string, SafeId<"legislationDocument">>();
-    for (const { key, id } of resolved) {
-      if (!idByWork.has(key)) {
-        idByWork.set(key, brandPersistedLegislationDocumentId(id));
-      }
-    }
+    const idByWork = await resolveWorksAtDate(tx, requests);
 
     const ids = [...new Set(idByWork.values())];
     if (ids.length === 0) {
