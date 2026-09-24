@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import fc from "fast-check";
 import {
   existsSync,
@@ -81,6 +89,21 @@ const readReleaseDates = (root: string): unknown =>
       "utf-8",
     ),
   );
+
+// The reads resolve their token once, falling back to spawning `gh auth token`
+// when no variable holds one. Fetch is stubbed here, so a fixed token keeps the
+// first read from waiting on the CLI.
+const previousGhToken = process.env["GH_TOKEN"];
+beforeAll(() => {
+  process.env["GH_TOKEN"] = "test-token";
+});
+afterAll(() => {
+  if (previousGhToken === undefined) {
+    delete process.env["GH_TOKEN"];
+  } else {
+    process.env["GH_TOKEN"] = previousGhToken;
+  }
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
