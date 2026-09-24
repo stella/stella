@@ -105,9 +105,9 @@ type TemplateItem = {
   fieldCount: number;
   sizeBytes: number;
   categoryId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  lastUsedAt: Date | null;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
   useCount: number;
   tags: string[] | null;
   /** Ordered BCP-47 tags of the document text, primary language first. */

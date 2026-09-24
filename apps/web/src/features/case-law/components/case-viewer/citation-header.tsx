@@ -22,7 +22,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { SafeId } from "@/lib/safe-id";
 
 type CitationHeaderProps = {
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   /** The decision, as the citing-decisions tab the panel opens needs it. */
   target: Parameters<typeof createCaseDecisionDetailsTab>[0];

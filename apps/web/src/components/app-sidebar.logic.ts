@@ -55,13 +55,11 @@ export const resolveAutomaticExpandedMatterId = ({
 
 type RecentWorkspace = {
   id: string;
-  lastActivityAt: Date | string;
+  lastActivityAt: Date;
 };
 
 const activityTime = ({ lastActivityAt }: RecentWorkspace): number =>
-  lastActivityAt instanceof Date
-    ? lastActivityAt.getTime()
-    : new Date(lastActivityAt).getTime();
+  lastActivityAt.getTime();
 
 export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
   activeWorkspaceId,
@@ -71,7 +69,7 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
   workspaces,
 }: {
   activeWorkspaceId: string | undefined;
-  chatActivityByWorkspaceId: ReadonlyMap<string, Date | string>;
+  chatActivityByWorkspaceId: ReadonlyMap<string, string>;
   limit: number;
   pinnedIds: ReadonlySet<string>;
   workspaces: readonly TWorkspace[];
@@ -82,11 +80,7 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
       return activityTime(workspace);
     }
 
-    const chatActivityTime =
-      chatActivity instanceof Date
-        ? chatActivity.getTime()
-        : new Date(chatActivity).getTime();
-    return Math.max(activityTime(workspace), chatActivityTime);
+    return Math.max(activityTime(workspace), new Date(chatActivity).getTime());
   };
   const sorted = workspaces
     .filter((workspace) => !pinnedIds.has(workspace.id))

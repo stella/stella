@@ -14,10 +14,10 @@ const workspace = ({
   members?: { userId: string }[];
 }) => ({
   client: null,
-  createdAt,
+  createdAt: createdAt.toISOString(),
   entityCount: 0,
   id,
-  lastActivityAt: createdAt,
+  lastActivityAt: createdAt.toISOString(),
   leadUserId,
   members,
 });

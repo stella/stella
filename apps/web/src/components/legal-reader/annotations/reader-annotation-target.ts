@@ -31,7 +31,7 @@ export type ReaderAnnotationTarget =
       caseNumber: string;
       country: string;
       court: string;
-      decisionDate: Date | string | null;
+      decisionDate: string | null;
       decisionType: string | null;
       ecli: string | null;
       id: string;

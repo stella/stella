@@ -349,7 +349,7 @@ type ContactItem = {
   phones: { type: string; number: string; isPrimary: boolean }[] | null;
   tags: string[] | null;
   color: string | null;
-  createdAt: Date;
+  createdAt: string;
   clientMatterCount: number;
 };
 

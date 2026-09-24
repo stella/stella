@@ -57,7 +57,7 @@ export type LinkedClause = {
   clauseVersionId: string | null;
   slotName: string | null;
   sortOrder: number;
-  insertedAt: Date;
+  insertedAt: string;
   clause: {
     id: string;
     title: string;

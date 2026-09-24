@@ -54,7 +54,7 @@ type ClauseItem = {
   title: string;
   categoryId: string | null;
   currentVersion: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
 type ClauseListProps = {

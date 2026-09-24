@@ -20,13 +20,8 @@ const dateOnlyEpoch = (value: string): number =>
     timeZone: "UTC",
   }).epochMilliseconds;
 
-const instantEpoch = (value: string | Date): number =>
-  Result.try(() =>
-    value instanceof Date
-      ? Temporal.Instant.fromEpochMilliseconds(value.getTime())
-          .epochMilliseconds
-      : Temporal.Instant.from(value).epochMilliseconds,
-  ).unwrapOr(0);
+const instantEpoch = (value: string): number =>
+  Result.try(() => Temporal.Instant.from(value).epochMilliseconds).unwrapOr(0);
 
 type InternalColId = "select" | "add-property";
 
