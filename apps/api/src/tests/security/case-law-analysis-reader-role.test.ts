@@ -302,7 +302,7 @@ const READER_GRANT_PATTERN =
   /^(?<verb>GRANT|REVOKE) SELECT \((?<columns>[^)]+)\) ON TABLE "?(?<table>[a-z_]+)"? (?:TO|FROM) "?stella_case_law_analysis_reader"?$/iu;
 const READER_ROLE_NAME_PATTERN = /\bstella_case_law_analysis_reader\b/iu;
 const READER_DDL_PATTERN =
-  /^(?:CREATE ROLE \S+ NOLOGIN|GRANT USAGE ON SCHEMA public TO|CREATE POLICY "\w+" ON "?[a-z_]+"? AS PERMISSIVE FOR SELECT TO|DROP POLICY)\b/iu;
+  /^(?:CREATE ROLE "?stella_case_law_analysis_reader"? NOLOGIN|GRANT USAGE ON SCHEMA public TO "?stella_case_law_analysis_reader"?|CREATE POLICY "\w+" ON "?[a-z_]+"? AS PERMISSIVE FOR SELECT TO "?stella_case_law_analysis_reader"? USING \(true\)|DROP POLICY (?:IF EXISTS )?"\w+" ON "?[a-z_]+"?)$/iu;
 
 /** Fold every migration's column grants for the role into one effective map. */
 const foldReaderGrants = (
@@ -375,6 +375,9 @@ describe("case-law analysis reader migrations", () => {
       "GRANT ALL ON ALL TABLES IN SCHEMA public TO stella_case_law_analysis_reader;",
       'GRANT UPDATE (polarity) ON TABLE "case_law_citations" TO stella_case_law_analysis_reader;',
       "ALTER ROLE stella_case_law_analysis_reader LOGIN;",
+      "CREATE ROLE stella_case_law_analysis_reader NOLOGIN SUPERUSER;",
+      "GRANT USAGE ON SCHEMA public TO stella_case_law_analysis_reader WITH GRANT OPTION;",
+      'CREATE POLICY "case_law_analysis_reader_read" ON "case_law_sources" AS PERMISSIVE FOR SELECT TO "stella_case_law_analysis_reader" USING (true) WITH CHECK (true);',
     ]) {
       expect(() => foldReaderGrants([statement])).toThrow(
         "Unsupported reader grant statement",
