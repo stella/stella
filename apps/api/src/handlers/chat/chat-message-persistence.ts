@@ -295,7 +295,7 @@ type TerminalAssistantMessageProps = {
  * Restoration pairs accumulate because the owning text still needs the earlier
  * ones; token usage sums because the row now spans both runs.
  */
-export const toTerminalAssistantMessage = ({
+const toTerminalAssistantMessage = ({
   outcome,
   owningAssistantMessage,
   responseMessage,
