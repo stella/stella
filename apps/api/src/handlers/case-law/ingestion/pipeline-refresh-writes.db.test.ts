@@ -18,6 +18,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
@@ -327,6 +329,48 @@ test("a refresh that changes what the decision says moves updated_at", async () 
   const second = await storedRow(caseNumber);
   expect(second.updatedAt).not.toBe(first.updatedAt);
   expect(second.metadata).toMatchObject({ chamber: "grand" });
+});
+
+test("a refresh that rewrites the decision's identifier rows moves updated_at", async () => {
+  // The identifier rows are replaced with the row and read into its search
+  // document, which is refreshed by `updated_at`. Rows an earlier write left
+  // differently from what this refresh derives are a change of their own,
+  // even when nothing else the decision says moved.
+  const caseNumber = "30 Cdo 102/2024";
+  const reporter = {
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: "R 12/2021 civ",
+  } as const;
+  await ingest(
+    { ...withDocument(caseNumber, "page-v1"), identifiers: [reporter] },
+    canonical,
+  );
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decision_identifiers
+       SET value = 'R 12/2021 CIV'
+     WHERE decision_id = ${first.id}::uuid
+       AND type = ${reporter.type}
+  `);
+
+  await ingest(
+    { ...withDocument(caseNumber, "page-v2"), identifiers: [reporter] },
+    canonical,
+  );
+  const rewritten = await storedRow(caseNumber);
+  expect(rewritten.updatedAt).not.toBe(first.updatedAt);
+  const values = await db.execute(sql`
+    SELECT value FROM case_law_decision_identifiers
+     WHERE decision_id = ${first.id}::uuid AND type = ${reporter.type}
+  `);
+  expect(values.rows).toEqual([{ value: reporter.value }]);
+
+  // The rows now match, so the next refresh of the same page leaves it.
+  await ingest(
+    { ...withDocument(caseNumber, "page-v3"), identifiers: [reporter] },
+    canonical,
+  );
+  expect((await storedRow(caseNumber)).updatedAt).toBe(rewritten.updatedAt);
 });
 
 test.each([

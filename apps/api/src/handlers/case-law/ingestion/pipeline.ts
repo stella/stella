@@ -2767,6 +2767,7 @@ const processDecisionAttempt = async ({
     identifiers: {
       type: (typeof identifierRows)[number]["type"];
       normalizedValue: string;
+      value: string;
     }[];
   } | null> => {
     const rows = await tx
@@ -2789,6 +2790,7 @@ const processDecisionAttempt = async ({
       .select({
         type: caseLawDecisionIdentifiers.type,
         normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
+        value: caseLawDecisionIdentifiers.value,
       })
       .from(caseLawDecisionIdentifiers)
       .where(eq(caseLawDecisionIdentifiers.decisionId, id));
@@ -2826,6 +2828,35 @@ const processDecisionAttempt = async ({
       previous.language !== result.language ||
       (persistedDecisionDate !== undefined &&
         previous.decisionDate !== persistedDecisionDate)
+    );
+  };
+
+  /**
+   * Whether the identifier rows this write replaces differ from the ones it
+   * writes, stated values included: the search document is built from them.
+   */
+  const identifiersRewritten = (
+    previous: {
+      identifiers: {
+        type: string;
+        normalizedValue: string;
+        value: string;
+      }[];
+    } | null,
+  ): boolean => {
+    if (previous === null) {
+      return false;
+    }
+    const key = (identifier: {
+      type: string;
+      normalizedValue: string;
+      value: string;
+    }) =>
+      `${identifier.type}\u0000${identifier.normalizedValue}\u0000${identifier.value}`;
+    const incoming = new Set(identifierRows.map(key));
+    return (
+      previous.identifiers.length !== incoming.size ||
+      previous.identifiers.some((identifier) => !incoming.has(key(identifier)))
     );
   };
 
@@ -2998,7 +3029,8 @@ const processDecisionAttempt = async ({
         const metadataWrite = markedMetadata ?? describedMetadata;
         const writtenPayload = payloadNeedsGuard ? {} : payloadColumns;
         const contentChanged = sql`(
-          ${payloadChangedSql(corpusPlan, writtenPayload)}
+          ${identifiersRewritten(replacedState)}::boolean
+          OR ${payloadChangedSql(corpusPlan, writtenPayload)}
           OR ${storedRowDiffers(describedColumns)}
           OR ${caseLawDecisions.metadata} IS DISTINCT FROM ${markedMetadata ?? describedMetadataSql}
         )`;
