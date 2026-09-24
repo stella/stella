@@ -24,7 +24,7 @@ export type CitationInput = {
   caseNumber: string;
   country: string;
   court: string;
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionType: string | null;
   ecli: string | null;
   /** Citable case name where the tradition uses one (USA, EU). */
@@ -64,7 +64,7 @@ export const formatYear = (format: IntlFormatter, year: number): string =>
   format.number(year, { useGrouping: false });
 
 /** The calendar year a decision was handed down; null when undated. */
-export const decisionYear = (value: Date | string | null): number | null =>
+export const decisionYear = (value: string | null): number | null =>
   parseDecisionDate(value)?.year ?? null;
 
 /** "17. 5. 1954" — Czech and Slovak legal writing. */

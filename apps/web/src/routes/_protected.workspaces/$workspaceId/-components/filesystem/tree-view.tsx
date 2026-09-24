@@ -1770,16 +1770,13 @@ type ExtraColumnCellProps = {
 };
 
 const formatDateValue = (
-  value: string | Date | null | undefined,
+  value: string | null | undefined,
   locale: string,
 ): string => {
   if (value === undefined || value === null) {
     return "";
   }
   const formatter = new Intl.DateTimeFormat(locale, UTC_CALENDAR_DATE_FORMAT);
-  if (value instanceof Date) {
-    return formatter.format(value);
-  }
   if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
     return formatter.format(
       Temporal.PlainDate.from(value).toZonedDateTime({

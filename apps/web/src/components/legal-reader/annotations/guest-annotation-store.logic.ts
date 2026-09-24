@@ -337,7 +337,6 @@ export const guestAnnotationRows = ({
   target: GuestAnnotationTarget;
 }): ReaderAnnotation[] =>
   guestAnnotationsOnTarget(store, target).flatMap((item) => {
-    const createdAt = new Date(item.createdAt);
     const groupId = item.rowIds.length > 1 ? item.requestId : null;
     return item.input.spans.map((span, index) => {
       const rowId = item.rowIds.at(index);
@@ -352,7 +351,7 @@ export const guestAnnotationRows = ({
         body:
           item.input.kind === "comment" && index === 0 ? item.input.body : null,
         color: item.input.kind === "highlight" ? item.input.color : null,
-        createdAt,
+        createdAt: item.createdAt,
         endOffset: span.endOffset,
         groupId,
         id: toSafeId<"legalReaderAnnotation">(rowId),
@@ -361,7 +360,7 @@ export const guestAnnotationRows = ({
         quote: span.quote,
         startOffset: span.startOffset,
         style: item.input.kind === "highlight" ? item.input.style : null,
-        updatedAt: createdAt,
+        updatedAt: item.createdAt,
         visibility: item.input.visibility,
       };
     });

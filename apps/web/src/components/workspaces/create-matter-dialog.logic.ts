@@ -3,7 +3,7 @@ import { compareByLocale } from "@stll/collation";
 type ExistingWorkspace = {
   client?: { id: string } | null;
   members: {
-    lastActivity?: Date | string | null;
+    lastActivity?: string | null;
     userId?: string | null;
   }[];
   id: string;

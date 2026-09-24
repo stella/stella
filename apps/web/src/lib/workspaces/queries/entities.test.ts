@@ -28,7 +28,7 @@ const property = (
 ): WorkspaceProperty => ({
   id: toSafeId<"property">(id),
   name: id,
-  createdAt: new Date("2025-01-01T00:00:00.000Z"),
+  createdAt: "2025-01-01T00:00:00.000Z",
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   kinds: null,

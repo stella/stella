@@ -106,7 +106,7 @@ describe("calculationKindsForProperty", () => {
   const property = (contentType: "int" | "text") => ({
     id: toSafeId<"property">("p"),
     name: "p",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    createdAt: "2026-01-01T00:00:00.000Z",
     workspaceId: toSafeId<"workspace">("w"),
     status: "fresh" as const,
     content:

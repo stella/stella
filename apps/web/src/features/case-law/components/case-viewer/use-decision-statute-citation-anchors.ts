@@ -19,7 +19,7 @@ export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
 /** Work-level citations resolve to the wording applicable on the decision date. */
 export const useDecisionStatuteCitationAnchors = (
   blocks: readonly Block[],
-  decisionDate: Date | string | null,
+  decisionDate: string | null,
 ): DecisionStatuteCitationAnchor[] => {
   const references = locateStatuteCitations(blocks);
   const asOf = decisionDateToIso(decisionDate);

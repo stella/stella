@@ -202,9 +202,8 @@ type DatePickerPopoverProps = Omit<
   "locale" | "clearLabel" | "todayLabel" | "overdueLabel"
 >;
 
-const hasDeletedAccount = (
-  deletedAt: Date | string | null | undefined,
-): boolean => deletedAt !== null && deletedAt !== undefined;
+const hasDeletedAccount = (deletedAt: string | null | undefined): boolean =>
+  deletedAt !== null && deletedAt !== undefined;
 
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
@@ -236,7 +235,7 @@ type OwnerPickerProps = {
     id: string;
     name: string | null;
     image: string | null;
-    deletedAt?: Date | string | null;
+    deletedAt?: string | null;
   } | null;
   reason: string;
   disabled?: boolean;
@@ -327,7 +326,7 @@ type AssigneePickerProps = {
       id: string;
       name: string | null;
       image: string | null;
-      deletedAt?: Date | string | null;
+      deletedAt?: string | null;
     };
   }[];
 };

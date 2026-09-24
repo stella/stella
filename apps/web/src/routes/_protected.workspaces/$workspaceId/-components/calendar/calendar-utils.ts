@@ -166,25 +166,17 @@ export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
  * Extract a date string from an entity for a given property ID.
  * Handles both custom date properties and internal properties.
  */
-/** Coerce a Date or ISO string to YYYY-MM-DD. */
-const toDateString = (value: string | Date): string => {
-  if (value instanceof Date) {
-    return Temporal.Instant.fromEpochMilliseconds(value.getTime())
-      .toZonedDateTimeISO("UTC")
-      .toPlainDate()
-      .toString();
-  }
-  return value.slice(0, 10);
-};
+/** The YYYY-MM-DD part of an ISO date or instant. */
+const toDateString = (value: string): string => value.slice(0, 10);
 
 export const getEntityDate = (
   entity: {
     fields: Record<string, { content: WorkspaceFieldContent }>;
-    createdAt: string | Date;
-    updatedAt: string | Date | null;
-    dueDate?: string | Date | null;
-    startAt?: string | Date | null;
-    occurredAt?: string | Date | null;
+    createdAt: string;
+    updatedAt: string | null;
+    dueDate?: string | null;
+    startAt?: string | null;
+    occurredAt?: string | null;
   },
   propertyId: string,
 ): string | null => {

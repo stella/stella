@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
 import type {
@@ -82,7 +83,7 @@ const pendingRows = ({
 }): ReaderAnnotation[] => {
   const groupId =
     input.spans.length > 1 ? `${PENDING_ID_PREFIX}${stamp}` : null;
-  const now = new Date();
+  const now = Temporal.Now.instant().toString();
   return input.spans.map((span, index) => ({
     authorId: author.id,
     authorImage: author.image,
