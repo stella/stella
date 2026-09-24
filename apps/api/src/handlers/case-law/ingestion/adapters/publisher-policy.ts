@@ -184,6 +184,16 @@ export const PUBLISHER_GATES = {
     intervalMs: 1000,
     hosts: ["orzeczenia.uodo.gov.pl"],
   },
+  /**
+   * decyzje.uokik.gov.pl. Politeness, not a publisher statement: the register
+   * states no limit, and two seconds between requests keeps a crawl
+   * sequential and slow.
+   */
+  "uokik-gov-pl": {
+    publisher: "Prezes UOKiK",
+    intervalMs: 2000,
+    hosts: ["decyzje.uokik.gov.pl"],
+  },
   /** eakta.birosag.hu. */
   "birosag-hu": {
     publisher: "Országos Bírósági Hivatal",
@@ -245,6 +255,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
   [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
+  [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** The hosts an adapter's publisher serves from. */

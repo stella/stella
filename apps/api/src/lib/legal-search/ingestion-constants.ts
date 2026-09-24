@@ -28,6 +28,7 @@ export const ADAPTER_KEYS = {
   HU_BHGY: "hu-bhgy",
   PL_KIS: "pl-kis",
   PL_UODO: "pl-uodo",
+  PL_UOKIK: "pl-uokik",
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
@@ -69,6 +70,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.HU_BHGY]: 1,
   [ADAPTER_KEYS.PL_KIS]: 1,
   [ADAPTER_KEYS.PL_UODO]: 1,
+  [ADAPTER_KEYS.PL_UOKIK]: 1,
 } as const satisfies Record<AdapterKey, number>;
 
 /**

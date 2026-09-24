@@ -546,6 +546,22 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    key: ADAPTER_KEYS.PL_UOKIK,
+    name: "Polish Competition and Consumer Protection Authority (Prezes UOKiK)",
+    publisher: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+    publicHomeUrl: "https://decyzje.uokik.gov.pl",
+    ...ADAPTER_JURISDICTIONS.POL,
+    // Poland issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // The register's oldest decision is dated 4 January 2000.
+      type: "decision-date",
+      fromInclusive: "2000-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",

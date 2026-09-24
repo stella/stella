@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { Block, InlineNode } from "@/api/handlers/case-law/document-ast";
+import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   parsePlUokikDocument,
   plUokikDocumentLines,
@@ -62,14 +62,14 @@ const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> =>
     .replaceAll(/(\p{L})-\n(\p{Ll})/gu, "$1$2")
     .split("\n");
 
-const hasBold = (inlines: readonly InlineNode[]): boolean =>
+const hasBold = (inlines: readonly Inline[]): boolean =>
   inlines.some(
     (inline) =>
       inline.type === "bold" ||
       ("children" in inline && hasBold(inline.children)),
   );
 
-const inlinesOf = (block: Block): readonly InlineNode[] =>
+const inlinesOf = (block: Block): readonly Inline[] =>
   block.type === "paragraph" || block.type === "heading" ? block.inlines : [];
 
 const LOSS_CODES = new Set([
