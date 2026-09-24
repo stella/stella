@@ -29,12 +29,10 @@ import type {
   StoredRawResultReader,
   StoredRawReparseRejection,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  allocateSourceObservationOrder,
-  PROCESS_DECISION_STATUS,
-  processSupplement,
-} from "@/api/handlers/case-law/ingestion/pipeline";
-import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";

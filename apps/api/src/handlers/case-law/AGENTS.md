@@ -751,7 +751,8 @@ case-law/
 ├── decisions/             # Read/list/search handlers
 ├── ingestion/
 │   ├── adapter.ts         # SourceAdapter interface
-│   ├── pipeline.ts        # Sanitize, dedup, upsert
+│   ├── pipeline.ts        # Page loop: fetch, process, checkpoint
+│   ├── pipeline/          # Sanitize, dedup, upsert (one module per step)
 │   ├── adapters/
 │   │   ├── cz-ns.ts       # Czech Supreme Court
 │   │   ├── cz-nss.ts      # Czech Supreme Admin Court

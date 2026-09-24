@@ -13,11 +13,9 @@ import {
   isCzRegionalApiItem,
   listCzRegionalDayPage,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import {
-  allocateSourceObservationOrder,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,

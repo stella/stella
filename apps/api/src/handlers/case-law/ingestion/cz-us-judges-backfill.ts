@@ -46,11 +46,9 @@ import {
 import type { NalusSession } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  allocateSourceObservationOrder,
-  DECISION_REFRESH,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";

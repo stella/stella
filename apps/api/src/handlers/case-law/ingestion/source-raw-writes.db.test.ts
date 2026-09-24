@@ -18,10 +18,8 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  DECISION_REFRESH,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

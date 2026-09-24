@@ -35,7 +35,7 @@ import {
   DOCUMENT_DELIVERY,
   EMPTY_AST,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,

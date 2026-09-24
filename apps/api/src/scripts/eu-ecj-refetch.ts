@@ -9,12 +9,10 @@ import {
   isValidCelex,
   listCelexVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import {
-  allocateSourceObservationOrder,
-  DECISION_REFRESH,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
