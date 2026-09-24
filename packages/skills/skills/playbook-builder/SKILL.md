@@ -48,11 +48,14 @@ going, drafting and saving until every position is settled.
 Ask, in one batch:
 
 - Past executed contracts of this type: the playbook is best grounded in them.
-  The user can attach them, name them, ask you to look for them in their
-  matters, or start without them.
+  Offer exactly four answers: attach them, name them, look for them in their
+  matters, or start without them. Do not offer "later": a user who wants to
+  supply contracts later starts without them, and you ask again once the
+  positions are settled (section 2, "None").
 - The contract type the playbook reviews.
-- The organization's side (for example buyer or seller, discloser or
-  recipient).
+- The organization's side, offered as the roles this contract type uses
+  (customer or supplier, discloser or recipient, controller or processor;
+  buyer or seller only for a sale).
 - The governing law the playbook assumes.
 - The language to write the playbook in.
 
@@ -77,6 +80,7 @@ before it is read, and a subagent cannot ask them.
 - **Look for them:** only when the user asks, whether at the open or once
   positions are saved, and always in this order:
   1. Ask which matters to search, or whether to search all they can access.
+     Never call `list_matters` or `list_documents` before this answer.
   2. For named matters, find them with `list_matters` and list their
      documents with `list_documents`. `search_across_matters` spans every
      matter the user can access, so use it only when they chose all.
@@ -87,15 +91,20 @@ before it is read, and a subagent cannot ask them.
      drafts and the counterparty's paper, and a playbook is visible to the
      whole organization, so which documents feed it is the user's choice.
      Positions already saved are then revised from what the contracts say.
-- **None:** do not search. Build from defaults and the interview.
+- **None, or later:** do not search and do not list matters. Build from
+  defaults and the interview. Once the positions are settled, before the
+  summary, ask once whether to ground them in contracts now (look in the
+  matters, attach them, or finish without); on yes, follow "Look for them"
+  and revise the saved positions from what the contracts say.
 
 ## 3. Save early
 
 As soon as you know the name, the side, and the first position, create the
-playbook: `name`, a one-line `description`, and that position, all in the
-playbook's language. Never send `scope` unless the user's own words for
-their side were buyer, seller, or neutral; a customer, supplier, recipient,
-discloser, controller, or processor gets no `scope.perspective`. Keep the
+playbook: `name`, a one-line `description`, and that one position, all in
+the playbook's language. Never send `scope` unless the user typed buyer,
+seller, or neutral for their side; an option you wrote is your word, not
+theirs, and a customer, supplier, recipient, discloser, controller, or
+processor gets no `scope.perspective`. Keep the
 returned `playbook_id` and `updatedAt`. The user sees the playbook fill in
 as you save, so do not hold positions back to save them all at the end.
 
@@ -131,8 +140,9 @@ SaaS), mention that the user can start from it on the playbooks page instead.
 ## Saving rules
 
 - Save each position when it settles, one position per call, written in the
-  playbook's language. After the first save, pass `playbook_id` and the
-  latest `updatedAt` as `expected_updated_at`.
+  playbook's language; never put several positions in one call, not even
+  the first. After the first save, pass `playbook_id` and the latest
+  `updatedAt` as `expected_updated_at`.
 - Send only positions that are new or changed. Never resend the playbook or a
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,
