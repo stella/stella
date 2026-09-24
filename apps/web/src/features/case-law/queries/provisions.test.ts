@@ -121,9 +121,9 @@ describe("cited statute resolution", () => {
       statutesResolveOptions(works),
     );
 
-    expect(bodies.map((body) => body.works.length).toSorted()).toEqual([
-      1, 200,
-    ]);
+    expect(
+      bodies.map((body) => body.works.length).toSorted((a, b) => a - b),
+    ).toEqual([1, 200]);
     expect(statuteByCitedWork(resolved).size).toBe(201);
   });
 

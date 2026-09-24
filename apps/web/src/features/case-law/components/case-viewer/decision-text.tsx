@@ -1031,7 +1031,7 @@ export const DecisionText = ({
   useExternalSyncEffect(() => {
     const article = articleRef.current;
     if (!article) {
-      return;
+      return undefined;
     }
 
     // The match wins where there is one; a landing passage the query does not
@@ -1050,7 +1050,7 @@ export const DecisionText = ({
             `[data-anchor="${CSS.escape(landingAnchorId)}"]`,
           ));
     if (!target) {
-      return;
+      return undefined;
     }
 
     // A match inside the folded reporter apparatus is invisible while its
@@ -1073,7 +1073,7 @@ export const DecisionText = ({
         block: "center",
         inline: "nearest",
       });
-      return;
+      return undefined;
     }
     return holdLanding({ article, target });
   }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
