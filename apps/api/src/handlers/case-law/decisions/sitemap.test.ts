@@ -16,6 +16,7 @@ import {
   decisionMonthSql,
   decisionYearSql,
   listSitemapShardDecisionsHandler,
+  readSitemapBucketShards,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -195,6 +196,56 @@ test("bucket-shard query groups by the hashed bucket without a GROUP BY mismatch
   expect(rows.every((row) => row.total === 1)).toBe(true);
   // The bucket is a zero-padded two-character token from the fragment's lpad.
   expect(rows.every((row) => /^[0-9]{2}$/u.test(row.bucket))).toBe(true);
+});
+
+test("the bucket-shard read covers only the shards it is given", async () => {
+  // Bucket rows are consumed per natural shard, and only for the shards that
+  // overflow the per-shard URL limit, so the read must not aggregate the shards
+  // that were not asked for. The seed holds one decision in each of CZE
+  // 2020-03, 2020-05, 2021-01 and the undated shard.
+  const dated = await caseLawDb(
+    async (tx) =>
+      await readSitemapBucketShards(tx, [
+        { country: "CZE", month: "05", year: "2020" },
+      ]),
+  );
+  expect(dated).toHaveLength(1);
+  expect(dated[0]).toMatchObject({ month: "05", total: 1, year: "2020" });
+
+  // The undated shard carries the COALESCE fallbacks in both the year and the
+  // month, and selects on a null decision date rather than a day range.
+  const undated = await caseLawDb(
+    async (tx) =>
+      await readSitemapBucketShards(tx, [
+        { country: "CZE", month: "00", year: "undated" },
+      ]),
+  );
+  expect(undated).toHaveLength(1);
+  expect(undated[0]).toMatchObject({
+    month: "00",
+    total: 1,
+    year: "undated",
+  });
+
+  const both = await caseLawDb(
+    async (tx) =>
+      await readSitemapBucketShards(tx, [
+        { country: "CZE", month: "05", year: "2020" },
+        { country: "CZE", month: "01", year: "2021" },
+      ]),
+  );
+  expect(both).toHaveLength(2);
+  expect(both.map((row) => `${row.year}-${row.month}`)).toEqual([
+    "2021-01",
+    "2020-05",
+  ]);
+
+  // No overflowing shard means no aggregate at all, rather than one over the
+  // whole corpus.
+  const none = await caseLawDb(
+    async (tx) => await readSitemapBucketShards(tx, []),
+  );
+  expect(none).toEqual([]);
 });
 
 test("sitemap shards reject countries outside the public list", async () => {

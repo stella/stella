@@ -674,7 +674,9 @@ describe("public-law reader role", () => {
     const shards = await listSitemapShardsHandler(caseLawDb);
     expect(shards).toMatchObject({ items: [] });
     await caseLawDb(async (tx) => {
-      await readSitemapBucketShards(tx);
+      await readSitemapBucketShards(tx, [
+        { country: PUBLIC_COUNTRY, month: "08", year: "2026" },
+      ]);
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });
 

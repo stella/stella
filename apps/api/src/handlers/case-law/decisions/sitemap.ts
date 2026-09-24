@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -53,12 +53,15 @@ type SitemapShardDecisionsQuery = Static<
   typeof sitemapShardDecisionsQuerySchema
 >;
 
-type NaturalShardRow = {
+type NaturalShardKey = {
   country: string;
-  lastmod: Date | null;
   month: string;
-  total: number;
   year: string;
+};
+
+type NaturalShardRow = NaturalShardKey & {
+  lastmod: Date | null;
+  total: number;
 };
 
 type BucketShardRow = NaturalShardRow & {
@@ -142,6 +145,41 @@ const chunkArray = <T>(
   return chunks;
 };
 
+// The half-open [start, end) day range covered by one dated natural shard.
+// Shared by the shard read and the bucket read so both select a shard through
+// the same date bounds (and so the same index) rather than through the
+// `to_char` fragments the index groups by.
+const getShardDateRange = (
+  year: string,
+  month: string,
+): { end: string; start: string } => {
+  const endMonth =
+    month === "12" ? "01" : String(Number(month) + 1).padStart(2, "0");
+  const endYear = month === "12" ? String(Number(year) + 1) : year;
+
+  return { end: `${endYear}-${endMonth}-01`, start: `${year}-${month}-01` };
+};
+
+// A natural shard is either fully undated or fully dated: the year and month
+// both come from a COALESCE over the same `decisionDate`, so the undated
+// fallbacks always appear together. Callers that take a shard key from the
+// grouped read therefore need no mismatch handling; `getShardConditions`
+// rejects the mismatch for the caller that takes it from a request.
+const getNaturalShardCondition = ({
+  country,
+  month,
+  year,
+}: NaturalShardKey): SQL => {
+  const countryCondition = eq(caseLawDecisions.country, country.toUpperCase());
+  if (year === SITEMAP_UNDATED_YEAR || month === SITEMAP_UNDATED_MONTH) {
+    return sql`(${countryCondition} AND ${isNull(caseLawDecisions.decisionDate)})`;
+  }
+
+  const { end, start } = getShardDateRange(year, month);
+
+  return sql`(${countryCondition} AND ${caseLawDecisions.decisionDate} >= ${start} AND ${caseLawDecisions.decisionDate} < ${end})`;
+};
+
 const getShardConditions = ({
   bucket = SITEMAP_ALL_BUCKET,
   country,
@@ -158,13 +196,10 @@ const getShardConditions = ({
     }
     conditions.push(isNull(caseLawDecisions.decisionDate));
   } else {
-    const startDate = `${year}-${month}-01`;
-    const endMonth =
-      month === "12" ? "01" : String(Number(month) + 1).padStart(2, "0");
-    const endYear = month === "12" ? String(Number(year) + 1) : year;
+    const { end, start } = getShardDateRange(year, month);
     conditions.push(
-      sql`${caseLawDecisions.decisionDate} >= ${startDate}`,
-      sql`${caseLawDecisions.decisionDate} < ${`${endYear}-${endMonth}-01`}`,
+      sql`${caseLawDecisions.decisionDate} >= ${start}`,
+      sql`${caseLawDecisions.decisionDate} < ${end}`,
     );
   }
 
@@ -175,10 +210,23 @@ const getShardConditions = ({
   return conditions;
 };
 
+// Only the natural shards that overflow the per-shard URL limit are split into
+// buckets, and only their bucket rows are ever read back out of this result, so
+// the read is restricted to those shards. Aggregating every published decision
+// instead would make the work grow with the whole corpus rather than with the
+// overflowing shards, and would let the index-entry cap below reject a servable
+// index: one bucket row per bucket per shard means a corpus with more than
+// `caseLawSitemapIndexEntryLimit / SITEMAP_SHARD_BUCKET_COUNT` natural shards
+// overflows the cap on bucket rows alone, however few shards actually overflow.
 export const readSitemapBucketShards = async (
   tx: CaseLawPublicReadTransaction,
-) =>
-  await tx
+  bucketedShards: readonly NaturalShardKey[],
+) => {
+  if (bucketedShards.length === 0) {
+    return [];
+  }
+
+  return await tx
     .select({
       country: caseLawDecisions.country,
       year: decisionYearSql,
@@ -194,6 +242,7 @@ export const readSitemapBucketShards = async (
         redistributableCaseLawSource,
         publishedCaseLawDecision,
         inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        or(...bucketedShards.map(getNaturalShardCondition)),
       ),
     )
     .groupBy(
@@ -210,6 +259,7 @@ export const readSitemapBucketShards = async (
     )
     // Fetch one past the index cap so an overflowing bucket set is rejected.
     .limit(LIMITS.caseLawSitemapIndexEntryLimit + 1);
+};
 
 export const readSitemapDecisionAlternates = async (
   tx: CaseLawPublicReadTransaction,
@@ -274,10 +324,10 @@ export const listSitemapShardsHandler = async (
       // shards. The guard below already 500s once items exceed this limit,
       // so the cap never truncates a servable index.
       .limit(LIMITS.caseLawSitemapIndexEntryLimit);
-    const needsBucketShards = natural.some(
+    const bucketedShards = natural.filter(
       (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
     );
-    const buckets = needsBucketShards ? await readSitemapBucketShards(tx) : [];
+    const buckets = await readSitemapBucketShards(tx, bucketedShards);
 
     return { naturalShards: natural, bucketShardRows: buckets };
   });
