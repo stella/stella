@@ -165,6 +165,14 @@ describe("the Polish search grammar", () => {
     // authority file number.
     ["0114-KDIP1-2.4012.123.2024.1.AB", " 0114–kdip1–2.4012.123.2024.1.ab "],
     ["KDIP1.4012.123.2024", "kdip1.4012.123.2024"],
+    // Competition authority decision numbers, as the register prints them
+    // and as a decision's own header spaces them.
+    ["DOK-1/2020", "DOK - 1/2020"],
+    ["DKK-212/2026", "DKK–212/2026"],
+    ["RŁO-7/2025", " RŁO-7/2025 "],
+    ["DIH-II-34/2026", "DIH - II - 34/2026"],
+    ["DNR-1-20/2026", "DNR - 1 - 20/2026"],
+    ["DOZIK-5/2026", "DOZIK-5/2026"],
   ])("accepts %p and keys %p the same", (docket, variant) => {
     expect(key(docket)).not.toBeNull();
     expect(key(variant)).toBe(key(docket));
@@ -175,6 +183,13 @@ describe("the Polish search grammar", () => {
       "0114-kdip1-2.4012.123.2024.1.ab",
     );
     expect(key("KDIP1.4012.123.2024")).toBe("kdip1.4012.123.2024");
+  });
+
+  test("keys a competition authority decision number whole", () => {
+    expect(key("DKK-212/2026")).toBe("dkk-212/2026");
+    expect(key("DIH-II-34/2026")).toBe("dih-ii-34/2026");
+    expect(key("DNR-1-20/2026")).toBe("dnr-1-20/2026");
+    expect(key("RŁO-7/2025")).toBe("rło-7/2025");
   });
 
   test("keeps distinct dockets apart", () => {
@@ -202,6 +217,13 @@ describe("the Polish search grammar", () => {
       // The dots between an authority file number's groups are its own.
       "DKN.5131.6.2024",
       "DKN.513.16.2024",
+      // A division or a numbered department is part of a decision number.
+      "DIH-34/2026",
+      "DIH-II-34/2026",
+      "DIH-III-34/2026",
+      "DNR-34/2026",
+      "DNR-1-34/2026",
+      "DNR-2-34/2026",
     ].map(key);
     expect(keys).not.toContain(null);
     expect(new Set(keys).size).toBe(keys.length);
@@ -228,6 +250,14 @@ describe("the Polish search grammar", () => {
     "dkn.5131.6.2024",
     "D.5131.6.2024",
     "ABCDEFG.1.2.2024",
+    // A decision number is printed in capitals with a four-digit year, and
+    // the register's placeholders for a record with none are not one.
+    "dok-1/2020",
+    "DOK-1/20",
+    "DO-1/2020",
+    "DOK1/2020",
+    "-/2024",
+    "-0/2024",
   ])("rejects %p", (text) => {
     expect(key(text)).toBeNull();
   });

@@ -309,6 +309,22 @@ const PL_AUTHORITY_FILE_NUMBER_RE = new RegExp(
 );
 
 /**
+ * A decision number of the competition and consumer protection authority
+ * (Prezes UOKiK), as its register prints it: the issuing unit's all-caps
+ * code, an optional division numeral or number, the decision's ordinal and
+ * the four-digit year ("DOK-1/2020", "RŁO-7/2025", "DIH-II-34/2026",
+ * "DNR-1-20/2026"). Spaces around a hyphen fold away, since a decision's
+ * own header often prints "DKK - 212/2026". Capitals only and a four-digit
+ * year, so a common court's docket ("II K 12/20") never reads as one.
+ */
+export const PL_UOKIK_DECISION_NUMBER_SOURCE = String.raw`\p{Lu}{3,5}(?: ?- ?(?:[IVX]{1,4}|\d{1,2}))? ?- ?\d{1,4}\/(?:19|20)\d{2}`;
+
+const PL_UOKIK_DECISION_NUMBER_RE = new RegExp(
+  `^${PL_UOKIK_DECISION_NUMBER_SOURCE}$`,
+  "u",
+);
+
+/**
  * Constitutional Tribunal (TK) case prefixes, as the Tribunal prints them:
  * "K 2/26", "SK 12/20", "Kpt 1/17", "Ts 123/19". There is no division, which
  * is what tells "K 12/20" from a common court's "II K 12/20".
@@ -458,6 +474,7 @@ const POL_DOCKET_PATTERNS = [
   PL_TK_DOCKET_RE,
   PL_AUTHORITY_FILE_NUMBER_RE,
   ...POL_TAX_SIGNATURE_PATTERNS,
+  PL_UOKIK_DECISION_NUMBER_RE,
 ] as const;
 const EU_DOCKET_PATTERNS = [
   /^(?:(?:case|vec|věc|sprawa|affaire|rechtssache|causa|asunto) )?[ctf]-\d{1,4}\/\d{2}(?: p)?$/iu,
