@@ -55,6 +55,7 @@ let userCounter = 0;
 const buildProps = (scopedDb: ScopedDb) => {
   userCounter += 1;
   return {
+    documentedReads: [],
     memberRole: "owner" as const,
     organizationId: toSafeId<"organization">("org_1"),
     refRegistry: createChatRefRegistry(),

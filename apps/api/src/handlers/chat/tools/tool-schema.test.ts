@@ -151,6 +151,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   description: "Review closing files.",
   displayName: "Closing Review",
   editable: true,
+  documentedChatReads: [],
   excludedChatTools: [],
   id: skillId,
   origin: "authored",

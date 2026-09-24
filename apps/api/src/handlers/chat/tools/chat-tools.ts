@@ -34,6 +34,7 @@ import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { documentedChatReadsOf } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
@@ -684,8 +685,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // hardened sandbox: the single `execute_typescript` runner plus its
   // `discover_tools` companion. Replaces the hand-written run-stella-query /
   // describe-stella-api pair; the read functions it exposes as `external_*`
-  // bindings are ref-mediated, so no tenant UUID reaches the model.
+  // bindings are ref-mediated, so no tenant UUID reaches the model. The
+  // active skill's documented reads are eager on the streaming set only; the
+  // validation set ignores them, as it ignores the exclusion below, since
+  // laziness does not change a tool's schema.
   const executionTools = buildChatCodeModeTools({
+    documentedReads: forValidation
+      ? []
+      : documentedChatReadsOf(activeSkillContext),
     memberRole,
     organizationId,
     recordAuditEvent,
