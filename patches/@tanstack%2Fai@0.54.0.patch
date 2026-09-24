@@ -1,0 +1,36 @@
+diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
+index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..a76b7c137fc5b26e0ab149a9c0b4ffc5c85121bd 100644
+--- a/dist/esm/activities/chat/stream/processor.js
++++ b/dist/esm/activities/chat/stream/processor.js
+@@ -37,6 +37,15 @@ function interruptBatchHasGeneric(interrupts) {
+ 		return binding !== null && typeof binding === "object" && !Array.isArray(binding) && binding.kind === "generic";
+ 	});
+ }
++function serializeToolInput(input) {
++	if (input === void 0) return void 0;
++	try {
++		const serialized = JSON.stringify(input);
++		return typeof serialized === "string" ? serialized : void 0;
++	} catch {
++		return void 0;
++	}
++}
+ /**
+ * StreamProcessor - State machine for processing AI response streams
+ *
+@@ -838,12 +847,11 @@ var StreamProcessor = class StreamProcessor {
+ 		const input = chunk.input !== void 0 ? chunk.input : tanstackMetadata(chunk)?.input;
+ 		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
+ 		if (existingToolCall && existingToolCall.state !== "input-complete") {
+-			if (input !== void 0 && !existingToolCall.arguments) try {
+-				existingToolCall.arguments = JSON.stringify(input);
+-			} catch {}
++			const serializedInput = serializeToolInput(input);
++			if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;
+ 			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
+ 			this.completeToolCall(messageId, index, existingToolCall);
+-			if (input !== void 0) {
++			if (serializedInput !== void 0) {
+ 				existingToolCall.parsedArguments = input;
+ 				this.messages = updateToolCallPart(this.messages, messageId, {
+ 					id: existingToolCall.id,

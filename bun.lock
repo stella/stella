@@ -1113,11 +1113,12 @@
     "lefthook",
   ],
   "patchedDependencies": {
+    "@tanstack/ai@0.54.0": "patches/@tanstack%2Fai@0.54.0.patch",
+    "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
     "eslint-plugin-drizzle@0.2.3": "patches/eslint-plugin-drizzle@0.2.3.patch",
     "@tanstack/ai-mcp@0.3.10": "patches/@tanstack%2Fai-mcp@0.3.10.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
-    "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
