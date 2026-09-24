@@ -190,12 +190,16 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const context = await Result.tryPromise(async () => {
-    const session = await authenticateMcpRequest(accessToken);
-    return await resolveMcpSessionContext(session, {
-      request: new Request(`${BASE}/mcp`, { method: "POST" }),
-    });
-  });
+  const session = await authenticateMcpRequest(accessToken);
+  if (session.isErr()) {
+    return false;
+  }
+  const context = await Result.tryPromise(
+    async () =>
+      await resolveMcpSessionContext(session.value, {
+        request: new Request(`${BASE}/mcp`, { method: "POST" }),
+      }),
+  );
   return context.isOk();
 };
 
