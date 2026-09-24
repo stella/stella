@@ -36,6 +36,12 @@ type ScriptedTurnUsage = Pick<
 export type ScriptedTurn =
   | {
       arguments: string;
+      /**
+       * Defaults to `call-<iteration>`, which repeats across adapters. A test
+       * that scripts several requests in one thread passes distinct ids, as a
+       * provider would: approvals are keyed by tool-call id.
+       */
+      toolCallId?: string | undefined;
       toolName: string;
       type: "tool-call";
       usage?: ScriptedTurnUsage | undefined;
@@ -100,7 +106,7 @@ export const createScriptedTextAdapter = (
       } satisfies StreamChunk;
       switch (turn.type) {
         case "tool-call": {
-          const callId = `call-${String(index + 1)}`;
+          const callId = turn.toolCallId ?? `call-${String(index + 1)}`;
           yield {
             type: EventType.TOOL_CALL_START,
             toolCallId: callId,
