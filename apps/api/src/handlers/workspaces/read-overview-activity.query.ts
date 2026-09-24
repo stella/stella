@@ -1,13 +1,9 @@
 import { panic, Result } from "better-result";
 import {
   and,
-  asc,
   desc,
   eq,
-  gt,
-  ilike,
   inArray,
-  isNotNull,
   isNull,
   ne,
   or,
@@ -23,7 +19,6 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-import { user } from "@/api/db/auth-schema";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   auditActivityActionSql,
@@ -39,7 +34,6 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import { createCursorPage } from "@/api/lib/pagination";
 import {
   brandPersistedAuditLogId,
@@ -48,18 +42,18 @@ import {
   brandPersistedEntityVersionId,
 } from "@/api/lib/safe-id-boundaries";
 
+import { readActivityActorIdentities } from "./read-overview-activity-actors.query";
 import {
   activityTargetSource,
   bindActivityCursorToFilters,
-  FEED_ACTIVITY_RESOURCE_TYPES,
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
   timestampMicroseconds,
-  VISIBLE_ACTIVITY_ACTIONS,
   type VisibleActivityAction,
 } from "./read-overview-activity.logic";
+import { visibleActivityCondition } from "./read-overview-activity.visibility";
 
 const versionSnapshotAuditLogs = alias(
   auditLogs,
@@ -70,106 +64,6 @@ const contactSnapshotAuditLogs = alias(
   auditLogs,
   "contact_snapshot_audit_logs",
 );
-
-const LEGACY_VISIBLE_RESOURCE_TYPES = [
-  AUDIT_RESOURCE_TYPE.ENTITY,
-  AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-  AUDIT_RESOURCE_TYPE.FIELD,
-  AUDIT_RESOURCE_TYPE.USER_FILE,
-  AUDIT_RESOURCE_TYPE.WORKSPACE,
-  AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-  AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
-  AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
-  AUDIT_RESOURCE_TYPE.FLOW_RUN,
-] as const;
-
-export const visibleActivityCondition = () =>
-  and(
-    inArray(auditLogs.action, VISIBLE_ACTIVITY_ACTIONS),
-    // Every feed row must resolve to a named target, so the query admits only
-    // the resource types the projection names. A resource excluded there can
-    // never arrive here to be labelled generically.
-    inArray(auditLogs.resourceType, FEED_ACTIVITY_RESOURCE_TYPES),
-    // "other" is housekeeping — session expiry, retention sweeps — and stays
-    // out of the matter's story no matter who performed it. The performer
-    // test only rescues rows written before activityCategory existed.
-    or(
-      and(
-        isNotNull(auditLogs.activityCategory),
-        ne(auditLogs.activityCategory, "other"),
-      ),
-      and(
-        isNull(auditLogs.activityCategory),
-        or(
-          ne(auditLogs.performerType, "user"),
-          inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
-        ),
-      ),
-    ),
-  ) ?? sql`false`;
-
-const historicalActorId = () =>
-  sql<string>`coalesce(${auditLogs.performerId}, ${auditLogs.userId})`;
-
-type ReadOverviewActivityActorRowsOptions = {
-  afterActorId: string | null;
-  limit: number;
-  organizationId: SafeId<"organization">;
-  safeDb: SafeDb;
-  search: string;
-  workspaceId: SafeId<"workspace">;
-};
-
-export const readOverviewActivityActorRows = async ({
-  afterActorId,
-  limit,
-  organizationId,
-  safeDb,
-  search,
-  workspaceId,
-}: ReadOverviewActivityActorRowsOptions) =>
-  await safeDb(async (tx) => {
-    const actorId = historicalActorId();
-    const conditions = [
-      eq(auditLogs.organizationId, organizationId),
-      eq(auditLogs.workspaceId, workspaceId),
-      eq(auditLogs.performerType, "user"),
-      visibleActivityCondition(),
-    ];
-    if (afterActorId !== null) {
-      conditions.push(gt(actorId, afterActorId));
-    }
-    const historicalActors = tx
-      .selectDistinct({ id: actorId.as("actor_id") })
-      .from(auditLogs)
-      .where(and(...conditions))
-      .as("historical_activity_actors");
-    const identityCondition =
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
-      search === ""
-        ? sql`true`
-        : (or(
-            ilike(user.name, `%${escapeLike(search)}%`),
-            ilike(user.email, `%${escapeLike(search)}%`),
-          ) ?? sql`false`);
-
-    // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
-    return await tx
-      .selectDistinct({
-        deletedAt: user.deletedAt,
-        email: user.email,
-        id: historicalActors.id,
-        image: user.image,
-        name: user.name,
-      })
-      .from(historicalActors)
-      // The actor ID comes from an organization-and-workspace-scoped audit
-      // row, so attribution remains authorized after membership ends.
-      .leftJoin(user, eq(user.id, historicalActors.id))
-      .where(identityCondition)
-      .orderBy(asc(historicalActors.id))
-      .limit(limit + 1);
-  });
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
@@ -891,25 +785,7 @@ export const readOverviewActivityPage = async ({
               .filter((id): id is string => id !== null),
           ),
         ];
-        const actors =
-          // oxlint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends
-          actorIds.length === 0
-            ? []
-            : await tx
-                .selectDistinct({
-                  deletedAt: user.deletedAt,
-                  email: user.email,
-                  id: user.id,
-                  image: user.image,
-                  name: user.name,
-                })
-                .from(user)
-                .where(
-                  // Actor IDs originate only from the organization-and-
-                  // workspace-scoped rows above, preserving audit attribution
-                  // after membership ends without widening the identity set.
-                  inArray(user.id, actorIds),
-                );
+        const actors = await readActivityActorIdentities(tx, actorIds);
         return {
           actors,
           compositeFieldVersions,

@@ -11,12 +11,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);
 
-/** The line one diagnostic of `ruleName` reports, or null for any other. */
-const reportedLine = (diagnostic: unknown, ruleName: string): number | null => {
+/** The line one diagnostic with `code` reports, or null for any other. */
+const reportedLine = (diagnostic: unknown, code: string): number | null => {
   if (!isRecord(diagnostic) || typeof diagnostic.code !== "string") {
     return null;
   }
-  if (!diagnostic.code.startsWith(`${ruleName}(`)) {
+  if (!diagnostic.code.startsWith(code)) {
     return null;
   }
   const label = isUnknownArray(diagnostic.labels)
@@ -28,6 +28,8 @@ const reportedLine = (diagnostic: unknown, ruleName: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** The plugin that carries the rule, when it is not named after it. */
+  plugin?: string;
   /** The rule's options object, for a rule configured by data. */
   ruleOptions?: unknown;
   /** Where the source is written, relative to a scratch root. */
@@ -42,7 +44,11 @@ type LintSingleRuleOptions = {
 export const lintSingleRule = async (
   ruleName: string,
   source: string,
-  { ruleOptions, sourcePath = "source.ts" }: LintSingleRuleOptions = {},
+  {
+    plugin = ruleName,
+    ruleOptions,
+    sourcePath = "source.ts",
+  }: LintSingleRuleOptions = {},
 ): Promise<number[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const lintResult = await Result.tryPromise(async () => {
@@ -52,10 +58,10 @@ export const lintSingleRule = async (
       `export default ${JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [
-          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${ruleName}.ts`),
+          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
         rules: {
-          [`${ruleName}/${ruleName}`]:
+          [`${plugin}/${ruleName}`]:
             ruleOptions === undefined ? "error" : ["error", ruleOptions],
         },
       })};\n`,
@@ -101,7 +107,12 @@ export const lintSingleRule = async (
     return panic(`oxlint reported no diagnostics array:\n${output}`);
   }
   return diagnostics
-    .map((diagnostic) => reportedLine(diagnostic, ruleName))
+    .map((diagnostic) =>
+      reportedLine(
+        diagnostic,
+        plugin === ruleName ? `${plugin}(` : `${plugin}(${ruleName})`,
+      ),
+    )
     .filter((line): line is number => line !== null)
     .toSorted((left, right) => left - right);
 };

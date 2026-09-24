@@ -135,6 +135,7 @@ describe("buildFilterConditions (kind)", () => {
 // -- buildFindConditions --
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws1");
+const TEST_ORGANIZATION_ID = toSafeId<"organization">("org1");
 
 type Find = NonNullable<Parameters<typeof buildFindConditions>[0]["find"]>;
 
@@ -712,9 +713,10 @@ describe("applySorts (in-memory)", () => {
 
 describe("buildSortExpressions", () => {
   test("_name sort uses the materialized display name", () => {
-    const [nameSort] = buildSortExpressions([
-      { propertyId: "_name", desc: false },
-    ]);
+    const [nameSort] = buildSortExpressions(
+      [{ propertyId: "_name", desc: false }],
+      TEST_ORGANIZATION_ID,
+    );
     if (!nameSort) {
       throw new Error("expected _name sort expression");
     }
@@ -735,9 +737,10 @@ describe("buildSortExpressions", () => {
     ];
 
     for (const { propertyId, column } of sortCases) {
-      const [sortExpression] = buildSortExpressions([
-        { propertyId, desc: false },
-      ]);
+      const [sortExpression] = buildSortExpressions(
+        [{ propertyId, desc: false }],
+        TEST_ORGANIZATION_ID,
+      );
       if (!sortExpression) {
         throw new Error(`expected ${propertyId} sort expression`);
       }
@@ -751,9 +754,10 @@ describe("buildSortExpressions", () => {
 
   test("a money column orders by currency first, then by its minor-unit amount", () => {
     const dialect = new PgDialect();
-    const [currencyExpr, numericExpr] = buildSortExpressions([
-      { propertyId: "fee", desc: false },
-    ]);
+    const [currencyExpr, numericExpr] = buildSortExpressions(
+      [{ propertyId: "fee", desc: false }],
+      TEST_ORGANIZATION_ID,
+    );
     if (!currencyExpr || !numericExpr) {
       throw new Error("expected currency and numeric sort expressions");
     }
@@ -777,9 +781,10 @@ describe("buildSortExpressions", () => {
 
   test("a person column orders by name, not by the entity id tie-breaker", () => {
     const dialect = new PgDialect();
-    const textExpr = buildSortExpressions([
-      { propertyId: "owner", desc: false },
-    ])[2];
+    const textExpr = buildSortExpressions(
+      [{ propertyId: "owner", desc: false }],
+      TEST_ORGANIZATION_ID,
+    )[2];
     if (!textExpr) {
       throw new Error("expected a text sort expression");
     }
@@ -789,9 +794,10 @@ describe("buildSortExpressions", () => {
 
   test("every content type a field can hold reaches a sort key", () => {
     const dialect = new PgDialect();
-    const expressions = buildSortExpressions([
-      { propertyId: "p1", desc: false },
-    ]);
+    const expressions = buildSortExpressions(
+      [{ propertyId: "p1", desc: false }],
+      TEST_ORGANIZATION_ID,
+    );
     const rendered = expressions
       .map((expression) => dialect.sqlToQuery(expression).sql)
       .join("\n");
@@ -805,9 +811,10 @@ describe("buildSortExpressions", () => {
 
   test("property sort emits a numeric key so int fields order numerically", () => {
     const dialect = new PgDialect();
-    const expressions = buildSortExpressions([
-      { propertyId: "p1", desc: false },
-    ]);
+    const expressions = buildSortExpressions(
+      [{ propertyId: "p1", desc: false }],
+      TEST_ORGANIZATION_ID,
+    );
 
     // Currency, then a guarded numeric cast, then the text key.
     const numericExpr = expressions[1];
@@ -831,9 +838,10 @@ describe("buildSortExpressions", () => {
 
   test("descending property sort keeps missing/non-int values last", () => {
     const dialect = new PgDialect();
-    const [numericExpr] = buildSortExpressions([
-      { propertyId: "p1", desc: true },
-    ]);
+    const [numericExpr] = buildSortExpressions(
+      [{ propertyId: "p1", desc: true }],
+      TEST_ORGANIZATION_ID,
+    );
     if (!numericExpr) {
       throw new Error("expected numeric sort expression");
     }

@@ -31,7 +31,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
-import { member, user as authUser } from "@/api/db/auth-schema";
+import { member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -66,6 +66,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
+import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
@@ -162,15 +163,8 @@ const isSignInEmailOtpBody = (body: unknown): body is SignInEmailOtpBody => {
   );
 };
 
-const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sign-in pre-check for account existence by email; runs before any organization context exists
-  const existingAccount = await rootDb
-    .select({ id: authUser.id })
-    .from(authUser)
-    .where(eq(authUser.email, normalizedEmail))
-    .limit(1);
-  return existingAccount.at(0) !== undefined;
-};
+const authAccountExists = async (normalizedEmail: string): Promise<boolean> =>
+  (await findAccountIdByEmail(normalizedEmail)) !== undefined;
 
 export const NEW_ACCOUNT_OTP_RATE_LIMIT_MODE = {
   bypassed: "bypassed",

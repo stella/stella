@@ -23,7 +23,6 @@ import {
   organization,
   session,
   twoFactor,
-  user,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -101,28 +100,11 @@ import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploa
 // with a foreign key to `user` is either DB-cascaded or explicitly handled
 // here — see that test for the full explanation.
 
-export const DELETED_ACCOUNT_DISPLAY_NAME = "Deleted account";
-
 export const ACCOUNT_DELETION_ERROR_CODE = {
   otpExpired: "account_deletion_otp_expired",
   otpInvalid: "account_deletion_otp_invalid",
   soleOwner: "account_deletion_sole_owner",
 } as const;
-
-/**
- * Locks the user row to serialize deletion of this account.
- */
-export const lockUserRowForDeletion = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- locks the caller's own user row while their account is deleted; account-level, no organization applies
-  await tx
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.id, currentUserId))
-    .for("update");
-};
 
 /**
  * 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction.
@@ -215,7 +197,7 @@ export const REVOKE_AUTH_CREDENTIALS_TABLES = [
  * invitations (auth-schema tables).
  *
  * The `two_factor` FK to `user` is `onDelete: "cascade"`, but account
- * deletion soft-deletes the user row (see `finalizeDeletedUserRecord`) and
+ * deletion soft-deletes the user row (see `anonymizeDeletedAccountRow`) and
  * never hard-deletes it, so that cascade never fires. The encrypted TOTP
  * secret and backup codes must therefore be purged explicitly here, the same
  * way `session` and `account` are.
@@ -1185,28 +1167,6 @@ export const recordAccountDeletionRequest = async ({
       items: effectChunks,
     });
   }
-};
-
-/**
- * 13. Mark the account deleted and release private contact/login fields.
- */
-export const finalizeDeletedUserRecord = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- anonymizes the caller's own user row at the end of account deletion; account-level, no organization applies
-  await tx
-    .update(user)
-    .set({
-      email: `deleted-${currentUserId}@stella.placeholder`,
-      emailVerified: false,
-      image: null,
-      name: DELETED_ACCOUNT_DISPLAY_NAME,
-      preferredName: null,
-      wordEditShortcut: null,
-      deletedAt: new Date(),
-    })
-    .where(eq(user.id, currentUserId));
 };
 
 /**

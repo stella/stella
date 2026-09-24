@@ -264,7 +264,7 @@ export type MentionTargets = {
 
 /**
  * Resolve `@email` mentions in `text` to users who are members of
- * `workspaceId`.
+ * `workspaceId` and of its organization.
  *
  * `workspaceId` must be server-derived (the handler's validated workspace),
  * never read off the body: it is the whole containment. An address that is not
@@ -275,10 +275,12 @@ export const resolveMentionTargets = async (
   tx: Transaction,
   {
     actorUserId,
+    organizationId,
     text,
     workspaceId,
   }: {
     actorUserId: SafeId<"user">;
+    organizationId: SafeId<"organization">;
     text: string;
     workspaceId: SafeId<"workspace">;
   },
@@ -296,12 +298,18 @@ export const resolveMentionTargets = async (
     return { actorName: "", userIds: [] };
   }
 
-  // The actor is the authenticated caller and their own row is always visible
-  // to them, so a miss here is a broken invariant, not an absent name.
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the authenticated actor's own name by their user id
+  // The actor is the authenticated caller, a member of the organization they
+  // act in, so a miss here is a broken invariant, not an absent name.
   const actorRow = await tx
     .select({ name: user.name })
     .from(user)
+    .innerJoin(
+      organizationMember,
+      and(
+        eq(organizationMember.userId, user.id),
+        eq(organizationMember.organizationId, organizationId),
+      ),
+    )
     .where(eq(user.id, actorUserId))
     .limit(1);
   const actorName =
@@ -315,11 +323,17 @@ export const resolveMentionTargets = async (
     ...new Set(mentioned.flatMap((email) => [email, email.toLowerCase()])),
   ];
 
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- mention candidates are restricted to members of the current workspace through workspaceMembers
   const members = await tx
     .select({ userId: user.id })
     .from(user)
     .innerJoin(workspaceMembers, eq(workspaceMembers.userId, user.id))
+    .innerJoin(
+      organizationMember,
+      and(
+        eq(organizationMember.userId, user.id),
+        eq(organizationMember.organizationId, organizationId),
+      ),
+    )
     .where(
       and(
         inArray(user.email, candidates),

@@ -1,8 +1,7 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 
-import { user } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import type { SafeId } from "@/api/lib/branded-types";
+import { readAccountEmailAndTwoFactor } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -11,19 +10,13 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * an organization/workspace — there is no cross-tenant data to leak here.
  */
 export const getUserEmailAndTwoFactorEnabled = async (
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<
   Result<{ email: string; twoFactorEnabled: boolean }, HandlerError>
 > =>
   await Result.tryPromise({
     try: async () => {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the caller's own email and two-factor flag by their session user id
-      const rows = await rootDb
-        .select({ email: user.email, twoFactorEnabled: user.twoFactorEnabled })
-        .from(user)
-        .where(eq(user.id, currentUserId))
-        .limit(1);
-      const row = rows.at(0);
+      const row = await readAccountEmailAndTwoFactor(currentUserId);
       if (!row) {
         throw new HandlerError({
           status: 404,

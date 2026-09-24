@@ -5,8 +5,9 @@ import { randomInt } from "node:crypto";
 
 import { Temporal } from "@stll/time";
 
-import { user, verification } from "@/api/db/auth-schema";
+import { verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -55,12 +56,7 @@ export const createConfirmationOtp = async ({
 
       await rootDb.transaction(async (tx) => {
         // Lock the user row by email first to serialize OTP requests for this email
-        // oxlint-disable-next-line security-guards/no-unscoped-user-query -- locks the requesting account's own row by email to serialize OTP issuance; account-level
-        await tx
-          .select({ id: user.id })
-          .from(user)
-          .where(eq(user.email, email))
-          .for("update");
+        await lockAccountRowByEmail(tx, email);
 
         // Now we delete any existing OTP records for this identifier safely
         await tx

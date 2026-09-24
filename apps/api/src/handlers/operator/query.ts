@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, asc, gte } from "drizzle-orm";
+import { and, asc, sql } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -27,7 +27,6 @@ const MAX_LOOKBACK_MS = OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS * DAY_IN_MS;
 const isUserIdCursorPart = (value: unknown): value is string =>
   typeof value === "string" && value.length >= 1 && value.length <= 128;
 
-// oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
 const registrationCursor = createTimestampIdCursorCodec({
   column: user.createdAt,
   brandId: brandPersistedUserId,
@@ -144,16 +143,14 @@ export const queryRegistrationsPage = async function* ({
 }) {
   const { limit } = filter;
 
-  // no-truncated-timestamp-comparison: caller-supplied filter bound, never
-  // round-tripped through the database. no-unscoped-user-query: operator
-  // registrations are instance-wide by design, token-gated at the deployment
-  // level, so there is no organization to scope by.
-  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison, security-guards/no-unscoped-user-query -- see the comment above
-  const conditions: SQL[] = [gte(user.createdAt, filter.since)];
+  // The lower bound is caller-supplied, never read back from the database;
+  // it is cast explicitly so the comparison keeps the column's precision.
+  const conditions: SQL[] = [
+    sql`${user.createdAt} >= ${filter.since.toISOString()}::timestamptz`,
+  ];
   if (filter.cursor) {
     const cursor = registrationCursor.decode(filter.cursor);
     if (cursor) {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
       const cursorCondition = registrationCursor.keysetAfter({
         cursor,
         idColumn: user.id,
@@ -168,7 +165,6 @@ export const queryRegistrationsPage = async function* ({
   const rows = yield* Result.await(
     safeDb(
       async (tx) =>
-        // oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
         await tx
           .select({
             id: user.id,

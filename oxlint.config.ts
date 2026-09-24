@@ -3529,7 +3529,28 @@ export default defineConfig({
         "apps/api/src/tests/**/*.{ts,tsx}",
       ],
       rules: {
-        "security-guards/no-unscoped-user-query": "error",
+        "security-guards/no-unscoped-user-query": [
+          "error",
+          {
+            allowedFiles: [
+              {
+                file: "apps/api/src/lib/db/account-row.ts",
+                reason:
+                  "single-account reads and writes keyed by the caller's own user id, or by the email a sign-in or OTP request names before any organization exists",
+              },
+              {
+                file: "apps/api/src/handlers/operator/query.ts",
+                reason:
+                  "operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by",
+              },
+              {
+                file: "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts",
+                reason:
+                  "actor ids come only from audit rows already scoped to the authorized organization and workspace; a membership join would erase retained attribution after membership ends",
+              },
+            ],
+          },
+        ],
       },
     },
     {

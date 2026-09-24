@@ -171,7 +171,13 @@ type Query = {
   innerJoin: (table: unknown, on: unknown) => Query;
   where: (condition: unknown) => Query;
 };
-declare const db: { select: () => Query };
+type Insert = {
+  onConflictDoNothing: () => Insert;
+  onConflictDoUpdate: (config: unknown) => Insert;
+  returning: () => Insert;
+  values: (row: unknown) => Insert;
+};
+declare const db: { insert: (table: unknown) => Insert; select: () => Query };
 declare const and: (...conditions: unknown[]) => unknown;
 declare const eq: (left: unknown, right: unknown) => unknown;
 declare const organizationId: string;
@@ -229,6 +235,30 @@ export const scopedSelectionQuery = db
 // oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: a select map read by an unscoped query
 const unscopedSelection = { name: user.name };
 export const unscopedSelectionQuery = db.select().from(unscopedSelection);
+
+// expect-clean: security-guards/no-unscoped-user-query
+export const insertedUser = db.insert(user).values({ id: userId });
+
+// expect-clean: security-guards/no-unscoped-user-query
+export const insertedUserOnce = db
+  .insert(authSchema.user)
+  .values({ id: userId })
+  .onConflictDoNothing();
+
+// oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: an insert that hands rows back reads them
+export const insertedUserReturning = db
+  .insert(user)
+  .values({ id: userId })
+  .returning();
+
+// oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: an upsert rewrites whichever row already holds the key
+export const upsertedUser = db
+  .insert(user)
+  .values({ id: userId })
+  .onConflictDoUpdate({ set: { name: "" }, target: user.id });
+
+// oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: an insert fed from an unscoped read still reads
+export const insertedFromRead = db.insert(user).values(db.select().from(user));
 
 // oxlint-disable-next-line eslint/no-shadow -- fixture: a shadowed binding must not satisfy the imported-member scope guard
 const shadowedMemberReferences = (member: {

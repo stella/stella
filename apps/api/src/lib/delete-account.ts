@@ -21,8 +21,6 @@ import {
   deletePersonalBillingRates,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deleteUserFiles,
-  finalizeDeletedUserRecord,
-  lockUserRowForDeletion,
   reassignActiveTaskAssignmentsAndDropMemberships,
   recordAccountDeletionRequest,
   resetFolioCollabUserState,
@@ -33,6 +31,11 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
+import {
+  anonymizeDeletedAccountRow,
+  lockAccountRow,
+  readAccountEmail,
+} from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -44,24 +47,18 @@ export { ACCOUNT_DELETION_ERROR_CODE };
  * Fetches the user email by ID.
  */
 export const getUserEmail = async (
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<Result<string, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the caller's own email by their session user id
-      const rows = await rootDb
-        .select({ email: user.email })
-        .from(user)
-        .where(eq(user.id, currentUserId))
-        .limit(1);
-      const row = rows[0];
-      if (!row) {
+      const email = await readAccountEmail(currentUserId);
+      if (email === undefined) {
         throw new HandlerError({
           status: 404,
           message: "User not found",
         });
       }
-      return row.email;
+      return email;
     },
     catch: (err) =>
       err instanceof HandlerError
@@ -260,7 +257,7 @@ export const getPendingTasksAndMembers = async (
  * handled by one of these steps.
  */
 export const verifyAndDeleteUser = async (
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
   email: string,
   code: string,
   reassignments?: readonly {
@@ -295,7 +292,7 @@ export const verifyAndDeleteUser = async (
       }
 
       await rootDb.transaction(async (tx) => {
-        await lockUserRowForDeletion(tx, currentUserId);
+        await lockAccountRow(tx, currentUserId);
 
         // 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction
         await assertUserIsNotSoleOrgOwner(tx, currentUserId);
@@ -355,7 +352,7 @@ export const verifyAndDeleteUser = async (
           s3KeysToDelete,
         });
 
-        await finalizeDeletedUserRecord(tx, currentUserId);
+        await anonymizeDeletedAccountRow(tx, currentUserId);
       });
 
       if (s3KeysToDelete.length > 0) {

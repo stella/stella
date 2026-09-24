@@ -18,7 +18,11 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  DOCX_EXT_RE,
+  sanitizeFilename,
+  type SanitizedFileName,
+} from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { fillStoredTemplateDocx } from "@/api/lib/templates/template-fill-service";
@@ -42,18 +46,18 @@ const fillToWorkspaceBodySchema = t.Object({
   parentId: t.Optional(tSafeId("entity")),
 });
 
-/** The created document's file name: the caller's name (extension ensured)
- *  or the template's own file name. */
+/** The created document's file name: the caller's sanitized name (extension
+ *  ensured) or the template's own file name. */
 const resolveDocumentFileName = (
-  requestedName: string | undefined,
+  requestedName: SanitizedFileName | null,
   templateFileName: string,
 ): string => {
-  const trimmed = requestedName?.trim() ?? "";
-  if (trimmed === "") {
+  if (requestedName === null) {
     return templateFileName;
   }
-  const sanitized = sanitizeFilename(trimmed);
-  return DOCX_EXT_RE.test(sanitized) ? sanitized : `${sanitized}.docx`;
+  return DOCX_EXT_RE.test(requestedName)
+    ? requestedName
+    : `${requestedName}.docx`;
 };
 
 const config = {
@@ -228,7 +232,11 @@ const fillTemplateToWorkspace = createSafeHandler(
       );
     }
 
-    const fileName = resolveDocumentFileName(body.name, filled.fileName);
+    const requestedName = body.name?.trim() ?? "";
+    const fileName = resolveDocumentFileName(
+      requestedName === "" ? null : sanitizeFilename(requestedName),
+      filled.fileName,
+    );
 
     const created = yield* Result.await(
       Result.tryPromise({
@@ -240,7 +248,6 @@ const fillTemplateToWorkspace = createSafeHandler(
             userId: user.id,
             recordAuditEvent,
             buffer: filled.buffer,
-            // oxlint-disable-next-line security-guards/no-raw-filename-write -- resolveDocumentFileName passes the requested name through sanitizeFilename
             fileName,
             mimeType: DOCX_MIME_TYPE,
             parentId,

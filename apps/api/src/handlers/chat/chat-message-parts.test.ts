@@ -19,6 +19,8 @@ import {
   isChatPart,
   isProviderVisibleChatPart,
   isServerOwnedChatPart,
+  getChatAttachmentFilename,
+  legacyAiSdkFilePartToTanStack,
   normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
   toChatMessageContent,
@@ -49,6 +51,23 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
+  test("gives a legacy file part a sanitized display name", () => {
+    const attachment = (filename: string) =>
+      legacyAiSdkFilePartToTanStack({
+        filename,
+        mediaType: "application/pdf",
+        type: "file",
+        url: "https://files.example/brief.pdf",
+      });
+
+    expect(getChatAttachmentFilename(attachment("brief.pdf"))).toBe(
+      "brief.pdf",
+    );
+    expect(getChatAttachmentFilename(attachment("../brief:v2.pdf"))).toBe(
+      "___brief_v2.pdf",
+    );
+  });
+
   test("stores one canonical parsed tool-call representation", () => {
     const input = { query: "nda" };
     const output = { results: [{ id: "document-1" }] };

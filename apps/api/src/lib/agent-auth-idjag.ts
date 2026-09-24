@@ -20,7 +20,6 @@ import {
 } from "@/api/agent-auth/constants";
 import { IdJagValidationError, validateIdJag } from "@/api/agent-auth/id-jag";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
-import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   AgentTokenError,
@@ -35,6 +34,7 @@ import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -123,18 +123,6 @@ const findDelegation = async (
   });
 };
 
-const findUserByEmail = async (
-  email: string,
-): Promise<{ id: string } | undefined> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- resolves the asserted identity by email before provisioning; the account may not belong to any organization yet
-  const rows = await rootDb
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-  return rows.at(0);
-};
-
 class ProvisionError extends Error {
   override name = "ProvisionError";
 }
@@ -178,8 +166,7 @@ const autoProvision = async (
         }),
     );
     if (Result.isError(orgResult)) {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- rolls back the user row this function just created when its organization cannot be provisioned
-      await rootDb.delete(user).where(eq(user.id, createdUser.id));
+      await ctx.internalAdapter.deleteUser(createdUser.id);
       throw new ProvisionError();
     }
     return brandActorSessionIdentity({
@@ -389,8 +376,8 @@ export const resolveIdJagIdentity = async (
     return await finishReady(delegation);
   }
 
-  const existingUser = await findUserByEmail(email);
-  if (existingUser) {
+  const existingUserId = await findAccountIdByEmail(email);
+  if (existingUserId !== undefined) {
     const ceremony = await startServiceAuthRegistration(email);
     await bindCeremonyToIssuer({
       registrationId: ceremony.registrationId,

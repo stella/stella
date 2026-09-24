@@ -12,7 +12,7 @@ import {
   decodeActorCursor,
   encodeActorCursor,
 } from "./read-overview-activity-actors.logic";
-import { readOverviewActivityActorRows } from "./read-overview-activity.query";
+import { readOverviewActivityActorRows } from "./read-overview-activity-actors.query";
 
 const config = {
   permissions: { workspace: ["read"] },

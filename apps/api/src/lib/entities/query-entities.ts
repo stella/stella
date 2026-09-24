@@ -70,6 +70,7 @@ import type {
 import {
   buildFilterConditions,
   buildFindConditions,
+  createdByNameSortExpr,
   displayedNameExpr,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -474,25 +475,24 @@ const propertySortValueExpr = (propertyId: string): SQL => sql`(
   LIMIT 1
 )`;
 
-const internalSortKey = ({
-  desc,
-  propertyId,
-}: {
-  desc: boolean;
-  propertyId: string;
-}): EntitySortKey | null => {
+const internalSortKey = (
+  {
+    desc,
+    propertyId,
+  }: {
+    desc: boolean;
+    propertyId: string;
+  },
+  organizationId: SafeId<"organization">,
+): EntitySortKey | null => {
   const direction: SortDirection = desc ? "desc" : "asc";
   switch (propertyId) {
     case "_name":
       return textSortKey({ direction, expr: displayedNameExpr() });
     case "_created-by":
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped
       return defaultNullableTextSortKey({
         direction,
-        expr: sql`(
-          SELECT ${user.name} FROM ${user}
-          WHERE ${user.id} = ${entities.createdBy}
-        )`,
+        expr: createdByNameSortExpr(organizationId),
       });
     case "_created-at":
       return timestampSortKey({ direction, expr: sql`${entities.createdAt}` });
@@ -538,7 +538,10 @@ const internalSortKey = ({
   }
 };
 
-const buildViewSortKeys = (sorts: readonly ViewSort[]): EntitySortKey[] => {
+const buildViewSortKeys = (
+  sorts: readonly ViewSort[],
+  organizationId: SafeId<"organization">,
+): EntitySortKey[] => {
   if (sorts.length === 0) {
     return [
       timestampSortKey({ direction: "asc", expr: sql`${entities.createdAt}` }),
@@ -547,7 +550,7 @@ const buildViewSortKeys = (sorts: readonly ViewSort[]): EntitySortKey[] => {
 
   const keys: EntitySortKey[] = [];
   for (const sort of sorts) {
-    const internal = internalSortKey(sort);
+    const internal = internalSortKey(sort, organizationId);
     if (internal) {
       keys.push(internal);
       continue;
@@ -615,27 +618,31 @@ const sourceTiebreakKeys = (source: EntityWindowSource): EntitySortKey[] => {
 };
 
 const buildSortKeys = ({
+  organizationId,
   search,
   sorts,
   source = { type: "entities" },
 }: {
+  organizationId: SafeId<"organization">;
   search?: string | undefined;
   sorts: readonly ViewSort[];
   source?: EntityWindowSource;
 }): EntitySortKey[] => [
   ...buildSearchSortKeys(search),
-  ...buildViewSortKeys(sorts),
+  ...buildViewSortKeys(sorts, organizationId),
   ...sourceTiebreakKeys(source),
   textSortKey({ direction: "asc", expr: sql`${entities.id}` }),
 ];
 
 export const buildEntitySortExpressions = ({
+  organizationId,
   search,
   sorts,
 }: {
+  organizationId: SafeId<"organization">;
   search?: string | undefined;
   sorts: readonly ViewSort[];
-}): SQL[] => buildSortKeys({ search, sorts }).map(orderSortKey);
+}): SQL[] => buildSortKeys({ organizationId, search, sorts }).map(orderSortKey);
 
 const parseCursorValue = (
   key: EntitySortKey,
@@ -900,7 +907,12 @@ const queryEntitiesGenerator = async function* ({
     ...extraConditions,
   ];
   const entityAccess = and(workspaceCondition, ...entityConditions);
-  const sortKeys = buildSortKeys({ search, sorts, source });
+  const sortKeys = buildSortKeys({
+    organizationId: currentOrganizationId,
+    search,
+    sorts,
+    source,
+  });
   const cursorConditionResult = buildCursorCondition({ cursor, sortKeys });
   if (Result.isError(cursorConditionResult)) {
     return Result.err(cursorConditionResult.error);
