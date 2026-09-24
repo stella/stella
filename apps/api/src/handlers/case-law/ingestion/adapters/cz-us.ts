@@ -319,6 +319,25 @@ const buildEcli = (
   return `ECLI:CZ:US:${decisionYear}:${senateSegment}.US.${caseIndex}.${shortYear}.${counter}`;
 };
 
+/** A NALUS ECLI printed without its trailing counter segment. */
+const UNCOUNTED_ECLI = /^ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2}$/iu;
+
+/**
+ * The counted ECLI earlier releases built for a record NALUS now lists
+ * without the counter: the listed spelling plus the record's own counter.
+ * Undefined for any other listed spelling, so the hint never names an
+ * identity the listing itself does not imply.
+ */
+const countedLegacyEcli = (
+  listedEcli: string | undefined,
+  counter: number | undefined,
+): string | undefined =>
+  listedEcli !== undefined &&
+  counter !== undefined &&
+  UNCOUNTED_ECLI.test(listedEcli)
+    ? `${listedEcli}.${counter}`
+    : undefined;
+
 const parseCounter = (raw: string | undefined): number | undefined => {
   if (raw === undefined) {
     return undefined;
@@ -970,9 +989,14 @@ const parseDecisionPage = ({
       ecliCounter,
       nalusSz,
     ),
-    // Earlier releases always built the ECLI from the docket and the
-    // record's counter, while NALUS's listed spelling can omit the counter.
-    legacyEcli: builtEcli,
+    // Earlier releases built the ECLI from the docket and the record's
+    // counter; only that exact counted form of the listed spelling counts.
+    legacyEcli:
+      builtEcli !== undefined &&
+      countedLegacyEcli(listedEcli, ecliCounter)?.toUpperCase() ===
+        builtEcli.toUpperCase()
+        ? builtEcli
+        : undefined,
     ecli,
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
@@ -2178,6 +2202,7 @@ const listedOnlyDecision = (
       listed.counter,
       listed.sz,
     ),
+    legacyEcli: countedLegacyEcli(listed.ecli, listed.counter),
     ecli: listed.ecli,
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
