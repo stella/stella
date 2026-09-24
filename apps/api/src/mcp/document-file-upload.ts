@@ -7,10 +7,10 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
-import { fetchWithTimeout } from "@stll/fetch";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { putPresignedUpload } from "@/api/lib/s3-presign";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -187,16 +187,11 @@ const putPresignedFile = async ({
 }) =>
   await Result.tryPromise({
     try: async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- upload to the presigned URL Stella's own upload reservation produced
-      await fetchWithTimeout(reservation.url, {
-        method: "PUT",
+      await putPresignedUpload({
+        bytes,
         headers: reservation.headers,
-        // Copy into an ArrayBuffer-backed view. `safeOutboundFetchBytes` may
-        // return a Uint8Array<ArrayBufferLike>; DOM fetch deliberately rejects
-        // SharedArrayBuffer-backed bodies even though Bun's narrower fetch
-        // types accept the wider view.
-        body: new Uint8Array(bytes).buffer,
         timeoutMs: 60_000,
+        url: reservation.url,
       }),
     catch: (cause) => cause,
   });

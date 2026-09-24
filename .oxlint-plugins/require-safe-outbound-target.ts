@@ -30,11 +30,19 @@
 //   https.request({ hostname: "api.example.com", path })
 //   safeOutboundFetchBytes({ url: inputUrl, maxBytes, timeoutMs })
 //
+//   fetchWithTimeout(`${env.GOTENBERG_URL}/health`, { timeoutMs: 10_000 })
+//   fetchWithTimeout(`${free ? FREE_BASE : PRO_BASE}/v2/translate`, init)
+//   fetchWithTimeout(getCorpusS3().presign(key), { timeoutMs: 10_000 })
+//
 // The rule deliberately proves only the destination origin. Dynamic paths,
 // query parameters, and fragments are allowed after a static scheme/authority.
-// Runtime-configured internal services and explicitly trusted URL producers
-// take a narrow suppression at the call, naming the trust boundary; this rule
-// does not attempt whole-program taint analysis.
+// Three origins count as proven without being literal: a `*_URL` setting read
+// off the API's validated `env` (the operator chose it, no request selects
+// it), a choice between fixed origins, and a URL presigned by an object-store
+// client Stella configured (the imported `getS3()` / `getCorpusS3()`
+// factories). Other runtime-configured services and explicitly trusted URL
+// producers take a narrow suppression at the call, naming the trust boundary;
+// this rule does not attempt whole-program taint analysis.
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
@@ -94,6 +102,15 @@ const TRUSTED_PROVIDER_RESTRICTIONS: ReadonlyMap<
   ],
 ]);
 const S3_MODULE = "apps/api/src/lib/s3";
+const S3_CLIENT_FACTORIES: ReadonlySet<string> = new Set([
+  "getCorpusS3",
+  "getS3",
+]);
+const ENV_MODULE = "apps/api/src/env";
+const ENV_EXPORT = "env";
+const CONFIGURED_URL_SUFFIX = "_URL";
+const CONFIGURED_TARGET_ORIGIN = "https://configured.invalid";
+const STATIC_CHOICE_ORIGIN = "https://static-choice.invalid";
 const DYNAMIC_PART = "\u0000";
 const ABSOLUTE_ORIGIN = /^(?:https?|wss?):\/\/([^/?#]+)/u;
 const RESTRICTED_TARGET_ORIGIN = "https://restricted.invalid";
@@ -738,15 +755,60 @@ export default eslintCompatPlugin({
             const receiver = staticPattern(callee.object, visited);
             return hasFixedOrigin(receiver) ? receiver : null;
           }
-          const store = unwrapExpression(callee.object);
-          if (method !== "presign" || store?.type !== "CallExpression") {
-            return null;
-          }
-          const producer = resolveImport(context, store.callee);
-          return producer?.moduleId === S3_MODULE &&
-            producer.imported === "getS3"
+          return method === "presign" &&
+            isConfiguredObjectStore(callee.object, visited)
             ? `https://presigned.invalid/${DYNAMIC_PART}`
             : null;
+        };
+
+        // An object-store client whose endpoint Stella configured, so the
+        // URLs it presigns point at that store: the result of an imported S3
+        // module client factory, or a stable alias of one. Any other client,
+        // a parameter included, may carry an endpoint from anywhere, so it
+        // proves nothing.
+        const isConfiguredObjectStore = (
+          node: unknown,
+          visited: Set<Variable>,
+        ): boolean => {
+          const store = unwrapExpression(node);
+          if (store?.type === "CallExpression") {
+            const producer = resolveImport(context, store.callee);
+            return (
+              producer?.moduleId === S3_MODULE &&
+              S3_CLIENT_FACTORIES.has(producer.imported)
+            );
+          }
+          if (!isIdentifierReference(store)) {
+            return false;
+          }
+          const variable = resolveVariable(context, store);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          const initializer = constInitializer(variable);
+          return (
+            initializer !== null &&
+            isConfiguredObjectStore(
+              initializer,
+              new Set([...visited, variable]),
+            )
+          );
+        };
+
+        // `env.GOTENBERG_URL`: a URL setting from the API's validated
+        // environment. The operator chose that origin; no request selects it.
+        const isConfiguredUrlSetting = (expression: AstNode): boolean => {
+          if (expression.type !== "MemberExpression") {
+            return false;
+          }
+          const setting = memberPropertyName(expression);
+          const owner = resolveImport(context, expression.object);
+          return (
+            setting !== null &&
+            setting.endsWith(CONFIGURED_URL_SUFFIX) &&
+            owner?.moduleId === ENV_MODULE &&
+            owner.imported === ENV_EXPORT
+          );
         };
 
         const staticPattern = (
@@ -827,10 +889,34 @@ export default eslintCompatPlugin({
               consequent ?? "",
             )?.[0];
             const alternateOrigin = ABSOLUTE_ORIGIN.exec(alternate ?? "")?.[0];
-            return consequentOrigin !== undefined &&
-              consequentOrigin === alternateOrigin
-              ? `${consequentOrigin}/${DYNAMIC_PART}`
+            if (
+              consequentOrigin === undefined ||
+              alternateOrigin === undefined
+            ) {
+              return null;
+            }
+            if (consequentOrigin === alternateOrigin) {
+              return `${consequentOrigin}/${DYNAMIC_PART}`;
+            }
+            // Two different fixed origins: either one is a proven
+            // destination. Keep what follows the authority, so a dynamic
+            // suffix appended to a bare origin still reads as dynamic.
+            const consequentTail = (consequent ?? "").slice(
+              consequentOrigin.length,
+            );
+            const alternateTail = (alternate ?? "").slice(
+              alternateOrigin.length,
+            );
+            if (consequentTail === alternateTail) {
+              return `${STATIC_CHOICE_ORIGIN}${consequentTail}`;
+            }
+            return /^[/?#]/u.test(consequentTail) &&
+              /^[/?#]/u.test(alternateTail)
+              ? `${STATIC_CHOICE_ORIGIN}/${DYNAMIC_PART}`
               : null;
+          }
+          if (isConfiguredUrlSetting(expression)) {
+            return CONFIGURED_TARGET_ORIGIN;
           }
           if (
             expression.type === "NewExpression" &&

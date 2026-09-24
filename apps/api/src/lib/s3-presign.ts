@@ -31,6 +31,7 @@ import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -711,6 +712,34 @@ export const resetAwsS3ClientForTesting = (): void => {
   isScopedSigningEnabled = shouldUseScopedSigning;
   tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
+
+/**
+ * PUT bytes to a presigned upload URL that Stella's own upload
+ * reservation issued, with the headers it signed. Rejects on a
+ * transport failure; the status is the caller's to judge.
+ */
+export const putPresignedUpload = async ({
+  bytes,
+  headers,
+  timeoutMs,
+  url,
+}: {
+  bytes: Uint8Array;
+  headers: Record<string, string>;
+  timeoutMs: number;
+  url: string;
+}): Promise<Response> =>
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned upload URL issued by Stella's own upload reservation
+  await fetchWithTimeout(url, {
+    method: "PUT",
+    headers,
+    // Copy into an ArrayBuffer-backed view. `safeOutboundFetchBytes` may
+    // return a Uint8Array<ArrayBufferLike>; DOM fetch deliberately rejects
+    // SharedArrayBuffer-backed bodies even though Bun's narrower fetch
+    // types accept the wider view.
+    body: new Uint8Array(bytes).buffer,
+    timeoutMs,
+  });
 
 /**
  * Generate a presigned PUT URL bound to a specific object and an

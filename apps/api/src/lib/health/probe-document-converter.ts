@@ -8,7 +8,6 @@ export const probeDocumentConverter = async (
   signal: AbortSignal,
   timeoutMs: number,
 ): Promise<void> => {
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-configured Gotenberg deployment from validated env; no request data selects the origin
   const response = await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, {
     headers: {
       Authorization: basicAuthorizationHeader(

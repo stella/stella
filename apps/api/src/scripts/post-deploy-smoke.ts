@@ -25,7 +25,7 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -361,12 +361,23 @@ export const buildChatSmokeBody = (): ChatSmokeBody => {
   } satisfies ChatSmokeBody;
 };
 
+/**
+ * The script's one outbound boundary: every check is a path on the
+ * deployment under test.
+ */
+const smokeFetch = async (
+  baseUrl: string,
+  path: string,
+  init: FetchWithTimeoutInit,
+): Promise<Response> =>
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
+  await fetchWithTimeout(`${baseUrl}${path}`, init);
+
 const mintSmokeSession = async (
   baseUrl: string,
   secret: string,
 ): Promise<SmokeSession> => {
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
-  const response = await fetchWithTimeout(`${baseUrl}/smoke/session`, {
+  const response = await smokeFetch(baseUrl, "/smoke/session", {
     method: "POST",
     headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
     timeoutMs: SMOKE_SESSION_TIMEOUT_MS,
@@ -392,8 +403,7 @@ const readAuthenticated = async (
   path: string,
   cookie: string,
 ): Promise<EvaluatedCheck> => {
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
-  const response = await fetchWithTimeout(`${baseUrl}${path}`, {
+  const response = await smokeFetch(baseUrl, path, {
     headers: { cookie, ...EDGE_HEADERS },
     timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
@@ -405,8 +415,7 @@ const readAuthenticated = async (
 };
 
 const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
-  const response = await fetchWithTimeout(`${baseUrl}/health`, {
+  const response = await smokeFetch(baseUrl, "/health", {
     headers: EDGE_HEADERS,
     timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
@@ -573,8 +582,7 @@ const sendChat = async (
   baseUrl: string,
   cookie: string,
 ): Promise<EvaluatedCheck[]> => {
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
-  const response = await fetchWithTimeout(`${baseUrl}/v1/chat/`, {
+  const response = await smokeFetch(baseUrl, "/v1/chat/", {
     method: "POST",
     headers: {
       cookie,

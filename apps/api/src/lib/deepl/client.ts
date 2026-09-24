@@ -150,12 +150,15 @@ const authHeader = (apiKey: string): Record<string, string> => ({
  * surfaces as a generic 500 instead of an actionable 502.
  */
 const deeplFetch = async (
-  url: string,
+  apiKey: string,
+  path: string,
   init: FetchWithTimeoutInit,
 ): Promise<Response> => {
   try {
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- every caller passes a URL under resolveDeepLBaseUrl, one of DeepL's fixed API origins
-    return await fetchWithTimeout(url, init);
+    return await fetchWithTimeout(
+      `${resolveDeepLBaseUrl(apiKey)}/v2/${path}`,
+      init,
+    );
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL request failed before a response was received",
@@ -307,15 +310,12 @@ const uploadDocument = async (
   form.append("formality", input.formality ?? "prefer_more");
   form.append("file", blob, input.fileName);
 
-  const response = await deeplFetch(
-    `${resolveDeepLBaseUrl(input.apiKey)}/v2/document`,
-    {
-      method: "POST",
-      headers: authHeader(input.apiKey),
-      body: form,
-      timeoutMs: UPLOAD_TIMEOUT_MS,
-    },
-  );
+  const response = await deeplFetch(input.apiKey, "document", {
+    method: "POST",
+    headers: authHeader(input.apiKey),
+    body: form,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  });
 
   if (!response.ok) {
     mapHttpError(response.status, await readDeepLText(response));
@@ -334,18 +334,15 @@ const fetchStatus = async (
   handle: DocumentHandle,
 ): Promise<DocumentStatus> => {
   const body = new URLSearchParams({ document_key: handle.documentKey });
-  const response = await deeplFetch(
-    `${resolveDeepLBaseUrl(apiKey)}/v2/document/${handle.documentId}`,
-    {
-      method: "POST",
-      headers: {
-        ...authHeader(apiKey),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-      timeoutMs: STATUS_TIMEOUT_MS,
+  const response = await deeplFetch(apiKey, `document/${handle.documentId}`, {
+    method: "POST",
+    headers: {
+      ...authHeader(apiKey),
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-  );
+    body,
+    timeoutMs: STATUS_TIMEOUT_MS,
+  });
 
   if (!response.ok) {
     mapHttpError(response.status, await readDeepLText(response));
@@ -372,7 +369,8 @@ const downloadResult = async (
 ): Promise<Uint8Array> => {
   const body = new URLSearchParams({ document_key: handle.documentKey });
   const response = await deeplFetch(
-    `${resolveDeepLBaseUrl(apiKey)}/v2/document/${handle.documentId}/result`,
+    apiKey,
+    `document/${handle.documentId}/result`,
     {
       method: "POST",
       headers: {
@@ -531,18 +529,15 @@ export const translateTextBatch = async ({
       message: "DeepL text request exceeds the request-size limit",
     });
   }
-  const response = await deeplFetch(
-    `${resolveDeepLBaseUrl(apiKey)}/v2/translate`,
-    {
-      method: "POST",
-      headers: {
-        ...authHeader(apiKey),
-        "Content-Type": "application/json",
-      },
-      body,
-      timeoutMs: TEXT_TRANSLATION_TIMEOUT_MS,
+  const response = await deeplFetch(apiKey, "translate", {
+    method: "POST",
+    headers: {
+      ...authHeader(apiKey),
+      "Content-Type": "application/json",
     },
-  );
+    body,
+    timeoutMs: TEXT_TRANSLATION_TIMEOUT_MS,
+  });
   if (!response.ok) {
     mapHttpError(response.status, await readDeepLText(response));
   }
@@ -581,13 +576,10 @@ export const translateTextBatches = async (
 export const fetchTargetLanguages = async (
   apiKey: string,
 ): Promise<{ code: string; name: string; supportsFormality: boolean }[]> => {
-  const response = await deeplFetch(
-    `${resolveDeepLBaseUrl(apiKey)}/v2/languages?type=target`,
-    {
-      headers: authHeader(apiKey),
-      timeoutMs: STATUS_TIMEOUT_MS,
-    },
-  );
+  const response = await deeplFetch(apiKey, "languages?type=target", {
+    headers: authHeader(apiKey),
+    timeoutMs: STATUS_TIMEOUT_MS,
+  });
 
   if (!response.ok) {
     mapHttpError(response.status, await readDeepLText(response));

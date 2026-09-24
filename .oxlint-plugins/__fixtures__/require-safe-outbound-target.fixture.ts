@@ -1,6 +1,8 @@
 // Passive regression fixture for
 // `require-safe-outbound-target/require-safe-outbound-target`.
 
+/* oxlint-disable typescript/restrict-template-expressions -- the API env module is outside the fixture's type program, so its settings type as an error type */
+
 import * as nodeHttp from "node:http";
 import https, { request as nodeRequest } from "node:https";
 import { request as undiciRequest } from "undici";
@@ -9,12 +11,13 @@ import SocketClient from "ws";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
+import { env } from "@/api/env";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
 import * as http from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
-import { getS3 } from "@/api/lib/s3";
+import { getCorpusS3, getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
@@ -34,6 +37,73 @@ declare const spreadPolicyOverride: {
 };
 declare const spreadRedirectOverride: { redirect?: RequestRedirect };
 declare const mutateTarget: (target: URL, hostname: string) => void;
+declare const useFreeTier: boolean;
+declare const foreignStore: { presign: (key: string) => string };
+declare const settings: { GOTENBERG_URL: string };
+
+export const mustFlagUnprovenConfiguredTargets = async (store: {
+  presign: (key: string) => string;
+}) => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a parameter may be any client, so its presigned URL proves nothing
+  await fetchWithTimeout(store.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a dynamic suffix on a configured origin can still rewrite its authority
+  await fetchWithTimeout(`${env.GOTENBERG_URL}${dynamicPath}`, {
+    timeoutMs: 1000,
+  });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: only URL settings of the validated env name a configured origin
+  await fetchWithTimeout(`${env.GOTENBERG_USERNAME}/health`, {
+    timeoutMs: 1000,
+  });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a same-named setting outside the env module proves nothing
+  await fetchWithTimeout(`${settings.GOTENBERG_URL}/health`, {
+    timeoutMs: 1000,
+  });
+
+  const choice = useFreeTier ? "https://free.example" : "https://pro.example";
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a dynamic suffix on a bare fixed-origin choice can rewrite its authority
+  await fetchWithTimeout(`${choice}${dynamicPath}`, { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a choice with one dynamic branch has no proven origin
+  await fetchWithTimeout(useFreeTier ? "https://free.example" : dynamicBase, {
+    timeoutMs: 1000,
+  });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a presigner Stella did not configure proves nothing
+  await fetchWithTimeout(foreignStore.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+
+  const bunStore = new Bun.S3Client({ endpoint: dynamicBase });
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a client constructed outside the S3 module may take its endpoint from anywhere
+  await fetchWithTimeout(bunStore.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+};
+
+export const mustAllowConfiguredTargets = async () => {
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, { timeoutMs: 1000 });
+
+  const choice = useFreeTier ? "https://free.example" : "https://pro.example";
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(`${choice}/v2/${dynamicPath}`, { timeoutMs: 1000 });
+
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(getCorpusS3().presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+
+  const corpusStore = getCorpusS3();
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(corpusStore.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+};
 
 export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a parameter has no proven destination origin

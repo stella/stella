@@ -3581,7 +3581,8 @@ export default defineConfig({
       // Server-side outbound requests. A target that is constant, validated
       // configuration, or a Stella-owned producer carries a suppression at
       // the call naming that boundary; arbitrary URLs belong behind
-      // safeOutboundFetch*.
+      // safeOutboundFetch*. The MCP app bundles under `mcp/apps` run in the
+      // host's browser frame (their own DOM tsconfig), not on the server.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "packages/{boe,business-registries,infosoud,legal-atlas}/src/**/*.ts",
@@ -3590,6 +3591,7 @@ export default defineConfig({
         "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
+        "apps/api/src/mcp/apps/**",
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "error",

@@ -24,9 +24,11 @@ import { validateBoeDate, validateLawId } from "./validation.js";
 
 const BASE = "https://www.boe.es/datosabiertos/api";
 
-const LEGISLATION_ENDPOINT = `${BASE}/legislacion-consolidada`;
-const BOE_SUMMARY_ENDPOINT = `${BASE}/boe/sumario`;
-const BORME_SUMMARY_ENDPOINT = `${BASE}/borme/sumario`;
+// Request paths under BASE. Every request is built as `${BASE}/${path}`, so
+// the API origin is fixed in one place.
+const LEGISLATION_PATH = "legislacion-consolidada";
+const BOE_SUMMARY_PATH = "boe/sumario";
+const BORME_SUMMARY_PATH = "borme/sumario";
 
 const TIMEOUT_MS = 15_000;
 const DEFAULT_SEARCH_LIMIT = 25;
@@ -199,12 +201,12 @@ const parseErrorBody = (value: unknown): BoeErrorResponse => {
 };
 
 const boeFetch = async (
-  url: string,
+  path: string,
   accept: string,
 ): Promise<Response | null> => {
+  const url = `${BASE}/${path}`;
   let response: Response;
   try {
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- shared request helper; every caller in this client builds the URL from the fixed BOE API base
     response = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: accept },
@@ -235,10 +237,10 @@ const boeFetch = async (
 };
 
 const boeGet = async <T>(
-  url: string,
+  path: string,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T | null> => {
-  const response = await boeFetch(url, "application/json");
+  const response = await boeFetch(path, "application/json");
   if (response === null) {
     return null;
   }
@@ -262,8 +264,8 @@ const boeGet = async <T>(
 };
 
 // The BOE API serves /texto and /texto/bloque/{id} as application/xml only.
-const boeGetText = async (url: string): Promise<string | null> => {
-  const response = await boeFetch(url, "application/xml");
+const boeGetText = async (path: string): Promise<string | null> => {
+  const response = await boeFetch(path, "application/xml");
   if (response === null) {
     return null;
   }
@@ -310,8 +312,10 @@ export const searchConsolidatedLegislation = async (
     params.set("query", queryDsl);
   }
 
-  const url = `${LEGISLATION_ENDPOINT}?${params.toString()}`;
-  const data = await boeGet(url, isBoeSearchResponse);
+  const data = await boeGet(
+    `${LEGISLATION_PATH}?${params.toString()}`,
+    isBoeSearchResponse,
+  );
   return data ?? { data: [], status: { code: "200", text: "ok" } };
 };
 
@@ -319,8 +323,8 @@ export const searchConsolidatedLegislation = async (
 // Single-law fetches
 // ---------------------------------------------------------------------------
 
-const lawSectionUrl = (lawId: string, section?: string): string => {
-  const base = `${LEGISLATION_ENDPOINT}/id/${lawId}`;
+const lawSectionPath = (lawId: string, section?: string): string => {
+  const base = `${LEGISLATION_PATH}/id/${lawId}`;
   return section ? `${base}/${section}` : base;
 };
 
@@ -329,7 +333,7 @@ const fetchLawJsonSection = async (
   section: string,
 ): Promise<unknown> => {
   const envelope = await boeGet(
-    lawSectionUrl(lawId, section),
+    lawSectionPath(lawId, section),
     isBoeLawEnvelope,
   );
   if (envelope === null) {
@@ -345,7 +349,7 @@ const fetchOptionalLawJsonSection = async (
   section: string,
 ): Promise<unknown> => {
   const envelope = await boeGet(
-    lawSectionUrl(lawId, section),
+    lawSectionPath(lawId, section),
     isBoeLawEnvelope,
   );
   return envelope === null ? null : (envelope.data ?? null);
@@ -354,7 +358,7 @@ const fetchOptionalLawJsonSection = async (
 const fetchOptionalLawXmlSection = async (
   lawId: string,
   section: string,
-): Promise<string | null> => await boeGetText(lawSectionUrl(lawId, section));
+): Promise<string | null> => await boeGetText(lawSectionPath(lawId, section));
 
 export type GetConsolidatedLawOptions = {
   metadata?: boolean | undefined;
@@ -439,7 +443,7 @@ export const getLawTextBlock = async (
     throw new BoeValidationError("Block id must not be empty");
   }
   const xml = await boeGetText(
-    lawSectionUrl(lawId, `texto/bloque/${encodeURIComponent(blockId)}`),
+    lawSectionPath(lawId, `texto/bloque/${encodeURIComponent(blockId)}`),
   );
   if (xml === null) {
     throw new BoeNotFoundError(`${lawId}/texto/bloque/${blockId}`);
@@ -500,8 +504,10 @@ export const getBormeSummary = async (
       `Invalid BOE date (expected YYYYMMDD): ${date}`,
     );
   }
-  const url = `${BORME_SUMMARY_ENDPOINT}/${date}`;
-  const data = await boeGet(url, isBormeSummaryResponse);
+  const data = await boeGet(
+    `${BORME_SUMMARY_PATH}/${date}`,
+    isBormeSummaryResponse,
+  );
   if (data === null) {
     throw new BoeNotFoundError(`borme/${date}`);
   }
@@ -520,8 +526,7 @@ export const getBoeSummary = async (
       `Invalid BOE date (expected YYYYMMDD): ${date}`,
     );
   }
-  const url = `${BOE_SUMMARY_ENDPOINT}/${date}`;
-  const data = await boeGet(url, isRecord);
+  const data = await boeGet(`${BOE_SUMMARY_PATH}/${date}`, isRecord);
   if (data === null) {
     throw new BoeNotFoundError(`boe/${date}`);
   }

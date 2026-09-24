@@ -1197,7 +1197,7 @@ const fetchObject = async (
 ): Promise<Response> =>
   await store.run(async () => {
     const response = await fetchWithTimeout(
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned URL for the configured object store, produced by Stella
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- store is one of this module's ObjectStore records, whose client() is getS3 or getCorpusS3
       store.client().presign(key, {
         expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
       }),
@@ -1342,7 +1342,7 @@ export const readCorpusS3Range = async ({
   // the response has been turned into an error.
   const response = await corpusCredentials.run(async () => {
     const served = await fetchWithTimeout(
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned URL for the configured corpus object store, produced by Stella
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned by this module's own corpus store client, built from validated corpus bucket config
       getCorpusS3().presign(key, {
         expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
       }),

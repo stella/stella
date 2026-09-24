@@ -192,7 +192,6 @@ const uploadSelectedFile = async (): Promise<void> => {
     );
     uploadId = reservation.uploadId;
     setStatus("Uploading…", "idle");
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- browser upload to the presigned URL Stella's upload reservation returned
     const put = await fetchWithTimeout(reservation.url, {
       method: "PUT",
       headers: reservation.headers,
