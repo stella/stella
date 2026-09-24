@@ -30,6 +30,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -206,8 +207,7 @@ const presignUpload = createSafeHandler(
     // and the pending-upload row — no client-side normalization.
     const resolvedMime = resolveUploadMime({
       declaredMime: purposeBody.mimeType,
-      // oxlint-disable-next-line security-guards/no-raw-filename-write -- resolveUploadMime reads only a validated extension from the name; nothing is stored from it
-      fileName: purposeBody.name,
+      fileName: sanitizeFilenamePreservingExtension(purposeBody.name),
     });
 
     const uploadId = createSafeId<"pendingUpload">();

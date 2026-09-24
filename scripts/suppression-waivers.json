@@ -81,16 +81,6 @@
       "evidence": "apps/api/src/lib/search/index-entity.test.ts"
     },
     {
-      "id": "SW-0009",
-      "kind": "permanent",
-      "rule": "security-guards/no-raw-filename-write",
-      "file": "apps/api/src/handlers/chat/stream-chat.ts",
-      "symbol": "hydrateMessages",
-      "count": 1,
-      "reason": "DB read-back from the caller's own user_files row, sanitized by the single upload writer; the request part's own filename is never used",
-      "evidence": "apps/api/src/handlers/chat/hydrate-messages.integration.test.ts"
-    },
-    {
       "id": "SW-0013",
       "kind": "temporary",
       "expires": "2026-12-31",
@@ -111,36 +101,6 @@
       "count": 1,
       "reason": "Style-set packages are server-built from extracted styles and read from style-set storage, which has no scan boundary yet; this parser input moves to a ScannedFile once that storage gets one.",
       "evidence": "apps/api/src/lib/style-set-editor.test.ts"
-    },
-    {
-      "id": "SW-0015",
-      "kind": "permanent",
-      "rule": "security-guards/no-raw-filename-write",
-      "file": "apps/api/src/handlers/chat/chat-message-parts.ts",
-      "symbol": "legacyAiSdkFilePartToTanStack",
-      "count": 1,
-      "reason": "converts an already persisted message part; the filename is display metadata, never a storage path",
-      "evidence": "apps/api/src/handlers/chat/chat-message-parts.test.ts"
-    },
-    {
-      "id": "SW-0016",
-      "kind": "permanent",
-      "rule": "security-guards/no-raw-filename-write",
-      "file": "apps/api/src/handlers/templates/fills/create.ts",
-      "symbol": "fillTemplateToWorkspace",
-      "count": 1,
-      "reason": "resolveDocumentFileName passes the requested name through sanitizeFilename",
-      "evidence": "apps/api/src/handlers/templates/fills/create.ts#resolveDocumentFileName"
-    },
-    {
-      "id": "SW-0017",
-      "kind": "permanent",
-      "rule": "security-guards/no-raw-filename-write",
-      "file": "apps/api/src/handlers/uploads/create.ts",
-      "symbol": "presignUpload",
-      "count": 1,
-      "reason": "resolveUploadMime reads only a validated extension from the name; nothing is stored from it",
-      "evidence": "apps/api/src/lib/files/utils.ts#resolveUploadMime"
     }
   ]
 }

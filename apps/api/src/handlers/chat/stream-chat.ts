@@ -3186,19 +3186,18 @@ export const hydrateMessages = async ({
           continue;
         }
 
-        const file = userFilesById.get(fileId);
-        if (!file) {
+        const userFile = userFilesById.get(fileId);
+        if (!userFile) {
           panic("Persisted chat file reference missing user_files row");
         }
 
         const hydratedPart = yield* Result.await(
           hydrateFilePart({
-            extractedText: file.extractedText,
-            // eslint-disable-next-line security-guards/no-raw-filename-write -- DB read-back from user_files, already sanitized on upload
-            fileName: file.fileName,
-            mimeType: file.mimeType,
+            extractedText: userFile.extractedText,
+            fileName: userFile.fileName,
+            mimeType: userFile.mimeType,
             sendMode,
-            s3Key: file.s3Key,
+            s3Key: userFile.s3Key,
           }),
         );
 
@@ -3225,9 +3224,9 @@ export const hydrateMessages = async ({
               break;
             case "write": {
               const { text } = hydratedPart.cache;
-              cacheWrites.push({ file, text });
+              cacheWrites.push({ file: userFile, text });
               userFilesById.set(fileId, {
-                ...file,
+                ...userFile,
                 extractedText: text,
               });
               break;
