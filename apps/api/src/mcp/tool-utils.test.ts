@@ -17,7 +17,6 @@ import {
   mapValibotIssues,
   notFoundResult,
   oauthScopeRecoveryHint,
-  parseOptionalCursor,
   resolveWindowBounds,
   serializeToolResult,
   structuredErrorResult,
@@ -249,32 +248,6 @@ describe("windowTextByCursor", () => {
     expect(result.text).toBe("");
     expect(result.nextCursor).toBeNull();
     expect(result.truncated).toBe(false);
-  });
-});
-
-describe("parseOptionalCursor", () => {
-  test("returns undefined when the cursor arg is absent", () => {
-    expect(parseOptionalCursor({ args: {}, key: "cursor" })).toBeUndefined();
-  });
-
-  test("passes a well-formed cursor through unchanged", () => {
-    const cursor = "eyJhIjoxfQ";
-    expect(parseOptionalCursor({ args: { cursor }, key: "cursor" })).toBe(
-      cursor,
-    );
-  });
-
-  test("rejects a non-string cursor", () => {
-    const result = parseOptionalCursor({ args: { cursor: 42 }, key: "cursor" });
-    expect(isToolErrorResult(result)).toBe(true);
-  });
-
-  test("rejects an over-long cursor", () => {
-    const result = parseOptionalCursor({
-      args: { cursor: "x".repeat(513) },
-      key: "cursor",
-    });
-    expect(isToolErrorResult(result)).toBe(true);
   });
 });
 

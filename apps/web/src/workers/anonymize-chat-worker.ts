@@ -42,6 +42,15 @@ const getDictionaries = (): Promise<
 
 const defaultLocale = globalThis.navigator.language;
 
+const failureResponse = (
+  id: AnonymizeChatWorkerRequest["id"],
+  error: unknown,
+): AnonymizeChatWorkerResponse => ({
+  id,
+  ok: false,
+  error: error instanceof Error ? error.message : String(error),
+});
+
 const handle = async (
   request: AnonymizeChatWorkerRequest,
 ): Promise<AnonymizeChatWorkerResponse> => {
@@ -77,11 +86,7 @@ const handle = async (
     });
     return { id, ok: true, result };
   } catch (error) {
-    return {
-      id,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return failureResponse(id, error);
   }
 };
 
@@ -96,23 +101,26 @@ if (!isDedicatedWorkerScope(globalThis)) {
 
 const scope = globalThis;
 
+const postResponse = (response: AnonymizeChatWorkerResponse): void => {
+  // Worker postMessage doesn't take a targetOrigin (unlike
+  // window.postMessage); the lint rule is window-specific.
+  // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
+  scope.postMessage(response);
+};
+
 scope.addEventListener(
   "message",
   (event: MessageEvent<AnonymizeChatWorkerRequest>) => {
     // Worker-local handling keeps the off-main-thread anonymizer self-contained:
     // routing through the app's detached()/analytics stack would pull PostHog and
     // env into every worker cold start. The handler already converts pipeline
-    // failures into an error response, so the only residual rejection is a
-    // postMessage failure, which the main-thread client surfaces via onerror.
+    // failures into an error response; a response that fails to post (for
+    // example, one that cannot be cloned) is answered with an error response
+    // too, so the main-thread request settles instead of hanging.
     handle(event.data)
-      .then((response) => {
-        // Worker postMessage doesn't take a targetOrigin (unlike
-        // window.postMessage); the lint rule is window-specific.
-        // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
-        scope.postMessage(response);
-        return;
-      })
-      // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter -- the residual rejection is a postMessage failure the main thread already sees via onerror; see the note above
-      .catch(() => undefined);
+      .then(postResponse)
+      .catch((error: unknown) => {
+        postResponse(failureResponse(event.data.id, error));
+      });
   },
 );

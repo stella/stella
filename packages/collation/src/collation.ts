@@ -1,4 +1,7 @@
-class BoundedLruCache<TKey, TValue> {
+/** A least-recently-used cache holding at most `limit` entries; per-locale
+ *  `Intl` caches use it so a long-lived process cannot grow one without
+ *  bound. */
+export class BoundedLruCache<TKey, TValue> {
   readonly #entries = new Map<TKey, TValue>();
   readonly #limit: number;
 
@@ -31,10 +34,10 @@ class BoundedLruCache<TKey, TValue> {
 // One collator per active locale, with room for the handful an app really
 // uses; a per-locale cache that never evicts is a leak on a long-lived
 // server process handling many tenants.
-const COLLATOR_CACHE_LIMIT = 16;
+export const LOCALE_CACHE_LIMIT = 16;
 
 const collatorCache = new BoundedLruCache<string, Intl.Collator>(
-  COLLATOR_CACHE_LIMIT,
+  LOCALE_CACHE_LIMIT,
 );
 
 /**

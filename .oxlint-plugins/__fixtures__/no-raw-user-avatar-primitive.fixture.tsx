@@ -4,7 +4,7 @@ import { Avatar } from "@stll/ui/avatar";
 
 // Shared identity components and unrelated avatar modules stay valid. These
 // declarations keep the fixture independent of project module resolution.
-declare const UserAvatar: (props: { name: string }) => unknown;
+declare const UserIdentityAvatar: (props: { name: string }) => unknown;
 declare const UserIdentity: (props: { name: string }) => unknown;
 declare const OrganizationAvatar: () => unknown;
 
@@ -12,7 +12,7 @@ export const RawUserAvatarPrimitiveFixture = () => (
   <>
     <Avatar />
     {/* expect-clean: no-raw-user-avatar-primitive/no-raw-user-avatar-primitive */}
-    <UserAvatar name="Ada Lovelace" />
+    <UserIdentityAvatar name="Ada Lovelace" />
     <UserIdentity name="Ada Lovelace" />
     <OrganizationAvatar />
   </>

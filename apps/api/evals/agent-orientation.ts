@@ -252,12 +252,9 @@ type ValibotBackedToolDefinition = McpToolDefinition & {
   inputSchemaSource: v.GenericSchema;
 };
 
-// The six legacy tools (list_templates, fill_template, save_filled_template,
-// list_capabilities, describe_capability, invoke_capability) carry no
-// `inputSchemaSource`; every other tool is defined through
-// `defineValibotMcpTool`, so this presence check is exactly the registry's
-// own legacy/derived split (mirrors MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES
-// in static-tool-definitions.ts, which is not exported).
+// Every native tool is defined through `defineValibotMcpTool` (a compile-time
+// check in static-tool-definitions.ts), so this narrows the widened
+// `McpToolDefinition` back to the schema its handler parses.
 const hasValibotSchema = (
   definition: McpToolDefinition,
 ): definition is ValibotBackedToolDefinition =>

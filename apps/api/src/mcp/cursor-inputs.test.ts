@@ -24,7 +24,6 @@ import {
 } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import { isToolErrorResult, parseOptionalCursor } from "@/api/mcp/tool-utils";
 
 /**
  * Cursor values observed from a client filling every declared property. Kept
@@ -55,16 +54,6 @@ const MADE_UP_CURSORS = [
   "__start__",
   ".? no",
 ] as const;
-
-/**
- * Tools that still maintain their advertised schema by hand and read raw
- * arguments through `parseOptionalCursor`. The list only shrinks: a tool moved
- * to `defineValibotMcpTool` has to leave it, and a new tool cannot join it.
- */
-const RAW_ARGUMENT_CURSOR_TOOLS = new Set([
-  "list_capabilities",
-  "list_templates",
-]);
 
 /**
  * Invented values a tool keeps because they name the first page anyway. The
@@ -226,44 +215,6 @@ describe("MCP cursor inputs read a made-up cursor as no cursor", () => {
     expect(cursorReading(definition.inputSchemaSource, "cursor", "start")).toBe(
       CURSOR_READING.absent,
     );
-  });
-
-  test("the raw-argument reader answers the same way", () => {
-    for (const madeUp of MADE_UP_CURSORS) {
-      expect(
-        parseOptionalCursor({ args: { cursor: madeUp }, key: "cursor" }),
-      ).toBeUndefined();
-    }
-    expect(
-      parseOptionalCursor({ args: { cursor: "" }, key: "cursor" }),
-    ).toBeUndefined();
-    expect(
-      parseOptionalCursor({ args: { cursor: null }, key: "cursor" }),
-    ).toBeUndefined();
-    expect(
-      parseOptionalCursor({
-        args: { cursor: TRUNCATED_REAL_CURSOR },
-        key: "cursor",
-      }),
-    ).toBe(TRUNCATED_REAL_CURSOR);
-    expect(
-      isToolErrorResult(
-        parseOptionalCursor({ args: { cursor: 42 }, key: "cursor" }),
-      ),
-    ).toBe(true);
-  });
-
-  test("only the hand-maintained tools depend on the raw reader", () => {
-    const handMaintained = ALL_MCP_TOOL_DEFINITIONS.filter(
-      (definition) =>
-        !("inputSchemaSource" in definition) &&
-        cursorProperties(definition.inputSchema).length > 0,
-    ).map(({ name }) => name);
-
-    expect(
-      handMaintained.filter((name) => !RAW_ARGUMENT_CURSOR_TOOLS.has(name)),
-      "A new tool declares its input with defineValibotMcpTool, so its cursor goes through cursorInput rather than parseOptionalCursor.",
-    ).toEqual([]);
   });
 
   test("the walk covers the cursor properties the registry declares", () => {

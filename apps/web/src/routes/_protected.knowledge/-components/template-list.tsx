@@ -66,7 +66,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -735,7 +735,7 @@ const TemplateRow = ({
           content={template.authorName}
           render={<span className="inline-flex" />}
         >
-          <UserAvatar
+          <UserIdentityAvatar
             className="size-6 shrink-0 text-[0.5625rem]"
             image={template.authorImage}
             name={template.authorName}

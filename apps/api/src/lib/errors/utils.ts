@@ -400,11 +400,9 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => {
 export const logDevError = createDevErrorLogger({
   isDev: envBase.isDev,
   sink: ({ error, context }) => {
-    // Best-effort dev-only file sink. Its own rejection cannot route through
-    // the shared error-capture channel (that path logs back through here,
-    // which would recurse), so it is handled locally and ignored.
-    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-    appendDevErrorJsonl({ error, context }).catch(() => undefined);
+    devLogWrites = devLogWrites.then(
+      async () => await appendDevErrorJsonl({ error, context }),
+    );
   },
 });
 
@@ -427,6 +425,12 @@ const DEV_LOG_PATH = path.join(
 // cross it we just empty the file and start over. Simple beats
 // rotation for a dev-only convenience log.
 const MAX_BYTES = 5 * 1024 * 1024;
+
+// Appends run one at a time so a size-cap truncate cannot interleave with
+// another record's append. `appendDevErrorJsonl` never rejects (its failures
+// cannot route through the error-capture channel, which logs back through
+// here), so the chain never rejects either.
+let devLogWrites: Promise<void> = Promise.resolve();
 
 let dirReady: Promise<void> | null = null;
 const ensureLogDir = async (): Promise<void> => {

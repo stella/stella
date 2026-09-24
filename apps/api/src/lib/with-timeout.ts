@@ -65,6 +65,9 @@ export const withTimeout = async <T>(
     );
   }
 
+  // Cancellation is cooperative, so an operation that ignores the signal can
+  // still reject after a deadline wins. The race's own subscription to `op`
+  // observes that late rejection, so it never surfaces as unhandled.
   try {
     return await Promise.race([op, ...deadlines]);
   } finally {
@@ -72,10 +75,5 @@ export const withTimeout = async <T>(
     if (signal !== undefined && abort !== undefined) {
       signal.removeEventListener("abort", abort);
     }
-    // Cancellation is cooperative: operations that use the provided signal
-    // stop their underlying work. Keep swallowing late settlement for APIs
-    // that cannot cancel so their rejection is never reported as unhandled.
-    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-    op.catch(() => undefined);
   }
 };

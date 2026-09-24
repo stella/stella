@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -166,14 +166,17 @@ const readGenerationCandidates = createSafeHandler(
                   LIMITS.legalListGenerationCandidatesMax *
                     LIMITS.legalListGenerationCandidateSourcesMax,
                 );
+        // Seeded with every page candidate so a candidate without sources
+        // still has an entry and a miss on lookup is an invariant breach.
         const sourcesByCandidate = new Map<
           SafeId<"legalListGenerationCandidate">,
           typeof sources
-        >();
+        >(candidateIds.map((id) => [id, []]));
         for (const source of sources) {
-          const grouped = sourcesByCandidate.get(source.candidateId) ?? [];
-          grouped.push(source);
-          sourcesByCandidate.set(source.candidateId, grouped);
+          (
+            sourcesByCandidate.get(source.candidateId) ??
+            panic(`Source for unselected candidate ${source.candidateId}`)
+          ).push(source);
         }
         return { runStatus: run.status, candidates, sourcesByCandidate };
       }),
@@ -194,7 +197,9 @@ const readGenerationCandidates = createSafeHandler(
       runStatus: result.runStatus,
       items: page.items.map((candidate) =>
         Object.assign(candidate, {
-          sources: result.sourcesByCandidate.get(candidate.id) ?? [],
+          sources:
+            result.sourcesByCandidate.get(candidate.id) ??
+            panic(`Candidate ${candidate.id} missing from source grouping`),
         }),
       ),
     });

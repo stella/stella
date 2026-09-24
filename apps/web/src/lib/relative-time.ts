@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { BoundedLruCache, LOCALE_CACHE_LIMIT } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
@@ -96,7 +97,10 @@ export const WEEKDAY_INITIAL_FORMAT = {
   weekday: "narrow",
 } as const satisfies Intl.DateTimeFormatOptions;
 
-const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+const relativeTimeFormatters = new BoundedLruCache<
+  string,
+  Intl.RelativeTimeFormat
+>(LOCALE_CACHE_LIMIT);
 
 /** `Intl.RelativeTimeFormat` for `locale`, cached per locale so it isn't
  *  rebuilt on every `formatRelativeTime` call. */

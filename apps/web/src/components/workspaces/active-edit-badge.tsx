@@ -7,7 +7,7 @@ import {
 } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 
 type ActiveEditBadgeProps = {
   name: string;
@@ -26,7 +26,7 @@ export const ActiveEditBadge = ({
       render={<span />}
     >
       <LockIcon className="text-warning size-3" />
-      <UserAvatar
+      <UserIdentityAvatar
         className="size-4"
         fallbackClassName="text-[7px]"
         image={image}

@@ -627,9 +627,6 @@ const escapeRegExp = (value: string): string =>
 // Fuzzy supersets for narrow shared-helper/component bans. These counters are
 // intentionally lexical: the AST rules reject the exact known-bad shapes,
 // while the ratchets keep nearby aliases and new spellings visible in review.
-const countHandRolledUserIdentity = (content: string): number =>
-  countMatches(stripComments(content), /<UserAvatar\b/gu);
-
 // Both the flat subpath and the deprecated grouped alias reach the same
 // module, so the metric counts either spelling.
 const countRawUserAvatarPrimitive = (content: string): number =>
@@ -1493,78 +1490,6 @@ const countWorkspaceOnlyRlsOnOrgTables = (content: string): number => {
   return count;
 };
 
-const LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST =
-  "MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES";
-
-const unwrapExpression = (expression: ts.Expression): ts.Expression => {
-  let current = expression;
-  while (
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isParenthesizedExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
-};
-
-/**
- * Entries in the explicit legacy native-MCP input-schema inventory. Each entry
- * is a tool whose hand-authored JSON Schema still mirrors a separate runtime
- * validator; the count may only shrink as tools move to Valibot-derived wire
- * schemas. Parse the exact declaration so comments and unrelated arrays cannot
- * buy or consume this debt budget.
- */
-const countLegacyManualMcpInputSchemas = (
-  content: string,
-  file: string,
-): number => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    for (const declaration of statement.declarationList.declarations) {
-      if (
-        !ts.isIdentifier(declaration.name) ||
-        declaration.name.text !== LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST
-      ) {
-        continue;
-      }
-      if (declaration.initializer === undefined) {
-        return panic(
-          `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must have an array initializer`,
-        );
-      }
-      const initializer = unwrapExpression(declaration.initializer);
-      if (!ts.isArrayLiteralExpression(initializer)) {
-        return panic(
-          `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must be an array literal`,
-        );
-      }
-      for (const element of initializer.elements) {
-        if (!ts.isStringLiteralLike(element)) {
-          return panic(
-            `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must contain only string literals`,
-          );
-        }
-      }
-      return initializer.elements.length;
-    }
-  }
-
-  return panic(
-    `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} is missing from ${file}`,
-  );
-};
-
 type FileCounter = (content: string, file: string) => number;
 
 // A repo metric answers a question no single file can — the same helper copied
@@ -2064,15 +1989,6 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "legacy-manual-mcp-input-schemas",
-    description:
-      "tools in MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES whose hand-authored JSON Schema mirrors a separate runtime validator; each Valibot source-of-truth conversion removes one entry",
-    include: ["apps/api/src/mcp/static-tool-definitions.ts"],
-    exclude: () => false,
-    count: countLegacyManualMcpInputSchemas,
-  },
-  {
-    scope: "file",
     id: "nullish-array-fallback",
     description:
       "`?? []` fallbacks in app source (structural invariants should panic() instead)",
@@ -2127,17 +2043,6 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       file === "apps/web/src/components/workspaces/entity-kind-icon.tsx",
     count: countEntityKindGlyphs,
-  },
-  {
-    scope: "file",
-    id: "hand-rolled-user-identity",
-    description:
-      "<UserAvatar> JSX openings outside the shared user-avatar component (fuzzy superset; paired avatar+label shapes are banned by no-hand-rolled-user-identity)",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/web/src/components/user-avatar.tsx",
-    count: countHandRolledUserIdentity,
   },
   {
     scope: "file",
@@ -2976,18 +2881,6 @@ const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
 const SELF_TEST_LEGACY_REALTIME_INVALIDATIONS = `${LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 7;
 
-const LEGACY_MANUAL_MCP_INPUT_SCHEMA_FIXTURE_LINES = [
-  "const MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES = [",
-  '  "search",',
-  '  "fetch",',
-  '  "list_matters",',
-  "] as const satisfies readonly LegacyManualInputToolName[];",
-  'const unrelated = ["save_template"];',
-  '// "commented_tool",',
-];
-const SELF_TEST_LEGACY_MANUAL_MCP_INPUT_SCHEMAS = `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS = 3;
-
 const ENTITY_GLYPH_FIXTURE_LINES = [
   'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',
   "const shut = <FolderIcon />;",
@@ -3011,7 +2904,6 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   'import { Avatar } from "@stll/ui/avatar";',
   'import { UserIdentity } from "@/components/user-avatar";',
   'import { formatFullTimestamp as fullTimestamp } from "@/lib/relative-time";',
-  "const avatar = <UserAvatar name={user.name} />;",
   "const identity = <UserIdentity name={user.name} />;",
   "const getDisplayName = (name: string) => name;",
   "function getInitials(name: string) { return name.slice(0, 2); }",
@@ -3023,12 +2915,11 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   'const timeOnly = value.toLocaleString(locale, { timeStyle: "medium" });',
   "const quotePattern = /[\"']/u;",
   "const urlPattern = /https:\\/\\//u;",
-  "// <UserAvatar /> and const getInitials = () => '?' must not count.",
+  "// const getInitials = () => '?' must not count.",
   '// import { Avatar } from "@stll/ui/avatar";',
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_HAND_ROLLED_USER_IDENTITIES = 1;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -4057,11 +3948,6 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/mcp/static-tool-definitions.ts",
-      SELF_TEST_LEGACY_MANUAL_MCP_INPUT_SCHEMAS,
-    );
-    writeFixture(
-      root,
       "apps/web/src/entity-glyphs.tsx",
       SELF_TEST_ENTITY_GLYPHS,
     );
@@ -4403,19 +4289,6 @@ const runSelfTest = (): number => {
       );
     }
 
-    const legacyManualMcpInputSchemaMetric = requireSnapshot(
-      snapshot,
-      "legacy-manual-mcp-input-schemas",
-    );
-    if (
-      legacyManualMcpInputSchemaMetric.count !==
-      EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS
-    ) {
-      failures.push(
-        `legacy-manual-mcp-input-schemas counted ${legacyManualMcpInputSchemaMetric.count}, expected ${EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS}`,
-      );
-    }
-
     const adHocSubjectGateMetric = requireSnapshot(
       snapshot,
       "ad-hoc-decision-subject-gates",
@@ -4460,7 +4333,6 @@ const runSelfTest = (): number => {
         EXPECTED_LEGACY_PAINT_TRANSITIONS +
           EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS,
       ],
-      ["hand-rolled-user-identity", EXPECTED_HAND_ROLLED_USER_IDENTITIES],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [

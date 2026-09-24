@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -58,14 +59,18 @@ export const RunLauncher = ({
   const { data: flowsData } = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
-  const { data: entities } = useQuery(entitySummariesOptions(workspaceId));
+  const {
+    data: entities,
+    isError: entitiesFailed,
+    refetch: refetchEntities,
+  } = useQuery(entitySummariesOptions(workspaceId));
 
   const enabledFlows =
     flowsData && "items" in flowsData
       ? flowsData.items.filter((flow) => flow.enabled)
       : [];
 
-  const filteredEntities = (entities ?? []).filter((entity) =>
+  const filteredEntities = entities?.filter((entity) =>
     (entity.name ?? "").toLowerCase().includes(entityFilter.toLowerCase()),
   );
 
@@ -165,28 +170,39 @@ export const RunLauncher = ({
           value={entityFilter}
         />
         <div className="grid max-h-56 gap-1 overflow-y-auto rounded-md border p-2">
-          {filteredEntities.length === 0 ? (
+          {filteredEntities === undefined && !entitiesFailed && (
+            <Skeleton className="m-2 h-4 w-2/3" />
+          )}
+          {filteredEntities === undefined && entitiesFailed && (
+            <div className="flex items-center gap-2 p-2 text-xs">
+              <span className="text-muted-foreground">{t("common.error")}</span>
+              <Button
+                onClick={() =>
+                  detached(refetchEntities(), "flows.retry-run-entities")
+                }
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
+          {filteredEntities?.length === 0 && (
             <p className="text-muted-foreground p-2 text-xs">
               {t("common.empty")}
             </p>
-          ) : (
-            filteredEntities.map((entity) => (
-              <label
-                className="flex items-center gap-2 text-sm"
-                key={entity.id}
-              >
-                <Checkbox
-                  checked={selectedEntityIds.includes(entity.id)}
-                  onCheckedChange={(checked) =>
-                    toggleEntity(entity.id, checked)
-                  }
-                />
-                <span className="truncate" dir="auto">
-                  {entity.name}
-                </span>
-              </label>
-            ))
           )}
+          {filteredEntities?.map((entity) => (
+            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+              <Checkbox
+                checked={selectedEntityIds.includes(entity.id)}
+                onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
+              />
+              <span className="truncate" dir="auto">
+                {entity.name}
+              </span>
+            </label>
+          ))}
         </div>
         {exceedsInputEntitiesLimit && (
           <p className="text-xs text-[var(--option-red-fg)]">

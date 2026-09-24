@@ -1,5 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-// User avatars must render through UserAvatar or UserIdentity. Six user
+// User avatars must render through UserIdentityAvatar or UserIdentity. Six user
 // surfaces composed the raw Avatar primitive and independently rebuilt
 // initials, display-name fallbacks, image alternatives, deleted styling, or
 // hover labels; those copies therefore produced different identities for the
@@ -42,7 +42,7 @@ export default eslintCompatPlugin({
         messages: {
           rawAvatar:
             "Do not import {{name}} from the raw avatar primitive here. " +
-            "Render UserAvatar or UserIdentity from " +
+            "Render UserIdentityAvatar or UserIdentity from " +
             "'@/components/user-avatar' instead.",
         },
       },

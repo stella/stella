@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { Workspace } from "@/lib/workspaces/types";
 
@@ -49,18 +49,20 @@ export const TeamAvatars = ({
             }
             key={m.userId}
             render={
-              <UserAvatar
+              <span
                 className={cn(
-                  "ring-background ring-2",
-                  size,
-                  textSize,
+                  "ring-background inline-flex shrink-0 rounded-full ring-2",
                   isLead && "ring-primary",
                 )}
-                image={m.userImage}
-                name={displayName}
               />
             }
-          />
+          >
+            <UserIdentityAvatar
+              className={cn(size, textSize)}
+              image={m.userImage}
+              name={displayName}
+            />
+          </Tooltip>
         );
       })}
       {overflow > 0 && (

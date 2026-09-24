@@ -327,17 +327,13 @@ const loadConnectorTools = async ({
       // settlement: it covers the case above where no client existed yet
       // at timeout, and is a no-op otherwise since `MCPClient.close()` is
       // idempotent (safe even if it ends up closing the same client twice).
+      // Sequencing only: a late discovery rejection is the fallout of the
+      // timeout reported below (often the close above), not a new failure.
       detached(
-        discovery
-          // Sequencing only: this rejection is the same `error` the
-          // surrounding branch already handled, so re-reporting it here
-          // would double-count one failure.
-          // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-          .catch(() => undefined)
-          .then(
-            async () =>
-              await closeAbandonedClient({ client, connectorSlug: row.slug }),
-          ),
+        Promise.allSettled([discovery]).then(
+          async () =>
+            await closeAbandonedClient({ client, connectorSlug: row.slug }),
+        ),
         "external-mcp-tools.discovery",
       );
     } else {

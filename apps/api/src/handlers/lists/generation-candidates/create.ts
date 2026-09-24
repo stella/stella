@@ -81,7 +81,8 @@ type ValidCandidate = {
   status: (typeof TASK_STATUSES)[number] | null;
   priority: (typeof ENTITY_PRIORITIES)[number] | null;
   dueDate: string | null;
-  suggestedAssigneeUserIds: SafeId<"user">[];
+  // Omitted lets the column default (no suggested assignees) apply.
+  suggestedAssigneeUserIds: SafeId<"user">[] | undefined;
   sources: {
     entityId: SafeId<"entity">;
     entityVersionId: SafeId<"entityVersion">;
@@ -126,7 +127,7 @@ const validateCandidates = (
       status: candidate.status ?? null,
       priority: candidate.priority ?? null,
       dueDate: candidate.dueDate ?? null,
-      suggestedAssigneeUserIds: candidate.suggestedAssigneeUserIds ?? [],
+      suggestedAssigneeUserIds: candidate.suggestedAssigneeUserIds,
       sources,
     });
   }

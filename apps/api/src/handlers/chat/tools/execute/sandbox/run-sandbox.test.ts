@@ -15,7 +15,7 @@ import {
   awaitSandboxAdmissionIdle,
   getSandboxAdmissionSnapshot,
   runSandbox as runSandboxInternal,
-  trackSandboxHostWorkForTest,
+  strandSandboxHostWorkForTest,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 
@@ -1249,11 +1249,7 @@ describe("awaitSandboxAdmissionIdle", () => {
   // assertions are about the thrown diagnostic and its counters — never about
   // wall-clock progress.
   it("fails fast with a diagnostic when a host promise is stranded, then unpoisons", async () => {
-    trackSandboxHostWorkForTest(
-      new Promise<void>(() => {
-        // never settles; models a stranded host call
-      }),
-    );
+    strandSandboxHostWorkForTest();
 
     let thrown: unknown;
     try {

@@ -133,13 +133,14 @@ const readWorkspaces = createSafeRootHandler(
               user.name,
               user.image,
             )
-            // SAFETY: member rows fan out across the org's active workspaces; bounded by LIMITS.workspacesCount * LIMITS.workspaceMembersCount, and a single-workspace cap would truncate multi-workspace orgs.
-            // eslint-disable-next-line require-query-limit/require-query-limit
             .orderBy(
               workspaceMembers.workspaceId,
               sql`${max(entities.updatedAt)} DESC NULLS LAST`,
               user.name,
-            ),
+            )
+            // Membership writes cap each workspace at workspaceMembersCount, so
+            // this bound holds every member of every workspace on the page.
+            .limit(wsIds.length * LIMITS.workspaceMembersCount),
         ]);
 
         return {

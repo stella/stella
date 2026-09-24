@@ -24,6 +24,7 @@ import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
+import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
@@ -37,7 +38,6 @@ import type {
 } from "./chat-query-contract";
 import {
   createChatRuntime,
-  LifecycleRegistry,
   resetChatRequestStateForTests,
 } from "./chat-runtime";
 import type { ChatRuntime } from "./chat-runtime";

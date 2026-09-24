@@ -1,6 +1,6 @@
 declare const user: { name: string; image: string | null };
 declare const otherUser: { name: string };
-declare const UserAvatar: (props: {
+declare const UserIdentityAvatar: (props: {
   name: string;
   image?: string | null;
 }) => unknown;
@@ -17,7 +17,7 @@ declare const TooltipPopup: (props: { children: unknown }) => unknown;
 const _handRolled = (
   <span>
     {/* oxlint-disable-next-line no-hand-rolled-user-identity/no-hand-rolled-user-identity */}
-    <UserAvatar image={user.image} name={user.name} />
+    <UserIdentityAvatar image={user.image} name={user.name} />
     <span>{user.name}</span>
   </span>
 );
@@ -27,7 +27,7 @@ const _wrappedHandRolled = (
   <span>
     <Tooltip>
       {/* oxlint-disable-next-line no-hand-rolled-user-identity/no-hand-rolled-user-identity */}
-      <UserAvatar image={user.image} name={user.name} />
+      <UserIdentityAvatar image={user.image} name={user.name} />
     </Tooltip>
     <span>{user.name}</span>
   </span>
@@ -36,23 +36,23 @@ const _wrappedHandRolled = (
 // Shared identity, avatar-only, transformed, and different-name variants stay valid.
 // expect-clean: no-hand-rolled-user-identity/no-hand-rolled-user-identity
 const _shared = <UserIdentity image={user.image} name={user.name} />;
-const _avatarOnly = <UserAvatar image={user.image} name={user.name} />;
+const _avatarOnly = <UserIdentityAvatar image={user.image} name={user.name} />;
 const _transformed = (
   <span>
-    <UserAvatar name={user.name} />
+    <UserIdentityAvatar name={user.name} />
     <span>{user.name.toUpperCase()}</span>
   </span>
 );
 const _differentName = (
   <span>
-    <UserAvatar name={user.name} />
+    <UserIdentityAvatar name={user.name} />
     <span>{otherUser.name}</span>
   </span>
 );
 const _tooltipOnlyLabel = (
   <TooltipRoot>
     <TooltipTrigger>
-      <UserAvatar image={user.image} name={user.name} />
+      <UserIdentityAvatar image={user.image} name={user.name} />
     </TooltipTrigger>
     <TooltipPopup>{user.name}</TooltipPopup>
   </TooltipRoot>

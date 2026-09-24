@@ -3546,6 +3546,8 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 template_id: {
                   type: "string",
@@ -3555,12 +3557,12 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_templates call to fetch the next page",
-                  maxLength: 512,
                 },
               },
-              additionalProperties: false,
             },
           },
         },
@@ -3618,6 +3620,8 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
+              required: ["template_id", "values"],
+              additionalProperties: false,
               properties: {
                 template_id: {
                   type: "string",
@@ -3626,8 +3630,8 @@ export const generatedRouteMap: RouteNode = {
                 },
                 values: {
                   type: "object",
+                  additionalProperties: {},
                   description: "Map of field path to value.",
-                  additionalProperties: true,
                 },
                 allow_unused_values: {
                   type: "boolean",
@@ -3635,22 +3639,20 @@ export const generatedRouteMap: RouteNode = {
                     "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
                 },
                 completion_mode: {
-                  type: "string",
                   enum: ["require_complete", "allow_partial"],
+                  type: "string",
                   description:
                     "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                   default: "require_complete",
                 },
                 output_mode: {
-                  type: "string",
                   enum: ["text", "docx"],
+                  type: "string",
                   description:
                     "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
                   default: "text",
                 },
               },
-              required: ["template_id", "values"],
-              additionalProperties: false,
             },
           },
         },
@@ -3732,10 +3734,18 @@ export const generatedRouteMap: RouteNode = {
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
+                  additionalProperties: false,
                   properties: {
                     action: {
-                      type: "string",
                       enum: ["create_document", "create_version"],
+                      type: "string",
                       description: "Persistence destination",
                     },
                     template_id: {
@@ -3762,37 +3772,31 @@ export const generatedRouteMap: RouteNode = {
                     },
                     name: {
                       type: "string",
+                      minLength: 1,
+                      maxLength: 255,
                       description:
                         "Optional DOCX file name; defaults to the template file name",
-                      maxLength: 255,
                     },
                     idempotency_key: {
                       type: "string",
+                      minLength: 1,
+                      maxLength: 128,
                       description:
                         "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-                      maxLength: 128,
                     },
                     values: {
                       type: "object",
+                      additionalProperties: {},
                       description: "Map of template field path to value",
-                      additionalProperties: true,
                     },
                     completion_mode: {
-                      type: "string",
                       enum: ["require_complete", "allow_partial"],
+                      type: "string",
                       description:
                         "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                       default: "require_complete",
                     },
                   },
-                  required: [
-                    "action",
-                    "template_id",
-                    "matter_id",
-                    "idempotency_key",
-                    "values",
-                  ],
-                  additionalProperties: false,
                 },
               },
             },
@@ -3871,10 +3875,18 @@ export const generatedRouteMap: RouteNode = {
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
+                  additionalProperties: false,
                   properties: {
                     action: {
-                      type: "string",
                       enum: ["create_document", "create_version"],
+                      type: "string",
                       description: "Persistence destination",
                     },
                     template_id: {
@@ -3901,37 +3913,31 @@ export const generatedRouteMap: RouteNode = {
                     },
                     name: {
                       type: "string",
+                      minLength: 1,
+                      maxLength: 255,
                       description:
                         "Optional DOCX file name; defaults to the template file name",
-                      maxLength: 255,
                     },
                     idempotency_key: {
                       type: "string",
+                      minLength: 1,
+                      maxLength: 128,
                       description:
                         "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-                      maxLength: 128,
                     },
                     values: {
                       type: "object",
+                      additionalProperties: {},
                       description: "Map of template field path to value",
-                      additionalProperties: true,
                     },
                     completion_mode: {
-                      type: "string",
                       enum: ["require_complete", "allow_partial"],
+                      type: "string",
                       description:
                         "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                       default: "require_complete",
                     },
                   },
-                  required: [
-                    "action",
-                    "template_id",
-                    "matter_id",
-                    "idempotency_key",
-                    "values",
-                  ],
-                  additionalProperties: false,
                 },
               },
             },
@@ -7452,6 +7458,8 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 domain: {
                   type: "string",
@@ -7459,23 +7467,26 @@ export const generatedRouteMap: RouteNode = {
                     'Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices").',
                 },
                 access: {
-                  type: "string",
                   enum: ["all", "read", "write"],
+                  type: "string",
                   description: "Filter by access level.",
+                  default: "all",
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque pagination cursor from a previous page; omit for the first page.",
                 },
                 limit: {
                   type: "integer",
-                  description: "Maximum capabilities to return.",
                   minimum: 1,
                   maximum: 100,
+                  description: "Maximum capabilities to return.",
+                  default: 25,
                 },
               },
-              additionalProperties: false,
             },
           },
         },
@@ -7505,15 +7516,16 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["capability"],
+              additionalProperties: false,
               properties: {
                 capability: {
                   type: "string",
+                  minLength: 1,
                   description:
                     'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
                 },
               },
-              required: ["capability"],
-              additionalProperties: false,
             },
           },
         },
@@ -7553,37 +7565,41 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["capability"],
+              additionalProperties: false,
               properties: {
                 capability: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Capability id to invoke, as returned by list_capabilities.",
                 },
                 input: {
                   type: "object",
-                  description:
-                    "The capability's input, split into the parts its schema declares.",
                   properties: {
                     body: {
                       type: "object",
+                      additionalProperties: {},
                       description:
                         "Request body fields, per the capability's body schema.",
-                      additionalProperties: true,
                     },
                     params: {
                       type: "object",
+                      additionalProperties: {},
                       description:
                         "Path parameters; matter-scoped capabilities require matterId here.",
-                      additionalProperties: true,
                     },
                     query: {
                       type: "object",
+                      additionalProperties: {},
                       description:
                         "Query parameters, per the capability's query schema.",
-                      additionalProperties: true,
                     },
                   },
+                  required: [],
                   additionalProperties: false,
+                  description:
+                    "The capability's input, split into the parts its schema declares.",
                 },
                 validate_only: {
                   type: "boolean",
@@ -7596,8 +7612,6 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
                 },
               },
-              required: ["capability"],
-              additionalProperties: false,
             },
           },
         },

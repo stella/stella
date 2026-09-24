@@ -63,8 +63,6 @@ import { templateDecideConditionsLogic } from "@/api/lib/templates/template-deci
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
-  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
-  TEMPLATE_FILL_COMPLETION_MODES,
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
@@ -122,6 +120,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -129,18 +128,14 @@ import {
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  enumProp,
   errorResult,
   internalFailureResult,
   isToolErrorResult,
   notFoundResult,
   nullAsAbsent,
-  parseOptionalCursor,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
-  uuidProp,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -171,20 +166,6 @@ const PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS = 10_000;
 const TEMPLATE_FILL_OUTPUT_MODES = ["text", "docx"] as const;
 const DEFAULT_TEMPLATE_FILL_OUTPUT_MODE =
   "text" satisfies (typeof TEMPLATE_FILL_OUTPUT_MODES)[number];
-
-/**
- * One advertised `completion_mode` property for both fill tools. The
- * persisting tool writes into a matter, so it cannot be the laxer of the two:
- * both reject unmatched placeholders unless the caller opts into a partial
- * document.
- */
-const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
-  ...enumProp(
-    "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-    TEMPLATE_FILL_COMPLETION_MODES,
-  ),
-  default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
-} as const;
 
 /**
  * `create_template`: a document, and either a name for a new template or the
@@ -701,169 +682,6 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:templates",
 });
 
-const TEMPLATE_TOOL_DEFINITIONS = [
-  {
-    annotations: {
-      title: "List templates",
-      destructiveHint: false,
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List the document templates in this organization (NDAs, powers of " +
-      "attorney, leases), or describe one template's fillable fields. Omit " +
-      "template_id to list templates: each template's id, name, field count, " +
-      "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
-      "whose whenToUse matches the request and skip any whose whenNotToUse " +
-      "applies. Pass template_id to return that template's full field " +
-      "configuration, in the shape the field reference documents " +
-      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
-      "formula fields, and the configure_template_fields call to make next. " +
-      "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        template_id: uuidProp(
-          "Template id to describe its fields in detail; omit to list templates",
-        ),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_templates call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-      additionalProperties: false,
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      // Placeholder org id: derivation only ever reads `.path`, see the
-      // builders' doc comment above.
-      textFields: [
-        ...deriveTextFieldPaths(buildTemplateListTextFieldSpecs("")),
-        ...deriveTextFieldPaths(buildTemplateDetailTextFieldSpecs("")),
-      ],
-    },
-    name: "list_templates",
-    scope: "stella:templates",
-  },
-  {
-    description:
-      "Fill a template and return the rendered text; pass output_mode='docx' " +
-      "for base64 bytes. Call list_templates first, then pass its field paths " +
-      "in values. Registry, composite, formula, and AI fields resolve " +
-      "automatically. Unknown keys fail unless allow_unused_values is true. " +
-      "Missing required values always fail. Unfilled placeholders or failed AI " +
-      "drafts fail unless completion_mode is allow_partial. Errors name exact " +
-      "paths; never guess required values. Output includes completionStatus.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        template_id: uuidProp("Template id, as returned by list_templates"),
-        values: {
-          type: "object",
-          description: "Map of field path to value.",
-          additionalProperties: true,
-        },
-        allow_unused_values: {
-          type: "boolean",
-          description:
-            "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
-        },
-        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
-        output_mode: {
-          ...enumProp(
-            "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
-            TEMPLATE_FILL_OUTPUT_MODES,
-          ),
-          default: DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
-        },
-      },
-      required: ["template_id", "values"],
-      additionalProperties: false,
-    },
-    // openWorldHint: true because a manifest with a registry-lookup field
-    // (see lookup-fields.ts) sends the fill through the shared business-
-    // registry dispatch (ARES, KRS, ORSR, ...) before rendering, the same
-    // external interaction matter-tools.ts's company lookup declares open-
-    // world for; the hint is static per tool, so it must cover that case even
-    // though most fills touch no lookup field.
-    annotations: {
-      title: "Fill template",
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: true,
-      readOnlyHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "fill_template",
-    scope: "stella:templates",
-  },
-  {
-    description:
-      "Fill a registered template and persist its DOCX in a matter. Use " +
-      "create_document (optionally with parent_id) or create_version with " +
-      "entity_id. Call list_templates for field paths; never guess required " +
-      "values. Missing required values always fail. Unfilled placeholders or " +
-      "failed AI drafts stop writes unless completion_mode is allow_partial. " +
-      "Returns document/version ids and fill diagnostics.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: enumProp("Persistence destination", [
-          "create_document",
-          "create_version",
-        ]),
-        template_id: uuidProp("Template id, as returned by list_templates"),
-        matter_id: uuidProp("Matter receiving the filled DOCX."),
-        entity_id: uuidProp(
-          "Existing document entity id; required only for create_version",
-        ),
-        parent_id: uuidProp(
-          "Folder entity id for a new document; valid only for create_document",
-        ),
-        name: stringProp(
-          "Optional DOCX file name; defaults to the template file name",
-          { maxLength: 255 },
-        ),
-        idempotency_key: stringProp(
-          "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-          { maxLength: 128 },
-        ),
-        values: {
-          type: "object",
-          description: "Map of template field path to value",
-          additionalProperties: true,
-        },
-        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
-      },
-      required: [
-        "action",
-        "template_id",
-        "matter_id",
-        "idempotency_key",
-        "values",
-      ],
-      additionalProperties: false,
-    },
-    annotations: {
-      title: "Save filled template",
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: true,
-      readOnlyHint: false,
-    },
-    access: "write",
-    additionalScopes: ["stella:templates"],
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_filled_template",
-    scope: "stella:documents_write",
-  },
-  CREATE_TEMPLATE_TOOL_DEFINITION,
-  CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
-  PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
-] as const satisfies readonly McpToolDefinition[];
-
 /** The whole advertised list_templates surface, so the branch dispatch below
  * reads arguments a strict client's nulls have already been dropped from
  * rather than the raw ones. */
@@ -880,6 +698,172 @@ const listTemplatesArgsSchema = nullAsAbsent(
     }),
   }),
 );
+
+const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
+  annotations: {
+    title: "List templates",
+    destructiveHint: false,
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  description:
+    "List the document templates in this organization (NDAs, powers of " +
+    "attorney, leases), or describe one template's fillable fields. Omit " +
+    "template_id to list templates: each template's id, name, field count, " +
+    "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
+    "whose whenToUse matches the request and skip any whose whenNotToUse " +
+    "applies. Pass template_id to return that template's full field " +
+    "configuration, in the shape the field reference documents " +
+    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
+    "formula fields, and the configure_template_fields call to make next. " +
+    "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
+  inputSchema: listTemplatesArgsSchema,
+  access: "read",
+  anonymized: {
+    exposure: "anonymize",
+    // Placeholder org id: derivation only ever reads `.path`, see the
+    // builders' doc comment above.
+    textFields: [
+      ...deriveTextFieldPaths(buildTemplateListTextFieldSpecs("")),
+      ...deriveTextFieldPaths(buildTemplateDetailTextFieldSpecs("")),
+    ],
+  },
+  name: "list_templates",
+  scope: "stella:templates",
+});
+
+const fillTemplateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: uuidInputSchema("Template id, as returned by list_templates"),
+    values: v.pipe(
+      v.record(v.string(), v.unknown()),
+      v.description("Map of field path to value."),
+    ),
+    allow_unused_values: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
+        ),
+      ),
+    ),
+    completion_mode: templateFillCompletionModeSchema,
+    output_mode: v.optional(
+      v.pipe(
+        v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
+        v.description(
+          "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+        ),
+      ),
+      DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
+    ),
+  }),
+);
+
+const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Fill a template and return the rendered text; pass output_mode='docx' " +
+    "for base64 bytes. Call list_templates first, then pass its field paths " +
+    "in values. Registry, composite, formula, and AI fields resolve " +
+    "automatically. Unknown keys fail unless allow_unused_values is true. " +
+    "Missing required values always fail. Unfilled placeholders or failed AI " +
+    "drafts fail unless completion_mode is allow_partial. Errors name exact " +
+    "paths; never guess required values. Output includes completionStatus.",
+  inputSchema: fillTemplateArgsSchema,
+  // openWorldHint: true because a manifest with a registry-lookup field
+  // (see lookup-fields.ts) sends the fill through the shared business-
+  // registry dispatch (ARES, KRS, ORSR, ...) before rendering, the same
+  // external interaction matter-tools.ts's company lookup declares open-
+  // world for; the hint is static per tool, so it must cover that case even
+  // though most fills touch no lookup field.
+  annotations: {
+    title: "Fill template",
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+    readOnlyHint: false,
+  },
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: "fill_template",
+  scope: "stella:templates",
+});
+
+const saveFilledTemplateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    action: v.pipe(
+      v.picklist(["create_document", "create_version"]),
+      v.description("Persistence destination"),
+    ),
+    template_id: uuidInputSchema("Template id, as returned by list_templates"),
+    matter_id: uuidInputSchema("Matter receiving the filled DOCX."),
+    entity_id: v.optional(
+      uuidInputSchema(
+        "Existing document entity id; required only for create_version",
+      ),
+    ),
+    parent_id: v.optional(
+      uuidInputSchema(
+        "Folder entity id for a new document; valid only for create_document",
+      ),
+    ),
+    name: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(255),
+        v.description(
+          "Optional DOCX file name; defaults to the template file name",
+        ),
+      ),
+    ),
+    idempotency_key: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(128),
+      v.description(
+        "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+      ),
+    ),
+    values: v.pipe(
+      v.record(v.string(), v.unknown()),
+      v.description("Map of template field path to value"),
+    ),
+    completion_mode: templateFillCompletionModeSchema,
+  }),
+);
+
+const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Fill a registered template and persist its DOCX in a matter. Use " +
+    "create_document (optionally with parent_id) or create_version with " +
+    "entity_id. Call list_templates for field paths; never guess required " +
+    "values. Missing required values always fail. Unfilled placeholders or " +
+    "failed AI drafts stop writes unless completion_mode is allow_partial. " +
+    "Returns document/version ids and fill diagnostics.",
+  inputSchema: saveFilledTemplateArgsSchema,
+  annotations: {
+    title: "Save filled template",
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+    readOnlyHint: false,
+  },
+  access: "write",
+  additionalScopes: ["stella:templates"],
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: "save_filled_template",
+  scope: "stella:documents_write",
+});
+
+const TEMPLATE_TOOL_DEFINITIONS = [
+  LIST_TEMPLATES_TOOL_DEFINITION,
+  FILL_TEMPLATE_TOOL_DEFINITION,
+  SAVE_FILLED_TEMPLATE_TOOL_DEFINITION,
+  CREATE_TEMPLATE_TOOL_DEFINITION,
+  CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+  PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
+] as const satisfies readonly McpToolDefinition[];
 
 // The list_templates cursor is the boundary template id alone; the query
 // resolves its (createdAt, id) in-DB.
@@ -926,19 +910,12 @@ const handleListTemplatesTool: TypedMcpToolHandler<
         hint: "Omit 'template_id' to list templates with 'cursor', or omit 'cursor' when requesting a single template_id.",
       });
     }
-    return await describeTemplateDetail({
-      args: { template_id: templateId },
-      context,
-    });
+    return await describeTemplateDetail({ templateId, context });
   }
 
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
   let boundaryId: string | undefined;
-  if (cursor !== undefined) {
-    const decoded = decodeTemplatePageCursor(cursor);
+  if (requestedCursor !== undefined) {
+    const decoded = decodeTemplatePageCursor(requestedCursor);
     if (decoded === null) {
       return structuredErrorResult({
         code: "validation_error",
@@ -1000,34 +977,21 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-/**
- * Exported, with the two validators below, only so `uuid-id-inputs.test.ts` can
- * bind it to the hand-written `inputSchema` these three tools still advertise:
- * a one-sided edit to either representation fails there instead of shipping a
- * `tools/list` contract the handler does not enforce. The binding retires with
- * the schema, once the tool moves to `defineValibotMcpTool` and its advertised
- * schema is projected from this one.
- */
-export const describeTemplateArgsSchema = nullAsAbsent(
-  v.strictObject({
-    template_id: v.pipe(v.string(), v.uuid()),
-  }),
-);
-
 // Detail branch of list_templates: one template's field configuration. Reused
 // verbatim from the former describe_template tool, which list_templates
 // absorbed. The caller (list_templates) already checked the read permission.
-const describeTemplateDetail: TypedMcpToolHandler<
-  v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
-> = async ({ args, context }) => {
-  const parsed = v.safeParse(describeTemplateArgsSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-
+const describeTemplateDetail = async ({
+  templateId,
+  context,
+}: {
+  templateId: string;
+  context: McpRequestContext;
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_TEMPLATES_PROJECTION>>
+> => {
   const payload = await describeTemplateForAgent({
     context,
-    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    templateId: brandPersistedTemplateId(templateId),
   });
   if (isToolErrorResult(payload)) {
     return payload;
@@ -1281,19 +1245,6 @@ const assertTemplateFillUsage = async ({
   });
 };
 
-export const fillTemplateArgsSchema = nullAsAbsent(
-  v.strictObject({
-    template_id: v.pipe(v.string(), v.uuid()),
-    values: v.record(v.string(), v.unknown()),
-    allow_unused_values: v.optional(v.boolean()),
-    completion_mode: templateFillCompletionModeSchema,
-    output_mode: v.optional(
-      v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
-      DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
-    ),
-  }),
-);
-
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -1493,20 +1444,6 @@ const handleFillTemplateTool: McpToolHandler<
     decisions: filled.conditionDecisions.map(toFillConditionDecision),
   });
 };
-
-export const saveFilledTemplateArgsSchema = nullAsAbsent(
-  v.strictObject({
-    action: v.picklist(["create_document", "create_version"]),
-    template_id: v.pipe(v.string(), v.uuid()),
-    matter_id: v.pipe(v.string(), v.uuid()),
-    entity_id: v.optional(v.pipe(v.string(), v.uuid())),
-    parent_id: v.optional(v.pipe(v.string(), v.uuid())),
-    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
-    idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-    values: v.record(v.string(), v.unknown()),
-    completion_mode: templateFillCompletionModeSchema,
-  }),
-);
 
 const resolveFilledDocxName = ({
   requested,
