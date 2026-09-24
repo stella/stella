@@ -877,7 +877,9 @@ const printContract = ({
     name,
     text: resolve(text),
   }));
-  // Only aliases reachable from the declarations, in first-use order.
+  // Only aliases reachable from the declarations. The walk follows the
+  // checker's member order, which varies between runs, so the output is
+  // sorted by alias name below.
   const aliases: { name: string; text: string }[] = [];
   const emitted = new Set<number>();
   const aliasIdsByName = new Map(
@@ -900,7 +902,10 @@ const printContract = ({
 
   return {
     declarations,
-    aliases,
+    // Alias names are unique (a collision panics above), so no tie case.
+    aliases: aliases.toSorted((left, right) =>
+      left.name < right.name ? -1 : 1,
+    ),
     symbolImports: [...symbolImports.values()],
     typeImports: [...typeImports.values()],
     fallbacks,

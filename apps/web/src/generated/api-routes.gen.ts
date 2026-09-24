@@ -4995,6 +4995,408 @@ export type WebRoutes = {
         };
       };
     });
+    uploads: (Tc1a2e5b1a7 & {
+      ":workspaceId": {
+        presign: {
+          post: {
+            body: {
+              parentId?: null | T9a509045a7;
+              name: string;
+              mimeType: string;
+              propertyId: T80d841ed63;
+              size: number;
+              sha256Hex: string;
+              purpose: "entity_create";
+            } | {
+              name: string;
+              mimeType: string;
+              entityId: T9a509045a7;
+              size: number;
+              sha256Hex: string;
+              purpose: "entity_version";
+            } | {
+              name: string;
+              scope: Ted097feadd;
+              mimeType: string;
+              size: number;
+              sha256Hex: string;
+              purpose: "agent_skill";
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                uploadId: T5a51f85bbe;
+                url: string;
+                expiresAt: string;
+                headers: Tb68ccd9b57;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "entity-create": {
+          preflight: {
+            post: {
+              body: {
+                propertyId?: null | T80d841ed63;
+                parentId?: null | T9a509045a7;
+                entityCount: number;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  ok: T1bdf39f14a;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "entity-create": {
+          tree: {
+            post: {
+              body: {
+                propertyId?: null | T80d841ed63;
+                parentId?: null | T9a509045a7;
+                files: Array<{
+                  parentKey?: null | string;
+                  name: string;
+                  mimeType: string;
+                  key: string;
+                  size: number;
+                  sha256Hex: string;
+                }>;
+                directories: Array<{
+                  parentKey?: null | string;
+                  name: string;
+                  key: string;
+                }>;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  directories: Array<{
+                    key: string;
+                    entityId: T9a509045a7;
+                  }>;
+                  files: Array<{
+                    key: string;
+                    uploadId: T5a51f85bbe;
+                    parentId: T6b73348afa;
+                    url: string;
+                    expiresAt: string;
+                    headers: Tfa384bd983;
+                  }>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":uploadId": {
+          finalize: {
+            post: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                uploadId: T5a51f85bbe;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  finalizedResult: {
+                    type: "entity_create";
+                    entityId: T9a509045a7;
+                    fileId: string;
+                    fileName: string;
+                    renamed: T1bdf39f14a;
+                  } | {
+                    type: "entity_version";
+                    entityId: T9a509045a7;
+                    entityVersionId: T116a5c37c8;
+                    versionNumber: number;
+                    fileId: string;
+                    fileName: string;
+                  } | {
+                    type: "agent_skill";
+                    skillId: T7fc3acf5ac;
+                    name: string;
+                    version: string;
+                  };
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":uploadId": {
+          abort: {
+            post: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                uploadId: T5a51f85bbe;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  ok: true;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    });
+    documents: (Tc1a2e5b1a7 & {
+      ":workspaceId": {
+        document: {
+          ":documentId": {
+            compare: {
+              post: {
+                body: {
+                  mode?: "strict" | "best-effort";
+                  granularity?: "word" | "character";
+                  output: {
+                    type: "preview";
+                  } | {
+                    type: "download";
+                  } | {
+                    type: "version";
+                  };
+                  baseTrackedChanges: Tb2b6819922;
+                  targetTrackedChanges: Tb2b6819922;
+                  selection: {
+                    type: "versions";
+                    baseVersionId: T116a5c37c8;
+                    targetVersionIds: Array<T116a5c37c8>;
+                  } | {
+                    type: "previous";
+                    targetVersionId: T116a5c37c8;
+                  };
+                  filePropertyId: T80d841ed63;
+                };
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  documentId: T9a509045a7;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    results: Array<{
+                      status: "created";
+                      baseVersionId: T116a5c37c8;
+                      targetVersionId: T116a5c37c8;
+                      redlineVersionId: T116a5c37c8;
+                      file: {
+                        fieldId: T1c7a854487;
+                        propertyId: T80d841ed63;
+                        fileName: string;
+                        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                        versionNumber: number;
+                        openUrl: string;
+                        download: {
+                          status: "available";
+                          downloadUrl: string;
+                          expiresAt: string;
+                        } | {
+                          status: "unavailable";
+                          message: string;
+                          hint: string;
+                        };
+                      };
+                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
+                      verification: stll_folio_core_CompareVerification;
+                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
+                      compatibility: stll_folio_core_CompareCompatibility;
+                    } | {
+                      status: "downloadable";
+                      baseVersionId: T116a5c37c8;
+                      targetVersionId: T116a5c37c8;
+                      fileName: string;
+                      download: {
+                        downloadUrl: string;
+                        expiresAt: string;
+                      };
+                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
+                      verification: stll_folio_core_CompareVerification;
+                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
+                      compatibility: stll_folio_core_CompareCompatibility;
+                    } | {
+                      status: "previewed";
+                      baseVersionId: T116a5c37c8;
+                      targetVersionId: T116a5c37c8;
+                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
+                      verification: stll_folio_core_CompareVerification;
+                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
+                      compatibility: stll_folio_core_CompareCompatibility;
+                    } | {
+                      status: "failed";
+                      baseVersionId: T116a5c37c8;
+                      targetVersionId: T116a5c37c8;
+                      error: {
+                        code: ("parse_failed" | "delivery_failed" | "timeout" | "apply_failed" | "document_too_large" | "final_paragraph_mark" | "invalid_options" | "operation_limit" | "persistence_failed" | "read_failed" | "round_trip_failed" | "serialization_failed" | "tracked_change_resolution_failed" | "version_not_found");
+                        message: string;
+                        hint: string;
+                      };
+                    }>;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+      };
+    });
     properties: (Tc1a2e5b1a7 & {
       ":workspaceId": {
         put: {
@@ -5334,7 +5736,7 @@ export type WebRoutes = {
                 };
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 propertyId: T80d841ed63;
               };
               query: Record<never, never>;
@@ -5374,7 +5776,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 propertyId: T80d841ed63;
               };
               query: Record<never, never>;
@@ -5402,408 +5804,6 @@ export type WebRoutes = {
                 500: Tc642053948;
                 502: Tc642053948;
                 503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    });
-    uploads: (Tc1a2e5b1a7 & {
-      ":workspaceId": {
-        presign: {
-          post: {
-            body: {
-              parentId?: null | T9a509045a7;
-              name: string;
-              mimeType: string;
-              propertyId: T80d841ed63;
-              size: number;
-              sha256Hex: string;
-              purpose: "entity_create";
-            } | {
-              name: string;
-              mimeType: string;
-              entityId: T9a509045a7;
-              size: number;
-              sha256Hex: string;
-              purpose: "entity_version";
-            } | {
-              name: string;
-              scope: Ted097feadd;
-              mimeType: string;
-              size: number;
-              sha256Hex: string;
-              purpose: "agent_skill";
-            };
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                uploadId: T5a51f85bbe;
-                url: string;
-                expiresAt: string;
-                headers: Tb68ccd9b57;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tb62d3ee375;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "entity-create": {
-          preflight: {
-            post: {
-              body: {
-                propertyId?: null | T80d841ed63;
-                parentId?: null | T9a509045a7;
-                entityCount: number;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  ok: T1bdf39f14a;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "entity-create": {
-          tree: {
-            post: {
-              body: {
-                propertyId?: null | T80d841ed63;
-                parentId?: null | T9a509045a7;
-                files: Array<{
-                  parentKey?: null | string;
-                  name: string;
-                  mimeType: string;
-                  key: string;
-                  size: number;
-                  sha256Hex: string;
-                }>;
-                directories: Array<{
-                  parentKey?: null | string;
-                  name: string;
-                  key: string;
-                }>;
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  directories: Array<{
-                    key: string;
-                    entityId: T9a509045a7;
-                  }>;
-                  files: Array<{
-                    key: string;
-                    uploadId: T5a51f85bbe;
-                    parentId: T6b73348afa;
-                    url: string;
-                    expiresAt: string;
-                    headers: Tfa384bd983;
-                  }>;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":uploadId": {
-          finalize: {
-            post: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tbb32f197c9;
-                uploadId: T5a51f85bbe;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  finalizedResult: {
-                    type: "entity_create";
-                    entityId: T9a509045a7;
-                    fileId: string;
-                    fileName: string;
-                    renamed: T1bdf39f14a;
-                  } | {
-                    type: "entity_version";
-                    entityId: T9a509045a7;
-                    entityVersionId: T116a5c37c8;
-                    versionNumber: number;
-                    fileId: string;
-                    fileName: string;
-                  } | {
-                    type: "agent_skill";
-                    skillId: T7fc3acf5ac;
-                    name: string;
-                    version: string;
-                  };
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        ":uploadId": {
-          abort: {
-            post: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tbb32f197c9;
-                uploadId: T5a51f85bbe;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  ok: true;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    });
-    documents: (Tc1a2e5b1a7 & {
-      ":workspaceId": {
-        document: {
-          ":documentId": {
-            compare: {
-              post: {
-                body: {
-                  mode?: "strict" | "best-effort";
-                  granularity?: "word" | "character";
-                  output: {
-                    type: "preview";
-                  } | {
-                    type: "download";
-                  } | {
-                    type: "version";
-                  };
-                  baseTrackedChanges: Tb2b6819922;
-                  targetTrackedChanges: Tb2b6819922;
-                  selection: {
-                    type: "versions";
-                    baseVersionId: T116a5c37c8;
-                    targetVersionIds: Array<T116a5c37c8>;
-                  } | {
-                    type: "previous";
-                    targetVersionId: T116a5c37c8;
-                  };
-                  filePropertyId: T80d841ed63;
-                };
-                params: {
-                  workspaceId: Tbb32f197c9;
-                  documentId: T9a509045a7;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    results: Array<{
-                      status: "created";
-                      baseVersionId: T116a5c37c8;
-                      targetVersionId: T116a5c37c8;
-                      redlineVersionId: T116a5c37c8;
-                      file: {
-                        fieldId: T1c7a854487;
-                        propertyId: T80d841ed63;
-                        fileName: string;
-                        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-                        versionNumber: number;
-                        openUrl: string;
-                        download: {
-                          status: "available";
-                          downloadUrl: string;
-                          expiresAt: string;
-                        } | {
-                          status: "unavailable";
-                          message: string;
-                          hint: string;
-                        };
-                      };
-                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
-                      verification: stll_folio_core_CompareVerification;
-                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
-                      compatibility: stll_folio_core_CompareCompatibility;
-                    } | {
-                      status: "downloadable";
-                      baseVersionId: T116a5c37c8;
-                      targetVersionId: T116a5c37c8;
-                      fileName: string;
-                      download: {
-                        downloadUrl: string;
-                        expiresAt: string;
-                      };
-                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
-                      verification: stll_folio_core_CompareVerification;
-                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
-                      compatibility: stll_folio_core_CompareCompatibility;
-                    } | {
-                      status: "previewed";
-                      baseVersionId: T116a5c37c8;
-                      targetVersionId: T116a5c37c8;
-                      changes: ReadonlyArray<stll_folio_core_CompareChange>;
-                      verification: stll_folio_core_CompareVerification;
-                      unsupported: ReadonlyArray<stll_folio_core_CompareUnsupportedPart>;
-                      compatibility: stll_folio_core_CompareCompatibility;
-                    } | {
-                      status: "failed";
-                      baseVersionId: T116a5c37c8;
-                      targetVersionId: T116a5c37c8;
-                      error: {
-                        code: ("parse_failed" | "delivery_failed" | "timeout" | "apply_failed" | "document_too_large" | "final_paragraph_mark" | "invalid_options" | "operation_limit" | "persistence_failed" | "read_failed" | "round_trip_failed" | "serialization_failed" | "tracked_change_resolution_failed" | "version_not_found");
-                        message: string;
-                        hint: string;
-                      };
-                    }>;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
               };
             };
           };
@@ -6317,7 +6317,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               taskId: T9a509045a7;
             };
             query: Record<never, never>;
@@ -6819,7 +6819,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 taskId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -8707,7 +8707,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               invoiceId: Teb6688001f;
             };
             query: Record<never, never>;
@@ -8844,7 +8844,7 @@ export type WebRoutes = {
               invoiceDate?: string;
             };
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               invoiceId: Teb6688001f;
             };
             query: Record<never, never>;
@@ -8887,7 +8887,7 @@ export type WebRoutes = {
                 action: ("void" | "finalize" | "revert_to_draft" | "send" | "mark_paid");
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 invoiceId: Teb6688001f;
               };
               query: Record<never, never>;
@@ -8928,7 +8928,7 @@ export type WebRoutes = {
           delete: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               invoiceId: Teb6688001f;
             };
             query: Record<never, never>;
@@ -8972,7 +8972,7 @@ export type WebRoutes = {
                 expenseIds?: Array<Tac5e0997d1>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 invoiceId: Teb6688001f;
               };
               query: Record<never, never>;
@@ -9017,7 +9017,7 @@ export type WebRoutes = {
                 expenseIds?: Array<Tac5e0997d1>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 invoiceId: Teb6688001f;
               };
               query: Record<never, never>;
@@ -11102,7 +11102,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11160,7 +11160,7 @@ export type WebRoutes = {
                 serviceTier?: "standard" | "flex";
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11203,7 +11203,7 @@ export type WebRoutes = {
                 entityIds?: Array<T9a509045a7>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11246,7 +11246,7 @@ export type WebRoutes = {
               propertyId: T80d841ed63;
             };
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11288,7 +11288,7 @@ export type WebRoutes = {
                 entityIds: Array<T9a509045a7>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11334,7 +11334,7 @@ export type WebRoutes = {
               justificationId: Tea019afe5d;
             };
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11374,7 +11374,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11421,7 +11421,7 @@ export type WebRoutes = {
                 spisZn: string;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11500,7 +11500,7 @@ export type WebRoutes = {
                 spisZn: string;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -11542,7 +11542,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: {
               cursor?: string;
@@ -11600,7 +11600,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11663,7 +11663,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11712,7 +11712,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: {
                 cursor?: string;
@@ -11797,7 +11797,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                 };
                 query: {
                   search?: string;
@@ -11851,7 +11851,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                 };
                 query: {
                   action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
@@ -11943,7 +11943,7 @@ export type WebRoutes = {
               includeContent: T1bdf39f14a;
             };
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -11982,7 +11982,7 @@ export type WebRoutes = {
           post: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -12052,7 +12052,7 @@ export type WebRoutes = {
           post: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -12191,7 +12191,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 workspaceContactId: Ta28b1867ef;
               };
               query: Record<never, never>;
@@ -12321,7 +12321,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entryId: Tf9d14dced5;
               };
               query: Record<never, never>;
@@ -12453,7 +12453,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entryId: T8091e6bfed;
               };
               query: Record<never, never>;
@@ -12581,7 +12581,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 userId: string;
               };
               query: Record<never, never>;
@@ -12669,7 +12669,7 @@ export type WebRoutes = {
                   projection: ("none" | "columns");
                 };
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   playbookId: T6ebb5b60ba;
                 };
                 query: Record<never, never>;
@@ -12714,7 +12714,7 @@ export type WebRoutes = {
             post: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13056,7 +13056,7 @@ export type WebRoutes = {
                 }>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13097,7 +13097,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: {
                 cursor?: string;
@@ -13164,7 +13164,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   runId: Teb3fcd8ef4;
                 };
                 query: Record<never, never>;
@@ -13207,7 +13207,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     runId: Teb3fcd8ef4;
                   };
                   query: {
@@ -13256,7 +13256,7 @@ export type WebRoutes = {
                   decision: Te078108f79;
                 };
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   findingId: T92357156ac;
                 };
                 query: Record<never, never>;
@@ -13314,7 +13314,7 @@ export type WebRoutes = {
                 fieldId: T1c7a854487;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13371,7 +13371,7 @@ export type WebRoutes = {
                 targetLang: T9a881e7ede;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13416,7 +13416,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   runId: Tfcf09c4c62;
                 };
                 query: Record<never, never>;
@@ -13483,7 +13483,7 @@ export type WebRoutes = {
                 sourceLang: string;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13561,7 +13561,7 @@ export type WebRoutes = {
                 }>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13603,7 +13603,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   runId: T4d9ac44155;
                 };
                 query: Record<never, never>;
@@ -13674,7 +13674,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
             };
             query: {
               cursor?: string;
@@ -13728,7 +13728,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13780,7 +13780,7 @@ export type WebRoutes = {
                   key: string;
                 };
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                 };
                 query: Record<never, never>;
                 headers: Record<never, never>;
@@ -13834,7 +13834,7 @@ export type WebRoutes = {
                 viewId: Tf962ada343;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -13875,7 +13875,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 exportId: Tb60a03a607;
               };
               query: Record<never, never>;
@@ -14952,7 +14952,7 @@ export type WebRoutes = {
                 }>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 viewId: Tf962ada343;
               };
               query: Record<never, never>;
@@ -14995,7 +14995,7 @@ export type WebRoutes = {
                   targetType: T7b52b1c160;
                 };
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   viewId: Tf962ada343;
                 };
                 query: Record<never, never>;
@@ -15044,7 +15044,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   viewId: Tf962ada343;
                 };
                 query: {
@@ -15087,7 +15087,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 viewId: Tf962ada343;
               };
               query: Record<never, never>;
@@ -16840,7 +16840,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 fieldId: T1c7a854487;
               };
               query: {
@@ -16890,7 +16890,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 fieldId: T1c7a854487;
               };
               query: Record<never, never>;
@@ -16975,7 +16975,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     entityId: T9a509045a7;
                     fieldId: T1c7a854487;
                     blockId: string;
@@ -17038,7 +17038,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 fieldId: T1c7a854487;
               };
               query: Record<never, never>;
@@ -17078,7 +17078,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 fieldId: T1c7a854487;
               };
               query: {
@@ -17138,7 +17138,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 fieldId: T1c7a854487;
               };
               query: {
@@ -17758,7 +17758,7 @@ export type WebRoutes = {
                 }>;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -17804,7 +17804,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: {
@@ -17865,7 +17865,7 @@ export type WebRoutes = {
                   suggestionIds: Array<T95a4a01f59>;
                 };
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   entityId: T9a509045a7;
                 };
                 query: Record<never, never>;
@@ -17916,7 +17916,7 @@ export type WebRoutes = {
                       status: "rejected";
                     };
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       suggestionId: T95a4a01f59;
                     };
@@ -17965,7 +17965,7 @@ export type WebRoutes = {
                   patch: {
                     body: Record<never, never>;
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       suggestionId: T95a4a01f59;
                     };
@@ -19712,7 +19712,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 rateTableId: T3ff6d2c179;
               };
               query: {
@@ -19773,7 +19773,7 @@ export type WebRoutes = {
                 effectiveFrom: string;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 rateTableId: T3ff6d2c179;
               };
               query: Record<never, never>;
@@ -19820,7 +19820,7 @@ export type WebRoutes = {
                 id: T8021ae6e25;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 rateTableId: T3ff6d2c179;
               };
               query: Record<never, never>;
@@ -19864,7 +19864,7 @@ export type WebRoutes = {
                 id: T8021ae6e25;
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 rateTableId: T3ff6d2c179;
               };
               query: Record<never, never>;
@@ -23640,7 +23640,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 linkId: T7524b2c883;
               };
               query: Record<never, never>;
@@ -25406,7 +25406,7 @@ export type WebRoutes = {
           delete: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               templateId: Tf5f93d61f9;
             };
             query: Record<never, never>;
@@ -26355,7 +26355,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     runId: T00abe13820;
                     listId: T6709dca913;
                   };
@@ -26429,7 +26429,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 listId: T6709dca913;
               };
               query: {
@@ -26482,7 +26482,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               listId: T6709dca913;
             };
             query: Record<never, never>;
@@ -26545,7 +26545,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 listId: T6709dca913;
               };
               query: {
@@ -26613,7 +26613,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     listId: T6709dca913;
                     itemEntityId: T9a509045a7;
                   };
@@ -26672,7 +26672,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     listId: T6709dca913;
                     itemEntityId: T9a509045a7;
                   };
@@ -26741,7 +26741,7 @@ export type WebRoutes = {
               sourceDescription?: null | string;
             };
             params: {
-              workspaceId: Tbb32f197c9;
+              workspaceId: Tb9596e18eb;
               entityId: T9a509045a7;
             };
             query: Record<never, never>;
@@ -26782,7 +26782,7 @@ export type WebRoutes = {
             post: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -26827,7 +26827,7 @@ export type WebRoutes = {
                 action: ("complete" | "cancel" | "reopen");
               };
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -27409,7 +27409,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   handoffId: Ta0c53468e3;
                 };
                 query: Record<never, never>;
@@ -28390,7 +28390,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -28465,7 +28465,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  workspaceId: Tbb32f197c9;
+                  workspaceId: Tb9596e18eb;
                   entityId: T9a509045a7;
                 };
                 query: {
@@ -28532,7 +28532,7 @@ export type WebRoutes = {
                 get: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     entityId: T9a509045a7;
                     versionId: T116a5c37c8;
                   };
@@ -28580,7 +28580,7 @@ export type WebRoutes = {
                   get: {
                     body: Record<never, never>;
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       versionId: T116a5c37c8;
                     };
@@ -28621,7 +28621,7 @@ export type WebRoutes = {
                   post: {
                     body: Record<never, never>;
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       versionId: T116a5c37c8;
                     };
@@ -28664,7 +28664,7 @@ export type WebRoutes = {
                       label: T432e07d100;
                     };
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       versionId: T116a5c37c8;
                     };
@@ -28705,7 +28705,7 @@ export type WebRoutes = {
                       description: T432e07d100;
                     };
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       versionId: T116a5c37c8;
                     };
@@ -28744,7 +28744,7 @@ export type WebRoutes = {
                   post: {
                     body: Record<never, never>;
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       versionId: T116a5c37c8;
                     };
@@ -28785,7 +28785,7 @@ export type WebRoutes = {
                 delete: {
                   body: Record<never, never>;
                   params: {
-                    workspaceId: Tbb32f197c9;
+                    workspaceId: Tb9596e18eb;
                     entityId: T9a509045a7;
                     versionId: T116a5c37c8;
                   };
@@ -28826,7 +28826,7 @@ export type WebRoutes = {
                   get: {
                     body: Record<never, never>;
                     params: {
-                      workspaceId: Tbb32f197c9;
+                      workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
                       fieldId: T1c7a854487;
                     };
@@ -28874,7 +28874,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                workspaceId: Tbb32f197c9;
+                workspaceId: Tb9596e18eb;
                 entityId: T9a509045a7;
               };
               query: Record<never, never>;
@@ -31037,33 +31037,380 @@ export type ViewSort = T9531885fa8;
 
 export type ViewTemplateProperty = Tde69c6096b;
 
-type T6d90fb7f32 = {};
+type T001a42da95 = {
+  url: string;
+};
 
-type T7ddb1ff4a3 = {
-  resource: string;
-  resource_name: string;
-  resource_logo_uri: string;
-  authorization_servers: Array<string>;
-  scopes_supported: Array<("stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback" | "stella:search_anonymized" | "stella:read_anonymized" | "stella:templates_anonymized")>;
-  bearer_methods_supported: Array<string>;
-  stella_contract: {
-    protocol: 2;
-    revision: 3;
-    capabilities: {
-      "document-version-upload": 1;
-      "mcp-v2-transport": 1;
-    };
+type T004d50b559 = {
+  readonly value: T13f2f9bd72;
+  readonly issues?: undefined;
+};
+
+type T00abe13820 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListGenerationRun";
+};
+
+type T0122da017b = {
+  activeDraftContext?: undefined | {
+    type: "generated-document";
+    originChatMessageId: T7d9d93bde2;
+    originChatThreadId: T780bacb7ad;
+    toolCallId: string;
+    version: 1;
   };
-  stella_compatibility: {
-    api_contract_version: 2;
-    cli_version: {
-      minimum: string;
-      maximum: string;
+  anonRestorations?: undefined | {
+    pairs: Array<T4b1112b06e>;
+  };
+  docxEditPreferences?: undefined | {
+    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
+    editApplyMode?: undefined | "auto" | "manual";
+  };
+  mentions?: undefined | {
+    mentions: Array<((T2d7c3a4a2d & {
+      category: "entity";
+      resource: Tfa4d090dd5;
+      workspaceId: T432e07d100;
+    }) | (T2d7c3a4a2d & {
+      category: "workspace";
+      resource: T9d6eb42931;
+    }))>;
+  };
+  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
+  refContext?: undefined | {
+    version: 1;
+    entities: Array<{
+      entity: Tfa4d090dd5;
+      toolCallId: string;
+      workspace: T9d6eb42931;
+    }>;
+    unresolvedInputs: Array<{
+      kind: ("contact" | "entity" | "matter" | "property");
+      param: string;
+      ref: string;
+      toolCallId: string;
+    }>;
+    workspaceScope: Array<T9d6eb42931>;
+  };
+  serverProvenance?: undefined | {
+    type: "search-summary";
+    version: 1;
+  };
+  sourceDocuments?: undefined | Array<T18f8f5f7e8>;
+  turnOutcome?: undefined | {
+    type: "awaiting-user";
+    interaction: {
+      type: "approval";
+      toolCallId: string;
+    } | {
+      type: "ask-user";
+      toolCallId: string;
+    } | {
+      type: "client-tool";
+      toolCallId: string;
+    };
+  } | {
+    type: "completed";
+  } | {
+    type: "cancelled";
+    reason: ("superseded" | "user-stop");
+  } | {
+    type: "failed";
+    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "loop_detected" | "empty_completion");
+  } | {
+    type: "interrupted";
+    reason: ("client-disconnected" | "timeout");
+  };
+  usage?: undefined | {
+    totalTokens: number;
+    completionTokens: number;
+    promptTokens: number;
+  } & {
+    completionTokensDetails?: undefined | {
+      reasoningTokens?: number;
     };
   };
 };
 
-type Tc642053948 = {
+type T0156f5cdaa = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "usagePolicy";
+};
+
+type T01b006de06 = null | {
+  street: T432e07d100;
+  postalCode: T432e07d100;
+  city: T432e07d100;
+  country: T432e07d100;
+  textAddress: T432e07d100;
+};
+
+type T0290f4b244 = {
+  code?: string;
+  message: string;
+};
+
+type T03c56de23b = "language" | "presence" | "parameter" | "enumeration";
+
+type T03f9b9c11b = {
+  role: string;
+  name: T432e07d100;
+};
+
+type T057e58854e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillRevision";
+};
+
+type T06188f12f1 = {
+  readonly input: Td220c5b82e;
+  readonly output: Td7e6add81d;
+};
+
+type T069e650050 = "global" | "at" | "de" | "eu" | "sk" | "cz";
+
+type T06fc334600 = {
+  url: string;
+  title?: undefined | string;
+  publishedAt?: undefined | string;
+  content: string;
+  truncated: T1bdf39f14a;
+  provider: "jina";
+};
+
+type T0720439bb0 = {
+  results: Array<{
+    index: number;
+    status: "completed";
+    result: string;
+  } | {
+    index: number;
+    status: "failed";
+    error: string;
+  }>;
+};
+
+type T07b4b7cdd8 = {
+  workspaceId: string;
+};
+
+type T0823792555 = {
+  readonly input: T424c5f5482;
+  readonly output: T66d8615e4f;
+};
+
+type T08bc488f5e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "aiMemory";
+};
+
+type T0a46fb6ba4 = "medium" | "high" | "low" | "blocker";
+
+type T0a86ec0883 = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
+};
+
+type T0bc71347dc = {
+  success: true;
+  fileName: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+} | {
+  fixes?: undefined | Array<{
+    code: string;
+    message: string;
+    line?: undefined | number;
+  }>;
+  warnings?: undefined | Array<Tc78d41b768>;
+  success: true;
+  destination: "draft";
+  fileName: string;
+} | {
+  success: true;
+  destination: "download";
+  fileName: string;
+} | {
+  success: false;
+  message: string;
+  errors?: undefined | Array<Tc78d41b768>;
+};
+
+type T0beb2a0a9f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "auditLog";
+};
+
+type T0bf624198d = {
+  id: T594988174f;
+  name: string;
+  criteria: stll_api_contract_SavedSearchCriteria;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type T0c8f4cf1e2 = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
+};
+
+type T0d213827f5 = {
+  kind: "contact";
+  field: T8854c1a08e;
+};
+
+type T0e085dcc40 = "none" | "br_cpf_cnpj";
+
+type T0e8943eb14 = "matters" | "all-chats";
+
+type T0eb9f816ff = {
+  workspaceId?: Teb5c753062;
+  contextMatterIds?: Array<Teb5c753062>;
+  truncateAfterMessageId?: T7d9d93bde2;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T42090b159e;
+  activeDraft?: Td3493e7d84;
+  activeFile?: T68e02c7e0d;
+  activeTemplate?: Tcd61c78c49;
+  activeDecision?: T459c229135;
+  activeExternal?: Taf5ff5c24f;
+  activeSkill?: T8649aae095;
+  activeStatute?: Tc33c7b536f;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T7d9d93bde2;
+    role: "assistant";
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: T780bacb7ad;
+  sendMode: Tbbd6b6f3b5;
+  parentRunId: string;
+  resume: Array<T7c9c034721>;
+};
+
+type T0f57aba9b8 = "decision" | "instruction" | "fact" | "preference" | "relationship";
+
+type T0f5d4b903b = {
+  id: string;
+  role: ("tool" | "user" | "system" | "activity" | "assistant" | "reasoning" | "developer");
+};
+
+type T109fc089ae = {
+  date: string;
+};
+
+type T114f58ccca = "search" | "fetch";
+
+type T1168738ff9 = {
+  readonly input: any;
+  readonly output: any;
+};
+
+type T116a5c37c8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "entityVersion";
+};
+
+type T1173055df0 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "template";
+};
+
+type T1214881f9f = {
+  query: string;
+  limit?: undefined | number;
+};
+
+type T129a6d450b = {
+  authType: "oauth2";
+  authorizationServerUrl: string;
+  resourceUrl: string;
+  scopes: Array<string>;
+} | {
+  authType: "bearer";
+} | {
+  authType: "none";
+};
+
+type T136bf514df = {
+  index: number;
+  status: "created";
+  contactId: T938d9cc2e1;
+} | {
+  index: number;
+  status: "skipped";
+  reason: ("invalid_tax_id" | "contacts_limit_reached" | "duplicate_contact_id" | "duplicate_tax_id" | "invalid_row");
+};
+
+type T138c3f8370 = {
+  value: string;
+  label?: string;
+  count: number;
+};
+
+type T13f2f9bd72 = {
+  templateId: string;
+  values: T3e2a904f6c;
+};
+
+type T1404f6e6ed = {
+  kind: "matter";
+  field: ("name" | "status" | "reference" | "billingReference");
+};
+
+type T14093082e6 = "Bad Request" | {
   code?: string;
   message: string;
   hint?: string;
@@ -31083,94 +31430,178 @@ type Tc642053948 = {
   requiredFields?: Array<T196b4403fb>;
 };
 
-type T1bdf39f14a = false | true;
-
-type T432e07d100 = null | string;
-
-type T6eaa0a5371 = {
-  apiContractVersion: 4;
-  version: string;
-  commit: string;
-  status: "ok";
+type T149c4eb383 = {
+  run: {
+    decisionCounts: Tb1ed7519f1;
+    playbookStale: T1bdf39f14a;
+    playbookMissing: T1bdf39f14a;
+    basis: {
+      references: Array<{
+        workspaceId: Teb5c753062;
+        entityId: T9a509045a7;
+        entityVersionId: T116a5c37c8;
+        fileFieldId: T1c7a854487;
+      } & {
+        workspaceName: T432e07d100;
+        name: T432e07d100;
+        contentSha256: T432e07d100;
+      }>;
+      playbook: {
+        definitionId: Te2ec8e0b17;
+        versionId: (null | (string & valibot_Brand<"SafeId"> & {
+          readonly __safeIdType?: "playbookDefinitionVersion";
+        }));
+        provenance: Tb2d33c80ac;
+        definitionSnapshot: {
+          name: string;
+          positions: T50a09487e3;
+        };
+      };
+      perspective: {
+        type: "neutral";
+      } | {
+        type: "party";
+      } & T03f9b9c11b;
+    };
+    createdAt: string;
+    startedAt: T432e07d100;
+    finishedAt: T432e07d100;
+    id: Teb3fcd8ef4;
+    status: T97123e865d;
+    errorCode: Tdf3afab53d;
+    entityId: T9a509045a7;
+    fileFieldId: T1c7a854487;
+    entityVersionId: T116a5c37c8;
+    contentSha256: string;
+    skipped: Array<T9f51aef7c3>;
+    total: number;
+    completed: number;
+    pipelineVersion: number;
+  };
+  findings: Array<{
+    id: T92357156ac;
+    positionId: string;
+    positionTitle: string;
+    outcome: T432e07d100;
+    payload: {
+      finding: {
+        positionId: string;
+        issue: string;
+        severity: T0a46fb6ba4;
+        standardSource: T7d5b6398be;
+        verdict: (null | "fallback" | "missing" | "compliant" | "deviation" | "additional" | "not-applicable");
+        delta: {
+          kind: "parameter";
+          target: T602ddca6f8;
+          standard: T602ddca6f8;
+        } | {
+          kind: "enumeration";
+          items: Array<{
+            label: string;
+            inTarget: T1bdf39f14a;
+            inStandard: T1bdf39f14a;
+            citation: (null | T84093f1fc9);
+          }>;
+        } | {
+          kind: "presence";
+          term: string;
+          inTarget: T1bdf39f14a;
+          inStandard: T1bdf39f14a;
+        } | {
+          kind: "language";
+        };
+        extracted: (null | {
+          value: string;
+          text: string;
+        });
+        rationale: T432e07d100;
+        matchedRef?: Te831c71c90 | Tc0c55e9cf5;
+        consensus?: "mixed" | "single" | "consistent";
+        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
+        explanation?: {
+          type: "comparison";
+          text: string;
+        } | {
+          type: "insufficient-evidence";
+        };
+        recommendation?: null | string;
+        citations: Array<T84093f1fc9>;
+        referenceCitations?: Array<{
+          fileFieldId: T1c7a854487;
+          passages: Array<{
+            id: string;
+            blockId: string;
+          }>;
+        }>;
+        fix: (null | {
+          kind: "replaceInBlock";
+          blockId: string;
+          find: string;
+          replace: string;
+        } | {
+          kind: "replaceBlock";
+          blockId: string;
+          text: string;
+        } | {
+          kind: "insertAfterBlock";
+          blockId: string;
+          text: string;
+        });
+      } & {
+        referenceDetail?: "withheld";
+      };
+    };
+    decision: Te078108f79;
+    flags: Array<T6afe23e121>;
+    decidedBy: T432e07d100;
+    decidedAt: T432e07d100;
+    applicationStatus: T5dbcd4218d;
+    appliedBy: T432e07d100;
+    appliedAt: T432e07d100;
+    suggestionId: (null | T95a4a01f59);
+  }>;
 };
 
-type T767b63a67e = "message" | "document" | "contact" | "matter" | "folder" | "task" | "link" | "chat" | "case-law";
+type T15125483db = {
+  playbookId: T6ebb5b60ba;
+};
 
-type T219ebda4a4 = "message" | "document" | "folder" | "task" | "link";
+type T151c8c8adf = {
+  readonly input: T64efadf7d1;
+  readonly output: Tc69524a13b;
+};
 
-type Teb5c753062 = string & valibot_Brand<"SafeId"> & T9c01826163;
+type T15a377c39a = {
+  status: "disconnected";
+  reason: string;
+};
 
-type Tafda8a9ee4 = (T27402211cc & {
-  type: T219ebda4a4;
-  resource: Tfa4d090dd5;
+type T162fd4d3a0 = {
+  status: "saved";
+};
+
+type T16953276e4 = {
+  handle: Te73195d9c3;
+  text: string;
+};
+
+type T1754ed2395 = 1 | 2 | 3 | 4 | 5 | 6;
+
+type T178e72f979 = "accepted" | "rejected";
+
+type T18f8f5f7e8 = {
   entityId: string;
-  workspaceId: string;
-  workspaceName: string;
-  parentId: T432e07d100;
-  lastEditedByName: T432e07d100;
-  lastEditedByImage: T432e07d100;
-  fileFieldId: T432e07d100;
-  filePropertyId: T432e07d100;
+  entityRef?: string;
+  kind: string;
+  matterRef?: string;
+  mention?: string;
   mimeType: T432e07d100;
-}) | (T27402211cc & {
-  type: "matter";
-  resource: T9d6eb42931;
-  workspaceId: string;
-  workspaceName: string;
-  color: T432e07d100;
-}) | (T27402211cc & {
-  type: "contact";
-  resource: {
-    readonly type: "contact";
-    readonly id: stll_api_contract_SafeId<"contact">;
-  };
-  contactId: string;
-  contactType: Te287bedd42;
-}) | (T27402211cc & {
-  type: "case-law";
-  resource: {
-    readonly type: "case_law_decision";
-    readonly id: stll_api_contract_SafeId<"caseLawDecision">;
-  };
-  decisionId: string;
-  caseNumber: string;
-  identifiers: T4b4720fb6b;
-  court: string;
-  country: string;
-  decisionDate: T432e07d100;
-}) | (T27402211cc & {
-  type: "chat";
-  resource: {
-    readonly type: "chat_thread";
-    readonly id: stll_api_contract_SafeId<"chatThread">;
-  };
-  threadId: string;
+  title: string;
   workspaceId: T432e07d100;
-  workspaceName: T432e07d100;
-});
-
-type T138c3f8370 = {
-  value: string;
-  label?: string;
-  count: number;
 };
 
-type Tddcaa6c051 = {
-  path: string;
-  message: string;
-};
-
-type T79fba9c913 = {
-  estimatedUnits: number;
-  availableUnits: number;
-};
-
-type T6662e6acc7 = {
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete: string;
-  expires_in: number;
-  interval: number;
+type T192572b4c1 = {
+  workspaceId: string;
 };
 
 type T196b4403fb = {
@@ -31180,35 +31611,13 @@ type T196b4403fb = {
   options: T97430ff0f7;
 };
 
-type T82c7fa9c31 = "Forbidden" | Tc642053948;
-
-type T26b94a592c = T563feb80fd | T708bf95724;
-
-type T563feb80fd = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
+type T19f8a3623b = {
+  lawId: string;
+  metadata?: undefined | false | true;
+  analysis?: undefined | false | true;
+  fullText?: undefined | false | true;
+  eli?: undefined | false | true;
 };
-
-type T708bf95724 = {
-  readonly message: string;
-};
-
-type T2bcb73cd1b = T1a148d287c | T4543625c39;
 
 type T1a148d287c = {
   code?: string;
@@ -31230,31 +31639,1774 @@ type T1a148d287c = {
   requiredFields?: Array<T196b4403fb>;
 };
 
+type T1a242906f1 = {
+  type: "document";
+} | {
+  type: "docx-block";
+  blockId: string;
+} | {
+  type: "pdf-page";
+  pageNumber: number;
+  boundingBoxes?: undefined | Te08ba39d3b;
+};
+
+type T1a4826e1af = {
+  id: T7524b2c883;
+  decisionId: Tf4b485f2ea;
+  workspaceId: Teb5c753062;
+  note: T432e07d100;
+  linkedBy: string;
+  createdAt: Date;
+};
+
+type T1a6d2d119a = {
+  readonly input: Tccbcb316fa;
+  readonly output: Tf7f2d88b62;
+};
+
+type T1a7d210ea2 = {
+  readonly value: T06fc334600;
+  readonly issues?: undefined;
+};
+
+type T1ad8998f81 = {
+  readonly input: Tee61f4ed5c;
+  readonly output: T0720439bb0;
+};
+
+type T1ae8ac234c = {
+  readonly value: Tf7f2d88b62;
+  readonly issues?: undefined;
+};
+
+type T1b359114ee = {
+  status: "connecting";
+};
+
+type T1bc67fec1b = {
+  readonly value: T55fe720a8c;
+  readonly issues?: undefined;
+};
+
+type T1bdf39f14a = false | true;
+
+type T1c62d3c45a = {
+  signalId: Tff67652b63;
+};
+
+type T1c7a854487 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "field";
+};
+
+type T1d47fa3dc0 = {
+  success: true;
+  fileName: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+};
+
+type T1db05d7243 = {
+  type: "unsupported";
+  version: 1;
+};
+
+type T1e34f254e7 = {
+  level?: number;
+  style?: string;
+  runs?: Array<{
+    bold?: false | true;
+    italic?: false | true;
+    text: string;
+  }>;
+  isDirective?: false | true;
+  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+  directiveExpression?: string;
+  listKind?: "bullet" | "ordered";
+  listLevel?: number;
+  text: string;
+};
+
+type T1e9bf90711 = {
+  type: "case-number";
+  value: string;
+} | {
+  type: "ecli";
+  value: string;
+} | {
+  type: "neutral-citation";
+  value: string;
+} | {
+  type: "reporter-citation";
+  value: string;
+};
+
+type T1eec80096a = {
+  readonly "~standard": {
+    readonly jsonSchema: Tba9914ae60;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T1168738ff9;
+  };
+};
+
+type T1f1ce35744 = {
+  query: string;
+  results: Array<{
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T1f92bc3afa = "url" | "authored" | "bundled" | "upload";
+
+type T1f93dbbdfc = "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
+
+type T208326bc55 = "neutral" | "negative" | "positive" | "supportive" | "mixed" | "unclassified";
+
+type T20e2e4a545 = {
+  name: string;
+  description: T432e07d100;
+  enabled: T1bdf39f14a;
+  trigger: {
+    type: "manual";
+  } | {
+    type: "schedule";
+    workspaceId: Teb5c753062;
+    schedule: {
+      dayOfWeek?: number;
+      dayOfMonth?: number;
+      frequency: T70d0bdd159;
+      hourUtc: number;
+    };
+  } | {
+    type: "file-upload";
+    workspaceIds: (null | Array<Teb5c753062>);
+    fileExtensions: (null | Array<string>);
+  };
+  steps: Array<{
+    name: string;
+    kind: "ai";
+    prompt: string;
+    includeDocuments: T1bdf39f14a;
+  } | {
+    name: string;
+    kind: "review-gate";
+    instructions: string;
+  } | {
+    name: string;
+    kind: "create-document";
+    documentTitle: string;
+  }>;
+};
+
+type T219ebda4a4 = "message" | "document" | "folder" | "task" | "link";
+
+type T21bb8cfb40 = "other" | "work" | "personal";
+
+type T21e83da7dc = "failed" | "no-backend" | "below-floor";
+
+type T22668e5fed = {
+  packId: string;
+};
+
+type T2430547df2 = {
+  readonly error: "Not Found";
+};
+
+type T24a1a7f207 = "docx" | "xlsx" | "pptx";
+
+type T24da1e86c5 = {
+  readonly type: "present";
+  readonly text: string;
+};
+
+type T24df5d72b3 = {
+  type: "pending";
+  version: 1;
+};
+
+type T2609ebaa39 = null | T976b70d646;
+
+type T26b94a592c = T563feb80fd | T708bf95724;
+
+type T27402211cc = {
+  id: string;
+  resourceName: (string & valibot_Brand<"ResourceName">);
+  type: T767b63a67e;
+  title: string;
+  headline: T432e07d100;
+  updatedAt: string;
+};
+
+type T281869e86a = {
+  prompt: string;
+};
+
+type T285daf5b02 = {
+  needsApproval: false;
+  approvalSchema: undefined;
+};
+
+type T28f55fc43c = null | Array<{
+  index: number;
+  type: ("unknown" | "header" | "footer" | "history" | "argumentation" | "dissent" | "ruling");
+  title: T432e07d100;
+  text: string;
+}>;
+
+type T295e0f993e = {
+  readonly input: T33e181e080;
+  readonly output: T1d47fa3dc0;
+};
+
+type T2985b4f624 = {
+  readonly value: Record<never, never>;
+  readonly issues?: undefined;
+};
+
+type T29aea580ff = {
+  readonly input: Tf477029a44;
+  readonly output: T43e78e86e2;
+};
+
+type T29dbcb6703 = {
+  type: "text";
+  version: 1;
+};
+
+type T2a47f63130 = {
+  type: Te287bedd42;
+  displayName: string;
+  prefix?: undefined | string;
+  firstName?: undefined | string;
+  middleName?: undefined | string;
+  lastName?: undefined | string;
+  suffix?: undefined | string;
+  organizationName?: undefined | string;
+  notes?: undefined | string;
+  emails?: undefined | Array<T78d7036743>;
+  phones?: undefined | Array<Tca248f9d2b>;
+  addresses?: undefined | Array<T349dac8902>;
+  tags?: undefined | Array<string>;
+  registrationNumber?: undefined | string;
+  taxId?: undefined | string;
+  metadata?: undefined | T699c354d0c;
+};
+
+type T2a67644a3a = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+} | {
+  readonly message: "Decision not found";
+};
+
+type T2b12d7c01e = {
+  readonly [key: string]: never;
+};
+
+type T2b4af5b5ce = {
+  readonly target: ((T6d90fb7f32 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
+  readonly libraryOptions?: undefined | Td09f3f3108;
+};
+
+type T2bbd03475a = "private" | "shared";
+
+type T2bcb73cd1b = T1a148d287c | T4543625c39;
+
+type T2c0fc817e7 = "nda" | "dpa" | "msa" | "saas";
+
+type T2c788257c8 = {
+  text: string;
+  source: "inline";
+};
+
+type T2c8d30ce61 = {
+  workspaceId: string;
+};
+
+type T2c9a2b8de1 = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: Te80094a196;
+};
+
+type T2cf86f3d35 = null | {
+  siret: string;
+  isHeadOffice: T1bdf39f14a;
+  address: (null | {
+    textAddress: T432e07d100;
+    street: T432e07d100;
+    postalCode: T432e07d100;
+    city: T432e07d100;
+    country: T432e07d100;
+  });
+  activityCode: T432e07d100;
+  status: {
+    type: "open";
+  } | {
+    type: "closed";
+    closedAt: T432e07d100;
+  } | {
+    type: "unknown";
+  };
+  createdAt: T432e07d100;
+  closedAt: T432e07d100;
+};
+
+type T2d3c0bafce = {
+  updated: T1bdf39f14a;
+};
+
+type T2d7c3a4a2d = {
+  id: string;
+  label: string;
+};
+
+type T2dbacc4c35 = {
+  annotationId: Tdaa282e677;
+};
+
+type T2dc94a4ef0 = {
+  success: true;
+  destination: "download";
+  fileName: string;
+};
+
+type T2e1883ac96 = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
+
+type T2e350463c1 = {
+  date: string;
+};
+
+type T2e4ecabbc4 = "connected" | "needs_reauth" | "revoked";
+
+type T2f09c082c1 = {
+  value: string;
+  type: "text";
+  version: 1;
+};
+
+type T2f1b6312a1 = {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  entityVersionId: string;
+  fileFieldId: string;
+  blockId: string;
+};
+
+type T2f4709c888 = {
+  readonly input: T93f05f2bc9;
+  readonly output: T355e36f9c1;
+};
+
+type T302e959e47 = "left" | "right" | "preserve" | "center" | "both";
+
+type T304946b2ad = null | {
+  pattern: T432e07d100;
+  range: T432e07d100;
+  raw?: unknown;
+};
+
+type T307eb7347f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentType";
+};
+
+type T308fce9321 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
+
+type T30d70e95f5 = {
+  status: "connected";
+};
+
+type T30ee072c99 = null | Array<T78d7036743>;
+
+type T30ffd8d711 = {
+  readonly input: T78000c7c99;
+  readonly output: T9ab85afc3e;
+};
+
+type T31d2159604 = {
+  columnId: T82d2fa2fc8;
+};
+
+type T322c3dd90a = {
+  readonly input: T4c2454b604;
+  readonly output: T665ac097fb;
+};
+
+type T3292e4e3e4 = {
+  readonly value: T92b1e52bb0;
+  readonly issues?: undefined;
+};
+
+type T33933638b8 = "free" | "pro";
+
+type T33e181e080 = {
+  success: true;
+  fileName: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+};
+
+type T342c6c1fea = "global" | "ch" | "eu";
+
+type T3432cdf68d = {
+  readonly input: Taa8bbb5904;
+  readonly output: Tc7b9fe0fcd;
+};
+
+type T348917fbeb = {
+  operations: Array<unknown>;
+  documentVersion?: string;
+};
+
+type T349dac8902 = {
+  country?: string;
+  label?: string;
+  state?: string;
+  line2?: string;
+  postalCode?: string;
+  city?: string;
+  type: T3906e8d961;
+  isPrimary: T1bdf39f14a;
+  line1: string;
+};
+
+type T355e36f9c1 = {
+  templateId: string;
+};
+
+type T35788588c9 = "date" | "text" | "single-select" | "multi-select" | "int";
+
+type T36221949fd = {
+  readonly value: T0720439bb0;
+  readonly issues?: undefined;
+};
+
+type T36734b71d6 = {
+  query: string;
+  jurisdiction: T069e650050;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: undefined | string;
+    source: string;
+    score?: undefined | number;
+  }>;
+  provider: "tavily";
+  answer?: undefined | string;
+};
+
+type T36db913080 = null | {
+  street: T432e07d100;
+  city: T432e07d100;
+  region: T432e07d100;
+  postalCode: T432e07d100;
+  country: T432e07d100;
+  textAddress: T432e07d100;
+};
+
+type T37001f6d72 = {
+  generatedAt: string;
+  model: string;
+  inputFingerprint: string;
+  tree: Array<T94e2de2165>;
+};
+
+type T37288bed46 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "contactExtractionUpload";
+};
+
+type T37bd525dcb = {
+  readonly value: T9ab85afc3e;
+  readonly issues?: undefined;
+};
+
+type T3808ab4adf = {
+  readonly value: T19f8a3623b;
+  readonly issues?: undefined;
+};
+
+type T38aa50e8be = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "clauseVariant";
+};
+
+type T3906e8d961 = "other" | "billing" | "office" | "home" | "mailing" | "service";
+
+type T3a3428dc33 = {
+  jurisdiction: T9960bad961;
+  query: string;
+  limit?: undefined | number;
+};
+
+type T3a5770ff6b = null | "none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh";
+
+type T3b5822b18f = "Not Found" | {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+};
+
+type T3cde614388 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "clause";
+};
+
+type T3cedcce572 = {
+  canApplyEdits?: false | true;
+  blocks: Array<{
+    displayLabel?: string;
+    styleId?: string;
+    blockTextHash?: string;
+    kind: ("paragraph" | "heading" | "listItem");
+    text: string;
+    id: string;
+  }>;
+};
+
+type T3d16f860ff = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
+};
+
+type T3e2a904f6c = {
+  [key: string]: unknown;
+};
+
+type T3ed4bbeee3 = {
+  email: T432e07d100;
+  name: T432e07d100;
+};
+
+type T3f0cc74ef7 = {
+  readonly input: T8fa9d7c67b;
+  readonly output: Tf5e31e73aa;
+};
+
+type T3ff6d2c179 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "rateTable";
+};
+
+type T4124e1264c = null | Date;
+
+type T42090b159e = {
+  wordEditShortcut?: string;
+  wordEditAuthorName?: string;
+  locale: string;
+  userName: string;
+  timezone: string;
+};
+
+type T422efe7526 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "billingCode";
+};
+
+type T4240f19bc1 = null | Tbf9ef52639;
+
+type T424c5f5482 = {
+  subagents: Array<{
+    task: string;
+    context?: undefined | string;
+    expectedOutput?: undefined | string;
+    model?: undefined | string;
+  }>;
+};
+
+type T4275dec338 = {
+  workspaceId?: Teb5c753062;
+  contextMatterIds?: Array<Teb5c753062>;
+  truncateAfterMessageId?: T7d9d93bde2;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T42090b159e;
+  activeDraft?: Td3493e7d84;
+  activeFile?: T68e02c7e0d;
+  activeTemplate?: Tcd61c78c49;
+  activeDecision?: T459c229135;
+  activeExternal?: Taf5ff5c24f;
+  activeSkill?: T8649aae095;
+  activeStatute?: Tc33c7b536f;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T7d9d93bde2;
+    role: Tefd05507c2;
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: T780bacb7ad;
+  sendMode: Tbbd6b6f3b5;
+};
+
+type T4304cec9eb = {
+  readonly value: Td5abdf9c63;
+  readonly issues?: undefined;
+};
+
+type T4310244850 = {
+  propertyId: string;
+  kind: ("max" | "count" | "min" | "count-unique" | "count-empty" | "count-filled" | "percent-empty" | "percent-filled" | "sum" | "average" | "median" | "range" | "percent-of-total");
+};
+
+type T432e07d100 = null | string;
+
+type T4340530c23 = {
+  apartado?: T454acf9abc | Array<T454acf9abc>;
+  codigo?: string;
+  item?: T4d6a470586 | Array<T4d6a470586>;
+  nombre?: string;
+};
+
+type T439317a49b = null | T7256bc01d8;
+
+type T43e78e86e2 = {
+  query: string;
+  jurisdiction: T069e650050;
+  freshness: ("year" | "any" | "month" | "week" | "day");
+  maxResults: number;
+};
+
+type T440388b593 = null | "free" | "paid";
+
+type T4410c591d7 = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: T432e07d100;
+  id: string;
+  language: string;
+  slug: T432e07d100;
+};
+
+type T452ddcb649 = {
+  value: Array<string>;
+  type: "multi-select";
+  version: 1;
+};
+
+type T45420e5bd0 = {
+  readonly input: T8a3caedfda;
+  readonly output: Td5abdf9c63;
+};
+
 type T4543625c39 = {
   readonly message: string;
+};
+
+type T454acf9abc = {
+  codigo?: string;
+  nombre?: string;
+  item?: T4d6a470586 | Array<T4d6a470586>;
+};
+
+type T459c229135 = {
+  decisionId: Tf4b485f2ea;
+};
+
+type T462a2d055d = {
+  readonly value: Ta0b306ecbf;
+  readonly issues?: undefined;
+};
+
+type T46ab7251d5 = {
+  folderRef: string;
+};
+
+type T46f58f58fc = {
+  analysis: string;
+  questions: Array<{
+    question: string;
+    reason: string;
+    options?: undefined | Array<string>;
+    default?: undefined | string;
+  }>;
+};
+
+type T488ab33bc2 = "user" | "proposed" | "detected";
+
+type T48da17df08 = {
+  readonly value: Tcb64065203;
+  readonly issues?: undefined;
+};
+
+type T48e3c0ff63 = {
+  groupByPropertyId?: undefined | string;
+  subgroupByPropertyId?: undefined | string;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "kanban";
+};
+
+type T49a4b60f9b = {
+  ok: true;
+  result: stll_folio_agents_FolioAgentApplyOperationsSummary;
+};
+
+type T4b1112b06e = {
+  placeholder: string;
+  original: string;
+};
+
+type T4b4720fb6b = readonly [T1e9bf90711, ...T1e9bf90711[]];
+
+type T4c01853e6a = "preserve" | "decimal" | "hierarchicalDecimal" | "lowerLetterParenthetical" | "lowerRomanParenthetical" | "upperLetterParenthetical" | "upperRoman";
+
+type T4c2454b604 = {
+  lawId: string;
+  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
+};
+
+type T4c3f591341 = {
+  kind: "presence";
+  expectation: Ta258bd6696;
+};
+
+type T4c4fff0216 = null | Array<(T3ed4bbeee3 & {
+  optional?: false | true;
+  responseStatus?: null | string;
+  type?: null | "optional" | "required" | "resource";
+})>;
+
+type T4c634e037d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "notification";
+};
+
+type T4c9fd159c8 = {
+  id: Tf4b485f2ea;
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: T432e07d100;
+  decisionType: T432e07d100;
+  ecli: T432e07d100;
+  language: string;
+  languageAlternates: ReadonlyArray<T4410c591d7>;
+  slug: T432e07d100;
+} & {
+  citationAuthority: number;
+};
+
+type T4ce64977d1 = {
+  readonly input: T527969c00a;
+  readonly output: Tc83d8b9f37;
+};
+
+type T4d0c38f22c = {
+  perspective?: "neutral" | "buyer" | "seller";
+  documentTypeKey?: string;
+  trigger?: "manual" | "onClassified";
+};
+
+type T4d6a470586 = {
+  identificador?: string;
+  titulo?: string;
+  url_pdf?: {
+    pagina_final?: string;
+    pagina_inicial?: string;
+    szBytes?: string;
+    szKBytes?: string;
+    texto?: string;
+  };
+  url_html?: string;
+  url_xml?: string;
+};
+
+type T4d6cdf8636 = Response | {
+  status: "idle";
+} | {
+  status: "running";
+  startedAt: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+};
+
+type T4d93baa3cf = {
+  readonly input: T8387742e1c;
+  readonly output: Tc6f587c6bd;
+};
+
+type T4d9ac44155 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "bilingualTranslationRun";
+};
+
+type T4eb7f27086 = {
+  kind: "attorney";
+  ref: Tcdd0e1e285;
+  field: ("name" | "email");
+};
+
+type T4fc8c01a92 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeEntry";
+};
+
+type T4feef5505a = {
+  readonly input: T66e35ccd51;
+  readonly output: T846b0784de;
+};
+
+type T507f1fccd1 = {
+  kind: "party";
+  role: T8e2a10c549;
+  field: T8854c1a08e;
+};
+
+type T50a09487e3 = {
+  items: Array<T5d4fc8c82b>;
+  version: 3;
+};
+
+type T50cb7e6cbb = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
+
+type T51cad8ef60 = T59c3f5062f | T561e5b54a2 | T2dc94a4ef0 | Te1221ee9e8;
+
+type T51ea132ed2 = {
+  bold: T1bdf39f14a;
+  alignment: T302e959e47;
+  fontFamily: string;
+  fontSizePt: number;
+  spaceAfterPt: number;
+  spaceBeforePt: number;
+  numberingFormat: T4c01853e6a;
+  indentLeftPt: number;
+  hangingPt: number;
+};
+
+type T527969c00a = {
+  skillName: string;
+  path: string;
+};
+
+type T52d277c57b = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "styleSet";
+};
+
+type T533797319a = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
+
+type T533ec86c6c = {
+  readonly input: T51cad8ef60;
+  readonly output: T0bc71347dc;
+};
+
+type T53430f009c = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "desktopEditSession";
+};
+
+type T53a42b0477 = "decision" | "statute";
+
+type T53b5147e55 = {
+  readonly value: Ta21762d27e;
+  readonly issues?: undefined;
+};
+
+type T54bf6fc207 = {
+  value: T432e07d100;
+  type: "date";
+  version: 1;
+};
+
+type T557251045c = {
+  readonly input: T3d16f860ff;
+  readonly output: T596c558ecb;
+};
+
+type T55bdf3ebb2 = {
+  metadata?: Record<never, never>;
+  parameters?: unknown;
+  name: string;
+  description: string;
+};
+
+type T55fe720a8c = {
+  query: string;
+  jurisdiction: T069e650050;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: undefined | string;
+    source: string;
+    score?: undefined | number;
+  }>;
+  provider: "tavily";
+  answer?: undefined | string;
+};
+
+type T561e5b54a2 = {
+  fixes?: undefined | Array<{
+    code: string;
+    message: string;
+    line?: undefined | number;
+  }>;
+  warnings?: undefined | Array<Tf953808cbe>;
+  success: true;
+  destination: "draft";
+  fileName: string;
+};
+
+type T563feb80fd = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+};
+
+type T56c40ca454 = {
+  workspaceId: string;
+};
+
+type T56c55a5c5b = "stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback";
+
+type T56da76db92 = null | T38aa50e8be;
+
+type T576f555b24 = {
+  key: string;
+  labelKey: T9fe3112f57;
+};
+
+type T579e5557db = "approved" | "rejected";
+
+type T594988174f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "savedSearch";
+};
+
+type T596c558ecb = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
+};
+
+type T599434ec07 = {
+  workspaceId: Tb9596e18eb;
+};
+
+type T59a8dbef95 = {
+  stored: number;
+  storedAsOf: string;
+  reported: number;
+  reportedAsOf: string;
+  reportedBy: ("operator" | "publisher" | "listing");
+};
+
+type T59ad5fb938 = null | Array<Tca248f9d2b>;
+
+type T59c3f5062f = {
+  success: true;
+  fileName: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+};
+
+type T59dcde539e = {
+  workspaceId: Tb9596e18eb;
+};
+
+type T5a51f85bbe = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "pendingUpload";
+};
+
+type T5a7c3abed7 = null | Tb47b7b98fd;
+
+type T5af6308a18 = {
+  messageId: string;
+  before: number;
+  after: number;
+};
+
+type T5b30b2c0a8 = {
+  type: "footnote";
+  label: string;
+  noteId?: undefined | string;
+};
+
+type T5ba34a16c0 = {
+  kind: ("added" | "removed" | "unchanged" | "gap");
+  text: string;
+} | {
+  kind: "changed";
+  runs: Array<{
+    kind: ("same" | "del" | "ins");
+    text: string;
+  }>;
+};
+
+type T5cffd2424c = {
+  status: "not-required";
+};
+
+type T5d4fc8c82b = {
+  guidance?: string;
+  issue: string;
+  mode: "extract";
+  ask: Te18c7397cc;
+  enabled: T1bdf39f14a;
+  sourceId: string;
+} | Tf9d55cf19d;
+
+type T5d51195633 = null | {
+  premises: T432e07d100;
+  addressLine1: T432e07d100;
+  addressLine2: T432e07d100;
+  locality: T432e07d100;
+  region: T432e07d100;
+  postalCode: T432e07d100;
+  country: T432e07d100;
+  poBox: T432e07d100;
+  careOf: T432e07d100;
+  textAddress: T432e07d100;
+};
+
+type T5dab5448de = {
+  readonly value: any;
+  readonly issues?: undefined;
+};
+
+type T5dba4beb60 = null | {
+  name: string;
+  url: string;
+  retrievedAt?: undefined | string;
+};
+
+type T5dbacf96e7 = {
+  (args: T64efadf7d1, context?: Ta2dc1740cf): (T8387742e1c | Promise<T8387742e1c>);
+};
+
+type T5dbcd4218d = "pending" | "applied";
+
+type T602ddca6f8 = null | {
+  text: string;
+  value: T688f6f1190;
+  unit: T432e07d100;
+  citation: T84093f1fc9;
+};
+
+type T60d8f391f8 = {
+  readonly input: T7020765e60;
+  readonly output: T1f1ce35744;
+};
+
+type T61122d2719 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "flowRun";
+};
+
+type T6134405b04 = {
+  label?: string;
+  text: string;
+  id: string;
+};
+
+type T614d75882e = {
+  type: "error";
+  version: 1;
+};
+
+type T61574ed5e2 = null | T3cde614388;
+
+type T61ca628658 = null | T057e58854e;
+
+type T62188807d3 = {
+  escalation?: string;
+  rationale?: string;
+  talkingPoints?: Array<string>;
+};
+
+type T628ff2d974 = {
+  workspaceId: string;
+};
+
+type T63c4458d83 = {
+  type: "headingSection";
+  story: "main";
+  headingBlockId: string;
+  headingTextHash: string;
+  headingLevel: number;
+};
+
+type T645caae274 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateRecipe";
+};
+
+type T64efadf7d1 = {
+  query: string;
+  limit?: undefined | number;
+};
+
+type T65289db29c = {
+  workspaceId: string;
+};
+
+type T65e2c35ff8 = {
+  [key: string]: unknown;
+};
+
+type T6607846b47 = null | {
+  street: T432e07d100;
+  postalCode: T432e07d100;
+  city: T432e07d100;
+  municipality: T432e07d100;
+  country: T432e07d100;
+  textAddress: T432e07d100;
+};
+
+type T665ac097fb = {
+  lawId: string;
+  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
+};
+
+type T6662e6acc7 = {
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+};
+
+type T66d8615e4f = {
+  subagents: Array<{
+    task: string;
+    context?: undefined | string;
+    expectedOutput?: undefined | string;
+    model?: undefined | string;
+  }>;
+};
+
+type T66e35ccd51 = {
+  text?: undefined | string;
+  title?: undefined | string;
+  departmentCode?: undefined | string;
+  legalRangeCode?: undefined | string;
+  matterCode?: undefined | string;
+  dateFrom?: undefined | string;
+  dateTo?: undefined | string;
+  offset?: undefined | number;
+  limit?: undefined | number;
+};
+
+type T6709dca913 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalList";
+};
+
+type T6726f71d15 = {
+  readonly input: T162fd4d3a0;
+  readonly output: Tea3eb4808d;
+};
+
+type T688f6f1190 = null | number;
+
+type T68e02c7e0d = {
+  fileFieldId?: T1c7a854487;
+  docxEditSnapshot?: T3cedcce572;
+  supportsDocxEdits?: false | true;
+  entityId: T9a509045a7;
+  fileName: string;
+};
+
+type T699c354d0c = {
+  dataBoxes?: Array<{
+    label?: string;
+    id: string;
+    isPrimary: T1bdf39f14a;
+  }>;
+  customFields?: Array<{
+    value: string;
+    id: string;
+    label: string;
+  }>;
+};
+
+type T69b490d0c6 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateClause";
+};
+
+type T6a4a80b749 = {
+  code?: string;
+  text?: string;
+};
+
+type T6a76a17ac2 = {
+  ok: false;
+  error: string;
+};
+
+type T6ab1edb8c0 = {
+  country: string;
+  subdivision?: undefined | string;
+};
+
+type T6acd1b6804 = "Unauthorized" | Tc642053948;
+
+type T6afe23e121 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
+
+type T6b2d0b9da2 = "none" | "api-key" | "account";
+
+type T6b5cf52115 = {
+  documentRef: string;
+  name: string;
+};
+
+type T6b73348afa = null | T9a509045a7;
+
+type T6bf9fa81f9 = "double" | "single" | "preserve" | "onePoint15" | "onePoint5";
+
+type T6cf37641cd = undefined | {
+  readonly libraryOptions?: undefined | Td09f3f3108;
+};
+
+type T6d90fb7f32 = {};
+
+type T6e3baa4852 = {
+  system: string;
+  documentId: string;
+  webUrl: string;
+  printUrl: string;
+};
+
+type T6e7137c176 = "medium" | "high" | "low" | "unspecified";
+
+type T6e770422e4 = {
+  flowId: Tb47b7b98fd;
+};
+
+type T6e91e475a3 = "highlight" | "underline" | "squiggly" | "strikethrough";
+
+type T6eaa0a5371 = {
+  apiContractVersion: 4;
+  version: string;
+  commit: string;
+  status: "ok";
+};
+
+type T6ebb5b60ba = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "playbookDefinition";
+};
+
+type T6ef87eb7c7 = null | (T699c354d0c & {
+  version: 1;
+  custom?: T9b42ed15a8;
+});
+
+type T6f65fd94a6 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceMember";
+};
+
+type T6ffeb8632f = {
+  baseVersionNumber: number;
+  downloadUrl: string;
+  fileName: string;
+  fileType: T24a1a7f207;
+  lastCheckpointAt: string;
+  resumedFromCheckpoint: true;
+  sessionId: T53430f009c;
+  sessionToken: string;
+  tookOverExistingSession: true;
+  error?: never;
+} | {
+  baseVersionNumber: number;
+  downloadUrl: string;
+  fileName: string;
+  fileType: T24a1a7f207;
+  lastCheckpointAt: null;
+  resumedFromCheckpoint: false;
+  sessionId: T53430f009c;
+  sessionToken: string;
+  tookOverExistingSession: true;
+  error?: never;
+} | {
+  baseVersionNumber: number;
+  downloadUrl: string;
+  fileName: string;
+  fileType: T24a1a7f207;
+  lastCheckpointAt: null;
+  resumedFromCheckpoint: false;
+  sessionId: T53430f009c;
+  sessionToken: string;
+  tookOverExistingSession: false;
+  error?: never;
+};
+
+type T7020765e60 = {
+  query: string;
+  results: Array<{
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T7072a5aaf7 = {
+  id: T7fc3acf5ac;
+};
+
+type T708bf95724 = {
+  readonly message: string;
+};
+
+type T70d0bdd159 = "daily" | "weekly" | "monthly";
+
+type T7201685168 = {
+  savedSearchId: T594988174f;
+};
+
+type T72321554d4 = {
+  path: string;
+  label: string;
+};
+
+type T7256bc01d8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "clauseVersion";
+};
+
+type T72880ed30d = {
+  readonly "~standard": {
+    readonly jsonSchema: Tba9914ae60;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T151c8c8adf;
+  };
+} & {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tf9791990e8 | Promise<(T916c6c1f8b | Tf9791990e8)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T151c8c8adf;
+  };
+};
+
+type T73f271d728 = {
+  source: "tiers";
+  tiers: {
+    acceptable: {
+      ideal?: Td0e4afd336 | T2c788257c8;
+      rules: Array<Tad34918dcf>;
+    };
+    fallback: {
+      entries: Array<T6134405b04>;
+    };
+    notAcceptable: {
+      rules: Array<Tad34918dcf>;
+    };
+  };
+} | {
+  source: "reference";
+  passages: Array<T2f1b6312a1>;
+  termKind: T03c56de23b;
+};
+
+type T74114cb775 = {
+  url: string;
+  maxChars?: undefined | number;
+};
+
+type T74610d9d20 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListItemSource";
+};
+
+type T7477812ed2 = {
+  body: {
+    alignment: T302e959e47;
+    fontFamily: string;
+    fontSizePt: number;
+    lineSpacing: T6bf9fa81f9;
+    spaceAfterPt: number;
+  };
+  title: {
+    bold: T1bdf39f14a;
+    alignment: T302e959e47;
+    fontFamily: string;
+    fontSizePt: number;
+    spaceAfterPt: number;
+    spaceBeforePt: number;
+  };
+  level1: T90fb134c6b;
+  level2: T90fb134c6b;
+  level3: T90fb134c6b;
+  numbering: {
+    enabled: T1bdf39f14a;
+  };
+  page: {
+    paperSize: Tbc2c676288;
+    orientation: T83293cdac9;
+    marginTopPt: number;
+    marginBottomPt: number;
+    marginLeftPt: number;
+    marginRightPt: number;
+  };
+};
+
+type T748711fee4 = {
+  type: "int";
+  version: 1;
+};
+
+type T7522841395 = {
+  type: "text";
+  text: string;
+  anonymized?: undefined | true;
+} | {
+  type: "bold";
+  children: Array<T7522841395>;
+} | {
+  type: "italic";
+  children: Array<T7522841395>;
+} | {
+  type: "underline";
+  children: Array<T7522841395>;
+} | {
+  type: "superscript";
+  children: Array<T7522841395>;
+} | {
+  type: "subscript";
+  children: Array<T7522841395>;
+} | {
+  type: "link";
+  href: string;
+  children: Array<T7522841395>;
+} | {
+  type: "citation";
+  cite: string;
+  href?: undefined | string;
+  children: Array<T7522841395>;
+} | {
+  type: "line-break";
+} | {
+  type: "page-anchor";
+  label: string;
+  href?: undefined | string;
+};
+
+type T7524b2c883 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawMatterLink";
+};
+
+type T75e7369e19 = null | Array<T219ebda4a4>;
+
+type T75ecb21f44 = T876924cdc0 | Tca17a52309 | Tc44742d4e9 | T48e3c0ff63 | Tf52fd16fac | Tf272474a81;
+
+type T767b63a67e = "message" | "document" | "contact" | "matter" | "folder" | "task" | "link" | "chat" | "case-law";
+
+type T76b418efa9 = null | "task" | "event" | "deadline" | "meeting" | "hearing";
+
+type T774c2c36f6 = Response | {
+  status: "idle";
+  jobId: string;
+} | {
+  status: "running";
+  startedAt: string;
+  jobId: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+  jobId: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+  jobId: string;
+};
+
+type T775e6ec31b = {
+  scanWarnings?: Array<string>;
+  pdfDerivative?: T5cffd2424c | Tf6d1adf4f8 | Tb368e5ae56 | Tc6f6ebe775;
+  thumbnailFileId?: null | string;
+  placeholder?: string;
+  thumbnailDerivative?: T5cffd2424c | Tf6d1adf4f8 | Tb368e5ae56 | Tc6f6ebe775;
+  type: "file";
+  mimeType: string;
+  id: string;
+  pdfFileId: T432e07d100;
+  encrypted: T1bdf39f14a;
+  fileName: string;
+  version: 1;
+  sizeBytes: number;
+  sha256Hex: string;
+};
+
+type T77769e1af9 = {
+  client: (null | {
+    id: T938d9cc2e1;
+    displayName: string;
+  });
+  defaultViewId: (null | Tf962ada343);
+  id: Teb5c753062;
+  name: string;
+  reference: string;
+  clientId: Ta197d6f640;
+  color: T432e07d100;
+  status: T9c6eb40403;
+  lastActivityAt: Date;
+};
+
+type T78000c7c99 = {
+  name: string;
+  source: string;
 };
 
 type T780bacb7ad = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatThread";
 };
 
-type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "vies";
+type T7870a2de7e = {
+  configured: false;
+  platformFallback: T1bdf39f14a;
+} | {
+  configured: true;
+  apiKeyMasked: string;
+  platformFallback: T1bdf39f14a;
+};
 
-type Tf13f15d459 = {
-  id: T7f76e93fad;
-  registry: Tb3a8582d6b;
-  name: string;
-  format: string;
+type T7881dfbb44 = "draft" | "approved" | "billed" | "written_off";
+
+type T78d7036743 = {
+  label?: string;
+  type: T21bb8cfb40;
+  address: string;
+  isPrimary: T1bdf39f14a;
+};
+
+type T78dd90e9ca = {
+  status: "unconfigured";
+  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
+};
+
+type T78fb706128 = {
+  (args: unknown, context?: Ta2dc1740cf): unknown;
+};
+
+type T7985261e0e = "single-select" | "multi-select";
+
+type T79fba9c913 = {
+  estimatedUnits: number;
+  availableUnits: number;
+};
+
+type T7a2655a211 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListSection";
+};
+
+type T7a41dd6a7b = {
+  title: string;
+  markdown: string;
+};
+
+type T7a92932f06 = {
+  value: string;
+  description: string;
+};
+
+type T7b52b1c160 = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline";
+
+type T7bba2468e2 = T2430547df2 | {
+  documentPending: T1bdf39f14a;
+  documentReadFailed: T1bdf39f14a;
+  documentUnavailable: T1bdf39f14a;
+  id: Tf4b485f2ea;
+  resolution: {
+    type: "direct";
+  } | {
+    type: "absorbed-supplement";
+    absorbedDecisionId: Tf4b485f2ea;
+    anchorPrefix: string;
+  };
+  caseNumber: string;
+  slug: T432e07d100;
+  ecli: T432e07d100;
+  identifiers: T4b4720fb6b;
+  court: string;
+  courtAbbreviation: T432e07d100;
+  courtTier: Tcd6d16a377;
+  country: string;
+  language: string;
+  languageGroupKey: T432e07d100;
+  decisionDate: T432e07d100;
+  decisionType: T432e07d100;
+  documentAst: (null | T7c8bca7f18 | {
+    metadata: T9411263f78;
+    source: T6e3baa4852;
+    version: 1;
+  } & {
+    blocks: Array<{
+      type: "heading";
+      id: string;
+      role?: undefined | "decision-title" | "section-heading";
+      anchorId: string;
+      level: T1754ed2395;
+      inlines: Array<T7522841395>;
+    } & {
+      plainText?: undefined | string;
+    } | {
+      number?: undefined | number;
+      type: "paragraph";
+      id: string;
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      anchorId: string;
+      note?: undefined | T5b30b2c0a8;
+      inlines: Array<T7522841395>;
+      listDepth?: undefined | 1 | 2 | 3 | 4;
+    } & {
+      plainText?: undefined | string;
+    } | {
+      type: "image";
+      src: string;
+      id: string;
+      anchorId: string;
+      alt?: undefined | string;
+      width?: undefined | number;
+      height?: undefined | number;
+    } & {
+      plainText?: undefined | string;
+    } | {
+      type: "table";
+      id: string;
+      role?: undefined | "related-proceedings" | "metadata-table";
+      anchorId: string;
+      plainText: string;
+    } & {
+      rows: Array<Array<{
+        header?: undefined | true;
+        inlines: Array<T7522841395>;
+        colSpan?: undefined | number;
+        rowSpan?: undefined | number;
+      } & {
+        plainText?: undefined | string;
+      }>>;
+    }>;
+  });
+  sections: T28f55fc43c;
+  sourceUrl: T432e07d100;
+  sourceAttributionUrl: T432e07d100;
+  documentUrl: T432e07d100;
+  metadata: Td09f3f3108;
+  headnote: Td06876de99;
+  textFields: {
+    readonly abstract: Td06876de99;
+    readonly headnote: Td06876de99;
+    readonly legalSentence: Td06876de99;
+    readonly summary: Td06876de99;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+  source: {
+    id: T9163bffd43;
+    name: string;
+    adapterKey: string;
+    allowsDerivedAi: T1bdf39f14a;
+  };
+  judges: Array<{
+    role: ("rapporteur" | "presiding" | "panel-member" | "dissenting" | "advocate-general");
+    name: string;
+    judgeId: (null | Td0d20fc706);
+    portrait: (null | {
+      url: string;
+      attribution: string;
+    });
+  }>;
+  citationsFrom: (Array<never> | Array<{
+    id: Te8a8ced136;
+    citationText: string;
+    citedDecisionId: (null | Tf4b485f2ea);
+    sectionIndex: T688f6f1190;
+  }>);
+  citationsTo: (Array<never> | Array<{
+    id: Te8a8ced136;
+    citationText: string;
+    citingDecisionId: Tf4b485f2ea;
+    sectionIndex: T688f6f1190;
+  }>);
+  citationsNextCursor: T432e07d100;
+  languageAlternates: ReadonlyArray<T4410c591d7>;
+  fulltext: T432e07d100;
+};
+
+type T7bed1fb5ad = {
+  id: T82d2fa2fc8;
+  createdBy: T432e07d100;
+  position: number;
+  question: string;
+  content: (T29dbcb6703 | T9ffc3fafa7 | T888302d360 | T748711fee4);
   createdAt: string;
+  updatedAt: string;
 };
 
-type Ta5d3bf10c8 = null | Tf13f15d459;
-
-type T7f76e93fad = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateLookupFormat";
+type T7c243e5baa = {
+  id: T6ebb5b60ba;
+  outcome: ("created" | "existing");
 };
-
-type Tbdce6ead48 = null | T7f76e93fad;
 
 type T7c2706551f = {
   path: string;
@@ -31280,49 +33432,291 @@ type T7c2706551f = {
   visibleWhen?: undefined | string;
 };
 
-type T90212efe7a = {
-  message: string;
-  paragraphIndex: number;
-  directive: string;
-  source?: "body" | "header" | "footer";
+type T7c3a881b37 = T96412b8318 | Te35800633c;
+
+type T7c8bca7f18 = {
+  [key: string]: never;
 };
 
-type T9fe3112f57 = "workspaces.parties.client" | "templates.binding.sourceParty" | "common.matter" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "common.displayName" | "contacts.fields.firstName" | "contacts.fields.lastName" | "common.organizationName" | "common.email" | "contacts.columns.phone" | "common.anonymizationLabels.address" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressPostalCode" | "common.country" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "contacts.fields.bankAccountIban" | "contacts.fields.bankAccountBic" | "contacts.communication.dataBoxPlaceholder" | "common.name" | "common.reference" | "templates.binding.fieldBillingReference" | "common.status" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.witness" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.other" | "contacts.attorneys.responsible" | "contacts.attorneys.originating" | "templates.binding.attorneyLead";
-
-type T576f555b24 = {
-  key: string;
-  labelKey: T9fe3112f57;
+type T7c9021b9f6 = {
+  query: string;
+  limit: number;
 };
 
-type T8e2a10c549 = "other" | "opposing_party" | "opposing_counsel" | "co_counsel" | "witness" | "expert_witness" | "third_party" | "judge" | "mediator";
-
-type Tcdd0e1e285 = "responsible" | "originating" | "lead";
-
-type T9ccef839a9 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateCategory";
+type T7c9c034721 = {
+  payload?: unknown;
+  status: "resolved";
+  interruptId: string;
+} | {
+  status: "cancelled";
+  interruptId: string;
 };
 
-type T1173055df0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "template";
+type T7d2603043e = null | {
+  token?: unknown;
+  roomId?: unknown;
 };
 
-type T988e7b2faa = null | T9ccef839a9;
+type T7d5b6398be = "reference" | "tiers";
 
-type T4124e1264c = null | Date;
+type T7d5dbe7dfc = "workspace" | "download";
 
-type T97430ff0f7 = null | Array<string>;
-
-type Tc65782e9a6 = {
-  id: T1173055df0;
-  name: string;
-  fileName: string;
-  fieldCount: number;
-  sizeBytes: number;
-  createdAt: Date;
+type T7d9d93bde2 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "chatMessage";
 };
 
-type T52d277c57b = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "styleSet";
+type T7ddb1ff4a3 = {
+  resource: string;
+  resource_name: string;
+  resource_logo_uri: string;
+  authorization_servers: Array<string>;
+  scopes_supported: Array<("stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback" | "stella:search_anonymized" | "stella:read_anonymized" | "stella:templates_anonymized")>;
+  bearer_methods_supported: Array<string>;
+  stella_contract: {
+    protocol: 2;
+    revision: 3;
+    capabilities: {
+      "document-version-upload": 1;
+      "mcp-v2-transport": 1;
+    };
+  };
+  stella_compatibility: {
+    api_contract_version: 2;
+    cli_version: {
+      minimum: string;
+      maximum: string;
+    };
+  };
+};
+
+type T7f00196705 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "userFile";
+};
+
+type T7f3d121b72 = {
+  readonly input: T36734b71d6;
+  readonly output: T55fe720a8c;
+};
+
+type T7f76e93fad = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateLookupFormat";
+};
+
+type T7fc3acf5ac = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkill";
+};
+
+type T7fe233bf56 = {
+  cursor?: string;
+  workspaceId?: Teb5c753062;
+  limit?: number;
+  userId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  resourceType?: string;
+  resourceId?: string;
+  toExclusive?: string;
+};
+
+type T8021ae6e25 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "rateEntry";
+};
+
+type T8091e6bfed = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "anonymizationAllowlistEntry";
+};
+
+type T80d841ed63 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "property";
+};
+
+type T827d04be89 = {
+  value: T432e07d100;
+  type: "single-select";
+  version: 1;
+};
+
+type T82a15f6a03 = {
+  readonly value: Tc6f587c6bd;
+  readonly issues?: undefined;
+};
+
+type T82c7fa9c31 = "Forbidden" | Tc642053948;
+
+type T82d2fa2fc8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawResearchColumn";
+};
+
+type T82d662a0f0 = null | T116a5c37c8;
+
+type T83293cdac9 = "portrait" | "landscape";
+
+type T837d6a04e7 = "api-key" | "user-agent";
+
+type T8387742e1c = {
+  query: string;
+  scope: T0e8943eb14;
+  hint: T432e07d100;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: T432e07d100;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T84093f1fc9 = {
+  blockId: string;
+  text: string;
+};
+
+type T846b0784de = {
+  text?: undefined | string;
+  title?: undefined | string;
+  departmentCode?: undefined | string;
+  legalRangeCode?: undefined | string;
+  matterCode?: undefined | string;
+  dateFrom?: undefined | string;
+  dateTo?: undefined | string;
+  offset?: undefined | number;
+  limit?: undefined | number;
+};
+
+type T8500b3f9f9 = {
+  workspaceId: string;
+};
+
+type T85657694a1 = {
+  readonly input: T2e350463c1;
+  readonly output: T109fc089ae;
+};
+
+type T8649aae095 = {
+  skillId?: T7fc3acf5ac;
+  skillName: string;
+};
+
+type T8696d09f3f = {
+  workspaceId: string;
+};
+
+type T87284c6919 = {
+  analysis: string;
+  questions: Array<{
+    question: string;
+    reason: string;
+    options?: undefined | Array<string>;
+    default?: undefined | string;
+  }>;
+};
+
+type T873a479438 = {
+  createdAt: string;
+  id: T7d9d93bde2;
+  metadata?: T0122da017b;
+  role: Tefd05507c2;
+  parts: Array<Tff5735a10a>;
+};
+
+type T875ec33b50 = null | "document-type-classifier";
+
+type T876924cdc0 = {
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "overview";
+};
+
+type T87af5d63b3 = {
+  readonly input: Tf74132cd3e;
+  readonly output: Ta0b306ecbf;
+};
+
+type T881614816e = "year" | "month" | "week" | "day";
+
+type T8854c1a08e = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
+
+type T888302d360 = {
+  type: "date";
+  version: 1;
+};
+
+type T888e660ed8 = "task" | "deadline";
+
+type T88eaf34343 = "translated" | "bilingual";
+
+type T88f3735ffa = {
+  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK");
+  health: Ta8b78a42c5;
+  stored: {
+    decisions: number;
+    asOf: T432e07d100;
+  };
+  addedLastWeek: T688f6f1190;
+  completeness: {
+    measuredSources: number;
+    stored: number;
+    reported: number;
+    storedAsOf: T432e07d100;
+    staleSources: number;
+    notMeasuredSources: number;
+    notCountedSources: number;
+  };
+  sources: ReadonlyArray<{
+    adapterKey: string;
+    name: string;
+    publicHomeUrl: string;
+    health: Ta8b78a42c5;
+    lastSyncAt: T432e07d100;
+    completeness: {
+      state: "measured";
+    } & T59a8dbef95 | {
+      state: "stale";
+    } & T59a8dbef95 | {
+      state: "not-measured-yet";
+    } | {
+      state: "not-counted-yet";
+    };
+    addedLastWeek: T688f6f1190;
+  }>;
+};
+
+type T8a1ba6ec3d = {
+  readonly value: T5af6308a18;
+  readonly issues?: undefined;
+};
+
+type T8a3caedfda = {
+  answers: Array<{
+    question: string;
+    answer: string;
+  }>;
+};
+
+type T8b5d0b1391 = {
+  readonly input: T980f887156;
+  readonly output: T19f8a3623b;
+};
+
+type T8b75e960c1 = {
+  value: string;
+  label: T432e07d100;
+  count: number;
+};
+
+type T8c66118833 = {
+  (args: unknown, context?: Ta2dc1740cf): unknown;
+};
+
+type T8cd5b388a4 = {
+  readonly type: "absent";
+  readonly reason: ("not_published" | "parse_failed" | "publisher_placeholder" | "redistribution_withheld");
 };
 
 type T8d94497402 = {
@@ -31355,178 +33749,361 @@ type T8d94497402 = {
   directiveExpression?: undefined | string;
 };
 
-type T65e2c35ff8 = {
-  [key: string]: unknown;
+type T8dc306df33 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListGenerationCandidate";
 };
 
-type T21e83da7dc = "failed" | "no-backend" | "below-floor";
+type T8e2a10c549 = "other" | "opposing_party" | "opposing_counsel" | "co_counsel" | "witness" | "expert_witness" | "third_party" | "judge" | "mediator";
 
-type Tb8b5b0c6b3 = {
-  fieldPath: string;
-  valuePath: string;
-  itemIndex: T688f6f1190;
-  reason: ("truncated" | "empty" | "interrupted" | "generation-failed");
+type T8e8f463ae0 = "error" | "warning";
+
+type T8f8a3ed733 = {
+  kind: "constraint";
+  condition: stll_conditions_ConditionNode;
+};
+
+type T8fa1810fff = {
+  text: string;
+  id: string;
+};
+
+type T8fa9d7c67b = {
+  lawId: string;
+  blockId: string;
+};
+
+type T90212efe7a = {
+  message: string;
+  paragraphIndex: number;
+  directive: string;
+  source?: "body" | "header" | "footer";
+};
+
+type T9021ebfc29 = {
+  lawId: string;
+};
+
+type T9068ebbc43 = "task" | "activity";
+
+type T907570a20b = {
+  readonly message: string;
+  readonly code?: string;
+};
+
+type T90fb134c6b = {
+  bold: T1bdf39f14a;
+  alignment: T302e959e47;
+  fontFamily: string;
+  fontSizePt: number;
+  spaceAfterPt: number;
+  spaceBeforePt: number;
+  numberingFormat: T4c01853e6a;
+  indentLeftPt: number;
+  hangingPt: number;
+};
+
+type T914ea11467 = {
+  readonly input: Tfb9effd8c9;
+  readonly output: T9021ebfc29;
+};
+
+type T9163bffd43 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawSource";
+};
+
+type T916c6c1f8b = {
+  readonly issues: ReadonlyArray<{
+    readonly message: string;
+    readonly path?: undefined | ReadonlyArray<(string | number | symbol | {
+      readonly key: (string | number | symbol);
+    })>;
+  }>;
+};
+
+type T92357156ac = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentReviewFinding";
+};
+
+type T92b1e52bb0 = {
+  url: string;
+  maxChars: number;
+};
+
+type T9372e54e9c = {
+  readonly input: Ta2cb9f1c54;
+  readonly output: T06fc334600;
+};
+
+type T938d9cc2e1 = string & valibot_Brand<"SafeId"> & Tc13989dabb;
+
+type T93ee1fa9f8 = {
+  jurisdiction: T9960bad961;
+  query: string;
+  limit?: undefined | number;
+};
+
+type T93f05f2bc9 = {
+  templateId: string;
+};
+
+type T9411263f78 = {
+  caseNumber: T432e07d100;
+  ecli: T432e07d100;
+  court: T432e07d100;
+  decisionDate: T432e07d100;
+  decisionType: T432e07d100;
+  keywords: Array<string>;
+  statutes: Array<string>;
+};
+
+type T94e2de2165 = {
+  id: string;
+  label: string;
+  category: string;
+  startAnchorId: string;
+  endAnchorId: string;
+  annotations: Array<{
+    id: string;
+    summary: string;
+    startAnchorId: string;
+    endAnchorId: string;
+    textSnippet: string;
+  }>;
+  children: Array<T94e2de2165>;
+};
+
+type T952a349ecb = null | Array<T349dac8902>;
+
+type T9531885fa8 = {
+  propertyId: string;
+  desc: T1bdf39f14a;
+};
+
+type T95752d89bb = string | {
+  code?: string;
   message: string;
 };
 
-type T72321554d4 = {
-  path: string;
-  label: string;
+type T95a4a01f59 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "docxSuggestion";
+};
+
+type T960ebb008d = {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T5dab5448de | Promise<(T916c6c1f8b | T5dab5448de)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T1168738ff9;
+  };
+};
+
+type T96412b8318 = {
+  documentAst: (null | {
+    version: 1;
+    source: T6e3baa4852;
+    metadata: T9411263f78;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T1754ed2395;
+      role?: undefined | "decision-title" | "section-heading";
+      inlines: Array<T7522841395>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      note?: undefined | T5b30b2c0a8;
+      listDepth?: undefined | 1 | 2 | 3 | 4;
+      number?: undefined | number;
+      inlines: Array<T7522841395>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: undefined | "related-proceedings" | "metadata-table";
+      rows: Array<Array<{
+        inlines: Array<T7522841395>;
+        plainText: string;
+        colSpan?: undefined | number;
+        rowSpan?: undefined | number;
+        header?: undefined | true;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: undefined | string;
+      width?: undefined | number;
+      height?: undefined | number;
+      plainText: string;
+    }>;
+  } | T7c8bca7f18);
+  fulltext: T432e07d100;
+  eli: string;
+  slug: T432e07d100;
+  title: string;
+  country: string;
+  language: string;
+  documentType: T432e07d100;
+  status: string;
+  effectiveDate: T432e07d100;
+  versionValidFrom: T432e07d100;
+  versionValidTo: T432e07d100;
+  sections: T28f55fc43c;
+  sourceUrl: T432e07d100;
+  documentUrl: T432e07d100;
+  createdAt: Date;
+  updatedAt: Date;
+  citationCaseCount: T688f6f1190;
+  allowsDerivedAi: T1bdf39f14a;
+  id: Td90f3cb611;
+};
+
+type T97123e865d = "failed" | "cancelled" | "running" | "completed" | "queued";
+
+type T971aac1483 = {
+  chat: Tab86be84f5;
+  pdf: Tab86be84f5;
+  fast: Tab86be84f5;
+  reasoning: Tab86be84f5;
+};
+
+type T97430ff0f7 = null | Array<string>;
+
+type T976b70d646 = {
+  deletedAt: T432e07d100;
+  id: string;
+  image: T432e07d100;
+  name: T432e07d100;
+  type: "user";
+};
+
+type T980f887156 = {
+  lawId: string;
+  metadata?: undefined | false | true;
+  analysis?: undefined | false | true;
+  fullText?: undefined | false | true;
+  eli?: undefined | false | true;
+};
+
+type T982ae915eb = {
+  readonly input: T7a41dd6a7b;
+  readonly output: Ta21762d27e;
+};
+
+type T9871c1e63a = {
+  viewId: Tf962ada343;
+};
+
+type T988e7b2faa = null | T9ccef839a9;
+
+type T98953a0f12 = {
+  workspaceId: string;
+};
+
+type T9960bad961 = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
+
+type T9963a55ad2 = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
+};
+
+type T996a3b2f0e = "Internal Server Error" | Tc642053948;
+
+type T999075fe5b = {
+  bold: T1bdf39f14a;
+  alignment: T302e959e47;
+  fontFamily: string;
+  fontSizePt: number;
+  spaceAfterPt: number;
+  spaceBeforePt: number;
+  numberingFormat: T4c01853e6a;
+  indentLeftPt: number;
+  hangingPt: number;
+};
+
+type T99ca042a72 = {
+  readonly value: Tc7b9fe0fcd;
+  readonly issues?: undefined;
+};
+
+type T99de9c7152 = null | "unknown" | "free" | "tentative" | "busy" | "out_of_office" | "working_elsewhere";
+
+type T99f4784515 = {
+  readonly value: T87284c6919;
+  readonly issues?: undefined;
 };
 
 type T9a509045a7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "entity";
 };
 
-type T1c7a854487 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "field";
-};
+type T9a881e7ede = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
 
-type Tb62d3ee375 = "Not Found" | Tc642053948;
-
-type Tf827555920 = {
+type T9ab85afc3e = {
   name: string;
-  organization?: undefined | string;
-  url?: undefined | string;
-  role: ("reviewer" | "drafter" | "converter");
-  date?: undefined | string;
+  source: string;
 };
 
-type Tf618255f8e = {
-  required?: undefined | false | true;
-  minLength?: undefined | number;
-  maxLength?: undefined | number;
-  min?: undefined | number;
-  max?: undefined | number;
-  pattern?: undefined | string;
-  minItems?: undefined | number;
-  maxItems?: undefined | number;
+type T9b42ed15a8 = {
+  [key: string]: Tcd02080ab1;
 };
 
-type Tc3f2878d85 = {
-  registry: Tb3a8582d6b;
-  formats: Array<{
-    key: string;
-    template: string;
-  }>;
+type T9c01826163 = {
+  readonly __safeIdType?: "workspace";
 };
 
-type T0d213827f5 = {
-  kind: "contact";
-  field: T8854c1a08e;
+type T9c6eb40403 = "active" | "archived" | "deleting";
+
+type T9c90567336 = {
+  status: "failed";
+  message: string;
 };
 
-type T507f1fccd1 = {
-  kind: "party";
-  role: T8e2a10c549;
-  field: T8854c1a08e;
+type T9ccef839a9 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateCategory";
 };
 
-type T1404f6e6ed = {
-  kind: "matter";
-  field: ("name" | "status" | "reference" | "billingReference");
+type T9cedc91781 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "folioCollabRoom";
 };
 
-type T4eb7f27086 = {
-  kind: "attorney";
-  ref: Tcdd0e1e285;
-  field: ("name" | "email");
+type T9d6eb42931 = {
+  readonly type: "workspace";
+  readonly id: stll_api_contract_SafeId<"workspace">;
 };
-
-type Tec7940d497 = {
-  kind: "firm";
-  field: "name";
-};
-
-type Te9707abbcc = {
-  text: string;
-  style?: string;
-  level?: number;
-  runs?: Array<{
-    text: string;
-    bold?: false | true;
-    italic?: false | true;
-  }>;
-  isDirective?: false | true;
-  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
-  directiveExpression?: string;
-  listKind?: "bullet" | "ordered";
-  listLevel?: number;
-};
-
-type Teb6522997d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateVersion";
-};
-
-type T5ba34a16c0 = {
-  kind: ("added" | "removed" | "unchanged" | "gap");
-  text: string;
-} | {
-  kind: "changed";
-  runs: Array<{
-    kind: ("same" | "del" | "ins");
-    text: string;
-  }>;
-};
-
-type T69b490d0c6 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateClause";
-};
-
-type T61574ed5e2 = null | T3cde614388;
-
-type T56da76db92 = null | T38aa50e8be;
-
-type T439317a49b = null | T7256bc01d8;
-
-type T3cde614388 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "clause";
-};
-
-type T7256bc01d8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "clauseVersion";
-};
-
-type T38aa50e8be = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "clauseVariant";
-};
-
-type Te4598481ee = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "mcpConnector";
-};
-
-type Tf4965e37f8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "organization";
-};
-
-type Tbb6e0c457f = "none" | "bearer" | "oauth2";
-
-type T2e1883ac96 = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
-
-type T129a6d450b = {
-  authType: "oauth2";
-  authorizationServerUrl: string;
-  resourceUrl: string;
-  scopes: Array<string>;
-} | {
-  authType: "bearer";
-} | {
-  authType: "none";
-};
-
-type Td120f37682 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "mcpUserConnection";
-};
-
-type T2e4ecabbc4 = "connected" | "needs_reauth" | "revoked";
-
-type T938d9cc2e1 = string & valibot_Brand<"SafeId"> & Tc13989dabb;
-
-type Te287bedd42 = "organization" | "person";
-
-type T30ee072c99 = null | Array<T78d7036743>;
-
-type T59ad5fb938 = null | Array<Tca248f9d2b>;
 
 type T9d9802fdcb = {
   registry: Tb3a8582d6b;
@@ -31967,45 +34544,164 @@ type T9d9802fdcb = {
   };
 };
 
-type T0e085dcc40 = "none" | "br_cpf_cnpj";
-
-type T2a47f63130 = {
-  type: Te287bedd42;
-  displayName: string;
-  prefix?: undefined | string;
-  firstName?: undefined | string;
-  middleName?: undefined | string;
-  lastName?: undefined | string;
-  suffix?: undefined | string;
-  organizationName?: undefined | string;
-  notes?: undefined | string;
-  emails?: undefined | Array<T78d7036743>;
-  phones?: undefined | Array<Tca248f9d2b>;
-  addresses?: undefined | Array<T349dac8902>;
-  tags?: undefined | Array<string>;
-  registrationNumber?: undefined | string;
-  taxId?: undefined | string;
-  metadata?: undefined | T699c354d0c;
+type T9de85a3162 = {
+  created: number;
+  skipped: number;
+  errors: Array<string>;
 };
 
-type Tbc4150ec47 = {
-  code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "tax_id" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
-  rowNumber: number;
+type T9e0fd3a1d8 = {
+  workspaceId: string;
 };
 
-type T21bb8cfb40 = "other" | "work" | "personal";
+type T9f51aef7c3 = {
+  subject: string;
+  reason: {
+    kind: "deal-specific-value";
+  } | {
+    kind: "structural";
+  } | {
+    kind: "lower-weight";
+  } | {
+    kind: "other";
+    text: string;
+  };
+};
+
+type T9fe3112f57 = "workspaces.parties.client" | "templates.binding.sourceParty" | "common.matter" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "common.displayName" | "contacts.fields.firstName" | "contacts.fields.lastName" | "common.organizationName" | "common.email" | "contacts.columns.phone" | "common.anonymizationLabels.address" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressPostalCode" | "common.country" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "contacts.fields.bankAccountIban" | "contacts.fields.bankAccountBic" | "contacts.communication.dataBoxPlaceholder" | "common.name" | "common.reference" | "templates.binding.fieldBillingReference" | "common.status" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.witness" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.other" | "contacts.attorneys.responsible" | "contacts.attorneys.originating" | "templates.binding.attorneyLead";
+
+type T9ffc3fafa7 = {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+};
 
 type Ta083079a24 = "other" | "mobile" | "office" | "home" | "fax";
 
-type T3906e8d961 = "other" | "billing" | "office" | "home" | "mailing" | "service";
+type Ta0b306ecbf = {
+  text: string;
+  instructions: T432e07d100;
+};
 
-type T6ef87eb7c7 = null | (T699c354d0c & {
-  version: 1;
-  custom?: T9b42ed15a8;
-});
+type Ta0c53468e3 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "desktopEditHandoff";
+};
 
-type T952a349ecb = null | Array<T349dac8902>;
+type Ta0f85a4b95 = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
+
+type Ta197d6f640 = null | T938d9cc2e1;
+
+type Ta21762d27e = {
+  title: string;
+  markdown: string;
+};
+
+type Ta24f5c3087 = {
+  readonly input: T2c9a2b8de1;
+  readonly output: Tf79cee9ca8;
+};
+
+type Ta258bd6696 = "required" | "restricted";
+
+type Ta273032f6f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillResource";
+};
+
+type Ta276f1b49a = {
+  workspaceId: Tb9596e18eb;
+  runId: T61122d2719;
+};
+
+type Ta28b1867ef = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceContact";
+};
+
+type Ta291bca56d = "yellow" | "green" | "sky" | "violet" | "red";
+
+type Ta2ba582892 = {
+  file: File;
+};
+
+type Ta2cb9f1c54 = {
+  url: string;
+  title?: undefined | string;
+  publishedAt?: undefined | string;
+  content: string;
+  truncated: T1bdf39f14a;
+  provider: "jina";
+};
+
+type Ta2dc1740cf = undefined | tanstack_ai_ToolExecutionContext<unknown>;
+
+type Ta3d11202d8 = {
+  body: {
+    alignment: T302e959e47;
+    fontFamily: string;
+    fontSizePt: number;
+    lineSpacing: T6bf9fa81f9;
+    spaceAfterPt: number;
+  };
+  title: {
+    bold: T1bdf39f14a;
+    alignment: T302e959e47;
+    fontFamily: string;
+    fontSizePt: number;
+    spaceAfterPt: number;
+    spaceBeforePt: number;
+  };
+  level1: T51ea132ed2;
+  level2: T51ea132ed2;
+  level3: T51ea132ed2;
+  numbering: {
+    enabled: T1bdf39f14a;
+  };
+  page: {
+    paperSize: Tbc2c676288;
+    orientation: T83293cdac9;
+    marginTopPt: number;
+    marginBottomPt: number;
+    marginLeftPt: number;
+    marginRightPt: number;
+  };
+};
+
+type Ta4255119d0 = {
+  readonly value: Tde0e71406c;
+  readonly issues?: undefined;
+};
+
+type Ta56b4ba098 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
+
+type Ta5cd720bed = "available" | "unavailable" | "installed";
+
+type Ta5d3bf10c8 = null | Tf13f15d459;
+
+type Ta6ace2bae9 = null | Teb5c753062;
+
+type Ta6c90ab050 = {
+  title: string;
+  introduction: string;
+  investmentHeading: string;
+  investmentBody: string;
+  equityFinancingHeading: string;
+  equityFinancingBody: string;
+  conversionPriceHeading: string;
+  conversionPriceBody: string;
+  shareClassHeading: string;
+  shareClassBody: string;
+  liquidityEventHeading: string;
+  liquidityEventBody: string;
+  companyRepresentationsHeading: string;
+  companyRepresentationsBody: string;
+  generalHeading: string;
+  generalBody: string;
+};
+
+type Ta6e00a75de = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
 
 type Ta76c7a3d9d = null | Array<{
   iban?: string;
@@ -32014,6 +34710,70 @@ type Ta76c7a3d9d = null | Array<{
   accountNumber?: string;
   bankName?: string;
 }>;
+
+type Ta7d8e78679 = {
+  content: string;
+  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
+  scope?: undefined | "workspace" | "user";
+};
+
+type Ta846db0598 = {
+  contactId: (string & valibot_Brand<"SafeId"> & Tc13989dabb);
+};
+
+type Ta8b78a42c5 = "unknown" | "disabled" | "current" | "delayed" | "stalled";
+
+type Ta8fc8ea2ad = {
+  readonly value: T1d47fa3dc0;
+  readonly issues?: undefined;
+};
+
+type Ta95272d8d2 = {
+  workspaceId: string;
+};
+
+type Taa1b35a86b = "companies-house" | "denue" | "edgar";
+
+type Taa8bbb5904 = {
+  courtCode: string;
+  spisZn: string;
+};
+
+type Tab56697f3b = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
+
+type Tab67d2a75b = null | Td09f3f3108;
+
+type Tab86be84f5 = {
+  provider: Tf822306fb6;
+  modelId: string;
+};
+
+type Tac2a3266c6 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
+
+type Tac5e0997d1 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "expense";
+};
+
+type Taca2a07939 = {
+  readonly value: Tf79cee9ca8;
+  readonly issues?: undefined;
+};
+
+type Taccc62a1a5 = {
+  folderRef: string;
+};
+
+type Tad20dce351 = {
+  readonly input: T348917fbeb;
+  readonly output: T348917fbeb;
+};
+
+type Tad34918dcf = {
+  text: string;
+  id: string;
+};
+
+type Tad3978d98f = "assignee" | "reviewer";
 
 type Tad492b101a = null | {
   country?: string;
@@ -32024,442 +34784,7 @@ type Tad492b101a = null | {
   city?: string;
 };
 
-type Tda61230c8c = null | stll_money_CentsAmount;
-
-type T688f6f1190 = null | number;
-
-type T136bf514df = {
-  index: number;
-  status: "created";
-  contactId: T938d9cc2e1;
-} | {
-  index: number;
-  status: "skipped";
-  reason: ("invalid_tax_id" | "contacts_limit_reached" | "duplicate_contact_id" | "duplicate_tax_id" | "invalid_row");
-};
-
-type T37288bed46 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "contactExtractionUpload";
-};
-
-type Tb68ccd9b57 = {
-  "content-type": string;
-  "content-length": string;
-  "x-amz-checksum-sha256": string;
-  "x-amz-sdk-checksum-algorithm": "SHA256";
-  "x-amz-tagging"?: string;
-};
-
-type Ta846db0598 = {
-  contactId: (string & valibot_Brand<"SafeId"> & Tc13989dabb);
-};
-
-type Tc1a2e5b1a7 = {
-  ":workspaceId": T6d90fb7f32;
-};
-
-type T80d841ed63 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "property";
-};
-
-type T6afe23e121 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
-
-type Td23efda0c9 = null | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-
-type Td8b1ef5d5f = "date" | "text" | "person" | "file" | "single-select" | "multi-select" | "int" | "money";
-
-type Ta95272d8d2 = {
-  workspaceId: string;
-};
-
-type T35788588c9 = "date" | "text" | "single-select" | "multi-select" | "int";
-
-type T2f09c082c1 = {
-  value: string;
-  type: "text";
-  version: 1;
-};
-
-type T827d04be89 = {
-  value: T432e07d100;
-  type: "single-select";
-  version: 1;
-};
-
-type T452ddcb649 = {
-  value: Array<string>;
-  type: "multi-select";
-  version: 1;
-};
-
-type T54bf6fc207 = {
-  value: T432e07d100;
-  type: "date";
-  version: 1;
-};
-
-type Tdd30a41adc = {
-  value: number;
-  type: "int";
-  version: 1;
-  currency: T432e07d100;
-};
-
-type Tc6e8f2c363 = {
-  type: "money";
-  version: 1;
-  currency: string;
-  amountCents: number;
-};
-
-type Tdc8456b76d = {
-  name: string;
-  type: "person";
-  userId: T432e07d100;
-  version: 1;
-  image: T432e07d100;
-};
-
-type T281869e86a = {
-  prompt: string;
-};
-
-type Teba0ca2bc3 = "stale" | "fresh";
-
-type Tfcce4260b1 = {
-  type: "file";
-  version: 1;
-} | T29dbcb6703 | T9ffc3fafa7 | T888302d360 | T748711fee4 | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type T75e7369e19 = null | Array<T219ebda4a4>;
-
-type T875ec33b50 = null | "document-type-classifier";
-
-type Tce28b0606f = {
-  condition: Td23efda0c9;
-  dependsOnPropertyId: T80d841ed63;
-};
-
-type T7985261e0e = "single-select" | "multi-select";
-
-type Tbb32f197c9 = string & valibot_Brand<"SafeId"> & T9c01826163;
-
-type Ted097feadd = "private" | "team";
-
-type T5a51f85bbe = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "pendingUpload";
-};
-
-type T6b73348afa = null | T9a509045a7;
-
-type Tfa384bd983 = {
-  [key: string]: string;
-};
-
-type T116a5c37c8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "entityVersion";
-};
-
-type T7fc3acf5ac = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkill";
-};
-
-type Tb2b6819922 = "keep" | "accept" | "reject";
-
-type T6acd1b6804 = "Unauthorized" | Tc642053948;
-
-type T996a3b2f0e = "Internal Server Error" | Tc642053948;
-
-type Tad3978d98f = "assignee" | "reviewer";
-
-type Tc81f44a4a0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "user";
-};
-
-type T6709dca913 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalList";
-};
-
-type T7a2655a211 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListSection";
-};
-
-type T98953a0f12 = {
-  workspaceId: string;
-};
-
-type T61122d2719 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "flowRun";
-};
-
-type Tbf94b8914e = null | "issue" | "task" | "fact" | "requirement" | "event";
-
-type T76b418efa9 = null | "task" | "event" | "deadline" | "meeting" | "hearing";
-
-type T82d662a0f0 = null | T116a5c37c8;
-
-type T99de9c7152 = null | "unknown" | "free" | "tentative" | "busy" | "out_of_office" | "working_elsewhere";
-
-type Tf5c81c4dc2 = null | "private" | "normal" | "confidential";
-
-type Te493c91f7e = null | T3ed4bbeee3;
-
-type T4c4fff0216 = null | Array<(T3ed4bbeee3 & {
-  optional?: false | true;
-  responseStatus?: null | string;
-  type?: null | "optional" | "required" | "resource";
-})>;
-
-type T304946b2ad = null | {
-  pattern: T432e07d100;
-  range: T432e07d100;
-  raw?: unknown;
-};
-
-type Tab56697f3b = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
-
-type Tb09958ae39 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "taskAssignee";
-};
-
-type T308fce9321 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
-
-type T888e660ed8 = "task" | "deadline";
-
-type Tc76e62dca7 = "email" | "document" | "court" | "manual" | "flow" | "calendar" | "import" | "api";
-
-type Ta56b4ba098 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
-
-type Tbcf4936bb0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "entityLink";
-};
-
-type Tedc0dc7925 = {
-  workspaceId: string;
-};
-
-type T8696d09f3f = {
-  workspaceId: string;
-};
-
-type Tf38d7a3340 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "clauseCategory";
-};
-
-type Tb85b0b5de5 = null | Tf38d7a3340;
-
-type Ta2ba582892 = {
-  file: File;
-};
-
-type T9de85a3162 = {
-  created: number;
-  skipped: number;
-  errors: Array<string>;
-};
-
-type T1e34f254e7 = {
-  level?: number;
-  style?: string;
-  runs?: Array<{
-    bold?: false | true;
-    italic?: false | true;
-    text: string;
-  }>;
-  isDirective?: false | true;
-  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
-  directiveExpression?: string;
-  listKind?: "bullet" | "ordered";
-  listLevel?: number;
-  text: string;
-};
-
-type T9b42ed15a8 = {
-  [key: string]: Tcd02080ab1;
-};
-
-type T7a92932f06 = {
-  value: string;
-  description: string;
-};
-
-type T4275dec338 = {
-  workspaceId?: Teb5c753062;
-  contextMatterIds?: Array<Teb5c753062>;
-  truncateAfterMessageId?: T7d9d93bde2;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T42090b159e;
-  activeDraft?: Td3493e7d84;
-  activeFile?: T68e02c7e0d;
-  activeTemplate?: Tcd61c78c49;
-  activeDecision?: T459c229135;
-  activeExternal?: Taf5ff5c24f;
-  activeSkill?: T8649aae095;
-  activeStatute?: Tc33c7b536f;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T7d9d93bde2;
-    role: Tefd05507c2;
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: T780bacb7ad;
-  sendMode: Tbbd6b6f3b5;
-};
-
-type T0f5d4b903b = {
-  id: string;
-  role: ("tool" | "user" | "system" | "activity" | "assistant" | "reasoning" | "developer");
-};
-
-type T55bdf3ebb2 = {
-  metadata?: Record<never, never>;
-  parameters?: unknown;
-  name: string;
-  description: string;
-};
-
-type T0eb9f816ff = {
-  workspaceId?: Teb5c753062;
-  contextMatterIds?: Array<Teb5c753062>;
-  truncateAfterMessageId?: T7d9d93bde2;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T42090b159e;
-  activeDraft?: Td3493e7d84;
-  activeFile?: T68e02c7e0d;
-  activeTemplate?: Tcd61c78c49;
-  activeDecision?: T459c229135;
-  activeExternal?: Taf5ff5c24f;
-  activeSkill?: T8649aae095;
-  activeStatute?: Tc33c7b536f;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T7d9d93bde2;
-    role: "assistant";
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: T780bacb7ad;
-  sendMode: Tbbd6b6f3b5;
-  parentRunId: string;
-  resume: Array<T7c9c034721>;
-};
-
-type T7c9c034721 = {
-  payload?: unknown;
-  status: "resolved";
-  interruptId: string;
-} | {
-  status: "cancelled";
-  interruptId: string;
-};
-
-type T9e0fd3a1d8 = {
-  workspaceId: string;
-};
-
-type T873a479438 = {
-  createdAt: string;
-  id: T7d9d93bde2;
-  metadata?: T0122da017b;
-  role: Tefd05507c2;
-  parts: Array<Tff5735a10a>;
-};
-
-type T3a5770ff6b = null | "none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh";
-
-type T4240f19bc1 = null | Tbf9ef52639;
-
-type Ta0f85a4b95 = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
-
-type Tbbd6b6f3b5 = "anonymized" | "rawOverride";
-
-type Ta6ace2bae9 = null | Teb5c753062;
-
-type Tbf9ef52639 = {
-  estimatedTokens: number;
-  triggerTokens: number;
-  cacheStableTokens: number;
-  summarizedMessageCount: number;
-  breakdown: {
-    promptTokens: number;
-    toolTokens: number;
-    summaryTokens: number;
-    attachmentTokens: number;
-    conversationTokens: number;
-  };
-};
-
-type T7d9d93bde2 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "chatMessage";
-};
-
-type T56c40ca454 = {
-  workspaceId: string;
-};
-
-type Teb6688001f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "invoice";
-};
-
-type Tefbda21c4c = "draft" | "finalized" | "sent" | "paid" | "void";
-
-type T7881dfbb44 = "draft" | "approved" | "billed" | "written_off";
-
-type T4fc8c01a92 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "timeEntry";
-};
-
-type Tac5e0997d1 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "expense";
-};
-
-type T1f93dbbdfc = "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
-
-type Tf92771e40d = {
-  workspaceId: string;
-};
-
-type Te35800633c = {
-  readonly error: "Not Found";
-};
-
-type Td90f3cb611 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legislationDocument";
-};
-
-type Tc5f67256c1 = {
-  id: string;
-  eli: string;
-  slug: T432e07d100;
-  title: string;
-  country: string;
-  language: string;
-  documentType: T432e07d100;
-  status: string;
-  versionValidFrom: T432e07d100;
-};
-
-type T7c3a881b37 = T96412b8318 | Te35800633c;
-
-type Tfe81175840 = {
+type Tad8a18f823 = {
   code?: string;
   message: string;
   hint?: string;
@@ -32478,274 +34803,7 @@ type Tfe81175840 = {
   post_claim_scopes?: Array<string>;
   requiredFields?: Array<T196b4403fb>;
 } | {
-  readonly message: "Legislation document not found";
-};
-
-type Tffb9800473 = {
-  documentId: Td90f3cb611;
-  language: string;
-  anchorId: string;
-  citedAnchorId: T432e07d100;
-  headings: Array<{
-    anchorId: string;
-    level: T1754ed2395;
-    text: string;
-  }>;
-  heading: (null | {
-    id: string;
-    anchorId: string;
-    level: T1754ed2395;
-    text: string;
-  });
-  blocks: Array<{
-    id: string;
-    anchorId: string;
-    text: string;
-  }>;
-};
-
-type T6a4a80b749 = {
-  code?: string;
-  text?: string;
-};
-
-type Tf8f3e7ee44 = {
-  numero?: string;
-  seccion?: T4340530c23 | Array<T4340530c23>;
-  sumario_diario?: {
-    identificador?: string;
-    url_pdf?: {
-      szBytes?: string;
-      szKBytes?: string;
-      texto?: string;
-    };
-  };
-};
-
-type T95752d89bb = string | {
-  code?: string;
-  message: string;
-};
-
-type T96412b8318 = {
-  documentAst: (null | {
-    version: 1;
-    source: T6e3baa4852;
-    metadata: T9411263f78;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T1754ed2395;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<T7522841395>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T5b30b2c0a8;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<T7522841395>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<T7522841395>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T7c8bca7f18);
-  fulltext: T432e07d100;
-  eli: string;
-  slug: T432e07d100;
-  title: string;
-  country: string;
-  language: string;
-  documentType: T432e07d100;
-  status: string;
-  effectiveDate: T432e07d100;
-  versionValidFrom: T432e07d100;
-  versionValidTo: T432e07d100;
-  sections: T28f55fc43c;
-  sourceUrl: T432e07d100;
-  documentUrl: T432e07d100;
-  createdAt: Date;
-  updatedAt: Date;
-  citationCaseCount: T688f6f1190;
-  allowsDerivedAi: T1bdf39f14a;
-  id: Td90f3cb611;
-};
-
-type T0156f5cdaa = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "usagePolicy";
-};
-
-type Ta197d6f640 = null | T938d9cc2e1;
-
-type T77769e1af9 = {
-  client: (null | {
-    id: T938d9cc2e1;
-    displayName: string;
-  });
-  defaultViewId: (null | Tf962ada343);
-  id: Teb5c753062;
-  name: string;
-  reference: string;
-  clientId: Ta197d6f640;
-  color: T432e07d100;
-  status: T9c6eb40403;
-  lastActivityAt: Date;
-};
-
-type T59dcde539e = {
-  workspaceId: Tbb32f197c9;
-};
-
-type T9c6eb40403 = "active" | "archived" | "deleting";
-
-type T3b5822b18f = "Not Found" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-};
-
-type Tea019afe5d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "justification";
-};
-
-type Tb8d6cfe011 = {
-  version: 1;
-  blocks: Array<{
-    kind: "pdf-bates";
-    fileFieldId: T1c7a854487;
-    statements: Array<{
-      text: string;
-      citations: Array<{
-        bates: string;
-        pageNumber: number;
-      }>;
-    }>;
-  } | {
-    kind: "docx-folio";
-    fileFieldId: T1c7a854487;
-    statements: Array<{
-      text: string;
-      citations: Array<{
-        citationStatus: "verified";
-        blockId: string;
-        text: string;
-      } | {
-        citationStatus: "unverified";
-        text: string;
-      }>;
-    }>;
-  } | {
-    kind: "playbook-verdict";
-    rationale: string;
-    matchedRef?: Te831c71c90 | Tc0c55e9cf5;
-  } | {
-    kind: "decision-passage";
-    anchorId: string;
-    excerpt: string;
-  }>;
-};
-
-type Te08ba39d3b = {
-  version: 1;
-  boxes: Array<Tfccf1c1167>;
-};
-
-type Tfccf1c1167 = {
-  pageNumber: number;
-  yMin: number;
-  xMin: number;
-  yMax: number;
-  xMax: number;
-};
-
-type Teff106c9af = null | false | true;
-
-type T2609ebaa39 = null | T976b70d646;
-
-type T0beb2a0a9f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "auditLog";
-};
-
-type T976b70d646 = {
-  deletedAt: T432e07d100;
-  id: string;
-  image: T432e07d100;
-  name: T432e07d100;
-  type: "user";
-};
-
-type Td2977c7b72 = {
-  workspaceId: Tbb32f197c9;
-};
-
-type Ta28b1867ef = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceContact";
-};
-
-type Te350a1ab11 = {
-  workspaceId: Tbb32f197c9;
-};
-
-type Tf9d14dced5 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "anonymizationBlacklistEntry";
-};
-
-type T599434ec07 = {
-  workspaceId: Tbb32f197c9;
-};
-
-type T8091e6bfed = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "anonymizationAllowlistEntry";
-};
-
-type Tbecb65774d = {
-  workspaceId: Tbb32f197c9;
-};
-
-type T6f65fd94a6 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceMember";
-};
-
-type T6ebb5b60ba = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "playbookDefinition";
+  readonly message: string;
 };
 
 type Tae327b658e = {
@@ -32847,215 +34905,88 @@ type Tae327b658e = {
   }>;
 };
 
-type T5d4fc8c82b = {
-  guidance?: string;
-  issue: string;
-  mode: "extract";
-  ask: Te18c7397cc;
-  enabled: T1bdf39f14a;
-  sourceId: string;
-} | Tf9d55cf19d;
+type Taf5ff5c24f = {
+  text?: string;
+  snippet?: string;
+  provider?: string;
+  connectorSlug?: string;
+  sourceToolName?: string;
+  url: string;
+  title: string;
+};
 
-type T9f51aef7c3 = {
-  subject: string;
-  reason: {
-    kind: "deal-specific-value";
-  } | {
-    kind: "structural";
-  } | {
-    kind: "lower-weight";
-  } | {
-    kind: "other";
-    text: string;
+type Taf8f77d898 = {
+  readonly input: Tffa11b61c2;
+  readonly output: Tde0e71406c;
+};
+
+type Tafda8a9ee4 = (T27402211cc & {
+  type: T219ebda4a4;
+  resource: Tfa4d090dd5;
+  entityId: string;
+  workspaceId: string;
+  workspaceName: string;
+  parentId: T432e07d100;
+  lastEditedByName: T432e07d100;
+  lastEditedByImage: T432e07d100;
+  fileFieldId: T432e07d100;
+  filePropertyId: T432e07d100;
+  mimeType: T432e07d100;
+}) | (T27402211cc & {
+  type: "matter";
+  resource: T9d6eb42931;
+  workspaceId: string;
+  workspaceName: string;
+  color: T432e07d100;
+}) | (T27402211cc & {
+  type: "contact";
+  resource: {
+    readonly type: "contact";
+    readonly id: stll_api_contract_SafeId<"contact">;
   };
-};
-
-type T03f9b9c11b = {
-  role: string;
-  name: T432e07d100;
-};
-
-type Tec60471056 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type Ta258bd6696 = "required" | "restricted";
-
-type T0a46fb6ba4 = "medium" | "high" | "low" | "blocker";
-
-type Tf9ac86bc44 = {
-  text: string;
-  id: string;
-};
-
-type T03c56de23b = "language" | "presence" | "parameter" | "enumeration";
-
-type Te2ec8e0b17 = null | T6ebb5b60ba;
-
-type Teb3fcd8ef4 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentReviewRun";
-};
-
-type T149c4eb383 = {
-  run: {
-    decisionCounts: Tb1ed7519f1;
-    playbookStale: T1bdf39f14a;
-    playbookMissing: T1bdf39f14a;
-    basis: {
-      references: Array<{
-        workspaceId: Teb5c753062;
-        entityId: T9a509045a7;
-        entityVersionId: T116a5c37c8;
-        fileFieldId: T1c7a854487;
-      } & {
-        workspaceName: T432e07d100;
-        name: T432e07d100;
-        contentSha256: T432e07d100;
-      }>;
-      playbook: {
-        definitionId: Te2ec8e0b17;
-        versionId: (null | (string & valibot_Brand<"SafeId"> & {
-          readonly __safeIdType?: "playbookDefinitionVersion";
-        }));
-        provenance: Tb2d33c80ac;
-        definitionSnapshot: {
-          name: string;
-          positions: T50a09487e3;
-        };
-      };
-      perspective: {
-        type: "neutral";
-      } | {
-        type: "party";
-      } & T03f9b9c11b;
-    };
-    createdAt: string;
-    startedAt: T432e07d100;
-    finishedAt: T432e07d100;
-    id: Teb3fcd8ef4;
-    status: T97123e865d;
-    errorCode: Tdf3afab53d;
-    entityId: T9a509045a7;
-    fileFieldId: T1c7a854487;
-    entityVersionId: T116a5c37c8;
-    contentSha256: string;
-    skipped: Array<T9f51aef7c3>;
-    total: number;
-    completed: number;
-    pipelineVersion: number;
+  contactId: string;
+  contactType: Te287bedd42;
+}) | (T27402211cc & {
+  type: "case-law";
+  resource: {
+    readonly type: "case_law_decision";
+    readonly id: stll_api_contract_SafeId<"caseLawDecision">;
   };
-  findings: Array<{
-    id: T92357156ac;
-    positionId: string;
-    positionTitle: string;
-    outcome: T432e07d100;
-    payload: {
-      finding: {
-        positionId: string;
-        issue: string;
-        severity: T0a46fb6ba4;
-        standardSource: T7d5b6398be;
-        verdict: (null | "fallback" | "missing" | "compliant" | "deviation" | "additional" | "not-applicable");
-        delta: {
-          kind: "parameter";
-          target: T602ddca6f8;
-          standard: T602ddca6f8;
-        } | {
-          kind: "enumeration";
-          items: Array<{
-            label: string;
-            inTarget: T1bdf39f14a;
-            inStandard: T1bdf39f14a;
-            citation: (null | T84093f1fc9);
-          }>;
-        } | {
-          kind: "presence";
-          term: string;
-          inTarget: T1bdf39f14a;
-          inStandard: T1bdf39f14a;
-        } | {
-          kind: "language";
-        };
-        extracted: (null | {
-          value: string;
-          text: string;
-        });
-        rationale: T432e07d100;
-        matchedRef?: Te831c71c90 | Tc0c55e9cf5;
-        consensus?: "mixed" | "single" | "consistent";
-        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
-        explanation?: {
-          type: "comparison";
-          text: string;
-        } | {
-          type: "insufficient-evidence";
-        };
-        recommendation?: null | string;
-        citations: Array<T84093f1fc9>;
-        referenceCitations?: Array<{
-          fileFieldId: T1c7a854487;
-          passages: Array<{
-            id: string;
-            blockId: string;
-          }>;
-        }>;
-        fix: (null | {
-          kind: "replaceInBlock";
-          blockId: string;
-          find: string;
-          replace: string;
-        } | {
-          kind: "replaceBlock";
-          blockId: string;
-          text: string;
-        } | {
-          kind: "insertAfterBlock";
-          blockId: string;
-          text: string;
-        });
-      } & {
-        referenceDetail?: "withheld";
-      };
-    };
-    decision: Te078108f79;
-    flags: Array<T6afe23e121>;
-    decidedBy: T432e07d100;
-    decidedAt: T432e07d100;
-    applicationStatus: T5dbcd4218d;
-    appliedBy: T432e07d100;
-    appliedAt: T432e07d100;
-    suggestionId: (null | T95a4a01f59);
-  }>;
+  decisionId: string;
+  caseNumber: string;
+  identifiers: T4b4720fb6b;
+  court: string;
+  country: string;
+  decisionDate: T432e07d100;
+}) | (T27402211cc & {
+  type: "chat";
+  resource: {
+    readonly type: "chat_thread";
+    readonly id: stll_api_contract_SafeId<"chatThread">;
+  };
+  threadId: string;
+  workspaceId: T432e07d100;
+  workspaceName: T432e07d100;
+});
+
+type Tb025ef030b = {
+  readonly value: T7c9021b9f6;
+  readonly issues?: undefined;
 };
 
-type T97123e865d = "failed" | "cancelled" | "running" | "completed" | "queued";
+type Tb063d4fcd4 = {
+  id: T08bc488f5e;
+  type: ("created" | "existing" | "reactivated");
+};
 
-type Tdf3afab53d = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
+type Tb09958ae39 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "taskAssignee";
+};
+
+type Tb13bfff6df = {
+  readonly input: Tf87d0b824c;
+  readonly output: T13f2f9bd72;
+};
 
 type Tb1ed7519f1 = {
   open: number;
@@ -33063,67 +34994,379 @@ type Tb1ed7519f1 = {
   dismissed: number;
 };
 
+type Tb1fcbf5ca4 = {
+  items: Array<Te3ba023acf>;
+  nextCursor: T432e07d100;
+  limit: number;
+};
+
+type Tb26813d017 = {
+  instanceProvisioned: T1bdf39f14a;
+  decisionInstanceProvisioned: T1bdf39f14a;
+};
+
+type Tb2ae6e53e6 = {
+  readonly input: T74114cb775;
+  readonly output: T92b1e52bb0;
+};
+
+type Tb2b6819922 = "keep" | "accept" | "reject";
+
 type Tb2d33c80ac = "draft" | "approved" | "ephemeral";
 
-type Tf7b6a1b7cb = "docx" | "xlsx" | "csv";
-
-type Te078108f79 = "open" | "accepted" | "dismissed";
-
-type T92357156ac = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentReviewFinding";
+type Tb368e5ae56 = {
+  status: "ready";
 };
 
-type T5dbcd4218d = "pending" | "applied";
-
-type T9a881e7ede = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
-
-type T88eaf34343 = "translated" | "bilingual";
-
-type Tfcf09c4c62 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentTranslationRun";
-};
-
-type Tdb872dbe7d = null | T1c7a854487;
-
-type Tba98ee81e0 = "table" | "paragraph" | "heading" | "listItem";
-
-type Tc2ec057ae0 = "keep" | "inline" | "translate";
-
-type T488ab33bc2 = "user" | "proposed" | "detected";
-
-type T4d9ac44155 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "bilingualTranslationRun";
-};
-
-type Tb60b7c14cd = "failed" | "running" | "completed" | "queued";
-
-type Tb60a03a607 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "reportExport";
-};
-
-type T7d5dbe7dfc = "workspace" | "download";
-
-type Tf962ada343 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceView";
-};
+type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "vies";
 
 type Tb47b7b98fd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowDefinition";
 };
 
-type Te27c9d3a2b = {
-  workspaceId: Tbb32f197c9;
+type Tb5b50d2995 = {
+  workspaceId: string;
 };
 
-type Tac2a3266c6 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
+type Tb60a03a607 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "reportExport";
+};
 
-type T5a7c3abed7 = null | Tb47b7b98fd;
+type Tb60b7c14cd = "failed" | "running" | "completed" | "queued";
 
-type Teef0e50364 = "manual" | "schedule" | "file-upload";
+type Tb62d3ee375 = "Not Found" | Tc642053948;
 
-type Ta276f1b49a = {
-  workspaceId: Tbb32f197c9;
-  runId: T61122d2719;
+type Tb63d3fa983 = {
+  readonly input: Ta7d8e78679;
+  readonly output: Tcb64065203;
+};
+
+type Tb68ccd9b57 = {
+  "content-type": string;
+  "content-length": string;
+  "x-amz-checksum-sha256": string;
+  "x-amz-sdk-checksum-algorithm": "SHA256";
+  "x-amz-tagging"?: string;
+};
+
+type Tb85b0b5de5 = null | Tf38d7a3340;
+
+type Tb8b5b0c6b3 = {
+  fieldPath: string;
+  valuePath: string;
+  itemIndex: T688f6f1190;
+  reason: ("truncated" | "empty" | "interrupted" | "generation-failed");
+  message: string;
+};
+
+type Tb8d6cfe011 = {
+  version: 1;
+  blocks: Array<{
+    kind: "pdf-bates";
+    fileFieldId: T1c7a854487;
+    statements: Array<{
+      text: string;
+      citations: Array<{
+        bates: string;
+        pageNumber: number;
+      }>;
+    }>;
+  } | {
+    kind: "docx-folio";
+    fileFieldId: T1c7a854487;
+    statements: Array<{
+      text: string;
+      citations: Array<{
+        citationStatus: "verified";
+        blockId: string;
+        text: string;
+      } | {
+        citationStatus: "unverified";
+        text: string;
+      }>;
+    }>;
+  } | {
+    kind: "playbook-verdict";
+    rationale: string;
+    matchedRef?: Te831c71c90 | Tc0c55e9cf5;
+  } | {
+    kind: "decision-passage";
+    anchorId: string;
+    excerpt: string;
+  }>;
+};
+
+type Tb8ee110390 = {
+  readonly value: T43e78e86e2;
+  readonly issues?: undefined;
+};
+
+type Tb9596e18eb = string & valibot_Brand<"SafeId"> & T9c01826163;
+
+type Tba0a2a4af3 = {
+  readonly value: T596c558ecb;
+  readonly issues?: undefined;
+};
+
+type Tba98ee81e0 = "table" | "paragraph" | "heading" | "listItem";
+
+type Tba9914ae60 = {
+  readonly input: {
+    (options: T2b4af5b5ce): Td09f3f3108;
+  };
+  readonly output: {
+    (options: T2b4af5b5ce): Td09f3f3108;
+  };
+};
+
+type Tbb6e0c457f = "none" | "bearer" | "oauth2";
+
+type Tbbd6b6f3b5 = "anonymized" | "rawOverride";
+
+type Tbc2c676288 = "preserve" | "a4" | "letter" | "legal";
+
+type Tbc4150ec47 = {
+  code: stll_api_contract_ContactImportIssueCode;
+  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "tax_id" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
+  rowNumber: number;
+};
+
+type Tbc99f68f5d = {
+  readonly input: Tcb4e2e17b4;
+  readonly output: T5af6308a18;
+};
+
+type Tbcf4936bb0 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "entityLink";
+};
+
+type Tbdce6ead48 = null | T7f76e93fad;
+
+type Tbecb65774d = {
+  workspaceId: Tb9596e18eb;
+};
+
+type Tbf94b8914e = null | "issue" | "task" | "fact" | "requirement" | "event";
+
+type Tbf9ef52639 = {
+  estimatedTokens: number;
+  triggerTokens: number;
+  cacheStableTokens: number;
+  summarizedMessageCount: number;
+  breakdown: {
+    promptTokens: number;
+    toolTokens: number;
+    summaryTokens: number;
+    attachmentTokens: number;
+    conversationTokens: number;
+  };
+};
+
+type Tbfcb6ae0d3 = {
+  readonly value: T1f1ce35744;
+  readonly issues?: undefined;
+};
+
+type Tc0af96215a = {
+  readonly value: T846b0784de;
+  readonly issues?: undefined;
+};
+
+type Tc0c55e9cf5 = {
+  kind: "redLine";
+  ruleId: string;
+  text: string;
+};
+
+type Tc13989dabb = {
+  readonly __safeIdType?: "contact";
+};
+
+type Tc14bc9e445 = {
+  readonly input: T46f58f58fc;
+  readonly output: T87284c6919;
+};
+
+type Tc1a2e5b1a7 = {
+  ":workspaceId": T6d90fb7f32;
+};
+
+type Tc2754df8d9 = {
+  documentTypeId: T307eb7347f;
+};
+
+type Tc2ec057ae0 = "keep" | "inline" | "translate";
+
+type Tc33c7b536f = {
+  documentId: Td90f3cb611;
+};
+
+type Tc3d4d912b6 = {
+  readonly value: Tf5e31e73aa;
+  readonly issues?: undefined;
+};
+
+type Tc3f2878d85 = {
+  registry: Tb3a8582d6b;
+  formats: Array<{
+    key: string;
+    template: string;
+  }>;
+};
+
+type Tc44742d4e9 = {
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "filesystem";
+};
+
+type Tc472c563cc = {
+  bold: T1bdf39f14a;
+  alignment: T302e959e47;
+  fontFamily: string;
+  fontSizePt: number;
+  spaceAfterPt: number;
+  spaceBeforePt: number;
+  numberingFormat: T4c01853e6a;
+  indentLeftPt: number;
+  hangingPt: number;
+};
+
+type Tc479176c61 = {
+  accepted: number;
+  dismissed: number;
+  runs: number;
+  latestAcceptedFixText: T432e07d100;
+};
+
+type Tc4b9125369 = {
+  snippet?: string;
+  citation?: string;
+  jurisdiction?: string;
+  sourceType?: string;
+  type: "clip";
+  url: string;
+  version: 1;
+};
+
+type Tc5f67256c1 = {
+  id: string;
+  eli: string;
+  slug: T432e07d100;
+  title: string;
+  country: string;
+  language: string;
+  documentType: T432e07d100;
+  status: string;
+  versionValidFrom: T432e07d100;
+};
+
+type Tc642053948 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+};
+
+type Tc65782e9a6 = {
+  id: T1173055df0;
+  name: string;
+  fileName: string;
+  fieldCount: number;
+  sizeBytes: number;
+  createdAt: Date;
+};
+
+type Tc69524a13b = {
+  query: string;
+  limit: number;
+};
+
+type Tc6cd6234fd = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
+
+type Tc6e8f2c363 = {
+  type: "money";
+  version: 1;
+  currency: string;
+  amountCents: number;
+};
+
+type Tc6f587c6bd = {
+  query: string;
+  scope: T0e8943eb14;
+  hint: T432e07d100;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: T432e07d100;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type Tc6f6ebe775 = {
+  reason?: "processing" | "enqueue";
+  status: "failed";
+};
+
+type Tc76e62dca7 = "email" | "document" | "court" | "manual" | "flow" | "calendar" | "import" | "api";
+
+type Tc783e54f00 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+} | {
+  readonly message: "Invalid cursor";
+} | {
+  readonly message: string;
+};
+
+type Tc78d41b768 = {
+  code: string;
+  message: string;
+  severity: T8e8f463ae0;
+  line?: undefined | number;
+};
+
+type Tc7b9fe0fcd = {
+  courtCode: string;
+  spisZn: string;
+};
+
+type Tc81f44a4a0 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "user";
 };
 
 type Tc82c428863 = {
@@ -33141,7 +35384,208 @@ type Tc82c428863 = {
   documentTitle: string;
 };
 
-type T579e5557db = "approved" | "rejected";
+type Tc83d8b9f37 = {
+  skillName: string;
+  path: string;
+};
+
+type Tc8699411bc = {
+  readonly value: T9021ebfc29;
+  readonly issues?: undefined;
+};
+
+type Tc9666df965 = {
+  needsApproval: true;
+  approvalSchema: undefined;
+};
+
+type Tca17a52309 = {
+  groupByPropertyId?: undefined | string;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "table";
+  columnOrder: Array<string>;
+  columnPinning: Array<string>;
+};
+
+type Tca248f9d2b = {
+  label?: string;
+  number: string;
+  type: Ta083079a24;
+  isPrimary: T1bdf39f14a;
+};
+
+type Tcb4e2e17b4 = {
+  messageId: string;
+  before?: undefined | number;
+  after?: undefined | number;
+};
+
+type Tcb64065203 = {
+  content: string;
+  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
+  scope?: undefined | "workspace" | "user";
+};
+
+type Tcbe8612c20 = "draft" | "accepted" | "rejected" | "proposed";
+
+type Tcc80affb43 = {
+  defaultFormatId: T432e07d100;
+  defaultFormatSource: (null | "organization" | "user");
+};
+
+type Tccbcb316fa = {
+  targetMessageId: string;
+  messages: Array<{
+    messageId: string;
+    role: string;
+    createdAt: string;
+    content: string;
+  }>;
+};
+
+type Tcd02080ab1 = null | string | number | false | true | T9b42ed15a8 | Array<Tcd02080ab1>;
+
+type Tcd61c78c49 = {
+  docxEditSnapshot?: T3cedcce572;
+  templateId: T1173055df0;
+  fileName: string;
+};
+
+type Tcd6d16a377 = "constitutional" | "supreme" | "regional" | "other";
+
+type Tcdd0e1e285 = "responsible" | "originating" | "lead";
+
+type Tcdf7409741 = {
+  readonly value: T109fc089ae;
+  readonly issues?: undefined;
+};
+
+type Tce28b0606f = {
+  condition: Td23efda0c9;
+  dependsOnPropertyId: T80d841ed63;
+};
+
+type Td06876de99 = T24da1e86c5 | T8cd5b388a4;
+
+type Td09f3f3108 = {
+  [key: string]: unknown;
+};
+
+type Td0d20fc706 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawJudge";
+};
+
+type Td0e4afd336 = {
+  clauseVersion?: number;
+  source: "clause";
+  clauseId: string;
+};
+
+type Td120f37682 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "mcpUserConnection";
+};
+
+type Td220c5b82e = {
+  skillName: string;
+};
+
+type Td23efda0c9 = null | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
+
+type Td29492c5e7 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListColumn";
+};
+
+type Td2977c7b72 = {
+  workspaceId: Tb9596e18eb;
+};
+
+type Td33fc5a5dd = {
+  readonly value: Tea3eb4808d;
+  readonly issues?: undefined;
+};
+
+type Td3493e7d84 = {
+  fileName: string;
+  toolCallId: string;
+  originChatMessageId: T7d9d93bde2;
+  originChatThreadId: T780bacb7ad;
+  docxEditSnapshot: T3cedcce572;
+};
+
+type Td4552d8c2b = {
+  readonly value: Tc83d8b9f37;
+  readonly issues?: undefined;
+};
+
+type Td4b7fddf97 = {
+  readonly value: T355e36f9c1;
+  readonly issues?: undefined;
+};
+
+type Td50e30d0f1 = {
+  readonly value: T0bc71347dc;
+  readonly issues?: undefined;
+};
+
+type Td519ee5a29 = {
+  countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
+  isPrimary: T1bdf39f14a;
+};
+
+type Td5abdf9c63 = {
+  answers: Array<{
+    question: string;
+    answer: string;
+  }>;
+};
+
+type Td787ffea34 = {
+  readonly value: T665ac097fb;
+  readonly issues?: undefined;
+};
+
+type Td7e6add81d = {
+  skillName: string;
+};
+
+type Td7e706f8bb = {
+  readonly input: T1214881f9f;
+  readonly output: T7c9021b9f6;
+};
+
+type Td7e844e938 = {
+  readonly value: T46ab7251d5;
+  readonly issues?: undefined;
+};
+
+type Td8b1ef5d5f = "date" | "text" | "person" | "file" | "single-select" | "multi-select" | "int" | "money";
+
+type Td9037df773 = {
+  quote: string;
+  blockAnchorId: string;
+  startOffset: number;
+  endOffset: number;
+};
+
+type Td90f3cb611 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legislationDocument";
+};
+
+type Td9b2117be5 = {
+  workspaceId: string;
+};
+
+type Tda61230c8c = null | stll_money_CentsAmount;
+
+type Tdaa282e677 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalReaderAnnotation";
+};
+
+type Tdb872dbe7d = null | T1c7a854487;
 
 type Tdc26bce8d6 = {
   status: ("accepted" | "new" | "snoozed" | "dismissed");
@@ -33270,969 +35714,19 @@ type Tdc26bce8d6 = {
   updatedAt: string;
 };
 
-type T1c62d3c45a = {
-  signalId: Tff67652b63;
-};
-
-type T628ff2d974 = {
-  workspaceId: string;
-};
-
-type T75ecb21f44 = T876924cdc0 | Tca17a52309 | Tc44742d4e9 | T48e3c0ff63 | Tf52fd16fac | Tf272474a81;
-
-type T876924cdc0 = {
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
+type Tdc8456b76d = {
+  name: string;
+  type: "person";
+  userId: T432e07d100;
   version: 1;
-  type: "overview";
+  image: T432e07d100;
 };
 
-type Tca17a52309 = {
-  groupByPropertyId?: undefined | string;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
-  version: 1;
-  type: "table";
-  columnOrder: Array<string>;
-  columnPinning: Array<string>;
-};
-
-type Tc44742d4e9 = {
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
-  version: 1;
-  type: "filesystem";
-};
-
-type T48e3c0ff63 = {
-  groupByPropertyId?: undefined | string;
-  subgroupByPropertyId?: undefined | string;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
-  version: 1;
-  type: "kanban";
-};
-
-type Tf52fd16fac = {
-  datePropertyId: string;
-  endDatePropertyId?: undefined | string;
-  additionalDatePropertyIds?: undefined | Array<string>;
-  mode: ("year" | "month" | "week");
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
-  version: 1;
-  type: "calendar";
-};
-
-type Tf272474a81 = {
-  startDatePropertyId: string;
-  endDatePropertyId: string;
-  zoom: ("month" | "week" | "day" | "quarter");
-  groupByPropertyId?: undefined | string;
-  showTable: T1bdf39f14a;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T9531885fa8>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4310244850>;
-  version: 1;
-  type: "timeline";
-};
-
-type T7b52b1c160 = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline";
-
-type Tcc80affb43 = {
-  defaultFormatId: T432e07d100;
-  defaultFormatSource: (null | "organization" | "user");
-};
-
-type T4d6cdf8636 = Response | {
-  status: "idle";
-} | {
-  status: "running";
-  startedAt: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
-};
-
-type T774c2c36f6 = Response | {
-  status: "idle";
-  jobId: string;
-} | {
-  status: "running";
-  startedAt: string;
-  jobId: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-  jobId: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
-  jobId: string;
-};
-
-type T78dd90e9ca = {
-  status: "unconfigured";
-  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
-};
-
-type T1b359114ee = {
-  status: "connecting";
-};
-
-type T30d70e95f5 = {
-  status: "connected";
-};
-
-type T15a377c39a = {
-  status: "disconnected";
-  reason: string;
-};
-
-type T9c90567336 = {
-  status: "failed";
-  message: string;
-};
-
-type T4c634e037d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "notification";
-};
-
-type Teb4507dfaa = "draft" | "approved";
-
-type T9963a55ad2 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
+type Tdd30a41adc = {
+  value: number;
   type: "int";
   version: 1;
-} | {
-  type: "money";
-  version: 1;
   currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type T8fa1810fff = {
-  text: string;
-  id: string;
-};
-
-type T7c243e5baa = {
-  id: T6ebb5b60ba;
-  outcome: ("created" | "existing");
-};
-
-type T2c0fc817e7 = "nda" | "dpa" | "msa" | "saas";
-
-type T15125483db = {
-  playbookId: T6ebb5b60ba;
-};
-
-type Tc479176c61 = {
-  accepted: number;
-  dismissed: number;
-  runs: number;
-  latestAcceptedFixText: T432e07d100;
-};
-
-type T4d0c38f22c = {
-  perspective?: "neutral" | "buyer" | "seller";
-  documentTypeKey?: string;
-  trigger?: "manual" | "onClassified";
-};
-
-type T50a09487e3 = {
-  items: Array<T5d4fc8c82b>;
-  version: 3;
-};
-
-type T0a86ec0883 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type Tede2d5a69f = {
-  text: string;
-  id: string;
-};
-
-type T20e2e4a545 = {
-  name: string;
-  description: T432e07d100;
-  enabled: T1bdf39f14a;
-  trigger: {
-    type: "manual";
-  } | {
-    type: "schedule";
-    workspaceId: Teb5c753062;
-    schedule: {
-      dayOfWeek?: number;
-      dayOfMonth?: number;
-      frequency: T70d0bdd159;
-      hourUtc: number;
-    };
-  } | {
-    type: "file-upload";
-    workspaceIds: (null | Array<Teb5c753062>);
-    fileExtensions: (null | Array<string>);
-  };
-  steps: Array<{
-    name: string;
-    kind: "ai";
-    prompt: string;
-    includeDocuments: T1bdf39f14a;
-  } | {
-    name: string;
-    kind: "review-gate";
-    instructions: string;
-  } | {
-    name: string;
-    kind: "create-document";
-    documentTitle: string;
-  }>;
-};
-
-type T6e770422e4 = {
-  flowId: Tb47b7b98fd;
-};
-
-type T70d0bdd159 = "daily" | "weekly" | "monthly";
-
-type T307eb7347f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentType";
-};
-
-type Tc2754df8d9 = {
-  documentTypeId: T307eb7347f;
-};
-
-type T14093082e6 = "Bad Request" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-};
-
-type Te8478104bf = "Bad Gateway" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-};
-
-type T9cedc91781 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "folioCollabRoom";
-};
-
-type T7d2603043e = null | {
-  token?: unknown;
-  roomId?: unknown;
-};
-
-type Ta0c53468e3 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "desktopEditHandoff";
-};
-
-type T6ffeb8632f = {
-  baseVersionNumber: number;
-  downloadUrl: string;
-  fileName: string;
-  fileType: T24a1a7f207;
-  lastCheckpointAt: string;
-  resumedFromCheckpoint: true;
-  sessionId: T53430f009c;
-  sessionToken: string;
-  tookOverExistingSession: true;
-  error?: never;
-} | {
-  baseVersionNumber: number;
-  downloadUrl: string;
-  fileName: string;
-  fileType: T24a1a7f207;
-  lastCheckpointAt: null;
-  resumedFromCheckpoint: false;
-  sessionId: T53430f009c;
-  sessionToken: string;
-  tookOverExistingSession: true;
-  error?: never;
-} | {
-  baseVersionNumber: number;
-  downloadUrl: string;
-  fileName: string;
-  fileType: T24a1a7f207;
-  lastCheckpointAt: null;
-  resumedFromCheckpoint: false;
-  sessionId: T53430f009c;
-  sessionToken: string;
-  tookOverExistingSession: false;
-  error?: never;
-};
-
-type T907570a20b = {
-  readonly message: string;
-  readonly code?: string;
-};
-
-type T53430f009c = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "desktopEditSession";
-};
-
-type T24a1a7f207 = "docx" | "xlsx" | "pptx";
-
-type T50cb7e6cbb = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
-
-type T6e7137c176 = "medium" | "high" | "low" | "unspecified";
-
-type T95a4a01f59 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "docxSuggestion";
-};
-
-type Ta3d11202d8 = {
-  body: {
-    alignment: T302e959e47;
-    fontFamily: string;
-    fontSizePt: number;
-    lineSpacing: T6bf9fa81f9;
-    spaceAfterPt: number;
-  };
-  title: {
-    bold: T1bdf39f14a;
-    alignment: T302e959e47;
-    fontFamily: string;
-    fontSizePt: number;
-    spaceAfterPt: number;
-    spaceBeforePt: number;
-  };
-  level1: T51ea132ed2;
-  level2: T51ea132ed2;
-  level3: T51ea132ed2;
-  numbering: {
-    enabled: T1bdf39f14a;
-  };
-  page: {
-    paperSize: Tbc2c676288;
-    orientation: T83293cdac9;
-    marginTopPt: number;
-    marginBottomPt: number;
-    marginLeftPt: number;
-    marginRightPt: number;
-  };
-};
-
-type Ta6c90ab050 = {
-  title: string;
-  introduction: string;
-  investmentHeading: string;
-  investmentBody: string;
-  equityFinancingHeading: string;
-  equityFinancingBody: string;
-  conversionPriceHeading: string;
-  conversionPriceBody: string;
-  shareClassHeading: string;
-  shareClassBody: string;
-  liquidityEventHeading: string;
-  liquidityEventBody: string;
-  companyRepresentationsHeading: string;
-  companyRepresentationsBody: string;
-  generalHeading: string;
-  generalBody: string;
-};
-
-type T7477812ed2 = {
-  body: {
-    alignment: T302e959e47;
-    fontFamily: string;
-    fontSizePt: number;
-    lineSpacing: T6bf9fa81f9;
-    spaceAfterPt: number;
-  };
-  title: {
-    bold: T1bdf39f14a;
-    alignment: T302e959e47;
-    fontFamily: string;
-    fontSizePt: number;
-    spaceAfterPt: number;
-    spaceBeforePt: number;
-  };
-  level1: T90fb134c6b;
-  level2: T90fb134c6b;
-  level3: T90fb134c6b;
-  numbering: {
-    enabled: T1bdf39f14a;
-  };
-  page: {
-    paperSize: Tbc2c676288;
-    orientation: T83293cdac9;
-    marginTopPt: number;
-    marginBottomPt: number;
-    marginLeftPt: number;
-    marginRightPt: number;
-  };
-};
-
-type T302e959e47 = "left" | "right" | "preserve" | "center" | "both";
-
-type T6bf9fa81f9 = "double" | "single" | "preserve" | "onePoint15" | "onePoint5";
-
-type T999075fe5b = {
-  bold: T1bdf39f14a;
-  alignment: T302e959e47;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T4c01853e6a;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type Tbc2c676288 = "preserve" | "a4" | "letter" | "legal";
-
-type T83293cdac9 = "portrait" | "landscape";
-
-type Tc472c563cc = {
-  bold: T1bdf39f14a;
-  alignment: T302e959e47;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T4c01853e6a;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type Tf96cb8149e = {
-  readonly error: "Not Found";
-};
-
-type T5dba4beb60 = null | {
-  name: string;
-  url: string;
-  retrievedAt?: undefined | string;
-};
-
-type T6ab1edb8c0 = {
-  country: string;
-  subdivision?: undefined | string;
-};
-
-type Tfe7cf57422 = {
-  title: string;
-  jurisdictions: ReadonlyArray<T6ab1edb8c0>;
-  fields: ReadonlyArray<string>;
-  slug: string;
-  license: string;
-  languages: ReadonlyArray<string>;
-  sha256: string;
-  legalArea: T432e07d100;
-};
-
-type T22668e5fed = {
-  packId: string;
-};
-
-type Tc6cd6234fd = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
-
-type T6b2d0b9da2 = "none" | "api-key" | "account";
-
-type T440388b593 = null | "free" | "paid";
-
-type Ta5cd720bed = "available" | "unavailable" | "installed";
-
-type Td519ee5a29 = {
-  countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
-  isPrimary: T1bdf39f14a;
-};
-
-type T645caae274 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateRecipe";
-};
-
-type T65289db29c = {
-  workspaceId: string;
-};
-
-type T422efe7526 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "billingCode";
-};
-
-type T9068ebbc43 = "task" | "activity";
-
-type Tb5b50d2995 = {
-  workspaceId: string;
-};
-
-type T3ff6d2c179 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "rateTable";
-};
-
-type T8021ae6e25 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "rateEntry";
-};
-
-type T001a42da95 = {
-  url: string;
-};
-
-type T837d6a04e7 = "api-key" | "user-agent";
-
-type Taa1b35a86b = "companies-house" | "denue" | "edgar";
-
-type Tb26813d017 = {
-  instanceProvisioned: T1bdf39f14a;
-  decisionInstanceProvisioned: T1bdf39f14a;
-};
-
-type Tf822306fb6 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
-
-type T342c6c1fea = "global" | "ch" | "eu";
-
-type T971aac1483 = {
-  chat: Tab86be84f5;
-  pdf: Tab86be84f5;
-  fast: Tab86be84f5;
-  reasoning: Tab86be84f5;
-};
-
-type Tfd3c8010a2 = {
-  modelId: string;
-  provider: Ta0f85a4b95;
-};
-
-type T33933638b8 = "free" | "pro";
-
-type T7870a2de7e = {
-  configured: false;
-  platformFallback: T1bdf39f14a;
-} | {
-  configured: true;
-  apiKeyMasked: string;
-  platformFallback: T1bdf39f14a;
-};
-
-type T114f58ccca = "search" | "fetch";
-
-type T56c55a5c5b = "stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback";
-
-type T53a42b0477 = "decision" | "statute";
-
-type Tdaa282e677 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalReaderAnnotation";
-};
-
-type T2bbd03475a = "private" | "shared";
-
-type T6e91e475a3 = "highlight" | "underline" | "squiggly" | "strikethrough";
-
-type Ta291bca56d = "yellow" | "green" | "sky" | "violet" | "red";
-
-type Td9037df773 = {
-  quote: string;
-  blockAnchorId: string;
-  startOffset: number;
-  endOffset: number;
-};
-
-type T2dbacc4c35 = {
-  annotationId: Tdaa282e677;
-};
-
-type T0bf624198d = {
-  id: T594988174f;
-  name: string;
-  criteria: stll_api_contract_SavedSearchCriteria;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T881614816e = "year" | "month" | "week" | "day";
-
-type T7201685168 = {
-  savedSearchId: T594988174f;
-};
-
-type T7fe233bf56 = {
-  cursor?: string;
-  workspaceId?: Teb5c753062;
-  limit?: number;
-  userId?: string;
-  action?: string;
-  from?: string;
-  to?: string;
-  resourceType?: string;
-  resourceId?: string;
-  toExclusive?: string;
-};
-
-type Tab67d2a75b = null | Td09f3f3108;
-
-type T2430547df2 = {
-  readonly error: "Not Found";
-};
-
-type T88f3735ffa = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK");
-  health: Ta8b78a42c5;
-  stored: {
-    decisions: number;
-    asOf: T432e07d100;
-  };
-  addedLastWeek: T688f6f1190;
-  completeness: {
-    measuredSources: number;
-    stored: number;
-    reported: number;
-    storedAsOf: T432e07d100;
-    staleSources: number;
-    notMeasuredSources: number;
-    notCountedSources: number;
-  };
-  sources: ReadonlyArray<{
-    adapterKey: string;
-    name: string;
-    publicHomeUrl: string;
-    health: Ta8b78a42c5;
-    lastSyncAt: T432e07d100;
-    completeness: {
-      state: "measured";
-    } & T59a8dbef95 | {
-      state: "stale";
-    } & T59a8dbef95 | {
-      state: "not-measured-yet";
-    } | {
-      state: "not-counted-yet";
-    };
-    addedLastWeek: T688f6f1190;
-  }>;
-};
-
-type Te1e0bd9183 = {
-  type: "court";
-  court: string;
-  courtAbbreviation: T432e07d100;
-  tier: Tcd6d16a377;
-  decisions: number;
-  addedLastDay: number;
-  addedLastWeek: number;
-  updatedAt: T432e07d100;
-} | {
-  type: "tier";
-  tier: Tcd6d16a377;
-  courts: number;
-  decisions: number;
-  addedLastDay: number;
-  addedLastWeek: number;
-  updatedAt: T432e07d100;
-} | {
-  type: "unlisted";
-  tier: "other";
-  listed: number;
-  decisions: number;
-};
-
-type T9163bffd43 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawSource";
-};
-
-type Tf4b485f2ea = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawDecision";
-};
-
-type Tcd6d16a377 = "constitutional" | "supreme" | "regional" | "other";
-
-type T4410c591d7 = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: T432e07d100;
-  id: string;
-  language: string;
-  slug: T432e07d100;
-};
-
-type Tdf8a0dc6ac = T8cd5b388a4 | (T24da1e86c5 & {
-  readonly truncated: T1bdf39f14a;
-}) | {
-  readonly type: "keywords";
-  readonly items: ReadonlyArray<string>;
-  readonly omitted: number;
-};
-
-type T7bba2468e2 = T2430547df2 | {
-  documentPending: T1bdf39f14a;
-  documentReadFailed: T1bdf39f14a;
-  documentUnavailable: T1bdf39f14a;
-  id: Tf4b485f2ea;
-  resolution: {
-    type: "direct";
-  } | {
-    type: "absorbed-supplement";
-    absorbedDecisionId: Tf4b485f2ea;
-    anchorPrefix: string;
-  };
-  caseNumber: string;
-  slug: T432e07d100;
-  ecli: T432e07d100;
-  identifiers: T4b4720fb6b;
-  court: string;
-  courtAbbreviation: T432e07d100;
-  courtTier: Tcd6d16a377;
-  country: string;
-  language: string;
-  languageGroupKey: T432e07d100;
-  decisionDate: T432e07d100;
-  decisionType: T432e07d100;
-  documentAst: (null | T7c8bca7f18 | {
-    metadata: T9411263f78;
-    source: T6e3baa4852;
-    version: 1;
-  } & {
-    blocks: Array<{
-      type: "heading";
-      id: string;
-      role?: undefined | "decision-title" | "section-heading";
-      anchorId: string;
-      level: T1754ed2395;
-      inlines: Array<T7522841395>;
-    } & {
-      plainText?: undefined | string;
-    } | {
-      number?: undefined | number;
-      type: "paragraph";
-      id: string;
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      anchorId: string;
-      note?: undefined | T5b30b2c0a8;
-      inlines: Array<T7522841395>;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-    } & {
-      plainText?: undefined | string;
-    } | {
-      type: "image";
-      src: string;
-      id: string;
-      anchorId: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-    } & {
-      plainText?: undefined | string;
-    } | {
-      type: "table";
-      id: string;
-      role?: undefined | "related-proceedings" | "metadata-table";
-      anchorId: string;
-      plainText: string;
-    } & {
-      rows: Array<Array<{
-        header?: undefined | true;
-        inlines: Array<T7522841395>;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-      } & {
-        plainText?: undefined | string;
-      }>>;
-    }>;
-  });
-  sections: T28f55fc43c;
-  sourceUrl: T432e07d100;
-  sourceAttributionUrl: T432e07d100;
-  documentUrl: T432e07d100;
-  metadata: Td09f3f3108;
-  headnote: Td06876de99;
-  textFields: {
-    readonly abstract: Td06876de99;
-    readonly headnote: Td06876de99;
-    readonly legalSentence: Td06876de99;
-    readonly summary: Td06876de99;
-  };
-  createdAt: Date;
-  updatedAt: Date;
-  source: {
-    id: T9163bffd43;
-    name: string;
-    adapterKey: string;
-    allowsDerivedAi: T1bdf39f14a;
-  };
-  judges: Array<{
-    role: ("rapporteur" | "presiding" | "panel-member" | "dissenting" | "advocate-general");
-    name: string;
-    judgeId: (null | Td0d20fc706);
-    portrait: (null | {
-      url: string;
-      attribution: string;
-    });
-  }>;
-  citationsFrom: (Array<never> | Array<{
-    id: Te8a8ced136;
-    citationText: string;
-    citedDecisionId: (null | Tf4b485f2ea);
-    sectionIndex: T688f6f1190;
-  }>);
-  citationsTo: (Array<never> | Array<{
-    id: Te8a8ced136;
-    citationText: string;
-    citingDecisionId: Tf4b485f2ea;
-    sectionIndex: T688f6f1190;
-  }>);
-  citationsNextCursor: T432e07d100;
-  languageAlternates: ReadonlyArray<T4410c591d7>;
-  fulltext: T432e07d100;
-};
-
-type Tc783e54f00 = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-} | {
-  readonly message: "Invalid cursor";
-} | {
-  readonly message: string;
-};
-
-type T2a67644a3a = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-} | {
-  readonly message: "Decision not found";
-};
-
-type Te8a8ced136 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawCitation";
-};
-
-type T208326bc55 = "neutral" | "negative" | "positive" | "supportive" | "mixed" | "unclassified";
-
-type T4c9fd159c8 = {
-  id: Tf4b485f2ea;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: T432e07d100;
-  decisionType: T432e07d100;
-  ecli: T432e07d100;
-  language: string;
-  languageAlternates: ReadonlyArray<T4410c591d7>;
-  slug: T432e07d100;
-} & {
-  citationAuthority: number;
 };
 
 type Tdd7653bfae = {
@@ -34244,169 +35738,53 @@ type Tdd7653bfae = {
   unclassified: number;
 };
 
-type Tad8a18f823 = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
-} | {
-  readonly message: string;
+type Tdda1650864 = {
+  readonly value: Td7e6add81d;
+  readonly issues?: undefined;
 };
 
-type Td0d20fc706 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawJudge";
-};
-
-type T8b75e960c1 = {
-  value: string;
-  label: T432e07d100;
-  count: number;
-};
-
-type T4b4720fb6b = readonly [T1e9bf90711, ...T1e9bf90711[]];
-
-type T0290f4b244 = {
-  code?: string;
+type Tddcaa6c051 = {
+  path: string;
   message: string;
 };
 
-type T37001f6d72 = {
-  generatedAt: string;
-  model: string;
-  inputFingerprint: string;
-  tree: Array<T94e2de2165>;
-};
-
-type T7bed1fb5ad = {
-  id: T82d2fa2fc8;
-  createdBy: T432e07d100;
-  position: number;
-  question: string;
-  content: (T29dbcb6703 | T9ffc3fafa7 | T888302d360 | T748711fee4);
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T82d2fa2fc8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawResearchColumn";
-};
-
-type T31d2159604 = {
-  columnId: T82d2fa2fc8;
-};
-
-type T614d75882e = {
-  type: "error";
-  version: 1;
-};
-
-type T24df5d72b3 = {
-  type: "pending";
-  version: 1;
-};
-
-type T1db05d7243 = {
-  type: "unsupported";
-  version: 1;
-};
-
-type T775e6ec31b = {
-  scanWarnings?: Array<string>;
-  pdfDerivative?: T5cffd2424c | Tf6d1adf4f8 | Tb368e5ae56 | Tc6f6ebe775;
-  thumbnailFileId?: null | string;
-  placeholder?: string;
-  thumbnailDerivative?: T5cffd2424c | Tf6d1adf4f8 | Tb368e5ae56 | Tc6f6ebe775;
-  type: "file";
-  mimeType: string;
-  id: string;
-  pdfFileId: T432e07d100;
-  encrypted: T1bdf39f14a;
-  fileName: string;
-  version: 1;
-  sizeBytes: number;
-  sha256Hex: string;
-};
-
-type Tc4b9125369 = {
-  snippet?: string;
-  citation?: string;
-  jurisdiction?: string;
-  sourceType?: string;
-  type: "clip";
-  url: string;
-  version: 1;
-};
-
-type T8500b3f9f9 = {
-  workspaceId: string;
-};
-
-type T7524b2c883 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawMatterLink";
-};
-
-type T1a4826e1af = {
-  id: T7524b2c883;
-  decisionId: Tf4b485f2ea;
-  workspaceId: Teb5c753062;
-  note: T432e07d100;
-  linkedBy: string;
-  createdAt: Date;
-};
-
-type T1f92bc3afa = "url" | "authored" | "bundled" | "upload";
-
-type Ta273032f6f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillResource";
-};
-
-type Tf1e37b2227 = "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
-
-type T7072a5aaf7 = {
-  id: T7fc3acf5ac;
-};
-
-type T057e58854e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillRevision";
-};
-
-type Te5542ad5a8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillProposal";
-};
-
-type Tcbe8612c20 = "draft" | "accepted" | "rejected" | "proposed";
-
-type T61ca628658 = null | T057e58854e;
-
-type Tdf22af53e7 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillComment";
-};
-
-type T178e72f979 = "accepted" | "rejected";
-
-type T7f00196705 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "userFile";
-};
-
-type Td9b2117be5 = {
-  workspaceId: string;
-};
-
-type Tf5f93d61f9 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceViewTemplate";
+type Tde0e71406c = {
+  folder: {
+    folderRef: string;
+    name: string;
+  };
+  coverage: {
+    complete: T1bdf39f14a;
+    snapshotDocumentCount: number;
+    traversalDepthLimit: number;
+    additionalDescendantsMayExist: T1bdf39f14a;
+  };
+  documentsReviewed: Array<T6b5cf52115>;
+  documentsSkipped: Array<{
+    documentRef: string;
+    name: string;
+    reason: string;
+  }>;
+  documentsNotChecked: Array<T6b5cf52115>;
+  documentsNotCheckedOmittedCount: number;
+  review: string;
+  citations: Array<{
+    type: "docx-folio";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    passage: string;
+    blockId: string;
+  } | {
+    type: "pdf-bates";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    bates: string;
+    pageNumber: number;
+  }>;
 };
 
 type Tde69c6096b = {
@@ -34457,22 +35835,77 @@ type Tde69c6096b = {
   createIfMissing: T1bdf39f14a;
 };
 
-type Tf4ac35b786 = {
+type Tdf22af53e7 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillComment";
+};
+
+type Tdf3afab53d = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
+
+type Tdf8a0dc6ac = T8cd5b388a4 | (T24da1e86c5 & {
+  readonly truncated: T1bdf39f14a;
+}) | {
+  readonly type: "keywords";
+  readonly items: ReadonlyArray<string>;
+  readonly omitted: number;
+};
+
+type Te078108f79 = "open" | "accepted" | "dismissed";
+
+type Te08ba39d3b = {
   version: 1;
-  id: Tf962ada343;
-  name: string;
-  layout: T75ecb21f44;
-  position: number;
-  createdAt: string;
+  boxes: Array<Tfccf1c1167>;
 };
 
-type T9871c1e63a = {
-  viewId: Tf962ada343;
+type Te1221ee9e8 = {
+  success: false;
+  message: string;
+  errors?: undefined | Array<Tf953808cbe>;
 };
 
-type Tebea30474d = "all" | "columns";
+type Te18c7397cc = {
+  content: Tfcce4260b1;
+  question: string;
+};
 
-type Tf1506fd1ab = T80d841ed63 | "_status" | "_kind";
+type Te1e0bd9183 = {
+  type: "court";
+  court: string;
+  courtAbbreviation: T432e07d100;
+  tier: Tcd6d16a377;
+  decisions: number;
+  addedLastDay: number;
+  addedLastWeek: number;
+  updatedAt: T432e07d100;
+} | {
+  type: "tier";
+  tier: Tcd6d16a377;
+  courts: number;
+  decisions: number;
+  addedLastDay: number;
+  addedLastWeek: number;
+  updatedAt: T432e07d100;
+} | {
+  type: "unlisted";
+  tier: "other";
+  listed: number;
+  decisions: number;
+};
+
+type Te27c9d3a2b = {
+  workspaceId: Tb9596e18eb;
+};
+
+type Te287bedd42 = "organization" | "person";
+
+type Te2ec8e0b17 = null | T6ebb5b60ba;
+
+type Te350a1ab11 = {
+  workspaceId: Tb9596e18eb;
+};
+
+type Te35800633c = {
+  readonly error: "Not Found";
+};
 
 type Te3ba023acf = {
   entityId: string;
@@ -34558,471 +35991,155 @@ type Te3ba023acf = {
   }>;
 };
 
-type T2c8d30ce61 = {
-  workspaceId: string;
+type Te4598481ee = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "mcpConnector";
+};
+
+type Te493c91f7e = null | T3ed4bbeee3;
+
+type Te4ad2efe8c = {
+  approval?: {
+    id: string;
+    needsApproval: T1bdf39f14a;
+    approved?: false | true;
+  };
+};
+
+type Te5542ad5a8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillProposal";
+};
+
+type Te73195d9c3 = {
+  type: "main";
+} | {
+  type: "header";
+  relationshipId: string;
+} | {
+  type: "footer";
+  relationshipId: string;
+} | {
+  type: "footnote";
+  noteId: number;
+} | {
+  type: "endnote";
+  noteId: number;
+};
+
+type Te80094a196 = null | string | number | Array<string>;
+
+type Te831c71c90 = {
+  kind: "fallback";
+  label?: string;
+  text: string;
+};
+
+type Te8478104bf = "Bad Gateway" | {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+};
+
+type Te8a8ced136 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawCitation";
+};
+
+type Te9707abbcc = {
+  text: string;
+  style?: string;
+  level?: number;
+  runs?: Array<{
+    text: string;
+    bold?: false | true;
+    italic?: false | true;
+  }>;
+  isDirective?: false | true;
+  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+  directiveExpression?: string;
+  listKind?: "bullet" | "ordered";
+  listLevel?: number;
 };
 
 type Te9902600f8 = "active" | "archived";
 
-type Td29492c5e7 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListColumn";
+type Tea019afe5d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "justification";
 };
 
-type T00abe13820 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListGenerationRun";
+type Tea3eb4808d = {
+  status: "saved";
 };
 
-type T8dc306df33 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListGenerationCandidate";
+type Teb3fcd8ef4 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentReviewRun";
 };
 
-type T07b4b7cdd8 = {
-  workspaceId: string;
+type Teb4507dfaa = "draft" | "approved";
+
+type Teb5c753062 = string & valibot_Brand<"SafeId"> & T9c01826163;
+
+type Teb6522997d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateVersion";
 };
 
-type T74610d9d20 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListItemSource";
+type Teb6688001f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "invoice";
 };
 
-type Ta6e00a75de = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
+type Teba0ca2bc3 = "stale" | "fresh";
 
-type T1a242906f1 = {
-  type: "document";
+type Tebea30474d = "all" | "columns";
+
+type Tebf70ccf13 = {
+  text: string;
+  id: string;
+};
+
+type Tec60471056 = {
+  type: "file";
+  version: 1;
 } | {
-  type: "docx-block";
-  blockId: string;
+  type: "text";
+  version: 1;
 } | {
-  type: "pdf-page";
-  pageNumber: number;
-  boundingBoxes?: undefined | Te08ba39d3b;
-};
-
-type T533797319a = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
-
-type Tb1fcbf5ca4 = {
-  items: Array<Te3ba023acf>;
-  nextCursor: T432e07d100;
-  limit: number;
-};
-
-type T192572b4c1 = {
-  workspaceId: string;
-};
-
-type Tfde6260a4e = {
-  entityId: string;
-  fieldId: string;
-  fileId: string;
-  fileName: string;
-  renamed: T1bdf39f14a;
-};
-
-type T2d3c0bafce = {
-  updated: T1bdf39f14a;
-};
-
-type T0f57aba9b8 = "decision" | "instruction" | "fact" | "preference" | "relationship";
-
-type Tb063d4fcd4 = {
-  id: T08bc488f5e;
-  type: ("created" | "existing" | "reactivated");
-};
-
-type T08bc488f5e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "aiMemory";
-};
-
-type T4b1112b06e = {
-  placeholder: string;
-  original: string;
-};
-
-type T1eec80096a = {
-  readonly "~standard": {
-    readonly jsonSchema: Tba9914ae60;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T1168738ff9;
-  };
-};
-
-type T960ebb008d = {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T5dab5448de | Promise<(T916c6c1f8b | T5dab5448de)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T1168738ff9;
-  };
-};
-
-type Td09f3f3108 = {
-  [key: string]: unknown;
-};
-
-type Ta2dc1740cf = undefined | tanstack_ai_ToolExecutionContext<unknown>;
-
-type Tc9666df965 = {
-  needsApproval: true;
-  approvalSchema: undefined;
-};
-
-type T8c66118833 = {
-  (args: unknown, context?: Ta2dc1740cf): unknown;
-};
-
-type Tba9914ae60 = {
-  readonly input: {
-    (options: T2b4af5b5ce): Td09f3f3108;
-  };
-  readonly output: {
-    (options: T2b4af5b5ce): Td09f3f3108;
-  };
-};
-
-type Tf0ef540b72 = {
-  readonly input: Record<never, never>;
-  readonly output: Record<never, never>;
-};
-
-type T6cf37641cd = undefined | {
-  readonly libraryOptions?: undefined | Td09f3f3108;
-};
-
-type T916c6c1f8b = {
-  readonly issues: ReadonlyArray<{
-    readonly message: string;
-    readonly path?: undefined | ReadonlyArray<(string | number | symbol | {
-      readonly key: (string | number | symbol);
-    })>;
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
   }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
 };
 
-type T2985b4f624 = {
-  readonly value: Record<never, never>;
-  readonly issues?: undefined;
-};
-
-type Tb13bfff6df = {
-  readonly input: Tf87d0b824c;
-  readonly output: T13f2f9bd72;
-};
-
-type T004d50b559 = {
-  readonly value: T13f2f9bd72;
-  readonly issues?: undefined;
-};
-
-type Tf87d0b824c = {
-  templateId: string;
-  values: T3e2a904f6c;
-};
-
-type T78fb706128 = {
-  (args: unknown, context?: Ta2dc1740cf): unknown;
-};
-
-type T30ffd8d711 = {
-  readonly input: T78000c7c99;
-  readonly output: T9ab85afc3e;
-};
-
-type T37bd525dcb = {
-  readonly value: T9ab85afc3e;
-  readonly issues?: undefined;
-};
-
-type T533ec86c6c = {
-  readonly input: T51cad8ef60;
-  readonly output: T0bc71347dc;
-};
-
-type Td50e30d0f1 = {
-  readonly value: T0bc71347dc;
-  readonly issues?: undefined;
-};
-
-type T78000c7c99 = {
-  name: string;
-  source: string;
-};
-
-type T59c3f5062f = {
-  success: true;
-  fileName: string;
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-};
-
-type T561e5b54a2 = {
-  fixes?: undefined | Array<{
-    code: string;
-    message: string;
-    line?: undefined | number;
-  }>;
-  warnings?: undefined | Array<Tf953808cbe>;
-  success: true;
-  destination: "draft";
-  fileName: string;
-};
-
-type T2dc94a4ef0 = {
-  success: true;
-  destination: "download";
-  fileName: string;
-};
-
-type Te1221ee9e8 = {
-  success: false;
-  message: string;
-  errors?: undefined | Array<Tf953808cbe>;
-};
-
-type T51cad8ef60 = T59c3f5062f | T561e5b54a2 | T2dc94a4ef0 | Te1221ee9e8;
-
-type T285daf5b02 = {
-  needsApproval: false;
-  approvalSchema: undefined;
-};
-
-type Tc14bc9e445 = {
-  readonly input: T46f58f58fc;
-  readonly output: T87284c6919;
-};
-
-type T99f4784515 = {
-  readonly value: T87284c6919;
-  readonly issues?: undefined;
-};
-
-type T45420e5bd0 = {
-  readonly input: T8a3caedfda;
-  readonly output: Td5abdf9c63;
-};
-
-type T4304cec9eb = {
-  readonly value: Td5abdf9c63;
-  readonly issues?: undefined;
-};
-
-type T46f58f58fc = {
-  analysis: string;
-  questions: Array<{
-    question: string;
-    reason: string;
-    options?: undefined | Array<string>;
-    default?: undefined | string;
-  }>;
-};
-
-type T8a3caedfda = {
-  answers: Array<{
-    question: string;
-    answer: string;
-  }>;
-};
-
-type T06188f12f1 = {
-  readonly input: Td220c5b82e;
-  readonly output: Td7e6add81d;
-};
-
-type Tdda1650864 = {
-  readonly value: Td7e6add81d;
-  readonly issues?: undefined;
-};
-
-type Td220c5b82e = {
-  skillName: string;
-};
-
-type T4ce64977d1 = {
-  readonly input: T527969c00a;
-  readonly output: Tc83d8b9f37;
-};
-
-type Td4552d8c2b = {
-  readonly value: Tc83d8b9f37;
-  readonly issues?: undefined;
-};
-
-type T527969c00a = {
-  skillName: string;
-  path: string;
-};
-
-type Tf26788d5a2 = {
-  readonly input: T3a3428dc33;
-  readonly output: T93ee1fa9f8;
-};
-
-type Tf8c0c7c67b = {
-  readonly value: T93ee1fa9f8;
-  readonly issues?: undefined;
-};
-
-type T3a3428dc33 = {
-  jurisdiction: T9960bad961;
-  query: string;
-  limit?: undefined | number;
-};
-
-type T4feef5505a = {
-  readonly input: T66e35ccd51;
-  readonly output: T846b0784de;
-};
-
-type Tc0af96215a = {
-  readonly value: T846b0784de;
-  readonly issues?: undefined;
-};
-
-type T66e35ccd51 = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
-};
-
-type T8b5d0b1391 = {
-  readonly input: T980f887156;
-  readonly output: T19f8a3623b;
-};
-
-type T3808ab4adf = {
-  readonly value: T19f8a3623b;
-  readonly issues?: undefined;
-};
-
-type T980f887156 = {
-  lawId: string;
-  metadata?: undefined | false | true;
-  analysis?: undefined | false | true;
-  fullText?: undefined | false | true;
-  eli?: undefined | false | true;
-};
-
-type T914ea11467 = {
-  readonly input: Tfb9effd8c9;
-  readonly output: T9021ebfc29;
-};
-
-type Tc8699411bc = {
-  readonly value: T9021ebfc29;
-  readonly issues?: undefined;
-};
-
-type Tfb9effd8c9 = {
-  lawId: string;
-};
-
-type T3f0cc74ef7 = {
-  readonly input: T8fa9d7c67b;
-  readonly output: Tf5e31e73aa;
-};
-
-type Tc3d4d912b6 = {
-  readonly value: Tf5e31e73aa;
-  readonly issues?: undefined;
-};
-
-type T8fa9d7c67b = {
-  lawId: string;
-  blockId: string;
-};
-
-type T322c3dd90a = {
-  readonly input: T4c2454b604;
-  readonly output: T665ac097fb;
-};
-
-type Td787ffea34 = {
-  readonly value: T665ac097fb;
-  readonly issues?: undefined;
-};
-
-type T4c2454b604 = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
-type T85657694a1 = {
-  readonly input: T2e350463c1;
-  readonly output: T109fc089ae;
-};
-
-type Tcdf7409741 = {
-  readonly value: T109fc089ae;
-  readonly issues?: undefined;
-};
-
-type T2e350463c1 = {
-  date: string;
-};
-
-type T3432cdf68d = {
-  readonly input: Taa8bbb5904;
-  readonly output: Tc7b9fe0fcd;
-};
-
-type T99ca042a72 = {
-  readonly value: Tc7b9fe0fcd;
-  readonly issues?: undefined;
-};
-
-type Taa8bbb5904 = {
-  courtCode: string;
-  spisZn: string;
-};
-
-type Ta24f5c3087 = {
-  readonly input: T2c9a2b8de1;
-  readonly output: Tf79cee9ca8;
-};
-
-type Taca2a07939 = {
-  readonly value: Tf79cee9ca8;
-  readonly issues?: undefined;
-};
-
-type T557251045c = {
-  readonly input: T3d16f860ff;
-  readonly output: T596c558ecb;
-};
-
-type Tba0a2a4af3 = {
-  readonly value: T596c558ecb;
-  readonly issues?: undefined;
-};
-
-type T2c9a2b8de1 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: Te80094a196;
-};
-
-type T3d16f860ff = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
-type Tad20dce351 = {
-  readonly input: T348917fbeb;
-  readonly output: T348917fbeb;
+type Tec7940d497 = {
+  kind: "firm";
+  field: "name";
 };
 
 type Tece462aa22 = {
@@ -35030,58 +36147,75 @@ type Tece462aa22 = {
   readonly issues?: undefined;
 };
 
-type T982ae915eb = {
-  readonly input: T7a41dd6a7b;
-  readonly output: Ta21762d27e;
+type Ted097feadd = "private" | "team";
+
+type Tedc0dc7925 = {
+  workspaceId: string;
 };
 
-type T53b5147e55 = {
-  readonly value: Ta21762d27e;
-  readonly issues?: undefined;
+type Tede2d5a69f = {
+  text: string;
+  id: string;
 };
 
-type T295e0f993e = {
-  readonly input: T33e181e080;
-  readonly output: T1d47fa3dc0;
+type Tee61f4ed5c = {
+  results: Array<{
+    index: number;
+    status: "completed";
+    result: string;
+  } | {
+    index: number;
+    status: "failed";
+    error: string;
+  }>;
 };
 
-type Ta8fc8ea2ad = {
-  readonly value: T1d47fa3dc0;
-  readonly issues?: undefined;
+type Teef0e50364 = "manual" | "schedule" | "file-upload";
+
+type Tefbda21c4c = "draft" | "finalized" | "sent" | "paid" | "void";
+
+type Tefd05507c2 = "user" | "system" | "assistant";
+
+type Teff106c9af = null | false | true;
+
+type Tf0ef540b72 = {
+  readonly input: Record<never, never>;
+  readonly output: Record<never, never>;
 };
 
-type T7a41dd6a7b = {
-  title: string;
-  markdown: string;
+type Tf13f15d459 = {
+  id: T7f76e93fad;
+  registry: Tb3a8582d6b;
+  name: string;
+  format: string;
+  createdAt: string;
 };
 
-type T33e181e080 = {
-  success: true;
-  fileName: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
+type Tf1506fd1ab = T80d841ed63 | "_status" | "_kind";
+
+type Tf1e37b2227 = "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
+
+type Tf26788d5a2 = {
+  readonly input: T3a3428dc33;
+  readonly output: T93ee1fa9f8;
 };
 
-type T29aea580ff = {
-  readonly input: Tf477029a44;
-  readonly output: T43e78e86e2;
+type Tf272474a81 = {
+  startDatePropertyId: string;
+  endDatePropertyId: string;
+  zoom: ("month" | "week" | "day" | "quarter");
+  groupByPropertyId?: undefined | string;
+  showTable: T1bdf39f14a;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "timeline";
 };
 
-type Tb8ee110390 = {
-  readonly value: T43e78e86e2;
-  readonly issues?: undefined;
-};
-
-type T7f3d121b72 = {
-  readonly input: T36734b71d6;
-  readonly output: T55fe720a8c;
-};
-
-type T1bc67fec1b = {
-  readonly value: T55fe720a8c;
-  readonly issues?: undefined;
+type Tf38d7a3340 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "clauseCategory";
 };
 
 type Tf477029a44 = {
@@ -35091,118 +36225,77 @@ type Tf477029a44 = {
   maxResults?: undefined | number;
 };
 
-type T36734b71d6 = {
-  query: string;
-  jurisdiction: T069e650050;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
+type Tf4965e37f8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "organization";
 };
 
-type Tb2ae6e53e6 = {
-  readonly input: T74114cb775;
-  readonly output: T92b1e52bb0;
+type Tf4ac35b786 = {
+  version: 1;
+  id: Tf962ada343;
+  name: string;
+  layout: T75ecb21f44;
+  position: number;
+  createdAt: string;
 };
 
-type T3292e4e3e4 = {
-  readonly value: T92b1e52bb0;
-  readonly issues?: undefined;
+type Tf4b485f2ea = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawDecision";
 };
 
-type T9372e54e9c = {
-  readonly input: Ta2cb9f1c54;
-  readonly output: T06fc334600;
+type Tf52fd16fac = {
+  datePropertyId: string;
+  endDatePropertyId?: undefined | string;
+  additionalDatePropertyIds?: undefined | Array<string>;
+  mode: ("year" | "month" | "week");
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T9531885fa8>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4310244850>;
+  version: 1;
+  type: "calendar";
 };
 
-type T1a7d210ea2 = {
-  readonly value: T06fc334600;
-  readonly issues?: undefined;
+type Tf5c81c4dc2 = null | "private" | "normal" | "confidential";
+
+type Tf5e31e73aa = {
+  lawId: string;
+  blockId: string;
 };
 
-type T74114cb775 = {
-  url: string;
-  maxChars?: undefined | number;
+type Tf5f93d61f9 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceViewTemplate";
 };
 
-type Ta2cb9f1c54 = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: T1bdf39f14a;
-  provider: "jina";
+type Tf618255f8e = {
+  required?: undefined | false | true;
+  minLength?: undefined | number;
+  maxLength?: undefined | number;
+  min?: undefined | number;
+  max?: undefined | number;
+  pattern?: undefined | string;
+  minItems?: undefined | number;
+  maxItems?: undefined | number;
 };
 
-type Td7e706f8bb = {
-  readonly input: T1214881f9f;
-  readonly output: T7c9021b9f6;
+type Tf6d1adf4f8 = {
+  status: "pending";
 };
 
-type Tb025ef030b = {
-  readonly value: T7c9021b9f6;
-  readonly issues?: undefined;
+type Tf74132cd3e = {
+  text: string;
+  instructions: T432e07d100;
 };
 
-type T60d8f391f8 = {
-  readonly input: T7020765e60;
-  readonly output: T1f1ce35744;
+type Tf79cee9ca8 = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: Te80094a196;
 };
 
-type Tbfcb6ae0d3 = {
-  readonly value: T1f1ce35744;
-  readonly issues?: undefined;
-};
+type Tf7b6a1b7cb = "docx" | "xlsx" | "csv";
 
-type T1214881f9f = {
-  query: string;
-  limit?: undefined | number;
-};
-
-type T7020765e60 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type Tbc99f68f5d = {
-  readonly input: Tcb4e2e17b4;
-  readonly output: T5af6308a18;
-};
-
-type T8a1ba6ec3d = {
-  readonly value: T5af6308a18;
-  readonly issues?: undefined;
-};
-
-type T1a6d2d119a = {
-  readonly input: Tccbcb316fa;
-  readonly output: Tf7f2d88b62;
-};
-
-type T1ae8ac234c = {
-  readonly value: Tf7f2d88b62;
-  readonly issues?: undefined;
-};
-
-type Tcb4e2e17b4 = {
-  messageId: string;
-  before?: undefined | number;
-  after?: undefined | number;
-};
-
-type Tccbcb316fa = {
+type Tf7f2d88b62 = {
   targetMessageId: string;
   messages: Array<{
     messageId: string;
@@ -35212,22 +36305,106 @@ type Tccbcb316fa = {
   }>;
 };
 
-type T72880ed30d = {
-  readonly "~standard": {
-    readonly jsonSchema: Tba9914ae60;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T151c8c8adf;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tf9791990e8 | Promise<(T916c6c1f8b | Tf9791990e8)>);
+type Tf822306fb6 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
+
+type Tf827555920 = {
+  name: string;
+  organization?: undefined | string;
+  url?: undefined | string;
+  role: ("reviewer" | "drafter" | "converter");
+  date?: undefined | string;
+};
+
+type Tf85ca6744e = "error" | "complete" | "awaiting-input" | "input-streaming" | "input-complete" | "approval-requested" | "approval-responded";
+
+type Tf87d0b824c = {
+  templateId: string;
+  values: T3e2a904f6c;
+};
+
+type Tf8c0c7c67b = {
+  readonly value: T93ee1fa9f8;
+  readonly issues?: undefined;
+};
+
+type Tf8f3e7ee44 = {
+  numero?: string;
+  seccion?: T4340530c23 | Array<T4340530c23>;
+  sumario_diario?: {
+    identificador?: string;
+    url_pdf?: {
+      szBytes?: string;
+      szKBytes?: string;
+      texto?: string;
     };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T151c8c8adf;
   };
+};
+
+type Tf92771e40d = {
+  workspaceId: string;
+};
+
+type Tf953808cbe = {
+  code: string;
+  message: string;
+  severity: T8e8f463ae0;
+  line?: undefined | number;
+};
+
+type Tf962ada343 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceView";
+};
+
+type Tf96cb8149e = {
+  readonly error: "Not Found";
+};
+
+type Tf9791990e8 = {
+  readonly value: Tc69524a13b;
+  readonly issues?: undefined;
+};
+
+type Tf9ac86bc44 = {
+  text: string;
+  id: string;
+};
+
+type Tf9d14dced5 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "anonymizationBlacklistEntry";
+};
+
+type Tf9d55cf19d = {
+  check?: T4c3f591341 | T8f8a3ed733;
+  guidance?: string;
+  negotiation?: T62188807d3;
+  purpose?: string;
+  issue: string;
+  mode: "graded";
+  ask: {
+    derived?: {
+      content: Tfcce4260b1;
+      question: string;
+      rulesHash: string;
+    };
+    mode: "auto";
+  } | {
+    mode: "manual";
+    content: Tfcce4260b1;
+    question: string;
+  };
+  enabled: T1bdf39f14a;
+  severity: T0a46fb6ba4;
+  sourceId: string;
+  standard: T73f271d728;
+};
+
+type Tfa384bd983 = {
+  [key: string]: string;
+};
+
+type Tfa4d090dd5 = {
+  readonly type: "entity";
+  readonly id: stll_api_contract_SafeId<"entity">;
 };
 
 type Tfa609f319e = {
@@ -35248,105 +36425,42 @@ type Tfa609f319e = {
   };
 };
 
-type T5dbacf96e7 = {
-  (args: T64efadf7d1, context?: Ta2dc1740cf): (T8387742e1c | Promise<T8387742e1c>);
+type Tfa998c5874 = {
+  documentRef: string;
+  name: string;
 };
 
-type T2f4709c888 = {
-  readonly input: T93f05f2bc9;
-  readonly output: T355e36f9c1;
+type Tfb9effd8c9 = {
+  lawId: string;
 };
 
-type Td4b7fddf97 = {
-  readonly value: T355e36f9c1;
-  readonly issues?: undefined;
+type Tfcce4260b1 = {
+  type: "file";
+  version: 1;
+} | T29dbcb6703 | T9ffc3fafa7 | T888302d360 | T748711fee4 | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
 };
 
-type T93f05f2bc9 = {
-  templateId: string;
+type Tfccf1c1167 = {
+  pageNumber: number;
+  yMin: number;
+  xMin: number;
+  yMax: number;
+  xMax: number;
 };
 
-type T87af5d63b3 = {
-  readonly input: Tf74132cd3e;
-  readonly output: Ta0b306ecbf;
+type Tfcf09c4c62 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentTranslationRun";
 };
 
-type T462a2d055d = {
-  readonly value: Ta0b306ecbf;
-  readonly issues?: undefined;
-};
-
-type Tf74132cd3e = {
-  text: string;
-  instructions: T432e07d100;
-};
-
-type Tffce8f1b46 = {
-  readonly input: Taccc62a1a5;
-  readonly output: T46ab7251d5;
-};
-
-type Td7e844e938 = {
-  readonly value: T46ab7251d5;
-  readonly issues?: undefined;
-};
-
-type Taf8f77d898 = {
-  readonly input: Tffa11b61c2;
-  readonly output: Tde0e71406c;
-};
-
-type Ta4255119d0 = {
-  readonly value: Tde0e71406c;
-  readonly issues?: undefined;
-};
-
-type Taccc62a1a5 = {
-  folderRef: string;
-};
-
-type Tffa11b61c2 = {
-  folder: {
-    folderRef: string;
-    name: string;
-  };
-  coverage: {
-    complete: T1bdf39f14a;
-    snapshotDocumentCount: number;
-    traversalDepthLimit: number;
-    additionalDescendantsMayExist: T1bdf39f14a;
-  };
-  documentsReviewed: Array<Tfa998c5874>;
-  documentsSkipped: Array<{
-    documentRef: string;
-    name: string;
-    reason: string;
-  }>;
-  documentsNotChecked: Array<Tfa998c5874>;
-  documentsNotCheckedOmittedCount: number;
-  review: string;
-  citations: Array<{
-    type: "docx-folio";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    passage: string;
-    blockId: string;
-  } | {
-    type: "pdf-bates";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    bates: string;
-    pageNumber: number;
-  }>;
-};
-
-type T0823792555 = {
-  readonly input: T424c5f5482;
-  readonly output: T66d8615e4f;
+type Tfd3c8010a2 = {
+  modelId: string;
+  provider: Ta0f85a4b95;
 };
 
 type Tfd3efc6c3f = {
@@ -35354,146 +36468,45 @@ type Tfd3efc6c3f = {
   readonly issues?: undefined;
 };
 
-type T1ad8998f81 = {
-  readonly input: Tee61f4ed5c;
-  readonly output: T0720439bb0;
+type Tfde6260a4e = {
+  entityId: string;
+  fieldId: string;
+  fileId: string;
+  fileName: string;
+  renamed: T1bdf39f14a;
 };
 
-type T36221949fd = {
-  readonly value: T0720439bb0;
-  readonly issues?: undefined;
+type Tfe7cf57422 = {
+  title: string;
+  jurisdictions: ReadonlyArray<T6ab1edb8c0>;
+  fields: ReadonlyArray<string>;
+  slug: string;
+  license: string;
+  languages: ReadonlyArray<string>;
+  sha256: string;
+  legalArea: T432e07d100;
 };
 
-type T424c5f5482 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
-};
-
-type Tee61f4ed5c = {
-  results: Array<{
-    index: number;
-    status: "completed";
-    result: string;
-  } | {
-    index: number;
-    status: "failed";
-    error: string;
-  }>;
-};
-
-type Tb63d3fa983 = {
-  readonly input: Ta7d8e78679;
-  readonly output: Tcb64065203;
-};
-
-type T48da17df08 = {
-  readonly value: Tcb64065203;
-  readonly issues?: undefined;
-};
-
-type T6726f71d15 = {
-  readonly input: T162fd4d3a0;
-  readonly output: Tea3eb4808d;
-};
-
-type Td33fc5a5dd = {
-  readonly value: Tea3eb4808d;
-  readonly issues?: undefined;
-};
-
-type Ta7d8e78679 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
-};
-
-type T162fd4d3a0 = {
-  status: "saved";
-};
-
-type T0122da017b = {
-  activeDraftContext?: undefined | {
-    type: "generated-document";
-    originChatMessageId: T7d9d93bde2;
-    originChatThreadId: T780bacb7ad;
-    toolCallId: string;
-    version: 1;
-  };
-  anonRestorations?: undefined | {
-    pairs: Array<T4b1112b06e>;
-  };
-  docxEditPreferences?: undefined | {
-    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
-    editApplyMode?: undefined | "auto" | "manual";
-  };
-  mentions?: undefined | {
-    mentions: Array<((T2d7c3a4a2d & {
-      category: "entity";
-      resource: Tfa4d090dd5;
-      workspaceId: T432e07d100;
-    }) | (T2d7c3a4a2d & {
-      category: "workspace";
-      resource: T9d6eb42931;
-    }))>;
-  };
-  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | {
-    version: 1;
-    entities: Array<{
-      entity: Tfa4d090dd5;
-      toolCallId: string;
-      workspace: T9d6eb42931;
-    }>;
-    unresolvedInputs: Array<{
-      kind: ("contact" | "entity" | "matter" | "property");
-      param: string;
-      ref: string;
-      toolCallId: string;
-    }>;
-    workspaceScope: Array<T9d6eb42931>;
-  };
-  serverProvenance?: undefined | {
-    type: "search-summary";
-    version: 1;
-  };
-  sourceDocuments?: undefined | Array<T18f8f5f7e8>;
-  turnOutcome?: undefined | {
-    type: "awaiting-user";
-    interaction: {
-      type: "approval";
-      toolCallId: string;
-    } | {
-      type: "ask-user";
-      toolCallId: string;
-    } | {
-      type: "client-tool";
-      toolCallId: string;
-    };
-  } | {
-    type: "completed";
-  } | {
-    type: "cancelled";
-    reason: ("superseded" | "user-stop");
-  } | {
-    type: "failed";
-    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "loop_detected" | "empty_completion");
-  } | {
-    type: "interrupted";
-    reason: ("client-disconnected" | "timeout");
-  };
-  usage?: undefined | {
-    totalTokens: number;
-    completionTokens: number;
-    promptTokens: number;
-  } & {
-    completionTokensDetails?: undefined | {
-      reasoningTokens?: number;
-    };
-  };
+type Tfe81175840 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+} | {
+  readonly message: "Legislation document not found";
 };
 
 type Tff5735a10a = tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | {
@@ -36050,136 +37063,11 @@ type Tff5735a10a = tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> 
   output?: unknown;
 } & Te4ad2efe8c | tanstack_ai_StructuredOutputPart<unknown>;
 
-type T18f8f5f7e8 = {
-  entityId: string;
-  entityRef?: string;
-  kind: string;
-  matterRef?: string;
-  mention?: string;
-  mimeType: T432e07d100;
-  title: string;
-  workspaceId: T432e07d100;
+type Tff67652b63 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "signal";
 };
 
-type T0bc71347dc = {
-  success: true;
-  fileName: string;
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-} | {
-  fixes?: undefined | Array<{
-    code: string;
-    message: string;
-    line?: undefined | number;
-  }>;
-  warnings?: undefined | Array<Tc78d41b768>;
-  success: true;
-  destination: "draft";
-  fileName: string;
-} | {
-  success: true;
-  destination: "download";
-  fileName: string;
-} | {
-  success: false;
-  message: string;
-  errors?: undefined | Array<Tc78d41b768>;
-};
-
-type Td5abdf9c63 = {
-  answers: Array<{
-    question: string;
-    answer: string;
-  }>;
-};
-
-type T596c558ecb = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
-type T1d47fa3dc0 = {
-  success: true;
-  fileName: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-};
-
-type T55fe720a8c = {
-  query: string;
-  jurisdiction: T069e650050;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
-};
-
-type T06fc334600 = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: T1bdf39f14a;
-  provider: "jina";
-};
-
-type T1f1ce35744 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type Tf7f2d88b62 = {
-  targetMessageId: string;
-  messages: Array<{
-    messageId: string;
-    role: string;
-    createdAt: string;
-    content: string;
-  }>;
-};
-
-type T64efadf7d1 = {
-  query: string;
-  limit?: undefined | number;
-};
-
-type Tc6f587c6bd = {
-  query: string;
-  scope: T0e8943eb14;
-  hint: T432e07d100;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: T432e07d100;
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type Tde0e71406c = {
+type Tffa11b61c2 = {
   folder: {
     folderRef: string;
     name: string;
@@ -36190,13 +37078,13 @@ type Tde0e71406c = {
     traversalDepthLimit: number;
     additionalDescendantsMayExist: T1bdf39f14a;
   };
-  documentsReviewed: Array<T6b5cf52115>;
+  documentsReviewed: Array<Tfa998c5874>;
   documentsSkipped: Array<{
     documentRef: string;
     name: string;
     reason: string;
   }>;
-  documentsNotChecked: Array<T6b5cf52115>;
+  documentsNotChecked: Array<Tfa998c5874>;
   documentsNotCheckedOmittedCount: number;
   review: string;
   citations: Array<{
@@ -36218,918 +37106,30 @@ type Tde0e71406c = {
   }>;
 };
 
-type T0720439bb0 = {
-  results: Array<{
-    index: number;
-    status: "completed";
-    result: string;
-  } | {
-    index: number;
-    status: "failed";
-    error: string;
-  }>;
-};
-
-type Tea3eb4808d = {
-  status: "saved";
-};
-
-type T2b12d7c01e = {
-  readonly [key: string]: never;
-};
-
-type T6a76a17ac2 = {
-  ok: false;
-  error: string;
-};
-
-type T348917fbeb = {
-  operations: Array<unknown>;
-  documentVersion?: string;
-};
-
-type T49a4b60f9b = {
-  ok: true;
-  result: stll_folio_agents_FolioAgentApplyOperationsSummary;
-};
-
-type T63c4458d83 = {
-  type: "headingSection";
-  story: "main";
-  headingBlockId: string;
-  headingTextHash: string;
-  headingLevel: number;
-};
-
-type T16953276e4 = {
-  handle: Te73195d9c3;
-  text: string;
-};
-
-type Te73195d9c3 = {
-  type: "main";
-} | {
-  type: "header";
-  relationshipId: string;
-} | {
-  type: "footer";
-  relationshipId: string;
-} | {
-  type: "footnote";
-  noteId: number;
-} | {
-  type: "endnote";
-  noteId: number;
-};
-
-type Te18c7397cc = {
-  content: Tfcce4260b1;
-  question: string;
-};
-
-type T4c3f591341 = {
-  kind: "presence";
-  expectation: Ta258bd6696;
-};
-
-type T8f8a3ed733 = {
-  kind: "constraint";
-  condition: stll_conditions_ConditionNode;
-};
-
-type T6134405b04 = {
-  label?: string;
-  text: string;
-  id: string;
-};
-
-type Tf9d55cf19d = {
-  check?: T4c3f591341 | T8f8a3ed733;
-  guidance?: string;
-  negotiation?: T62188807d3;
-  purpose?: string;
-  issue: string;
-  mode: "graded";
-  ask: {
-    derived?: {
-      content: Tfcce4260b1;
-      question: string;
-      rulesHash: string;
-    };
-    mode: "auto";
-  } | {
-    mode: "manual";
-    content: Tfcce4260b1;
-    question: string;
-  };
-  enabled: T1bdf39f14a;
-  severity: T0a46fb6ba4;
-  sourceId: string;
-  standard: T73f271d728;
-};
-
-type Td0e4afd336 = {
-  clauseVersion?: number;
-  source: "clause";
-  clauseId: string;
-};
-
-type T2c788257c8 = {
-  text: string;
-  source: "inline";
-};
-
-type T62188807d3 = {
-  escalation?: string;
-  rationale?: string;
-  talkingPoints?: Array<string>;
-};
-
-type T73f271d728 = {
-  source: "tiers";
-  tiers: {
-    acceptable: {
-      ideal?: Td0e4afd336 | T2c788257c8;
-      rules: Array<Tad34918dcf>;
-    };
-    fallback: {
-      entries: Array<T6134405b04>;
-    };
-    notAcceptable: {
-      rules: Array<Tad34918dcf>;
-    };
-  };
-} | {
-  source: "reference";
-  passages: Array<T2f1b6312a1>;
-  termKind: T03c56de23b;
-};
-
-type T7d5b6398be = "reference" | "tiers";
-
-type T2f1b6312a1 = {
-  id: string;
-  workspaceId: string;
-  entityId: string;
-  entityVersionId: string;
-  fileFieldId: string;
-  blockId: string;
-};
-
-type Tad34918dcf = {
-  text: string;
-  id: string;
-};
-
-type T9531885fa8 = {
-  propertyId: string;
-  desc: T1bdf39f14a;
-};
-
-type T9c01826163 = {
-  readonly __safeIdType?: "workspace";
-};
-
-type T27402211cc = {
-  id: string;
-  resourceName: (string & valibot_Brand<"ResourceName">);
-  type: T767b63a67e;
-  title: string;
-  headline: T432e07d100;
-  updatedAt: string;
-};
-
-type Tfa4d090dd5 = {
-  readonly type: "entity";
-  readonly id: stll_api_contract_SafeId<"entity">;
-};
-
-type T9d6eb42931 = {
-  readonly type: "workspace";
-  readonly id: stll_api_contract_SafeId<"workspace">;
-};
-
-type T8854c1a08e = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
-
-type Tc13989dabb = {
-  readonly __safeIdType?: "contact";
-};
-
-type T78d7036743 = {
-  label?: string;
-  type: T21bb8cfb40;
-  address: string;
-  isPrimary: T1bdf39f14a;
-};
-
-type Tca248f9d2b = {
-  label?: string;
-  number: string;
-  type: Ta083079a24;
-  isPrimary: T1bdf39f14a;
-};
-
-type T6607846b47 = null | {
-  street: T432e07d100;
-  postalCode: T432e07d100;
-  city: T432e07d100;
-  municipality: T432e07d100;
-  country: T432e07d100;
-  textAddress: T432e07d100;
-};
-
-type T5d51195633 = null | {
-  premises: T432e07d100;
-  addressLine1: T432e07d100;
-  addressLine2: T432e07d100;
-  locality: T432e07d100;
-  region: T432e07d100;
-  postalCode: T432e07d100;
-  country: T432e07d100;
-  poBox: T432e07d100;
-  careOf: T432e07d100;
-  textAddress: T432e07d100;
-};
-
-type T36db913080 = null | {
-  street: T432e07d100;
-  city: T432e07d100;
-  region: T432e07d100;
-  postalCode: T432e07d100;
-  country: T432e07d100;
-  textAddress: T432e07d100;
-};
-
-type T01b006de06 = null | {
-  street: T432e07d100;
-  postalCode: T432e07d100;
-  city: T432e07d100;
-  country: T432e07d100;
-  textAddress: T432e07d100;
-};
-
-type T2cf86f3d35 = null | {
-  siret: string;
-  isHeadOffice: T1bdf39f14a;
-  address: (null | {
-    textAddress: T432e07d100;
-    street: T432e07d100;
-    postalCode: T432e07d100;
-    city: T432e07d100;
-    country: T432e07d100;
-  });
-  activityCode: T432e07d100;
-  status: {
-    type: "open";
-  } | {
-    type: "closed";
-    closedAt: T432e07d100;
-  } | {
-    type: "unknown";
-  };
-  createdAt: T432e07d100;
-  closedAt: T432e07d100;
-};
-
-type T349dac8902 = {
-  country?: string;
-  label?: string;
-  state?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-  type: T3906e8d961;
-  isPrimary: T1bdf39f14a;
-  line1: string;
-};
-
-type T699c354d0c = {
-  dataBoxes?: Array<{
-    label?: string;
-    id: string;
-    isPrimary: T1bdf39f14a;
-  }>;
-  customFields?: Array<{
-    value: string;
-    id: string;
-    label: string;
-  }>;
-};
-
-type T29dbcb6703 = {
-  type: "text";
-  version: 1;
-};
-
-type T9ffc3fafa7 = {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-};
-
-type T888302d360 = {
-  type: "date";
-  version: 1;
-};
-
-type T748711fee4 = {
-  type: "int";
-  version: 1;
-};
-
-type T3ed4bbeee3 = {
-  email: T432e07d100;
-  name: T432e07d100;
-};
-
-type Tcd02080ab1 = null | string | number | false | true | T9b42ed15a8 | Array<Tcd02080ab1>;
-
-type T42090b159e = {
-  wordEditShortcut?: string;
-  wordEditAuthorName?: string;
-  locale: string;
-  userName: string;
-  timezone: string;
-};
-
-type Td3493e7d84 = {
-  fileName: string;
-  toolCallId: string;
-  originChatMessageId: T7d9d93bde2;
-  originChatThreadId: T780bacb7ad;
-  docxEditSnapshot: T3cedcce572;
-};
-
-type T68e02c7e0d = {
-  fileFieldId?: T1c7a854487;
-  docxEditSnapshot?: T3cedcce572;
-  supportsDocxEdits?: false | true;
-  entityId: T9a509045a7;
-  fileName: string;
-};
-
-type Tcd61c78c49 = {
-  docxEditSnapshot?: T3cedcce572;
-  templateId: T1173055df0;
-  fileName: string;
-};
-
-type T459c229135 = {
-  decisionId: Tf4b485f2ea;
-};
-
-type Taf5ff5c24f = {
-  text?: string;
-  snippet?: string;
-  provider?: string;
-  connectorSlug?: string;
-  sourceToolName?: string;
-  url: string;
-  title: string;
-};
-
-type T8649aae095 = {
-  skillId?: T7fc3acf5ac;
-  skillName: string;
-};
-
-type Tc33c7b536f = {
+type Tffb9800473 = {
   documentId: Td90f3cb611;
-};
-
-type Tefd05507c2 = "user" | "system" | "assistant";
-
-type T1754ed2395 = 1 | 2 | 3 | 4 | 5 | 6;
-
-type T4340530c23 = {
-  apartado?: T454acf9abc | Array<T454acf9abc>;
-  codigo?: string;
-  item?: T4d6a470586 | Array<T4d6a470586>;
-  nombre?: string;
-};
-
-type T6e3baa4852 = {
-  system: string;
-  documentId: string;
-  webUrl: string;
-  printUrl: string;
-};
-
-type T9411263f78 = {
-  caseNumber: T432e07d100;
-  ecli: T432e07d100;
-  court: T432e07d100;
-  decisionDate: T432e07d100;
-  decisionType: T432e07d100;
-  keywords: Array<string>;
-  statutes: Array<string>;
-};
-
-type T7522841395 = {
-  type: "text";
-  text: string;
-  anonymized?: undefined | true;
-} | {
-  type: "bold";
-  children: Array<T7522841395>;
-} | {
-  type: "italic";
-  children: Array<T7522841395>;
-} | {
-  type: "underline";
-  children: Array<T7522841395>;
-} | {
-  type: "superscript";
-  children: Array<T7522841395>;
-} | {
-  type: "subscript";
-  children: Array<T7522841395>;
-} | {
-  type: "link";
-  href: string;
-  children: Array<T7522841395>;
-} | {
-  type: "citation";
-  cite: string;
-  href?: undefined | string;
-  children: Array<T7522841395>;
-} | {
-  type: "line-break";
-} | {
-  type: "page-anchor";
-  label: string;
-  href?: undefined | string;
-};
-
-type T5b30b2c0a8 = {
-  type: "footnote";
-  label: string;
-  noteId?: undefined | string;
-};
-
-type T7c8bca7f18 = {
-  [key: string]: never;
-};
-
-type T28f55fc43c = null | Array<{
-  index: number;
-  type: ("unknown" | "header" | "footer" | "history" | "argumentation" | "dissent" | "ruling");
-  title: T432e07d100;
-  text: string;
-}>;
-
-type Te831c71c90 = {
-  kind: "fallback";
-  label?: string;
-  text: string;
-};
-
-type Tc0c55e9cf5 = {
-  kind: "redLine";
-  ruleId: string;
-  text: string;
-};
-
-type T0c8f4cf1e2 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type Tebf70ccf13 = {
-  text: string;
-  id: string;
-};
-
-type T602ddca6f8 = null | {
-  text: string;
-  value: T688f6f1190;
-  unit: T432e07d100;
-  citation: T84093f1fc9;
-};
-
-type T84093f1fc9 = {
-  blockId: string;
-  text: string;
-};
-
-type Tff67652b63 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "signal";
-};
-
-type T4310244850 = {
-  propertyId: string;
-  kind: ("max" | "count" | "min" | "count-unique" | "count-empty" | "count-filled" | "percent-empty" | "percent-filled" | "sum" | "average" | "median" | "range" | "percent-of-total");
-};
-
-type T51ea132ed2 = {
-  bold: T1bdf39f14a;
-  alignment: T302e959e47;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T4c01853e6a;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type T90fb134c6b = {
-  bold: T1bdf39f14a;
-  alignment: T302e959e47;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T4c01853e6a;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type T4c01853e6a = "preserve" | "decimal" | "hierarchicalDecimal" | "lowerLetterParenthetical" | "lowerRomanParenthetical" | "upperLetterParenthetical" | "upperRoman";
-
-type Tab86be84f5 = {
-  provider: Tf822306fb6;
-  modelId: string;
-};
-
-type T594988174f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "savedSearch";
-};
-
-type Ta8b78a42c5 = "unknown" | "disabled" | "current" | "delayed" | "stalled";
-
-type T59a8dbef95 = {
-  stored: number;
-  storedAsOf: string;
-  reported: number;
-  reportedAsOf: string;
-  reportedBy: ("operator" | "publisher" | "listing");
-};
-
-type T8cd5b388a4 = {
-  readonly type: "absent";
-  readonly reason: ("not_published" | "parse_failed" | "publisher_placeholder" | "redistribution_withheld");
-};
-
-type T24da1e86c5 = {
-  readonly type: "present";
-  readonly text: string;
-};
-
-type Td06876de99 = T24da1e86c5 | T8cd5b388a4;
-
-type T1e9bf90711 = {
-  type: "case-number";
-  value: string;
-} | {
-  type: "ecli";
-  value: string;
-} | {
-  type: "neutral-citation";
-  value: string;
-} | {
-  type: "reporter-citation";
-  value: string;
-};
-
-type T94e2de2165 = {
-  id: string;
-  label: string;
-  category: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  annotations: Array<{
-    id: string;
-    summary: string;
-    startAnchorId: string;
-    endAnchorId: string;
-    textSnippet: string;
-  }>;
-  children: Array<T94e2de2165>;
-};
-
-type T5cffd2424c = {
-  status: "not-required";
-};
-
-type Tf6d1adf4f8 = {
-  status: "pending";
-};
-
-type Tb368e5ae56 = {
-  status: "ready";
-};
-
-type Tc6f6ebe775 = {
-  reason?: "processing" | "enqueue";
-  status: "failed";
-};
-
-type T1168738ff9 = {
-  readonly input: any;
-  readonly output: any;
-};
-
-type T5dab5448de = {
-  readonly value: any;
-  readonly issues?: undefined;
-};
-
-type T2b4af5b5ce = {
-  readonly target: ((T6d90fb7f32 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
-  readonly libraryOptions?: undefined | Td09f3f3108;
-};
-
-type T13f2f9bd72 = {
-  templateId: string;
-  values: T3e2a904f6c;
-};
-
-type T3e2a904f6c = {
-  [key: string]: unknown;
-};
-
-type T9ab85afc3e = {
-  name: string;
-  source: string;
-};
-
-type Tf953808cbe = {
-  code: string;
-  message: string;
-  severity: T8e8f463ae0;
-  line?: undefined | number;
-};
-
-type T87284c6919 = {
-  analysis: string;
-  questions: Array<{
-    question: string;
-    reason: string;
-    options?: undefined | Array<string>;
-    default?: undefined | string;
-  }>;
-};
-
-type Td7e6add81d = {
-  skillName: string;
-};
-
-type Tc83d8b9f37 = {
-  skillName: string;
-  path: string;
-};
-
-type T93ee1fa9f8 = {
-  jurisdiction: T9960bad961;
-  query: string;
-  limit?: undefined | number;
-};
-
-type T9960bad961 = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
-
-type T846b0784de = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
-};
-
-type T19f8a3623b = {
-  lawId: string;
-  metadata?: undefined | false | true;
-  analysis?: undefined | false | true;
-  fullText?: undefined | false | true;
-  eli?: undefined | false | true;
-};
-
-type T9021ebfc29 = {
-  lawId: string;
-};
-
-type Tf5e31e73aa = {
-  lawId: string;
-  blockId: string;
-};
-
-type T665ac097fb = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
-type T109fc089ae = {
-  date: string;
-};
-
-type Tc7b9fe0fcd = {
-  courtCode: string;
-  spisZn: string;
-};
-
-type Tf79cee9ca8 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: Te80094a196;
-};
-
-type Te80094a196 = null | string | number | Array<string>;
-
-type Ta21762d27e = {
-  title: string;
-  markdown: string;
-};
-
-type T43e78e86e2 = {
-  query: string;
-  jurisdiction: T069e650050;
-  freshness: ("year" | "any" | "month" | "week" | "day");
-  maxResults: number;
-};
-
-type T069e650050 = "global" | "at" | "de" | "eu" | "sk" | "cz";
-
-type T92b1e52bb0 = {
-  url: string;
-  maxChars: number;
-};
-
-type T7c9021b9f6 = {
-  query: string;
-  limit: number;
-};
-
-type T5af6308a18 = {
-  messageId: string;
-  before: number;
-  after: number;
-};
-
-type T151c8c8adf = {
-  readonly input: T64efadf7d1;
-  readonly output: Tc69524a13b;
-};
-
-type Tf9791990e8 = {
-  readonly value: Tc69524a13b;
-  readonly issues?: undefined;
-};
-
-type T4d93baa3cf = {
-  readonly input: T8387742e1c;
-  readonly output: Tc6f587c6bd;
-};
-
-type T82a15f6a03 = {
-  readonly value: Tc6f587c6bd;
-  readonly issues?: undefined;
-};
-
-type T8387742e1c = {
-  query: string;
-  scope: T0e8943eb14;
-  hint: T432e07d100;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: T432e07d100;
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type T355e36f9c1 = {
-  templateId: string;
-};
-
-type Ta0b306ecbf = {
-  text: string;
-  instructions: T432e07d100;
-};
-
-type T46ab7251d5 = {
-  folderRef: string;
-};
-
-type Tfa998c5874 = {
-  documentRef: string;
-  name: string;
-};
-
-type T66d8615e4f = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
-};
-
-type Tcb64065203 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
-};
-
-type T2d7c3a4a2d = {
-  id: string;
-  label: string;
-};
-
-type Tf85ca6744e = "error" | "complete" | "awaiting-input" | "input-streaming" | "input-complete" | "approval-requested" | "approval-responded";
-
-type Te4ad2efe8c = {
-  approval?: {
-    id: string;
-    needsApproval: T1bdf39f14a;
-    approved?: false | true;
-  };
-};
-
-type Tc78d41b768 = {
-  code: string;
-  message: string;
-  severity: T8e8f463ae0;
-  line?: undefined | number;
-};
-
-type T0e8943eb14 = "matters" | "all-chats";
-
-type T6b5cf52115 = {
-  documentRef: string;
-  name: string;
-};
-
-type T3cedcce572 = {
-  canApplyEdits?: false | true;
-  blocks: Array<{
-    displayLabel?: string;
-    styleId?: string;
-    blockTextHash?: string;
-    kind: ("paragraph" | "heading" | "listItem");
+  language: string;
+  anchorId: string;
+  citedAnchorId: T432e07d100;
+  headings: Array<{
+    anchorId: string;
+    level: T1754ed2395;
     text: string;
+  }>;
+  heading: (null | {
     id: string;
+    anchorId: string;
+    level: T1754ed2395;
+    text: string;
+  });
+  blocks: Array<{
+    id: string;
+    anchorId: string;
+    text: string;
   }>;
 };
 
-type T454acf9abc = {
-  codigo?: string;
-  nombre?: string;
-  item?: T4d6a470586 | Array<T4d6a470586>;
-};
-
-type T4d6a470586 = {
-  identificador?: string;
-  titulo?: string;
-  url_pdf?: {
-    pagina_final?: string;
-    pagina_inicial?: string;
-    szBytes?: string;
-    szKBytes?: string;
-    texto?: string;
-  };
-  url_html?: string;
-  url_xml?: string;
-};
-
-type T8e8f463ae0 = "error" | "warning";
-
-type Tc69524a13b = {
-  query: string;
-  limit: number;
+type Tffce8f1b46 = {
+  readonly input: Taccc62a1a5;
+  readonly output: T46ab7251d5;
 };
