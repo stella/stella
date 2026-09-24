@@ -11,7 +11,12 @@ import {
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 
-import { EAGER_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
+import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+
+import {
+  EAGER_CHAT_READ_TOOLS,
+  toDocumentedChatReads,
+} from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
@@ -191,7 +196,7 @@ type BuildChatCodeModeProps = Omit<
   ChatRegistryContextDeps,
   "pinServerValidatedWorkspaceId"
 > & {
-  /** The active skill's documented reads (`ActiveChatSkillContext`). */
+  /** Documented reads of the active skill (`ActiveChatSkillContext`). */
   documentedReads: readonly RegistryReadToolName[];
   refRegistry: ChatRefRegistry;
   toolDefectMemo: ChatToolDefectMemo;
@@ -272,42 +277,70 @@ export const buildChatCodeModeTools = (
   return { execute_typescript: tool, discover_tools: discovery };
 };
 
-const codeModePromptVariants = new Map<string, string>();
-
-/**
- * The chat code-mode system-prompt section for a turn whose active skill
- * documents `documentedReads` up front, injected in place of the hand-written
- * `READONLY_API_HINT`. A pure function of the set, memoized on its sorted,
- * deduplicated key, so it is request-independent within a skill and
- * cache-stable: two threads with the same active skill share one string and
- * one prompt-cache key. Built from the same `buildChatReadTools` definitions
- * the runtime uses, so the prompt and the registered tools never drift. The
- * no-op runner is never invoked here; `createCodeModeSystemPrompt` only reads
- * the definitions. The cache holds one entry per distinct set a skill in use
- * declares.
- */
-export const chatCodeModeSystemPrompt = (
+/** One key per distinct read set: sorted and deduplicated. */
+export const codeModePromptVariantKey = (
   documentedReads: readonly RegistryReadToolName[],
-): string => {
-  const reads = [...new Set(documentedReads)].toSorted();
-  const key = reads.join(" ");
-  const cached = codeModePromptVariants.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const prompt = createCodeModeSystemPrompt({
+): string => [...new Set(documentedReads)].toSorted().join(" ");
+
+const renderChatCodeModeSystemPrompt = (
+  documentedReads: readonly RegistryReadToolName[],
+): string =>
+  createCodeModeSystemPrompt({
     driver: createStellaIsolateDriver({
       concurrencyKey: "chat-code-mode-prompt",
     }),
     tools: buildChatReadTools({
-      documentedReads: reads,
+      documentedReads: [...new Set(documentedReads)].toSorted(),
       runReadTool: () => ({}),
     }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });
-  codeModePromptVariants.set(key, prompt);
-  return prompt;
+
+let builtInVariants: ReadonlyMap<string, string> | undefined;
+
+/**
+ * The variants shipped code declares, rendered once on first use: the base
+ * (no skill) and each built-in skill's documented reads, keyed by
+ * `codeModePromptVariantKey`. Built-in skills are code, so this set is finite
+ * and known; an installed skill's declaration is org data, so its variant is
+ * rendered per turn and never retained, and a tenant's skills cannot grow a
+ * process-wide table.
+ */
+export const builtInCodeModePromptVariants = (): ReadonlyMap<
+  string,
+  string
+> => {
+  builtInVariants ??= new Map(
+    [
+      [],
+      ...listSkillMetadata().map(
+        ({ metadata }) =>
+          toDocumentedChatReads(readDocumentedChatReads(metadata)).reads,
+      ),
+    ].map((reads) => [
+      codeModePromptVariantKey(reads),
+      renderChatCodeModeSystemPrompt(reads),
+    ]),
+  );
+  return builtInVariants;
 };
+
+/**
+ * The chat code-mode system-prompt section for a turn whose active skill
+ * documents `documentedReads` up front, injected in place of the hand-written
+ * `READONLY_API_HINT`. A pure function of the set, so two threads with the
+ * same active skill share one string and one prompt-cache key whether or not
+ * the variant was rendered before; the built-in table only saves the render.
+ * Built from the same `buildChatReadTools` definitions the runtime uses, so
+ * the prompt and the registered tools never drift. The no-op runner is never
+ * invoked here; `createCodeModeSystemPrompt` only reads the definitions.
+ */
+export const chatCodeModeSystemPrompt = (
+  documentedReads: readonly RegistryReadToolName[],
+): string =>
+  builtInCodeModePromptVariants().get(
+    codeModePromptVariantKey(documentedReads),
+  ) ?? renderChatCodeModeSystemPrompt(documentedReads);
 
 /** The base variant: no active skill, so only `list_matters` is documented. */
 export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = chatCodeModeSystemPrompt(
