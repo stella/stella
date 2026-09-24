@@ -46,7 +46,6 @@ const ensureSmokePrincipal = async (now: Date): Promise<void> => {
     columns: { id: true },
   });
   if (!existingUser) {
-    // oxlint-disable-next-line security-guards/no-unscoped-user-query -- seeds the fixed smoke-test principal; no organization-owned data is read
     await rootDb.insert(user).values({
       ...SMOKE_USER,
       emailVerified: true,

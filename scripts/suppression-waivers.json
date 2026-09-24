@@ -303,16 +303,6 @@
       "evidence": "apps/api/src/lib/notifications.integration.test.ts"
     },
     {
-      "id": "SW-0034",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/smoke-session/store.ts",
-      "symbol": "ensureSmokePrincipal",
-      "count": 1,
-      "reason": "seeds the fixed smoke-test principal; no organization-owned data is read",
-      "evidence": "apps/api/src/lib/smoke-session/store.ts#mintSmokeSession"
-    },
-    {
       "id": "SW-0035",
       "kind": "permanent",
       "rule": "security-guards/no-unscoped-user-query",

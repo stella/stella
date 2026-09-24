@@ -20,6 +20,7 @@ import {
   isCallTo,
   isIdentifier,
   isIdentifierReference,
+  isFileIn,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
@@ -224,11 +225,75 @@ const HREF_SANITIZERS: ReadonlyMap<string, string> = new Map([
 // both `member.userId` and `member.organizationId` of the auth schema's
 // `member` table. Both tables are recognised by what they are bound to, so an
 // aliased import, a namespace member, or a local alias still counts.
-// Alternative authorized scopes require a narrow suppression with evidence.
+//
+// A plain insert creates a row and reads none, so `insert(user)` is judged
+// only when it hands rows back (`returning`) or rewrites an existing one
+// (`onConflictDoUpdate`).
+//
+// Modules whose every user-table query answers to another scope (the caller's
+// own account, an instance-wide operator view) are listed in the rule's
+// `allowedFiles` option, each with the reason that scope holds. Anything else
+// needs a narrow suppression with evidence.
 
 const AUTH_SCHEMA_MODULE = "apps/api/src/db/auth-schema";
 const USER_TABLE_EXPORT = "user";
 const MEMBER_TABLE_EXPORT = "member";
+
+// Chain calls that make an insert read or overwrite an existing row.
+const ROW_READING_INSERT_CALLS: ReadonlySet<string> = new Set([
+  "onConflictDoUpdate",
+  "returning",
+]);
+
+const allowedUnscopedFiles = (options: unknown): string[] => {
+  const configured: unknown = Array.isArray(options) ? options.at(0) : null;
+  if (
+    typeof configured !== "object" ||
+    configured === null ||
+    !("allowedFiles" in configured) ||
+    !Array.isArray(configured.allowedFiles)
+  ) {
+    return [];
+  }
+  return configured.allowedFiles.flatMap((entry: unknown) =>
+    typeof entry === "object" &&
+    entry !== null &&
+    "file" in entry &&
+    "reason" in entry &&
+    typeof entry.file === "string" &&
+    typeof entry.reason === "string" &&
+    entry.reason.trim() !== ""
+      ? [entry.file]
+      : [],
+  );
+};
+
+// `db.insert(user)`: the table is the argument of an `insert` call.
+const isInsertTarget = (node: AstNode): boolean => {
+  const call = node.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.at(0) !== node
+  ) {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  return (
+    callee?.type === "MemberExpression" &&
+    memberPropertyName(callee) === "insert"
+  );
+};
+
+const readsInsertedRows = (chain: AstNode): boolean =>
+  everyNode(chain).some((node) => {
+    if (node.type !== "MemberExpression") {
+      return false;
+    }
+    const property = memberPropertyName(node);
+    return property !== null && ROW_READING_INSERT_CALLS.has(property);
+  });
 
 // Where one query expression ends: a statement, a declaration, or a function
 // (a callback is its own query). Walking up from a table reference to the
@@ -645,6 +710,26 @@ export default eslintCompatPlugin({
             "chain. Join through organization membership, or suppress " +
             "narrowly with evidence for another authorized scope.",
         },
+        schema: [
+          {
+            type: "object",
+            properties: {
+              allowedFiles: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    file: { type: "string" },
+                    reason: { type: "string", minLength: 1 },
+                  },
+                  required: ["file", "reason"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            additionalProperties: false,
+          },
+        ],
       },
       createOnce(context) {
         const reportedChains = new Set<AstNode>();
@@ -745,6 +830,9 @@ export default eslintCompatPlugin({
             return;
           }
           const chain = queryChainRoot(node);
+          if (isInsertTarget(node) && !readsInsertedRows(chain)) {
+            return;
+          }
           // `const users = user` only renames the table; its uses are the
           // queries.
           const holder = chain.parent;
@@ -769,6 +857,7 @@ export default eslintCompatPlugin({
           before() {
             importsAuthSchema = false;
             reportedChains.clear();
+            return !isFileIn(context, allowedUnscopedFiles(context.options));
           },
           // Static imports precede every use, so files that never load the
           // auth schema skip binding resolution entirely.
