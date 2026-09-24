@@ -26348,6 +26348,332 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
+        "item-fact-details": {
+          put: {
+            body: {
+              medium: T432e07d100;
+              confidence: never;
+              listId: T6709dca913;
+              itemEntityId: T9a509045a7;
+              occurredOn: (null | {
+                date: string;
+                precision: never;
+              });
+              evidenceKind: T432e07d100;
+              interpretationNote: T432e07d100;
+              scoring: never;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                medium: T432e07d100;
+                confidence: ("medium" | "high" | "low");
+                itemEntityId: T9a509045a7;
+                occurredOn: T432e07d100;
+                evidenceKind: T432e07d100;
+                interpretationNote: T432e07d100;
+                scoring: ("included" | "held");
+                occurredOnPrecision: T1c70c47ed9;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "claim-reviews": {
+          post: {
+            body: {
+              runId: Tf1edb394fb;
+              event: {
+                status: null;
+                kind: "status";
+              } | {
+                kind: "override";
+                state: null;
+              } | {
+                kind: "note";
+                note: string;
+              } | {
+                kind: "reopen";
+              } | {
+                kind: "record-conflict";
+                resolution: (null | {
+                  kind: "governed";
+                  factEntityId: T9a509045a7;
+                } | {
+                  kind: "escalated";
+                });
+              };
+              claimId: Tab9b292a50;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                claimId: Tab9b292a50;
+                review: T6b1ceddef1;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        "claim-reviews": {
+          bulk: {
+            post: {
+              body: {
+                runId: Tf1edb394fb;
+                claimIds: Array<Tab9b292a50>;
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  reviews: (readonly [] | Array<{
+                    claimId: Tab9b292a50;
+                    review: T6b1ceddef1;
+                  }>);
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          post: {
+            body: {
+              confirmedUnits?: number;
+              entityId: T9a509045a7;
+              fileFieldId: T1c7a854487;
+              listId: T6709dca913;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                runId: Tf1edb394fb;
+                status: "queued";
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        verifications: {
+          ":runId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                runId: Tf1edb394fb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: Tf1edb394fb;
+                  entityId: T9a509045a7;
+                  fileFieldId: T1c7a854487;
+                  entityVersionId: T116a5c37c8;
+                  evidence: {
+                    listId: T6709dca913;
+                    facts: ReadonlyArray<{
+                      factEntityId: T9a509045a7;
+                      text: string;
+                      occurredOn: T432e07d100;
+                      occurredOnPrecision: T1c70c47ed9;
+                      evidenceKind: T432e07d100;
+                      medium: T432e07d100;
+                      confidence: (null | "medium" | "high" | "low");
+                      interpretationNote: T432e07d100;
+                      sources: ReadonlyArray<{
+                        sourceEntityId: T9a509045a7;
+                        sourceEntityVersionId: T116a5c37c8;
+                        locator: T25b04af095;
+                        quote: T432e07d100;
+                      }>;
+                    }>;
+                  };
+                  status: Tb60b7c14cd;
+                  errorCode: (null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "enqueue_failed" | "no_text" | "extraction_failed" | "grading_failed");
+                  pipelineVersion: number;
+                  modelRef: T432e07d100;
+                  requestedBy: T432e07d100;
+                  createdAt: string;
+                  startedAt: T432e07d100;
+                  finishedAt: T432e07d100;
+                  claims: Array<{
+                    id: Tab9b292a50;
+                    position: number;
+                    type: ("fact" | "opinion" | "unverifiable");
+                    framing: ("asserted" | "recalled");
+                    verdict: {
+                      state: T2d38e5b837;
+                      score: number;
+                      recordConflict: null;
+                    } | {
+                      state: ("nocover" | "notverifiable");
+                      score: null;
+                      recordConflict: null;
+                    } | {
+                      state: "recordconflict";
+                      score: null;
+                      recordConflict: {
+                        subject: string;
+                        factEntityIds: readonly [T9a509045a7, T9a509045a7];
+                        values: readonly [string, string];
+                        governingStates: readonly [T2d38e5b837, T2d38e5b837];
+                      };
+                    };
+                    text: string;
+                    anchor: {
+                      type: "docx-block";
+                      blockId: string;
+                      start: number;
+                      end: number;
+                    } | {
+                      type: "pdf-page";
+                      pageNumber: number;
+                      start: number;
+                      end: number;
+                    };
+                    refs: Array<{
+                      factEntityId: T9a509045a7;
+                      rel: ("record" | "supports" | "conflicts");
+                    }>;
+                    review: (null | T6b1ceddef1);
+                  }>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
         ":listId": {
           generations: {
             ":runId": {
@@ -26366,7 +26692,7 @@ export type WebRoutes = {
                   headers: Record<never, never>;
                   response: {
                     200: {
-                      runStatus: Ta6e00a75de;
+                      runStatus: T7cafa859d4;
                       items: Array<{
                         id: T8dc306df33;
                         position: number;
@@ -26387,7 +26713,7 @@ export type WebRoutes = {
                           candidateId: T8dc306df33;
                           sourceEntityId: T9a509045a7;
                           sourceEntityVersionId: T116a5c37c8;
-                          locator: T1a242906f1;
+                          locator: T25b04af095;
                           quote: T432e07d100;
                         }>;
                       }>;
@@ -26441,7 +26767,7 @@ export type WebRoutes = {
                 200: {
                   items: Array<{
                     id: T00abe13820;
-                    status: Ta6e00a75de;
+                    status: T7cafa859d4;
                     instruction: string;
                     createdAt: Date;
                     updatedAt: Date;
@@ -26687,7 +27013,7 @@ export type WebRoutes = {
                         id: T74610d9d20;
                         sourceEntityId: T9a509045a7;
                         sourceEntityVersionId: T116a5c37c8;
-                        locator: T1a242906f1;
+                        locator: T25b04af095;
                         quote: T432e07d100;
                         verificationStatus: ("verified" | "unverified" | "rejected");
                         verifiedBy: T432e07d100;
@@ -31009,7 +31335,7 @@ export type GradedPosition = Tf9d55cf19d;
 
 export type IdealLanguage = (Td0e4afd336 | T2c788257c8);
 
-export type LegalListSourceLocator = T1a242906f1;
+export type LegalListSourceLocator = T25b04af095;
 
 export type Negotiation = T62188807d3;
 
@@ -31639,17 +31965,6 @@ type T1a148d287c = {
   requiredFields?: Array<T196b4403fb>;
 };
 
-type T1a242906f1 = {
-  type: "document";
-} | {
-  type: "docx-block";
-  blockId: string;
-} | {
-  type: "pdf-page";
-  pageNumber: number;
-  boundingBoxes?: undefined | Te08ba39d3b;
-};
-
 type T1a4826e1af = {
   id: T7524b2c883;
   decisionId: Tf4b485f2ea;
@@ -31693,6 +32008,8 @@ type T1bdf39f14a = false | true;
 type T1c62d3c45a = {
   signalId: Tff67652b63;
 };
+
+type T1c70c47ed9 = null | "year" | "month" | "day";
 
 type T1c7a854487 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "field";
@@ -31827,6 +32144,17 @@ type T24da1e86c5 = {
 type T24df5d72b3 = {
   type: "pending";
   version: 1;
+};
+
+type T25b04af095 = {
+  type: "document";
+} | {
+  type: "docx-block";
+  blockId: string;
+} | {
+  type: "pdf-page";
+  pageNumber: number;
+  boundingBoxes?: undefined | Te08ba39d3b;
 };
 
 type T2609ebaa39 = null | T976b70d646;
@@ -31972,6 +32300,8 @@ type T2cf86f3d35 = null | {
   createdAt: T432e07d100;
   closedAt: T432e07d100;
 };
+
+type T2d38e5b837 = "supported" | "tension" | "contradicted";
 
 type T2d3c0bafce = {
   updated: T1bdf39f14a;
@@ -32908,6 +33238,23 @@ type T6acd1b6804 = "Unauthorized" | Tc642053948;
 
 type T6afe23e121 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
 
+type T6b1ceddef1 = {
+  noteSavedAt: T432e07d100;
+  decidedAt: T432e07d100;
+  status: (null | "reviewed" | "disputed");
+  statusOrigin: (null | "single" | "bulk");
+  override: (null | "supported" | "tension" | "contradicted" | "nocover" | "notverifiable");
+  note: string;
+  decidedBy: T432e07d100;
+  reopened: T1bdf39f14a;
+  recordConflictResolution: (null | {
+    kind: "governed";
+    factEntityId: T9a509045a7;
+  } | {
+    kind: "escalated";
+  });
+};
+
 type T6b2d0b9da2 = "none" | "api-key" | "account";
 
 type T6b5cf52115 = {
@@ -33451,6 +33798,8 @@ type T7c9c034721 = {
   status: "cancelled";
   interruptId: string;
 };
+
+type T7cafa859d4 = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
 
 type T7d2603043e = null | {
   token?: unknown;
@@ -34701,8 +35050,6 @@ type Ta6c90ab050 = {
   generalBody: string;
 };
 
-type Ta6e00a75de = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
-
 type Ta76c7a3d9d = null | Array<{
   iban?: string;
   bic?: string;
@@ -34746,6 +35093,10 @@ type Tab67d2a75b = null | Td09f3f3108;
 type Tab86be84f5 = {
   provider: Tf822306fb6;
   modelId: string;
+};
+
+type Tab9b292a50 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListClaim";
 };
 
 type Tac2a3266c6 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
@@ -36194,6 +36545,10 @@ type Tf13f15d459 = {
 type Tf1506fd1ab = T80d841ed63 | "_status" | "_kind";
 
 type Tf1e37b2227 = "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
+
+type Tf1edb394fb = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListVerificationRun";
+};
 
 type Tf26788d5a2 = {
   readonly input: T3a3428dc33;
