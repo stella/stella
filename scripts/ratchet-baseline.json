@@ -244,6 +244,7 @@
       "apps/api/src/lib/case-law/case-law-config-store.ts": 1,
       "apps/api/src/lib/case-law/maintenance-lane.ts": 1,
       "apps/api/src/lib/confirmation-otp.ts": 1,
+      "apps/api/src/lib/db/account-row.ts": 1,
       "apps/api/src/lib/db/assert-better-auth-oauth-policy.ts": 1,
       "apps/api/src/lib/db/assert-migrations-applied.ts": 1,
       "apps/api/src/lib/db/feedback-report-store.ts": 1,
@@ -296,7 +297,6 @@
       "apps/api/src/lib/sharepoint-disable-purge.ts": 1,
       "apps/api/src/lib/smoke-session/store.ts": 1,
       "apps/api/src/lib/style-set-package-cleanup-queue.ts": 1,
-      "apps/api/src/lib/two-factor.ts": 1,
       "apps/api/src/lib/web-search/load-org-keys.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1
@@ -968,36 +968,16 @@
     "files": {}
   },
   "security-guards-no-raw-filename-write-suppressions": {
-    "count": 4,
-    "files": {
-      "apps/api/src/handlers/chat/chat-message-parts.ts": 1,
-      "apps/api/src/handlers/chat/stream-chat.ts": 1,
-      "apps/api/src/handlers/templates/fills/create.ts": 1,
-      "apps/api/src/handlers/uploads/create.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "security-guards-no-unsanitized-href-suppressions": {
     "count": 0,
     "files": {}
   },
   "security-guards-no-unscoped-user-query-suppressions": {
-    "count": 22,
-    "files": {
-      "apps/api/src/handlers/operator/query.ts": 4,
-      "apps/api/src/handlers/workspaces/list.ts": 1,
-      "apps/api/src/handlers/workspaces/read-overview-activity.query.ts": 3,
-      "apps/api/src/lib/account-deletion-steps.ts": 2,
-      "apps/api/src/lib/agent-auth-idjag.ts": 2,
-      "apps/api/src/lib/agent-auth.ts": 1,
-      "apps/api/src/lib/auth.ts": 1,
-      "apps/api/src/lib/confirmation-otp.ts": 1,
-      "apps/api/src/lib/delete-account.ts": 1,
-      "apps/api/src/lib/entities/query-entities.ts": 1,
-      "apps/api/src/lib/entity-filters.ts": 1,
-      "apps/api/src/lib/notifications.ts": 2,
-      "apps/api/src/lib/smoke-session/store.ts": 1,
-      "apps/api/src/lib/two-factor.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "security-guards-require-secure-document-response-suppressions": {
     "count": 0,
@@ -1389,7 +1369,7 @@
     }
   },
   "eslint-spelled-suppression-directives": {
-    "count": 236,
+    "count": 235,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1409,7 +1389,6 @@
       "apps/api/src/handlers/chat/get-model-options.ts": 1,
       "apps/api/src/handlers/chat/history-window.ts": 2,
       "apps/api/src/handlers/chat/send-message.ts": 1,
-      "apps/api/src/handlers/chat/stream-chat.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 1,
       "apps/api/src/handlers/chat/tools/boe-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 4,
