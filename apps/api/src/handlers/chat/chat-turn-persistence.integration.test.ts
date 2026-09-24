@@ -302,6 +302,101 @@ describe("durable chat turn persistence", () => {
     ).toEqual({ assistantMessageId, status: "failed" });
   });
 
+  test("a streamed failure before the first chunk keeps the owning assistant", async () => {
+    const { acceptance, assistantMessageId, threadId, userMessageId } =
+      await seedAwaitingTurn();
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the continuation to be claimed");
+    }
+    const owningAssistantMessage = toPersistableChatMessage({
+      id: assistantMessageId,
+      metadata: {
+        anonRestorations: {
+          pairs: [{ original: "Acme", placeholder: "[ORG_1]" }],
+        },
+        turnOutcome: {
+          interaction: { toolCallId: "ask-1", type: "ask-user" },
+          type: "awaiting-user",
+        },
+        usage: { completionTokens: 5, promptTokens: 10, totalTokens: 15 },
+      },
+      parts: awaitingAskUserContent.data,
+      role: "assistant",
+    });
+
+    // The stream's terminal message for a RUN_ERROR before any chunk: the
+    // owning id, no parts, and only this run's metadata.
+    unwrap(
+      await finalizeAssistantTurn({
+        acceptedSendMode: null,
+        existingIds: new Set([userMessageId, assistantMessageId]),
+        execution,
+        outcome: { error: "unknown", type: "failed" },
+        owningAssistantMessage,
+        recordAuditEvent: async () => {},
+        responseMessage: toPersistableChatMessage({
+          id: assistantMessageId,
+          metadata: {
+            anonRestorations: {
+              pairs: [{ original: "Jane", placeholder: "[PERSON_1]" }],
+            },
+            turnOutcome: { error: "unknown", type: "failed" },
+            usage: { completionTokens: 1, promptTokens: 2, totalTokens: 3 },
+          },
+          parts: [],
+          role: "assistant",
+        }),
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    const messages = await testDb.query.chatMessages.findMany({
+      where: { threadId: { eq: threadId } },
+      columns: { content: true, createdAt: true, id: true, role: true },
+    });
+    expect(messages).toHaveLength(2);
+    const assistant = messages.find(({ id }) => id === assistantMessageId);
+    if (assistant === undefined) {
+      throw new Error("Expected the owning assistant to remain persisted");
+    }
+    const reloaded = clientMessageFromPageRow(assistant, new Map());
+    expect(reloaded.parts).toMatchObject([
+      { id: "ask-1", name: "ask-user", type: "tool-call" },
+    ]);
+    expect(reloaded.metadata).toMatchObject({
+      anonRestorations: {
+        pairs: [
+          { original: "Acme", placeholder: "[ORG_1]" },
+          { original: "Jane", placeholder: "[PERSON_1]" },
+        ],
+      },
+      turnOutcome: { error: "unknown", type: "failed" },
+      usage: { completionTokens: 6, promptTokens: 12, totalTokens: 18 },
+    });
+    expect(
+      await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: acceptance.id } },
+        columns: { assistantMessageId: true, status: true },
+      }),
+    ).toEqual({ assistantMessageId, status: "failed" });
+  });
+
   test("finalizes the assistant message, data scope, and turn atomically", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
