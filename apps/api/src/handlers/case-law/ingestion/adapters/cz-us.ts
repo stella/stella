@@ -762,8 +762,9 @@ const parallelCitationIdentifiers = ({
 }): DecisionIdentifiers | undefined => {
   const [first, ...rest] = czechConstitutionalIdentifiersFromParallelCitations([
     ...(parallelQuotation === undefined ? [] : [parallelQuotation]),
-    ...(detail?.parallelCitationLaws ?? []),
-    ...(detail?.parallelCitationReports ?? []),
+    ...(detail === null
+      ? []
+      : [...detail.parallelCitationLaws, ...detail.parallelCitationReports]),
   ]).slice(0, DECISION_IDENTIFIER_MAX_COUNT - 2);
   return first === undefined ? undefined : [first, ...rest];
 };
