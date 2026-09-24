@@ -6,6 +6,7 @@ import {
   paragraphFromPreview,
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
+  statuteLandingAnchorId,
 } from "@/features/statutes/statute-reader-blocks";
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
@@ -231,5 +232,23 @@ describe("statute reader blocks", () => {
         { anchor: "cl_7", decisionCount: 12 },
       ]).get("prilohy-cl_7"),
     ).toBe(12);
+  });
+
+  test("a statute tab lands on the block its link names", () => {
+    const blocks = [
+      heading("cl_7", 2, "Čl. 7"),
+      heading("prilohy-cl_8", 2, "Čl. 8"),
+      heading("hlava_1-par_9", 2, "§ 9"),
+      heading("hlava_2-par_9", 2, "§ 9"),
+    ];
+
+    expect(statuteLandingAnchorId(blocks, "cl_7")).toBe("cl_7");
+    // The local provision id a citation states finds the namespaced block
+    // the publisher rendered.
+    expect(statuteLandingAnchorId(blocks, "cl_8")).toBe("prilohy-cl_8");
+    // Two blocks answer to it: guessing would land on the wrong provision.
+    expect(statuteLandingAnchorId(blocks, "par_9")).toBeUndefined();
+    expect(statuteLandingAnchorId(blocks, "cl_99")).toBeUndefined();
+    expect(statuteLandingAnchorId(blocks, undefined)).toBeUndefined();
   });
 });

@@ -5,10 +5,9 @@ import type {
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
-import {
-  analysisStateFromQuery,
-  parseAnalysisResponse,
-} from "./use-decision-analysis";
+import { parseAnalysisResponse } from "@/features/case-law/queries/decision-analysis";
+
+import { analysisStateFromQuery } from "./use-decision-analysis";
 
 const heading = {
   id: "h1",
