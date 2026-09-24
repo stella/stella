@@ -326,6 +326,15 @@ const indexOfFirst = (
 
 const isSave = ({ name }: BuilderEvent) => name === "save_playbook";
 
+/** Positions a save call carries; the skill saves one per call. */
+const positionCount = (input: unknown): number => {
+  if (typeof input !== "object" || input === null || !("positions" in input)) {
+    return 0;
+  }
+  const positions: unknown = Reflect.get(input, "positions");
+  return Array.isArray(positions) ? positions.length : 0;
+};
+
 const topicsAskedBeforeFirstSave = (events: readonly BuilderEvent[]) => {
   const firstSave = indexOfFirst(events, isSave);
   return new Set(
@@ -467,6 +476,12 @@ const commonDefects = ({
   const resent = events.flatMap(({ resentUnchanged }) => resentUnchanged);
   if (resent.length > 0) {
     defects.push(`resent unchanged positions: ${resent.join(", ")}`);
+  }
+  for (const save of events.filter(isSave)) {
+    const count = positionCount(save.input);
+    if (count > 1) {
+      defects.push(`saved ${String(count)} positions in one call`);
+    }
   }
   return defects;
 };

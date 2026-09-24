@@ -195,6 +195,16 @@ describe("contracts-later scoring", () => {
       "looked for contracts after the user declined them",
     ]);
   });
+
+  test("saving several positions in one call is a defect", () => {
+    const events = contractsLaterRun();
+    events[1] = event(1, "save_playbook", {
+      positions: [{ issue: "Liability cap" }, { issue: "Payment" }],
+    });
+    expect(score("contracts-later", events)).toEqual([
+      "saved 2 positions in one call",
+    ]);
+  });
 });
 
 describe("chat-surface discovery scoring", () => {
