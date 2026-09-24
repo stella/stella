@@ -10,8 +10,9 @@
 // Outbound requests are recognised by what the callee is bound to, following
 // aliased imports, namespace members, destructuring, local aliases, `.bind`,
 // `.call` and `.apply`:
-//   the fetch wrappers (`fetchWithTimeout`, `fetchWithRetry`) from their
-//     owning modules and the modules that re-export them
+//   the fetch wrappers (`fetchWithTimeout`, and the case-law publisher
+//     fetches `fetchPublisher` / `fetchWithRetry`) from their owning modules
+//     and the modules that re-export them
 //   global `fetch` (`globalThis.fetch`, `const { fetch } = globalThis`)
 //   `undici` `fetch`, `request` and `stream`
 //   `node:http` / `node:https` `request` and `get`
@@ -34,13 +35,19 @@
 //   fetchWithTimeout(`${free ? FREE_BASE : PRO_BASE}/v2/translate`, init)
 //   fetchWithTimeout(getCorpusS3().presign(key), { timeoutMs: 10_000 })
 //
+//   const target = publisherTarget(adapterKey, scrapedLink);
+//   if (Result.isOk(target)) await fetchPublisher(target.value, init);
+//
 // The rule deliberately proves only the destination origin. Dynamic paths,
 // query parameters, and fragments are allowed after a static scheme/authority.
-// Three origins count as proven without being literal: a `*_URL` setting read
+// Four origins count as proven without being literal: a `*_URL` setting read
 // off the API's validated `env` (the operator chose it, no request selects
-// it), a choice between fixed origins, and a URL presigned by an object-store
+// it), a choice between fixed origins, a URL presigned by an object-store
 // client Stella configured (the imported `getS3()` / `getCorpusS3()`
-// factories). Other runtime-configured services and explicitly trusted URL
+// factories), and the Ok value of the case-law `publisherTarget()`, which
+// holds a URL to one of the hosts declared for that adapter's publisher: the
+// same trust as a fixed publisher base, so like one it may follow redirects.
+// Other runtime-configured services and explicitly trusted URL
 // producers take a narrow suppression at the call, naming the trust boundary;
 // this rule does not attempt whole-program taint analysis.
 
@@ -68,7 +75,7 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["apps/web/src/lib/fetch", new Set(["fetchWithTimeout"])],
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/retry",
-    new Set(["fetchWithRetry"]),
+    new Set(["fetchPublisher", "fetchWithRetry"]),
   ],
   ["undici", new Set(["fetch", "request", "stream"])],
 ]);
@@ -101,6 +108,10 @@ const TRUSTED_PROVIDER_RESTRICTIONS: ReadonlyMap<
     new Set(["restrictSkCourtDocumentUrl"]),
   ],
 ]);
+const PUBLISHER_TARGET_MODULE =
+  "apps/api/src/handlers/case-law/ingestion/adapters/publisher-target";
+const PUBLISHER_TARGET_HELPER = "publisherTarget";
+const PUBLISHER_TARGET_ORIGIN = "https://publisher-host.invalid";
 const S3_MODULE = "apps/api/src/lib/s3";
 const S3_CLIENT_FACTORIES: ReadonlySet<string> = new Set([
   "getCorpusS3",
@@ -795,6 +806,54 @@ export default eslintCompatPlugin({
           );
         };
 
+        // `checked.value` where `const checked = publisherTarget(key, url)`:
+        // an Ok result holds a URL on one of the publisher's declared hosts.
+        // The result must never have `.value` written through it.
+        const isPublisherTargetValue = (expression: AstNode): boolean => {
+          if (
+            expression.type !== "MemberExpression" ||
+            memberPropertyName(expression) !== "value"
+          ) {
+            return false;
+          }
+          const checked = unwrapExpression(expression.object);
+          if (!isIdentifierReference(checked)) {
+            return false;
+          }
+          const variable = resolveVariable(context, checked);
+          const initializer =
+            variable === null ? null : constInitializer(variable);
+          if (
+            variable === null ||
+            initializer?.type !== "CallExpression" ||
+            variable.references.some((reference) => {
+              const member = isAstNode(reference.identifier)
+                ? outerTransparentExpression(reference.identifier).parent
+                : null;
+              const write = isAstNode(member) ? member.parent : null;
+              return (
+                isAstNode(member) &&
+                member.type === "MemberExpression" &&
+                isAstNode(write) &&
+                ((write.type === "AssignmentExpression" &&
+                  write.left === member) ||
+                  (write.type === "UpdateExpression" &&
+                    write.argument === member) ||
+                  (write.type === "UnaryExpression" &&
+                    write.operator === "delete" &&
+                    write.argument === member))
+              );
+            })
+          ) {
+            return false;
+          }
+          const helper = resolveImport(context, initializer.callee);
+          return (
+            helper?.moduleId === PUBLISHER_TARGET_MODULE &&
+            helper.imported === PUBLISHER_TARGET_HELPER
+          );
+        };
+
         // `env.GOTENBERG_URL`: a URL setting from the API's validated
         // environment. The operator chose that origin; no request selects it.
         const isConfiguredUrlSetting = (expression: AstNode): boolean => {
@@ -917,6 +976,9 @@ export default eslintCompatPlugin({
           }
           if (isConfiguredUrlSetting(expression)) {
             return CONFIGURED_TARGET_ORIGIN;
+          }
+          if (isPublisherTargetValue(expression)) {
+            return `${PUBLISHER_TARGET_ORIGIN}/${DYNAMIC_PART}`;
           }
           if (
             expression.type === "NewExpression" &&
