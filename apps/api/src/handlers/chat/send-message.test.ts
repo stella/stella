@@ -7,7 +7,8 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreads, chatTurns } from "@/api/db/schema";
+import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import {
   createSendMessage,
@@ -24,7 +25,10 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import type { PersistableChatMessage } from "./types";
+import type {
+  PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
+} from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
 let webSearchProviderLoadHook: (() => void) | undefined;
@@ -1235,5 +1239,252 @@ describe("send message turn persistence", () => {
         uploadedFiles: [uploadedFile],
       }),
     );
+  });
+});
+
+describe("assistant turn settlement", () => {
+  type StreamChatProps = Parameters<typeof streamChat>[0];
+  const assistantMessageId = toSafeId<"chatMessage">(
+    "00000000-0000-0000-0000-00000000000a",
+  );
+  const completedMessage = (
+    parts: PersistableChatMessage["parts"],
+  ): PersistableTerminalAssistantMessage => ({
+    ...toPersistableChatMessage({
+      id: assistantMessageId,
+      parts,
+      role: "assistant",
+    }),
+    metadata: { turnOutcome: { type: "completed" } },
+    role: "assistant",
+  });
+  const isAssistantRow = (values: unknown) =>
+    Array.isArray(values) &&
+    values.some(
+      (row: unknown) =>
+        typeof row === "object" &&
+        row !== null &&
+        "role" in row &&
+        row.role === "assistant",
+    );
+
+  /**
+   * Runs a send up to the provider dispatch, which is mocked to hand back the
+   * stream's `onFinish` callback instead of streaming, so a test can drive
+   * the settlement path with a chosen response message and fault.
+   */
+  const startStreamingTurn = async ({
+    failAssistantInsertOnce = false,
+    onSafeDbTransaction,
+  }: {
+    failAssistantInsertOnce?: boolean;
+    onSafeDbTransaction?: (() => void) | undefined;
+  } = {}) => {
+    let onFinish: StreamChatProps["onFinish"] | undefined;
+    const turnUpdates: unknown[] = [];
+    const streamResponse = mock(async (props: StreamChatProps) => {
+      onFinish = props.onFinish;
+      return new Response("", {
+        headers: { "content-type": "text/event-stream" },
+      });
+    });
+    const send = createSendMessage({
+      indexThread: upsertChatThreadSearchDocumentMock,
+      loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+      loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+      rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+      streamResponse,
+      uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+    });
+    externalMcpToolsLoadHook = () => {};
+    let assistantInsertsFailed = 0;
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: (values: unknown) => {
+        if (table === chatTurns) {
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: turnId }],
+            }),
+          };
+        }
+        if (
+          table === chatMessages &&
+          failAssistantInsertOnce &&
+          assistantInsertsFailed === 0 &&
+          isAssistantRow(values)
+        ) {
+          assistantInsertsFailed += 1;
+          throw new Error("chat_messages insert failed");
+        }
+        return undefined;
+      },
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+
+    const result = await send.handler(
+      createContext({
+        contextMatterIds: [],
+        onSafeDbTransaction,
+        transaction: {
+          insert,
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+          update,
+        },
+      }),
+    );
+    expect(streamResponse).toHaveBeenCalledTimes(1);
+    if (onFinish === undefined) {
+      throw new Error(
+        `the send did not reach streaming: ${JSON.stringify(result)}`,
+      );
+    }
+    return { onFinish, turnUpdates };
+  };
+
+  /** The rejection `onFinish` reports to the stream, captured as a value. */
+  const settlementFailure = async (
+    settle: Promise<void> | void,
+  ): Promise<unknown> => {
+    const settled = await Result.tryPromise({
+      try: async () => await settle,
+      catch: (cause) => cause,
+    });
+    return Result.isError(settled) ? settled.error : undefined;
+  };
+
+  const failedTurnUpdate = (failureCode: string) =>
+    expect.objectContaining({
+      failureCode,
+      failureRetryable: true,
+      status: "failed",
+    });
+
+  test("fails the turn when the generated tool parts do not validate", async () => {
+    const { onFinish, turnUpdates } = await startStreamingTurn();
+    const input = {
+      analysis: "The side is not in the request.",
+      questions: [{ question: "Which side are you on?", reason: "Tiers." }],
+    };
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            {
+              // The text names a different call than the input: the
+              // canonical-input check rejects the part.
+              arguments: JSON.stringify({ ...input, analysis: "Which law?" }),
+              id: "call-drifted",
+              input,
+              name: "ask-user",
+              state: "input-complete",
+              type: "tool-call",
+            },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      message: "Generated chat tool parts are invalid",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("internal"));
+  });
+
+  test("fails the turn as a persistence failure when the assistant message cannot be written", async () => {
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      failAssistantInsertOnce: true,
+    });
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            { content: "Done.", type: "text" },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      message: "Failed to persist assistant turn",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("persistence"));
+  });
+
+  test("fails the turn when settlement throws instead of returning", async () => {
+    let explodeNextTransaction = false;
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      onSafeDbTransaction: () => {
+        if (!explodeNextTransaction) {
+          return;
+        }
+        explodeNextTransaction = false;
+        throw new Error("connection reset");
+      },
+    });
+    explodeNextTransaction = true;
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            { content: "Done.", type: "text" },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      cause: expect.objectContaining({ message: "connection reset" }),
+      message: "Failed to settle assistant turn",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("internal"));
   });
 });
