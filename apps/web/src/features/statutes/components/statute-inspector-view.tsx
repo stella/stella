@@ -31,7 +31,10 @@ import {
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
-import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
+import {
+  prepareStatuteReader,
+  statuteLandingAnchorId,
+} from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
@@ -75,6 +78,10 @@ export const StatuteInspectorView = ({
     blocks: ast === null ? [] : ast.blocks,
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
+  const landingAnchorId = statuteLandingAnchorId(
+    preparedReader.blocks,
+    payload.anchorId,
+  );
   // The chat is bound to the consolidation the tab holds, which is the
   // document the full reader binds: a question asked here and one asked there
   // are one conversation.
@@ -141,6 +148,7 @@ export const StatuteInspectorView = ({
               {statute !== undefined && (
                 <StatuteReaderBody
                   blocks={preparedReader.blocks}
+                  landingAnchorId={landingAnchorId}
                   masthead={preparedReader.masthead}
                   scrollContainerRef={contentRef}
                   statute={statute}
@@ -166,6 +174,7 @@ export const StatuteInspectorView = ({
 
 /**
  * Read the whole act: the maximize a decision tab carries, on a statute. A
+ * tab opened at a passage keeps it: the page lands on the same block. A
  * modified click stays native and opens the act in a browser tab, leaving the
  * pane as it is.
  */
@@ -194,6 +203,9 @@ const StatuteMainViewAction = ({
           render={
             <Link
               onClick={onNavigate}
+              {...(payload.anchorId === undefined
+                ? {}
+                : { hash: payload.anchorId })}
               {...createStatuteLinkTarget({
                 country: payload.country,
                 documentId: payload.documentId,

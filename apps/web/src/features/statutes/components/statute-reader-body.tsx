@@ -14,6 +14,8 @@ import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks"
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */
   blocks: readonly Block[];
+  /** The rendered block the reader was sent to, if any. */
+  landingAnchorId?: string | undefined;
   masthead: StatuteMasthead | null;
   scrollContainerRef: RefObject<HTMLElement | null>;
   statute: PublicStatute;
@@ -30,6 +32,7 @@ type StatuteReaderBodyProps = {
  */
 export const StatuteReaderBody = ({
   blocks,
+  landingAnchorId,
   masthead,
   scrollContainerRef,
   statute,
@@ -67,6 +70,7 @@ export const StatuteReaderBody = ({
         documentId={statute.id}
         eli={statute.eli}
         fulltext={statute.fulltext}
+        landingAnchorId={landingAnchorId}
         language={statute.language}
         masthead={masthead}
         provisionCitationCounts={provisionCitationCounts}

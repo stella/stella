@@ -71,6 +71,18 @@ describe("isStatuteViewPayload", () => {
     }
   });
 
+  test("accepts a tab opened at a passage, and only a named one", () => {
+    expect(
+      isStatuteViewPayload({ ...payload, anchorId: "par_90-odst_5" }),
+    ).toBe(true);
+    expect(isStatuteViewPayload({ ...payload, anchorId: undefined })).toBe(
+      true,
+    );
+    for (const anchorId of ["", null, 90]) {
+      expect(isStatuteViewPayload({ ...payload, anchorId })).toBe(false);
+    }
+  });
+
   test("rejects values that are not a payload at all", () => {
     // The registry runs this over whatever a peer browser tab synced in.
     for (const value of [null, undefined, "statute", 326, []]) {
@@ -87,6 +99,15 @@ describe("createStatuteViewTab", () => {
     expect(tab.label).toBe(payload.statuteTitle);
     expect(tab.payload).toEqual(payload);
     expect(isStatuteViewPayload(tab.payload)).toBe(true);
+  });
+
+  test("a link that names a passage opens the tab at it", () => {
+    const tab = createStatuteViewTab({ ...target, anchorId: "par_90-odst_5" });
+
+    expect(tab.payload).toEqual({ ...payload, anchorId: "par_90-odst_5" });
+    expect(isStatuteViewPayload(tab.payload)).toBe(true);
+    // The passage does not make it another tab: the act is still one text.
+    expect(tab.id).toBe(createStatuteViewTab(target).id);
   });
 
   test("a citation stating no version or segment carries nulls, not gaps", () => {
