@@ -133,7 +133,7 @@ const contractsLaterRun = (): BuilderEvent[] => [
 const score = (
   id: string,
   events: BuilderEvent[],
-  stored = playbook("buyer"),
+  stored = playbook(undefined),
 ) =>
   scoreScenario(scenario(id), {
     surface: "mcp",
@@ -151,7 +151,7 @@ const scoreOnChat = (
     surface: "chat",
     documentedReads: new Set(documentedReads),
     events,
-    playbooks: [playbook("buyer")],
+    playbooks: [playbook(undefined)],
   });
 
 const discoveryDefects = (defects: readonly string[]) =>
@@ -233,10 +233,13 @@ describe("chat-surface discovery scoring", () => {
 });
 
 describe("perspective scoring", () => {
-  test("a customer may be saved as a buyer or with no perspective", () => {
+  test("a customer saved as a buyer is a defect; no perspective is the reading", () => {
     expect(
       score("contracts-later", contractsLaterRun(), playbook(undefined)),
     ).toEqual([]);
+    expect(
+      score("contracts-later", contractsLaterRun(), playbook("buyer")),
+    ).toEqual(["saved scope.perspective buyer; the side maps to undefined"]);
   });
 
   test("a receiving party saved as neutral is a defect", () => {
