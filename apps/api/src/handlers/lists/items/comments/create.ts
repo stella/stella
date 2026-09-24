@@ -74,6 +74,7 @@ const createItemComment = createSafeHandler(
         // a member of this server-validated workspace.
         const mentions = await resolveMentionTargets(tx, {
           actorUserId: user.id,
+          organizationId: session.activeOrganizationId,
           text: body.body,
           workspaceId,
         });

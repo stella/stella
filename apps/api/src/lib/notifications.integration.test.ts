@@ -6,9 +6,11 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { workspaceMembers } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { resolveMentionTargets } from "@/api/lib/notifications";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -39,6 +41,7 @@ const mentionsIn = async (text: string) =>
       // API with a different driver brand; the helper is driver-agnostic.
       await resolveMentionTargets(asTestRaw<Transaction>(tx), {
         actorUserId: ids.userA1,
+        organizationId: ids.orgA,
         text,
         // Server-derived: userA1 and userA2 are both members of wsA2, userB1
         // is not a member of any workspace in organization A.
@@ -82,6 +85,26 @@ describe("mention detection", () => {
     const { userIds } = await mentionsIn(`cc @${emailB1}`);
 
     expect(userIds).toEqual([]);
+  });
+
+  test("ignores a workspace member outside the organization", async () => {
+    // A workspace membership row can outlive the organization membership it
+    // was granted under; that account can no longer open the thread.
+    const inserted = await testDb
+      .insert(workspaceMembers)
+      .values({ workspaceId: ids.wsA2, userId: ids.userB1 })
+      .returning({ id: workspaceMembers.id });
+    const rowId =
+      inserted.at(0)?.id ?? expect.unreachable("workspace member not inserted");
+    try {
+      const { userIds } = await mentionsIn(`cc @${emailB1}`);
+
+      expect(userIds).toEqual([]);
+    } finally {
+      await testDb
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, rowId));
+    }
   });
 
   test("ignores an address that belongs to nobody", async () => {

@@ -191,16 +191,6 @@
       "count": 1,
       "reason": "sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped",
       "evidence": "apps/api/src/lib/entity-filters.test.ts"
-    },
-    {
-      "id": "SW-0033",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/notifications.ts",
-      "symbol": "resolveMentionTargets",
-      "count": 2,
-      "reason": "reads the authenticated actor's own name by their user id",
-      "evidence": "apps/api/src/lib/notifications.integration.test.ts"
     }
   ]
 }
