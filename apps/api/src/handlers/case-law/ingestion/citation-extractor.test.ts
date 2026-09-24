@@ -4,7 +4,10 @@ import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifierType,
+  DecisionIdentifiers,
+} from "@stll/legal-ast/decision-identifier";
 
 import {
   normalizeHuBhgyRow,
@@ -3082,5 +3085,193 @@ describe("Hungarian citations", () => {
         ),
       ).toEqual([null]);
     }
+  });
+});
+
+describe("Constitutional Court rulings by their collection numbers", () => {
+  // Pl. ÚS 18/01 as NALUS lists it: the gazette number the ruling was
+  // published under, then its reporter entry.
+  const ruling = {
+    caseNumber: "Pl. ÚS 18/01",
+    ecli: "ECLI:CZ:US:2002:Pl.US.18.01",
+    metadata: { parallelQuotation: "234/2002 Sb.\nN 53/26 SbNU 73" },
+  };
+  const rulingIdentifiers = decisionIdentifiersFromStoredMetadata(ruling);
+  const reaches = (citation: {
+    identifierType: DecisionIdentifierType;
+    identifierValue: string;
+  }): boolean =>
+    rulingIdentifiers.some(
+      (identifier) =>
+        identifier.type === citation.identifierType &&
+        normalizeDecisionIdentifier(identifier) ===
+          normalizeDecisionIdentifierValue(
+            citation.identifierType,
+            citation.identifierValue,
+          ),
+    );
+
+  test("derives both parallel citations from stored metadata", () => {
+    expect(rulingIdentifiers).toEqual([
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "Pl. ÚS 18/01" },
+      { type: DECISION_IDENTIFIER_TYPES.ECLI, value: ruling.ecli },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "234/2002 Sb.",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "N 53/26 SbNU 73",
+      },
+    ]);
+  });
+
+  test("reads the record card's cells the same way, once each", () => {
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...ruling,
+        metadata: {
+          ...ruling.metadata,
+          parallelCitationLaws: "234/2002 Sb.",
+          parallelCitationReports: ["N 53/26 SbNU 73"],
+        },
+      }),
+    ).toEqual(rulingIdentifiers);
+  });
+
+  test("a parallel citation in neither form is no identifier", () => {
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...ruling,
+        metadata: { parallelQuotation: "NALUS 14/24" },
+      }),
+    ).toHaveLength(2);
+  });
+
+  test("a ruling's gazette number is read after the ruling is named, never an act's", () => {
+    const text =
+      "Ustanovení § 31 odst. 4 zákona č. 82/1998 Sb., ve znění nálezu " +
+      "Ústavního soudu č. 234/2002 Sb., bylo …";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      citationText: "234/2002 Sb.",
+      identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    });
+    expect(citations.every(reaches)).toBe(true);
+  });
+
+  test("an amendment list reads only the ruling among the acts", () => {
+    const text =
+      "ve znění zákonů č. 585/2006 Sb., č. 181/2007 Sb., č. 261/2007 Sb., " +
+      "č. 296/2007 Sb. a č. 362/2007 Sb., nálezu Ústavního soudu č. " +
+      "116/2008 Sb., a zákonů č. 121/2008 Sb., č. 126/2008 Sb.";
+    expect(
+      extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+    ).toEqual(["116/2008 Sb."]);
+  });
+
+  test("an act named after the ruling is not read as the ruling", () => {
+    const text =
+      "V nálezu Ústavního soudu ve věci zákona č. 82/1998 Sb. se uvádí";
+    expect(extractCitations([{ index: 0, text }])).toEqual([]);
+  });
+
+  test("the court's own announcement of its number is a self-citation", () => {
+    const text =
+      "jako vedlejších účastníků řízení (nález byl vyhlášen pod č. " +
+      "437/2012 Sb.). I. Ustanovení";
+    const [citation] = extractCitations([{ index: 0, text }]);
+    expect(citation?.citationText).toBe("437/2012 Sb.");
+    expect(
+      isSelfCitation(
+        citation?.citationText ?? "",
+        decisionIdentifiersFromStoredMetadata({
+          caseNumber: "Pl. ÚS 1/12",
+          ecli: null,
+          metadata: {
+            parallelCitationLaws: "437/2012 Sb.",
+            parallelCitationReports: "N 195/67 SbNU 333",
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  test("a docket followed by its reporter entry stays one citation of the docket", () => {
+    const text =
+      "srov. nález ze dne 22. března 1994 sp. zn. Pl. ÚS 37/93 (N 9/1 SbNU " +
+      "61; 86/1994 Sb.); nález ze dne 7. června 1994 sp. zn. I. ÚS 2/93 " +
+      "(N 37/1 SbNU 267)]. Všechny";
+    expect(
+      extractCitations([{ index: 0, text }]).map((c) => [
+        c.citationText,
+        c.identifierType,
+        c.identifierValue,
+      ]),
+    ).toEqual([
+      ["Pl. ÚS 37/93", DECISION_IDENTIFIER_TYPES.CASE_NUMBER, "Pl. ÚS 37/93"],
+      ["I. ÚS 2/93", DECISION_IDENTIFIER_TYPES.CASE_NUMBER, "I. ÚS 2/93"],
+    ]);
+  });
+
+  test("a docket followed by the gazette number it was published under stays one citation of the docket", () => {
+    const text =
+      "nálezem pléna Ústavního soudu ze dne 13. 3. 2002, sp. zn. Pl. ÚS " +
+      "18/01, vyhlášeným pod č. 234/2002 Sb., bylo zrušeno";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      citationText: "Pl. ÚS 18/01",
+      identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    });
+    expect(citations.every(reaches)).toBe(true);
+  });
+
+  test("every inflection of the published-under words introduces the gazette number", () => {
+    for (const participle of [
+      "publikovaného",
+      "publikovaným",
+      "publikovaný",
+      "vyhlášeného",
+      "uveřejněného",
+    ]) {
+      const text = `v rozporu s nálezem Ústavního soudu ${participle} pod č. 234/2002 Sb. se`;
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(["234/2002 Sb."]);
+    }
+  });
+
+  test("the spelled-out volume and number reach the entry without its page", () => {
+    const text =
+      "srov. např. Sbírka nálezů a usnesení Ústavního soudu, svazek 26, " +
+      "nález č. 53";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.identifierValue).toBe(
+      "Sbírka nálezů a usnesení Ústavního soudu, svazek 26, nález č. 53",
+    );
+    expect(citations.every(reaches)).toBe(true);
+  });
+
+  test("an entry whose series the text leaves unsaid is not read", () => {
+    const text =
+      "(nález Ústavního soudu ze dne 11. 5. 2004, sp. zn. III. ÚS 266/03, " +
+      "uveřejněného ve Sbírce nálezů a usnesení, sv. 33, pod č. 67).";
+    expect(
+      extractCitations([{ index: 0, text }]).map((c) => c.identifierType),
+    ).toEqual([DECISION_IDENTIFIER_TYPES.CASE_NUMBER]);
+  });
+
+  test("reporter entries that differ only in where the slash falls stay apart", () => {
+    const entry = (value: string) =>
+      normalizeDecisionIdentifierValue(
+        DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value,
+      );
+    expect(entry("N 53/26 SbNU 73")).not.toBe(entry("N 5/326 SbNU 73"));
+    expect(entry("N 53/26 SbNU 73")).not.toBe(entry("U 53/26 SbNU 73"));
+    expect(entry("N 53/26 SbNU 73")).toBe(entry("N 53/26 SbNU"));
   });
 });

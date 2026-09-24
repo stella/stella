@@ -171,6 +171,134 @@ const CZECH_REPORTER_CITATION_RE = new RegExp(
 );
 
 /**
+ * A Constitutional Court ruling by the number it was published under in the
+ * Sbírka zákonů: `234/2002 Sb.`. Acts share the series, so the number alone
+ * names an act as readily as a ruling; the extraction pattern below only
+ * reads it after the ruling itself is named, and a bare number stored as a
+ * citation's text is therefore always a ruling.
+ */
+const CZ_US_GAZETTE_SOURCE = String.raw`\d{1,4}\/\d{4}\s+Sb\.`;
+
+/**
+ * What may introduce a ruling's gazette number: a form of "nález", then only
+ * the words that describe that ruling (the court, the plenum, the date, the
+ * docket, "vyhlášený pod") before `č.`. Any other word between them, "zákona"
+ * above all, ends the context, so `nálezu … ve věci zákona č. 82/1998 Sb.`
+ * stays an act.
+ */
+const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům|ech)?(?:\s+pléna|\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE})|\s+ze\s+dne\s+\d{1,2}\.\s*(?:\d{1,2}\.|\p{L}{3,9})\s*\d{4}|,?\s+sp\.\s*zn\.\s*(?:Pl|[IVX]{1,4})\.?\s*${US_MARK_SOURCE}(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*st\.)?\s*\d{1,5}\/\d{2,4}|,?\s+(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikov[aá]n|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod){0,6},?\s+[čc]\.\s*`;
+
+/**
+ * The Constitutional Court's own reporter, the Sbírka nálezů a usnesení, in
+ * the form the court cites it: `N 53/26 SbNU 73` is nález 53 of volume 26,
+ * printed on page 73 (`U` for an usnesení).
+ */
+const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
+
+/**
+ * The same entry in the older spelled-out form, where the kind is written as
+ * a word: `Sbírka nálezů a usnesení Ústavního soudu, svazek 7, nález č. 13`.
+ * The form that leaves the kind to the reader (`sv. 33, pod č. 67`) is not
+ * read: the number alone does not say which of the volume's two series it
+ * counts in.
+ */
+const CZ_US_REPORT_VOLUME_SOURCE = String.raw`(?:Sbír(?:ka|ky|ce|ku)\s+nálezů\s+a\s+usnesení(?:\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE}))?\s*,?\s*)?(?:svaz(?:ek|ku)|sv\.)\s*\d{1,3}\s*,\s*(?:nález|usnesení)\s+[čc]\.\s*\d{1,4}(?!\d)`;
+
+const CZ_US_GAZETTE_RE = /^(?<number>\d{1,4})\/(?<year>\d{4}) Sb\.?$/u;
+const CZ_US_REPORT_RE =
+  /^(?<kind>[NU]) ?(?<number>\d{1,4})\/(?<volume>\d{1,3}) SbNU(?: \d{1,4})?$/u;
+const CZ_US_REPORT_VOLUME_RE =
+  /^(?:Sbír\p{L}{1,2} nálezů a usnesení(?: \S+(?: soudu)?)? ?,? ?)?(?:svaz\p{L}{2}|sv\.) ?(?<volume>\d{1,3}) ?, ?(?<kind>nález|usnesení) [čc]\. ?(?<number>\d{1,4})$/u;
+
+/**
+ * A Constitutional Court ruling in one spelling per publication, for the
+ * reporter-citation normalization, or null for text that is neither: the
+ * gazette number as `234/2002 Sb.`, the reporter entry as `SbNU sv. 26 N 53`.
+ *
+ * The reporter entry keeps volume, series and number and drops the page: the
+ * three name the entry, the page only locates it, and a citation that leaves
+ * the page out still names the same ruling. Letters stand between the numbers
+ * because the shared normalization strips punctuation, and `N 5/326` must not
+ * meet `N 53/26`.
+ */
+const czechConstitutionalDesignation = (value: string): string | null => {
+  const text = value
+    .normalize("NFC")
+    .replace(/\s+/gu, " ")
+    .replace(/ ?\/ ?/gu, "/")
+    .trim();
+  const gazette = CZ_US_GAZETTE_RE.exec(text)?.groups;
+  if (gazette !== undefined) {
+    return `${requiredGroup(gazette, "number")}/${requiredGroup(gazette, "year")} Sb.`;
+  }
+  const report =
+    CZ_US_REPORT_RE.exec(text)?.groups ??
+    CZ_US_REPORT_VOLUME_RE.exec(text)?.groups;
+  if (report === undefined) {
+    return null;
+  }
+  const kind = requiredGroup(report, "kind");
+  const series = kind === "U" || kind === "usnesení" ? "U" : "N";
+  const volume = Number(requiredGroup(report, "volume"));
+  const number = Number(requiredGroup(report, "number"));
+  return `SbNU sv. ${String(volume)} ${series} ${String(number)}`;
+};
+
+/**
+ * Reporter identifiers for a Constitutional Court ruling, read from the
+ * parallel citations its publisher lists beside it (`234/2002 Sb.`,
+ * `N 53/26 SbNU 73`), one or several to a value. A part that is neither form
+ * is left out rather than stored under a type it does not have.
+ */
+export const czechConstitutionalIdentifiersFromParallelCitations = (
+  values: readonly string[],
+): DecisionIdentifier[] => {
+  const seen = new Set<string>();
+  return values
+    .flatMap((value) => value.split(/[\n;]|,(?=\s)/u))
+    .map((part) => part.trim())
+    .flatMap((part) => {
+      const designation = czechConstitutionalDesignation(part);
+      const identifier = {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: part,
+      } as const;
+      if (
+        designation === null ||
+        seen.has(designation) ||
+        !isDecisionIdentifier(identifier)
+      ) {
+        return [];
+      }
+      seen.add(designation);
+      return [identifier];
+    });
+};
+
+/**
+ * Where the Constitutional Court adapter stores a ruling's parallel
+ * citations: the document page's combined field, and the record card's two
+ * cells, each a string or, when the court repeats the cell, a list.
+ */
+const CZ_US_PARALLEL_CITATION_METADATA_KEYS = [
+  "parallelQuotation",
+  "parallelCitationLaws",
+  "parallelCitationReports",
+] as const;
+
+const czechConstitutionalParallelCitations = (
+  metadata: Record<string, unknown>,
+): string[] =>
+  CZ_US_PARALLEL_CITATION_METADATA_KEYS.flatMap((key) => {
+    const value: unknown = metadata[key];
+    if (typeof value === "string") {
+      return [value];
+    }
+    const values: unknown[] = Array.isArray(value) ? value : [];
+    return values.filter((item) => typeof item === "string");
+  });
+
+/**
  * A Hungarian court docket as the courts print it: an optional Arabic panel
  * number, the registry letters with their dot, an optional Roman panel
  * numeral, the register number (typeset with a thousands dot by the courts,
@@ -745,6 +873,20 @@ const CITATION_PATTERNS: RegExp[] = [
   // text to the wrong court's abbreviation.
   new RegExp(CZECH_REPORTER_CITATION_SOURCE, "gu"),
 
+  // Constitutional Court rulings by their Sbírka zákonů number, read only
+  // after the ruling is named: "ve znění nálezu Ústavního soudu č. 234/2002
+  // Sb.", "nálezem sp. zn. Pl. ÚS 18/01, vyhlášeným pod č. 234/2002 Sb.". The
+  // match is the number alone, so every later mention of it is marked too.
+  new RegExp(
+    String.raw`(?<=${CZ_US_GAZETTE_LEAD_SOURCE})${CZ_US_GAZETTE_SOURCE}(?!\s*(?:NSS|NS|rozh\.|m\.\s*s\.))`,
+    "gu",
+  ),
+
+  // Constitutional Court rulings by their Sbírka nálezů a usnesení entry:
+  // "N 53/26 SbNU 73", "svazek 7, nález č. 13".
+  new RegExp(CZ_US_REPORT_SOURCE, "gu"),
+  new RegExp(CZ_US_REPORT_VOLUME_SOURCE, "gu"),
+
   // Generic: "rozsudek č.j. 5 As 123/2020"; registrars also write "č. j.:
   // 137 Ex 1850/23", administrative senates glue the digit straight to
   // the registry letter ("6A 242/2016", "9Afs 44/2011", "2T 190/2017"),
@@ -1247,9 +1389,14 @@ export const decisionIdentifiersFromStoredMetadata = ({
     type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     value: legacyReporterCitation,
   };
-  const reporterIdentifiers = isDecisionIdentifier(reporterIdentifierCandidate)
-    ? expandCompositeReporterIdentifier(reporterIdentifierCandidate)
-    : [];
+  const reporterIdentifiers = [
+    ...(isDecisionIdentifier(reporterIdentifierCandidate)
+      ? expandCompositeReporterIdentifier(reporterIdentifierCandidate)
+      : []),
+    ...czechConstitutionalIdentifiersFromParallelCitations(
+      czechConstitutionalParallelCitations(metadata),
+    ),
+  ];
   const capacity =
     DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1) - reporterIdentifiers.length;
   const seen = new Set([
@@ -1326,6 +1473,7 @@ export const normalizeDecisionIdentifier = (
         type: identifier.type,
         value:
           hungarianConstitutionalDesignation(identifier.value) ??
+          czechConstitutionalDesignation(identifier.value) ??
           identifier.value,
       });
     default: {
@@ -1387,6 +1535,11 @@ export const decisionIdentifierTypeOfCitation = (
   if (hungarianConstitutionalDesignation(citationText) !== null) {
     return DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
   }
+  // A bare gazette number is only ever extracted as a ruling's; see
+  // `CZ_US_GAZETTE_SOURCE`.
+  if (czechConstitutionalDesignation(citationText) !== null) {
+    return DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+  }
   return DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
 };
 
@@ -1426,6 +1579,33 @@ const COLLECTION_AFTER_DOCKET = new RegExp(
 );
 
 /**
+ * The same join after a Constitutional Court docket, which the court and
+ * those citing it write in more ways: the reporter entry in parentheses,
+ * "Pl. ÚS 18/01 (N 53/26 SbNU 73; 234/2002 Sb.)", and the gazette number
+ * after the words that say where it was published, "Pl. ÚS 18/01, vyhlášený
+ * pod č. 234/2002 Sb.".
+ */
+const CZ_US_COLLECTION_AFTER_DOCKET =
+  /^\s*(?:[,;(]\s*)?(?:(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikov[aá]n|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod\s+[čc]\.\s*)?$/u;
+
+const US_MARK_RE = new RegExp(US_MARK_SOURCE, "u");
+
+/** The join a collection citation may stand in after a docket, if any. */
+const collectionJoinAfterDocket = (
+  reporter: ExtractedCitation,
+): RegExp | null => {
+  if (reporter.identifierType !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+    return null;
+  }
+  if (CZECH_REPORTER_CITATION_RE.test(reporter.identifierValue)) {
+    return COLLECTION_AFTER_DOCKET;
+  }
+  return czechConstitutionalDesignation(reporter.identifierValue) === null
+    ? null
+    : CZ_US_COLLECTION_AFTER_DOCKET;
+};
+
+/**
  * Fold a collection citation into the docket citation that names the same
  * decision beside it.
  *
@@ -1435,6 +1615,10 @@ const COLLECTION_AFTER_DOCKET = new RegExp(
  * that is the span the reader sees and what the passage anchors on; the
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
+ *
+ * A Constitutional Court docket is the exception: the collection mention
+ * beside it is absorbed into the docket's citation, which keeps the docket's
+ * identity.
  *
  * Czech collections only. A Hungarian docket already names one decision (its
  * document number), and the only Hungarian reporter-type citation, a
@@ -1451,10 +1635,8 @@ const mergeCollectionCitations = ({
   sectionText: Map<number, string>;
 }): void => {
   for (const [reporterKey, reporter] of byKey) {
-    if (
-      reporter.identifierType !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION ||
-      !CZECH_REPORTER_CITATION_RE.test(reporter.identifierValue)
-    ) {
+    const join = collectionJoinAfterDocket(reporter);
+    if (join === null) {
       continue;
     }
     const reporterAt = positions.get(reporterKey);
@@ -1472,14 +1654,19 @@ const mergeCollectionCitations = ({
         docketAt === undefined ||
         docketAt.sectionIndex !== reporterAt.sectionIndex ||
         docketAt.end > reporterAt.start ||
-        !COLLECTION_AFTER_DOCKET.test(
-          text.slice(docketAt.end, reporterAt.start),
-        )
+        (join === CZ_US_COLLECTION_AFTER_DOCKET &&
+          !US_MARK_RE.test(docket.identifierValue)) ||
+        !join.test(text.slice(docketAt.end, reporterAt.start))
       ) {
         continue;
       }
-      docket.identifierType = reporter.identifierType;
-      docket.identifierValue = reporter.identifierValue;
+      // A Constitutional Court docket keeps resolving by itself: the
+      // collection numbers reach a ruling only once its row carries them, and
+      // the docket reaches it either way.
+      if (join !== CZ_US_COLLECTION_AFTER_DOCKET) {
+        docket.identifierType = reporter.identifierType;
+        docket.identifierValue = reporter.identifierValue;
+      }
       byKey.delete(reporterKey);
       break;
     }

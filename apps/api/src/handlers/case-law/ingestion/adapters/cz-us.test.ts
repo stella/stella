@@ -1229,6 +1229,40 @@ describe("czUsAdapter.fetchPage", () => {
     });
   });
 
+  test("carries the ruling's parallel citations as reporter identifiers", async () => {
+    const row = {
+      id: "6002",
+      sz: "Pl-18-01_1",
+      caseNumber: "Pl.ÚS 18/01",
+      date: "13. 3. 2002",
+    };
+    installSearchMock({ rows: [row] });
+    const originalFetchForMetadata = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(resolveUrl(input));
+        if (url.pathname.endsWith("/Search/GetText.aspx")) {
+          return Promise.resolve(
+            new Response(
+              makeTextPage(row.caseNumber, row.date, {
+                parallelQuotation: "234/2002 Sb.<br/>N 53/26 SbNU 73",
+              }),
+            ),
+          );
+        }
+        return originalFetchForMetadata(input, init);
+      }),
+    );
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2002), {}),
+    );
+    expect(page.decisions[0]?.identifiers).toEqual([
+      { type: "reporter-citation", value: "234/2002 Sb." },
+      { type: "reporter-citation", value: "N 53/26 SbNU 73" },
+    ]);
+  });
+
   test("rejects corrupt search cursors instead of silently restarting", async () => {
     installSearchMock({ empty: true });
     const result = await czUsAdapter.fetchPage("search:future:2026:0", {});
