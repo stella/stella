@@ -40,6 +40,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -109,6 +110,8 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const SPARQL_URL = "https://publications.europa.eu/webapi/rdf/sparql";
 const CELLAR_RESOURCE_PREFIX = "http://publications.europa.eu/resource/cellar/";
+/** Where Cellar serves a manifestation and its items. */
+const CELLAR_CONTENT_BASE = "https://publications.europa.eu/resource/cellar";
 const CELLAR_LANGUAGE_PREFIX =
   "http://publications.europa.eu/resource/authority/language/";
 // Digit runs are unbounded on purpose: Cellar's version/manifestation
@@ -179,7 +182,9 @@ const toEcjLanguage = (languageUri: string): EcjLanguage | undefined => {
   return resolved;
 };
 
-const toCellarContentUrl = (manifestationUri: string): string | undefined => {
+const toCellarManifestationId = (
+  manifestationUri: string,
+): string | undefined => {
   if (!manifestationUri.startsWith(CELLAR_RESOURCE_PREFIX)) {
     return undefined;
   }
@@ -192,11 +197,7 @@ const toCellarContentUrl = (manifestationUri: string): string | undefined => {
     });
     return undefined;
   }
-  // Addressed as the manifestation itself, with the format asked for by
-  // content negotiation. `DOC_1` names the first item of the manifestation,
-  // and the XHTML is not always the first: older works expose it at a later
-  // ordinal, so a fixed item number 404s on documents Cellar does serve.
-  return `https://publications.europa.eu/resource/cellar/${manifestationId}`;
+  return manifestationId;
 };
 
 // -- SPARQL --
@@ -611,7 +612,7 @@ const distinctVariants = (
  * value here and must not be the same event.
  */
 type FetchManifestationOptions = {
-  contentUrl: string;
+  manifestationId: string;
   celex: string;
   lang: EcjLanguage;
   signal: AbortSignal;
@@ -703,12 +704,13 @@ const isRetryableStatus = (status: number): boolean =>
   status >= 500 || RETRYABLE_STATUSES.some((retryable) => retryable === status);
 
 type ManifestationRead =
-  | { type: "document"; html: string }
+  | { type: "document"; html: string; url: string }
   | { type: "address-exhausted"; status: number }
   | { type: "fetch-failed"; status: number };
 
 type ReadDocumentOptions = {
-  url: string;
+  /** The manifestation or one of its items, under {@link CELLAR_CONTENT_BASE}. */
+  resource: string;
   /**
    * `undefined` for an item URL, rather than the document types. Cellar serves
    * an older item as `text/html;type=simplified` and matches an `Accept`
@@ -727,12 +729,13 @@ type ReadDocumentOptions = {
  * whether another address is left to try.
  */
 const readDocumentResponse = async ({
-  url,
+  resource,
   accept,
   celex,
   lang,
   signal,
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
+  const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     signal,
@@ -765,11 +768,11 @@ const readDocumentResponse = async ({
 
   const html = await response.text();
   return html.length > MIN_DOCUMENT_LENGTH
-    ? { type: "document", html }
+    ? { type: "document", html, url }
     : { type: "address-exhausted", status: response.status };
 };
 
-type ManifestationAddress = { url: string; accept: string | undefined };
+type ManifestationAddress = { resource: string; accept: string | undefined };
 
 /**
  * The document and the address that actually served it, which is not always
@@ -814,14 +817,14 @@ const readFirstServedAddress = async ({
   }
 
   const read = await readDocumentResponse({
-    url: address.url,
+    resource: address.resource,
     accept: address.accept,
     celex,
     lang,
     signal,
   });
   if (read.type === "document") {
-    return { type: "document", html: read.html, url: address.url };
+    return { type: "document", html: read.html, url: read.url };
   }
   if (read.type === "fetch-failed") {
     return { type: "failed", status: read.status };
@@ -843,20 +846,25 @@ type FetchManifestationResult = Result<
 >;
 
 const fetchManifestation = async ({
-  contentUrl,
+  manifestationId,
   celex,
   lang,
   signal,
 }: FetchManifestationOptions): Promise<FetchManifestationResult> => {
+  const contentUrl = `${CELLAR_CONTENT_BASE}/${manifestationId}`;
   const fetched = await Result.tryPromise({
     try: async () =>
       await readFirstServedAddress({
+        // The manifestation itself first, with the format asked for by content
+        // negotiation. `DOC_1` names its first item, and the XHTML is not
+        // always the first: older works expose it at a later ordinal, so a
+        // fixed item number 404s on documents Cellar does serve.
         addresses: [
-          { url: contentUrl, accept: XHTML_MEDIA_TYPE },
+          { resource: manifestationId, accept: XHTML_MEDIA_TYPE },
           ...Array.from(
             { length: MAX_MANIFESTATION_ITEMS },
             (_unused, index): ManifestationAddress => ({
-              url: `${contentUrl}/DOC_${index + 1}`,
+              resource: `${manifestationId}/DOC_${index + 1}`,
               accept: undefined,
             }),
           ),
@@ -1637,8 +1645,20 @@ const fetchFormex = async (
   if (manifestation === undefined) {
     return undefined;
   }
-  const contentUrl = `${manifestation.uri.replace("http://", "https://")}/DOC_1`;
-  const response = await fetchPublisher(contentUrl, {
+  // The address comes from the notice, so it is held to Cellar's host.
+  const contentUrl = publisherTarget(
+    ADAPTER_KEYS.EU_ECJ,
+    `${manifestation.uri.replace("http://", "https://")}/DOC_1`,
+  );
+  if (Result.isError(contentUrl)) {
+    logger.warn("case_law.ingestion.formex_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      reason: contentUrl.error.message,
+      url: contentUrl.error.url,
+    });
+    return undefined;
+  }
+  const response = await fetchPublisher(contentUrl.value, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1651,7 +1671,7 @@ const fetchFormex = async (
     logger.warn("case_law.ingestion.formex_unavailable", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       httpStatus: response.status,
-      url: contentUrl,
+      url: contentUrl.value,
     });
     return undefined;
   }
@@ -1684,9 +1704,9 @@ export const buildDecision = async (
   const decisionType =
     CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
   const lang = toEcjLanguage(binding.language.value);
-  const documentUrl = toCellarContentUrl(binding.manifestation.value);
+  const manifestationId = toCellarManifestationId(binding.manifestation.value);
 
-  if (!lang || !documentUrl) {
+  if (!lang || !manifestationId) {
     return undefined;
   }
 
@@ -1696,7 +1716,7 @@ export const buildDecision = async (
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
   const manifestation = await fetchManifestation({
-    contentUrl: documentUrl,
+    manifestationId,
     celex,
     lang,
     signal: AbortSignal.any([

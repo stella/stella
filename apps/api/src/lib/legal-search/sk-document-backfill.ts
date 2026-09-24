@@ -117,12 +117,13 @@ export type PendingDocument = {
  * be counted against that publisher's budget. The gate lives in the ingestion
  * slice, which `lib` may not import, so the caller supplies it — required, and
  * never defaulted, because a call site that forgot it would download outside
- * the budget and nothing would say so.
+ * the budget and nothing would say so. `undefined` when the gate refuses the
+ * URL as off the publisher's hosts.
  */
 export type SkDocumentFetch = (
   url: URL,
   init: { signal?: AbortSignal },
-) => Promise<Response>;
+) => Promise<Response | undefined>;
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;
@@ -148,6 +149,9 @@ export const fetchPdfBytes = async ({
   }
 
   const response = await fetchDocument(target, { signal });
+  if (response === undefined) {
+    return undefined;
+  }
   if (response.ok) {
     return new Uint8Array(await response.arrayBuffer());
   }
