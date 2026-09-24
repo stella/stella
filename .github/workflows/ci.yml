@@ -1303,6 +1303,13 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-projection-totality.test.ts
 
+      # Root script tests belong to no workspace package, so no scoped test
+      # run reaches them. The steps above call some by path; this runs every
+      # other one, so a new test cannot miss CI by missing a step.
+      - name: Test remaining repository scripts
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun scripts/run-unlisted-script-tests.ts
+
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.

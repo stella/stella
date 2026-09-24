@@ -399,5 +399,6 @@ run_step "Published package list self-test" bun test \
   scripts/check-published-package-lists.test.ts
 run_step "Published package lists" bun run check:published-package-lists
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
+run_step "Remaining repository script tests" bun scripts/run-unlisted-script-tests.ts
 
 finish_verification
