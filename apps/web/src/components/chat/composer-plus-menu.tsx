@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import {
   useInfiniteQuery,
@@ -62,9 +63,9 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
 import {
-  COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,
   shouldDrainSkillPages,
+  type ComposerMenuShortcut,
 } from "@/components/chat/composer-plus-menu.logic";
 import {
   ComposerSubmenuSearch,
@@ -145,6 +146,13 @@ type ComposerPlusMenuProps = {
 // surface passes the matching prop. The list-backed submenus' queries are
 // gated on the root menu's open state, so opening (+) — not mounting the
 // composer — is what triggers the fetches.
+//
+// The "/" and "@" editor shortcuts open the Skills or Context list as a
+// standalone popup anchored to the same button, never as the root menu with a
+// submenu forced open: a shortcut leaves the pointer wherever the caret was,
+// typically on top of a sibling root item, and Base UI closes an open submenu
+// as soon as the pointer moves over a sibling (`itemhover`), so the popup
+// gets no siblings to lose to.
 export const ComposerPlusMenu = ({
   disabled,
   guideAnchorsEnabled = false,
@@ -159,13 +167,13 @@ export const ComposerPlusMenu = ({
 }: ComposerPlusMenuProps) => {
   const t = useTranslations();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false);
-  const [contextSubmenuOpen, setContextSubmenuOpen] = useState(false);
-  // Set only by the editor shortcut listener below; consulted (and cleared)
-  // the next time the root menu closes, so only a "/" or "@"-triggered open
-  // reroutes focus back to the editor. An ordinary (+) click/Escape keeps
-  // Base UI's default of returning focus to the trigger button.
-  const openedProgrammaticallyRef = useRef(false);
+  // Set only by the editor shortcut listener below. Closing a shortcut popup
+  // returns focus to the editor; an ordinary (+) click or Escape keeps Base
+  // UI's default of returning focus to the trigger button.
+  const [shortcutMenu, setShortcutMenu] = useState<ComposerMenuShortcut | null>(
+    null,
+  );
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const shortcutEditor = skills?.editor ?? context?.editor ?? null;
   const hasSkillsShortcut = skills !== undefined;
   const hasContextShortcut = context !== undefined;
@@ -173,7 +181,7 @@ export const ComposerPlusMenu = ({
   // The menu owns its editor shortcuts. Any composer that renders a Skills
   // submenu therefore gets the same "/" behavior at any cursor position
   // without a second surface-level key handler that can drift. The slash is
-  // consumed here and the unified Skills submenu owns filtering.
+  // consumed here and the Skills list owns filtering.
   useExternalSyncEffect(() => {
     if (!shortcutEditor || shortcutEditor.isDestroyed) {
       return undefined;
@@ -202,13 +210,7 @@ export const ComposerPlusMenu = ({
 
       event.preventDefault();
       event.stopImmediatePropagation();
-      openedProgrammaticallyRef.current = true;
-      setMenuOpen(true);
-      if (shortcut === COMPOSER_MENU_SHORTCUT.skills) {
-        setSkillsSubmenuOpen(true);
-      } else {
-        setContextSubmenuOpen(true);
-      }
+      setShortcutMenu(shortcut);
     };
 
     editorElement.addEventListener("keydown", handleKeyDown, { capture: true });
@@ -219,100 +221,133 @@ export const ComposerPlusMenu = ({
     };
   }, [disabled, hasContextShortcut, hasSkillsShortcut, shortcutEditor]);
 
-  const handleMenuOpenChange = (open: boolean) => {
-    setMenuOpen(open);
-    if (open) {
-      return;
-    }
-    setSkillsSubmenuOpen(false);
-    setContextSubmenuOpen(false);
-    if (openedProgrammaticallyRef.current) {
-      openedProgrammaticallyRef.current = false;
-      if (shortcutEditor && !shortcutEditor.isDestroyed) {
-        shortcutEditor.commands.focus();
-      }
+  const closeShortcutMenu = () => {
+    setShortcutMenu(null);
+    if (shortcutEditor && !shortcutEditor.isDestroyed) {
+      shortcutEditor.commands.focus();
     }
   };
+  const submenuHost = { kind: "submenu", guideAnchorsEnabled } as const;
 
   return (
-    <Menu onOpenChange={handleMenuOpenChange} open={menuOpen}>
-      <MenuTrigger
-        aria-label={t("chat.composerMenu.open")}
-        disabled={disabled}
-        render={
-          <Button
-            {...guideAnchor(GUIDE_ANCHORS.chatToolsButton, guideAnchorsEnabled)}
-            className={cn(
-              "border-border size-7 shrink-0 rounded-full border",
-              triggerClassName,
-            )}
-            size={COMPOSER_CONTROL_BUTTON_SIZE}
-            type="button"
-            variant="secondary"
-          />
-        }
-      >
-        <PlusIcon className="size-4" />
-      </MenuTrigger>
-      <MenuPopup align="start" side="top">
-        {onNewThread && (
-          <>
-            <MenuItem onClick={onNewThread}>
-              <MessageSquarePlusIcon />
-              {t("chat.newChat")}
-            </MenuItem>
-            <MenuSeparator />
-          </>
-        )}
-        <MenuItem
-          {...guideAnchor(GUIDE_ANCHORS.chatMenuAttach, guideAnchorsEnabled)}
-          onClick={onOpenFilePicker}
+    <>
+      <Menu onOpenChange={setMenuOpen} open={menuOpen}>
+        <MenuTrigger
+          aria-label={t("chat.composerMenu.open")}
+          disabled={disabled}
+          ref={triggerRef}
+          render={
+            <Button
+              {...guideAnchor(
+                GUIDE_ANCHORS.chatToolsButton,
+                guideAnchorsEnabled,
+              )}
+              className={cn(
+                "border-border size-7 shrink-0 rounded-full border",
+                triggerClassName,
+              )}
+              size={COMPOSER_CONTROL_BUTTON_SIZE}
+              type="button"
+              variant="secondary"
+            />
+          }
         >
-          <PaperclipIcon />
-          {t("chat.attachFile")}
-        </MenuItem>
-        {models && (
-          <ComposerModelsSubmenu
-            enabled={menuOpen}
-            guideAnchorsEnabled={guideAnchorsEnabled}
-            models={models}
-          />
-        )}
-        {editMode && (
-          <ComposerEditModeSubmenu
-            onChange={editMode.onChange}
-            optionId={editMode.optionId}
-          />
-        )}
-        {skills && (
-          <ComposerSkillsSubmenu
-            enabled={menuOpen}
-            guideAnchorsEnabled={guideAnchorsEnabled}
-            onOpenChange={setSkillsSubmenuOpen}
-            open={skillsSubmenuOpen}
-            skills={skills}
-          />
-        )}
-        {context && (
-          <ComposerContextSubmenu
-            context={context}
-            enabled={menuOpen}
-            guideAnchorsEnabled={guideAnchorsEnabled}
-            onOpenChange={setContextSubmenuOpen}
-            open={contextSubmenuOpen}
-          />
-        )}
-        {mcp && (
-          <ComposerMcpSubmenu
-            enabled={menuOpen}
-            guideAnchorsEnabled={guideAnchorsEnabled}
-            mcp={mcp}
-          />
-        )}
-      </MenuPopup>
-    </Menu>
+          <PlusIcon className="size-4" />
+        </MenuTrigger>
+        <MenuPopup align="start" side="top">
+          {onNewThread && (
+            <>
+              <MenuItem onClick={onNewThread}>
+                <MessageSquarePlusIcon />
+                {t("chat.newChat")}
+              </MenuItem>
+              <MenuSeparator />
+            </>
+          )}
+          <MenuItem
+            {...guideAnchor(GUIDE_ANCHORS.chatMenuAttach, guideAnchorsEnabled)}
+            onClick={onOpenFilePicker}
+          >
+            <PaperclipIcon />
+            {t("chat.attachFile")}
+          </MenuItem>
+          {models && (
+            <ComposerModelsSubmenu
+              enabled={menuOpen}
+              guideAnchorsEnabled={guideAnchorsEnabled}
+              models={models}
+            />
+          )}
+          {editMode && (
+            <ComposerEditModeSubmenu
+              onChange={editMode.onChange}
+              optionId={editMode.optionId}
+            />
+          )}
+          {skills && (
+            <ComposerSkillsMenu
+              enabled={menuOpen}
+              host={submenuHost}
+              skills={skills}
+            />
+          )}
+          {context && (
+            <ComposerContextMenu
+              context={context}
+              enabled={menuOpen}
+              host={submenuHost}
+            />
+          )}
+          {mcp && (
+            <ComposerMcpSubmenu
+              enabled={menuOpen}
+              guideAnchorsEnabled={guideAnchorsEnabled}
+              mcp={mcp}
+            />
+          )}
+        </MenuPopup>
+      </Menu>
+      {skills && (
+        <ComposerSkillsMenu
+          enabled={shortcutMenu === "skills"}
+          host={{
+            kind: "shortcut",
+            anchor: triggerRef,
+            open: shortcutMenu === "skills",
+            onClose: closeShortcutMenu,
+          }}
+          skills={skills}
+        />
+      )}
+      {context && (
+        <ComposerContextMenu
+          context={context}
+          enabled={shortcutMenu === "context"}
+          host={{
+            kind: "shortcut",
+            anchor: triggerRef,
+            open: shortcutMenu === "context",
+            onClose: closeShortcutMenu,
+          }}
+        />
+      )}
+    </>
   );
 };
+
+/**
+ * Where a Skills or Context list renders: as a hover-opening submenu of the
+ * (+) root menu, or as the standalone popup an editor shortcut opens, anchored
+ * to the same button and owned by the shortcut's open state.
+ */
+type ComposerListHost =
+  | { kind: "submenu"; guideAnchorsEnabled: boolean }
+  | {
+      kind: "shortcut";
+      anchor: RefObject<HTMLButtonElement | null>;
+      open: boolean;
+      onClose: () => void;
+    };
 
 const ComposerSubmenuEmpty = ({ children }: { children: React.ReactNode }) => (
   <p className="text-muted-foreground px-2.5 py-2 text-xs">{children}</p>
@@ -382,24 +417,20 @@ const itemSecondary = (item: SlashItem): string => {
   return item.command.command;
 };
 
-const ComposerSkillsSubmenu = ({
+const ComposerSkillsMenu = ({
   enabled,
-  guideAnchorsEnabled,
-  onOpenChange,
-  open,
+  host,
   skills,
 }: {
   enabled: boolean;
-  guideAnchorsEnabled: boolean;
-  /** Controlled open state so the "/" trigger can force this specific
-   *  submenu open alongside the root menu. */
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
+  host: ComposerListHost;
   skills: ComposerSkillsMenuProps;
 }) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const { activeOrganizationId, editor, reservedCommands } = skills;
+  const [submenuOpen, setSubmenuOpen] = useState(false);
+  const open = host.kind === "shortcut" ? host.open : submenuOpen;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -497,60 +528,110 @@ const ComposerSkillsSubmenu = ({
     ));
   }
 
-  return (
-    <MenuSub
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          setSearch("");
-        }
-      }}
-      open={open}
-    >
-      <MenuSubTrigger
-        {...guideAnchor(GUIDE_ANCHORS.chatMenuSkills, guideAnchorsEnabled)}
-      >
-        <BookOpenIcon />
-        {/* Reuses the chat landing page's "Skills" section label (same
-            value) instead of adding a duplicate key. */}
-        {t("chat.landing.prompts")}
-      </MenuSubTrigger>
-      <MenuSubPopup className="w-72">
-        <ComposerSubmenuSearch
-          onChange={setSearch}
-          placeholder={t("chat.composerMenu.searchSkills")}
-          ref={searchRef}
-          value={search}
-        />
-        {skillItemsContent}
-        {hasNextPage && (
-          <MenuItem
-            disabled={isFetchingNextPage}
-            onClick={() => {
-              detached(fetchNextPage(), "composer-plus-menu.fetch-next-page");
-            }}
-          >
-            {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
-          </MenuItem>
-        )}
-        <MenuSeparator />
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (host.kind === "shortcut") {
+      if (!nextOpen) {
+        host.onClose();
+      }
+    } else {
+      setSubmenuOpen(nextOpen);
+    }
+    if (!nextOpen) {
+      setSearch("");
+    }
+  };
+  // Reuses the chat landing page's "Skills" section label (same value)
+  // instead of adding a duplicate key.
+  const label = t("chat.landing.prompts");
+  const content = (
+    <>
+      <ComposerSubmenuSearch
+        onChange={setSearch}
+        placeholder={t("chat.composerMenu.searchSkills")}
+        ref={searchRef}
+        value={search}
+      />
+      {skillItemsContent}
+      {hasNextPage && (
         <MenuItem
+          disabled={isFetchingNextPage}
           onClick={() => {
-            detached(
-              navigate({
-                to: "/knowledge/tools",
-                search: { kind: "skill" },
-              }),
-              "composer-plus-menu.navigate",
-            );
+            detached(fetchNextPage(), "composer-plus-menu.fetch-next-page");
           }}
         >
-          {t("chat.composerMenu.openSkills")}
+          {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
         </MenuItem>
-      </MenuSubPopup>
+      )}
+      <MenuSeparator />
+      <MenuItem
+        onClick={() => {
+          detached(
+            navigate({
+              to: "/knowledge/tools",
+              search: { kind: "skill" },
+            }),
+            "composer-plus-menu.navigate",
+          );
+        }}
+      >
+        {t("chat.composerMenu.openSkills")}
+      </MenuItem>
+    </>
+  );
+
+  if (host.kind === "shortcut") {
+    return (
+      <ComposerShortcutPopup
+        anchor={host.anchor}
+        label={label}
+        onOpenChange={handleOpenChange}
+        open={open}
+      >
+        {content}
+      </ComposerShortcutPopup>
+    );
+  }
+  return (
+    <MenuSub onOpenChange={handleOpenChange} open={open}>
+      <MenuSubTrigger
+        {...guideAnchor(GUIDE_ANCHORS.chatMenuSkills, host.guideAnchorsEnabled)}
+      >
+        <BookOpenIcon />
+        {label}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-72">{content}</MenuSubPopup>
     </MenuSub>
   );
 };
+
+// The trigger-less Menu a shortcut opens beside the (+) button, following the
+// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+const ComposerShortcutPopup = ({
+  anchor,
+  children,
+  label,
+  onOpenChange,
+  open,
+}: {
+  anchor: RefObject<HTMLButtonElement | null>;
+  children: React.ReactNode;
+  label: string;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) => (
+  <Menu onOpenChange={onOpenChange} open={open}>
+    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuPopup
+      align="start"
+      anchor={anchor}
+      aria-label={label}
+      className="w-72"
+      side="top"
+    >
+      {children}
+    </MenuPopup>
+  </Menu>
+);
 
 type ContextMatter = {
   id: string;
@@ -566,23 +647,19 @@ type ContextMatter = {
 // (files) for now; other referenceable kinds (tasks, etc.) would slot in
 // next to `ComposerContextMatterSub`'s file list without changing this
 // level's shape.
-const ComposerContextSubmenu = ({
+const ComposerContextMenu = ({
   context,
   enabled,
-  guideAnchorsEnabled,
-  onOpenChange,
-  open,
+  host,
 }: {
   context: ComposerContextMenuProps;
   enabled: boolean;
-  guideAnchorsEnabled: boolean;
-  /** Controlled open state so the "@" trigger can force this specific
-   *  submenu open alongside the root menu. */
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
+  host: ComposerListHost;
 }) => {
   const t = useTranslations();
   const { activeOrganizationId, editor, threadRef } = context;
+  const [submenuOpen, setSubmenuOpen] = useState(false);
+  const open = host.kind === "shortcut" ? host.open : submenuOpen;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -599,44 +676,68 @@ const ComposerContextSubmenu = ({
     ? matters.filter((matter) => matter.name.toLowerCase().includes(query))
     : matters;
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (host.kind === "shortcut") {
+      if (!nextOpen) {
+        host.onClose();
+      }
+    } else {
+      setSubmenuOpen(nextOpen);
+    }
+    if (!nextOpen) {
+      setSearch("");
+    }
+  };
+  const label = t("chat.composerMenu.context");
+  const content = (
+    <>
+      <ComposerSubmenuSearch
+        onChange={setSearch}
+        placeholder={t("chat.composerMenu.searchMatters")}
+        ref={searchRef}
+        value={search}
+      />
+      {filteredMatters.length === 0 ? (
+        <ComposerSubmenuEmpty>
+          {t("chat.composerMenu.noMatters")}
+        </ComposerSubmenuEmpty>
+      ) : (
+        filteredMatters.map((matter) => (
+          <ComposerContextMatterSub
+            editor={editor}
+            key={matter.id}
+            matter={matter}
+            threadRef={threadRef}
+          />
+        ))
+      )}
+    </>
+  );
+
+  if (host.kind === "shortcut") {
+    return (
+      <ComposerShortcutPopup
+        anchor={host.anchor}
+        label={label}
+        onOpenChange={handleOpenChange}
+        open={open}
+      >
+        {content}
+      </ComposerShortcutPopup>
+    );
+  }
   return (
-    <MenuSub
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          setSearch("");
-        }
-      }}
-      open={open}
-    >
+    <MenuSub onOpenChange={handleOpenChange} open={open}>
       <MenuSubTrigger
-        {...guideAnchor(GUIDE_ANCHORS.chatMenuContext, guideAnchorsEnabled)}
+        {...guideAnchor(
+          GUIDE_ANCHORS.chatMenuContext,
+          host.guideAnchorsEnabled,
+        )}
       >
         <AtSignIcon />
-        {t("chat.composerMenu.context")}
+        {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72">
-        <ComposerSubmenuSearch
-          onChange={setSearch}
-          placeholder={t("chat.composerMenu.searchMatters")}
-          ref={searchRef}
-          value={search}
-        />
-        {filteredMatters.length === 0 ? (
-          <ComposerSubmenuEmpty>
-            {t("chat.composerMenu.noMatters")}
-          </ComposerSubmenuEmpty>
-        ) : (
-          filteredMatters.map((matter) => (
-            <ComposerContextMatterSub
-              editor={editor}
-              key={matter.id}
-              matter={matter}
-              threadRef={threadRef}
-            />
-          ))
-        )}
-      </MenuSubPopup>
+      <MenuSubPopup className="w-72">{content}</MenuSubPopup>
     </MenuSub>
   );
 };
