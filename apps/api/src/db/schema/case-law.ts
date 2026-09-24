@@ -2222,6 +2222,7 @@ export const caseLawCitationReviews = p.pgTable(
       .notNull(),
     /** Opaque reference to where the review is recorded. */
     reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+    /** When the current review was made; a changed review moves it. */
     reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },

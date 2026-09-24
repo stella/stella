@@ -293,6 +293,7 @@ const upsertReviewsStatement = (
   ON CONFLICT (citing_decision_id, citation_key) DO UPDATE
      SET polarity = excluded.polarity,
          review_ref = excluded.review_ref,
+         reviewed_at = now(),
          updated_at = now()
    WHERE (r.polarity, r.review_ref)
          IS DISTINCT FROM (excluded.polarity, excluded.review_ref)
