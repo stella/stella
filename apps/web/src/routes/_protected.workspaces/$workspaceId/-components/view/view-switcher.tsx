@@ -59,22 +59,19 @@ import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import type { WorkspaceView } from "@/lib/types";
-import { viewsOptions } from "@/lib/workspaces/queries/views";
-import {
-  EMPTY_AVT_LAYOUT,
-  switcherViews,
-} from "@/lib/workspaces/view-layout";
-import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
-import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
-import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
-import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import {
   useConvertView,
   useCreateView,
   useDeleteView,
   useReorderViews,
   useUpdateView,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
+} from "@/lib/workspaces/mutations/views";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { EMPTY_AVT_LAYOUT, switcherViews } from "@/lib/workspaces/view-layout";
+import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
+import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
+import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 
 const layoutIcons = {
   overview: LayoutDashboardIcon,

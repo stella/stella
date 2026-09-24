@@ -81,6 +81,7 @@ import type {
   WorkspaceView,
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -99,7 +100,6 @@ import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

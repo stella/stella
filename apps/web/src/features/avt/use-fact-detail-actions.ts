@@ -45,8 +45,10 @@ export const useFactDetailActions = (scope: ListScope) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const itemsKey = legalListItemsOptions(scope.workspaceId, scope.listId)
-    .queryKey;
+  const itemsKey = legalListItemsOptions(
+    scope.workspaceId,
+    scope.listId,
+  ).queryKey;
   const mutationKey = factDetailsMutationKey(scope);
 
   const writeDetails = (

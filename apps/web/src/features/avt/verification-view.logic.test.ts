@@ -66,9 +66,9 @@ describe("claim passages", () => {
       inBlock(3, "p2", 0),
     ]);
 
-    expect(passages.map((passage) => passage.claims.map((c) => c.text))).toEqual(
-      [["Claim 2", "Claim 1"], ["Claim 3"]],
-    );
+    expect(
+      passages.map((passage) => passage.claims.map((c) => c.text)),
+    ).toEqual([["Claim 2", "Claim 1"], ["Claim 3"]]);
   });
 
   test("follow reading order, so a block revisited later is a new passage", () => {
@@ -104,6 +104,8 @@ describe("claim passages", () => {
 
     const order = passageReadingOrder(groupClaimsIntoPassages(claims));
 
-    expect(order.toSorted()).toEqual(claims.map((claim) => claim.id).toSorted());
+    expect(order.toSorted()).toEqual(
+      claims.map((claim) => claim.id).toSorted(),
+    );
   });
 });

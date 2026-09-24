@@ -43,12 +43,12 @@ import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
+import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
 import { EMPTY_AVT_LAYOUT } from "@/lib/workspaces/view-layout";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { useDeleteViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
-import { useCreateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const layoutIcons = {
   overview: LayoutDashboardIcon,

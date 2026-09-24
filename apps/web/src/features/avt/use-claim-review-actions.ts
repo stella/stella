@@ -59,8 +59,10 @@ export const useClaimReviewActions = (scope: RunScope) => {
     from: "/_protected",
     select: (ctx) => ctx.user.id,
   });
-  const runKey = verificationRunOptions(scope.workspaceId, scope.runId)
-    .queryKey;
+  const runKey = verificationRunOptions(
+    scope.workspaceId,
+    scope.runId,
+  ).queryKey;
   const mutationKey = claimReviewMutationKey(scope);
   const lists = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) });
@@ -72,7 +74,8 @@ export const useClaimReviewActions = (scope: RunScope) => {
   ): Promise<PreviousReviews> => {
     await queryClient.cancelQueries({ queryKey: runKey });
     const run = queryClient.getQueryData(runKey);
-    const previous = (run?.claims ?? [])
+    // Nothing cached yet: no optimistic state to write or roll back.
+    const previous = (run === undefined ? [] : run.claims)
       .filter((claim) => claimIds.includes(claim.id))
       .map((claim) => ({ claimId: claim.id, review: claim.review }));
     queryClient.setQueryData(runKey, (current) =>

@@ -51,7 +51,12 @@ export const makeClaim = ({
   type = "fact",
   refs = [],
   review = null,
-  anchor = { type: "docx-block", blockId: `b${String(suffix)}`, start: 0, end: 10 },
+  anchor = {
+    type: "docx-block",
+    blockId: `b${String(suffix)}`,
+    start: 0,
+    end: 10,
+  },
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,

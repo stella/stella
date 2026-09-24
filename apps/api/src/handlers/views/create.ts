@@ -97,7 +97,8 @@ const createView = createSafeHandler(
           legalListsEnabled: legalListsDeployed(),
         });
         if (avtRejection !== null) {
-          throw new HandlerError(avtLayoutErrorDetail(avtRejection));
+          // Nothing is written yet, so returning commits no partial view.
+          return { type: "rejected" as const, rejection: avtRejection };
         }
 
         const resolvedTemplateProperties = await resolveTemplateProperties({
@@ -168,6 +169,7 @@ const createView = createSafeHandler(
         });
 
         return {
+          type: "created" as const,
           view: {
             version: 1 as const,
             id: inserted.id,
@@ -179,6 +181,11 @@ const createView = createSafeHandler(
         };
       }),
     );
+    if (txResult.type === "rejected") {
+      return Result.err(
+        new HandlerError(avtLayoutErrorDetail(txResult.rejection)),
+      );
+    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,

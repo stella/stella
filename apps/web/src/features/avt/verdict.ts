@@ -9,7 +9,6 @@
 
 import { panic } from "better-result";
 
-import type { TranslationKey } from "@/i18n/types";
 import type {
   ClaimReview,
   ClaimState,
@@ -18,6 +17,7 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
+import type { TranslationKey } from "@/i18n/types";
 
 const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
   "contradicted",
@@ -113,7 +113,10 @@ export const effectiveState = (
 export const resolveClaimView = (
   claim: VerificationClaim,
 ): VerificationClaim => {
-  if (claim.review?.reopened !== true || claim.verdict.state !== "notverifiable") {
+  if (
+    claim.review?.reopened !== true ||
+    claim.verdict.state !== "notverifiable"
+  ) {
     return claim;
   }
   return {

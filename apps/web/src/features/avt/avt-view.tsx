@@ -6,7 +6,7 @@
 
 import * as React from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
@@ -25,10 +25,10 @@ import { DocumentVerifications } from "@/features/avt/document-verifications";
 import { VerificationDetail } from "@/features/avt/verification-detail";
 import { usePermissions } from "@/hooks/use-permissions";
 import { toSafeId } from "@/lib/safe-id";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 type AvtViewProps = {
   view: AvtWorkspaceView;
@@ -108,8 +108,10 @@ const EvidenceListPicker = ({
   const t = useTranslations();
   const canUpdateView = usePermissions({ view: ["update"] });
   const updateView = useUpdateView(workspaceId);
-  const { data: lists } = useQuery(legalListsOptions(workspaceId));
-  const items = lists?.items ?? [];
+  // The view's loader has already read the workspace's lists.
+  const {
+    data: { items },
+  } = useSuspenseQuery(legalListsOptions(workspaceId));
 
   const pick = (listId: string) => {
     updateView.mutate(

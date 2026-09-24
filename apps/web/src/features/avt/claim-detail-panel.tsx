@@ -226,7 +226,9 @@ export const ClaimDetailPanel = ({
                 {t("avt.claimDetail.humanReview")}
               </h3>
               {!settled && !isEscalated && (
-                <ReviewStatusBadge tone={DISPOSITION_TONE_STYLE[guidance.tone].tone}>
+                <ReviewStatusBadge
+                  tone={DISPOSITION_TONE_STYLE[guidance.tone].tone}
+                >
                   {t(guidance.guideKey)}
                 </ReviewStatusBadge>
               )}
@@ -813,9 +815,7 @@ const RecordConflictBlock = ({
               resolution?.kind === "escalated" ? null : { kind: "escalated" },
             )
           }
-          variant={
-            resolution?.kind === "escalated" ? "destructive" : "outline"
-          }
+          variant={resolution?.kind === "escalated" ? "destructive" : "outline"}
         >
           <FlagIcon />
           {t("avt.claimDetail.recordConflict.flagForEvidenceTeam")}
