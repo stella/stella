@@ -203,7 +203,7 @@ describe("GET /operator/registrations", () => {
     }
   });
 
-  // The `no-unscoped-user-query` waiver on the registrations query rests on
+  // The `no-unscoped-user-query` allowlist entry for this module rests on
   // this: the read spans every account on the instance and has no tenant to
   // scope by, so the token gate is the whole boundary. A gate that runs after
   // the read, or beside it, would still answer 404/401 while the accounts had

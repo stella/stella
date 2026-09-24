@@ -3538,6 +3538,11 @@ export default defineConfig({
                 reason:
                   "single-account reads and writes keyed by the caller's own user id, or by the email a sign-in or OTP request names before any organization exists",
               },
+              {
+                file: "apps/api/src/handlers/operator/query.ts",
+                reason:
+                  "operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by",
+              },
             ],
           },
         ],

@@ -27,7 +27,6 @@ const MAX_LOOKBACK_MS = OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS * DAY_IN_MS;
 const isUserIdCursorPart = (value: unknown): value is string =>
   typeof value === "string" && value.length >= 1 && value.length <= 128;
 
-// oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
 const registrationCursor = createTimestampIdCursorCodec({
   column: user.createdAt,
   brandId: brandPersistedUserId,
@@ -144,16 +143,11 @@ export const queryRegistrationsPage = async function* ({
 }) {
   const { limit } = filter;
 
-  // no-truncated-timestamp-comparison: caller-supplied filter bound, never
-  // round-tripped through the database. no-unscoped-user-query: operator
-  // registrations are instance-wide by design, token-gated at the deployment
-  // level, so there is no organization to scope by.
-  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison, security-guards/no-unscoped-user-query -- see the comment above
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
   const conditions: SQL[] = [gte(user.createdAt, filter.since)];
   if (filter.cursor) {
     const cursor = registrationCursor.decode(filter.cursor);
     if (cursor) {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
       const cursorCondition = registrationCursor.keysetAfter({
         cursor,
         idColumn: user.id,
@@ -168,7 +162,6 @@ export const queryRegistrationsPage = async function* ({
   const rows = yield* Result.await(
     safeDb(
       async (tx) =>
-        // oxlint-disable-next-line security-guards/no-unscoped-user-query -- operator registrations are instance-wide by design: the endpoint is token-gated at the deployment level, so there is no organization to scope by
         await tx
           .select({
             id: user.id,

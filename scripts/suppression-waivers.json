@@ -143,26 +143,6 @@
       "evidence": "apps/api/src/lib/files/utils.ts#resolveUploadMime"
     },
     {
-      "id": "SW-0018",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/operator/query.ts",
-      "symbol": "queryRegistrationsPage",
-      "count": 3,
-      "reason": "operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.",
-      "evidence": "apps/api/src/handlers/operator/read-registrations.test.ts"
-    },
-    {
-      "id": "SW-0019",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/operator/query.ts",
-      "symbol": "registrationCursor",
-      "count": 1,
-      "reason": "operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.",
-      "evidence": "apps/api/src/handlers/operator/read-registrations.test.ts"
-    },
-    {
       "id": "SW-0020",
       "kind": "permanent",
       "rule": "security-guards/no-unscoped-user-query",
