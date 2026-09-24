@@ -157,6 +157,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
+  // Reviewed citation labels: read by ingestion, written by the operator
+  // script on the owner connection, never read through the request role.
+  "case_law_citation_reviews",
   "account_deletion_effect_chunks",
   "entity_deletion_effect_chunks",
   // Filed feedback reports: no tenant read surface, and the request role must

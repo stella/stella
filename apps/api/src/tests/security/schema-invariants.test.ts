@@ -9,11 +9,15 @@ import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
-import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import {
+  POLARITY,
+  REVIEWABLE_POLARITIES,
+} from "@/api/handlers/case-law/polarity/consts";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCitationReviews,
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
@@ -380,6 +384,14 @@ describe("schema invariants", () => {
       "polarity_rules_polarity_values",
     ).toSorted();
     expect(dbValues).toEqual(polarityValues);
+  });
+
+  test("citation_reviews CHECK constraint matches REVIEWABLE_POLARITIES", () => {
+    const dbValues = extractCheckValues(
+      caseLawCitationReviews,
+      "citation_reviews_polarity_values",
+    ).toSorted();
+    expect(dbValues).toEqual(REVIEWABLE_POLARITIES.toSorted());
   });
 
   test("corpus mirror CHECK constraint matches its domain type", () => {

@@ -13,6 +13,7 @@ export type SafeIdType =
   | "auditLog"
   | "billingCode"
   | "caseLawCitation"
+  | "caseLawCitationReview"
   | "caseLawCitationResolutionCensusRun"
   | "caseLawCoverageSlice"
   | "caseLawCourtWeight"

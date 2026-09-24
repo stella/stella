@@ -248,12 +248,11 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 96,
+    "count": 95,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/scripts/backfill-image-thumbnails.ts": 1,
       "apps/api/scripts/backfill-search-previews.ts": 1,
-      "apps/api/scripts/classify-citations.ts": 1,
       "apps/api/scripts/ingestion-status.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
       "apps/api/scripts/seed-dev.ts": 1,

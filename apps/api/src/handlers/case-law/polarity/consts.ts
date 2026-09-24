@@ -70,6 +70,18 @@ export const isClassifiablePolarity = (
   value: string,
 ): value is ClassifiablePolarity => includes(CLASSIFIABLE_POLARITIES, value);
 
+/** A polarity a review may record: any reading, never `unknown`. */
+export type ReviewablePolarity = Exclude<Polarity, typeof POLARITY.UNKNOWN>;
+
+/**
+ * The review codomain. `unknown` records that nothing read the text, which a
+ * review contradicts by existing; `mixed` stays, because a reader can find
+ * both a departure and a reliance in one decision.
+ */
+export const REVIEWABLE_POLARITIES = POLARITIES.filter(
+  (polarity): polarity is ReviewablePolarity => polarity !== POLARITY.UNKNOWN,
+);
+
 /**
  * Order in which competing readings are resolved: lower wins. It settles
  * which rule match labels a mention, which mention labels a citation, and

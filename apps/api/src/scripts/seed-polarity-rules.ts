@@ -1,4 +1,4 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 /**
  * Load the hand-written polarity rules into `case_law_polarity_rules`.
  *
@@ -16,8 +16,9 @@ import path from "node:path";
 
 import { Temporal } from "@stll/time";
 
-import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import { caseLawPolarityRules } from "@/api/db/schema";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
+import { resetRetiredRuleVerdicts } from "@/api/handlers/case-law/polarity/rule-retirement";
 import {
   RETIRED_SEED_RULES,
   SEED_RULES,
@@ -60,9 +61,6 @@ await rootDb.transaction(async (tx) => {
     });
 });
 
-/** Rows reset per statement; bounded so the lock never spans the table. */
-const RESET_BATCH = 5000;
-
 let resetIds: string[] = [];
 if (RETIRED_SEED_RULES.length > 0) {
   const retired = await rootDb.transaction(
@@ -87,28 +85,10 @@ if (RETIRED_SEED_RULES.length > 0) {
   // to the unclassified pool, and `scripts/classify-citations.ts` reads them
   // again under the rules that remain. Left in place, a withdrawn rule would
   // keep speaking through every row it ever touched.
-  const retiredIds = retired.map((rule) => rule.id);
-  const resetBatch = async (): Promise<string[]> => {
-    const reset = await rootDb.transaction(
-      async (tx) =>
-        await tx
-          .update(caseLawCitations)
-          .set({ polarity: null, polarityRuleId: null })
-          .where(
-            sql`${caseLawCitations.id} IN (
-              SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
-              WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
-              LIMIT ${RESET_BATCH}
-            )`,
-          )
-          .returning({ id: caseLawCitations.id }),
-    );
-    const ids = reset.map((row) => row.id);
-    return reset.length < RESET_BATCH ? ids : [...ids, ...(await resetBatch())];
-  };
-  if (retiredIds.length > 0) {
-    resetIds = await resetBatch();
-  }
+  resetIds = await resetRetiredRuleVerdicts(
+    rootDb,
+    retired.map((rule) => rule.id),
+  );
 }
 
 console.log(

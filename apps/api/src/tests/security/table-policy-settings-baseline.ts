@@ -29,6 +29,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "case_law_citation_resolution_census",
   "case_law_citation_resolution_census_runs",
   "case_law_citation_resolution_progress",
+  "case_law_citation_reviews",
   "case_law_citations",
   "case_law_corpus_jurisdictions",
   "case_law_corpus_pack_refs",

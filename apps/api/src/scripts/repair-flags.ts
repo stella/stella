@@ -71,6 +71,27 @@ export const flagInteger = ({
   return parsed;
 };
 
+type RequiredFlagOptions = {
+  /** Flag name without the leading dashes. */
+  name: string;
+  /** Printed when the flag or its value is missing. */
+  usage: string;
+};
+
+/** The value of a required `--<name>`; a missing one stops the run. */
+export const requiredFlagValue = ({
+  name,
+  usage,
+}: RequiredFlagOptions): string => {
+  const raw = flagValue(name);
+  if (raw === undefined || raw.length === 0 || raw.startsWith("--")) {
+    console.error(`--${name} needs a value.`);
+    console.error(usage);
+    process.exit(1);
+  }
+  return raw;
+};
+
 /** Flags every repair takes, so a caller lists only its own. */
 const SHARED_FLAGS = ["apply", "dry-run"] as const;
 
