@@ -98,10 +98,13 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 // ── Constants ─────────────────────────────────────────────
 
 const BASE_URL = "https://www.ustavnysud.sk";
-const SEARCH_URL = `${BASE_URL}/o/v1/dms/search`;
-const CONTENT_URL = `${BASE_URL}/o/v1/dms/content`;
-const COURT_FILE_URL = `${BASE_URL}/o/v1/dms/file`;
-const CODELIST_URL = `${BASE_URL}/o/v1/codelist/decision`;
+/** The JSON service; the paths below are relative to it. */
+const SERVICE_URL = `${BASE_URL}/o/v1`;
+const SEARCH_PATH = "dms/search";
+const SEARCH_URL = `${SERVICE_URL}/${SEARCH_PATH}`;
+const CONTENT_PATH = "dms/content";
+const COURT_FILE_PATH = "dms/file";
+const CODELIST_PATH = "codelist/decision";
 const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 
 /** The corpus this adapter reads; the service echoes it back as `docType`. */
@@ -362,13 +365,13 @@ const fetchPdfBytes = async (
  * response leaves its envelope part out and the row states what did arrive.
  */
 const fetchJson = async (
-  url: string,
+  path: string,
   init: { body?: string; signal?: AbortSignal },
 ): Promise<string | undefined> =>
   (
     await Result.tryPromise({
       try: async (): Promise<string | undefined> => {
-        const response = await fetchPublisher(url, {
+        const response = await fetchPublisher(`${SERVICE_URL}/${path}`, {
           adapterKey: ADAPTER_KEYS.SK_US,
           ...(init.body === undefined
             ? {}
@@ -403,7 +406,7 @@ const fetchDocumentXhtml = async (
   documentId: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
-  const body = await fetchJson(CONTENT_URL, {
+  const body = await fetchJson(CONTENT_PATH, {
     body: JSON.stringify({
       highlightText: "",
       documentId,
@@ -441,7 +444,7 @@ const fetchFacets = async (
   { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
-  await fetchJson(SEARCH_URL, {
+  await fetchJson(SEARCH_PATH, {
     body: JSON.stringify({
       docType: DECISION_DOC_TYPE,
       start: 0,
@@ -479,7 +482,7 @@ const fetchCourtFile = async (
   rvpNumber: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
-  await fetchJson(`${COURT_FILE_URL}/${rvpNumber.replace("/", ":")}`, {
+  await fetchJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -583,7 +586,7 @@ const perKey = <T>(
 
 export const createSkUsPageContext = (): SkUsPageContext => {
   const codelist = perKey(async (_key, signal) => {
-    const body = await fetchJson(CODELIST_URL, {
+    const body = await fetchJson(CODELIST_PATH, {
       ...(signal === undefined ? {} : { signal }),
     });
     return body === undefined ? undefined : parseCodelist(body);
