@@ -417,6 +417,24 @@ describe("a decision", () => {
     expect(decision.metadata["crossSourceKey"]).toBeUndefined();
   });
 
+  test("is identified by its number as the register prints it and as prose cites it", async () => {
+    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+    const decision = decisionOf(
+      await buildFrom(entry, await pageOf(WITH_RULINGS)),
+    );
+    expect(decision.identifiers).toEqual([
+      { type: "case-number", value: "DOK-9/2011" },
+      { type: "case-number", value: "DOK 9/2011" },
+    ]);
+    const numberless = decisionOf(
+      await buildFrom(
+        entryOf(await capturedEntries(), NUMBERLESS),
+        await pageOf(NUMBERLESS),
+      ),
+    );
+    expect(numberless.identifiers).toBeUndefined();
+  });
+
   test("a decision under appeal keeps the court status its page shows", async () => {
     const page = await pageOf(APPEALED);
     const detail = parsePlUokikDetail(page);

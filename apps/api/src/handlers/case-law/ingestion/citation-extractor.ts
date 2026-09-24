@@ -7,6 +7,7 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
@@ -657,6 +658,24 @@ const PL_KIO_PATTERN = new RegExp(
   "gu",
 );
 
+// A decision number of the competition and consumer protection authority,
+// as a court or another decision cites it: "decyzji Prezesa UOKiK nr
+// DOK-1/2020", "od decyzji Prezesa Urzędu Ochrony Konkurencji i Konsumentów
+// z 29 lutego 2024 r. Nr DOZIK 3/2024". Its shape is shared with other
+// bodies' file numbers, so it is read only near its own cue
+// (PL_UOKIK_DECISION_CUE_RE).
+const PL_UOKIK_DECISION_PATTERN = new RegExp(
+  String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
+  "gu",
+);
+
+/** What marks a nearby decision number as the competition authority's. */
+const PL_UOKIK_DECISION_CUE_RE =
+  /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu;
+
+/** How far before a decision number its cue may sit. */
+const PL_UOKIK_DECISION_CUE_WINDOW = 160;
+
 /** What marks a nearby authority file number as the data protection authority's. */
 const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
   /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
@@ -930,6 +949,7 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_TK_BARE_PATTERN,
   PL_TK_CUED_PATTERN,
   PL_AUTHORITY_FILE_NUMBER_PATTERN,
+  PL_UOKIK_DECISION_PATTERN,
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
@@ -1748,6 +1768,17 @@ export const extractCitations = (
           !PL_AUTHORITY_FILE_NUMBER_CUE_RE.test(
             section.text.slice(
               Math.max(0, match.index - PL_TK_CUE_WINDOW),
+              match.index,
+            ),
+          )
+        ) {
+          continue;
+        }
+        if (
+          pattern === PL_UOKIK_DECISION_PATTERN &&
+          !PL_UOKIK_DECISION_CUE_RE.test(
+            section.text.slice(
+              Math.max(0, match.index - PL_UOKIK_DECISION_CUE_WINDOW),
               match.index,
             ),
           )

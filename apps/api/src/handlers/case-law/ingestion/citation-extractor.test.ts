@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -8,11 +9,13 @@ import type {
   DecisionIdentifierType,
   DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
   decisionIdentifiersFromMetadata,
@@ -2181,6 +2184,68 @@ describe("extractCitations", () => {
         extractCitations([{ index: 0, text }]).map((c) => c.citationText),
       ).toEqual(expected);
     }
+  });
+
+  test("reads a competition authority decision number only after its cue", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "decyzji Prezesa UOKiK nr DOK-1/2020 z dnia 5 marca 2020 r.",
+        ["DOK-1/2020"],
+      ],
+      [
+        "na skutek odwołania od decyzji Prezesa Urzędu Ochrony Konkurencji i Konsumentów z 29 lutego 2024 r. Nr DOZIK 3/2024",
+        ["DOZIK 3/2024"],
+      ],
+      ["decyzja Prezesa UOKiK nr RŁO-7/2025", ["RŁO-7/2025"]],
+      ["decyzją Prezesa UOKiK nr DIH-II-34/2026", ["DIH-II-34/2026"]],
+      ["decyzji Prezesa UOKiK (DNR-1-20/2026)", ["DNR-1-20/2026"]],
+      ["UOKiK, decyzja nr RGD- 16/2024", ["RGD- 16/2024"]],
+      ["Prezes UOKiK wydał decyzję DKK – 212/2026", ["DKK – 212/2026"]],
+      // No cue: other bodies number their files the same way.
+      ["pismo MZDR 6206/2025 w aktach", []],
+      ["decyzja nr DOK-1/2020", []],
+      // Cued, but not a decision number: a two-digit year, lower case, a
+      // unit code too short, a number running on.
+      ["Prezes UOKiK, RKR 51/06", []],
+      ["Prezes UOKiK, dok-1/2020", []],
+      ["Prezes UOKiK, DO-1/2020", []],
+      ["Prezes UOKiK, DOK-1/2020/3", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+        text,
+      ).toEqual(expected);
+    }
+  });
+
+  test("a cited competition authority decision keys like the identifiers its row stores", () => {
+    const units = fc.constantFrom("DOK", "DKK", "RŁO", "DOZIK", "RKT");
+    const divisions = fc.option(fc.constantFrom("II", "III", "1", "2"), {
+      nil: undefined,
+    });
+    fc.assert(
+      fc.property(
+        units,
+        divisions,
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 1990, max: 2099 }),
+        fc.constantFrom("-", " - ", "–", " "),
+        (unit, division, ordinal, year, separator) => {
+          const register = `${unit}${division === undefined ? "" : `-${division}`}-${ordinal}/${year}`;
+          const cited = `${unit}${division === undefined ? "" : `-${division}`}${separator}${ordinal}/${year}`;
+          const [citation] = extractCitations([
+            { index: 0, text: `decyzja Prezesa UOKiK nr ${cited} z dnia` },
+          ]);
+          expect(citation?.citationText).toBe(cited);
+          const held = plUokikDecisionIdentifiers(register).map((identifier) =>
+            normalizeDecisionIdentifier(identifier),
+          );
+          expect(held).toContain(bareCitationKey(citation?.citationText ?? ""));
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("keys a Tribunal docket with its dot and letter case ignored", () => {

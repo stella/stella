@@ -325,6 +325,16 @@ const PL_UOKIK_DECISION_NUMBER_RE = new RegExp(
 );
 
 /**
+ * The same number as prose cites it: the register's hyphens, or a space where
+ * the register prints the hyphen before the ordinal ("Nr RKR 51/2006",
+ * "decyzja nr RPZ 30/2005"), any dash spelling, spaced or not. Wider than the
+ * grammar, which reads the register's own spelling only: a space form is also
+ * how ministries number their files ("MZDR 6206/2025"), so only a citation
+ * read beside its own cue may use it.
+ */
+export const PL_UOKIK_CITED_DECISION_NUMBER_SOURCE = String.raw`\p{Lu}{3,5}(?:\s?[${DECISION_DASH_CLASS_SOURCE}]\s?(?:[IVX]{1,4}|\d{1,2}))?(?:\s?[${DECISION_DASH_CLASS_SOURCE}]\s?|\s)\d{1,4}\/(?:19|20)\d{2}`;
+
+/**
  * Constitutional Tribunal (TK) case prefixes, as the Tribunal prints them:
  * "K 2/26", "SK 12/20", "Kpt 1/17", "Ts 123/19". There is no division, which
  * is what tells "K 12/20" from a common court's "II K 12/20".

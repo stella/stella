@@ -56,6 +56,9 @@
 import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -1027,6 +1030,38 @@ export type AssemblePlUokikDecisionOptions = {
  */
 const isPlaceholderNumber = (number: string): boolean => !/\p{L}/u.test(number);
 
+/** The ordinal and year after the register's last hyphen: `…-51/2006`. */
+const ORDINAL_AFTER_HYPHEN = /^(?<unit>.+)-(?<ordinal>\d{1,4}\/\d{4})$/u;
+
+/**
+ * The decision number as the register prints it, and as the office's own
+ * decisions and the courts reviewing them print it, with a space before the
+ * ordinal ("DECYZJA nr RPZ 30/2005", "Nr RKR 51/2006"). Both spellings are
+ * identifiers of the one decision, so a citation in either form meets it.
+ */
+export const plUokikDecisionIdentifiers = (
+  caseNumber: string,
+): DecisionIdentifiers => {
+  const printed = {
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: caseNumber,
+  } as const;
+  const groups = ORDINAL_AFTER_HYPHEN.exec(caseNumber)?.groups;
+  const unit = groups?.["unit"];
+  const ordinal = groups?.["ordinal"];
+  return unit === undefined ||
+    ordinal === undefined ||
+    DECISION_DOCKET_GRAMMARS.POL.parse(caseNumber) === null
+    ? [printed]
+    : [
+        printed,
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: `${unit} ${ordinal}`,
+        },
+      ];
+};
+
 /** The key the courts' rows that cite this decision can meet it by. */
 export type PlUokikCrossSourceKey = {
   court: string;
@@ -1322,7 +1357,9 @@ export const assemblePlUokikDecision = async ({
   const listingOnly = missing !== undefined;
   const decision: IngestionResult = {
     caseNumber,
-    ...(placeholder ? { caseNumberIsPlaceholder: true } : {}),
+    ...(placeholder
+      ? { caseNumberIsPlaceholder: true }
+      : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
     sourceDocumentId: id,
     ...(quarantined ? {} : repairAliasesOf(row)),
     court: authority,
