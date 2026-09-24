@@ -30,13 +30,13 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   CLAIM_COUNT_COLUMNS,
   RUN_SUMMARY_COLUMNS,
-  serializeRunSummary
+  serializeRunSummary,
 } from "@/api/lib/lists/verification/run-summary";
 import type {
   RunRow,
   RunSummaryColumnProjection,
-
-  UNPROJECTED_RUN_SUMMARY_COLUMNS} from "@/api/lib/lists/verification/run-summary";
+  UNPROJECTED_RUN_SUMMARY_COLUMNS,
+} from "@/api/lib/lists/verification/run-summary";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
   UnbackedProjectionKeys,

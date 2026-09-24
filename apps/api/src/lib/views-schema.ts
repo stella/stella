@@ -16,10 +16,10 @@ import {
   propertyContentSchema,
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { toSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
 import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
+import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 
 const v1 = v.literal(1);
 
@@ -137,7 +137,7 @@ const avtLayoutSchema = v.strictObject({
   type: v.literal("avt"),
   ...versionedBaseLayoutSchema,
   listId: v.nullable(
-    v.pipe(v.string(), v.uuid(), v.transform(toSafeId<"legalList">)),
+    v.pipe(v.string(), v.uuid(), v.transform(brandPersistedLegalListId)),
   ),
 });
 

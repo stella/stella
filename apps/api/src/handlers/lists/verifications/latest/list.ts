@@ -16,13 +16,13 @@ import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import {
   CLAIM_COUNT_COLUMNS,
   RUN_SUMMARY_COLUMNS,
-  serializeRunSummary
+  serializeRunSummary,
 } from "@/api/lib/lists/verification/run-summary";
 import type {
   RunRow,
   RunSummaryColumnProjection,
-
-  UNPROJECTED_RUN_SUMMARY_COLUMNS} from "@/api/lib/lists/verification/run-summary";
+  UNPROJECTED_RUN_SUMMARY_COLUMNS,
+} from "@/api/lib/lists/verification/run-summary";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
