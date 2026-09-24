@@ -224,6 +224,43 @@ describe("the gate's own Redis client", () => {
     expect(calls).toEqual(["connect", "send", "send"]);
   });
 
+  it("builds one client for reservations that race the first connection", async () => {
+    // Every adapter runs its own loop, so the first reservations arrive
+    // together. A second client installed over the first would be handed out
+    // unconnected, and its command rejected, because the handshake being
+    // awaited belongs to the client it replaced.
+    let clients = 0;
+    const createClient = async () => {
+      clients += 1;
+      await Promise.resolve();
+      let connected = false;
+      return {
+        connect: async () => {
+          await Promise.resolve();
+          connected = true;
+        },
+        send: () => {
+          if (!connected) {
+            throw new Error(
+              "Connection is closed and offline queue is disabled",
+            );
+          }
+          return 0;
+        },
+      };
+    };
+    const gateClient = connectedGateClient(createClient);
+
+    const waits = await Promise.all(
+      Array.from({ length: 8 }, async () =>
+        (await gateClient()).send("EVAL", []),
+      ),
+    );
+
+    expect(clients).toBe(1);
+    expect(waits).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
   it("retries the connection on the next reservation after one fails", async () => {
     let attempts = 0;
     const client = {
