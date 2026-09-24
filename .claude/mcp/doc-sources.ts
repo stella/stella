@@ -358,6 +358,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-09-23T00:00:00.000Z",
+      dependency: "hyparquet",
+      explanation:
+        "https://hyparam.github.io/hyparquet/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/hyparam/hyparquet and the typed API in its package (src/types.d.ts) directly.",
+      expiresAt: "2026-10-23T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-08T00:00:00.000Z",
       dependency: "temporal-polyfill",
       explanation:

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "cdf57c3751bf19101ca95e79e4a9b061ef2c196714964f25dc4a6ac62cb9c470",
+  "sourceUrl": "https://huggingface.co/datasets/JuDDGES/pl-nsa/tree/595f2301210eb513c392b437153aa2c5f6683240/data",
+  "capturedAt": "2026-09-23T09:34:00.000Z",
+  "note": "the 28 rows of pl-nsa-rows.json re-encoded with pyarrow 25 under the dataset's own schema: one snappy row group with 512-byte data pages, so a read of a later row skips earlier pages"
+}

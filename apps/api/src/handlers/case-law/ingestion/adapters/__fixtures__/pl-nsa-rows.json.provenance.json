@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "b26350d2c4829617ac4246a941c5e84988fb27c528c333471e9bf5e8b82d934d",
+  "sourceUrl": "https://huggingface.co/datasets/JuDDGES/pl-nsa/tree/595f2301210eb513c392b437153aa2c5f6683240/data",
+  "capturedAt": "2026-09-23T09:34:00.000Z",
+  "note": "28 rows of revision 595f2301210eb513c392b437153aa2c5f6683240: 24 from the dataset viewer's rows endpoint (shards 0, 1, 10 and 11) and 4 read from shard 45; each keeps its shard and row. Text columns are cut to their first paragraphs (about 700 characters) and full_text is rebuilt from the cut columns by the dataset's own rule."
+}

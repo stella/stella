@@ -290,6 +290,11 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 3,
     maxSteadyStatePositions: 3,
   },
+  [ADAPTER_KEYS.PL_NSA]: {
+    disposition: "excluded",
+    reason:
+      "a pinned dataset revision read shard by shard, each shard checked against its published digest before a row is read, which no stub can answer; pl-nsa.test.ts walks the cursor to its park over a recorded shard and asserts the park reads nothing",
+  },
   [ADAPTER_KEYS.AT_COURTS]: AT_RIS_COVERAGE,
   [ADAPTER_KEYS.AT_VFGH]: AT_RIS_COVERAGE,
   [ADAPTER_KEYS.AT_VWGH]: AT_RIS_COVERAGE,

@@ -290,6 +290,25 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_NSA]: {
+    key: ADAPTER_KEYS.PL_NSA,
+    name: "Polish Administrative Courts (Hugging Face dataset)",
+    publisher:
+      "Naczelny Sąd Administracyjny i wojewódzkie sądy administracyjne",
+    // The dataset the decisions are imported from, which is also what the
+    // attribution line credits; each decision links its court's own page.
+    publicHomeUrl: "https://huggingface.co/datasets/JuDDGES/pl-nsa",
+    ...ADAPTER_JURISDICTIONS.POL,
+    // Poland issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // The oldest and newest decision dates the pinned revision holds.
+      type: "decision-date",
+      fromInclusive: "1981-01-07",
+      through: { type: "inclusive", date: "2025-03-05" },
+    },
+  },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",

@@ -147,6 +147,7 @@
     "elysia": "catalog:",
     "entities": "^8.1.0",
     "franc": "catalog:",
+    "hyparquet": "^1.31.1",
     "ip-address": "^10.7.2",
     "jose": "^6.2.12",
     "jszip": "catalog:",

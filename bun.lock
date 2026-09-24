@@ -137,6 +137,7 @@
         "elysia": "catalog:",
         "entities": "^8.1.0",
         "franc": "catalog:",
+        "hyparquet": "^1.31.1",
         "ip-address": "^10.7.2",
         "jose": "^6.2.12",
         "jszip": "catalog:",
@@ -4103,6 +4104,8 @@
     "human-id": ["human-id@4.2.0", "", { "bin": { "human-id": "dist/cli.js" } }, "sha512-K3GbkIWqyvvlpfhBPlbEvD97TtqBpAYA4kt+cn2lD2x2HuohzZCibcA2nOlnJT6exqvJLggoB5nv2dNf192nEA=="],
 
     "human-signals": ["human-signals@8.0.1", "", {}, "sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ=="],
+
+    "hyparquet": ["hyparquet@1.31.1", "", {}, "sha512-tF9580Xb+41+Eb+mH0av1k7m1PWl+PSKrX66Yd7UOZ760cwEXP9/enwHRMSCeVncaubRI8XPb3v580/ujYKK5w=="],
 
     "hyphen": ["hyphen@1.14.1", "", {}, "sha512-kvL8xYl5QMTh+LwohVN72ciOxC0OEV79IPdJSTwEXok9y9QHebXGdFgrED4sWfiax/ODx++CAMk3hMy4XPJPOw=="],
 
