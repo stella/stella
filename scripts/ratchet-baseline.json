@@ -332,12 +332,12 @@
     }
   },
   "audit-skip-directives": {
-    "count": 149,
+    "count": 154,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/analysis-store-core.ts": 3,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
-      "apps/api/src/handlers/case-law/citation-authority.ts": 1,
+      "apps/api/src/handlers/case-law/citation-authority.ts": 2,
       "apps/api/src/handlers/case-law/citation-resolution.ts": 11,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 5,
@@ -345,7 +345,7 @@
       "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 6,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 15,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 17,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts": 3,
@@ -353,7 +353,9 @@
       "apps/api/src/handlers/case-law/judges/decision-judges.ts": 2,
       "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts": 2,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
+      "apps/api/src/handlers/case-law/polarity/recheck.ts": 1,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
+      "apps/api/src/handlers/case-law/polarity/rule-retirement.ts": 1,
       "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts": 2,
       "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
       "apps/api/src/handlers/chat/chat-turn-persistence.ts": 7,
