@@ -269,6 +269,11 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
+  fixtureRuleOverride("bun-test-hygiene.fixture.ts", [
+    "bun-test-hygiene/no-focused-tests",
+    "bun-test-hygiene/no-disabled-tests",
+    "bun-test-hygiene/no-identical-title",
+  ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
   ]),
@@ -349,11 +354,13 @@ const fixtureRuleOverrides = [
     "suppression-hygiene/no-foreign-directive",
     "suppression-hygiene/require-description",
   ]),
-  fixtureRuleOverride("no-throw-outside-boundary.fixture.ts", [
-    "no-throw-outside-boundary/no-throw-outside-boundary",
+  fixtureRuleOverride("s3-object-boundary.fixture.ts", [
+    "s3-object-boundary/no-native-s3-object-read",
+    "s3-object-boundary/no-native-s3-object-write",
   ]),
-  fixtureRuleOverride("no-try-catch-outside-boundary.fixture.ts", [
-    "no-try-catch-outside-boundary/no-try-catch-outside-boundary",
+  fixtureRuleOverride("result-boundary.fixture.ts", [
+    "result-boundary/no-throw-outside-boundary",
+    "result-boundary/no-try-catch-outside-boundary",
   ]),
 ];
 
@@ -1136,8 +1143,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unpaired-playbook-verdict.ts",
     "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
-    "./.oxlint-plugins/no-native-s3-object-read.ts",
-    "./.oxlint-plugins/no-native-s3-object-write.ts",
+    "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
@@ -1239,7 +1245,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
-    "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
@@ -1270,15 +1275,28 @@ export default defineConfig({
     "./.oxlint-plugins/no-async-context-enter-with.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
-    "./.oxlint-plugins/no-throw-outside-boundary.ts",
+    "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
-    "./.oxlint-plugins/no-try-catch-outside-boundary.ts",
   ],
 
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      // The built-in jest/vitest rules do not recognise `bun:test`; these
+      // resolve test functions through their `bun:test` import.
+      files: [
+        "**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}",
+        "**/{test,tests,__tests__}/**/*.{ts,tsx,mts,cts,js,mjs}",
+      ],
+      rules: {
+        "bun-test-hygiene/no-focused-tests": "error",
+        "bun-test-hygiene/no-disabled-tests": "error",
+        "bun-test-hygiene/no-identical-title": "error",
+      },
+    },
     {
       files: [
         "apps/web/**/*.{js,jsx,ts,tsx}",
@@ -1454,26 +1472,6 @@ export default defineConfig({
           "error",
           { allowedColumnExpressions: ["table.metadata"] },
         ],
-      },
-    },
-    {
-      // Exercise no-native-s3-object-read against its regression fixture; the
-      // rule is otherwise scoped to apps/api, which the fixtures dir is not.
-      files: [
-        ".oxlint-plugins/__fixtures__/no-native-s3-object-read.fixture.ts",
-      ],
-      rules: {
-        "no-native-s3-object-read/no-native-s3-object-read": "error",
-      },
-    },
-    {
-      // Exercise no-native-s3-object-write against its regression fixture;
-      // production enforcement is scoped to apps/api below.
-      files: [
-        ".oxlint-plugins/__fixtures__/no-native-s3-object-write.fixture.ts",
-      ],
-      rules: {
-        "no-native-s3-object-write/no-native-s3-object-write": "error",
       },
     },
     {
@@ -1920,17 +1918,6 @@ export default defineConfig({
             ignorePrimitives: { string: true, boolean: true },
           },
         ],
-      },
-    },
-    {
-      // Browser surfaces only: `document` does not exist in apps/api's
-      // Bun runtime. AGENTS.md: "No direct document.cookie assignment."
-      files: [
-        ...browserSurfaceFiles,
-        ".oxlint-plugins/__fixtures__/no-document-cookie.fixture.ts",
-      ],
-      rules: {
-        "no-document-cookie/no-document-cookie": "error",
       },
     },
     {
@@ -2734,10 +2721,8 @@ export default defineConfig({
           "error",
         // Direct useEffect is banned; route external-system sync through
         // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
-        "no-raw-use-effect/no-raw-use-effect": [
-          "error",
-          { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
-        ],
+        // The wrapper module is the owner row in restricted-import.ts.
+        "no-raw-use-effect/no-raw-use-effect": "error",
         // Unsaved-work guards go through useUnsavedWork so the stale-client
         // refresh can see them.
         "no-direct-unsaved-work-guard/no-direct-unsaved-work-guard": [
@@ -3280,6 +3265,14 @@ export default defineConfig({
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
           "error",
           {
+            // Operational tooling that runs as its own process, outside any
+            // app env module: API maintenance scripts, the API test harness,
+            // and the repository's dev tooling package.
+            allowedDirectories: [
+              "apps/api/src/scripts/",
+              "apps/api/src/tests/",
+              "packages/scripts/src/",
+            ],
             allowedFiles: [
               // Side-effect-free schema modules are the API's environment
               // boundary. Runtime wrappers import them and instantiate env.
@@ -3531,6 +3524,31 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "security-guards/no-unscoped-user-query": "error",
+      },
+    },
+    {
+      // Server runtimes whose logs, traces and errors leave the process.
+      // Browser and UI packages are excluded; tests write placeholder
+      // secrets into sinks on purpose.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "apps/collab/src/**/*.ts",
+        "apps/legal-atlas-runner/src/**/*.ts",
+        "packages/{agent-engine,auth-model,boe,business-registries,cli,fetch,infosoud,legal-atlas,scripts,skills,start-runtime}/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "no-secret-in-log-sink/no-secret-in-log-sink": "error",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
@@ -3558,52 +3576,24 @@ export default defineConfig({
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
-        "no-secret-in-log-sink/no-secret-in-log-sink": "error",
-        "require-safe-outbound-target/require-safe-outbound-target": [
-          "error",
-          {
-            allowedFiles: [
-              // Explicit trust-boundary clients whose runtime origins come
-              // from validated operator configuration, an exact issuer
-              // allowlist, or Stella-owned presigned/reservation producers.
-              // Arbitrary internet URLs belong behind safeOutboundFetch*.
-              "apps/api/src/agent-auth/id-jag.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
-              // These wrappers restrict every target to exact Austrian
-              // publisher origins and paths, then force redirect rejection.
-              "apps/api/src/handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-              "apps/api/src/handlers/sharepoint/graph-oauth.ts",
-              "apps/api/src/lib/deepl/client.ts",
-              "apps/api/src/lib/files/gotenberg.ts",
-              // This probe reaches only the operator-configured Gotenberg
-              // deployment; no request or persisted data selects the origin.
-              "apps/api/src/lib/health/probe-document-converter.ts",
-              "apps/api/src/lib/hosted-usage-provider/client.ts",
-              "apps/api/src/lib/legal-search/corpus-index-client.ts",
-              "apps/api/src/lib/s3.ts",
-              "apps/api/src/mcp/document-file-upload.ts",
-              "apps/api/src/mcp/file-comparison-links-tool.ts",
-              "apps/api/src/scripts/citation-probe.ts",
-              "apps/api/src/scripts/mcp-canary.ts",
-              "apps/api/src/scripts/post-deploy-smoke.ts",
-            ],
-          },
-        ],
       },
     },
     {
+      // Server-side outbound requests. A target that is constant, validated
+      // configuration, or a Stella-owned producer carries a suppression at
+      // the call naming that boundary; arbitrary URLs belong behind
+      // safeOutboundFetch*.
       files: [
-        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/*.{ts,tsx}",
+        "packages/{boe,business-registries,infosoud,legal-atlas}/src/**/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
-        "apps/api/src/mcp/apps/**/*.{ts,tsx}",
       ],
       rules: {
-        "require-safe-outbound-target/require-safe-outbound-target": "off",
+        "require-safe-outbound-target/require-safe-outbound-target": "error",
       },
     },
     {
@@ -3614,19 +3604,18 @@ export default defineConfig({
       rules: {
         "no-raw-error-logging/no-raw-error-logging": "error",
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
-        "require-safe-outbound-target/require-safe-outbound-target": [
-          "error",
-          {
-            allowedFiles: [
-              // Posts only to the operator-configured API origin.
-              "apps/collab/src/server.ts",
-            ],
-          },
-        ],
+        "require-safe-outbound-target/require-safe-outbound-target": "error",
       },
     },
     {
-      files: ["apps/api/src/handlers/mcp-connectors/**/*.{ts,tsx}"],
+      // Every write of an OAuth registration response, wherever it is built.
+      // The table schema declares the column and tests assert raw shapes.
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/db/schema/**",
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**",
+      ],
       rules: {
         "mcp-security/redact-oauth-registration-response": "error",
       },
@@ -3744,8 +3733,8 @@ export default defineConfig({
       ],
       rules: {
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
-        "no-native-s3-object-read/no-native-s3-object-read": "error",
-        "no-native-s3-object-write/no-native-s3-object-write": "error",
+        "s3-object-boundary/no-native-s3-object-read": "error",
+        "s3-object-boundary/no-native-s3-object-write": "error",
       },
     },
     {
@@ -3977,7 +3966,6 @@ export default defineConfig({
         "no-offset-pagination/no-offset-pagination": "error",
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-untyped-updates/no-untyped-updates": "error",
-        "security-guards/no-unscoped-user-query": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -4139,12 +4127,21 @@ export default defineConfig({
       },
     },
     {
-      files: [
-        "apps/api/src/handlers/case-law/decisions/list.ts",
-        "apps/api/src/handlers/case-law/decisions/get.ts",
-        "apps/api/src/handlers/case-law/decisions/search.ts",
-        "apps/api/src/handlers/case-law/decisions/sitemap.ts",
-        "apps/api/src/lib/case-law-public-read-db.ts",
+      // The rule applies itself to every file that imports
+      // `@/api/lib/case-law-public-read-db` (and to that module). The excluded
+      // modules read the public connection and tenant data side by side, so
+      // they sit outside the public-only boundary; this list may only shrink.
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**",
+        "apps/api/src/handlers/case-law/matter-links/list.ts",
+        "apps/api/src/handlers/case-law/research/answers-run.ts",
+        "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts",
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        "apps/api/src/lib/case-law/research-answer-runner.ts",
+        "apps/api/src/lib/legal-search/corpus-tombstones.ts",
+        "apps/api/src/mcp/stella-tools.ts",
       ],
       rules: {
         "public-case-law-db-boundary/public-case-law-db-boundary": "error",
@@ -4242,7 +4239,6 @@ export default defineConfig({
         "no-physical-properties/no-physical-properties": "off",
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
-        "security-guards/no-unscoped-user-query": "off",
         "vitest/no-focused-tests": "error",
         // bun:test globals (describe/test/expect/it/…) can resolve as `error`
         // when test files are excluded from a package's main tsconfig.
@@ -4279,8 +4275,8 @@ export default defineConfig({
       // opt-out reason.
       files: [...RESULT_CONVENTION_ENABLED_GLOBS],
       rules: {
-        "no-throw-outside-boundary/no-throw-outside-boundary": "error",
-        "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "error",
+        "result-boundary/no-throw-outside-boundary": "error",
+        "result-boundary/no-try-catch-outside-boundary": "error",
       },
     },
     {
@@ -4297,8 +4293,8 @@ export default defineConfig({
         (glob) => glob !== DECLARATION_FILE_GLOB,
       ),
       rules: {
-        "no-throw-outside-boundary/no-throw-outside-boundary": "off",
-        "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "off",
+        "result-boundary/no-throw-outside-boundary": "off",
+        "result-boundary/no-try-catch-outside-boundary": "off",
       },
     },
     {

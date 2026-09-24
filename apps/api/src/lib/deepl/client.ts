@@ -154,6 +154,7 @@ const deeplFetch = async (
   init: FetchWithTimeoutInit,
 ): Promise<Response> => {
   try {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- every caller passes a URL under resolveDeepLBaseUrl, one of DeepL's fixed API origins
     return await fetchWithTimeout(url, init);
   } catch (error) {
     throw new DeepLUpstreamError({

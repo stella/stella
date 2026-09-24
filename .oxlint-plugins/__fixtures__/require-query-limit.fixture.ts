@@ -86,6 +86,7 @@ export const nestedRelationNoLimit = tx.query.foo.findFirst({
 // --- Cases the rule MUST NOT flag ---
 
 // `findFirst` with no eager relation is inherently bounded.
+// expect-clean: require-query-limit/require-query-limit
 export const findFirstBounded = tx.query.foo.findFirst({ where: condition });
 
 // `findMany` carrying an explicit `limit`.

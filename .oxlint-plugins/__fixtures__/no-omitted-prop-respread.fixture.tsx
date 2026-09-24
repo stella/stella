@@ -125,6 +125,7 @@ export const _ok_children = (props: Omit<PanelProps, "children">) => (
 );
 
 // Allowed: the props type omits nothing.
+// expect-clean: no-omitted-prop-respread/no-omitted-prop-respread
 export const _ok_noOmit = (props: PanelProps) => <Panel {...props} />;
 
 // Allowed: the pattern destructures the omitted key, so the rest object

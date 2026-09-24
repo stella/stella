@@ -41,6 +41,7 @@ const _dayLiteralUnderscore = 86_400_000;
 const _dayLiteralPlain = 86400000;
 
 // --- Allowed: spec-defined timestamps, parts constructor, variables ---
+// expect-clean: no-raw-date-parsing/no-raw-date-parsing
 const _fullUtc = new Date("2024-01-01T00:00:00.000Z");
 const _localWallClock = new Date(`${year}-${month}-${day}T00:00:00`);
 const _parts = new Date(2024, 0, 1);

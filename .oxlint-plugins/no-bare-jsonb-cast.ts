@@ -45,12 +45,7 @@
 
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  typeof (node as { type?: unknown }).type === "string";
+import { isAstNode } from "./utils.ts";
 
 // Postgres treats comments as whitespace wherever they appear, so they are
 // replaced with a space before any matching; otherwise a comment could hide
@@ -127,7 +122,7 @@ const bareCastSurrounds = (prevRaw: string, nextRaw: string): boolean => {
   }
   const wrapped = PAREN_WRAPPED_CAST.exec(next);
   if (wrapped) {
-    const closers = (wrapped[1] ?? "").split(")").length - 1;
+    const closers = (wrapped.at(1) ?? "").split(")").length - 1;
     return bindIsParenWrapped(prevRaw, closers);
   }
   return (
@@ -170,8 +165,9 @@ const rawTextOf = (quasi: unknown): string => {
   const value = isAstNode(quasi) ? quasi.value : undefined;
   return typeof value === "object" &&
     value !== null &&
-    typeof (value as { raw?: unknown }).raw === "string"
-    ? (value as { raw: string }).raw
+    "raw" in value &&
+    typeof value.raw === "string"
+    ? value.raw
     : "";
 };
 
@@ -209,8 +205,8 @@ const dottedNameOf = (node: unknown): string | undefined => {
   ) {
     return undefined;
   }
-  const objectName = object["name"];
-  const propertyName = property["name"];
+  const objectName = object.name;
+  const propertyName = property.name;
   return typeof objectName === "string" && typeof propertyName === "string"
     ? `${objectName}.${propertyName}`
     : undefined;
@@ -250,7 +246,7 @@ export default eslintCompatPlugin({
 
         // A positional cast is reported wherever the SQL text carrying it
         // appears, so guard against reporting the same node twice.
-        let reportedPositional = new WeakSet<object>();
+        let reportedPositional = new WeakSet();
 
         const reportPositionalCasts = (node: Node) => {
           if (reportedPositional.has(node)) {
@@ -268,7 +264,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const configuredOptions = context.options?.[0];
+            const configuredOptions = context.options.at(0);
             const options = isRecord(configuredOptions)
               ? configuredOptions
               : {};
@@ -279,7 +275,7 @@ export default eslintCompatPlugin({
                   )
                 : [],
             );
-            reportedPositional = new WeakSet<object>();
+            reportedPositional = new WeakSet();
           },
           Literal(node) {
             reportPositionalCasts(node);

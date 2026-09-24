@@ -90,8 +90,46 @@ export const chainedWindowAlias = () => {
   return popupHost.open(externalDocumentUrl);
 };
 
+// MUST flag: invoking the primitive through call().
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open, eslint/no-useless-call -- fixture: call() invokes the same function
+export const callForm = window.open.call(window, externalDocumentUrl);
+
+// MUST flag: a sequence expression callee.
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: the sequence evaluates to window.open
+export const sequenceForm = (0, window.open)(externalDocumentUrl);
+
+// MUST flag: a destructured binding of the primitive.
+export const destructuredOpen = () => {
+  // oxlint-disable-next-line typescript/unbound-method -- fixture: the destructured form is the syntax under test
+  const { open: openPopup } = window;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: destructured binding
+  return openPopup(externalDocumentUrl);
+};
+
+// MUST flag: a const alias of the member.
+export const aliasedMember = () => {
+  const openPopup = globalThis.open;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: aliased member
+  return openPopup(externalDocumentUrl);
+};
+
+// MUST flag: window members that are windows themselves.
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: top window
+export const topWindow = window.top?.open(externalDocumentUrl);
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: parent window
+export const parentWindow = window.parent.open(externalDocumentUrl);
+
 // Allowed: product code delegates to the sanctioned boundary.
+// expect-clean: require-safe-window-open/require-safe-window-open
 export const safeHelperCall = () => openExternalUrl(externalDocumentUrl);
+
+// Allowed: a destructured sibling member is not the primitive.
+export const destructuredSibling = () => {
+  // oxlint-disable-next-line typescript/unbound-method -- fixture: the destructured form is the syntax under test
+  const { close } = window;
+  // expect-clean: require-safe-window-open/require-safe-window-open
+  close();
+};
 
 // Allowed: an injected function named `open` shadows the browser global.
 export const useInjectedOpen = (
@@ -187,4 +225,5 @@ export const useInjectedGlobalThisAlias = (
 
 // Allowed: opening a method on an ordinary domain object is unrelated.
 declare const documentPreview: { open: (url: string) => unknown };
+// expect-clean: require-safe-window-open/require-safe-window-open
 export const previewWindow = documentPreview.open(externalDocumentUrl);

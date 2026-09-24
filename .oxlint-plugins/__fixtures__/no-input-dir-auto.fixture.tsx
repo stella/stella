@@ -35,5 +35,6 @@ export const _rawTextareaNoDir = () => (
 export const _ok1 = () => <input type="email" />;
 export const _ok2 = () => <input type="number" />;
 export const _ok3 = () => <input dir="ltr" inputMode="decimal" />;
+// expect-clean: no-input-dir-auto/no-input-dir-auto
 export const _ok4 = () => <input dir="ltr" type="text" />;
 export const _ok5 = () => <input dir="rtl" type="text" />;

@@ -166,6 +166,7 @@ const isSignInEmailOtpBody = (body: unknown): body is SignInEmailOtpBody => {
 };
 
 const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sign-in pre-check for account existence by email; runs before any organization context exists
   const existingAccount = await rootDb
     .select({ id: authUser.id })
     .from(authUser)

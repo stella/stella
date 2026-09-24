@@ -206,6 +206,7 @@ const presignUpload = createSafeHandler(
     // and the pending-upload row — no client-side normalization.
     const resolvedMime = resolveUploadMime({
       declaredMime: purposeBody.mimeType,
+      // oxlint-disable-next-line security-guards/no-raw-filename-write -- resolveUploadMime reads only a validated extension from the name; nothing is stored from it
       fileName: purposeBody.name,
     });
 

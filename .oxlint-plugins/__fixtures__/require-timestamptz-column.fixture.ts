@@ -79,6 +79,7 @@ const _computedKey = customType<{ data: Date }>({
 // --- Cases the rule MUST NOT flag ---
 
 // A customType that yields timestamptz carries its UTC anchoring.
+// expect-clean: require-timestamptz-column/require-timestamptz-column
 const _tz = customType<{ data: Date }>({ dataType: () => "timestamptz" });
 
 export const __requireTimestamptzFixture = {

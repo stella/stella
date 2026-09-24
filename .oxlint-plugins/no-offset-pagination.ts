@@ -4,7 +4,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // envelope. Legacy offset endpoints must be listed explicitly in oxlint.config.ts
 // with a justification.
 
-import { getCalleeName, getPropertyName } from "./utils.ts";
+import { getCalleeName, getPropertyName, isFileIn } from "./utils.ts";
 
 const SCHEMA_CALLEES = new Set([
   "t.Integer",
@@ -13,24 +13,7 @@ const SCHEMA_CALLEES = new Set([
   "t.Union",
 ]);
 
-const filenameForContext = (context) =>
-  context.filename ?? context.getFilename?.() ?? "";
-
-const HARDCODED_ALLOWED_FILES = new Set([
-  "apps/api/src/handlers/skills/list.ts",
-]);
-
-const isAllowedFile = (context, allowedFiles) => {
-  const filename = filenameForContext(context).replace(/\\/g, "/");
-  if (
-    Array.from(HARDCODED_ALLOWED_FILES).some((allowed) =>
-      filename.endsWith(allowed),
-    )
-  ) {
-    return true;
-  }
-  return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
-};
+const HARDCODED_ALLOWED_FILES = ["apps/api/src/handlers/skills/list.ts"];
 
 const containsRequestSchemaCall = (node) => {
   if (!node) {
@@ -78,7 +61,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&
@@ -88,7 +71,10 @@ export default eslintCompatPlugin({
                     (value) => typeof value === "string",
                   )
                 : [];
-            return !isAllowedFile(context, allowedFiles);
+            return !isFileIn(context, [
+              ...HARDCODED_ALLOWED_FILES,
+              ...allowedFiles,
+            ]);
           },
           Property(node) {
             if (getPropertyName(node.key) !== "offset") {

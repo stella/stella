@@ -26,6 +26,7 @@ const _aliasedTitle = <span title={fullTimestamp(date)}>time</span>;
 
 // Canonical helpers, shared tooltip content, and date-only formatting stay valid.
 const _relative = formatRelativeTime(date);
+// expect-clean: require-relative-time-helpers/require-relative-time-helpers
 const _tooltip = <Tooltip content={formatFullTimestamp(date)} />;
 const _tooltipOwner = (
   <ReadOnlyRow title={formatFullTimestamp(date)}>time</ReadOnlyRow>

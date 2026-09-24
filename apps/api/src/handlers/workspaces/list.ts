@@ -10,12 +10,7 @@ import {
   sql,
 } from "drizzle-orm";
 
-// `user` is joined via workspaceMembers, which carries workspace-scoped
-// RLS (wsPolicies) and is itself filtered by wsIds derived from an
-// organization-scoped workspaces query. The `member` table is not
-// needed for scoping in this code path. The disable directive sits on
-// the same line as the import so reordering imports cannot shift it.
-import { user } from "@/api/db/auth-schema"; // oxlint-disable-line security-guards/no-unscoped-user-query -- joined via RLS-scoped workspaceMembers filtered by org-derived wsIds (see comment above)
+import { user } from "@/api/db/auth-schema";
 import { entities, workspaceMembers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -94,6 +89,11 @@ const readWorkspaces = createSafeRootHandler(
           ),
         );
 
+        // `user` is joined via workspaceMembers, which carries workspace-scoped
+        // RLS (wsPolicies) and is itself filtered by wsIds derived from an
+        // organization-scoped workspaces query, so the `member` table is not
+        // needed for scoping here.
+        // oxlint-disable-next-line security-guards/no-unscoped-user-query -- user rows are joined via RLS-scoped workspaceMembers filtered by org-derived wsIds
         const [aggregateRows, members] = await Promise.all([
           tx
             .select({

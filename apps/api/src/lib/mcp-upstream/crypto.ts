@@ -62,6 +62,7 @@ export const encryptMcpSecret = async ({
     JSON.stringify({
       connectorId,
       purpose,
+      // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- serializes the envelope for encryptContent; only the ciphertext is stored
       secret,
       ...(userId ? { userId } : {}),
     } satisfies SecretEnvelope),

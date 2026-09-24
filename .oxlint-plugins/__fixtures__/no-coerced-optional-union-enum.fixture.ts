@@ -26,6 +26,7 @@ const _allowed = t.Optional(
 );
 
 // A required (non-optional) `UnionEnum` does not coerce on absence.
+// expect-clean: no-coerced-optional-union-enum/no-coerced-optional-union-enum
 const _required = t.UnionEnum(["person", "organization"]);
 
 export const __coercedUnionEnumFixture = {

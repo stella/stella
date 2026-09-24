@@ -2,20 +2,16 @@
 // outside its canonical serializer can skip strict component encoding and
 // break persistence or Markdown parsing for valid IDs.
 
-import {
-  eslintCompatPlugin,
-  type ESTree,
-  type Scope,
-  type Variable,
-} from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
   getImportedName,
   getPropertyName,
   isAstNode,
   isCallTo,
-  isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -35,10 +31,6 @@ const RESOURCE_URI_PREFIX_BINDINGS = new Set([
 
 const containsRawResourceUriPrefix = (value: string): boolean =>
   RAW_RESOURCE_URI_PREFIXES.some((prefix) => value.includes(prefix));
-
-const isScopeIdentifier = (
-  value: unknown,
-): value is ESTree.IdentifierReference => isIdentifier(value);
 
 const templateElementText = (value: unknown): string | null => {
   if (!isAstNode(value) || value.type !== "TemplateElement") {
@@ -82,21 +74,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier: unknown): Variable | null => {
-          if (!isScopeIdentifier(identifier)) {
-            return null;
-          }
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope) {
-            const variable = scope.set.get(identifier.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const getStableInitializer = (variable: Variable): unknown => {
           for (const definition of variable.defs) {
             if (
@@ -128,7 +105,7 @@ export default eslintCompatPlugin({
           if (
             !isAstNode(node) ||
             node.type !== "MemberExpression" ||
-            !isIdentifier(node.object)
+            !isIdentifierReference(node.object)
           ) {
             return false;
           }
@@ -139,7 +116,7 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
-          const variable = resolveVariable(node.object);
+          const variable = resolveVariable(context, node.object);
           return (
             variable?.defs.some(
               (definition) =>
@@ -158,8 +135,8 @@ export default eslintCompatPlugin({
           if (node === null) {
             return false;
           }
-          if (isIdentifier(node)) {
-            const variable = resolveVariable(node);
+          if (isIdentifierReference(node)) {
+            const variable = resolveVariable(context, node);
             if (variable === null) {
               return RESOURCE_URI_PREFIX_BINDINGS.has(node.name);
             }

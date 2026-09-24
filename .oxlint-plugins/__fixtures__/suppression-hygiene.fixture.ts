@@ -16,4 +16,8 @@ console.log("documented above");
 // oxlint-disable-next-line no-console -- fixture: inline reason is valid
 console.log("documented inline");
 
+// A described same-line directive and plain comments are accepted.
+// expect-clean: suppression-hygiene/require-description, suppression-hygiene/no-foreign-directive
+console.log("documented same line"); // oxlint-disable-line no-console -- fixture: same-line reason is valid
+
 void foreignDirective;

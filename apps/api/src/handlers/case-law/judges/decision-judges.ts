@@ -189,6 +189,7 @@ export const relinkUnmatchedDecisionJudges = async (
   db: StatementRunner,
   { country, court }: RelinkUnmatchedDecisionJudgesOptions,
 ): Promise<{ linked: number }> => {
+  // audit: skip — relinks derived public case-law judge attributions
   const linked = await db.execute(sql`
     UPDATE ${caseLawDecisionJudges} AS dj
     SET judge_id = j.id

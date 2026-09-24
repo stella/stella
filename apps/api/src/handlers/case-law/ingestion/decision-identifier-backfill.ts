@@ -215,6 +215,7 @@ const loadCheckpoint = async (
   );
 
 const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
+  // audit: skip — public case-law corpus backfill checkpoint; no workspace data
   await rootDb.execute(sql`
     INSERT INTO case_law_decision_identifier_backfills (version)
     VALUES (${DECISION_IDENTIFIER_BACKFILL_VERSION})
@@ -365,6 +366,7 @@ const resetCheckpoint = async (
     | typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
     | typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
 ): Promise<void> => {
+  // audit: skip — public case-law corpus backfill checkpoint; no workspace data
   await tx.execute(sql`
     UPDATE case_law_decision_identifier_backfills
     SET phase = ${phase}, cursor_id = NULL,
@@ -382,6 +384,7 @@ const projectDecisionPage = async (
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
+  // audit: skip — rewrites derived public case-law identifiers; no workspace data
   const rows = readDecisionRows(
     await tx.execute(decisionRowsSql(checkpoint.cursorId, batchSize, true)),
   );
@@ -506,6 +509,7 @@ const projectCitationPage = async (
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
+  // audit: skip — rewrites derived public case-law identifiers; no workspace data
   // Resolver batches take the graph lock before citation row locks too.
   await lockCitationGraph(tx);
   const rows = readCitationRows(
@@ -667,6 +671,7 @@ const verifyDecisionPage = async (
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
 ): Promise<VerificationPageResult> => {
+  // audit: skip — public case-law corpus backfill checkpoint; no workspace data
   const rows = readDecisionRows(
     await tx.execute(decisionRowsSql(checkpoint.cursorId, batchSize, false)),
   );
@@ -714,6 +719,7 @@ const verifyCitationPage = async (
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
 ): Promise<VerificationPageResult | { status: "completed" }> => {
+  // audit: skip — public case-law corpus backfill checkpoint; no workspace data
   const rows = readCitationRows(
     await tx.execute(citationRowsSql(checkpoint.cursorId, batchSize, false)),
   );

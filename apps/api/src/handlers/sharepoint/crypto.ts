@@ -57,6 +57,7 @@ export const encryptSharepointSecret = async ({
 }): Promise<EncryptedSecret> =>
   await encryptContent(
     organizationId,
+    // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- serializes the envelope for encryptContent; only the ciphertext is stored
     JSON.stringify({ purpose, secret, userId } satisfies SecretEnvelope),
   );
 

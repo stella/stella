@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { stableStringify } from "@stll/stable-stringify";
@@ -65,8 +66,12 @@ type CassetteTransport = {
   finish: () => Promise<AiProviderCassette>;
 };
 
+export class AiCassetteError extends TaggedError("AiCassetteError")<{
+  message: string;
+}> {}
+
 const fail = (message: string): never => {
-  throw new TypeError(`AI cassette: ${message}`);
+  throw new AiCassetteError({ message: `AI cassette: ${message}` });
 };
 
 const contentTypeBase = (value: string) =>
@@ -339,9 +344,9 @@ export const createCassetteFetch = (
       const expected = cassette.entries.at(cursor);
       if (expected === undefined) {
         replayFailed = true;
-        throw new TypeError(
-          "AI cassette: unexpected extra request during replay",
-        );
+        throw new AiCassetteError({
+          message: "AI cassette: unexpected extra request during replay",
+        });
       }
       cursor += 1;
       let actual: CassetteEntry["request"];
@@ -393,11 +398,15 @@ export const createCassetteFetch = (
   let recordingStatus: "open" | "sealed" = "open";
   const recordFetch: CassetteFetch = async (input, init) => {
     if (recordingStatus === "sealed") {
-      throw new TypeError("AI cassette: recording is sealed");
+      throw new AiCassetteError({
+        message: "AI cassette: recording is sealed",
+      });
     }
     if (reservedRequests >= options.maxRequests) {
       recordingFailed = true;
-      throw new TypeError("AI cassette: request limit exceeded");
+      throw new AiCassetteError({
+        message: "AI cassette: request limit exceeded",
+      });
     }
     reservedRequests += 1;
     const operation = async () => {

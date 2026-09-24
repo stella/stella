@@ -23,6 +23,7 @@ export function ChromeFixture() {
   const match = useMatch({ from: "/_protected" });
 
   // Opted out via shouldThrow — must NOT flag.
+  // expect-clean: no-strict-route-read-in-chrome/no-strict-route-read-in-chrome
   const safeMatch = useMatch({ from: "/_protected", shouldThrow: false });
 
   // Opted out via strict — must NOT flag.

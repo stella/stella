@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { realpathSync, writeFileSync } from "node:fs";
 import {
@@ -576,6 +577,10 @@ export const handleCanaryMessage = ({
   return errorResponse(id, -32_601, "Method not found");
 };
 
+class CanaryRequestTooLargeError extends TaggedError(
+  "CanaryRequestTooLargeError",
+)<{ message: string }> {}
+
 const readBody = async (request: IncomingMessage): Promise<unknown> => {
   const parts: Buffer[] = [];
   let length = 0;
@@ -583,7 +588,7 @@ const readBody = async (request: IncomingMessage): Promise<unknown> => {
     const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     length += part.length;
     if (length > MAX_REQUEST_BYTES) {
-      throw new RangeError("request-too-large");
+      throw new CanaryRequestTooLargeError({ message: "request-too-large" });
     }
     parts.push(part);
   }

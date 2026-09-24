@@ -35,6 +35,10 @@ const currentVersionPatch = { currentVersionId: "version-id" };
 // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: const payload aliases must not evade current-version detection
 void directTx.update(entityTable).set(currentVersionPatch);
 
+// An entity update that leaves the current version alone.
+// expect-clean: no-unowned-file-version-write/no-unowned-file-version-write
+void directTx.update(entityTable).set({ title: "renamed" });
+
 const locallyAliasedVersionTable = relativeSchema.entityVersions;
 // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: relative namespace imports and local table aliases must not evade the guard
 void directTx.insert(locallyAliasedVersionTable);

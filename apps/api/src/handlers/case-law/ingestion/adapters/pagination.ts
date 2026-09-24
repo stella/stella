@@ -787,6 +787,7 @@ export const createPagePaginatedFetch = <TResponse>(
         // backoff. All page-paginated adapters inherit this.
         let response: Response;
         try {
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
           response = await fetchWithRetry(url, init, {
             maxRetries: SERVER_ERROR_RETRIES,
             timeoutMs: listTimeout,
@@ -882,6 +883,7 @@ export const createPagePaginatedFetch = <TResponse>(
               page,
               mediaType: contentType,
             });
+            // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
             const retryResponse = await fetchWithRetry(url, init, {
               maxRetries: 1,
               timeoutMs: listTimeout,

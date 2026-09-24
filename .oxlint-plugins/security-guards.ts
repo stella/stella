@@ -1,57 +1,170 @@
 // Security guard lint rules.
 //
 // Catches common security anti-patterns at lint time:
-//   1. no-raw-filename-write  — raw user input in fileName properties
+//   1. no-raw-filename-write  — request-supplied filenames written without
+//      sanitizeFilename()
 //   2. no-unsanitized-href    — dynamic href without sanitization
-//   3. no-unscoped-user-query — user table import without member scoping
+//   3. no-unscoped-user-query — user-table query without membership scoping
 //   4. require-secure-document-response — direct raw document Response
 //      construction outside the typed security boundary
 
-import {
-  eslintCompatPlugin,
-  type ESTree,
-  type Ranged,
-  type Scope,
-  type Variable,
-} from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  canonicalModuleId,
+  everyNode,
   getImportedName,
   getPropertyName,
+  invokedCallee,
   isAstNode,
   isCallTo,
   isIdentifier,
+  isIdentifierReference,
+  isStringLiteral,
+  memberPropertyName,
+  repoRelativeFilename,
+  resolveImport,
+  resolveVariable,
+  stableInitializer,
   unwrapExpression,
+  type AstNode,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
 //
 // User-supplied filenames can contain path traversal segments
-// (../../etc/passwd) or control characters. All values assigned
-// to a `fileName` property must pass through `sanitizeFilename`
-// before reaching storage or downstream logic. Stable local aliases and
-// string composition remain tainted, so a temporary variable cannot launder
-// `file.name` before the sink.
+// (../../etc/passwd) or control characters. Every value written to a
+// `fileName` / `filename` key or member must pass through the
+// `sanitizeFilename` exported by the module that owns it before reaching
+// storage or downstream logic.
+//
+// A value is request-derived when it comes from a handler's `body`, `query`
+// or `params` (including `ctx.body` and destructured parameters), from an
+// upload `file` / multipart `part`, or from a member, element or method
+// result of one of those. Its `.name` / `.filename` / `.fileName` is a raw
+// filename, and so is anything built from one: a stable alias, a
+// destructured binding, string methods (`.trim()`), templates and
+// concatenation.
 //
 // Safe patterns (not flagged):
 //   fileName: sanitizeFilename(file.name)
 //   fileName: content.fileName           (DB read-back)
 //   fileName: true                       (Drizzle column selector)
-//   fileName: null / undefined
 //   fileName: "literal.pdf"
 //
 // Flagged:
-//   fileName: file.name       (raw File.name from upload)
-//   const raw = file.name; { fileName: raw }
-//   fileName: body.name       (raw request body)
-//   fileName: body.fileName   (raw request body, camelCase)
-//   fileName: part.filename   (raw multipart part)
+//   fileName: file.name
+//   fileName: body.upload.name.trim()
+//   filename: part.filename
+//   row.fileName = params.fileName
 
-// Objects whose .name / .filename property is raw user input
-const RAW_INPUT_OBJECTS = new Set(["file", "body", "query", "part"]);
+// Names that hold request input or an uploaded file wherever they appear.
+const REQUEST_INPUT_NAMES: ReadonlySet<string> = new Set([
+  "body",
+  "file",
+  "files",
+  "params",
+  "part",
+  "parts",
+  "query",
+  "upload",
+]);
 
-// Property names on those objects that carry raw filenames
-const RAW_NAME_PROPS = new Set(["name", "filename", "fileName"]);
+// Members of a request context that carry request input (`ctx.body`).
+// `query` is left out: as a member it is Drizzle's relational API
+// (`tx.query.templates`), and handlers receive the request query destructured.
+const REQUEST_INPUT_PROPERTIES: ReadonlySet<string> = new Set([
+  "body",
+  "params",
+]);
+
+// Properties of request input that carry a client-chosen filename.
+const RAW_NAME_PROPS: ReadonlySet<string> = new Set([
+  "fileName",
+  "filename",
+  "name",
+]);
+
+// Keys and members a filename is written to.
+const FILENAME_SINK_KEYS: ReadonlySet<string> = new Set([
+  "fileName",
+  "filename",
+]);
+
+const SANITIZE_FILENAME_MODULE = "apps/api/src/lib/sanitize-filename";
+const SANITIZE_FILENAME_EXPORTS: ReadonlySet<string> = new Set([
+  "sanitizeFilename",
+  "sanitizeFilenamePreservingExtension",
+]);
+
+type Taint = "request" | "filename";
+
+type BindingPath = { keys: (string | null)[]; root: AstNode };
+
+// The keys a destructured binding reads, outermost first, and the pattern
+// root they start from: `{ body: { file: upload } }` gives ["body", "file"]
+// for `upload`. An array element or rest step reads a null key.
+const bindingPatternPath = (binding: AstNode): BindingPath => {
+  const keys: (string | null)[] = [];
+  let current = binding;
+  while (true) {
+    const parent = current.parent;
+    if (!isAstNode(parent)) {
+      break;
+    }
+    if (parent.type === "AssignmentPattern" && parent.left === current) {
+      current = parent;
+      continue;
+    }
+    if (parent.type === "RestElement") {
+      keys.unshift(null);
+      current = parent;
+      continue;
+    }
+    if (parent.type === "ArrayPattern") {
+      keys.unshift(null);
+      current = parent;
+      continue;
+    }
+    if (
+      parent.type === "Property" &&
+      parent.value === current &&
+      isAstNode(parent.parent) &&
+      parent.parent.type === "ObjectPattern"
+    ) {
+      keys.unshift(
+        parent.computed === true && !isStringLiteral(parent.key)
+          ? null
+          : getPropertyName(parent.key),
+      );
+      current = parent.parent;
+      continue;
+    }
+    break;
+  }
+  return { keys, root: current };
+};
+
+// The taint a destructured binding takes from the value it destructures.
+const destructuredTaint = (
+  base: Taint | null,
+  keys: readonly (string | null)[],
+): Taint | null => {
+  const requestAt = keys.findIndex(
+    (key) => key !== null && REQUEST_INPUT_PROPERTIES.has(key),
+  );
+  const fromRequest = base === "request" || requestAt !== -1;
+  if (!fromRequest) {
+    return null;
+  }
+  const last = keys.at(-1);
+  const readsName =
+    last !== undefined &&
+    last !== null &&
+    RAW_NAME_PROPS.has(last) &&
+    (base === "request" || requestAt < keys.length - 1);
+  return readsName ? "filename" : "request";
+};
 
 // ── Rule 2: no-unsanitized-href ────────────────────────────────
 //
@@ -94,58 +207,72 @@ const isSafeTemplateLiteral = (node): boolean => {
   );
 };
 
-// The sanitizers a sink may be fed from. `readerHref` is the legal reader's
-// own gate: it returns `sanitizeHref`'s answer and then withholds any host
-// outside the document's publisher, so it is never weaker than `sanitizeHref`.
-// A helper only earns a place here by calling one of these itself.
-const HREF_SANITIZERS = ["sanitizeHref", "readerHref"];
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference => isIdentifier(node);
-
-/**
- * A sanitizer call, resolved through its binding rather than its spelling.
- *
- * Matching the callee's name alone leaves the rule defeatable by the file it
- * guards: `const sanitizeHref = (url) => url` above the sink satisfies a name
- * check, and the anchor renders whatever it was handed. So the name has to
- * resolve to an import, which only the module that owns the sanitizer can
- * provide; a local, a parameter and a shadowing binding all report.
- */
-const isSanitizeHrefCall = (
-  node: unknown,
-  resolveVariable: (identifier: ESTree.IdentifierReference) => Variable | null,
-): boolean => {
-  if (
-    !isAstNode(node) ||
-    node.type !== "CallExpression" ||
-    !HREF_SANITIZERS.some((sanitizer) => isCallTo(node, sanitizer))
-  ) {
-    return false;
-  }
-  const callee = unwrapExpression(node.callee);
-  if (!isIdentifierReference(callee)) {
-    return false;
-  }
-  return (
-    resolveVariable(callee)?.defs.some(
-      (def) => def.type === "ImportBinding",
-    ) === true
-  );
-};
+// The sanitizers a sink may be fed from, keyed by export name, each with the
+// module that owns it. `readerHref` is the legal reader's own gate: it returns
+// `sanitizeHref`'s answer and then withholds any host outside the document's
+// publisher, so it is never weaker than `sanitizeHref`. A helper only earns a
+// place here by calling one of these itself.
+const HREF_SANITIZERS: ReadonlyMap<string, string> = new Map([
+  ["sanitizeHref", "apps/web/src/lib/sanitize-href"],
+  ["readerHref", "apps/web/src/components/legal-reader/source-link-policy"],
+]);
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
 //
-// Importing the `user` table from auth-schema requires an organization-scoped
-// membership relation in the same file. Merely importing `member` is not
-// proof: the query must reference both member.userId and
-// member.organizationId. Alternative authorized scopes require a narrow
-// suppression with evidence.
-//
-// Only applies to handler files (configured via overrides).
+// A query chain that reads the `user` table exported by the auth schema must
+// scope it through organization membership in the same chain: it references
+// both `member.userId` and `member.organizationId` of the auth schema's
+// `member` table. Both tables are recognised by what they are bound to, so an
+// aliased import, a namespace member, or a local alias still counts.
+// Alternative authorized scopes require a narrow suppression with evidence.
 
-const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
+const AUTH_SCHEMA_MODULE = "apps/api/src/db/auth-schema";
+const USER_TABLE_EXPORT = "user";
+const MEMBER_TABLE_EXPORT = "member";
+
+// Where one query expression ends: a statement, a declaration, or a function
+// (a callback is its own query). Walking up from a table reference to the
+// last node below one of these reaches the whole query, including its select
+// map, join conditions and `sql` fragments.
+const isQueryChainBoundary = (node: AstNode): boolean =>
+  node.type === "Program" ||
+  node.type === "VariableDeclarator" ||
+  node.type === "PropertyDefinition" ||
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionExpression" ||
+  node.type.endsWith("Statement") ||
+  node.type.endsWith("Declaration");
+
+const queryChainRoot = (node: AstNode): AstNode => {
+  let current = node;
+  while (isAstNode(current.parent) && !isQueryChainBoundary(current.parent)) {
+    current = current.parent;
+  }
+  return current;
+};
+
+// Type positions (`typeof user.$inferSelect`) name the table without
+// querying it.
+const isInTypePosition = (node: AstNode): boolean => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (
+      current.type.startsWith("TS") &&
+      current.type !== "TSAsExpression" &&
+      current.type !== "TSSatisfiesExpression" &&
+      current.type !== "TSNonNullExpression" &&
+      current.type !== "TSTypeAssertion" &&
+      current.type !== "TSInstantiationExpression"
+    ) {
+      return true;
+    }
+    if (current.type.endsWith("Statement") || current.type === "Program") {
+      return false;
+    }
+    current = current.parent;
+  }
+  return false;
+};
 
 // ── Rule 4: require-secure-document-response ──────────────────
 //
@@ -155,7 +282,7 @@ const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
 // security headers, MIME type, disposition, and sanitized filename.
 
 const RAW_DOCUMENT_SECURITY_HEADERS = "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS";
-const SECURITY_HEADERS_MODULE = "@/api/lib/security-headers";
+const SECURITY_HEADERS_MODULE = "apps/api/src/lib/security-headers";
 
 const getHeadersObject = (node) => {
   if (node.type !== "ObjectExpression") {
@@ -198,10 +325,7 @@ const hasAttachmentDisposition = (node): boolean => {
   return isCallTo(disposition.value, "contentDisposition");
 };
 
-const isFileHandler = (context): boolean =>
-  (context.filename ?? context.getFilename?.() ?? "")
-    .replaceAll("\\", "/")
-    .includes("/apps/api/src/handlers/files/");
+const FILE_HANDLER_DIRECTORY = "apps/api/src/handlers/files/";
 
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
@@ -212,129 +336,196 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawFilename:
-            "Use sanitizeFilename() before assigning to " +
-            "fileName. Raw strings may contain path " +
-            "traversal segments.",
+            "Use sanitizeFilename() before writing a request-supplied " +
+            "filename. Raw strings may contain path traversal segments.",
         },
       },
       createOnce(context) {
-        const resolveVariable = (
-          identifier: ESTree.IdentifierReference,
-        ): Variable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
+        const isSanitizeFilenameCall = (call: AstNode): boolean => {
+          const resolved = resolveImport(context, invokedCallee(call));
+          return (
+            resolved !== null &&
+            SANITIZE_FILENAME_EXPORTS.has(resolved.imported) &&
+            resolved.moduleId === SANITIZE_FILENAME_MODULE
+          );
+        };
+
+        // The taint of the value a variable holds, from its declaration.
+        const variableTaint = (
+          variable: Variable,
+          seen: Set<Variable>,
+        ): Taint | null => {
+          const nextSeen = new Set(seen);
+          nextSeen.add(variable);
+          for (const definition of variable.defs) {
+            if (!isAstNode(definition.name)) {
+              continue;
             }
-            scope = scope.upper;
+            const { keys, root } = bindingPatternPath(definition.name);
+            if (definition.type === "Parameter") {
+              const taint =
+                keys.length === 0
+                  ? REQUEST_INPUT_NAMES.has(variable.name)
+                    ? "request"
+                    : null
+                  : destructuredTaint(null, keys);
+              if (taint !== null) {
+                return taint;
+              }
+              continue;
+            }
+            const declarator = definition.node;
+            const declaredPattern: unknown = isAstNode(declarator)
+              ? declarator.id
+              : null;
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(declarator) ||
+              declarator.type !== "VariableDeclarator" ||
+              declaredPattern !== root
+            ) {
+              continue;
+            }
+            // `for (const part of body.parts)` binds each element of the
+            // iterated value.
+            const declaration = declarator.parent;
+            const loop = isAstNode(declaration) ? declaration.parent : null;
+            const iterated =
+              isAstNode(loop) &&
+              loop.type === "ForOfStatement" &&
+              loop.left === declaration
+                ? taintOf(loop.right, nextSeen) === "request"
+                  ? "request"
+                  : null
+                : null;
+            const base = iterated ?? taintOf(declarator.init, nextSeen);
+            const taint =
+              keys.length === 0 ? base : destructuredTaint(base, keys);
+            if (taint !== null) {
+              return taint;
+            }
           }
           return null;
         };
 
-        const isRawDestructuredFilename = (
-          declaration: ESTree.VariableDeclarator,
-          identifierName: string,
-        ): boolean => {
-          const init = unwrapExpression(declaration.init);
-          if (
-            !isIdentifier(init) ||
-            !RAW_INPUT_OBJECTS.has(init.name) ||
-            declaration.id.type !== "ObjectPattern"
-          ) {
-            return false;
-          }
-
-          return declaration.id.properties.some((property) => {
-            if (property.type !== "Property") {
-              return false;
-            }
-            const boundValue =
-              property.value.type === "AssignmentPattern"
-                ? property.value.left
-                : property.value;
-            return (
-              RAW_NAME_PROPS.has(getPropertyName(property.key) ?? "") &&
-              isIdentifier(boundValue, identifierName)
-            );
-          });
-        };
-
-        const isRawFilenameExpression = (
+        const taintOf = (
           node: unknown,
-          seenVariables = new Set<Variable>(),
-        ): boolean => {
+          seen = new Set<Variable>(),
+        ): Taint | null => {
           const expression = unwrapExpression(node);
           if (!isAstNode(expression)) {
-            return false;
+            return null;
           }
-          if (isCallTo(expression, "sanitizeFilename")) {
-            return false;
-          }
-          if (
-            expression.type === "MemberExpression" &&
-            expression.computed === false &&
-            isIdentifier(expression.object) &&
-            isIdentifier(expression.property) &&
-            RAW_INPUT_OBJECTS.has(expression.object.name) &&
-            RAW_NAME_PROPS.has(expression.property.name)
-          ) {
-            return true;
-          }
-          if (
-            expression.type === "TemplateLiteral" &&
-            Array.isArray(expression.expressions)
-          ) {
-            return expression.expressions.some((part) =>
-              isRawFilenameExpression(part, seenVariables),
-            );
-          }
-          if (
-            expression.type === "BinaryExpression" ||
-            expression.type === "LogicalExpression"
-          ) {
-            return (
-              isRawFilenameExpression(expression.left, seenVariables) ||
-              isRawFilenameExpression(expression.right, seenVariables)
-            );
-          }
-          if (expression.type === "ConditionalExpression") {
-            return (
-              isRawFilenameExpression(expression.consequent, seenVariables) ||
-              isRawFilenameExpression(expression.alternate, seenVariables)
-            );
+          switch (expression.type) {
+            case "AwaitExpression":
+              return taintOf(expression.argument, seen);
+            case "MemberExpression": {
+              const property = memberPropertyName(expression);
+              const objectTaint = taintOf(expression.object, seen);
+              if (objectTaint === "request") {
+                return property !== null && RAW_NAME_PROPS.has(property)
+                  ? "filename"
+                  : "request";
+              }
+              if (
+                objectTaint === null &&
+                property !== null &&
+                REQUEST_INPUT_PROPERTIES.has(property)
+              ) {
+                return "request";
+              }
+              return null;
+            }
+            case "CallExpression": {
+              if (isSanitizeFilenameCall(expression)) {
+                return null;
+              }
+              // A method of request input or of a raw filename keeps the
+              // taint: `body.files.at(0)`, `file.name.trim()`. Any other
+              // function handed a raw filename returns something built from
+              // it; only the sanitizer's result is clean.
+              const callee = unwrapExpression(expression.callee);
+              const receiverTaint =
+                callee?.type === "MemberExpression"
+                  ? taintOf(callee.object, seen)
+                  : null;
+              if (receiverTaint !== null) {
+                return receiverTaint;
+              }
+              return Array.isArray(expression.arguments) &&
+                expression.arguments.some(
+                  (argument) => taintOf(argument, seen) === "filename",
+                )
+                ? "filename"
+                : null;
+            }
+            case "TemplateLiteral":
+              return Array.isArray(expression.expressions) &&
+                expression.expressions.some(
+                  (part) => taintOf(part, seen) === "filename",
+                )
+                ? "filename"
+                : null;
+            case "BinaryExpression":
+            case "LogicalExpression":
+              return taintOf(expression.left, seen) === "filename" ||
+                taintOf(expression.right, seen) === "filename"
+                ? "filename"
+                : null;
+            case "ConditionalExpression":
+              return taintOf(expression.consequent, seen) === "filename" ||
+                taintOf(expression.alternate, seen) === "filename"
+                ? "filename"
+                : null;
+            default:
+              break;
           }
           if (!isIdentifierReference(expression)) {
-            return false;
+            return null;
           }
-
-          const variable = resolveVariable(expression);
-          if (variable === null || seenVariables.has(variable)) {
-            return false;
+          const variable = resolveVariable(context, expression);
+          if (variable === null) {
+            return REQUEST_INPUT_NAMES.has(expression.name) ? "request" : null;
           }
-
-          const nextSeenVariables = new Set(seenVariables);
-          nextSeenVariables.add(variable);
-          return variable.defs.some((definition) => {
-            const declaration = definition.node;
-            if (declaration.type !== "VariableDeclarator") {
-              return false;
-            }
-            return (
-              isRawDestructuredFilename(declaration, expression.name) ||
-              isRawFilenameExpression(declaration.init, nextSeenVariables)
-            );
-          });
+          if (seen.has(variable)) {
+            return null;
+          }
+          const resolved = variableTaint(variable, seen);
+          if (resolved !== null) {
+            return resolved;
+          }
+          // An upload handed in under a conventional name (`file: File`)
+          // stays request input even where its origin is out of view.
+          return REQUEST_INPUT_NAMES.has(expression.name) ? "request" : null;
         };
 
         return {
           Property(node) {
-            // Only check property assignments named "fileName"
-            if (getPropertyName(node.key) !== "fileName") {
+            if (
+              !isAstNode(node.parent) ||
+              node.parent.type !== "ObjectExpression" ||
+              (node.computed && !isStringLiteral(node.key))
+            ) {
               return;
             }
-
-            if (isRawFilenameExpression(node.value)) {
+            const key = getPropertyName(node.key);
+            if (key === null || !FILENAME_SINK_KEYS.has(key)) {
+              return;
+            }
+            if (taintOf(node.value) === "filename") {
+              context.report({ node, messageId: "rawFilename" });
+            }
+          },
+          AssignmentExpression(node) {
+            const target = unwrapExpression(node.left);
+            if (target?.type !== "MemberExpression") {
+              return;
+            }
+            const key = memberPropertyName(target);
+            if (key === null || !FILENAME_SINK_KEYS.has(key)) {
+              return;
+            }
+            if (taintOf(node.right) === "filename") {
               context.report({ node, messageId: "rawFilename" });
             }
           },
@@ -354,18 +545,19 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (
-          identifier: ESTree.IdentifierReference,
-        ): Variable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
+        // A sanitizer call, resolved through its binding rather than its
+        // spelling: a local `const sanitizeHref = (url) => url` satisfies a
+        // name check and renders whatever it was handed, so the callee must
+        // resolve to the export of the module that owns the sanitizer.
+        const isSanitizeHrefCall = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "CallExpression") {
+            return false;
           }
-          return null;
+          const resolved = resolveImport(context, invokedCallee(node));
+          return (
+            resolved !== null &&
+            HREF_SANITIZERS.get(resolved.imported) === resolved.moduleId
+          );
         };
 
         return {
@@ -424,8 +616,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            // Allow a sanitizer imported from the module that owns it
-            if (isSanitizeHrefCall(expr, resolveVariable)) {
+            if (isSanitizeHrefCall(unwrapExpression(expr))) {
               return;
             }
 
@@ -449,90 +640,174 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unscopedUserQuery:
-            "Queries importing 'user' from auth-schema must reference both " +
-            "member.userId and member.organizationId in the same file. " +
-            "Join through organization membership, or suppress narrowly " +
-            "with evidence for another authorized scope.",
+            "A query reading the auth-schema 'user' table must reference " +
+            "both member.userId and member.organizationId in the same query " +
+            "chain. Join through organization membership, or suppress " +
+            "narrowly with evidence for another authorized scope.",
         },
       },
       createOnce(context) {
-        let userImportNode: Ranged | null = null;
-        let memberLocalName: string | null = null;
-        let memberImportVariable: Variable | null = null;
-        let hasMemberUserIdReference = false;
-        let hasMemberOrganizationIdReference = false;
+        const reportedChains = new Set<AstNode>();
+        let importsAuthSchema = false;
 
-        const resolveVariable = (
-          identifier: ESTree.IdentifierReference,
-        ): Variable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
+        const authSchemaExport = (node: AstNode): string | null => {
+          const resolved = resolveImport(context, node);
+          return resolved?.moduleId === AUTH_SCHEMA_MODULE
+            ? resolved.imported
+            : null;
+        };
+
+        // The membership predicates a query chain carries, including those of
+        // local constants it reads: a membership subquery built in the
+        // statement above (`const members = tx.select().from(member)...`)
+        // scopes the chain that joins it.
+        const membershipPredicates = (
+          chain: AstNode,
+          scoped: Set<string>,
+          seen: Set<Variable>,
+        ): void => {
+          for (const node of everyNode(chain)) {
+            if (isIdentifierReference(node)) {
+              const variable = resolveVariable(context, node);
+              const initializer =
+                variable === null || seen.has(variable)
+                  ? null
+                  : stableInitializer(variable);
+              if (variable !== null && initializer !== null) {
+                seen.add(variable);
+                membershipPredicates(initializer, scoped, seen);
+              }
+              continue;
             }
-            scope = scope.upper;
+            if (node.type !== "MemberExpression") {
+              continue;
+            }
+            const property = memberPropertyName(node);
+            if (
+              (property === "userId" || property === "organizationId") &&
+              isAstNode(node.object) &&
+              authSchemaExport(node.object) === MEMBER_TABLE_EXPORT
+            ) {
+              scoped.add(property);
+            }
           }
-          return null;
+        };
+
+        // A chain held by a local constant (a select map, an aliased table)
+        // is judged by the queries that read the constant: it is scoped when
+        // every one of them is.
+        const isScopedChain = (
+          chain: AstNode,
+          seen: Set<Variable>,
+        ): boolean => {
+          const scoped = new Set<string>();
+          membershipPredicates(chain, scoped, new Set());
+          if (scoped.size === 2) {
+            return true;
+          }
+          const holder = chain.parent;
+          if (
+            !isAstNode(holder) ||
+            holder.type !== "VariableDeclarator" ||
+            holder.init !== chain ||
+            !isIdentifierReference(holder.id)
+          ) {
+            return false;
+          }
+          const variable = resolveVariable(context, holder.id);
+          if (
+            variable === null ||
+            seen.has(variable) ||
+            stableInitializer(variable) === null
+          ) {
+            return false;
+          }
+          seen.add(variable);
+          const readers = variable.references
+            .filter((reference) => !reference.init)
+            .map((reference): unknown => reference.identifier);
+          return (
+            readers.length > 0 &&
+            readers.every(
+              (reader) =>
+                isAstNode(reader) &&
+                isScopedChain(queryChainRoot(reader), seen),
+            )
+          );
+        };
+
+        const checkTableReference = (node: unknown): void => {
+          if (
+            !isAstNode(node) ||
+            isInTypePosition(node) ||
+            authSchemaExport(node) !== USER_TABLE_EXPORT
+          ) {
+            return;
+          }
+          const chain = queryChainRoot(node);
+          // `const users = user` only renames the table; its uses are the
+          // queries.
+          const holder = chain.parent;
+          if (
+            chain === node &&
+            isAstNode(holder) &&
+            holder.type === "VariableDeclarator" &&
+            holder.init === node
+          ) {
+            return;
+          }
+          if (reportedChains.has(chain) || isScopedChain(chain, new Set())) {
+            return;
+          }
+          reportedChains.add(chain);
+          // The whole query is the unit a waiver covers, so the report sits
+          // where the query starts.
+          context.report({ node: chain, messageId: "unscopedUserQuery" });
         };
 
         return {
           before() {
-            userImportNode = null;
-            memberLocalName = null;
-            memberImportVariable = null;
-            hasMemberUserIdReference = false;
-            hasMemberOrganizationIdReference = false;
+            importsAuthSchema = false;
+            reportedChains.clear();
           },
+          // Static imports precede every use, so files that never load the
+          // auth schema skip binding resolution entirely.
           ImportDeclaration(node) {
-            if (node.source.value !== AUTH_SCHEMA_MODULE) {
+            if (
+              canonicalModuleId(
+                node.source.value,
+                repoRelativeFilename(context),
+              ) === AUTH_SCHEMA_MODULE
+            ) {
+              importsAuthSchema = true;
+            }
+          },
+          Identifier(node) {
+            if (!importsAuthSchema) {
               return;
             }
-
-            for (const spec of node.specifiers) {
-              const importedName = getImportedName(spec);
-              if (importedName === null) {
-                continue;
-              }
-
-              if (importedName === "user" && !userImportNode) {
-                userImportNode = spec;
-              }
-              if (importedName === "member") {
-                memberLocalName = spec.local.name;
-                memberImportVariable =
-                  context.sourceCode.getDeclaredVariables(spec).at(0) ?? null;
-              }
+            const parent = node.parent;
+            // The object of a member access is judged as part of it, so
+            // `ns.user` resolves once through its MemberExpression.
+            if (
+              !isAstNode(parent) ||
+              (parent.type === "MemberExpression" && parent.property === node)
+            ) {
+              return;
             }
+            if (
+              parent.type.startsWith("Import") ||
+              parent.type.startsWith("Export") ||
+              (parent.type === "VariableDeclarator" && parent.id === node) ||
+              (parent.type === "Property" && parent.key === node)
+            ) {
+              return;
+            }
+            checkTableReference(node);
           },
           MemberExpression(node) {
-            if (
-              memberLocalName === null ||
-              node.computed ||
-              !isIdentifier(node.object, memberLocalName) ||
-              !isIdentifier(node.property) ||
-              resolveVariable(node.object) !== memberImportVariable
-            ) {
-              return;
-            }
-
-            if (node.property.name === "userId") {
-              hasMemberUserIdReference = true;
-            }
-            if (node.property.name === "organizationId") {
-              hasMemberOrganizationIdReference = true;
-            }
-          },
-
-          "Program:exit"() {
-            if (
-              userImportNode &&
-              (!hasMemberUserIdReference || !hasMemberOrganizationIdReference)
-            ) {
-              context.report({
-                node: userImportNode,
-                messageId: "unscopedUserQuery",
-              });
+            if (importsAuthSchema) {
+              checkTableReference(node);
             }
           },
         };
@@ -558,11 +833,18 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            fileHandler = isFileHandler(context);
+            fileHandler = repoRelativeFilename(context).includes(
+              FILE_HANDLER_DIRECTORY,
+            );
             downloadHeadersIdentifiers.clear();
           },
           ImportDeclaration(node) {
-            if (node.source.value !== SECURITY_HEADERS_MODULE) {
+            if (
+              canonicalModuleId(
+                node.source.value,
+                repoRelativeFilename(context),
+              ) !== SECURITY_HEADERS_MODULE
+            ) {
               return;
             }
 

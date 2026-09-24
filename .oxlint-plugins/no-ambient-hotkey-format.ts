@@ -1,6 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName } from "./utils.ts";
+import { getImportedName, isFileIn } from "./utils.ts";
 
 const HOTKEY_MODULES = new Set([
   "@tanstack/hotkeys",
@@ -13,14 +13,6 @@ const ALLOWED_FILES = [
   "apps/web/src/lib/hotkeys.ts",
   "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts",
 ];
-
-const filenameForContext = (context) =>
-  (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
-
-const isAllowedFile = (context) => {
-  const filename = filenameForContext(context);
-  return ALLOWED_FILES.some((allowedFile) => filename.endsWith(allowedFile));
-};
 
 export default eslintCompatPlugin({
   meta: { name: "no-ambient-hotkey-format" },
@@ -36,10 +28,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            return !isAllowedFile(context);
+            return !isFileIn(context, ALLOWED_FILES);
           },
           ImportDeclaration(node) {
-            if (!HOTKEY_MODULES.has(node.source?.value)) {
+            if (!HOTKEY_MODULES.has(node.source.value)) {
               return;
             }
 

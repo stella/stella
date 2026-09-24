@@ -14,5 +14,6 @@ logger.warn("request.failed", { "error.message": error.message });
 // oxlint-disable-next-line no-raw-error-logging/no-raw-error-logging -- fixture proves stderr templates cannot expose raw error details
 process.stderr.write(`worker failed: ${error.stack}\n`);
 
+// expect-clean: no-raw-error-logging/no-raw-error-logging
 logger.error("worker.failed", { "error.type": errorTag(error) });
 process.stderr.write("worker failed: TaggedFailure\n");

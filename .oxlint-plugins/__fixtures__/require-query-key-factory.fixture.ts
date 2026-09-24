@@ -147,6 +147,7 @@ export const invalidatesFactoryKey = async () => {
 };
 
 export const writesFactoryKey = () => {
+  // expect-clean: require-query-key-factory/require-query-key-factory
   queryClient.setQueryData(fixtureKeys.scoped(organizationId), { items: [] });
 };
 

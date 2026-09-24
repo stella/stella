@@ -303,6 +303,7 @@ export const probeCorpusIndexSearchLiveness = async (
   cluster: QuickwitCluster,
   timeoutMs: number,
 ): Promise<Response> =>
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- corpus index cluster URL from validated operator configuration
   await fetchWithTimeout(`${searchBaseUrl(cluster)}/health/livez`, {
     timeoutMs,
   });
@@ -367,6 +368,7 @@ const requestFailure = ({
   });
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
   await fetchWithTimeout(`${request.baseUrl}${request.path}`, {
     ...request.init,
     timeoutMs: request.timeoutMs,

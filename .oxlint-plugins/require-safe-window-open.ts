@@ -5,14 +5,16 @@
 // through the sanctioned helper instead, so opener isolation and URL handling
 // remain a single enforced boundary.
 //
-// Flags whenever the receiver is the browser global:
+// Flags whenever the function is the browser global's `open`:
 //   open(url)
 //   window.open(url)
 //   window["open"](url)
-//   globalThis.open(url)
-//   globalThis.window.open(url)
-//   self.open(url)
+//   globalThis.open(url) / self.open(url)
+//   globalThis.window.open(url) / window.top.open(url) / window.parent.open(url)
+//   window.open.call(window, url) / (0, window.open)(url)
+//   const { open } = window; open(url)
 //   const popupHost = window; popupHost.open(url)
+//   const openWindow = window.open; openWindow(url)
 //
 // This rule is scoped to browser surfaces in oxlint.config.ts. Locally bound
 // values named `open`, `window`, `globalThis`, or `self` are unrelated bindings and
@@ -20,272 +22,154 @@
 // retain browser-global identity; mutable or dynamic values stay unreported.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Variable } from "@oxlint/plugins";
 
+import type { ScopeContext } from "./utils.ts";
 import {
+  invokedCallee,
   isAstNode,
   isIdentifier,
-  isStringLiteral,
+  isIdentifierReference,
+  memberPropertyName,
+  patternKeyFor,
+  resolveVariable,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 
 const RULE_NAME = "require-safe-window-open";
+const OPEN = "open";
 
-const staticTemplateValue = (node: unknown): string | null => {
-  if (
-    !isAstNode(node) ||
-    node.type !== "TemplateLiteral" ||
-    !Array.isArray(node.expressions) ||
-    node.expressions.length !== 0 ||
-    !Array.isArray(node.quasis) ||
-    node.quasis.length !== 1
-  ) {
-    return null;
-  }
+// Globals that are the browser window itself.
+const BROWSER_GLOBAL_NAMES: ReadonlySet<string> = new Set([
+  "globalThis",
+  "self",
+  "window",
+]);
+// Members of a window that are again a window.
+const WINDOW_MEMBERS: ReadonlySet<string> = new Set([
+  "opener",
+  "parent",
+  "self",
+  "top",
+  "window",
+]);
 
-  const quasi = node.quasis.at(0);
-  if (
-    !isAstNode(quasi) ||
-    quasi.type !== "TemplateElement" ||
-    typeof quasi.value !== "object" ||
-    quasi.value === null ||
-    !("cooked" in quasi.value)
-  ) {
-    return null;
-  }
-
-  return typeof quasi.value.cooked === "string" ? quasi.value.cooked : null;
+// Resolve through `const` / never-reassigned bindings to the expression they
+// hold, remembering visited variables so alias cycles terminate.
+type Resolution = {
+  context: ScopeContext;
+  visited: Set<Variable>;
 };
 
-const staticMemberName = (member: unknown): string | null => {
-  const unwrapped = unwrapExpression(member);
-  if (!unwrapped || unwrapped.type !== "MemberExpression") {
-    return null;
-  }
-
-  if (unwrapped.computed === false && isIdentifier(unwrapped.property)) {
-    return unwrapped.property.name;
-  }
-  if (unwrapped.computed !== true) {
-    return null;
-  }
-  if (isStringLiteral(unwrapped.property)) {
-    return unwrapped.property.value;
-  }
-  return staticTemplateValue(unwrapped.property);
-};
-
-const memberObject = (member: unknown): unknown => {
-  const unwrapped = unwrapExpression(member);
-  if (!unwrapped || unwrapped.type !== "MemberExpression") {
-    return null;
-  }
-  return unwrapped.object;
-};
-
-const sourceCodeForContext = (context: unknown): unknown => {
-  if (
-    typeof context !== "object" ||
-    context === null ||
-    !("sourceCode" in context) ||
-    typeof context.sourceCode !== "object" ||
-    context.sourceCode === null
-  ) {
-    return null;
-  }
-  return context.sourceCode;
-};
-
-const bindingFromScope = (initialScope: unknown, name: string): unknown => {
-  let scope = initialScope;
-  while (typeof scope === "object" && scope !== null) {
-    if (
-      "set" in scope &&
-      typeof scope.set === "object" &&
-      scope.set !== null &&
-      "get" in scope.set &&
-      typeof scope.set.get === "function"
-    ) {
-      const binding = scope.set.get(name);
-      if (binding !== undefined) {
-        return binding;
-      }
-    }
-    scope = "upper" in scope ? scope.upper : null;
-  }
-  return null;
-};
-
-const bindingHasDefinitions = (binding: unknown): boolean =>
-  typeof binding === "object" &&
-  binding !== null &&
-  "defs" in binding &&
-  Array.isArray(binding.defs) &&
-  binding.defs.length > 0;
-
-type ScopeVariable = {
-  defs: {
-    node: unknown;
-    parent: unknown;
-    type: string;
-  }[];
-  references: {
-    init?: boolean;
-    isWrite?: () => boolean;
-  }[];
-};
-
-const isScopeVariable = (value: unknown): value is ScopeVariable =>
-  typeof value === "object" &&
-  value !== null &&
-  "defs" in value &&
-  Array.isArray(value.defs) &&
-  "references" in value &&
-  Array.isArray(value.references);
-
-const scopeVariableForReference = (
-  context: unknown,
+const bindingOf = (
+  { context, visited }: Resolution,
   node: unknown,
-): ScopeVariable | null => {
-  if (!isIdentifier(node)) {
+): Variable | null => {
+  if (!isIdentifierReference(node)) {
     return null;
   }
-  const sourceCode = sourceCodeForContext(context);
-  if (
-    typeof sourceCode !== "object" ||
-    sourceCode === null ||
-    !("getScope" in sourceCode) ||
-    typeof sourceCode.getScope !== "function"
-  ) {
+  const variable = resolveVariable(context, node);
+  if (variable === null || visited.has(variable)) {
     return null;
   }
-  const binding = bindingFromScope(sourceCode.getScope(node), node.name);
-  return isScopeVariable(binding) ? binding : null;
+  visited.add(variable);
+  return variable;
 };
 
-const isGlobalReference = (context: unknown, node: unknown): boolean => {
-  if (!isIdentifier(node)) {
+const isUnboundGlobal = (context: ScopeContext, node: unknown): boolean => {
+  if (!isIdentifierReference(node)) {
     return false;
   }
+  const variable = resolveVariable(context, node);
+  return variable === null || variable.defs.length === 0;
+};
 
-  const sourceCode = sourceCodeForContext(context);
-  if (typeof sourceCode !== "object" || sourceCode === null) {
+// Whether `node` evaluates to the browser window: a global `window` /
+// `globalThis` / `self`, a window member of one (`window.top`), or a stable
+// alias of either.
+const isBrowserWindow = (resolution: Resolution, node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
     return false;
   }
-
   if (
-    "isGlobalReference" in sourceCode &&
-    typeof sourceCode.isGlobalReference === "function" &&
-    sourceCode.isGlobalReference(node) === true
+    isIdentifier(expression) &&
+    BROWSER_GLOBAL_NAMES.has(expression.name) &&
+    isUnboundGlobal(resolution.context, expression)
   ) {
     return true;
   }
-
-  if (
-    !("getScope" in sourceCode) ||
-    typeof sourceCode.getScope !== "function"
-  ) {
-    return false;
-  }
-
-  // Unresolved identifiers and configured globals have no local definition.
-  // A parameter/import/variable declaration has at least one definition and
-  // therefore shadows the browser global for this reference.
-  const binding = bindingFromScope(sourceCode.getScope(node), node.name);
-  return binding === null || !bindingHasDefinitions(binding);
-};
-
-type BrowserGlobalKind = "globalThis" | "self" | "window";
-
-const stableAliasInitializer = (
-  context: unknown,
-  identifier: unknown,
-): unknown => {
-  const variable = scopeVariableForReference(context, identifier);
-  if (
-    variable === null ||
-    variable.references.some(
-      (reference) =>
-        reference.init !== true &&
-        typeof reference.isWrite === "function" &&
-        reference.isWrite(),
-    )
-  ) {
-    return null;
-  }
-
-  for (const definition of variable.defs) {
-    if (
-      definition.type !== "Variable" ||
-      !isAstNode(definition.node) ||
-      definition.node.type !== "VariableDeclarator" ||
-      !isAstNode(definition.parent) ||
-      definition.parent.type !== "VariableDeclaration" ||
-      definition.parent.kind !== "const"
-    ) {
-      continue;
-    }
-    return definition.node.init;
-  }
-  return null;
-};
-
-const browserGlobalKind = (
-  context: unknown,
-  node: unknown,
-  visited = new Set<ScopeVariable>(),
-): BrowserGlobalKind | null => {
-  const expression = unwrapExpression(node);
-  if (expression === null) {
-    return null;
-  }
-
-  if (isIdentifier(expression)) {
-    if (
-      (expression.name === "window" ||
-        expression.name === "globalThis" ||
-        expression.name === "self") &&
-      isGlobalReference(context, expression)
-    ) {
-      return expression.name;
-    }
-
-    const variable = scopeVariableForReference(context, expression);
-    if (variable === null || visited.has(variable)) {
-      return null;
-    }
-    visited.add(variable);
-    return browserGlobalKind(
-      context,
-      stableAliasInitializer(context, expression),
-      visited,
+  if (expression.type === "MemberExpression") {
+    const name = memberPropertyName(expression);
+    return (
+      name !== null &&
+      WINDOW_MEMBERS.has(name) &&
+      isBrowserWindow(resolution, expression.object)
     );
   }
-
-  if (
-    expression.type !== "MemberExpression" ||
-    staticMemberName(expression) !== "window"
-  ) {
-    return null;
-  }
-  return browserGlobalKind(context, expression.object, visited) === null
-    ? null
-    : "window";
+  const variable = bindingOf(resolution, expression);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  return initializer !== null && isBrowserWindow(resolution, initializer);
 };
 
-const isBrowserOpenCallee = (context: unknown, callee: unknown): boolean => {
-  const unwrappedCallee = unwrapExpression(callee);
-  if (isIdentifier(unwrappedCallee, "open")) {
-    return isGlobalReference(context, unwrappedCallee);
-  }
+// The variable declarator `const { open } = window` binds `variable` in, when
+// it destructures the `open` key from a browser window.
+const isDestructuredOpen = (
+  resolution: Resolution,
+  variable: Variable,
+): boolean => {
+  const definition = variable.defs.at(0);
+  const declarator: unknown = definition?.node;
   if (
-    !unwrappedCallee ||
-    unwrappedCallee.type !== "MemberExpression" ||
-    staticMemberName(unwrappedCallee) !== "open"
+    variable.defs.length !== 1 ||
+    definition?.type !== "Variable" ||
+    !isAstNode(declarator) ||
+    declarator.type !== "VariableDeclarator" ||
+    !isAstNode(declarator.id) ||
+    declarator.id.type !== "ObjectPattern" ||
+    variable.references.some(
+      (reference) => reference.isWrite() && !reference.init,
+    )
   ) {
     return false;
   }
+  return (
+    patternKeyFor(declarator.id, definition.name) === OPEN &&
+    isBrowserWindow(resolution, declarator.init)
+  );
+};
 
-  return browserGlobalKind(context, memberObject(unwrappedCallee)) !== null;
+// Whether `node` evaluates to the browser's `open` function.
+const isBrowserOpen = (resolution: Resolution, node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return false;
+  }
+  if (expression.type === "MemberExpression") {
+    return (
+      memberPropertyName(expression) === OPEN &&
+      isBrowserWindow(resolution, expression.object)
+    );
+  }
+  if (!isIdentifier(expression)) {
+    return false;
+  }
+  if (
+    expression.name === OPEN &&
+    isUnboundGlobal(resolution.context, expression)
+  ) {
+    return true;
+  }
+  const variable = bindingOf(resolution, expression);
+  if (variable === null) {
+    return false;
+  }
+  if (isDestructuredOpen(resolution, variable)) {
+    return true;
+  }
+  const initializer = stableInitializer(variable);
+  return initializer !== null && isBrowserOpen(resolution, initializer);
 };
 
 export default eslintCompatPlugin({
@@ -304,7 +188,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           CallExpression(node) {
-            if (!isBrowserOpenCallee(context, node.callee)) {
+            const call: unknown = node;
+            const callee = isAstNode(call) ? invokedCallee(call) : null;
+            if (!isBrowserOpen({ context, visited: new Set() }, callee)) {
               return;
             }
             context.report({

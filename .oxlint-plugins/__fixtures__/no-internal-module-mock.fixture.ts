@@ -42,6 +42,7 @@ void mock.module("@tanstack/ai", () => ({ chat: () => "fabricated" }));
 void mock.module("@tanstack/ai-openai", () => ({}));
 
 // Allowed: an npm package is an external boundary.
+// expect-clean: no-internal-module-mock/no-internal-module-mock
 void mock.module("bullmq", () => ({ Queue: "fake-queue" }));
 
 // Allowed: a runtime builtin.

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
   DesktopAccountConflictError,
+  DesktopAccountLinkCleanupError,
   DesktopBridgeUnavailableError,
   completeDesktopAccountLink,
   desktopAccountLinkRequest,
@@ -117,13 +118,12 @@ test("a cleanup failure reports both failures with the link error as cause", asy
   if (outcome.status !== "error") {
     panic("Expected account link and cleanup to fail");
   }
-  expect(outcome.error).toEqual(
-    new AggregateError(
-      [linkError, cleanupError],
-      "Desktop account link failed and credential cleanup failed",
-      { cause: linkError },
-    ),
-  );
+  expect(outcome.error).toBeInstanceOf(DesktopAccountLinkCleanupError);
+  expect(outcome.error).toMatchObject({
+    message: "Desktop account link failed and credential cleanup failed",
+    cause: linkError,
+    cleanupError,
+  });
 });
 
 test("the one account-link request carries only the server-minted credential", () => {

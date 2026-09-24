@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
+import { panic } from "better-result";
+
 import type { ChatAnonResult } from "@stll/anonymize-chat";
 
 import type { DemoEngine } from "./anonymize-demo-engine";
@@ -78,7 +80,7 @@ const isDedicatedWorkerScope = (
   "importScripts" in value && "WorkerGlobalScope" in globalThis;
 
 if (!isDedicatedWorkerScope(globalThis)) {
-  throw new TypeError("The anonymization demo must run in a dedicated worker");
+  panic("The anonymization demo must run in a dedicated worker");
 }
 
 const scope = globalThis;

@@ -40,6 +40,7 @@ export const _bareInFragment = () => (
 );
 
 // --- Allowed: formatted, non-numeric, or a non-display attribute ---
+// expect-clean: no-unformatted-number/no-unformatted-number
 export const _formatted = () => <span>{getFormatter().number(x.count)}</span>;
 export const _nonNumeric = () => <span>{x.name}</span>;
 export const _nonDisplayAttr = () => <li key={String(x.count)}>ok</li>;

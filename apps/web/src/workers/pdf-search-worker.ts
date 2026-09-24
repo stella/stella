@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
+import { panic } from "better-result";
+
 import { findPDFSearchResults } from "@/lib/pdf/pdf-search";
 import type {
   PDFSearchWorkerRequest,
@@ -12,7 +14,7 @@ const isDedicatedWorkerScope = (
   "importScripts" in value && "WorkerGlobalScope" in globalThis;
 
 if (!isDedicatedWorkerScope(globalThis)) {
-  throw new TypeError("PDF search must run in a dedicated worker");
+  panic("PDF search must run in a dedicated worker");
 }
 
 const scope = globalThis;

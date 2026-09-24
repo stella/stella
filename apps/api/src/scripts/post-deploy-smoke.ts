@@ -365,6 +365,7 @@ const mintSmokeSession = async (
   baseUrl: string,
   secret: string,
 ): Promise<SmokeSession> => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
   const response = await fetchWithTimeout(`${baseUrl}/smoke/session`, {
     method: "POST",
     headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
@@ -391,6 +392,7 @@ const readAuthenticated = async (
   path: string,
   cookie: string,
 ): Promise<EvaluatedCheck> => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
   const response = await fetchWithTimeout(`${baseUrl}${path}`, {
     headers: { cookie, ...EDGE_HEADERS },
     timeoutMs: READ_CHECK_TIMEOUT_MS,
@@ -403,6 +405,7 @@ const readAuthenticated = async (
 };
 
 const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
   const response = await fetchWithTimeout(`${baseUrl}/health`, {
     headers: EDGE_HEADERS,
     timeoutMs: READ_CHECK_TIMEOUT_MS,
@@ -570,6 +573,7 @@ const sendChat = async (
   baseUrl: string,
   cookie: string,
 ): Promise<EvaluatedCheck[]> => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
   const response = await fetchWithTimeout(`${baseUrl}/v1/chat/`, {
     method: "POST",
     headers: {

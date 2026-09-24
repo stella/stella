@@ -1,6 +1,4 @@
-import {
-  bufferObjectCleanupIntents as cleanupIntents,
-} from "../../apps/api/src/db/schema.ts";
+import { bufferObjectCleanupIntents as cleanupIntents } from "../../apps/api/src/db/schema.ts";
 
 declare const tx: {
   delete: (table: unknown) => unknown;
@@ -23,6 +21,7 @@ const _ownedRetirement = retirePublishedObjectCleanupIntentsInTransaction({
 });
 
 // Deletes from unrelated tables remain ordinary Drizzle operations.
+// expect-clean: no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete
 const _otherDelete = tx.delete(anotherTable);
 
 export const __noDirectBufferCleanupIntentDeleteFixture = {

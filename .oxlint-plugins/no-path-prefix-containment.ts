@@ -1,77 +1,58 @@
-import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
 // Reject filesystem containment checks that compare a resolved or normalized
 // candidate with a bare string prefix. `startsWith(root)` also accepts sibling
 // paths such as `/safe/root-backup`, so it is not an authorization boundary.
 //
 // The rule is deliberately provenance-based: only helpers imported from
-// `node:path` or `path` make an expression path-derived. Ordinary string and
+// `node:path` or `path` (or their `/posix` and `/win32` entry points) make an
+// expression path-derived. Ordinary string and
 // URL prefix checks, same-named local helpers, and shadowed imports stay clean.
 //
 // Flagged:
 //   path.resolve(root, input).startsWith(root)
 //   path.normalize(candidate).startsWith(path.normalize(root))
+//   path.resolve(root, input).indexOf(root) === 0
 //
 // Allowed:
 //   candidate.startsWith(`${root}${path.sep}`)
 //   const relative = path.relative(root, candidate)
 //   !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Variable } from "@oxlint/plugins";
+
 import {
   getImportedName,
   getPropertyName,
   isAstNode,
-  isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
+  stableInitializer,
+  unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
-const PATH_MODULES = new Set(["node:path", "path"]);
+// The platform entry points export the same API as the default module.
+const PATH_MODULES = new Set([
+  "node:path",
+  "node:path/posix",
+  "node:path/win32",
+  "path",
+  "path/posix",
+  "path/win32",
+]);
 const PATH_VALUE_APIS = new Set(["dirname", "join", "normalize", "resolve"]);
 const PATH_PLATFORMS = new Set(["posix", "win32"]);
 const PATH_SEPARATORS = new Set(["/", "\\"]);
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
-
-type ScopeVariable = {
-  defs: {
-    node: unknown;
-    parent: unknown;
-    type: string;
-  }[];
-  references: {
-    init?: boolean;
-    isWrite?: () => boolean;
-  }[];
-};
-
-type IdentifierNode = ESTree.IdentifierReference;
-
-const WRAPPER_TYPES = new Set([
-  "ChainExpression",
-  "ParenthesizedExpression",
-  "TSAsExpression",
-  "TSNonNullExpression",
-  "TSSatisfiesExpression",
-  "TSTypeAssertion",
+const EQUALITY_OPERATORS: ReadonlySet<string> = new Set([
+  "!=",
+  "!==",
+  "==",
+  "===",
 ]);
 
-const unwrapExpression = (node: unknown): AstNode | null => {
-  let current = isAstNode(node) ? node : null;
-  while (current !== null && WRAPPER_TYPES.has(current.type)) {
-    current = isAstNode(current.expression) ? current.expression : null;
-  }
-  return current;
-};
-
-const isEstreeIdentifier = (node: unknown): node is IdentifierNode =>
-  isIdentifier(node) && Array.isArray(node.range);
-
 const importedPathBinding = (
-  variable: ScopeVariable | null,
+  variable: Variable | null,
 ): { importedName: string | null; type: string } | null => {
   if (variable === null) {
     return null;
@@ -91,31 +72,6 @@ const importedPathBinding = (
       importedName: getImportedName(definition.node),
       type: definition.node.type,
     };
-  }
-  return null;
-};
-
-const stableInitializer = (variable: ScopeVariable): AstNode | null => {
-  for (const definition of variable.defs) {
-    if (
-      definition.type !== "Variable" ||
-      !isAstNode(definition.node) ||
-      definition.node.type !== "VariableDeclarator" ||
-      !isAstNode(definition.parent) ||
-      definition.parent.type !== "VariableDeclaration"
-    ) {
-      continue;
-    }
-    if (
-      definition.parent.kind !== "const" &&
-      variable.references.some(
-        (reference) =>
-          reference.init !== true && reference.isWrite?.() === true,
-      )
-    ) {
-      return null;
-    }
-    return unwrapExpression(definition.node.init);
   }
   return null;
 };
@@ -156,29 +112,18 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (
-          identifier: IdentifierNode,
-        ): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        const variableFor = (node: unknown): Variable | null =>
+          isIdentifierReference(node) ? resolveVariable(context, node) : null;
 
         const resolveStableExpression = (
           node: unknown,
-          visited = new Set<ScopeVariable>(),
+          visited = new Set<Variable>(),
         ): AstNode | null => {
           const expression = unwrapExpression(node);
-          if (!isEstreeIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return expression;
           }
-          const variable = resolveVariable(expression);
+          const variable = variableFor(expression);
           if (variable === null || visited.has(variable)) {
             return expression;
           }
@@ -196,10 +141,10 @@ export default eslintCompatPlugin({
         // unrelated helpers impersonate the trusted path module.
         const nodePathApiParts = (node: unknown): string[] | null => {
           const member = staticMemberParts(node);
-          if (member === null || !isEstreeIdentifier(member.root)) {
+          if (member === null) {
             return null;
           }
-          const imported = importedPathBinding(resolveVariable(member.root));
+          const imported = importedPathBinding(variableFor(member.root));
           if (imported === null) {
             return null;
           }
@@ -259,13 +204,12 @@ export default eslintCompatPlugin({
             return true;
           }
           if (
-            isEstreeIdentifier(stableLeft) &&
-            isEstreeIdentifier(stableRight)
+            isIdentifierReference(stableLeft) &&
+            isIdentifierReference(stableRight)
           ) {
-            const leftVariable = resolveVariable(stableLeft);
+            const leftVariable = variableFor(stableLeft);
             return (
-              leftVariable !== null &&
-              leftVariable === resolveVariable(stableRight)
+              leftVariable !== null && leftVariable === variableFor(stableRight)
             );
           }
           return (
@@ -372,33 +316,49 @@ export default eslintCompatPlugin({
           return trailingText === "" && isPathSeparator(expressions.at(-1));
         };
 
+        // Whether `call` is `<path value>.<method>(prefix[, 0])` with a
+        // prefix that does not end at a path separator.
+        const isBarePrefixCall = (call: unknown, method: string): boolean => {
+          const expression = unwrapExpression(call);
+          if (
+            expression?.type !== "CallExpression" ||
+            !isAstNode(expression.callee) ||
+            expression.callee.type !== "MemberExpression" ||
+            getPropertyName(expression.callee.property) !== method ||
+            !Array.isArray(expression.arguments)
+          ) {
+            return false;
+          }
+          const args = expression.arguments;
+          const hasEquivalentStartPosition =
+            args.length === 1 ||
+            (args.length === 2 && isZeroStartPosition(args.at(1)));
+          return (
+            hasEquivalentStartPosition &&
+            !hasPathSeparatorSuffix(args.at(0)) &&
+            getPathValueCall(expression.callee.object) !== null
+          );
+        };
+
         return {
           CallExpression(node) {
-            if (
-              !isAstNode(node.callee) ||
-              node.callee.type !== "MemberExpression" ||
-              getPropertyName(node.callee.property) !== "startsWith" ||
-              !Array.isArray(node.arguments)
-            ) {
+            if (isBarePrefixCall(node, "startsWith")) {
+              context.report({ node, messageId: "noPathPrefixContainment" });
+            }
+          },
+          // `candidate.indexOf(root) === 0` and its negated / mirrored forms.
+          BinaryExpression(node) {
+            if (!EQUALITY_OPERATORS.has(node.operator)) {
               return;
             }
-            const hasEquivalentStartPosition =
-              node.arguments.length === 1 ||
-              (node.arguments.length === 2 &&
-                isZeroStartPosition(node.arguments.at(1)));
-            if (!hasEquivalentStartPosition) {
-              return;
+            const comparesIndexToZero =
+              (isZeroStartPosition(node.right) &&
+                isBarePrefixCall(node.left, "indexOf")) ||
+              (isZeroStartPosition(node.left) &&
+                isBarePrefixCall(node.right, "indexOf"));
+            if (comparesIndexToZero) {
+              context.report({ node, messageId: "noPathPrefixContainment" });
             }
-            const prefix = node.arguments.at(0);
-            if (hasPathSeparatorSuffix(prefix)) {
-              return;
-            }
-            const candidateCall = getPathValueCall(node.callee.object);
-            if (candidateCall === null) {
-              return;
-            }
-
-            context.report({ node, messageId: "noPathPrefixContainment" });
           },
         };
       },

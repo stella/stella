@@ -47,7 +47,7 @@ const _method = customType<{ data: unknown }>({
 });
 
 // A quoted property key parses as a string literal, not an identifier, and
-// must not bypass the rule. oxfmt-ignore keeps the quotes in place.
+// is matched too. oxfmt-ignore keeps the quotes in place.
 // oxfmt-ignore
 // oxlint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column
 const _quotedKey = customType<{ data: unknown }>({
@@ -55,7 +55,7 @@ const _quotedKey = customType<{ data: unknown }>({
 });
 
 // A zero-expression template literal names the same SQL type as a string
-// literal and must not bypass the rule.
+// literal and is matched too.
 // oxlint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column
 const _backtick = customType<{ data: unknown }>({ dataType: () => `jsonb` });
 
@@ -69,6 +69,7 @@ const _computedKey = customType<{ data: unknown }>({
 // --- Cases the rule MUST NOT flag ---
 
 // A non-jsonb customType is unrelated to the bun-sql JSONB storage hazard.
+// expect-clean: require-custom-jsonb-column/require-custom-jsonb-column
 const _text = customType<{ data: unknown }>({ dataType: () => "text" });
 
 export const __requireCustomJsonbFixture = {

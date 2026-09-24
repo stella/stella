@@ -1,3 +1,5 @@
+import { TaggedError } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import { errorTag } from "@/api/lib/errors/utils";
@@ -95,6 +97,13 @@ export const createMcpGatewayRateLimiter = ({
   return { consume };
 };
 
+class McpGatewayRedisReplyError extends TaggedError(
+  "McpGatewayRedisReplyError",
+)<{
+  message: string;
+  reply: unknown;
+}> {}
+
 const consumeRedis = async ({
   commandTimeoutMs,
   key,
@@ -116,7 +125,10 @@ const consumeRedis = async ({
   });
   const count = Number(rawCount);
   if (!Number.isFinite(count)) {
-    throw new TypeError("Redis returned a non-numeric rate-limit count");
+    throw new McpGatewayRedisReplyError({
+      message: "Redis returned a non-numeric rate-limit count",
+      reply: rawCount,
+    });
   }
   return count;
 };

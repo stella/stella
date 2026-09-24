@@ -28,6 +28,7 @@ export const redactedKeys = (): void => {
 
 export const acceptedKeys = (): void => {
   // Allowed: the same information under a key the sanitizer keeps.
+  // expect-clean: no-redacted-log-attribute-key/no-redacted-log-attribute-key
   logger.error("worker.failed", { queue: queueName, attempt });
 
   // Allowed: usage metrics survive the `prompt` lookahead.

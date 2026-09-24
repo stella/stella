@@ -943,7 +943,7 @@ export const createMcpHttpRequestHandler = ({
           try {
             const readResult: unknown = await reader.read();
             if (!isByteStreamReadResult(readResult)) {
-              throw new TypeError("MCP transport returned a non-byte stream");
+              panic("MCP transport returned a non-byte stream");
             }
             if (readResult.done) {
               await completeExchange();

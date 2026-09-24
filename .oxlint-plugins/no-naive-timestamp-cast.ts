@@ -17,9 +17,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     // instant with a stated zone is deliberate time-zone handling, which
 //     // is exactly what this rule exists to force.
 
-import { isStringLiteral } from "./utils.ts";
-
-type AstNode = { type: string } & Record<string, unknown>;
+import { isAstNode, isStringLiteral } from "./utils.ts";
 
 // A naive timestamp cast in either PostgreSQL shorthand (`::timestamp`) or
 // ANSI form (`CAST(x AS timestamp)`), with optional precision and the
@@ -46,12 +44,6 @@ const AWARE_ZONE_SUFFIX = /^\s+with\s+time\s+zone$/iu;
 // a parenthesized shorthand cast is equally deliberate.
 const RE_ANCHOR = /^(?:\s*\))*\s*at\s+time\s+zone\b/iu;
 
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
-
 const hasNaiveCast = (text: string): boolean => {
   for (const pattern of NAIVE_CASTS) {
     pattern.lastIndex = 0;
@@ -60,7 +52,7 @@ const hasNaiveCast = (text: string): boolean => {
       match !== null;
       match = pattern.exec(text)
     ) {
-      const zone = match.groups?.["zone"];
+      const zone = match.groups?.zone;
       if (zone !== undefined && AWARE_ZONE_SUFFIX.test(zone)) {
         continue;
       }
@@ -97,20 +89,12 @@ export default eslintCompatPlugin({
               if (!isAstNode(quasi)) {
                 continue;
               }
-              const value = quasi.value;
-              if (typeof value !== "object" || value === null) {
-                continue;
-              }
               // Prefer the cooked text: an escape like `\n` reaches the SQL
               // tag as a real newline, which `\s` matches, while the raw
               // segment still holds the two-character escape sequence.
               // cooked is null for invalid escapes; fall back to raw there.
-              const { cooked, raw } = value as {
-                cooked?: unknown;
-                raw?: unknown;
-              };
-              const segment = typeof cooked === "string" ? cooked : raw;
-              if (typeof segment === "string" && hasNaiveCast(segment)) {
+              const segment = quasi.value.cooked ?? quasi.value.raw;
+              if (hasNaiveCast(segment)) {
                 context.report({ node, messageId: "naiveCast" });
                 return;
               }

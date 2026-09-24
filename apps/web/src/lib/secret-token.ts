@@ -24,14 +24,10 @@ export const createSecretTokenBoundary = <const TName extends string>(
         [secretTokenBrand]: name,
         [Symbol.toStringTag]: "SecretToken",
         toString() {
-          throw new TypeError(
-            `Secret token cannot be converted to string: ${name}`,
-          );
+          return panic(`Secret token cannot be converted to string: ${name}`);
         },
         [Symbol.toPrimitive]() {
-          throw new TypeError(
-            `Secret token cannot be converted to string: ${name}`,
-          );
+          return panic(`Secret token cannot be converted to string: ${name}`);
         },
       };
 

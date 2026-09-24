@@ -126,6 +126,7 @@ const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
     return null;
   }
   const response = await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixed container credentials endpoint; the runtime supplies only the path
     `http://169.254.170.2${relativeUri}`,
     { timeoutMs: 5000 },
   );
@@ -348,6 +349,7 @@ const probeKey = async (
 ): Promise<ProbedDoc> => {
   // Keep the presigned fetch here because the probe requires a hard request
   // timeout; Bun's native S3 body reads do not yet accept an AbortSignal.
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned URL for the configured corpus bucket, produced by this script
   const response = await fetchWithTimeout(s3.presign(key, { expiresIn: 300 }), {
     timeoutMs: 30_000,
   });

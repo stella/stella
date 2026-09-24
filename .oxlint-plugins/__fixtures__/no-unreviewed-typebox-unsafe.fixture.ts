@@ -49,6 +49,7 @@ const Unsafe = "Unsafe";
 TypeAlias[Unsafe](runtimeSchema);
 
 const localSchemaFactory = { Unsafe: (schema: unknown) => schema };
+// expect-clean: no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe
 localSchemaFactory.Unsafe(runtimeSchema);
 
 // oxlint-disable-next-line no-shadow -- parameter shadows the TypeBox import to prove source provenance

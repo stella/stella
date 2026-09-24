@@ -1,5 +1,6 @@
 // Passive regression fixture for
 // `no-vacuous-throw-assertion/no-vacuous-throw-assertion`.
+/* oxlint-disable no-bare-error/no-bare-error -- fixture throws the native error types its assertions name */
 
 import { expect } from "bun:test";
 
@@ -51,6 +52,7 @@ export const namedAssertions = (): void => {
   );
 
   // Allowed: an error class pins the constructor.
+  // expect-clean: no-vacuous-throw-assertion/no-vacuous-throw-assertion
   expect(loadCorpus("")).rejects.toThrow(RangeError);
 
   // Allowed: `.not.toThrow()` asserts the absence of every error, so there is

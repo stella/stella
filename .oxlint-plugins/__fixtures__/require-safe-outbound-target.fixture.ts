@@ -1,7 +1,11 @@
 // Passive regression fixture for
 // `require-safe-outbound-target/require-safe-outbound-target`.
 
+import * as nodeHttp from "node:http";
+import https, { request as nodeRequest } from "node:https";
+import { request as undiciRequest } from "undici";
 import { fetchWithTimeout as unrelatedFetch } from "unrelated-fetch";
+import SocketClient from "ws";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
@@ -14,6 +18,7 @@ import { getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
+import { fetchWithTimeout as webFetch } from "../../apps/web/src/lib/fetch.ts";
 
 const STATIC_BASE = "https://api.example.com";
 const STATIC_ALIAS = STATIC_BASE;
@@ -223,6 +228,33 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
     });
   }
 
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a re-exporting module's wrapper
+  await webFetch(inputUrl, { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: undici request
+  await undiciRequest(inputUrl);
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: default import of node:https
+  https.request(inputUrl);
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: aliased named import of node:https
+  nodeRequest({ hostname: inputUrl, path: "/items" });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: namespace import of node:http
+  nodeHttp.get(inputUrl);
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: conditional callee choosing between sinks
+  (inputUrl.startsWith("https:") ? nodeRequest : nodeHttp.request)(inputUrl);
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: global WebSocket
+  void new WebSocket(inputUrl);
+  const Socket = WebSocket;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: aliased global WebSocket
+  void new Socket(inputUrl);
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: default import of ws
+  void new SocketClient(inputUrl);
+
   const spreadRedirect = restrictOutboundUrl({
     rawUrl: inputUrl,
     hostPolicy: {
@@ -240,7 +272,25 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   }
 };
 
+const fixedEndpoint = (tenant: string) =>
+  `https://login.example.com/${tenant}/token`;
+const passThroughEndpoint = (target: string) => target;
+
+export const mustCheckLocalHelpers = async (inputUrl: string) => {
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(fixedEndpoint(inputUrl), { timeoutMs: 1000 });
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a local helper returning its parameter
+  await fetchWithTimeout(passThroughEndpoint(inputUrl), { timeoutMs: 1000 });
+};
+
 export const mustAllowFixedOrigins = async (id: string) => {
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  https.request({ hostname: "api.example.com", path: `/items/${id}` });
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  void new WebSocket(`wss://api.example.com/items/${id}`);
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await webFetch(`${STATIC_BASE}/items/${id}`, { timeoutMs: 1000 });
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
   await fetchWithTimeout("https://api.example.com/items", {
     timeoutMs: 1000,
   });
@@ -278,6 +328,38 @@ export const mustAllowCanonicalBoundary = async (inputUrl: string) => {
   });
   if (providerUrl !== null) {
     await fetchWithTimeout(providerUrl, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const spreadBeforeRedirect = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ["https://provider.example"],
+    },
+  });
+  if (spreadBeforeRedirect !== null) {
+    // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+    await fetchWithTimeout(spreadBeforeRedirect, {
+      ...spreadRedirectOverride,
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const baseOrigins = ["https://provider.example"] as const;
+  const spreadOrigins = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: [...baseOrigins, "https://mirror.provider.example"],
+    },
+  });
+  if (spreadOrigins !== null) {
+    // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+    await fetchWithTimeout(spreadOrigins, {
       redirect: "error",
       timeoutMs: 1000,
     });

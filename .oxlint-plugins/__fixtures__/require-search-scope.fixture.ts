@@ -296,6 +296,7 @@ const unsafeAliasedLocalHelperPrivateRead = sql`
 const scopedFromHelper = (scope: unknown) =>
   sql`FROM search_documents sd WHERE true ${scope}`;
 const scopedFromHelperAlias = scopedFromHelper;
+// expect-clean: require-search-scope/require-search-scope
 const scopedAliasedLocalHelperRead = sql`
   SELECT * ${scopedFromHelperAlias(entityWorkspaceFilter)}
 `;
@@ -485,7 +486,7 @@ const unsafeJoinedMultiBranch = (() => {
     sql`* FROM search_documents sd`,
     sql`* FROM entities sd WHERE true ${entityWorkspaceFilter}`,
   ];
-  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sql.join separator preserves query branch boundaries
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- x2: fixture proves a sql.join separator preserves query branch boundaries
   return sql`SELECT ${sql.join(branches, sql` UNION ALL SELECT `)}`;
 })();
 
@@ -778,7 +779,7 @@ const unsafeConditionalPrivateFragment = (() => {
 
 const unsafeLogicalPrivateFragment = (() => {
   const privateFrom = enabled && sql`FROM search_documents sd`;
-  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a logical SQL fragment cannot hide a private projection
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- x2: fixture proves a logical SQL fragment cannot hide a private projection
   return sql`SELECT * ${privateFrom}`;
 })();
 

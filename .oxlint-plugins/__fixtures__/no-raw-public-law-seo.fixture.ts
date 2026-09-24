@@ -7,6 +7,7 @@ const rawOpenGraph = `og:title`;
 // oxlint-disable-next-line no-raw-public-law-seo/no-raw-public-law-seo -- fixture proves Twitter metadata prefixes are rejected
 const rawTwitter = "twitter:card";
 
+// expect-clean: no-raw-public-law-seo/no-raw-public-law-seo
 const routeTitle = "Supreme Court decisions";
 const metadata = createPublicLawHead();
 

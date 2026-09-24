@@ -1,5 +1,5 @@
 import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { createPipelineContext, deanonymise } from "@stll/anonymize";
 import type { PipelineContext } from "@stll/anonymize";
@@ -385,7 +385,7 @@ const rewriteBoundaryPlaceholders = (
     ) {
       nextIndex += 1;
       if (!Number.isSafeInteger(nextIndex)) {
-        throw new TypeError("placeholder index exceeds the safe integer range");
+        panic("placeholder index exceeds the safe integer range");
       }
       nextPlaceholder = `[${parsed.label}_${String(nextIndex)}]`;
     }
@@ -1532,9 +1532,7 @@ const collectMcpInputKeyRestorations = ({
 }): void => {
   if (Array.isArray(original) && Array.isArray(prepared)) {
     if (original.length !== prepared.length) {
-      throw new TypeError(
-        "MCP input schema preparation changed its array shape",
-      );
+      panic("MCP input schema preparation changed its array shape");
     }
     for (let index = 0; index < original.length; index += 1) {
       collectMcpInputKeyRestorations({
@@ -1560,9 +1558,7 @@ const collectMcpInputKeyRestorations = ({
   const originalEntries = unknownObjectEntries(original);
   const preparedEntries = unknownObjectEntries(prepared);
   if (originalEntries.length !== preparedEntries.length) {
-    throw new TypeError(
-      "MCP input schema preparation changed its object shape",
-    );
+    panic("MCP input schema preparation changed its object shape");
   }
 
   for (const [
@@ -1571,7 +1567,7 @@ const collectMcpInputKeyRestorations = ({
   ] of originalEntries.entries()) {
     const preparedEntry = preparedEntries.at(index);
     if (preparedEntry === undefined) {
-      throw new TypeError("MCP input schema preparation lost a property");
+      return panic("MCP input schema preparation lost a property");
     }
     const [preparedKey, preparedValue] = preparedEntry;
     if (preparedKey !== originalKey) {

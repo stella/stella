@@ -115,6 +115,8 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-typebox-unsafe.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
+  "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
+  "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;

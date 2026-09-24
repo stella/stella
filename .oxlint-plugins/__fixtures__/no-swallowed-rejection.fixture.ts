@@ -208,6 +208,7 @@ const namedWithReason = (error: unknown) => {
   captureError(error);
 };
 const handledNamedRejectionCallbacks = async () => {
+  // expect-clean: no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
   await risky().catch(namedWithReason);
   await risky().then(success, namedWithReason);
 };

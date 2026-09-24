@@ -204,6 +204,7 @@ const boeFetch = async (
 ): Promise<Response | null> => {
   let response: Response;
   try {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- shared request helper; every caller in this client builds the URL from the fixed BOE API base
     response = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: accept },

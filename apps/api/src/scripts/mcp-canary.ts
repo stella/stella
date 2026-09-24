@@ -319,6 +319,7 @@ export const createJsonRpcRequest = ({
 
 const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
   await readProbeResponse(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
     await fetchWithTimeout(createJsonRpcRequest(call), {
       timeoutMs: PROBE_TIMEOUT_MS,
     }),
@@ -329,6 +330,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.discovery, async () =>
       evaluateDiscovery(
         await readProbeResponse(
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
           await fetchWithTimeout(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
@@ -340,6 +342,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.unauthenticated, async () =>
       evaluateUnauthenticated(
         await readProbeResponse(
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
           await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
             body: JSON.stringify({
               id: 1,

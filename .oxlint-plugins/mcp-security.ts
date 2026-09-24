@@ -9,35 +9,67 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isCallTo, isIdentifier } from "./utils.ts";
+import {
+  type ImportedFromOptions,
+  getPropertyName,
+  invokedCallee,
+  isAstNode,
+  isFileIn,
+  isImportedFrom,
+  memberPropertyName,
+  unwrapExpression,
+} from "./utils.ts";
 
-const MCP_OAUTH_CLIENTS = "mcpOAuthClients";
+type RuleContext = ImportedFromOptions["context"];
+
+const MCP_OAUTH_CLIENTS: ReadonlySet<string> = new Set(["mcpOAuthClients"]);
+const MCP_OAUTH_CLIENTS_MODULES = [
+  "apps/api/src/db/schema",
+  "apps/api/src/db/schema/mcp",
+];
+const REDACTOR: ReadonlySet<string> = new Set([
+  "redactMcpOAuthRegistrationResponse",
+]);
+const REDACTOR_MODULE =
+  "apps/api/src/lib/mcp-upstream/oauth-registration-response";
+const JOIN_METHODS: ReadonlySet<string> = new Set(["leftJoin", "innerJoin"]);
 const OAUTH_CLIENT_JOIN_ALLOWED_FILES = [
   "apps/api/src/handlers/chat/tools/external-mcp-tools.ts",
 ];
 
-const isRedactionCall = (node) =>
-  isCallTo(node, "redactMcpOAuthRegistrationResponse");
-
-const isJoinCall = (node) => {
-  if (node.type !== "CallExpression") {
-    return false;
-  }
-
-  const callee = node.callee;
+const isRedactionCall = (context: RuleContext, node: unknown): boolean => {
+  const call = unwrapExpression(node);
   return (
-    callee.type === "MemberExpression" &&
-    !callee.computed &&
-    (isIdentifier(callee.property, "leftJoin") ||
-      isIdentifier(callee.property, "innerJoin")) &&
-    isIdentifier(node.arguments.at(0), MCP_OAUTH_CLIENTS)
+    call?.type === "CallExpression" &&
+    isImportedFrom({
+      context,
+      node: invokedCallee(call),
+      modules: [REDACTOR_MODULE],
+      names: REDACTOR,
+    })
   );
 };
 
-const isAllowedOAuthClientJoinFile = (context) => {
-  const filename = context.filename ?? context.getFilename?.() ?? "";
-  return OAUTH_CLIENT_JOIN_ALLOWED_FILES.some((allowedFile) =>
-    filename.endsWith(allowedFile),
+const isOAuthClientJoin = (context: RuleContext, node: unknown): boolean => {
+  const call = unwrapExpression(node);
+  if (call?.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const method = memberPropertyName(callee);
+  return (
+    method !== null &&
+    JOIN_METHODS.has(method) &&
+    Array.isArray(call.arguments) &&
+    isImportedFrom({
+      context,
+      node: call.arguments.at(0),
+      modules: MCP_OAUTH_CLIENTS_MODULES,
+      names: MCP_OAUTH_CLIENTS,
+    })
   );
 };
 
@@ -55,11 +87,13 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           Property(node) {
-            if (getPropertyName(node.key) !== "registrationResponse") {
-              return;
-            }
-
-            if (isRedactionCall(node.value)) {
+            // A destructuring pattern reads the field; it does not persist it.
+            const owner = node.parent;
+            if (
+              getPropertyName(node.key) !== "registrationResponse" ||
+              (isAstNode(owner) && owner.type === "ObjectPattern") ||
+              isRedactionCall(context, node.value)
+            ) {
               return;
             }
 
@@ -85,10 +119,10 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            isAllowedFile = isAllowedOAuthClientJoinFile(context);
+            isAllowedFile = isFileIn(context, OAUTH_CLIENT_JOIN_ALLOWED_FILES);
           },
           CallExpression(node) {
-            if (isAllowedFile || !isJoinCall(node)) {
+            if (isAllowedFile || !isOAuthClientJoin(context, node)) {
               return;
             }
 

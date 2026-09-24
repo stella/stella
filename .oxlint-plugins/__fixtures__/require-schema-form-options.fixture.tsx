@@ -26,6 +26,7 @@ const { useForm: destructuredFactory } = namespaceAlias;
 const helperAlias = configure;
 
 export const useGoodForms = () => [
+  // expect-clean: require-schema-form-options/require-schema-form-options
   useForm(schemaFormOptions(config)),
   useForm(relativeOptions(config)),
   useAliasedForm(configure(config)),

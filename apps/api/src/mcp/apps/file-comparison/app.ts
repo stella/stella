@@ -201,6 +201,7 @@ const putFile = async (
 ): Promise<Result<void, ComparisonAppError>> => {
   const response = await Result.tryPromise(
     async () =>
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- browser upload to the presigned URL Stella's upload reservation returned
       await fetchWithTimeout(upload.url, {
         method: "PUT",
         headers: upload.headers,

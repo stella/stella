@@ -68,6 +68,7 @@ export const _switchBranch = () => {
 // --- Allowed: file/pending branches drive routing/loading, not display drift ---
 
 export const _fileBranch = () => {
+  // expect-clean: no-workspace-field-value-drift/no-workspace-field-value-drift
   if (field.content.type === "file") {
     return <button type="button">{field.content.fileName}</button>;
   }
@@ -97,6 +98,7 @@ export const _rawBidiText = () => (
 );
 
 export const _isolatedBidiText = () => (
+  // expect-clean: no-workspace-field-value-drift/no-raw-field-value-bidi-text
   <BidiText as="div">שלום v ABC-123</BidiText>
 );
 

@@ -32,6 +32,7 @@ import {
   getImportedName,
   isAstNode,
   isIdentifier,
+  jsxName,
 } from "./utils.ts";
 
 const LUCIDE_MODULE = "lucide-react";
@@ -46,20 +47,6 @@ const BANNED_IMPORTS = new Set([
   "Scale",
   "ScaleIcon",
 ]);
-
-/** The name a JSX element opens with, for identifier and member forms. */
-const jsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return jsxName(node.property);
-  }
-  return null;
-};
 
 /**
  * Whether this identifier stands for the binding itself rather than naming

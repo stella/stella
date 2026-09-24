@@ -21,7 +21,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isStringLiteral } from "./utils.ts";
+import { isAstNode, isFileIn, isStringLiteral, jsxName } from "./utils.ts";
 
 const MATTER_ROUTE = "/workspaces/$workspaceId";
 
@@ -45,30 +45,6 @@ const LISTING_WRAPPER = "MatterContextMenu";
 // `<Navigate>` is a redirect, not a clickable affordance.
 const REDIRECT_ELEMENTS = new Set(["Navigate"]);
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
-
-const getJsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return getJsxName(node.property);
-  }
-  if (node.type === "JSXNamespacedName") {
-    return getJsxName(node.name);
-  }
-  return null;
-};
-
 const getStringAttrValue = (value: unknown): string | null => {
   if (isStringLiteral(value)) {
     return value.value;
@@ -90,7 +66,7 @@ const hasListingWrapperAncestor = (node: unknown): boolean => {
       const openingElement = current.openingElement;
       if (
         isAstNode(openingElement) &&
-        getJsxName(openingElement.name) === LISTING_WRAPPER
+        jsxName(openingElement.name) === LISTING_WRAPPER
       ) {
         return true;
       }
@@ -99,11 +75,6 @@ const hasListingWrapperAncestor = (node: unknown): boolean => {
   }
   return false;
 };
-
-const filenameOf = (context: {
-  filename?: string;
-  getFilename?: () => string;
-}): string => context.filename ?? context.getFilename?.() ?? "";
 
 export default eslintCompatPlugin({
   meta: { name: "require-matter-affordance" },
@@ -124,11 +95,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            const filename = filenameOf(context);
-            return !SANCTIONED_FILES.some((file) => filename.endsWith(file));
+            return !isFileIn(context, SANCTIONED_FILES);
           },
           JSXAttribute(node) {
-            if (getJsxName(node.name) !== "to") {
+            if (jsxName(node.name) !== "to") {
               return;
             }
             if (getStringAttrValue(node.value) !== MATTER_ROUTE) {
@@ -139,7 +109,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(opening) || opening.type !== "JSXOpeningElement") {
               return;
             }
-            const tag = getJsxName(opening.name);
+            const tag = jsxName(opening.name);
             if (tag === null || REDIRECT_ELEMENTS.has(tag)) {
               return;
             }

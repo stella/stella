@@ -1,6 +1,8 @@
 import { useId } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
+import { panic } from "better-result";
+
 import { cn } from "../lib/utils";
 import {
   CalendarCell,
@@ -149,7 +151,7 @@ export const ResourceCalendar = ({
           for (const placement of layout.placements) {
             const entry = resourceEntryById.get(placement.entryId);
             if (entry === undefined) {
-              throw new TypeError(
+              panic(
                 `Resource calendar layout references unknown entry ${placement.entryId}`,
               );
             }
@@ -301,7 +303,7 @@ const ResourceCalendarEntryView = ({
 
 const assertUniqueIds = (ids: readonly string[], label: string): void => {
   if (new Set(ids).size !== ids.length) {
-    throw new TypeError(`${label} ids must be unique`);
+    panic(`${label} ids must be unique`);
   }
 };
 
@@ -322,7 +324,7 @@ const assertResourceCalendarContract = ({
   const resourceIds = new Set(resources.map(({ id }) => id));
   const orphan = entries.find(({ resourceId }) => !resourceIds.has(resourceId));
   if (orphan !== undefined) {
-    throw new TypeError(
+    panic(
       `Resource calendar entry ${orphan.id} references an unknown resource`,
     );
   }

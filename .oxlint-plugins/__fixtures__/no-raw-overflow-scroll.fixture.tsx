@@ -63,6 +63,7 @@ export const _ok3b = () => <div className="[&>table]:overflow-x-auto" />;
 export const _ok3c = () => <div className="[&_pre_code]:overflow-x-auto" />;
 
 // --- Accepted: clipping, not scrolling ---
+// expect-clean: no-raw-overflow-scroll/no-raw-overflow-scroll
 export const _ok4 = () => <div className="overflow-hidden" />;
 export const _ok5 = () => <div className="overflow-clip" />;
 export const _ok6 = () => <div className="overflow-visible" />;

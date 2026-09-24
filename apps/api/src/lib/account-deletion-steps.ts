@@ -116,6 +116,7 @@ export const lockUserRowForDeletion = async (
   tx: Transaction,
   currentUserId: string,
 ): Promise<void> => {
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- locks the caller's own user row while their account is deleted; account-level, no organization applies
   await tx
     .select({ id: user.id })
     .from(user)
@@ -1193,6 +1194,7 @@ export const finalizeDeletedUserRecord = async (
   tx: Transaction,
   currentUserId: string,
 ): Promise<void> => {
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- anonymizes the caller's own user row at the end of account deletion; account-level, no organization applies
   await tx
     .update(user)
     .set({

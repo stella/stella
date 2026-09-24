@@ -126,6 +126,7 @@ const findDelegation = async (
 const findUserByEmail = async (
   email: string,
 ): Promise<{ id: string } | undefined> => {
+  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- resolves the asserted identity by email before provisioning; the account may not belong to any organization yet
   const rows = await rootDb
     .select({ id: user.id })
     .from(user)
@@ -177,6 +178,7 @@ const autoProvision = async (
         }),
     );
     if (Result.isError(orgResult)) {
+      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- rolls back the user row this function just created when its organization cannot be provisioned
       await rootDb.delete(user).where(eq(user.id, createdUser.id));
       throw new ProvisionError();
     }

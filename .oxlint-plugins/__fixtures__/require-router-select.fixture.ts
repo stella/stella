@@ -13,6 +13,7 @@ export const useFixtureSelections = () => {
   // oxlint-disable-next-line require-router-select/require-router-select -- fixture: route-scoped hook also requires select
   const wholeContext = Route.useRouteContext({});
 
+  // expect-clean: require-router-select/require-router-select
   const selectedParam = useParams({ select: (value: unknown) => value });
   const selectedSearch = useSearch({ select: (value: unknown) => value });
   return {

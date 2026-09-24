@@ -7,19 +7,16 @@
 // of the small approved, import-verified scope builders; compiled-SQL and
 // adversarial integration tests prove the predicates those builders emit.
 
-import {
-  eslintCompatPlugin,
-  type ESTree,
-  type Scope as OxlintScope,
-  type Variable,
-} from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 import { panic } from "better-result";
 
 import {
   getImportedName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -27,11 +24,6 @@ import type { AstNode } from "./utils.ts";
 type ScopeVariable = Variable;
 
 type SqlParameterBindings = ReadonlyMap<ScopeVariable, unknown>;
-
-type Scope = OxlintScope;
-
-const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
-  isIdentifier(node);
 
 type ApprovedImport = {
   importedName: string;
@@ -1472,20 +1464,14 @@ export default eslintCompatPlugin({
           }
         >();
 
-        const resolveVariable = (identifier: unknown): ScopeVariable | null => {
-          if (!isScopeIdentifier(identifier)) {
-            return null;
-          }
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope) {
-            const variable = scope.set.get(identifier.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        // Call sites hand in unnarrowed expressions; anything but an
+        // identifier reference binds to no variable.
+        const variableForExpression = (
+          identifier: unknown,
+        ): ScopeVariable | null =>
+          isIdentifierReference(identifier)
+            ? resolveVariable(context, identifier)
+            : null;
 
         const resolveBoundArgument = (
           expression: unknown,
@@ -1496,7 +1482,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(unwrapped) || ancestors.has(unwrapped)) {
             return unwrapped;
           }
-          const variable = resolveVariable(unwrapped);
+          const variable = variableForExpression(unwrapped);
           if (variable === null || !parameterBindings.has(variable)) {
             return unwrapped;
           }
@@ -1513,7 +1499,7 @@ export default eslintCompatPlugin({
           identifier: AstNode & { name: string },
           approvedImports: readonly ApprovedImport[],
         ): boolean => {
-          const variable = resolveVariable(identifier);
+          const variable = variableForExpression(identifier);
           return (
             variable?.defs.some((definition) => {
               if (
@@ -1540,7 +1526,7 @@ export default eslintCompatPlugin({
           identifier: AstNode & { name: string },
           module: string,
         ): boolean =>
-          resolveVariable(identifier)?.defs.some(
+          variableForExpression(identifier)?.defs.some(
             (definition) =>
               definition.type === "ImportBinding" &&
               isAstNode(definition.node) &&
@@ -1668,7 +1654,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(unwrapped)) {
             return false;
           }
-          const variable = resolveVariable(unwrapped);
+          const variable = variableForExpression(unwrapped);
           return (
             variable?.defs.some((definition) => {
               if (
@@ -1860,7 +1846,7 @@ export default eslintCompatPlugin({
           }
           if (isIdentifier(unwrapped)) {
             return (
-              resolveVariable(unwrapped)?.defs.some(
+              variableForExpression(unwrapped)?.defs.some(
                 (definition) => definition.type === "ImportBinding",
               ) === true
             );
@@ -1898,7 +1884,7 @@ export default eslintCompatPlugin({
             return false;
           }
           return (
-            resolveVariable(unwrapped)?.defs.some(
+            variableForExpression(unwrapped)?.defs.some(
               (definition) =>
                 definition.type === "Variable" &&
                 isAstNode(definition.node) &&
@@ -1911,7 +1897,7 @@ export default eslintCompatPlugin({
         const constIdentifierInitializer = (
           identifier: AstNode & { name: string },
         ): unknown => {
-          const variable = resolveVariable(identifier);
+          const variable = variableForExpression(identifier);
           for (const definition of variable?.defs ?? []) {
             if (
               definition.type !== "Variable" ||
@@ -2138,7 +2124,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(unwrapped)) {
             return null;
           }
-          const variable = resolveVariable(unwrapped);
+          const variable = variableForExpression(unwrapped);
           if (variable === null || ancestors.has(variable)) {
             return null;
           }
@@ -2206,7 +2192,7 @@ export default eslintCompatPlugin({
           const declaration = isAstNode(parent.parent) ? parent.parent : null;
           return declaration?.type === "VariableDeclaration" &&
             declaration.kind === "const"
-            ? resolveVariable(parent.id)
+            ? variableForExpression(parent.id)
             : null;
         };
 
@@ -2277,7 +2263,7 @@ export default eslintCompatPlugin({
           identifier: AstNode & { name: string },
           ancestors: ReadonlySet<ScopeVariable> = new Set(),
         ): AstNode[] => {
-          const variable = resolveVariable(identifier);
+          const variable = variableForExpression(identifier);
           if (variable === null || ancestors.has(variable)) {
             return [];
           }
@@ -2329,7 +2315,7 @@ export default eslintCompatPlugin({
           if (!isIdentifier(resolved)) {
             return [];
           }
-          const variable = resolveVariable(resolved);
+          const variable = variableForExpression(resolved);
           return (variable?.defs ?? []).flatMap((definition) => {
             if (
               definition.type === "FunctionName" &&
@@ -2409,7 +2395,7 @@ export default eslintCompatPlugin({
                 hasAmbiguousParameter = true;
                 break;
               }
-              const parameterVariable = resolveVariable(parameter);
+              const parameterVariable = variableForExpression(parameter);
               const argument = call.arguments.at(index);
               if (
                 parameterVariable === null ||

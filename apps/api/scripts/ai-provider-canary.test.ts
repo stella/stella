@@ -22,6 +22,7 @@ import {
   canaryToolProbeIterationLimit,
   canaryToolProbeModelOptions,
   CanaryCredentialRejectedError,
+  CanaryError,
   CanaryProviderUnavailableError,
   CanaryProviderRunError,
   CATALOG_SWEEP_BUDGET_MS,
@@ -592,9 +593,9 @@ describe("AI provider canary retry contract", () => {
 
   test("does not retry deterministic contract failures", async () => {
     let calls = 0;
-    const error = new TypeError(
-      "Provider returned unexpected weekly canary tool arguments.",
-    );
+    const error = new CanaryError({
+      message: "Provider returned unexpected weekly canary tool arguments.",
+    });
     const result = await runCanaryProbe({
       retryDelayMs: 0,
       run: async () => {
@@ -1022,7 +1023,7 @@ describe("AI provider canary credential rejection", () => {
       run: async () => {
         invoked.push(label);
         if (index === 0) {
-          throw new TypeError("Provider returned no text.");
+          throw new CanaryError({ message: "Provider returned no text." });
         }
       },
       timeoutMs: 1000,

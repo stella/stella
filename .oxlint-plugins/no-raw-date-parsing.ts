@@ -1,6 +1,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
+import { unwrapExpression } from "./utils.ts";
+
 // Disallow raw date-only parsing and calendar-day millisecond arithmetic.
 //
 // 1. `new Date("YYYY-MM-DD")` (string or template argument without a "T")
@@ -55,14 +57,6 @@ const PRODUCT_WRAPPER_TYPES = new Set([
   "TSTypeAssertion",
 ]);
 
-const unwrapExpression = (node) => {
-  let current = node;
-  while (current && PRODUCT_WRAPPER_TYPES.has(current.type)) {
-    current = current.expression;
-  }
-  return current;
-};
-
 // Collect the numeric-literal leaves of a `*` chain (`a * b * c * ...`).
 const collectProductLiterals = (node, out: number[]): void => {
   const expression = unwrapExpression(node);
@@ -103,7 +97,10 @@ const isDateOnlyStringArg = (arg): boolean => {
       typeof expression.value === "string" && !expression.value.includes("T")
     );
   }
-  if (expression.type === "TemplateLiteral") {
+  if (
+    expression.type === "TemplateLiteral" &&
+    Array.isArray(expression.quasis)
+  ) {
     return !expression.quasis.some(
       (quasi) =>
         typeof quasi.value?.raw === "string" && quasi.value.raw.includes("T"),

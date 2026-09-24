@@ -69,6 +69,7 @@ const PlainRow = ({ children }: { children: React.ReactNode }) => (
 // --- Allowed: the part has a `Field` ancestor ---
 export const LabelledInput = () => (
   <Field>
+    {/* expect-clean: field-parts-inside-field/field-parts-inside-field */}
     <FieldLabel>{t("common.name")}</FieldLabel>
     <FieldControl render={<Input />} />
     <FieldDescription>{t("common.hint")}</FieldDescription>

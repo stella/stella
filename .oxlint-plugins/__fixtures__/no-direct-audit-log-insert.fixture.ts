@@ -12,6 +12,7 @@ declare const reportingTable: unknown;
 const _direct = tx.insert(auditLogs);
 
 // Other tables are ordinary Drizzle writes.
+// expect-clean: no-direct-audit-log-insert/no-direct-audit-log-insert
 const _entityInsert = tx.insert(entities);
 
 // An imported alias of the audit table is the same prohibited write.

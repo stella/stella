@@ -23,6 +23,7 @@ export const LegalClicheGlyphFixture = () => (
     {/* oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the prop reference */}
     <Icon as={JusticeIcon} />
     {/* A geometry transform, not a balance: the rule matches exact names. */}
+    {/* expect-clean: no-legal-cliche-glyph/no-legal-cliche-glyph */}
     <Scale3dIcon />
   </>
 );

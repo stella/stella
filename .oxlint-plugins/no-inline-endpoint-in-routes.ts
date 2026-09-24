@@ -27,7 +27,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getCalleeName } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { getCalleeName, isAstNode } from "./utils.ts";
 
 // The safe-handler factory family from `@/api/lib/api-handlers`. A bare
 // identifier call to any of these defines an endpoint; a route file should
@@ -38,15 +39,7 @@ const SAFE_HANDLER_FACTORIES = new Set([
   "createSafePublicHandler",
 ]);
 
-type AstNode = Record<string, unknown> & { type: string };
-
 type CallExpressionNode = AstNode & { callee: unknown };
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
 
 const isCallExpression = (node: unknown): node is CallExpressionNode =>
   isAstNode(node) && node.type === "CallExpression" && "callee" in node;

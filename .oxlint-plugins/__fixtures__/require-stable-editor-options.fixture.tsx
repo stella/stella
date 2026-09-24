@@ -55,6 +55,7 @@ export const SafeFixture = ({ value }: { value: string }) => {
   const editorProps = useMemo(() => ({}), []);
   const editor = useEditor({
     autofocus: false,
+    // expect-clean: require-stable-editor-options/require-stable-editor-options
     content,
     editorProps,
     extensions: moduleExtensions,

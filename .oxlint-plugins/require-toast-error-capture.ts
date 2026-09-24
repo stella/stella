@@ -43,13 +43,13 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
   getCalleeName,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isStringLiteral,
-  type AstNode,
 } from "./utils.ts";
 
 const TOAST_RECEIVER = "stellaToast";
@@ -114,7 +114,7 @@ const isCaptureCall = (node: AstNode): boolean => {
     return false;
   }
   const calleeName = getCalleeName(node.callee);
-  return calleeName !== null && calleeName.split(".").at(-1) === CAPTURE_METHOD;
+  return calleeName?.split(".").at(-1) === CAPTURE_METHOD;
 };
 
 // The callback argument of a promise `.catch(handler)`, or null when the node
@@ -125,8 +125,7 @@ const promiseCatchCallback = (node: unknown): AstNode | null => {
   }
   const callee = isAstNode(node.callee) ? node.callee : null;
   if (
-    callee === null ||
-    callee.type !== "MemberExpression" ||
+    callee?.type !== "MemberExpression" ||
     callee.computed !== false ||
     !isIdentifier(callee.property, "catch")
   ) {
@@ -146,13 +145,12 @@ const errResultBindingName = (node: unknown): string | null => {
     return null;
   }
   const test = isAstNode(node.test) ? node.test : null;
-  if (test === null || test.type !== "CallExpression") {
+  if (test?.type !== "CallExpression") {
     return null;
   }
   const callee = isAstNode(test.callee) ? test.callee : null;
   if (
-    callee === null ||
-    callee.type !== "MemberExpression" ||
+    callee?.type !== "MemberExpression" ||
     callee.computed !== false ||
     !isIdentifier(callee.property, "isErr") ||
     !isIdentifier(callee.object)

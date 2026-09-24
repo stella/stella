@@ -635,6 +635,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
 
       {/* Static and pass-through values — MUST NOT flag. */}
       <div className="rounded-md" />
+      {/* expect-clean: require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={`rounded-md`} />
       <div className={className} />
       <div className={equivalentStyleMap[status]} />

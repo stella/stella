@@ -31,6 +31,7 @@ export const undeclaredFileConfig = {
 } satisfies HandlerConfig;
 
 // Allowed: the required file leg is declared, with the alternative transport.
+// expect-clean: require-file-transport-disposition/require-file-transport-disposition
 export const declaredFileInputConfig = {
   permissions,
   mcp: { type: "capability", reason: "document_processing" },

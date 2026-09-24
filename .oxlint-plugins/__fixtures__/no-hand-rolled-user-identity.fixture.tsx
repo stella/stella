@@ -34,6 +34,7 @@ const _wrappedHandRolled = (
 );
 
 // Shared identity, avatar-only, transformed, and different-name variants stay valid.
+// expect-clean: no-hand-rolled-user-identity/no-hand-rolled-user-identity
 const _shared = <UserIdentity image={user.image} name={user.name} />;
 const _avatarOnly = <UserAvatar image={user.image} name={user.name} />;
 const _transformed = (

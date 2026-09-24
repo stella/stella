@@ -48,6 +48,11 @@ export class DesktopAccountConflictError extends TaggedError(
   "DesktopAccountConflictError",
 )<{ message: string }> {}
 
+/** The link was rejected and revoking the minted credential also failed. */
+export class DesktopAccountLinkCleanupError extends TaggedError(
+  "DesktopAccountLinkCleanupError",
+)<{ message: string; cause: unknown; cleanupError: unknown }> {}
+
 type RemoteDesktopSession = {
   baseVersionNumber: number;
   downloadUrl: string;
@@ -144,11 +149,11 @@ export const completeDesktopAccountLink = async ({
   const cleaned = await revoke(grant.key);
   if (cleaned.isErr()) {
     return Result.err(
-      new AggregateError(
-        [linked.error.cause, cleaned.error],
-        "Desktop account link failed and credential cleanup failed",
-        { cause: linked.error.cause },
-      ),
+      new DesktopAccountLinkCleanupError({
+        message: "Desktop account link failed and credential cleanup failed",
+        cause: linked.error.cause,
+        cleanupError: cleaned.error,
+      }),
     );
   }
   return Result.err(linked.error.cause);

@@ -19,6 +19,7 @@ const _aliasUpdate = tx.update(propertyTable);
 const _entityInsert = tx.insert(entities);
 
 // An unrelated table with a different local name remains valid.
+// expect-clean: no-direct-property-table-write/no-direct-property-table-write
 const _reportingInsert = tx.insert(reportingTable);
 
 // A local named `properties` that was never imported from the schema module

@@ -240,6 +240,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             userId: user.id,
             recordAuditEvent,
             buffer: filled.buffer,
+            // oxlint-disable-next-line security-guards/no-raw-filename-write -- resolveDocumentFileName passes the requested name through sanitizeFilename
             fileName,
             mimeType: DOCX_MIME_TYPE,
             parentId,

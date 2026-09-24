@@ -8,6 +8,7 @@ const rawUserSchema = { userId: t.String() };
 // oxlint-disable-next-line no-raw-user-id-schema/no-raw-user-id-schema -- fixture proves contact owner IDs require organization-membership validation
 const unvalidatedOwnerSchema = { responsibleAttorneyId: tUserId };
 
+// expect-clean: no-raw-user-id-schema/no-raw-user-id-schema
 const brandedUserSchema = { userId: tUserId };
 const unrelatedStringSchema = { search: t.String() };
 

@@ -4,7 +4,8 @@
 // tree, error handling goes through `Result`.
 //
 // `oxlint.config.ts` imports this list for the
-// `no-throw-outside-boundary` / `no-try-catch-outside-boundary` rules: the lint
+// `result-boundary/no-throw-outside-boundary` and
+// `result-boundary/no-try-catch-outside-boundary` rules: the lint
 // rule blocks a new violation at the boundary in real time, while the ratchet
 // keeps the count in already-merged code from growing back.
 export const RESULT_CONVENTION_SOURCE_GLOBS = [

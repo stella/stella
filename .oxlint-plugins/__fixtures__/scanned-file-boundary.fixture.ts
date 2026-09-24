@@ -67,6 +67,7 @@ const _fromPrototype: unknown = Object.create(ScannedFile.prototype);
 // Other brands, and reading a real ScannedFile, stay valid for this rule.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const _otherKey = stagingKey as OtherKey;
+// expect-clean: scanned-file-boundary/scanned-file-boundary
 const _scannedBytes = scanned.bytes;
 
 export const __scannedFileBoundaryFixture = {

@@ -55,6 +55,7 @@ export const createConfirmationOtp = async ({
 
       await rootDb.transaction(async (tx) => {
         // Lock the user row by email first to serialize OTP requests for this email
+        // oxlint-disable-next-line security-guards/no-unscoped-user-query -- locks the requesting account's own row by email to serialize OTP issuance; account-level
         await tx
           .select({ id: user.id })
           .from(user)

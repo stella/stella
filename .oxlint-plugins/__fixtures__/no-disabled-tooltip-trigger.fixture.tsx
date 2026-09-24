@@ -51,6 +51,7 @@ export const _e = () => (
 export const _ok1 = () => <Button disabled tooltip={t("save")} />;
 export const _ok2 = () => <Button disabled={isBusy} tooltip={t("save")} />;
 // Allowed: an enabled Button can be hovered, so an outer tooltip works.
+// expect-clean: no-disabled-tooltip-trigger/no-disabled-tooltip-trigger
 export const _ok3 = () => <Tooltip content={t("save")} render={<Button />} />;
 // Allowed: the render target is not a Button.
 export const _ok4 = () => (

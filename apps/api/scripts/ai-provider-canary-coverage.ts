@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   isCanaryProvider,
   missingCanaryProviders,
@@ -20,7 +22,7 @@ const parseProviderSelection = (args: string[]): CanaryProviderSelection => {
     return value;
   }
 
-  throw new TypeError("Pass --provider followed by all or a canary provider.");
+  return panic("Pass --provider followed by all or a canary provider.");
 };
 
 export const parseCanaryCoverageArgs = (

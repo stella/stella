@@ -1,3 +1,5 @@
+import { TaggedError } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
@@ -158,6 +160,11 @@ const defaultDependencies = (
 export const publisherGateReserves = (): boolean =>
   process.env.NODE_ENV !== "test";
 
+/** Redis answered a gate reservation with something other than a wait. */
+class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
+  message: string;
+}> {}
+
 export const createPublisherRequestSlot =
   (
     { intervalMs, key, publisher }: PublisherRequestGateConfig,
@@ -181,9 +188,9 @@ export const createPublisherRequestSlot =
     );
     const waitMs = Number(rawWait);
     if (!Number.isFinite(waitMs) || waitMs < 0) {
-      throw new TypeError(
-        `${publisher} publisher gate returned an invalid wait`,
-      );
+      throw new PublisherGateReplyError({
+        message: `${publisher} publisher gate returned an invalid wait`,
+      });
     }
     await dependencies.sleep(waitMs, signal);
   };

@@ -11,6 +11,7 @@ declare const OrganizationAvatar: () => unknown;
 export const RawUserAvatarPrimitiveFixture = () => (
   <>
     <Avatar />
+    {/* expect-clean: no-raw-user-avatar-primitive/no-raw-user-avatar-primitive */}
     <UserAvatar name="Ada Lovelace" />
     <UserIdentity name="Ada Lovelace" />
     <OrganizationAvatar />

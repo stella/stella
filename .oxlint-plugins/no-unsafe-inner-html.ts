@@ -1,4 +1,3 @@
-import { eslintCompatPlugin } from "@oxlint/plugins";
 // Forbid injecting un-proven HTML into the DOM.
 //
 // Raw HTML may only reach the DOM from a value that is provably
@@ -9,93 +8,181 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // un-escaped DB / AI / user string into `__html` or `el.innerHTML` and turn
 // stored data into stored XSS inside a privileged workspace.
 //
-// Two sinks share one allowlist:
-//   • JSX `__html` property of a `dangerouslySetInnerHTML` object literal
-//     (report on the value expression).
-//   • `AssignmentExpression` whose LHS is a non-computed `.innerHTML`
-//     MemberExpression (report on the RHS).
+// Sinks, all sharing one allowlist:
+//   • `__html` of a `dangerouslySetInnerHTML` object, whether the object is a
+//     JSX attribute value or a property of any object literal (props passed
+//     to `createElement` / `jsx()`, or spread into JSX).
+//   • assignment to `innerHTML`, `outerHTML` or `srcdoc`, dot or static
+//     bracket notation, and the same keys in an `Object.assign` source.
+//   • the JSX `srcDoc` attribute.
+//   • `insertAdjacentHTML`, `setHTMLUnsafe`, `createContextualFragment`,
+//     `setAttribute("srcdoc", …)`, and `write` / `writeln` on a document.
 //
 // A value is allowed when it is:
 //   • a static string Literal or TemplateLiteral whose interpolations are all
 //     independently static, OR
-//   • carries an explicit `// safe-html:` provenance comment on the line
-//     directly above the sink (loc adjacency, like suppression-hygiene.ts).
+//   • annotated by a `// safe-html: <provenance>` comment with non-empty text
+//     on the line directly above the sink. One comment covers one sink: a
+//     second sink starting on the same line needs its own annotation.
 //
 // Function names are not proof: a local identity function can be named
 // `sanitizeHtml`. Dynamic values therefore require explicit provenance at the
 // sink until the codebase has a branded SafeHtml boundary.
-//
-// Flagged:
-//   <div dangerouslySetInnerHTML={{ __html: userInput }} />
-//   <div dangerouslySetInnerHTML={{ __html: hit.headline }} />   // unless annotated
-//   el.innerHTML = html;                                         // unless annotated
-//   el.innerHTML = data.body;
-//
-// Allowed:
-//   el.innerHTML = "";
-//   el.innerHTML = "&nbsp;";
-//   // safe-html: server-escaped by escapeAndHighlight()
-//   <div dangerouslySetInnerHTML={{ __html: hit.headline }} />
 
-import { getPropertyName, isIdentifier, unwrapExpression } from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-const ESCAPE_HATCH_RE = /^\s*safe-html:/u;
+import type { AstNode } from "./utils.ts";
+import {
+  getPropertyName,
+  invokedCallee,
+  isAstNode,
+  isIdentifier,
+  isMemberAccess,
+  isStringLiteral,
+  memberPropertyName,
+  unwrapExpression,
+} from "./utils.ts";
 
-const isComment = (value) =>
+// The provenance text after the marker must be non-empty.
+const WAIVER_RE = /^\s*safe-html:\s*\S/u;
+
+const DANGEROUS_PROP = "dangerouslySetInnerHTML";
+const HTML_KEY = "__html";
+const HTML_PROPERTIES: ReadonlySet<string> = new Set([
+  "innerHTML",
+  "outerHTML",
+  "srcdoc",
+]);
+const DANGEROUS_PROP_ATTRIBUTES: ReadonlySet<string> = new Set([
+  DANGEROUS_PROP,
+]);
+const SRCDOC_ATTRIBUTES: ReadonlySet<string> = new Set(["srcDoc", "srcdoc"]);
+// Methods whose first argument is parsed as HTML.
+const HTML_FIRST_ARGUMENT_METHODS: ReadonlySet<string> = new Set([
+  "createContextualFragment",
+  "setHTMLUnsafe",
+]);
+const DOCUMENT_WRITE_METHODS: ReadonlySet<string> = new Set([
+  "write",
+  "writeln",
+]);
+const DOCUMENT_MEMBERS: ReadonlySet<string> = new Set([
+  "contentDocument",
+  "document",
+  "ownerDocument",
+]);
+
+type Located = { loc: { start: { line: number } } };
+
+const hasLocation = (node: unknown): node is Located =>
+  typeof node === "object" &&
+  node !== null &&
+  "loc" in node &&
+  typeof node.loc === "object" &&
+  node.loc !== null &&
+  "start" in node.loc &&
+  typeof node.loc.start === "object" &&
+  node.loc.start !== null &&
+  "line" in node.loc.start &&
+  typeof node.loc.start.line === "number";
+
+// A node without location data never matches a waiver line.
+const startLine = (node: unknown): number =>
+  hasLocation(node) ? node.loc.start.line : Number.NaN;
+
+type WaiverComment = {
+  value: string;
+  loc: { end: { line: number } };
+};
+
+const isWaiverComment = (value: unknown): value is WaiverComment =>
   typeof value === "object" &&
   value !== null &&
+  "value" in value &&
   typeof value.value === "string" &&
+  WAIVER_RE.test(value.value) &&
+  "loc" in value &&
   typeof value.loc === "object" &&
   value.loc !== null;
 
-const isJsxIdentifier = (node, name) =>
-  typeof node === "object" &&
-  node !== null &&
+const isJsxIdentifierIn = (
+  node: unknown,
+  names: ReadonlySet<string>,
+): boolean =>
+  isAstNode(node) &&
   node.type === "JSXIdentifier" &&
-  node.name === name;
+  typeof node.name === "string" &&
+  names.has(node.name);
 
 // A value is proven safe by its own static shape, independent of comments.
-const isProvenSafeValue = (node) => {
-  if (!node || typeof node.type !== "string") {
+const isProvenSafeValue = (node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
     return false;
   }
-  if (node.type === "Literal" && typeof node.value === "string") {
+  if (isStringLiteral(expression)) {
     return true;
   }
-  if (node.type === "TemplateLiteral") {
-    return (
-      Array.isArray(node.expressions) &&
-      node.expressions.every(isProvenSafeValue)
-    );
-  }
-  return false;
+  return (
+    expression.type === "TemplateLiteral" &&
+    Array.isArray(expression.expressions) &&
+    expression.expressions.every(isProvenSafeValue)
+  );
 };
 
-const isDangerouslySetInnerHtmlValue = (property) => {
-  if (getPropertyName(property.key) !== "__html") {
-    return false;
+// The static key of an object-literal Property: `a`, `"a"`, `["a"]`.
+const objectPropertyKey = (property: unknown): string | null => {
+  if (!isAstNode(property)) {
+    return null;
   }
-  const objectExpression = property.parent;
-  if (objectExpression?.type !== "ObjectExpression") {
-    return false;
+  if (property.computed === true && !isStringLiteral(property.key)) {
+    return null;
   }
+  return getPropertyName(property.key);
+};
 
-  let current = objectExpression.parent;
-  while (
-    current?.type === "TSAsExpression" ||
-    current?.type === "TSSatisfiesExpression"
+const objectProperties = (node: unknown): AstNode[] => {
+  const expression = unwrapExpression(node);
+  if (
+    expression?.type !== "ObjectExpression" ||
+    !Array.isArray(expression.properties)
   ) {
-    current = current.parent;
+    return [];
   }
+  return expression.properties.filter(isAstNode);
+};
 
-  if (current?.type !== "JSXExpressionContainer") {
+// The arguments the invoked function receives: `f.call(thisArg, ...args)`
+// shifts them by one; `f.apply(thisArg, args)` passes an array this rule does
+// not read, so it yields none.
+const invokedArguments = (call: unknown): unknown[] => {
+  if (!isAstNode(call)) {
+    return [];
+  }
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression") {
+    return args;
+  }
+  const method = memberPropertyName(callee);
+  if (method === "call") {
+    return args.slice(1);
+  }
+  return method === "apply" ? [] : args;
+};
+
+// `document.write`, `window.document.write`, `frame.contentDocument.write`,
+// `node.ownerDocument.write`.
+const isDocumentReceiver = (node: unknown): boolean => {
+  const receiver = unwrapExpression(node);
+  if (isIdentifier(receiver, "document")) {
+    return true;
+  }
+  if (receiver?.type !== "MemberExpression") {
     return false;
   }
-  const attribute = current.parent;
-  return (
-    attribute?.type === "JSXAttribute" &&
-    isJsxIdentifier(attribute.name, "dangerouslySetInnerHTML")
-  );
+  const name = memberPropertyName(receiver);
+  return name !== null && DOCUMENT_MEMBERS.has(name);
 };
 
 export default eslintCompatPlugin({
@@ -117,94 +204,166 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const escapeHatchLines = new Set();
+        // Line of each waiver comment's end; a sink starting on the next line
+        // consumes it, so one comment covers exactly one sink.
+        const waiverLines = new Set<number>();
 
-        const recordEscapeHatches = (node) => {
-          const comments =
-            node && Array.isArray(node.comments)
-              ? node.comments.filter(isComment)
-              : [];
-          for (const comment of comments) {
-            if (ESCAPE_HATCH_RE.test(comment.value)) {
-              escapeHatchLines.add(comment.loc.end.line);
-            }
+        const consumeWaiver = (node: unknown): boolean => {
+          const line = startLine(node) - 1;
+          if (!waiverLines.has(line)) {
+            return false;
           }
+          waiverLines.delete(line);
+          return true;
         };
 
-        // The escape-hatch comment sits on the line directly above the
-        // reported node's first line. Sink expressions inside JSX object
-        // literals span multiple lines, so anchor on the node's start line.
-        const hasEscapeHatchAbove = (node) =>
-          escapeHatchLines.has(node.loc.start.line - 1);
-
-        const reportIfUnsafe = (node) => {
-          if (isProvenSafeValue(node)) {
+        const reportIfUnsafe = (node: unknown): void => {
+          if (!isAstNode(node) || isProvenSafeValue(node)) {
             return;
           }
-          if (hasEscapeHatchAbove(node)) {
+          if (consumeWaiver(node)) {
             return;
           }
           context.report({ node, messageId: "unsafeInnerHtml" });
         };
 
-        const reportPayloadSpreads = (objectNode) => {
-          for (const property of objectNode.properties) {
-            if (property?.type !== "SpreadElement") {
+        // The value of a `dangerouslySetInnerHTML` prop: an inline object has
+        // its `__html` checked and its spreads rejected; anything else is a
+        // hoisted payload whose HTML this rule cannot see.
+        const checkDangerousPayload = (value: unknown): void => {
+          const expression = unwrapExpression(value);
+          if (expression?.type !== "ObjectExpression") {
+            reportIfUnsafe(value);
+            return;
+          }
+          for (const property of objectProperties(expression)) {
+            if (property.type === "SpreadElement") {
+              context.report({
+                node: property,
+                messageId: "unsafeInnerHtmlSpread",
+              });
               continue;
             }
-            context.report({
-              node: property,
-              messageId: "unsafeInnerHtmlSpread",
-            });
+            if (
+              property.type === "Property" &&
+              objectPropertyKey(property) === HTML_KEY
+            ) {
+              reportIfUnsafe(property.value);
+            }
+          }
+        };
+
+        const checkHtmlPropertySources = (sources: unknown[]): void => {
+          for (const source of sources) {
+            for (const property of objectProperties(source)) {
+              const key =
+                property.type === "Property"
+                  ? objectPropertyKey(property)
+                  : null;
+              if (key !== null && HTML_PROPERTIES.has(key)) {
+                reportIfUnsafe(property.value);
+              }
+            }
           }
         };
 
         return {
           before() {
-            escapeHatchLines.clear();
+            waiverLines.clear();
           },
           Program(node) {
-            recordEscapeHatches(node);
+            const comments: unknown[] = Array.isArray(node.comments)
+              ? node.comments
+              : [];
+            for (const comment of comments) {
+              if (isWaiverComment(comment)) {
+                waiverLines.add(comment.loc.end.line);
+              }
+            }
           },
 
-          // Reject hoisted payloads such as
-          // `dangerouslySetInnerHTML={payload}`. Keeping the `__html` object
-          // inline lets this rule inspect the actual HTML expression.
           JSXAttribute(node) {
-            if (!isJsxIdentifier(node.name, "dangerouslySetInnerHTML")) {
-              return;
-            }
             const value = node.value;
-            if (value?.type !== "JSXExpressionContainer") {
+            if (!isAstNode(value) || value.type !== "JSXExpressionContainer") {
               return;
             }
-            const expression = unwrapExpression(value.expression);
-            if (expression?.type === "ObjectExpression") {
-              reportPayloadSpreads(expression);
+            if (isJsxIdentifierIn(node.name, DANGEROUS_PROP_ATTRIBUTES)) {
+              checkDangerousPayload(value.expression);
               return;
             }
-            reportIfUnsafe(value.expression);
+            if (isJsxIdentifierIn(node.name, SRCDOC_ATTRIBUTES)) {
+              reportIfUnsafe(value.expression);
+            }
           },
 
-          // Sink 1: `dangerouslySetInnerHTML={{ __html: <expr> }}`.
+          // `{ dangerouslySetInnerHTML: … }` outside a JSX attribute: props
+          // for `createElement` / `jsx()`, or an object spread into JSX.
           Property(node) {
-            if (!isDangerouslySetInnerHtmlValue(node)) {
+            if (objectPropertyKey(node) !== DANGEROUS_PROP) {
               return;
             }
-            reportIfUnsafe(node.value);
-          },
-
-          // Sink 2: `<el>.innerHTML = <expr>` (non-computed member LHS).
-          AssignmentExpression(node) {
-            const target = node.left;
+            const container = node.parent;
             if (
-              target.type !== "MemberExpression" ||
-              target.computed ||
-              !isIdentifier(target.property, "innerHTML")
+              !isAstNode(container) ||
+              container.type !== "ObjectExpression"
             ) {
               return;
             }
-            reportIfUnsafe(node.right);
+            checkDangerousPayload(node.value);
+          },
+
+          AssignmentExpression(node) {
+            const target = unwrapExpression(node.left);
+            if (target?.type !== "MemberExpression") {
+              return;
+            }
+            const name = memberPropertyName(target);
+            if (name !== null && HTML_PROPERTIES.has(name)) {
+              reportIfUnsafe(node.right);
+            }
+          },
+
+          CallExpression(node) {
+            const call: unknown = node;
+            const callee = isAstNode(call) ? invokedCallee(call) : null;
+            if (callee?.type !== "MemberExpression") {
+              return;
+            }
+            const args = invokedArguments(node);
+            const method = memberPropertyName(callee);
+            if (method === null) {
+              return;
+            }
+            if (HTML_FIRST_ARGUMENT_METHODS.has(method)) {
+              reportIfUnsafe(args.at(0));
+              return;
+            }
+            if (method === "insertAdjacentHTML") {
+              reportIfUnsafe(args.at(1));
+              return;
+            }
+            if (method === "setAttribute") {
+              const attribute = unwrapExpression(args.at(0));
+              if (
+                isStringLiteral(attribute) &&
+                attribute.value.toLowerCase() === "srcdoc"
+              ) {
+                reportIfUnsafe(args.at(1));
+              }
+              return;
+            }
+            if (
+              DOCUMENT_WRITE_METHODS.has(method) &&
+              isDocumentReceiver(callee.object)
+            ) {
+              if (!args.every(isProvenSafeValue) && !consumeWaiver(node)) {
+                context.report({ node, messageId: "unsafeInnerHtml" });
+              }
+              return;
+            }
+            if (isMemberAccess(callee, "Object", "assign")) {
+              checkHtmlPropertySources(args.slice(1));
+            }
           },
         };
       },

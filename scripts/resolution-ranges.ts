@@ -29,6 +29,16 @@ import {
   type JsonTextReplacement,
 } from "./json-text-edit";
 
+// A local error class instead of better-result: consumers run without an install.
+class ResolutionRangesError extends Error {
+  readonly _tag = "ResolutionRangesError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ResolutionRangesError";
+  }
+}
+
 const OVERRIDE_KINDS = ["resolutions", "overrides"] as const;
 
 export type OverrideKind = (typeof OVERRIDE_KINDS)[number];
@@ -191,10 +201,12 @@ export const loadResolutionGraph = async (
     lockText.replace(/,(\s*[}\]])/gu, "$1"),
   );
   if (!isRecord(rootManifest)) {
-    throw new TypeError("package.json did not parse into an object");
+    throw new ResolutionRangesError(
+      "package.json did not parse into an object",
+    );
   }
   if (!isRecord(parsedLock)) {
-    throw new TypeError("bun.lock did not parse into an object");
+    throw new ResolutionRangesError("bun.lock did not parse into an object");
   }
   return {
     declared: collectDeclaredRanges(lockRangeSources(parsedLock)),
@@ -369,7 +381,9 @@ export const applyOverridePins = (
         text: manifestText,
       });
       if (manifestText[overridesStart] !== "{") {
-        throw new TypeError(`package.json ${kind} must be an object`);
+        throw new ResolutionRangesError(
+          `package.json ${kind} must be an object`,
+        );
       }
       const pinStart = directPropertyValue({
         label: MANIFEST_LABEL,

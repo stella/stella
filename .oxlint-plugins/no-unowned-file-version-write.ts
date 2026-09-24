@@ -7,7 +7,7 @@
 // The version row itself is inserted in one place (insertEntityVersion), which
 // is what makes a verification-code collision recoverable at every writer.
 
-import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   REVIEWED_VERSION_MUTATION_OWNERS,
@@ -21,7 +21,9 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -34,9 +36,6 @@ const NATIVE_EXTRACTION_REQUEST_HELPERS = new Set([
   "requestNativeExtractionRun",
   "requestNativeExtractionRuns",
 ]);
-
-const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
-  isIdentifier(node);
 
 const isVersionUtilsModule = (moduleSpecifier: string): boolean =>
   moduleSpecifier === "@/api/lib/entity-versions/version-utils" ||
@@ -154,22 +153,6 @@ export default eslintCompatPlugin({
         const observedCapabilities = new Set<VersionWriteCapability>();
         let ownerCapabilities = new Set<VersionWriteCapability>();
 
-        const resolveVariable = (identifierNode: unknown) => {
-          if (!isScopeIdentifier(identifierNode)) {
-            return null;
-          }
-          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
-            context.sourceCode.getScope(identifierNode);
-          while (scope) {
-            const variable = scope.set.get(identifierNode.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const payloadSetsCurrentVersion = (
           payload: unknown,
           seenVariables = new Set<unknown>(),
@@ -192,11 +175,11 @@ export default eslintCompatPlugin({
               );
             });
           }
-          if (!isIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return false;
           }
 
-          const variable = resolveVariable(expression);
+          const variable = resolveVariable(context, expression);
           if (variable === null || seenVariables.has(variable)) {
             return false;
           }

@@ -5,7 +5,10 @@ import {
   getImportedName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  memberPropertyName,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -35,11 +38,6 @@ const FUNCTION_EXPRESSION_TYPES = new Set([
   "ArrowFunctionExpression",
   "FunctionExpression",
 ]);
-
-const isIdentifierReference = (
-  node: unknown,
-): node is ESTree.IdentifierReference =>
-  isIdentifier(node) && Array.isArray(node.range);
 
 const configuredApprovedAdapters = (options: unknown): ApprovedAdapter[] => {
   if (
@@ -99,16 +97,6 @@ const adapterBinding = (node: unknown): AdapterBinding | null => {
     current = current.parent;
   }
   return null;
-};
-
-const memberPropertyName = (member: unknown): string | null => {
-  if (!isAstNode(member) || member.type !== "MemberExpression") {
-    return null;
-  }
-  if (member.computed) {
-    return isStringLiteral(member.property) ? member.property.value : null;
-  }
-  return isIdentifier(member.property) ? member.property.name : null;
 };
 
 const objectPatternPropertyPath = (
@@ -196,23 +184,10 @@ export default eslintCompatPlugin({
         ],
       },
       createOnce(context) {
-        const resolveVariable = (identifier: ESTree.IdentifierReference) => {
-          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
-            context.sourceCode.getScope(identifier);
-          while (scope) {
-            const variable = scope.set.get(identifier.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const importedBindingFor = (
           identifier: ESTree.IdentifierReference,
         ): SchemaBinding | null => {
-          const variable = resolveVariable(identifier);
+          const variable = resolveVariable(context, identifier);
           if (variable === null) {
             return null;
           }
@@ -254,7 +229,7 @@ export default eslintCompatPlugin({
         const constantBindingSource = (
           identifier: ESTree.IdentifierReference,
         ): { initializer: unknown; propertyPath: string[] } | null => {
-          const variable = resolveVariable(identifier);
+          const variable = resolveVariable(context, identifier);
           if (variable === null) {
             return null;
           }
@@ -312,7 +287,7 @@ export default eslintCompatPlugin({
             if (imported !== null) {
               return imported;
             }
-            const variable = resolveVariable(expression);
+            const variable = resolveVariable(context, expression);
             if (variable === null || seen.has(variable)) {
               return null;
             }

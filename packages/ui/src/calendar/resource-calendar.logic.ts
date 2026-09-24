@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 export type CalendarDateRange = {
@@ -34,9 +34,7 @@ const differenceInCalendarDays = (later: string, earlier: string): number => {
   const laterDate = toPlainDate(later);
   const earlierDate = toPlainDate(earlier);
   if (laterDate === null || earlierDate === null) {
-    throw new RangeError(
-      "Calendar dates must use normalized YYYY-MM-DD values",
-    );
+    panic("Calendar dates must use normalized YYYY-MM-DD values");
   }
   return laterDate.since(earlierDate, { largestUnit: "days" }).days;
 };
@@ -57,9 +55,7 @@ export const getResourceCalendarPlacement = ({
     entry.startDate,
   );
   if (visibleDayCount <= 0 || entryDayCount <= 0) {
-    throw new RangeError(
-      "Calendar date ranges must be non-empty and half-open",
-    );
+    panic("Calendar date ranges must be non-empty and half-open");
   }
   if (
     entry.startDate >= visibleRange.endDateExclusive ||
@@ -88,12 +84,12 @@ export const assertConsecutiveCalendarDates = (
   dates: readonly string[],
 ): void => {
   if (dates.length === 0) {
-    throw new RangeError("A resource calendar needs at least one date column");
+    panic("A resource calendar needs at least one date column");
   }
 
   const first = dates.at(0);
   if (first === undefined || toPlainDate(first) === null) {
-    throw new RangeError(
+    panic(
       "Resource calendar date columns must be consecutive normalized dates",
     );
   }
@@ -106,7 +102,7 @@ export const assertConsecutiveCalendarDates = (
       current === undefined ||
       differenceInCalendarDays(current, previous) !== 1
     ) {
-      throw new RangeError(
+      panic(
         "Resource calendar date columns must be consecutive normalized dates",
       );
     }
@@ -116,15 +112,11 @@ export const assertConsecutiveCalendarDates = (
 export const nextCalendarDate = (value: string): string => {
   const date = toPlainDate(value);
   if (date === null) {
-    throw new RangeError(
-      "Calendar dates must use normalized YYYY-MM-DD values",
-    );
+    panic("Calendar dates must use normalized YYYY-MM-DD values");
   }
   const nextDate = date.add({ days: 1 }).toString();
   if (toPlainDate(nextDate) === null) {
-    throw new RangeError(
-      "Calendar dates must have a following normalized YYYY-MM-DD value",
-    );
+    panic("Calendar dates must have a following normalized YYYY-MM-DD value");
   }
   return nextDate;
 };
@@ -139,7 +131,7 @@ export const layoutResourceCalendarEntries = (
   const entryIds = new Set<string>();
   for (const entry of entries) {
     if (entryIds.has(entry.id)) {
-      throw new TypeError("Resource calendar entry ids must be unique");
+      panic("Resource calendar entry ids must be unique");
     }
     entryIds.add(entry.id);
     const placement = getResourceCalendarPlacement({ entry, visibleRange });

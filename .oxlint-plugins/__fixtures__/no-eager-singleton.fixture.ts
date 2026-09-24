@@ -61,6 +61,7 @@ if (condition) {
 }
 
 // Allowed — behind a function boundary (ordinary lazy getter).
+// expect-clean: no-eager-singleton/no-eager-singleton
 export const getDb = () => drizzle({ client });
 
 // Allowed — the `let _x; const getX = () => (_x ??= ctor())` singleton

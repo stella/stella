@@ -1,43 +1,61 @@
-// Disallow unvalidated process.env access outside approved env boundaries.
+// Disallow unvalidated environment access outside approved env boundaries.
 // Environment variables should be read through env.ts/env-base.ts so
 // validation and normalization happen once at process startup. Direct
-// process.env access in product code bypasses config safety and tends to
+// environment access in product code skips config validation and tends to
 // spread fallback parsing across call sites.
 //
-// Flags:
-//   const token = process.env["TOKEN"];
-//   const mode = process.env.NODE_ENV;
-//   spawn(cmd, { env: process.env });
+// The environment object is recognised by what it is bound to, in every
+// spelling that reaches it:
+//   process.env.NODE_ENV, process["env"], globalThis.process.env
+//   const { env } = process
+//   import process from "node:process"; process.env
+//   import { env } from "node:process"
+//   Bun.env
+//   import.meta.env   (server code only: in the Vite client apps it is the
+//                      build-time contract, not the process environment)
 //
 // Allows by default:
-//   env.ts / env-base.ts
-//   *.config.ts
-//   *.test.ts / *.spec.ts
-//   scripts, test setup, and explicitly configured boundary files
+//   env.ts / env-base.ts / setup-env.ts at any depth
+//   *.config.* and *.test.* / *.spec.* files, __tests__ directories
+//   the repository `scripts/` directory, and a package's own `scripts/`,
+//   `test/` or `tests/` directory (`apps/<app>/scripts/`,
+//   `packages/<package>/tests/`), never a nested one
+//   explicitly configured boundary files (`allowedFiles`) and tooling
+//   directories (`allowedDirectories`, repository-relative prefixes)
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier, isStringLiteral } from "./utils.ts";
-
-type AstNode = { type: string } & Record<string, unknown>;
-
-type FilenameContext = {
-  filename?: string;
-  getFilename?: () => string;
-};
+import {
+  getImportedName,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  isStringLiteral,
+  memberPropertyName,
+  repoRelativeFilename,
+  resolveImport,
+  resolveVariable,
+  stableInitializer,
+  unwrapExpression,
+} from "./utils.ts";
 
 const DEFAULT_ALLOWED_FILE_PATTERNS = [
   /(?:^|\/)env(?:-base)?\.ts$/u,
   /(?:^|\/)setup-env\.ts$/u,
-  /(?:^|\/)(?:scripts|tests|__tests__)\/.+/u,
+  /^scripts\//u,
+  /^(?:apps|packages)\/[^/]+\/(?:scripts|tests?)\//u,
+  /(?:^|\/)__tests__\//u,
   /\.(?:config|test|spec)\.[cm]?[jt]sx?$/u,
 ];
 
-const filenameForContext = (context: FilenameContext): string =>
-  context.filename ?? context.getFilename?.() ?? "";
+// Vite client apps read `import.meta.env` as their build-time contract.
+const VITE_CLIENT_ROOT = /^apps\/(?:desktop|landing|mobile|playground|web)\//u;
 
-const normalizePath = (filename: string): string =>
-  filename.replaceAll("\\", "/");
+const PROCESS_MODULES: ReadonlySet<string> = new Set([
+  "node:process",
+  "process",
+]);
 
 const stringArrayOption = (options: Record<string, unknown>, key: string) => {
   const value = options[key];
@@ -46,89 +64,24 @@ const stringArrayOption = (options: Record<string, unknown>, key: string) => {
     : [];
 };
 
-const isAllowedFile = (
-  filename: string,
-  allowedFiles: readonly string[],
-): boolean => {
-  const normalized = normalizePath(filename);
-  if (
-    DEFAULT_ALLOWED_FILE_PATTERNS.some((pattern) => pattern.test(normalized))
-  ) {
-    return true;
-  }
-  return allowedFiles.some((allowedFile) =>
-    normalized.endsWith(normalizePath(allowedFile)),
-  );
+type AllowedPaths = {
+  // Repository-relative files (or path suffixes) that own an env boundary.
+  files: readonly string[];
+  // Repository-relative directory prefixes of operational tooling that runs
+  // outside any app env module (`apps/api/src/scripts/`).
+  directories: readonly string[];
 };
 
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
+const isAllowedFile = (
+  filename: string,
+  { files, directories }: AllowedPaths,
+): boolean =>
+  DEFAULT_ALLOWED_FILE_PATTERNS.some((pattern) => pattern.test(filename)) ||
+  files.some((file) => filename.endsWith(file.replaceAll("\\", "/"))) ||
+  directories.some((directory) => filename.startsWith(directory));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-const staticMemberPropertyName = (node: AstNode): string | null => {
-  if (node.computed === false) {
-    return getPropertyName(node.property);
-  }
-  return isStringLiteral(node.property) ? node.property.value : null;
-};
-
-const isProcessEnvRoot = (node: unknown): boolean =>
-  isAstNode(node) &&
-  node.type === "MemberExpression" &&
-  isIdentifier(node.object, "process") &&
-  staticMemberPropertyName(node) === "env";
-
-const envNameForAccess = (node: unknown): string => {
-  if (isProcessEnvRoot(node)) {
-    return "process.env";
-  }
-  if (
-    isAstNode(node) &&
-    node.type === "MemberExpression" &&
-    isProcessEnvRoot(node.object) &&
-    isAstNode(node.property)
-  ) {
-    const propertyName = staticMemberPropertyName(node);
-    if (propertyName === null) {
-      return "process.env[...]";
-    }
-    if (node.computed === true) {
-      return `process.env[${JSON.stringify(propertyName)}]`;
-    }
-    return `process.env.${propertyName}`;
-  }
-  return "process.env";
-};
-
-const isNestedProcessEnvRoot = (node: unknown): boolean => {
-  if (!isAstNode(node) || !isProcessEnvRoot(node)) {
-    return false;
-  }
-  const parent = node.parent;
-  return (
-    isAstNode(parent) &&
-    parent.type === "MemberExpression" &&
-    parent.object === node
-  );
-};
-
-const isProcessEnvAccess = (node: unknown): boolean => {
-  if (!isAstNode(node)) {
-    return false;
-  }
-  if (isNestedProcessEnvRoot(node)) {
-    return false;
-  }
-  if (isProcessEnvRoot(node)) {
-    return true;
-  }
-  return node.type === "MemberExpression" && isProcessEnvRoot(node.object);
-};
 
 export default eslintCompatPlugin({
   meta: { name: "forbid-process-env-outside-env-ts" },
@@ -148,29 +101,186 @@ export default eslintCompatPlugin({
                 type: "array",
                 items: { type: "string" },
               },
+              allowedDirectories: {
+                type: "array",
+                items: { type: "string" },
+              },
             },
             additionalProperties: false,
           },
         ],
       },
       createOnce(context) {
+        let checkImportMetaEnv = false;
+
+        // A global binding: unresolved, or a built-in the scope manager
+        // declares without a definition.
+        const isGlobal = (node: unknown, name: string): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression) || expression.name !== name) {
+            return false;
+          }
+          const variable = resolveVariable(context, expression);
+          return variable === null || variable.defs.length === 0;
+        };
+
+        // The `process` object: the global, `globalThis.process`, the
+        // default or namespace import of `node:process`, or a stable alias.
+        const isProcessObject = (
+          node: unknown,
+          seen = new Set<unknown>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isAstNode(expression) || seen.has(expression)) {
+            return false;
+          }
+          seen.add(expression);
+          if (isGlobal(expression, "process")) {
+            return true;
+          }
+          if (expression.type === "MemberExpression") {
+            return (
+              memberPropertyName(expression) === "process" &&
+              isGlobal(expression.object, "globalThis")
+            );
+          }
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const resolved = resolveImport(context, expression);
+          if (resolved !== null) {
+            return (
+              PROCESS_MODULES.has(resolved.moduleId) &&
+              (resolved.imported === "default" || resolved.imported === "*")
+            );
+          }
+          const variable = resolveVariable(context, expression);
+          const declarator = variable?.defs.at(0)?.node;
+          const initializer =
+            variable === null ? null : stableInitializer(variable);
+          return (
+            initializer !== null &&
+            isAstNode(declarator) &&
+            isIdentifier(declarator.id) &&
+            isProcessObject(initializer, seen)
+          );
+        };
+
+        // The label of the environment object `node` evaluates to, or null.
+        const environmentObjectName = (node: unknown): string | null => {
+          const expression = unwrapExpression(node);
+          if (expression?.type !== "MemberExpression") {
+            return null;
+          }
+          if (memberPropertyName(expression) !== "env") {
+            return null;
+          }
+          if (isProcessObject(expression.object)) {
+            return "process.env";
+          }
+          if (isGlobal(expression.object, "Bun")) {
+            return "Bun.env";
+          }
+          const meta = unwrapExpression(expression.object);
+          return checkImportMetaEnv &&
+            meta?.type === "MetaProperty" &&
+            isIdentifier(meta.meta, "import") &&
+            isIdentifier(meta.property, "meta")
+            ? "import.meta.env"
+            : null;
+        };
+
+        const accessName = (base: string, member: unknown): string => {
+          if (!isAstNode(member)) {
+            return base;
+          }
+          const property = memberPropertyName(member);
+          if (property === null) {
+            return `${base}[...]`;
+          }
+          return member.computed === true
+            ? `${base}[${JSON.stringify(property)}]`
+            : `${base}.${property}`;
+        };
+
         return {
           before() {
-            const options = isRecord(context.options?.[0])
-              ? context.options[0]
-              : {};
-            const allowedFiles = stringArrayOption(options, "allowedFiles");
-            return !isAllowedFile(filenameForContext(context), allowedFiles);
+            const configured: unknown = context.options.at(0);
+            const options = isRecord(configured) ? configured : {};
+            const filename = repoRelativeFilename(context);
+            checkImportMetaEnv = !VITE_CLIENT_ROOT.test(filename);
+            return !isAllowedFile(filename, {
+              files: stringArrayOption(options, "allowedFiles"),
+              directories: stringArrayOption(options, "allowedDirectories"),
+            });
           },
           MemberExpression(node) {
-            if (!isProcessEnvAccess(node)) {
+            const objectName = environmentObjectName(node.object);
+            if (objectName !== null) {
+              context.report({
+                node,
+                messageId: "processEnv",
+                data: { envName: accessName(objectName, node) },
+              });
+              return;
+            }
+            const ownName = environmentObjectName(node);
+            const parent = node.parent;
+            if (
+              ownName === null ||
+              (isAstNode(parent) &&
+                parent.type === "MemberExpression" &&
+                parent.object === node)
+            ) {
               return;
             }
             context.report({
               node,
               messageId: "processEnv",
-              data: { envName: envNameForAccess(node) },
+              data: { envName: ownName },
             });
+          },
+          // `const { env } = process` binds the environment object itself.
+          VariableDeclarator(node) {
+            if (
+              !isAstNode(node.id) ||
+              node.id.type !== "ObjectPattern" ||
+              !isProcessObject(node.init)
+            ) {
+              return;
+            }
+            for (const property of node.id.properties) {
+              if (
+                isAstNode(property) &&
+                property.type === "Property" &&
+                (!property.computed || isStringLiteral(property.key)) &&
+                getPropertyName(property.key) === "env"
+              ) {
+                context.report({
+                  node: property,
+                  messageId: "processEnv",
+                  data: { envName: "process.env" },
+                });
+              }
+            }
+          },
+          // `import { env } from "node:process"`.
+          ImportDeclaration(node) {
+            if (
+              typeof node.source.value !== "string" ||
+              !PROCESS_MODULES.has(node.source.value)
+            ) {
+              return;
+            }
+            for (const specifier of node.specifiers) {
+              if (getImportedName(specifier) === "env") {
+                context.report({
+                  node: specifier,
+                  messageId: "processEnv",
+                  data: { envName: "process.env" },
+                });
+              }
+            }
           },
         };
       },

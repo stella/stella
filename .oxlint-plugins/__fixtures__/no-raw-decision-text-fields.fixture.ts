@@ -106,6 +106,7 @@ const checkedMetadata = {
   metadata: checkedDecisionMetadata(rawMetadata),
   textFields: validTextFields,
 };
+// expect-clean: no-raw-decision-text-fields/no-raw-decision-text-fields
 const unrelatedMetadata = { metadata: rawMetadata };
 decision.metadata = { sourceId };
 const { metadata } = decision;

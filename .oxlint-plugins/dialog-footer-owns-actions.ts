@@ -43,8 +43,8 @@ import {
   getImportLocalName,
   getImportedName,
   isAstNode,
-  type AstNode,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const UI_MODULE_PREFIX = "@stll/ui";
 
@@ -461,10 +461,16 @@ export default eslintCompatPlugin({
         return {
           Program(program) {
             collectImports(program);
-            collectPopupBodies(program);
+            popupBodies.clear();
+            // Without a popup import no row can be the dialog's own, so most
+            // files skip the whole-file walk.
+            if (contentLocals.size > 0) {
+              collectPopupBodies(program);
+            }
           },
           JSXElement(node) {
             if (
+              contentLocals.size === 0 ||
               !isPlainRow(node) ||
               !ownsTheActionRow(node) ||
               !isTheDialogsOwnRow(node)

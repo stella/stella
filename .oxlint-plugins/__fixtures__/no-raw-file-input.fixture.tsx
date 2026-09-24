@@ -32,6 +32,7 @@ export const _c = () => (
 );
 
 // --- Allowed: any other input type, and a dynamic type ---
+// expect-clean: no-raw-file-input/no-raw-file-input
 export const _ok1 = () => <input type="text" />;
 export const _ok2 = () => <input type={inputType} />;
 export const _ok3 = () => <input />;

@@ -32,6 +32,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { everyNode, isAstNode } from "./utils.ts";
+
 const AUTH_PROVIDER_ID_TYPES = new Set(["user", "organization"]);
 const AUTH_PROVIDER_ID_TYPE_ALIAS = "AuthProviderIdType";
 
@@ -45,12 +47,9 @@ const AUTH_PROVIDER_BRAND_CALLEES: ReadonlyMap<string, string> = new Map([
 
 const UUID_MINTER_PREFIX = "randomUUID";
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  typeof (node as { type?: unknown }).type === "string";
+// Every reported call names one of these, so a file that spells none of them
+// skips the whole-file binding walk.
+const BRANDING_NAMES = [BRANDING_CALLEE, ...AUTH_PROVIDER_BRAND_CALLEES.keys()];
 
 const identifierName = (node: unknown): string | null =>
   isAstNode(node) && node.type === "Identifier" && typeof node.name === "string"
@@ -65,25 +64,6 @@ const calleeName = (callee: unknown): string | null => {
     return identifierName(callee.property);
   }
   return identifierName(callee);
-};
-
-// Walk every node of a subtree once; the AST is a plain object graph.
-const walk = (node: unknown, visit: (node: AstNode) => void): void => {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      walk(item, visit);
-    }
-    return;
-  }
-  if (!isAstNode(node)) {
-    return;
-  }
-  visit(node);
-  for (const [key, value] of Object.entries(node)) {
-    if (key !== "parent" && typeof value === "object" && value !== null) {
-      walk(value, visit);
-    }
-  }
 };
 
 const typeArgumentIsAuthProvider = (typeNode: unknown): boolean => {
@@ -168,30 +148,39 @@ export default eslintCompatPlugin({
         };
 
         return {
+          before() {
+            const text = context.sourceCode.text;
+            return BRANDING_NAMES.some((name) => text.includes(name));
+          },
           Program(program) {
             minterNames = new Set<string>();
             const uuidBound = new Set<string>();
             const otherwiseBound = new Set<string>();
+            const nodes = isAstNode(program) ? everyNode(program) : [];
 
-            walk(program, (node) => {
-              if (node.type === "ImportSpecifier") {
-                const imported = identifierName(node.imported);
-                const local = identifierName(node.local);
-                if (
-                  imported !== null &&
-                  local !== null &&
-                  imported.startsWith(UUID_MINTER_PREFIX)
-                ) {
-                  minterNames.add(local);
-                }
-                return;
+            // Aliases first: a declarator's initializer may call one.
+            for (const node of nodes) {
+              if (node.type !== "ImportSpecifier") {
+                continue;
               }
+              const imported = identifierName(node.imported);
+              const local = identifierName(node.local);
+              if (
+                imported !== null &&
+                local !== null &&
+                imported.startsWith(UUID_MINTER_PREFIX)
+              ) {
+                minterNames.add(local);
+              }
+            }
+
+            for (const node of nodes) {
               if (node.type !== "VariableDeclarator") {
-                return;
+                continue;
               }
               const name = identifierName(node.id);
               if (name === null) {
-                return;
+                continue;
               }
               const init = node.init;
               const initMintsUuid =
@@ -206,7 +195,7 @@ export default eslintCompatPlugin({
                   );
                 })();
               (initMintsUuid ? uuidBound : otherwiseBound).add(name);
-            });
+            }
 
             uuidBindings = new Set(
               [...uuidBound].filter((name) => !otherwiseBound.has(name)),

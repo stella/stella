@@ -44,7 +44,12 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier } from "./utils.ts";
+import {
+  filenameForContext,
+  getPropertyName,
+  isIdentifier,
+  unwrapExpression,
+} from "./utils.ts";
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
@@ -59,19 +64,11 @@ const STRICT_FETCH_SCOPES = [
   /(?:^|\/)apps\/api\/src\//u,
 ];
 
-const normalizePath = (filename: string): string =>
-  filename.replaceAll("\\", "/");
-
-const filenameForContext = (context: {
-  filename?: string;
-  getFilename?: () => string;
-}): string => context.filename ?? context.getFilename?.() ?? "";
-
 const isStrictFetchWrapperFile = (context: {
   filename?: string;
   getFilename?: () => string;
 }): boolean => {
-  const normalized = normalizePath(filenameForContext(context));
+  const normalized = filenameForContext(context);
   return (
     STRICT_FETCH_SCOPES.some((pattern) => pattern.test(normalized)) &&
     !TEST_FILE_PATTERN.test(normalized)
@@ -95,26 +92,6 @@ const getNodeArguments = (node: unknown): unknown[] | null => {
     return null;
   }
   return node.arguments.map((value: unknown) => value);
-};
-
-const unwrapExpression = (node: unknown): unknown => {
-  let current = node;
-  while (
-    getNodeType(current) === "TSAsExpression" ||
-    getNodeType(current) === "TSSatisfiesExpression" ||
-    getNodeType(current) === "TSNonNullExpression" ||
-    getNodeType(current) === "TypeCastExpression"
-  ) {
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      !("expression" in current)
-    ) {
-      return current;
-    }
-    current = current.expression;
-  }
-  return current;
 };
 
 const getObjectExpressionProperties = (node: unknown): unknown[] | null => {

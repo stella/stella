@@ -85,6 +85,7 @@ const httpsOnlyFetch: FetchImplementation = async (url, options) => {
   if (!isHttpsUrl(url)) {
     panic("JWKS must be served over HTTPS.");
   }
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- JWKS URL of an issuer on the exact issuer allowlist, required to be HTTPS above
   return await fetchWithTimeout(url, {
     ...options,
     timeoutMs: AGENT_AUTH_JWKS_FETCH_TIMEOUT_MS,

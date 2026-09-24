@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { type AstNode, isAstNode, isIdentifier } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { isAstNode, isIdentifier } from "./utils.ts";
 
 // Base UI positions and collision-tests the Positioner, not the Popup, so the
 // positioner must measure the popup on both axes. Two sizing strategies each

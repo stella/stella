@@ -31,6 +31,7 @@ export const voidLiteral = () => {
 
 // Allowed — the `void` TYPE keyword is a different AST node and must not be
 // flagged. A false positive here (no disable present) would fail the fixture.
+// expect-clean: no-detached-void/no-detached-void
 export const returnsVoid: () => void = () => undefined;
 export const awaitsVoid = async (): Promise<void> => {
   await save();

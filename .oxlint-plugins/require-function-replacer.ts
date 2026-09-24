@@ -41,7 +41,7 @@
 //   text.replace(pattern, toReplacement);
 //
 // Scope: only `context.sourceCode.getScope` + `Scope.set`, walking `.upper`
-// (mirrors require-eden-error-check.ts) is used to resolve identifiers —
+// (the shared `resolveVariable` in utils.ts) is used to resolve identifiers —
 // no type information. This is why an identifier bound via `import`,
 // destructuring, or aliasing to another function-valued binding is not
 // resolved as "provably a function" and gets reported; wrap it in an arrow
@@ -69,20 +69,16 @@
 //   string `replace(pattern, value)` method takes a non-object second
 //   argument, add a callee-name/type exclusion here.
 
-import { eslintCompatPlugin, type ESTree, type Scope } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isIdentifier, isStringLiteral, unwrapExpression } from "./utils.ts";
-
-type AstNode = { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
-
-const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
-  isIdentifier(node);
+import {
+  isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  isStringLiteral,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
 
 const REPLACE_METHODS = new Set(["replace", "replaceAll"]);
 
@@ -130,25 +126,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        // Resolve the `Variable` an Identifier reference binds to by
-        // walking the scope chain outward from its use site (mirrors
-        // require-eden-error-check.ts's resolveVariable — this plugin API
-        // has no ready-made `findVariable` helper of its own).
-        const resolveVariable = (identifierNode: unknown) => {
-          if (!isScopeIdentifier(identifierNode)) {
-            return null;
-          }
-          let scope: Scope | null = context.sourceCode.getScope(identifierNode);
-          while (scope) {
-            const variable = scope.set.get(identifierNode.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         // True when `identifierNode` resolves, through scope, to a
         // function declaration (`function foo() {}`) or a `const`/`let`
         // variable whose own initializer is an arrow/function expression.
@@ -156,7 +133,10 @@ export default eslintCompatPlugin({
         // name, catch binding, or unresolved) is not provably a function
         // from syntax alone and returns false.
         const isFunctionBinding = (identifierNode: unknown): boolean => {
-          const variable = resolveVariable(identifierNode);
+          if (!isIdentifierReference(identifierNode)) {
+            return false;
+          }
+          const variable = resolveVariable(context, identifierNode);
           if (variable === null) {
             return false;
           }

@@ -85,6 +85,7 @@ export const breakWithoutCancel = async (
 export const naturalReadErrorRelease = async (
   stream: ReadableStream<Uint8Array>,
 ) => {
+  // expect-clean: require-stream-reader-disposal/require-stream-reader-disposal
   const reader = stream.getReader();
   try {
     while (true) {

@@ -87,6 +87,7 @@ const createNeutralSetupSession = async ({
   await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
         `${credentials.baseUrl}/v1/setup-sessions/`,
         {
           method: "POST",
@@ -143,6 +144,7 @@ export const createPolarSetupSession = async ({
   await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
         `${credentials.baseUrl}/v1/checkouts/`,
         {
           method: "POST",
@@ -215,6 +217,7 @@ const createNeutralManagementSession = async ({
   await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
         `${credentials.baseUrl}/v1/management-sessions`,
         {
           method: "POST",
@@ -268,6 +271,7 @@ export const createPolarManagementSession = async ({
   await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
         `${credentials.baseUrl}/v1/customer-sessions/`,
         {
           method: "POST",

@@ -7,17 +7,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Scope this rule with `overrides.files` in oxlint.config.ts for chrome
 // modules; route content stays free to use Suspense deliberately.
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import { getImportedName, isFileIn, isIdentifier } from "./utils.ts";
 
 const QUERY_MODULE = "@tanstack/react-query";
-
-const filenameForContext = (context) =>
-  context.filename ?? context.getFilename?.() ?? "";
-
-const isAllowedFile = (context, allowedFiles) => {
-  const filename = filenameForContext(context);
-  return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
-};
 
 export default eslintCompatPlugin({
   meta: { name: "no-shared-suspense-query" },
@@ -47,7 +39,7 @@ export default eslintCompatPlugin({
           before() {
             suspenseQueryAliases.clear();
             queryNamespaces.clear();
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&
@@ -57,10 +49,10 @@ export default eslintCompatPlugin({
                     (value) => typeof value === "string",
                   )
                 : [];
-            return !isAllowedFile(context, allowedFiles);
+            return !isFileIn(context, allowedFiles);
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== QUERY_MODULE) {
+            if (node.source.value !== QUERY_MODULE) {
               return;
             }
 
@@ -88,7 +80,7 @@ export default eslintCompatPlugin({
 
             if (
               callee.type === "MemberExpression" &&
-              callee.computed === false &&
+              !callee.computed &&
               isIdentifier(callee.object) &&
               queryNamespaces.has(callee.object.name) &&
               isIdentifier(callee.property, "useSuspenseQuery")

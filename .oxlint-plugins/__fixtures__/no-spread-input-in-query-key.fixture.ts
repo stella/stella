@@ -120,6 +120,7 @@ export const nestedFixtureKeys = {
 } as const;
 
 export const safeQueryOptions = {
+  // expect-clean: no-spread-input-in-query-key/no-spread-input-in-query-key
   queryKey: [...rootKeys.all, "safe"] as const,
 };
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
+  PropertyTestConfigError,
   propertyConfig,
   propertySeed,
   propertyTestDefaultTimeout,
@@ -144,7 +145,7 @@ describe("propertyTestTimeout", () => {
   test("rejects an invalid owning-runner baseline", () => {
     for (const raw of ["0", "-1", "1.5", "not-a-number"]) {
       withEnv({ [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: raw }, () => {
-        expect(propertyTestDefaultTimeout).toThrow(TypeError);
+        expect(propertyTestDefaultTimeout).toThrow(PropertyTestConfigError);
       });
     }
   });
@@ -195,7 +196,7 @@ describe("propertySeed", () => {
   test("rejects a pinned seed that is not an integer", () => {
     for (const raw of ["1.5", "not-a-number"]) {
       withEnv({ [PROPERTY_TEST_SEED_ENV]: raw }, () => {
-        expect(propertySeed).toThrow(TypeError);
+        expect(propertySeed).toThrow(PropertyTestConfigError);
       });
     }
   });

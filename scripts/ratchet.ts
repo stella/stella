@@ -751,6 +751,14 @@ const countDirectRootConnectionImports = (content: string): number =>
     countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
   );
 
+// `audit: skip` directives: occurrences in comments only, found as the
+// occurrences that stripping comments removes.
+const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
+
+const countAuditSkipDirectives = (content: string): number =>
+  countMatches(content, AUDIT_SKIP_DIRECTIVE) -
+  countMatches(stripComments(content), AUDIT_SKIP_DIRECTIVE);
+
 const countInlineTimestampCursorSql = (content: string): number =>
   countMatches(
     stripComments(content),
@@ -2191,6 +2199,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "audit-skip-directives",
+    description:
+      "`// audit: skip - <reason>` comments in API handlers, each exempting a database write from require-audit-on-mutation; the fix is an audit recorder call in the same transaction",
+    include: ["apps/api/src/handlers/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countAuditSkipDirectives,
+  },
+  {
+    scope: "file",
     id: "landing-inline-clipboard-writes",
     description:
       "`navigator.clipboard.writeText` calls in apps/landing `.astro` files, where the `clipboard-write` ownership rule cannot reach because oxlint does not scan Astro; the fix is to import `@stll/clipboard`, the one owner of the call, so the failure path is written once",
@@ -3032,6 +3049,16 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
 ];
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
+
+const AUDIT_SKIP_FIXTURE_LINES = [
+  "// audit: skip - scheduler bookkeeping, no user action",
+  "const settled = true; // audit: skip - trailing directive counts",
+  "/* audit: skip - block comment directive counts */",
+  'const label = "audit: skip in a string must not count";',
+];
+const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the line, trailing, and block comments (3); the string is code.
+const EXPECTED_AUDIT_SKIP_DIRECTIVES = 3;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
 
 const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
@@ -4040,6 +4067,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/handlers/audit-skip.ts",
+      SELF_TEST_AUDIT_SKIP_DIRECTIVES,
+    );
+    writeFixture(
+      root,
       "apps/web/src/shared-helper-shapes.tsx",
       SELF_TEST_SHARED_WEB_HELPERS,
     );
@@ -4436,6 +4468,7 @@ const runSelfTest = (): number => {
         EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
       ],
       ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
+      ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
       [
         "repeated-timestamp-cursor-boundary",

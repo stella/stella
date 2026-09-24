@@ -14,7 +14,7 @@ const _manualKeyset = or(
   eq(column, pgTimestampCursorBoundary(timestamp)),
 );
 
-// Aliasing the canonical boundary import must not bypass the codec rule.
+// An aliased canonical boundary import is matched too.
 // oxlint-disable-next-line require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec
 const _aliasedManualKeyset = or(
   lt(column, cursorBoundary(timestamp)),
@@ -22,6 +22,7 @@ const _aliasedManualKeyset = or(
 );
 
 // A one-sided range boundary is not a two-column keyset predicate.
+// expect-clean: require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec
 const _singleBoundary = lt(column, pgTimestampCursorBoundary(timestamp));
 
 // Heterogeneous tuple comparisons use one parsed boundary and remain valid.

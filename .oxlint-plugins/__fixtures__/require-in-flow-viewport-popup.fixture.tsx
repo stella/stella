@@ -12,6 +12,7 @@ const cn = (...classes: (string | false)[]) =>
 export const Fixture = ({ expanded }: { expanded: boolean }) => (
   <>
     <TooltipPrimitive.Portal>
+      {/* expect-clean: require-in-flow-viewport-popup/require-in-flow-viewport-popup */}
       <TooltipPrimitive.Positioner
         className={cn(CONTENT_SIZED_POSITIONER_CLASS_NAME, "z-50")}
       >

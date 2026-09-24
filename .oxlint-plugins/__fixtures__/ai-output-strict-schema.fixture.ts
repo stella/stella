@@ -23,6 +23,7 @@ export const looseArrayOutput = Output.array({
 
 // Allowed: the sanctioned helper recursively pins strict object schemas.
 export const strictObjectOutput = Output.object({
+  // expect-clean: ai-output-strict-schema/ai-output-strict-schema
   schema: strictOutputSchema(schema),
 });
 

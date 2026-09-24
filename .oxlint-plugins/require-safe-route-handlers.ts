@@ -19,13 +19,12 @@
 // justification. `no-direct-handler-config` remains applicable because Elysia
 // mutates route options regardless of the endpoint's authentication model.
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { getPropertyName, isAstNode } from "./utils.ts";
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
-
-type AstNode = Ranged & Record<string, unknown> & { type: string };
 
 type MemberExpressionNode = AstNode & {
   computed: boolean;
@@ -36,12 +35,6 @@ type CallExpressionNode = AstNode & {
   arguments: unknown[];
   callee: unknown;
 };
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
 
 const isMemberExpression = (node: unknown): node is MemberExpressionNode =>
   isAstNode(node) &&

@@ -27,15 +27,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // legitimate bare call building the cached collator):
 //   collator.compare(a, b)
 
-import { getPropertyName } from "./utils.ts";
-
-const filenameForContext = (context) =>
-  context.filename ?? context.getFilename?.() ?? "";
-
-const isAllowedFile = (context, allowedFiles) => {
-  const filename = filenameForContext(context);
-  return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
-};
+import { getPropertyName, isFileIn } from "./utils.ts";
 
 export default eslintCompatPlugin({
   meta: { name: "require-cached-collator" },
@@ -74,7 +66,7 @@ export default eslintCompatPlugin({
                   (file): file is string => typeof file === "string",
                 )
               : [];
-            enabled = !isAllowedFile(context, allowedFiles);
+            enabled = !isFileIn(context, allowedFiles);
             return enabled;
           },
           CallExpression(node) {

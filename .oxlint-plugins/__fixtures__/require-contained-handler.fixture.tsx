@@ -8,11 +8,11 @@
 
 import type { RefObject, SyntheticEvent } from "react";
 
+import { PopoverPopup } from "@stll/ui/popover";
 import {
   containedEventHandler,
   containedHandler,
 } from "@stll/ui/use-contained-handler";
-import { PopoverPopup } from "@stll/ui/popover";
 
 const noop = (_event?: SyntheticEvent) => undefined;
 
@@ -91,6 +91,7 @@ export const Wrapped = () => (
   <button
     type="button"
     ref={buttonRef}
+    // expect-clean: require-contained-handler/require-contained-handler
     onMouseDown={containedHandler(buttonRef, noop)}
   />
 );
@@ -120,6 +121,7 @@ export const NoRef = () => <button type="button" onMouseDown={noop} />;
 export const PortalBesideInteractiveTrigger = () => (
   <>
     <button type="button">Open</button>
+    {/* expect-clean: require-contained-handler/no-portal-under-interactive-ancestor */}
     <PopoverPopup>Popup</PopoverPopup>
   </>
 );

@@ -30,6 +30,7 @@ export const Fixture = () => (
       {t("settings")}
     </Button>
 
+    {/* expect-clean: icon-button-requires-tooltip/icon-button-requires-tooltip */}
     <Button size="icon" tooltip={t("settings")}>
       <SettingsIcon />
     </Button>

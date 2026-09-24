@@ -18,6 +18,7 @@ declare const block: { kind: string };
 export const handRolled = property.tool.type === "playbook-verdict";
 
 /** A justification block kind: an unrelated concept sharing the name. */
+// expect-clean: no-unpaired-playbook-verdict/no-unpaired-playbook-verdict
 export const blockKind = block.kind === "playbook-verdict";
 
 /** Type-level narrowing is how the variant is meant to be excluded. */

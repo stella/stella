@@ -15,6 +15,7 @@ export function SharedChromeFixture() {
   // oxlint-disable-next-line no-shared-suspense-query/no-shared-suspense-query
   const second = ReactQuery.useSuspenseQuery(options);
 
+  // expect-clean: no-shared-suspense-query/no-shared-suspense-query
   const third = ReactQuery.useQuery(options);
 
   return `${first.data}${second.data}${third.data ?? ""}`;

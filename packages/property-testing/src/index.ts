@@ -78,6 +78,17 @@ export const PROPERTY_TEST_SEED_ENV = "PROPERTY_TEST_SEED";
  */
 const DEFAULT_PROPERTY_SEED = 20_260_901;
 
+// A malformed property-test environment variable. A local class keeps this
+// package free of runtime dependencies beyond fast-check.
+export class PropertyTestConfigError extends Error {
+  readonly _tag = "PropertyTestConfigError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PropertyTestConfigError";
+  }
+}
+
 /**
  * The seed a property should run with: fixed in PR CI, absent (so
  * fast-check draws a fresh one) during the nightly sweep.
@@ -108,7 +119,7 @@ export const propertySeed = (): number | undefined => {
   if (pinned !== undefined && pinned !== "") {
     const parsed = Number(pinned);
     if (!Number.isSafeInteger(parsed)) {
-      throw new TypeError(
+      throw new PropertyTestConfigError(
         `${PROPERTY_TEST_SEED_ENV} must be an integer seed, got ${pinned}`,
       );
     }
@@ -139,7 +150,7 @@ export const propertyTestDefaultTimeout = (): number => {
       ? DEFAULT_PROPERTY_TEST_TIMEOUT_MS
       : Number(rawBaseMs);
   if (!Number.isSafeInteger(baseMs) || baseMs <= 0) {
-    throw new TypeError(
+    throw new PropertyTestConfigError(
       `${PROPERTY_TEST_TIMEOUT_BASE_MS_ENV} must be a positive integer`,
     );
   }

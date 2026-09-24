@@ -183,11 +183,14 @@ const memberExpressionPath = (node) => {
   if (node.property?.type !== "Identifier") {
     return null;
   }
-  const head =
+  const head: unknown =
     node.object?.type === "Identifier"
       ? node.object.name
       : memberExpressionPath(node.object);
-  return head === null ? null : `${head}.${node.property.name}`;
+  const propertyName: unknown = node.property.name;
+  return typeof head === "string" && typeof propertyName === "string"
+    ? `${head}.${propertyName}`
+    : null;
 };
 
 // Find the `ref={…}` attribute and return a display string for the ref
@@ -262,11 +265,11 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const checkOpening = (opening) => {
-          const elementName =
+          const plainTagName =
             opening.name?.type === "JSXIdentifier" ? opening.name.name : null;
           if (
-            typeof elementName === "string" &&
-            LEAF_ELEMENTS.has(elementName)
+            typeof plainTagName === "string" &&
+            LEAF_ELEMENTS.has(plainTagName)
           ) {
             return;
           }

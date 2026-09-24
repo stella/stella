@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -25,15 +26,13 @@ const getCapabilityIds = (rootDir: string): Set<string> => {
   const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
   const raw: unknown = JSON.parse(readFileSync(catalogPath, "utf-8"));
   if (!Array.isArray(raw)) {
-    throw new TypeError(`${CAPABILITY_CATALOG_PATH} must contain an array`);
+    panic(`${CAPABILITY_CATALOG_PATH} must contain an array`);
   }
 
   const ids = new Set<string>();
   for (const capability of raw) {
     if (!isRecord(capability) || typeof capability["id"] !== "string") {
-      throw new TypeError(
-        `${CAPABILITY_CATALOG_PATH} contains a capability without an id`,
-      );
+      panic(`${CAPABILITY_CATALOG_PATH} contains a capability without an id`);
     }
     ids.add(capability["id"]);
   }

@@ -8,6 +8,7 @@
 // per-capture verdict with the exact re-record command. Exit code is only
 // non-zero with --strict, so releases can choose to enforce.
 
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -97,15 +98,11 @@ export const readManifestEntries =
     }
     const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
     if (!isRecord(parsed) || !Array.isArray(parsed["entries"])) {
-      throw new TypeError(
-        `${RECORDINGS_MANIFEST_PATH} must contain an entries array`,
-      );
+      panic(`${RECORDINGS_MANIFEST_PATH} must contain an entries array`);
     }
     return parsed["entries"].map((entry, index) => {
       if (!isManifestEntry(entry)) {
-        throw new TypeError(
-          `${RECORDINGS_MANIFEST_PATH} entry ${index} is malformed`,
-        );
+        panic(`${RECORDINGS_MANIFEST_PATH} entry ${index} is malformed`);
       }
       return entry;
     });

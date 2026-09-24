@@ -25,6 +25,7 @@ const createNoteBodySchema = t.Object({
   dueAt: t.String({ format: "date-time" }),
   // oxlint-disable-next-line require-bounded-request-schema/require-bounded-request-schema -- fixture: array without maxItems
   tags: t.Array(tDefaultVarchar),
+  // expect-clean: require-bounded-request-schema/require-bounded-request-schema
   bounded: t.String({ maxLength: LIMIT }),
   day: t.String({ format: "date" }),
   shared: tDefaultVarchar,

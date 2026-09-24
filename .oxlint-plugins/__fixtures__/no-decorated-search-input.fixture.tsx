@@ -63,6 +63,7 @@ export const _ok2 = () => (
   </InputGroup>
 );
 // Allowed: trailing padding leaves the icon's inline-start space alone.
+// expect-clean: no-decorated-search-input/no-decorated-search-input
 export const _ok3 = () => <Input className="h-7 pe-8" type="search" />;
 // Allowed: leading padding on an input the primitive does not decorate.
 export const _ok4 = () => <Input className="ps-8" type="text" />;

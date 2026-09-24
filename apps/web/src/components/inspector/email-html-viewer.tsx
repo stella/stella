@@ -456,6 +456,7 @@ export const EmailHtmlViewer = ({
           ref={bodyFrameRef}
           referrerPolicy="no-referrer"
           sandbox="allow-same-origin"
+          // safe-html: sanitizeDom in apps/api/src/lib/files/email-to-html.ts strips active content and sets a CSP; localizeEmailBodyHtml adds only escaped labels, and the sandbox omits allow-scripts.
           srcDoc={bodyHtml}
           style={{ height: 0 }}
           title={t("emailViewer.bodyTitle")}

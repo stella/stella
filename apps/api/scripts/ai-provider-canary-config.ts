@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
@@ -88,7 +90,7 @@ export const weeklyCanaryRotation = ({
   rotationIndex,
 }: WeeklyCanaryRotationOptions): WeeklyCanaryRotation => {
   if (!Number.isSafeInteger(rotationIndex) || rotationIndex < 0) {
-    throw new TypeError("Weekly canary rotation index must be non-negative.");
+    return panic("Weekly canary rotation index must be non-negative.");
   }
 
   const models = BYOK_MODEL_OPTIONS[provider];
@@ -97,16 +99,14 @@ export const weeklyCanaryRotation = ({
     rotationIndex % WEEKLY_TOOL_SHAPES.length,
   );
   if (modelId === undefined || toolShape === undefined) {
-    throw new TypeError("Weekly canary rotation catalog must not be empty.");
+    return panic("Weekly canary rotation catalog must not be empty.");
   }
 
   const supportedRoles = MODEL_ROLES.filter((role) =>
     isBYOKModelRoleSupported({ modelId, provider, role }),
   );
   if (supportedRoles.length === 0) {
-    throw new TypeError(
-      `Weekly canary model ${modelId} has no supported role.`,
-    );
+    return panic(`Weekly canary model ${modelId} has no supported role.`);
   }
 
   const nonDefaultRoles = supportedRoles.filter(

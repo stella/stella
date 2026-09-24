@@ -4,7 +4,7 @@ import type {
   Document as HocuspocusDocument,
   WebSocketLike,
 } from "@hocuspocus/server";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import RedisClient from "ioredis";
@@ -159,10 +159,18 @@ const readPresenceUserId = (state: unknown) => {
   return typeof user.id === "string" ? user.id : null;
 };
 
+class CollabTokenExpiryError extends TaggedError("CollabTokenExpiryError")<{
+  message: string;
+  cause: unknown;
+}> {}
+
 const parseTokenExpiresAt = (value: string) => {
   const expiresAt = Result.try(() => Temporal.Instant.from(value));
   if (expiresAt.isErr()) {
-    throw new TypeError("Stella API returned an invalid token expiry.");
+    throw new CollabTokenExpiryError({
+      message: "Stella API returned an invalid token expiry.",
+      cause: expiresAt.error,
+    });
   }
 
   return expiresAt.value.epochMilliseconds;
@@ -201,6 +209,7 @@ const postJson = async <TSchema extends v.GenericSchema>({
     headers.set("Authorization", `Bearer ${authorizationToken}`);
   }
 
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- posts only to the operator-configured API origin
   const response = await fetch(`${apiUrl}/v1${path}`, {
     body: JSON.stringify(body),
     headers,

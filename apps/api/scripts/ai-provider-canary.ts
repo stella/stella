@@ -645,6 +645,13 @@ export class CanaryProviderRunError extends TypeError {
   }
 }
 
+// A failure the canary itself detected. Its message is canary-authored and
+// bounded, so the top-level handler prints it. Provider errors are never
+// printed.
+export class CanaryError extends TaggedError("CanaryError")<{
+  message: string;
+}> {}
+
 export const classifyCanaryFailure = (error: unknown): CanaryFailure =>
   error instanceof CanaryProviderRunError
     ? error.failure
@@ -656,24 +663,26 @@ type CanaryCredentialRejectedOptions = {
   reason: CredentialRejectionReason;
 };
 
-// A TypeError so the top-level handler prints this bounded message; every part
-// of it is either a canary literal or a canary-built label.
-export class CanaryCredentialRejectedError extends TypeError {
+// A CanaryError so the top-level handler prints this bounded message; every
+// part of it is either a canary literal or a canary-built label.
+export class CanaryCredentialRejectedError extends CanaryError {
   constructor({ label, provider, reason }: CanaryCredentialRejectedOptions) {
-    super(
-      `${provider}: credential rejected (${label}, ${reason}); ` +
+    super({
+      message:
+        `${provider}: credential rejected (${label}, ${reason}); ` +
         "rotate AI_CANARY_API_KEY for this provider",
-    );
+    });
     this.name = "CanaryCredentialRejectedError";
   }
 }
 
-export class CanaryProviderUnavailableError extends TypeError {
+export class CanaryProviderUnavailableError extends CanaryError {
   constructor(provider: CanaryProvider, label: string, status: number) {
-    super(
-      `${provider}: provider unavailable after retries (${label}, HTTP ${status}); ` +
+    super({
+      message:
+        `${provider}: provider unavailable after retries (${label}, HTTP ${status}); ` +
         "restore the canary credential quota",
-    );
+    });
     this.name = "CanaryProviderUnavailableError";
   }
 }
@@ -1107,7 +1116,9 @@ const runModelRoleProbe = async ({
       ? pdfCanarySelection(provider)
       : { modelId: DEFAULT_MODELS[provider][role], role };
   if (selection === null) {
-    throw new TypeError("Canary resolved an unexpected provider model.");
+    throw new CanaryError({
+      message: "Canary resolved an unexpected provider model.",
+    });
   }
   const probeConfig =
     selection.role === role
@@ -1128,7 +1139,9 @@ const runModelRoleProbe = async ({
     role: selection.role,
   });
   if (model.provider !== provider || model.modelId !== selection.modelId) {
-    throw new TypeError("Canary resolved an unexpected provider model.");
+    throw new CanaryError({
+      message: "Canary resolved an unexpected provider model.",
+    });
   }
 
   const output = await generateTanStackTextForRole({
@@ -1190,7 +1203,9 @@ const runWeeklyModelRoleProbe = async ({
     role,
   });
   if (model.provider !== provider || model.modelId !== rotation.modelId) {
-    throw new TypeError("Canary resolved an unexpected provider model.");
+    throw new CanaryError({
+      message: "Canary resolved an unexpected provider model.",
+    });
   }
 
   const output = await generateTanStackTextForRole({
@@ -1266,9 +1281,9 @@ const runToolCallRoundTripProbe = async ({
   });
 
   if (observedInputs.length !== 1) {
-    throw new TypeError(
-      "Provider did not execute the canary tool exactly once.",
-    );
+    throw new CanaryError({
+      message: "Provider did not execute the canary tool exactly once.",
+    });
   }
   const observedInput = observedInputs.at(0);
   if (
@@ -1276,15 +1291,17 @@ const runToolCallRoundTripProbe = async ({
     observedInput["count"] !== TOOL_ROUND_TRIP_COUNT ||
     observedInput["value"] !== TOOL_ROUND_TRIP_VALUE
   ) {
-    throw new TypeError("Provider returned unexpected canary tool arguments.");
+    throw new CanaryError({
+      message: "Provider returned unexpected canary tool arguments.",
+    });
   }
   // Only the synthetic null is the adapter's defect. An empty string is a
   // model choice the application schema accepts (maxLength 0), so it is not a
   // provider-contract finding.
   if (observedInput["optionalNote"] === null) {
-    throw new TypeError(
-      "Provider adapter preserved a synthetic null tool argument.",
-    );
+    throw new CanaryError({
+      message: "Provider adapter preserved a synthetic null tool argument.",
+    });
   }
 };
 
@@ -1303,9 +1320,9 @@ export const requireWeeklyToolExecution = ({
   observedInputs,
 }: RequireWeeklyToolExecutionOptions): void => {
   if (observedInputs.length !== 1) {
-    throw new TypeError(
-      "Provider did not execute the weekly canary tool exactly once.",
-    );
+    throw new CanaryError({
+      message: "Provider did not execute the weekly canary tool exactly once.",
+    });
   }
   const observedInput = observedInputs.at(0);
   if (
@@ -1313,9 +1330,9 @@ export const requireWeeklyToolExecution = ({
       isDeepStrictEqual(observedInput, expectedInput),
     )
   ) {
-    throw new TypeError(
-      "Provider returned unexpected weekly canary tool arguments.",
-    );
+    throw new CanaryError({
+      message: "Provider returned unexpected weekly canary tool arguments.",
+    });
   }
 };
 
@@ -1438,14 +1455,16 @@ const runToolProbe = async ({
 
 const requireNonEmptyText = (output: string): void => {
   if (output.trim().length === 0) {
-    throw new TypeError("Provider returned no text.");
+    throw new CanaryError({ message: "Provider returned no text." });
   }
 };
 
 const requireExpectedRoleOutput = (output: string, role: ModelRole): void => {
   requireNonEmptyText(output);
   if (role === "pdf" && output.trim() !== PDF_CANARY_TOKEN) {
-    throw new TypeError("Provider did not read the attached PDF.");
+    throw new CanaryError({
+      message: "Provider did not read the attached PDF.",
+    });
   }
 };
 
@@ -1528,7 +1547,7 @@ const flagValue = (args: string[], flag: string): string | undefined => {
 
   const value = args.at(flagIndex + 1);
   if (value === undefined || value.startsWith("--")) {
-    throw new TypeError(`Pass ${flag} followed by a value.`);
+    throw new CanaryError({ message: `Pass ${flag} followed by a value.` });
   }
 
   return value;
@@ -1540,9 +1559,9 @@ const parseProvider = (args: string[]): CanaryProvider => {
     return value;
   }
 
-  throw new TypeError(
-    `Pass --provider followed by one of: ${CANARY_PROVIDERS.join(", ")}.`,
-  );
+  throw new CanaryError({
+    message: `Pass --provider followed by one of: ${CANARY_PROVIDERS.join(", ")}.`,
+  });
 };
 
 type CanaryRunArgs =
@@ -1556,9 +1575,9 @@ const parseCanaryRunArgs = (args: string[]): CanaryRunArgs => {
     return { provider, tier: "daily" };
   }
   if (tierValue !== "weekly") {
-    throw new TypeError(
-      `Pass --tier followed by one of: ${CANARY_TIERS.join(", ")}.`,
-    );
+    throw new CanaryError({
+      message: `Pass --tier followed by one of: ${CANARY_TIERS.join(", ")}.`,
+    });
   }
 
   const rotationValue = flagValue(args, "--rotation-index");
@@ -1567,9 +1586,9 @@ const parseCanaryRunArgs = (args: string[]): CanaryRunArgs => {
       ? Math.floor(Date.now() / MILLISECONDS_PER_WEEK)
       : Number(rotationValue);
   if (!Number.isSafeInteger(rotationIndex) || rotationIndex < 0) {
-    throw new TypeError(
-      "Pass --rotation-index followed by a non-negative integer.",
-    );
+    throw new CanaryError({
+      message: "Pass --rotation-index followed by a non-negative integer.",
+    });
   }
 
   return { provider, rotationIndex, tier: "weekly" };
@@ -1604,10 +1623,7 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
     return `provider stream error ${stage} (${detail})`;
   }
 
-  if (
-    error instanceof TypeError &&
-    SAFE_CANARY_ERROR_MESSAGES.has(error.message)
-  ) {
+  if (CanaryError.is(error) && SAFE_CANARY_ERROR_MESSAGES.has(error.message)) {
     return error.message;
   }
 
@@ -1721,7 +1737,9 @@ const run = async (): Promise<void> => {
   const { provider } = args;
   const apiKey = process.env["AI_CANARY_API_KEY"];
   if (!apiKey) {
-    throw new TypeError(`No canary credential is configured for ${provider}.`);
+    throw new CanaryError({
+      message: `No canary credential is configured for ${provider}.`,
+    });
   }
 
   const context = {
@@ -1757,9 +1775,9 @@ const run = async (): Promise<void> => {
   }
 
   if (failures > 0) {
-    throw new TypeError(
-      `${failures} provider capability probe${failures === 1 ? "" : "s"} failed.`,
-    );
+    throw new CanaryError({
+      message: `${failures} provider capability probe${failures === 1 ? "" : "s"} failed.`,
+    });
   }
 };
 
@@ -1823,7 +1841,9 @@ const runCatalogModelProbe = async ({
     role: CATALOG_PROBE_ROLE,
   });
   if (model.provider !== provider || model.modelId !== modelId) {
-    throw new TypeError("Canary resolved an unexpected catalog model.");
+    throw new CanaryError({
+      message: "Canary resolved an unexpected catalog model.",
+    });
   }
 
   const output = await generateTanStackTextForRole({
@@ -1976,8 +1996,7 @@ const runWeeklyCanaryProbes = async (
 if (import.meta.main) {
   await run().catch((error: unknown) => {
     // Never print provider errors: bodies can echo request content or headers.
-    const message =
-      error instanceof TypeError ? error.message : "Canary failed.";
+    const message = CanaryError.is(error) ? error.message : "Canary failed.";
     console.error(`[ai-canary] ${message}`);
     process.exitCode = 1;
   });

@@ -18,6 +18,7 @@ export const AdhocLoaderFixture = ({ busy }: { busy: boolean }) => (
     {/* oxlint-disable-next-line no-adhoc-loader/no-adhoc-loader */}
     <div role={"progressbar"} />
 
+    {/* expect-clean: no-adhoc-loader/no-adhoc-loader */}
     <Loader label="Loading" size="sm" />
     <LoaderState label="Review in progress" />
     <Skeleton className="h-4 w-1/3" />

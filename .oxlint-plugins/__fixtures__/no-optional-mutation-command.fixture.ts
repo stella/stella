@@ -43,12 +43,12 @@ type LaterDeclaredOptionalBag = {
 
 export const useExplicitCommand = () =>
   useMutation({
+    // expect-clean: no-optional-mutation-command/no-optional-mutation-command
     mutationFn: async (update: ExplicitUpdate) => save(update),
   });
 
 export const useIntentionalBatchPatch = () =>
   useMutation({
-    mutationFn: async (
-      patch: NonEmptyPatch<{ color: string; name: string }>,
-    ) => save(patch),
+    mutationFn: async (patch: NonEmptyPatch<{ color: string; name: string }>) =>
+      save(patch),
   });

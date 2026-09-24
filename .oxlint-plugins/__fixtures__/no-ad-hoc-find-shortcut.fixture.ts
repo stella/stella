@@ -25,6 +25,7 @@ const claimsBareShortcut = (event: KeyboardEvent) =>
 const claimsUppercase = (event: KeyboardEvent) => "F" === event.key;
 
 // Other keys keep their own handlers.
+// expect-clean: no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut
 const closesOnEscape = (event: KeyboardEvent) => event.key === "Escape";
 
 export const __noAdHocFindShortcutFixture: readonly unknown[] = [

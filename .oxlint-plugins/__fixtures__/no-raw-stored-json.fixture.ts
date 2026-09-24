@@ -91,6 +91,7 @@ export const viaHelper = () =>
   readStoredJson(localStorage.getItem("k"), schema);
 
 // Allowed — not storage-sourced at all (e.g. an SSE payload).
+// expect-clean: no-raw-stored-json/no-raw-stored-json
 export const notStorage = () => JSON.parse(sseEventData);
 
 // Allowed — a variable not sourced from a storage .getItem() call.

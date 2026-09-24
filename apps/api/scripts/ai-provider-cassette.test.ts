@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  AiCassetteError,
   createCassetteFetch,
   type AiProviderCassette,
   type CassetteFetch,
@@ -46,7 +47,7 @@ const expectRejected = async (promise: Promise<unknown>, message: string) => {
     await promise;
     throw new TypeError("Expected promise to reject.");
   } catch (error) {
-    expect(error).toBeInstanceOf(TypeError);
+    expect(error).toBeInstanceOf(AiCassetteError);
     expect(error instanceof Error ? error.message : "").toContain(message);
   }
 };

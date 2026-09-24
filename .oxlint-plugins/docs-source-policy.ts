@@ -17,13 +17,23 @@ import {
   type DocSource,
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources.ts";
-import { filenameForContext } from "./utils.ts";
+import {
+  filenameForContext,
+  getPropertyName,
+  isAstNode,
+  isCallTo,
+  isStringLiteral,
+} from "./utils.ts";
 
 const RULE_NAME = "docs-source-policy";
 const POLICY_PATH_PARTS = [".claude", "mcp", "doc-sources.ts"] as const;
 const POLICY_PATH_SUFFIX = POLICY_PATH_PARTS.join("/");
 const FIXTURE_PATH_SUFFIX =
   ".oxlint-plugins/__fixtures__/docs-source-policy.fixture.ts";
+// The fixture cannot vary the repository's manifests or policy, so each case
+// there passes a whole policy to this marker call and the rule checks it.
+const FIXTURE_CASE_CALLEE = "docSourcePolicyCase";
+const NO_LLMS_TXT_REASON = "no-llms-txt";
 const MAX_QUARANTINE_MILLISECONDS = 31 * 24 * 60 * 60 * 1000;
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -189,6 +199,140 @@ export const checkDocumentationSourcePolicy = ({
   return failures.toSorted();
 };
 
+// --- Fixture cases -----------------------------------------------------------
+//
+// A fixture case is a literal: objects with static keys, arrays, and strings.
+// Anything else is reported as an unreadable case, never read as an empty
+// policy.
+
+type StaticValue = string | StaticValue[] | { [key: string]: StaticValue };
+
+const staticValue = (node: unknown): StaticValue | null => {
+  if (isStringLiteral(node)) {
+    return node.value;
+  }
+  if (!isAstNode(node)) {
+    return null;
+  }
+  if (node.type === "ArrayExpression" && Array.isArray(node.elements)) {
+    const items: StaticValue[] = [];
+    for (const element of node.elements) {
+      const item = staticValue(element);
+      if (item === null) {
+        return null;
+      }
+      items.push(item);
+    }
+    return items;
+  }
+  if (node.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
+    return null;
+  }
+  const entries: Record<string, StaticValue> = {};
+  for (const property of node.properties) {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return null;
+    }
+    const key =
+      property.computed === true ? null : getPropertyName(property.key);
+    const value = staticValue(property.value);
+    if (key === null || value === null) {
+      return null;
+    }
+    entries[key] = value;
+  }
+  return entries;
+};
+
+const isStaticRecord = (
+  value: StaticValue | null | undefined,
+): value is Record<string, StaticValue> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const staticStrings = (value: StaticValue | undefined): string[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const strings = value.filter((item) => typeof item === "string");
+  return strings.length === value.length ? strings : null;
+};
+
+const fixtureSource = (value: StaticValue): DocSource | null => {
+  if (!isStaticRecord(value)) {
+    return null;
+  }
+  const { dependencies, url } = value;
+  const strings = staticStrings(dependencies) ?? [];
+  const first = strings.at(0);
+  if (first === undefined || typeof url !== "string") {
+    return null;
+  }
+  return { dependencies: [first, ...strings.slice(1)], url };
+};
+
+const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {
+  if (!isStaticRecord(value) || value.reason !== NO_LLMS_TXT_REASON) {
+    return null;
+  }
+  const { checkedAt, dependency, explanation, expiresAt } = value;
+  if (
+    typeof checkedAt !== "string" ||
+    typeof dependency !== "string" ||
+    typeof explanation !== "string" ||
+    typeof expiresAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    checkedAt,
+    dependency,
+    explanation,
+    expiresAt,
+    reason: NO_LLMS_TXT_REASON,
+  };
+};
+
+const fixturePolicy = (
+  node: unknown,
+): DocumentationSourcePolicyOptions | null => {
+  const value = staticValue(node);
+  if (!isStaticRecord(value)) {
+    return null;
+  }
+  const dependencies = staticStrings(value.dependencies);
+  const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
+  if (
+    dependencies === null ||
+    typeof now !== "string" ||
+    !isStaticRecord(sourceEntries) ||
+    !Array.isArray(exclusionEntries)
+  ) {
+    return null;
+  }
+  const sources: Record<string, DocSource> = {};
+  for (const [name, entry] of Object.entries(sourceEntries)) {
+    const source = fixtureSource(entry);
+    if (source === null) {
+      return null;
+    }
+    sources[name] = source;
+  }
+  const exclusions: NoLlmsTxtExclusion[] = [];
+  for (const entry of exclusionEntries) {
+    const exclusion = fixtureExclusion(entry);
+    if (exclusion === null) {
+      return null;
+    }
+    exclusions.push(exclusion);
+  }
+  return {
+    dependencies: new Set(dependencies),
+    exclusions,
+    now: new Date(now),
+    sources,
+  };
+};
+
 const repositoryRootForPolicy = (filename: string): string => {
   let root = filename;
   for (const _part of POLICY_PATH_PARTS) {
@@ -204,8 +348,8 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          fixture:
-            "The documentation-source policy rule must execute against its fixture.",
+          fixtureCase:
+            "A documentation-source policy fixture case must be one literal policy with dependencies, sources, exclusions and now.",
           policyFailure: "{{failure}}",
         },
         schema: [],
@@ -222,11 +366,27 @@ export default eslintCompatPlugin({
             isPolicy = filename.endsWith(POLICY_PATH_SUFFIX);
             return isFixture || isPolicy;
           },
-          Program(node) {
-            if (isFixture) {
-              context.report({ node, messageId: "fixture" });
+          CallExpression(node) {
+            if (!isFixture || !isCallTo(node, FIXTURE_CASE_CALLEE)) {
               return;
             }
+            const policy =
+              node.arguments.length === 1
+                ? fixturePolicy(node.arguments[0])
+                : null;
+            if (policy === null) {
+              context.report({ node, messageId: "fixtureCase" });
+              return;
+            }
+            for (const failure of checkDocumentationSourcePolicy(policy)) {
+              context.report({
+                data: { failure },
+                node,
+                messageId: "policyFailure",
+              });
+            }
+          },
+          Program(node) {
             if (!isPolicy) {
               return;
             }

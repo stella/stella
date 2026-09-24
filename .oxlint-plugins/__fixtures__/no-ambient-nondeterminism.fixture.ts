@@ -826,6 +826,7 @@ export const spreadObjectEpoch = spreadClock.now();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested static object properties retain ambient provenance
 export const nestedObjectEpoch = nestedServices.clock.now();
 
+// expect-clean: no-ambient-nondeterminism/no-ambient-nondeterminism
 export const overriddenSpreadEpoch = overriddenClock.now();
 export const localObjectEpoch = spreadLocalClock.now();
 

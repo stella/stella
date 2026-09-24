@@ -5,6 +5,11 @@
 // regresses, unused-directive reporting fails this fixture. Unannotated writes
 // cover the intentional false-positive boundaries.
 
+import { ACCESS_TOKEN_STORAGE_KEY } from "@stll/fixture-storage-keys";
+
+// oxlint-disable-next-line import/no-cycle, import/no-self-import -- fixture: the imported key is declared further down in this module
+import { STORED_SLOT as importedSlot } from "./no-auth-token-in-web-storage.fixture";
+
 declare const credential: string;
 declare const dynamicKey: string;
 declare const getTokenKey: () => string;
@@ -99,9 +104,58 @@ localStorage[SET_ITEM_METHOD]("accessToken", credential);
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, eslint/no-useless-concat -- fixture: concatenated storage and method names remain static
 globalThis["local" + "Storage"]["set" + "Item"]("jwt", credential);
 
+// MUST flag: an imported key resolves to the string literal its module
+// declares.
+export const STORED_SLOT = "refresh_token";
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: imported key resolved from its declaration
+localStorage.setItem(importedSlot, credential);
+
+// MUST flag: an imported key from a module outside the repository counts by
+// its export name.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: imported key named like a credential
+sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, credential);
+
+// MUST flag: the stored value serializes a credential field.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: credential field in a serialized value
+localStorage.setItem("auth-state", JSON.stringify({ accessToken: credential }));
+const storedSession = { refreshToken: credential, theme: "dark" };
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: const object with a credential field
+localStorage.setItem("auth-state", JSON.stringify(storedSession));
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: assignment of a serialized credential field
+sessionStorage.state = JSON.stringify({ jwt: credential });
+
+// MUST flag: a local helper forwards its parameters to setItem.
+const persist = (key: string, value: string) => {
+  localStorage.setItem(key, value);
+};
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: forwarding helper with a credential key
+persist("accessToken", credential);
+function persistDeclared(value: string, key = "fallback") {
+  window.sessionStorage.setItem(key, value);
+}
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: function declaration helper with a default parameter
+persistDeclared(credential, "refresh-token");
+const persistSnapshot = (snapshot: object) =>
+  localStorage.setItem("snapshot", JSON.stringify(snapshot));
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: forwarding helper with a credential value
+persistSnapshot({ idToken: credential });
+const persistTwice = (key: string, value: string) => persist(key, value);
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: helper forwarding to another helper
+persistTwice("jwt", credential);
+
+// Allowed: helpers called with ordinary keys and values.
+// expect-clean: no-auth-token-in-web-storage/no-auth-token-in-web-storage
+persist("theme", "dark");
+// expect-clean: no-auth-token-in-web-storage/no-auth-token-in-web-storage
+persistSnapshot({ sidebarOpen: true });
+// expect-clean: no-auth-token-in-web-storage/no-auth-token-in-web-storage
+localStorage.setItem("layout", JSON.stringify({ columns: 3 }));
+
 // Allowed: ordinary preferences and deliberately JavaScript-readable CSRF or
 // push tokens are not authentication credentials.
+// expect-clean: no-auth-token-in-web-storage/no-auth-token-in-web-storage
 localStorage.setItem("theme", "dark");
+// expect-clean: no-auth-token-in-web-storage/no-auth-token-in-web-storage
 localStorage.setItem("csrfToken", credential);
 sessionStorage.setItem("pushToken", credential);
 localStorage.designTokens = credential;

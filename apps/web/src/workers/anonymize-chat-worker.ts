@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
+import { panic } from "better-result";
+
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 import { loadNameDictionaries } from "@stll/anonymize-data";
@@ -89,7 +91,7 @@ const isDedicatedWorkerScope = (
   "importScripts" in value && "WorkerGlobalScope" in globalThis;
 
 if (!isDedicatedWorkerScope(globalThis)) {
-  throw new TypeError("Chat anonymization must run in a dedicated worker");
+  panic("Chat anonymization must run in a dedicated worker");
 }
 
 const scope = globalThis;

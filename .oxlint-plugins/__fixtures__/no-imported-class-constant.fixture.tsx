@@ -41,6 +41,7 @@ export const _ok2 = () => (
 // Accepted: classes written where they are used.
 export const _ok3 = () => <Button className="mt-2" />;
 // Accepted: an intrinsic element is not a design-system component.
+// expect-clean: no-imported-class-constant/no-imported-class-constant
 export const _ok4 = () => <div className={SHELL_CHROME_LAYER_CLASS_NAME} />;
 // Accepted: a component from outside @stll/ui owns its own class contract.
 export const _ok5 = () => (

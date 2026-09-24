@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
@@ -1152,9 +1152,19 @@ type FetchedSearchPage = SearchPage & {
   session: NalusSession;
 };
 
-class SearchPageDriftError extends TypeError {
-  override name = "SearchPageDriftError";
-}
+/** A NALUS page that does not have the shape the crawl reads. */
+class NalusResponseError extends TaggedError("NalusResponseError")<{
+  message: string;
+}> {}
+
+/** A persisted cz-us checkpoint that does not decode. */
+class CzUsCursorError extends TaggedError("CzUsCursorError")<{
+  message: string;
+}> {}
+
+class SearchPageDriftError extends TaggedError("SearchPageDriftError")<{
+  message: string;
+}> {}
 
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
@@ -1202,7 +1212,7 @@ const parseNonNegativeInteger = (
 ): number => {
   const parsed = value === undefined ? Number.NaN : Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new TypeError(`Invalid cz-us cursor ${field}`);
+    throw new CzUsCursorError({ message: `Invalid cz-us cursor ${field}` });
   }
   return parsed;
 };
@@ -1217,7 +1227,7 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
 
   const parts = cursor.split(":");
   if (parts.at(0) !== "search") {
-    throw new TypeError("Invalid cz-us cursor version");
+    throw new CzUsCursorError({ message: "Invalid cz-us cursor version" });
   }
 
   const phase = parts.at(1);
@@ -1225,7 +1235,7 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
     const availableTo = parts.at(2);
     const year = parseNonNegativeInteger(parts.at(3), "year");
     if (year < FIRST_YEAR) {
-      throw new TypeError("Invalid cz-us cursor year");
+      throw new CzUsCursorError({ message: "Invalid cz-us cursor year" });
     }
     const pass = parts.at(4);
     const digest = parts.at(6);
@@ -1240,7 +1250,7 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
         (!expectedDigest || expectedDigest === "-")) ||
       (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
     ) {
-      throw new TypeError("Invalid cz-us historical pass");
+      throw new CzUsCursorError({ message: "Invalid cz-us historical pass" });
     }
     return {
       phase,
@@ -1283,7 +1293,9 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
         (!expectedDigest || expectedDigest === "-")) ||
       (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
     ) {
-      throw new TypeError("Invalid cz-us availability window");
+      throw new CzUsCursorError({
+        message: "Invalid cz-us availability window",
+      });
     }
     return {
       phase: SWEEP_PHASE.RECENT,
@@ -1295,7 +1307,7 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
       ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
   }
-  throw new TypeError("Invalid cz-us cursor phase");
+  throw new CzUsCursorError({ message: "Invalid cz-us cursor phase" });
 };
 
 const makeCursor = (state: CursorState): string => {
@@ -1498,7 +1510,9 @@ const parseResultPage = ({
   }));
   const banner = banners.at(0);
   if (!banner) {
-    throw new TypeError("NALUS result count banner is missing");
+    throw new NalusResponseError({
+      message: "NALUS result count banner is missing",
+    });
   }
   if (
     banners.some(
@@ -1508,15 +1522,21 @@ const parseResultPage = ({
         candidate.reported !== banner.reported,
     )
   ) {
-    throw new TypeError("NALUS result count banners disagree");
+    throw new NalusResponseError({
+      message: "NALUS result count banners disagree",
+    });
   }
 
   const expectedFrom = expectedPage * pageSize + 1;
   if (banner.rangeFrom !== expectedFrom) {
-    throw new SearchPageDriftError("NALUS result page moved during traversal");
+    throw new SearchPageDriftError({
+      message: "NALUS result page moved during traversal",
+    });
   }
   if (banner.rangeTo > banner.reported) {
-    throw new TypeError("NALUS returned an unexpected result page");
+    throw new NalusResponseError({
+      message: "NALUS returned an unexpected result page",
+    });
   }
 
   const $ = cheerio.load(html);
@@ -1649,7 +1669,9 @@ const parseResultPage = ({
     new Set(listed.map(({ sourceDocumentId }) => sourceDocumentId)).size !==
       listed.length
   ) {
-    throw new TypeError("NALUS result rows do not match the count banner");
+    throw new NalusResponseError({
+      message: "NALUS result rows do not match the count banner",
+    });
   }
   return { listed, ...banner };
 };
@@ -1759,9 +1781,9 @@ const nalusOkResponse = async ({
 }: NalusReadOptions): Promise<Response> => {
   const response = await nalusResponse(url, init);
   if (!response.ok) {
-    throw new TypeError(
-      `NALUS ${subject} returned ${httpFailureReason(response, url)}`,
-    );
+    throw new NalusResponseError({
+      message: `NALUS ${subject} returned ${httpFailureReason(response, url)}`,
+    });
   }
   return response;
 };
@@ -1786,7 +1808,9 @@ const fetchSearchPage = async ({
   const viewState = hiddenField(formHtml, "__VIEWSTATE");
   const validation = hiddenField(formHtml, "__EVENTVALIDATION");
   if (!viewState || !validation) {
-    throw new TypeError("NALUS search form is missing WebForms state");
+    throw new NalusResponseError({
+      message: "NALUS search form is missing WebForms state",
+    });
   }
 
   const form = new URLSearchParams({
@@ -1828,11 +1852,13 @@ const fetchSearchPage = async ({
       if (noResults === NO_RESULTS_MESSAGE && resultsDisabled) {
         return null;
       }
-      throw new TypeError("NALUS search did not confirm an empty result set");
+      throw new NalusResponseError({
+        message: "NALUS search did not confirm an empty result set",
+      });
     }
-    throw new TypeError(
-      `NALUS search returned ${httpFailureReason(submit, SEARCH_URL)}`,
-    );
+    throw new NalusResponseError({
+      message: `NALUS search returned ${httpFailureReason(submit, SEARCH_URL)}`,
+    });
   }
 
   const cookies = cookieHeader([first, submit]);
@@ -2096,12 +2122,12 @@ const fetchListedDecision = async (
         decision: listedOnlyDecision(listed, `http-${response.status}`),
       };
     }
-    throw new TypeError(
-      `NALUS decision ${listed.sourceDocumentId} returned ${httpFailureReason(
+    throw new NalusResponseError({
+      message: `NALUS decision ${listed.sourceDocumentId} returned ${httpFailureReason(
         response,
         listed.sourceUrl,
       )}`,
-    );
+    });
   }
   const responseHtml = await response.text();
 

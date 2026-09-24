@@ -81,6 +81,7 @@ const recordFieldRow = {
 // A court-valued query parameter is a filter token, not an attribution, and
 // is named for what it filters.
 declare const fetchListing: (options: { courtFilter?: string }) => void;
+// expect-clean: no-literal-decision-court/no-literal-decision-court
 fetchListing({ courtFilter: "AUSL" });
 
 export {

@@ -1,6 +1,5 @@
-import {
-  bufferObjectCleanupIntents as cleanupIntents,
-} from "@/api/db/schema";
+import { bufferObjectCleanupIntents as cleanupIntents } from "@/api/db/schema";
+
 import * as schema from "../../apps/api/src/db/schema.ts";
 
 declare const tx: {
@@ -13,12 +12,10 @@ declare const resolveStatus: () => string;
 declare const status: string;
 
 // A direct single-row insert must choose its lifecycle state.
-const _missingSingleStatus = tx
-  .insert(cleanupIntents)
-  .values(
-    // oxlint-disable-next-line require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status -- intentional bad fixture
-    { objectKey: "first" },
-  );
+const _missingSingleStatus = tx.insert(cleanupIntents).values(
+  // oxlint-disable-next-line require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status -- intentional bad fixture
+  { objectKey: "first" },
+);
 
 // Every row in a batch must make the same explicit decision.
 const _missingBatchStatus = tx.insert(cleanupIntents).values([
@@ -52,6 +49,7 @@ const _explicitStatusExpression = tx.insert(cleanupIntents).values({
   status: resolveStatus(),
 });
 const _explicitBatchStatuses = tx.insert(cleanupIntents).values([
+  // expect-clean: require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status
   { objectKey: "eighth", status },
   { objectKey: "ninth", status },
 ]);

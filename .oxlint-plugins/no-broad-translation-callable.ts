@@ -16,7 +16,9 @@
 //   const keys = { title: "feature.title" } as const
 //     satisfies Record<string, TranslationKey>;          // data, not a callable
 
-import { eslintCompatPlugin, type ESTree, type Scope } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
+
+import { resolveVariable } from "./utils.ts";
 
 const isIdentifierNamed = (node, name: string): boolean =>
   node?.type === "Identifier" && node.name === name;
@@ -53,10 +55,10 @@ const isQualifiedNamespaceMember = (
   node,
   namespaceVariables: Set<unknown>,
   memberNames: Set<string>,
-  resolveVariable,
+  resolveInScope,
 ): boolean => {
   const root = qualifiedNameRoot(node);
-  const variable = root ? resolveVariable(root) : null;
+  const variable = root ? resolveInScope(root) : null;
   return (
     node?.type === "TSQualifiedName" &&
     node.right?.type === "Identifier" &&
@@ -70,7 +72,7 @@ const isBroadTranslatorReturnType = (
   node,
   broadTranslatorTypeNames: Set<string>,
   broadTranslatorNamespaceVariables: Set<unknown>,
-  resolveVariable,
+  resolveInScope,
 ): boolean => {
   if (
     node.type !== "TSTypeReference" ||
@@ -88,7 +90,7 @@ const isBroadTranslatorReturnType = (
         queriedType.exprName,
         broadTranslatorNamespaceVariables,
         broadTranslatorMemberNames,
-        resolveVariable,
+        resolveInScope,
       ))
   );
 };
@@ -153,24 +155,15 @@ export default eslintCompatPlugin({
         const localExportCandidates = new Array<ESTree.ExportSpecifier>();
         const renamedReexportCandidates = new Array<ESTree.ExportSpecifier>();
 
-        const resolveVariable = (identifierNode) => {
-          let scope: Scope | null = context.sourceCode.getScope(identifierNode);
-          while (scope) {
-            const variable = scope.set.get(identifierNode.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        const resolveInScope = (identifierNode) =>
+          resolveVariable(context, identifierNode);
 
         const isBroadKeyTypeReference = (node): boolean => {
           if (node?.type !== "TSTypeReference") {
             return false;
           }
           if (node.typeName?.type === "Identifier") {
-            const variable = resolveVariable(node.typeName);
+            const variable = resolveInScope(node.typeName);
             return variable
               ? broadKeyVariables.has(variable)
               : node.typeName.name === "TranslationKey";
@@ -179,7 +172,7 @@ export default eslintCompatPlugin({
             node.typeName,
             broadKeyNamespaceVariables,
             translationKeyTypeNames,
-            resolveVariable,
+            resolveInScope,
           );
         };
 
@@ -213,21 +206,18 @@ export default eslintCompatPlugin({
             renamedReexportCandidates.length = 0;
           },
           Program(node) {
-            for (const statement of node.body ?? []) {
+            for (const statement of node.body) {
               if (statement.type !== "ImportDeclaration") {
                 continue;
               }
-              const source = statement.source?.value;
-              for (const specifier of statement.specifiers ?? []) {
-                if (
-                  specifier.type === "ImportNamespaceSpecifier" &&
-                  specifier.local?.type === "Identifier"
-                ) {
+              const source = statement.source.value;
+              for (const specifier of statement.specifiers) {
+                if (specifier.type === "ImportNamespaceSpecifier") {
                   if (
                     typeof source === "string" &&
                     isTranslationTypeModule(source)
                   ) {
-                    const variable = resolveVariable(specifier.local);
+                    const variable = resolveInScope(specifier.local);
                     if (variable) {
                       broadKeyNamespaceVariables.add(variable);
                     }
@@ -237,7 +227,7 @@ export default eslintCompatPlugin({
                     (typeof source === "string" &&
                       isTranslationTypeModule(source))
                   ) {
-                    const variable = resolveVariable(specifier.local);
+                    const variable = resolveInScope(specifier.local);
                     if (variable) {
                       broadTranslatorNamespaceVariables.add(variable);
                     }
@@ -247,19 +237,17 @@ export default eslintCompatPlugin({
                 if (
                   specifier.type === "ImportSpecifier" &&
                   isIdentifierNamed(specifier.imported, "TranslationKey") &&
-                  specifier.local?.type === "Identifier" &&
                   typeof source === "string" &&
                   isTranslationTypeModule(source)
                 ) {
-                  const variable = resolveVariable(specifier.local);
+                  const variable = resolveInScope(specifier.local);
                   if (variable) {
                     broadKeyVariables.add(variable);
                   }
                 }
                 if (
                   specifier.type === "ImportSpecifier" &&
-                  isBroadTranslatorName(specifier.imported) &&
-                  specifier.local?.type === "Identifier"
+                  isBroadTranslatorName(specifier.imported)
                 ) {
                   broadTranslatorTypeNames.add(specifier.local.name);
                 }
@@ -268,11 +256,8 @@ export default eslintCompatPlugin({
           },
           "Program:exit"() {
             for (const declaration of typeAliases) {
-              if (
-                declaration.id?.type === "Identifier" &&
-                declaration.id.name === "TranslationKey"
-              ) {
-                const variable = resolveVariable(declaration.id);
+              if (declaration.id.name === "TranslationKey") {
+                const variable = resolveInScope(declaration.id);
                 if (variable) {
                   broadKeyVariables.add(variable);
                 }
@@ -284,11 +269,8 @@ export default eslintCompatPlugin({
               foundAlias = false;
               for (const declaration of typeAliases) {
                 const annotation = declaration.typeAnnotation;
-                const variable = declaration.id
-                  ? resolveVariable(declaration.id)
-                  : null;
+                const variable = resolveInScope(declaration.id);
                 if (
-                  declaration.id?.type !== "Identifier" ||
                   variable === null ||
                   broadKeyVariables.has(variable) ||
                   !isBroadKeyTypeReference(annotation)
@@ -301,12 +283,10 @@ export default eslintCompatPlugin({
             }
 
             for (const [declaration, exportNode] of exportedAliasNodes) {
-              if (declaration.id?.name === "TranslationKey") {
+              if (declaration.id.name === "TranslationKey") {
                 continue;
               }
-              const variable = declaration.id
-                ? resolveVariable(declaration.id)
-                : null;
+              const variable = resolveInScope(declaration.id);
               if (variable && broadKeyVariables.has(variable)) {
                 context.report({
                   messageId: "broadAliasExport",
@@ -315,10 +295,10 @@ export default eslintCompatPlugin({
               }
             }
             for (const specifier of localExportCandidates) {
-              if (specifier.local?.type !== "Identifier") {
+              if (specifier.local.type !== "Identifier") {
                 continue;
               }
-              const variable = resolveVariable(specifier.local);
+              const variable = resolveInScope(specifier.local);
               if (variable && broadKeyVariables.has(variable)) {
                 context.report({
                   messageId: "broadAliasExport",
@@ -343,7 +323,7 @@ export default eslintCompatPlugin({
                   candidate,
                   broadTranslatorTypeNames,
                   broadTranslatorNamespaceVariables,
-                  resolveVariable,
+                  resolveInScope,
                 )
               ) {
                 context.report({ messageId: "broadCallable", node: candidate });
@@ -359,7 +339,7 @@ export default eslintCompatPlugin({
             }
 
             const source = node.source?.value;
-            for (const specifier of node.specifiers ?? []) {
+            for (const specifier of node.specifiers) {
               if (
                 typeof source === "string" &&
                 isTranslationTypeModule(source)
@@ -373,8 +353,8 @@ export default eslintCompatPlugin({
                 continue;
               }
               if (
-                (source === null || source === undefined) &&
-                specifier.local?.type === "Identifier" &&
+                source === undefined &&
+                specifier.local.type === "Identifier" &&
                 specifier.local.name !== "TranslationKey"
               ) {
                 localExportCandidates.push(specifier);

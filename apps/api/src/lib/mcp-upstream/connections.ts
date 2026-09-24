@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -621,7 +621,7 @@ const normalizeMcpFetchBody = (body: unknown): SafeOutboundFetchBody => {
     return body;
   }
 
-  throw new TypeError("Unsupported MCP request body type");
+  return panic("Unsupported MCP request body type");
 };
 
 const resolveAuthorizationToken = async ({

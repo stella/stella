@@ -69,6 +69,7 @@ export const assertsThenPanics = (kind: Kind): string => {
       return "b";
     default: {
       kind satisfies never;
+      // expect-clean: require-exhaustive-panic/require-exhaustive-panic
       return panic(`Unhandled kind: ${String(kind)}`);
     }
   }

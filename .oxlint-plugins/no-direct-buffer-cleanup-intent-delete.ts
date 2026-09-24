@@ -19,6 +19,7 @@ import {
   getPropertyName,
   isIdentifier,
   isStringLiteral,
+  isTestFile,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -31,11 +32,6 @@ const FIXTURE_PATH =
 const isSchemaModule = (specifier: string): boolean =>
   specifier === "@/api/db/schema" ||
   /(?:^|\/)db\/schema(?:\/entities)?(?:\.ts)?$/u.test(specifier);
-
-const isTestFile = (filename: string): boolean =>
-  filename.includes("/tests/") ||
-  filename.includes("/__tests__/") ||
-  /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filename);
 
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },

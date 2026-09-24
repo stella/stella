@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 const HEX_BYTE_WIDTH = 2;
 const HEX_RADIX = 16;
 const HEX_TABLE = Array.from({ length: 256 }, (_, byte) =>
@@ -15,6 +17,7 @@ export const installUint8ArrayToHexPolyfill = () => {
     // eslint-disable-next-line func-name-matching -- name kept for stack traces; semantically matches the "toHex" property
     value: function toHex(this: Uint8Array): string {
       if (!(this instanceof Uint8Array)) {
+        // oxlint-disable-next-line no-bare-error/no-bare-error -- the ECMAScript Uint8Array.prototype.toHex spec (ValidateUint8Array) throws TypeError on an incompatible receiver
         throw new TypeError(
           "Uint8Array.prototype.toHex called on incompatible receiver",
         );
@@ -24,12 +27,12 @@ export const installUint8ArrayToHexPolyfill = () => {
       for (let i = 0; i < this.length; i++) {
         const byte = this[i];
         if (byte === undefined) {
-          throw new TypeError("Uint8Array byte index out of bounds");
+          panic("Uint8Array byte index out of bounds");
         }
 
         const hex = HEX_TABLE[byte];
         if (hex === undefined) {
-          throw new TypeError("Uint8Array byte value out of bounds");
+          panic("Uint8Array byte value out of bounds");
         }
 
         hexBytes.push(hex);

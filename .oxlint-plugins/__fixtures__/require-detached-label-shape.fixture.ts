@@ -102,6 +102,7 @@ const doubledHyphen = () => {
 
 // The documented shape: module or route slice, then the detached work.
 const dottedLabel = () => {
+  // expect-clean: require-detached-label-shape/require-detached-label-shape
   detached(save(), "chat-thread.prefetch");
 };
 

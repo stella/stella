@@ -21,9 +21,8 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     );
 
-    expect(pluginSource).toContain("const staticMemberPropertyName");
-    expect(pluginSource).toContain("isStringLiteral(node.property)");
-    expect(pluginSource).toContain('return "process.env[...]"');
+    expect(pluginSource).toContain("memberPropertyName(member)");
+    expect(pluginSource).toContain("[...]`");
   });
 
   test("JSX literal rule is not scoped to files using translation markers", () => {
@@ -33,9 +32,7 @@ describe("custom oxlint guardrails", () => {
     const oxlintConfig = readRootFixture("oxlint.config.ts");
 
     expect(pluginSource).toContain("options.requireTranslationUsage === true");
-    expect(pluginSource).toContain(
-      "sourceTextForContext(context).includes(marker)",
-    );
+    expect(pluginSource).toContain("context.sourceCode.text.includes(marker)");
     expect(pluginSource).toContain("useTranslations");
     expect(pluginSource).toContain("TranslationKey");
     expect(oxlintConfig).toContain(
@@ -108,15 +105,15 @@ describe("custom oxlint guardrails", () => {
       "public-case-law-db-boundary/public-case-law-db-boundary",
     );
     expect(configSource).toContain(
-      "apps/api/src/handlers/case-law/decisions/get.ts",
+      '"public-case-law-db-boundary/public-case-law-db-boundary": "error"',
     );
-    expect(configSource).toContain(
-      "apps/api/src/lib/case-law-public-read-db.ts",
-    );
+    // The rule scopes itself to importers of the public read connection.
+    expect(pluginSource).toContain("apps/api/src/lib/case-law-public-read-db");
+    expect(pluginSource).toContain("importsPublicReadDb");
     expect(pluginSource).toContain("privateCaseLawImport");
     expect(pluginSource).toContain("privateTxQuery");
     expect(pluginSource).toContain("privateSqlText");
-    expect(pluginSource).toContain("PUBLIC_CASE_LAW_SCHEMA_IMPORTS");
+    expect(pluginSource).toContain("PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT");
     expect(pluginSource).toContain("PUBLIC_CASE_LAW_QUERY_RELATIONS");
     expect(pluginSource).toContain("tx.query");
     expect(pluginSource).toContain("workspace|workspaces");
@@ -230,35 +227,33 @@ describe("custom oxlint guardrails", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-raw-use-effect.ts",
     );
+    const tableSource = readRootFixture(".oxlint-plugins/restricted-import.ts");
 
-    // Must resolve `useEffect` through the react import (named, aliased,
-    // default, and namespace) rather than matching the bare identifier —
-    // otherwise an unrelated local `useEffect` would false-positive.
-    expect(pluginSource).toContain('const REACT_MODULE = "react"');
+    // The rule is a row of the restricted-import table, whose detector
+    // resolves `useEffect` through the react import (named, aliased, default,
+    // namespace, destructured) rather than matching the bare identifier, so
+    // an unrelated local `useEffect` does not match.
     expect(pluginSource).toContain(
-      'getImportedName(specifier) === "useEffect"',
+      'restrictedImportVisitors(context, "no-raw-use-effect")',
     );
-    expect(pluginSource).toContain(
-      'specifier.type === "ImportDefaultSpecifier"',
-    );
-    expect(pluginSource).toContain(
-      'specifier.type === "ImportNamespaceSpecifier"',
-    );
+    expect(tableSource).toContain('packageWithSubpaths("react")');
+    expect(tableSource).toContain('names: new Set(["useEffect"])');
 
-    // allowedFiles lets the sanctioned wrapper module call useEffect directly.
-    expect(pluginSource).toContain("allowedFiles");
+    // The sanctioned wrapper module is the row's owner.
+    expect(tableSource).toContain(
+      'owners: ["apps/web/src/hooks/use-effect.ts"]',
+    );
 
     // A failing call must point the reader/agent at the source of truth.
-    expect(pluginSource).toContain("/conventions-use-effect");
+    expect(tableSource).toContain("/conventions-use-effect");
   });
 
-  test("no-raw-use-effect is enabled for apps/web with the wrapper allowlisted", () => {
+  test("no-raw-use-effect is enabled for apps/web", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 
     expect(configSource).toContain("./.oxlint-plugins/no-raw-use-effect.ts");
-    expect(configSource).toContain("no-raw-use-effect/no-raw-use-effect");
     expect(configSource).toContain(
-      'allowedFiles: ["apps/web/src/hooks/use-effect.ts"]',
+      '"no-raw-use-effect/no-raw-use-effect": "error"',
     );
     // The regression fixture is enabled explicitly because the rule is scoped
     // to apps/web/src, which the fixtures dir is not.

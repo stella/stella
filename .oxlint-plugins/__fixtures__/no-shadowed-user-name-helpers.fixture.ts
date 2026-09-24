@@ -10,6 +10,7 @@ const getInitials = (name: string) => name.slice(0, 2);
 export const getDisplayName = (name: string) => name;
 
 // Imports, differently named helpers, and nested callback bindings are valid.
+// expect-clean: no-shadowed-user-name-helpers/no-shadowed-user-name-helpers
 const initialsForOrganization = (name: string) => name.slice(0, 2);
 const render = () => {
   // oxlint-disable-next-line no-shadow

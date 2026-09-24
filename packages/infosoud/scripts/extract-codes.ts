@@ -55,14 +55,14 @@ const parseArgs = (args: readonly string[]): ExtractOptions => {
     if (argument === "--bundle-url") {
       const next = argv.next().value;
       if (!next) {
-        throw new TypeError("--bundle-url requires a value");
+        return panic("--bundle-url requires a value");
       }
 
       bundleUrl = next;
       continue;
     }
 
-    throw new TypeError(`Unknown argument: ${argument}`);
+    return panic(`Unknown argument: ${argument}`);
   }
 
   return { bundleUrl, check };
@@ -91,7 +91,7 @@ const extractJavaScriptUrls = (html: string): string[] =>
         (match) => {
           const url = match.groups?.["url"];
           if (!url) {
-            throw new TypeError("Matched script URL was unexpectedly empty");
+            return panic("Matched script URL was unexpectedly empty");
           }
 
           return new URL(url, ROOT_URL).toString();
@@ -287,7 +287,7 @@ const parseCatalogObject = (
   const literal = extractObjectLiteral(scriptText, prefix);
   const parsed: unknown = JSON.parse(toJsonObjectLiteral(literal));
   if (!isRecord(parsed)) {
-    throw new TypeError(`${prefix} did not evaluate to an object`);
+    return panic(`${prefix} did not evaluate to an object`);
   }
 
   return parsed;

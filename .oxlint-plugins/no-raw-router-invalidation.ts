@@ -8,22 +8,22 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  filenameForContext,
   getImportLocalName,
   getImportedName,
   getPropertyName,
   isAstNode,
+  isFileIn,
   isIdentifier,
   isStringLiteral,
 } from "./utils.ts";
 
 const ROUTER_MODULE = "@tanstack/react-router";
 
-const OWNED_INVALIDATION_FILES = new Set([
+const OWNED_INVALIDATION_FILES = [
   "apps/web/src/app-providers.tsx",
   "apps/web/src/hooks/use-invalidate-session.ts",
   "apps/web/src/lib/workspaces/mutations.ts",
-]);
+];
 
 export default eslintCompatPlugin({
   meta: { name: "no-raw-router-invalidation" },
@@ -46,10 +46,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const filename = filenameForContext(context);
-            isOwnedFile = [...OWNED_INVALIDATION_FILES].some((ownedFile) =>
-              filename.endsWith(ownedFile),
-            );
+            isOwnedFile = isFileIn(context, OWNED_INVALIDATION_FILES);
           },
           ImportDeclaration(node) {
             if (
@@ -109,7 +106,7 @@ export default eslintCompatPlugin({
             const callsRouterInvalidation =
               isAstNode(node.callee) &&
               node.callee.type === "MemberExpression" &&
-              node.callee.computed === false &&
+              !node.callee.computed &&
               isIdentifier(node.callee.object) &&
               routerObjectNames.has(node.callee.object.name) &&
               getPropertyName(node.callee.property) === "invalidate";

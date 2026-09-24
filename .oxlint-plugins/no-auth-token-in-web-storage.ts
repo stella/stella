@@ -5,23 +5,39 @@
 // Authentication tokens belong in server-set HttpOnly, Secure, SameSite
 // cookies instead.
 //
-// The rule intentionally requires both a proven browser storage global and a
-// credential-like static key. Dynamic keys, benign token vocabulary (CSRF,
-// push, design tokens), and locally shadowed globals stay unreported.
+// The rule requires a proven browser storage global and either a
+// credential-like static key or a stored value that serializes credential-like
+// fields (`JSON.stringify({ accessToken })`). A key is static when it is a
+// literal, a `const`, or an export of a repository module whose declaration is
+// a string literal; an imported key that cannot be read counts by its export
+// name. A local helper that forwards its parameters to `setItem` is checked at
+// each of its call sites. Dynamic keys, benign token vocabulary (CSRF, push,
+// design tokens), and locally shadowed globals stay unreported.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Variable } from "@oxlint/plugins";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 
+import type { AstNode } from "./utils.ts";
 import {
+  everyNode,
   getPropertyName,
+  invokedCallee,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
+  isMemberAccess,
   isStringLiteral,
+  resolveImport,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
 const RULE_NAME = "no-auth-token-in-web-storage";
 const STORAGE_NAMES = new Set(["localStorage", "sessionStorage"]);
 const GLOBAL_HOST_NAMES = new Set(["globalThis", "self", "window"]);
+const MODULE_EXTENSIONS = [".ts", ".tsx", "/index.ts", "/index.tsx"];
 
 // Keep this list high-signal. Broad words such as `auth`, `session`, and bare
 // `key` routinely name harmless UI state.
@@ -31,19 +47,6 @@ const NON_CREDENTIAL_TOKEN_PATTERN =
   /csrf|xsrf|device|fcm|apns|push|design|tokeniz|syntax|css|theme|color/iu;
 const STRONG_CREDENTIAL_KEY_PATTERN =
   /jwt|secret|password|passwd|credential|private[-_]?key|api[-_]?key|bearer|access[-_]?token|refresh[-_]?token|auth[-_]?token|id[-_]?token|session/iu;
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
-
-type ScopeVariable = {
-  defs: {
-    node: unknown;
-    parent: unknown;
-    type: string;
-  }[];
-};
 
 const staticTemplateValue = (node: unknown): string | null => {
   if (
@@ -79,6 +82,81 @@ const isCredentialKey = (key: string): boolean => {
   );
 };
 
+// An export name is an identifier; `$` is its only regex metacharacter.
+const escapeIdentifier = (name: string): string =>
+  name.replaceAll("$", () => String.raw`\$`);
+
+// Module sources read once per lint process; `null` when the module is not a
+// repository file.
+const moduleSources = new Map<string, string | null>();
+
+const readModuleSource = (moduleId: string): string | null => {
+  const cached = moduleSources.get(moduleId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const file = MODULE_EXTENSIONS.map((extension) =>
+    path.join(process.cwd(), `${moduleId}${extension}`),
+  ).find((candidate) => existsSync(candidate));
+  const source = file === undefined ? null : readFileSync(file, "utf-8");
+  moduleSources.set(moduleId, source);
+  return source;
+};
+
+// The string literal a repository module exports under `name`
+// (`export const NAME = "value"`, with an optional type or `as const`).
+const exportedStringConstant = (
+  moduleId: string,
+  name: string,
+): string | null => {
+  const source = readModuleSource(moduleId);
+  if (source === null) {
+    return null;
+  }
+  const declaration = new RegExp(
+    `export\\s+const\\s+${escapeIdentifier(name)}\\s*(?::[^=]+)?=\\s*(["'\\x60])([^"'\\x60$\\\\]*)\\1`,
+    "u",
+  ).exec(source);
+  return declaration?.[2] ?? null;
+};
+
+// `JSON.stringify(x)` stores what `x` holds, so a helper that serializes its
+// parameter still forwards it.
+const unwrapSerialization = (node: unknown): AstNode | null => {
+  const expression = unwrapExpression(node);
+  if (
+    expression?.type === "CallExpression" &&
+    isMemberAccess(expression.callee, "JSON", "stringify") &&
+    Array.isArray(expression.arguments)
+  ) {
+    return unwrapExpression(expression.arguments.at(0));
+  }
+  return expression;
+};
+
+const constDeclarator = (variable: Variable): AstNode | null => {
+  for (const definition of variable.defs) {
+    if (
+      definition.type === "Variable" &&
+      isAstNode(definition.node) &&
+      definition.node.type === "VariableDeclarator" &&
+      isAstNode(definition.parent) &&
+      definition.parent.type === "VariableDeclaration" &&
+      definition.parent.kind === "const"
+    ) {
+      return definition.node;
+    }
+  }
+  return null;
+};
+
+// Where a forwarding helper passes its parameters: the positions of the
+// parameters that reach the storage key and value, or null for either one the
+// helper computes itself.
+type ForwardedSlots = { key: number | null; value: number | null };
+
+type StorageWrite = { key: unknown; value: unknown };
+
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
@@ -94,29 +172,51 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier): ScopeVariable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
+        const variableFor = (node: unknown): Variable | null =>
+          isIdentifierReference(node) ? resolveVariable(context, node) : null;
 
         const isGlobalReference = (node: unknown, name: string): boolean => {
           if (!isIdentifier(node, name)) {
             return false;
           }
-          const variable = resolveVariable(node);
+          const variable = variableFor(node);
           return variable === null || variable.defs.length === 0;
+        };
+
+        // The initializer of a `const` binding the identifier resolves to.
+        const constInitializer = (
+          node: unknown,
+          visited: Set<Variable>,
+        ): unknown => {
+          const variable = variableFor(node);
+          if (variable === null || visited.has(variable)) {
+            return null;
+          }
+          visited.add(variable);
+          return constDeclarator(variable)?.init ?? null;
+        };
+
+        // An imported key: the exported literal when the module is a
+        // repository file, else the export name itself when it reads like a
+        // credential key (`ACCESS_TOKEN_KEY`).
+        const importedKeyValue = (node: AstNode): string | null => {
+          const resolved = resolveImport(context, node);
+          if (resolved === null) {
+            return null;
+          }
+          const value = exportedStringConstant(
+            resolved.moduleId,
+            resolved.imported,
+          );
+          if (value !== null) {
+            return value;
+          }
+          return isCredentialKey(resolved.imported) ? resolved.imported : null;
         };
 
         const resolveStaticString = (
           node: unknown,
-          visited = new Set<ScopeVariable>(),
+          visited = new Set<Variable>(),
         ): string | null => {
           const expression = unwrapExpression(node);
           if (expression === null) {
@@ -140,33 +240,25 @@ export default eslintCompatPlugin({
             );
             return left === null || right === null ? null : left + right;
           }
+          if (expression.type === "MemberExpression") {
+            return importedKeyValue(expression);
+          }
           if (!isIdentifier(expression)) {
             return null;
           }
-          const variable = resolveVariable(expression);
-          if (variable === null || visited.has(variable)) {
-            return null;
+          const imported = importedKeyValue(expression);
+          if (imported !== null) {
+            return imported;
           }
-          visited.add(variable);
-          for (const definition of variable.defs) {
-            if (
-              definition.type !== "Variable" ||
-              !isAstNode(definition.node) ||
-              definition.node.type !== "VariableDeclarator" ||
-              !isAstNode(definition.parent) ||
-              definition.parent.type !== "VariableDeclaration" ||
-              definition.parent.kind !== "const"
-            ) {
-              continue;
-            }
-            return resolveStaticString(definition.node.init, visited);
-          }
-          return null;
+          const initializer = constInitializer(expression, visited);
+          return initializer === null
+            ? null
+            : resolveStaticString(initializer, visited);
         };
 
         const resolveMemberName = (node: unknown): string | null => {
           const member = unwrapExpression(node);
-          if (member === null || member.type !== "MemberExpression") {
+          if (member?.type !== "MemberExpression") {
             return null;
           }
           return member.computed === true
@@ -176,7 +268,7 @@ export default eslintCompatPlugin({
 
         const isBrowserGlobalHost = (
           node: unknown,
-          visited = new Set<ScopeVariable>(),
+          visited = new Set<Variable>(),
         ): boolean => {
           const expression = unwrapExpression(node);
           if (expression === null) {
@@ -196,33 +288,15 @@ export default eslintCompatPlugin({
               isBrowserGlobalHost(expression.object, visited)
             );
           }
-          if (!isIdentifier(expression)) {
-            return false;
-          }
-          const variable = resolveVariable(expression);
-          if (variable === null || visited.has(variable)) {
-            return false;
-          }
-          visited.add(variable);
-          for (const definition of variable.defs) {
-            if (
-              definition.type !== "Variable" ||
-              !isAstNode(definition.node) ||
-              definition.node.type !== "VariableDeclarator" ||
-              !isAstNode(definition.parent) ||
-              definition.parent.type !== "VariableDeclaration" ||
-              definition.parent.kind !== "const"
-            ) {
-              continue;
-            }
-            return isBrowserGlobalHost(definition.node.init, visited);
-          }
-          return false;
+          const initializer = constInitializer(expression, visited);
+          return (
+            initializer !== null && isBrowserGlobalHost(initializer, visited)
+          );
         };
 
         const isWebStorage = (
           node: unknown,
-          visited = new Set<ScopeVariable>(),
+          visited = new Set<Variable>(),
         ): boolean => {
           const expression = unwrapExpression(node);
           if (expression === null) {
@@ -232,25 +306,8 @@ export default eslintCompatPlugin({
             return isGlobalReference(expression, expression.name);
           }
           if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
-            if (variable === null || visited.has(variable)) {
-              return false;
-            }
-            visited.add(variable);
-            for (const definition of variable.defs) {
-              if (
-                definition.type !== "Variable" ||
-                !isAstNode(definition.node) ||
-                definition.node.type !== "VariableDeclarator" ||
-                !isAstNode(definition.parent) ||
-                definition.parent.type !== "VariableDeclaration" ||
-                definition.parent.kind !== "const"
-              ) {
-                continue;
-              }
-              return isWebStorage(definition.node.init, visited);
-            }
-            return false;
+            const initializer = constInitializer(expression, visited);
+            return initializer !== null && isWebStorage(initializer, visited);
           }
           if (expression.type !== "MemberExpression") {
             return false;
@@ -262,45 +319,181 @@ export default eslintCompatPlugin({
           return isBrowserGlobalHost(expression.object);
         };
 
-        const reportCredentialKeyValue = (
-          node,
-          keyValue: string | null,
-        ): void => {
-          if (keyValue === null || !isCredentialKey(keyValue)) {
-            return;
+        // Whether a stored value serializes a credential-like field:
+        // `JSON.stringify({ accessToken })`, or a const object literal with
+        // such a key passed through `JSON.stringify`.
+        const serializesCredential = (
+          node: unknown,
+          visited = new Set<Variable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (expression === null) {
+            return false;
           }
-          context.report({ node, messageId: "noAuthTokenInWebStorage" });
+          if (expression.type === "CallExpression") {
+            const serialized = unwrapSerialization(expression);
+            return (
+              serialized !== expression &&
+              serializesCredential(serialized, visited)
+            );
+          }
+          if (expression.type === "ObjectExpression") {
+            const properties = Array.isArray(expression.properties)
+              ? expression.properties
+              : [];
+            return properties.some((property) => {
+              if (!isAstNode(property)) {
+                return false;
+              }
+              if (property.type === "SpreadElement") {
+                return serializesCredential(property.argument, visited);
+              }
+              const key =
+                property.computed === true
+                  ? resolveStaticString(property.key)
+                  : getPropertyName(property.key);
+              return key !== null && isCredentialKey(key);
+            });
+          }
+          if (!isIdentifier(expression)) {
+            return false;
+          }
+          const initializer = constInitializer(expression, visited);
+          return (
+            initializer !== null && serializesCredential(initializer, visited)
+          );
         };
 
-        const reportCredentialKey = (node, key: unknown): void => {
-          reportCredentialKeyValue(node, resolveStaticString(key));
+        // --- Forwarding helpers -----------------------------------------
+
+        const forwardedSlotsCache = new Map<AstNode, ForwardedSlots | null>();
+
+        // The parameter position an argument of a write inside `fn` comes
+        // from, or null when it is not one of `fn`'s own parameters.
+        const parameterIndex = (fn: AstNode, node: unknown): number | null => {
+          const variable = variableFor(unwrapSerialization(node));
+          const definition = variable?.defs.at(0);
+          const owner: unknown = definition?.node;
+          const params: unknown = fn.params;
+          if (
+            definition?.type !== "Parameter" ||
+            owner !== fn ||
+            !Array.isArray(params)
+          ) {
+            return null;
+          }
+          const binding: unknown = definition.name;
+          const index = params.findIndex(
+            (param: unknown) =>
+              param === binding ||
+              (isAstNode(param) &&
+                param.type === "AssignmentPattern" &&
+                param.left === binding),
+          );
+          return index === -1 ? null : index;
         };
+
+        // The function a callee identifier is bound to: a function
+        // declaration, or a `const` arrow / function expression.
+        const localFunction = (callee: unknown): AstNode | null => {
+          const variable = variableFor(unwrapExpression(callee));
+          const definition = variable?.defs.at(0);
+          if (variable === null || definition === undefined) {
+            return null;
+          }
+          if (
+            definition.type === "FunctionName" &&
+            isAstNode(definition.node)
+          ) {
+            return definition.node;
+          }
+          const init = unwrapExpression(constDeclarator(variable)?.init);
+          return init?.type === "ArrowFunctionExpression" ||
+            init?.type === "FunctionExpression"
+            ? init
+            : null;
+        };
+
+        const forwardedSlots = (fn: AstNode): ForwardedSlots | null => {
+          if (forwardedSlotsCache.has(fn)) {
+            return forwardedSlotsCache.get(fn) ?? null;
+          }
+          // Recursive helpers settle on "not forwarding" for the cycle.
+          forwardedSlotsCache.set(fn, null);
+          let slots: ForwardedSlots | null = null;
+          for (const inner of everyNode(fn)) {
+            if (inner.type !== "CallExpression") {
+              continue;
+            }
+            const write = storageWrite(inner);
+            if (write === null) {
+              continue;
+            }
+            const key = parameterIndex(fn, write.key);
+            const value = parameterIndex(fn, write.value);
+            if (key !== null || value !== null) {
+              slots = { key, value };
+              break;
+            }
+          }
+          forwardedSlotsCache.set(fn, slots);
+          return slots;
+        };
+
+        // The key and value a call writes to web storage: a direct
+        // `setItem`, or a call to a local helper that forwards its
+        // parameters to one.
+        const storageWrite = (call: AstNode): StorageWrite | null => {
+          const callee = invokedCallee(call);
+          const args = Array.isArray(call.arguments) ? call.arguments : [];
+          if (
+            callee?.type === "MemberExpression" &&
+            resolveMemberName(callee) === "setItem" &&
+            isWebStorage(callee.object)
+          ) {
+            return args.length < 2
+              ? null
+              : { key: args.at(0), value: args.at(1) };
+          }
+          const fn = localFunction(call.callee);
+          const slots = fn === null ? null : forwardedSlots(fn);
+          if (slots === null) {
+            return null;
+          }
+          return {
+            key: slots.key === null ? null : args.at(slots.key),
+            value: slots.value === null ? null : args.at(slots.value),
+          };
+        };
+
+        const isCredentialWrite = (key: string | null, value: unknown) =>
+          (key !== null && isCredentialKey(key)) || serializesCredential(value);
 
         return {
           CallExpression(node) {
-            const callee = unwrapExpression(node.callee);
+            const call: unknown = node;
+            if (!isAstNode(call)) {
+              return;
+            }
+            const write = storageWrite(call);
             if (
-              callee === null ||
-              callee.type !== "MemberExpression" ||
-              resolveMemberName(callee) !== "setItem" ||
-              !isWebStorage(callee.object) ||
-              !Array.isArray(node.arguments) ||
-              node.arguments.length < 2
+              write === null ||
+              !isCredentialWrite(resolveStaticString(write.key), write.value)
             ) {
               return;
             }
-            reportCredentialKey(node, node.arguments.at(0));
+            context.report({ node, messageId: "noAuthTokenInWebStorage" });
           },
           AssignmentExpression(node) {
             const target = unwrapExpression(node.left);
             if (
-              target === null ||
-              target.type !== "MemberExpression" ||
-              !isWebStorage(target.object)
+              target?.type !== "MemberExpression" ||
+              !isWebStorage(target.object) ||
+              !isCredentialWrite(resolveMemberName(target), node.right)
             ) {
               return;
             }
-            reportCredentialKeyValue(node, resolveMemberName(target));
+            context.report({ node, messageId: "noAuthTokenInWebStorage" });
           },
         };
       },

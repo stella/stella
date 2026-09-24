@@ -21,6 +21,7 @@ export const RefMirrorFixture = ({ value }: { value: string }) => {
   const timerRef = useRef<number | null>(null);
 
   const updateLater = () => {
+    // expect-clean: no-ref-mirror/no-ref-mirror
     valueRef.current = value;
     timerRef.current = window.setTimeout(() => undefined, 0);
   };

@@ -31,6 +31,7 @@ const _stllInputMonth = () => (
 
 // --- Cases that MUST NOT flag (no disable directives below) ---
 
+// expect-clean: no-raw-date-input/no-raw-date-input
 const _nativeText = () => <input name="q" type="text" />;
 const _nativeNumber = () => <input name="n" type="number" />;
 const _stllInputText = () => <Input name="search" type="search" />;

@@ -32,6 +32,7 @@ function NoLoaderComponent() {
   const members = useSuspenseQuery(membersOptions);
 
   // Member-expression argument the rule cannot attribute — NOT flagged.
+  // expect-clean: require-loader-prefetch/require-loader-prefetch
   const other = useSuspenseQuery({ queryKey: ["x"], queryFn: () => "x" });
 
   return `${entity.data}${members.data}${other.data}`;

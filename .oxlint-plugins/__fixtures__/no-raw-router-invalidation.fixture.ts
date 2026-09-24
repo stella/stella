@@ -20,5 +20,6 @@ export const useDestructuredRouterInvalidation = () => {
 };
 
 export const unrelatedInvalidation = (guard: { invalidate: () => void }) => {
+  // expect-clean: no-raw-router-invalidation/no-raw-router-invalidation
   guard.invalidate();
 };

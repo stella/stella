@@ -15,6 +15,7 @@ const _update = tx.update(schema.templateVersions);
 // oxlint-disable-next-line no-direct-template-version-write/no-direct-template-version-write -- fixture: template-version deletes must be rejected
 const _delete = tx.delete(versions);
 
+// expect-clean: no-direct-template-version-write/no-direct-template-version-write
 const _unrelatedInsert = tx.insert(unrelatedTable);
 // oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding that shadows the imported table must remain valid
 const _shadowedInsert = (versions: unknown) => tx.insert(versions);

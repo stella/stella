@@ -253,6 +253,7 @@ describe("affected code-check planning", () => {
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
     ["scripts/oxlint-typebox-unsafe.test.ts", "plugin-fixtures"],
     ["scripts/oxlint-additional-guards.test.ts", "plugin-fixtures"],
+    ["scripts/check-oxlint-fixture-counts.ts", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
     ["scripts/tsconfig.json", "root-script-lint"],
     ["tsconfig.json", "plugin-fixtures"],

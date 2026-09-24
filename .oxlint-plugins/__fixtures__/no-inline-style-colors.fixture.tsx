@@ -58,5 +58,6 @@ export const SatisfiesUnsafeStyles = () => (
 // trigger the detector.
 export const unrelatedData = {
   declaration: "white-space: nowrap",
+  // expect-clean: no-inline-style-colors/no-inline-style-colors
   option: "red",
 };

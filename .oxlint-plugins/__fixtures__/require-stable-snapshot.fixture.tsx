@@ -72,6 +72,7 @@ const FixtureComponent = () => {
 
   // Named function references for subscribe/getSnapshot/getServerSnapshot —
   // the real fix (cache at the source), and the rule cannot see inside them.
+  // expect-clean: require-stable-snapshot/require-stable-snapshot
   useSyncExternalStore(subscribe, getCachedSnapshot, getCachedSnapshot);
 
   // Inline getSnapshot returning an already-cached identifier.

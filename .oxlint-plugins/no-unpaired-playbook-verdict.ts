@@ -16,7 +16,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext, isAstNode } from "./utils.ts";
+import { filenameForContext, isAstNode, isTestFile } from "./utils.ts";
 
 const VERDICT_TOOL_NAME = "playbook-verdict";
 
@@ -30,12 +30,10 @@ const OWNING_FILES = [
   "apps/web/src/lib/workspaces/queries/properties.ts",
 ];
 
-/** Fixtures name the variant to construct one; they render nothing. */
-const isTestFile = (filename: string): boolean =>
-  /\.(?:test|spec)\.tsx?$/u.test(filename);
-
 const isVerdictLiteral = (node: unknown): boolean =>
-  isAstNode(node) && node.type === "Literal" && node.value === VERDICT_TOOL_NAME;
+  isAstNode(node) &&
+  node.type === "Literal" &&
+  node.value === VERDICT_TOOL_NAME;
 
 /** Whether this expression reads `<something>.tool.type`. */
 const isToolTypeAccess = (node: unknown): boolean => {

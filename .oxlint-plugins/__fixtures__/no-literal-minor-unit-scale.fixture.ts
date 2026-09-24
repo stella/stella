@@ -70,6 +70,7 @@ export const _minorBigint = 100n * bigTotal;
 // --- Allowed ---
 
 // Percentage arithmetic with no money operand: 100 is the percent base.
+// expect-clean: no-literal-minor-unit-scale/no-literal-minor-unit-scale
 export const _splitMinutes = (billedMinutes * percentage) / 100;
 export const _elapsedShare = (elapsedMinutes * percentage) / 100;
 // A name that is not money, whatever the literal is.

@@ -37,6 +37,10 @@ import {
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import { decisionIdentifiersFromPersistedMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 /**
@@ -1298,7 +1302,10 @@ export const decisionIdentifiersFromMetadata = ({
   const normalizedCaseNumber =
     normalizeDecisionIdentifier(caseNumberIdentifier);
   if (!normalizedCaseNumber) {
-    throw new TypeError("Decision case number has no searchable content");
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision case number has no searchable content",
+      field: UNPERSISTABLE_DECISION_FIELDS.IDENTIFIER,
+    });
   }
   const seen = new Set([
     `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
@@ -1316,7 +1323,10 @@ export const decisionIdentifiersFromMetadata = ({
     return true;
   });
   if (additional.length >= DECISION_IDENTIFIER_MAX_COUNT) {
-    throw new TypeError("Decision has too many identifiers");
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision has too many identifiers",
+      field: UNPERSISTABLE_DECISION_FIELDS.IDENTIFIER_COUNT,
+    });
   }
   return [caseNumberIdentifier, ...additional];
 };

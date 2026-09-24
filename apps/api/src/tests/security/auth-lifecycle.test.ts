@@ -79,11 +79,9 @@ describe("organization member auth lifecycle", () => {
   test("lint rule catches auth artifact deletes through schema member access", () => {
     const pluginSource = readRootFixture(".oxlint-plugins/auth-lifecycle.ts");
 
-    expect(pluginSource).toContain(
-      'firstArgument?.type === "MemberExpression"',
-    );
-    expect(pluginSource).toContain("isIdentifier(firstArgument.property)");
-    expect(pluginSource).toContain("return firstArgument.property.name");
+    expect(pluginSource).toContain('table.type !== "MemberExpression"');
+    expect(pluginSource).toContain("memberPropertyName(table)");
+    expect(pluginSource).toContain("resolveImport(context, table)");
   });
 });
 

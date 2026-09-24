@@ -10,6 +10,16 @@
 // No third-party imports: the autofix workflow runs consumers of this module
 // with `bun --no-install` on a checkout that has no node_modules.
 
+// A local error class instead of better-result: consumers run without an install.
+class JsonTextEditError extends Error {
+  readonly _tag = "JsonTextEditError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "JsonTextEditError";
+  }
+}
+
 export type JsonStringToken = {
   readonly end: number;
   readonly start: number;
@@ -40,7 +50,7 @@ const skipWhitespace = (text: string, start: number): number => {
 
 export const stringTokenAt = (text: string, start: number): JsonStringToken => {
   if (text[start] !== '"') {
-    throw new TypeError(`expected JSON string at offset ${start}`);
+    throw new JsonTextEditError(`expected JSON string at offset ${start}`);
   }
   let index = start + 1;
   while (index < text.length) {
@@ -59,7 +69,7 @@ export const stringTokenAt = (text: string, start: number): JsonStringToken => {
     }
     index += 1;
   }
-  throw new TypeError(`unterminated JSON string at offset ${start}`);
+  throw new JsonTextEditError(`unterminated JSON string at offset ${start}`);
 };
 
 /**
@@ -75,7 +85,7 @@ export const directPropertyValue = ({
   text,
 }: DirectPropertyOptions): number => {
   if (text[objectStart] !== "{") {
-    throw new TypeError(`expected object at offset ${objectStart}`);
+    throw new JsonTextEditError(`expected object at offset ${objectStart}`);
   }
   let depth = 1;
   let index = objectStart + 1;
@@ -99,7 +109,7 @@ export const directPropertyValue = ({
     }
     index += 1;
   }
-  throw new TypeError(
+  throw new JsonTextEditError(
     missingMessage ??
       `${label} is missing property ${JSON.stringify(property)}`,
   );
@@ -108,7 +118,7 @@ export const directPropertyValue = ({
 export const rootObjectStart = (text: string, label: string): number => {
   const start = skipWhitespace(text, 0);
   if (text[start] !== "{") {
-    throw new TypeError(`${label} must contain a root object`);
+    throw new JsonTextEditError(`${label} must contain a root object`);
   }
   return start;
 };
@@ -128,7 +138,7 @@ export const applyReplacements = (
   let previousStart = text.length;
   for (const replacement of ordered) {
     if (replacement.end > previousStart) {
-      throw new TypeError("overlapping JSON text replacements");
+      throw new JsonTextEditError("overlapping JSON text replacements");
     }
     previousStart = replacement.start;
     output = `${output.slice(0, replacement.start)}${replacement.value}${output.slice(replacement.end)}`;

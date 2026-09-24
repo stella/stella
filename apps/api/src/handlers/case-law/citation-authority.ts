@@ -256,6 +256,7 @@ export const recomputeCitationAuthorityBatch = async (
     now,
   }: CitationAuthorityBatchOptions,
 ): Promise<CitationAuthorityBatch> => {
+  // audit: skip — recomputes derived public case-law citation authority
   const contribution = contributionWeight({
     aliases: { citation: "c", citing: "citing_d" },
     now: instantSql(now),

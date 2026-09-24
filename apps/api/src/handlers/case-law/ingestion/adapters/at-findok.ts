@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { Temporal, parsePlainDate } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
@@ -260,6 +260,11 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
   };
 };
 
+/** A Findok response that does not have the shape the crawl reads. */
+class FindokResponseError extends TaggedError("FindokResponseError")<{
+  message: string;
+}> {}
+
 const readStreamBounded = async (
   stream: ReadableStream<Uint8Array>,
   maxBytes: number,
@@ -269,7 +274,9 @@ const readStreamBounded = async (
   for await (const chunk of stream) {
     total += chunk.byteLength;
     if (total > maxBytes) {
-      throw new TypeError(`Findok response exceeded ${maxBytes} bytes`);
+      throw new FindokResponseError({
+        message: `Findok response exceeded ${maxBytes} bytes`,
+      });
     }
     chunks.push(chunk);
   }
@@ -300,11 +307,15 @@ export const parseFindokManifest = (
 ): FindokManifest => {
   const value: unknown = JSON.parse(text);
   if (!isRecord(value) || !Array.isArray(value["data"])) {
-    throw new TypeError("Findok manifest has an invalid envelope");
+    throw new FindokResponseError({
+      message: "Findok manifest has an invalid envelope",
+    });
   }
   const generatedAt = optionalString(value["generierungsdatum"]);
   if (generatedAt === undefined) {
-    throw new TypeError("Findok manifest has no generation timestamp");
+    throw new FindokResponseError({
+      message: "Findok manifest has no generation timestamp",
+    });
   }
   const items: FindokManifestItem[] = [];
   const identities = new Set<string>();
@@ -316,12 +327,14 @@ export const parseFindokManifest = (
     }
     const item = manifestItem(raw);
     if (item === undefined) {
-      throw new TypeError(
-        `Findok manifest contains an invalid item at ${index}`,
-      );
+      throw new FindokResponseError({
+        message: `Findok manifest contains an invalid item at ${index}`,
+      });
     }
     if (identities.has(item.dokumentId)) {
-      throw new TypeError("Findok manifest contains a duplicate document ID");
+      throw new FindokResponseError({
+        message: "Findok manifest contains a duplicate document ID",
+      });
     }
     identities.add(item.dokumentId);
     if (item.gueltig) {

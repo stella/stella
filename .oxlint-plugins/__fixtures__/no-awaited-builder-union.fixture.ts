@@ -65,6 +65,7 @@ export const builtRows = async () => {
 // Allowed — the required rewrite: each branch is awaited on its own, so only
 // one concrete builder type is ever resolved.
 export const branchwiseRows = async () => {
+  // expect-clean: no-awaited-builder-union/no-awaited-builder-union
   const rows = lock ? await query.for("update") : await query;
   return rows;
 };

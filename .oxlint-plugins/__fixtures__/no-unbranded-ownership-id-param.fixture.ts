@@ -17,6 +17,7 @@ const loadUser = ({ userId }: { userId: string }) => userId;
 // oxlint-disable-next-line no-unbranded-ownership-id-param/no-unbranded-ownership-id-param -- fixture proves function-type parameters receive the same guard
 type UnsafeLoader = (userId: string) => Promise<void>;
 
+// expect-clean: no-unbranded-ownership-id-param/no-unbranded-ownership-id-param
 const loadBrandedWorkspace = (workspaceId: SafeId<"workspace">) => workspaceId;
 const unrelatedString = (search: string) => search;
 

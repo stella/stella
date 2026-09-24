@@ -24,13 +24,15 @@
 //   v.safeParse(openSchema, JSON.parse(raw))
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { ESTree, Scope, Variable } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
 import {
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -165,24 +167,10 @@ export default eslintCompatPlugin({
         const isRawJsonBoundary = (node: unknown): boolean =>
           isJsonParseCall(node, jsonParseAliases) || isResponseJsonCall(node);
 
-        const resolveVariable = (
-          identifier: ESTree.IdentifierReference,
-        ): Variable | null => {
-          let scope: Scope | null = context.sourceCode.getScope(identifier);
-          while (scope !== null) {
-            const variable = scope.set.get(identifier.name);
-            if (variable !== undefined) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
-        };
-
         const hasClosedTypeAnnotation = (
           identifier: ESTree.IdentifierReference,
         ): boolean => {
-          const variable = resolveVariable(identifier);
+          const variable = resolveVariable(context, identifier);
           return (
             variable?.defs.some(
               (definition) =>
@@ -201,15 +189,11 @@ export default eslintCompatPlugin({
               isRawJsonType(definition.name.typeAnnotation),
           );
 
-        const isIdentifierReference = (
-          node: unknown,
-        ): node is ESTree.IdentifierReference => isIdentifier(node);
-
         const namedTypeAnnotationFor = (node: unknown): unknown => {
           if (!isIdentifierReference(node)) {
             return undefined;
           }
-          const variable = resolveVariable(node);
+          const variable = resolveVariable(context, node);
           return variable === null
             ? undefined
             : namedTypeAnnotations.get(variable);
@@ -424,7 +408,7 @@ export default eslintCompatPlugin({
           if (propertyName === null || !isIdentifierReference(object)) {
             return "unresolved";
           }
-          const variable = resolveVariable(object);
+          const variable = resolveVariable(context, object);
           if (variable === null) {
             return "unresolved";
           }
@@ -466,7 +450,7 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(current)) {
             return false;
           }
-          const variable = resolveVariable(current);
+          const variable = resolveVariable(context, current);
           if (
             variable === null ||
             seenVariables.has(variable) ||
@@ -602,7 +586,7 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(current)) {
             return false;
           }
-          const variable = resolveVariable(current);
+          const variable = resolveVariable(context, current);
           if (variable === null || seenVariables.has(variable)) {
             return false;
           }
@@ -778,7 +762,7 @@ export default eslintCompatPlugin({
           },
           TSInterfaceDeclaration(node) {
             if (isIdentifierReference(node.id)) {
-              const variable = resolveVariable(node.id);
+              const variable = resolveVariable(context, node.id);
               if (variable !== null) {
                 namedTypeAnnotations.set(variable, node);
               }
@@ -800,7 +784,7 @@ export default eslintCompatPlugin({
           },
           TSTypeAliasDeclaration(node) {
             if (isIdentifierReference(node.id)) {
-              const variable = resolveVariable(node.id);
+              const variable = resolveVariable(context, node.id);
               if (variable !== null) {
                 namedTypeAnnotations.set(variable, node);
               }

@@ -44,6 +44,7 @@ export const ListingWrappedWithMenu = () => (
   </MatterContextMenu>
 );
 
+// expect-clean: require-matter-affordance/require-matter-affordance
 export const InlineReference = () => (
   <MatterRefLink workspaceId={target.id}>Matter</MatterRefLink>
 );
