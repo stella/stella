@@ -39,8 +39,9 @@ export const isMatterToolName = (name: string): name is MatterToolName =>
  * How the matter reads reach the model. `mcp` hands them over as direct
  * tools with their production schemas, as an MCP client is served them.
  * `chat` is the stella chat surface: the reads are `external_*` functions
- * inside `execute_typescript`, only `list_matters` is documented up front,
- * and the rest are reached through `discover_tools`.
+ * inside `execute_typescript`; `list_matters` and the reads the skill
+ * documents are documented up front, and the rest are reached through
+ * `discover_tools`.
  */
 export const BUILDER_SURFACES = ["mcp", "chat"] as const;
 
@@ -77,6 +78,8 @@ export type BuilderEvent = {
 
 type BuilderEvidence = {
   surface: BuilderSurface;
+  /** Reads the active skill documents up front on the chat surface. */
+  documentedReads: ReadonlySet<string>;
   events: readonly BuilderEvent[];
   playbooks: readonly StoredPlaybook[];
 };
@@ -380,12 +383,16 @@ const discoveredNames = (input: unknown): string[] => {
 };
 
 /**
- * On the chat surface every read but `list_matters` is documented only by
- * `discover_tools`; a call written without its signature is the guess the
- * skill tells the model not to make, whether or not it happened to work.
+ * On the chat surface a read that neither the base prompt (`list_matters`)
+ * nor the skill documents is documented only by `discover_tools`; a call
+ * written without its signature is a guess, whether or not it happened to
+ * work. The rule keeps guarding every matter read a skill does not declare.
  */
-const readsBeforeDiscovery = (events: readonly BuilderEvent[]): string[] => {
-  const discovered = new Set<string>();
+const readsBeforeDiscovery = ({
+  documentedReads,
+  events,
+}: Pick<BuilderEvidence, "documentedReads" | "events">): string[] => {
+  const discovered = new Set<string>(["list_matters", ...documentedReads]);
   const defects: string[] = [];
   for (const { name, input } of events) {
     if (name === DISCOVER_TOOLS) {
@@ -394,11 +401,7 @@ const readsBeforeDiscovery = (events: readonly BuilderEvent[]): string[] => {
       }
       continue;
     }
-    if (
-      isMatterToolName(name) &&
-      name !== "list_matters" &&
-      !discovered.has(name)
-    ) {
+    if (isMatterToolName(name) && !discovered.has(name)) {
       defects.push(`called ${name} before discover_tools named it`);
       discovered.add(name);
     }
@@ -431,6 +434,7 @@ const tierTexts = (position: Position): string[] => {
  * chat surface no read written before its signature was discovered.
  */
 const commonDefects = ({
+  documentedReads,
   events,
   playbooks,
   surface,
@@ -445,7 +449,7 @@ const commonDefects = ({
     }
   }
   if (surface === "chat") {
-    defects.push(...readsBeforeDiscovery(events));
+    defects.push(...readsBeforeDiscovery({ documentedReads, events }));
   }
   const spawned = events.filter(
     ({ name }) => name === SPAWN_SUBAGENTS_TOOL_NAME,
