@@ -29,9 +29,9 @@ export const useOpenStatuteLink = () => {
   const navigate = useNavigate();
   const inspectorAvailable = !useIsMobile();
 
-  const resolveLink = async ({ params }: StatuteLink) => {
+  const resolveLink = async ({ asOf, params }: StatuteLink) => {
     const resolution = await resolveStatuteRoute(
-      { ...params, asOf: undefined },
+      { ...params, asOf: asOf ?? undefined },
       {
         byId: async (documentId) =>
           await queryClient.query(publicStatuteOptions(documentId)),

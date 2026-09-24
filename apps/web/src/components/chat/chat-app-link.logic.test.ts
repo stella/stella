@@ -54,7 +54,7 @@ describe("chat http links", () => {
 
     expect(classifyChatHttpLink(url, APP_ORIGINS)).toEqual({
       type: "statute",
-      link: { anchor: null, params: statuteParams },
+      link: { anchor: null, asOf: null, params: statuteParams },
     });
   });
 
@@ -63,7 +63,25 @@ describe("chat http links", () => {
 
     expect(classifyChatHttpLink(url, APP_ORIGINS)).toEqual({
       type: "statute",
-      link: { anchor: "par_90-odst_5", params: statuteParams },
+      link: { anchor: "par_90-odst_5", asOf: null, params: statuteParams },
+    });
+  });
+
+  test("a statute page's `?asOf` is the day the act is read on", () => {
+    const url = new URL(`${statutePath}?asOf=2019-05-01`, APP_ORIGIN);
+
+    expect(classifyChatHttpLink(url, APP_ORIGINS)).toEqual({
+      type: "statute",
+      link: { anchor: null, asOf: "2019-05-01", params: statuteParams },
+    });
+  });
+
+  test("an `?asOf` that is not a calendar day is dropped, as the page drops it", () => {
+    const url = new URL(`${statutePath}?asOf=2019-02-30`, APP_ORIGIN);
+
+    expect(classifyChatHttpLink(url, APP_ORIGINS)).toEqual({
+      type: "statute",
+      link: { anchor: null, asOf: null, params: statuteParams },
     });
   });
 

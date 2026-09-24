@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import {
   type CaseLawDecisionRouteParams,
@@ -10,10 +11,15 @@ import {
 } from "@stll/api-contract/statute-route";
 
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
+import { publicStatuteSearchSchema } from "@/routes/law/-statute-detail.logic";
 
-/** A statute page's address, and the provision anchor it lands on, if any. */
+/**
+ * A statute page's address, the `?asOf` day it asks the act on, and the
+ * provision anchor it lands on, each null when the link names none.
+ */
 export type StatuteLink = {
   anchor: string | null;
+  asOf: string | null;
   params: StatuteRouteParams;
 };
 
@@ -34,6 +40,15 @@ const readAnchor = (hash: string): string | null => {
   }
 
   return Result.try(() => decodeURIComponent(fragment)).unwrapOr(null);
+};
+
+/** The `?asOf` day, read by the statute page's own search schema. */
+const readAsOf = (searchParams: URLSearchParams): string | null => {
+  const search = v.safeParse(
+    publicStatuteSearchSchema,
+    Object.fromEntries(searchParams),
+  );
+  return search.success ? (search.output.asOf ?? null) : null;
 };
 
 /** The consolidation a statute link resolved to, as the corpus reads it. */
@@ -79,7 +94,11 @@ export const classifyChatHttpLink = (
   if (statute !== null) {
     return {
       type: "statute",
-      link: { anchor: readAnchor(url.hash), params: statute },
+      link: {
+        anchor: readAnchor(url.hash),
+        asOf: readAsOf(url.searchParams),
+        params: statute,
+      },
     };
   }
 
