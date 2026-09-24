@@ -134,11 +134,6 @@ test(
       fc.property(inputArbitrary, (input) => {
         const widenedText = stringifyDifferently(nullWidenedRecord(input));
 
-        // The text alone fails the schema, so the fixture reaches the fault.
-        expect(toolCallOutcome({ argumentsText: widenedText }).outcome).toBe(
-          `Invalid chat tool arguments for ${TOOL_NAME}`,
-        );
-
         // With the adapter's folded input the call is accepted, and one
         // spelling is persisted: that input and the text derived from it.
         expect(toolCallOutcome({ argumentsText: widenedText, input })).toEqual({
@@ -152,6 +147,21 @@ test(
             state: "input-complete",
           },
         });
+
+        // The text alone is folded the same way, so a part with no `input`
+        // persists the same call (the text's key order is its own).
+        const textOnly = toolCallOutcome({ argumentsText: widenedText });
+        const persistedText =
+          "persisted" in textOnly &&
+          isRecord(textOnly.persisted) &&
+          typeof textOnly.persisted["arguments"] === "string"
+            ? textOnly.persisted["arguments"]
+            : "";
+        expect(textOnly).toMatchObject({
+          outcome: ACCEPTED,
+          persisted: { input, state: "input-complete" },
+        });
+        expect(JSON.parse(persistedText)).toEqual(input);
 
         // Folding nulls never admits a different call: a key the adapter never
         // parsed, or a changed value at any position.
