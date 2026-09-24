@@ -772,10 +772,10 @@ export const OWNERSHIP = [
     enforcement: {
       kind: "import",
       // Both spellings of one module: the package entry point, and the file
-      // that defines the table. A specifier matches on its last two segments,
-      // so `@stll/country-codes` alone would leave a deep relative import of
-      // the source file unconfined.
-      specifiers: ["@stll/country-codes", "country-codes/src/alpha3"],
+      // that defines the table as a repository path. Relative imports resolve
+      // to that path, so `@stll/country-codes` alone would leave a deep
+      // relative import of the source file unconfined.
+      specifiers: ["@stll/country-codes", "packages/country-codes/src/alpha3"],
       names: [
         "COUNTRY_ALPHA3_BY_CODE",
         "COUNTRY_ALPHA3_CODES",

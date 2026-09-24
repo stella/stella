@@ -28,6 +28,8 @@ import type { createBullMqConnection } from "@/api/lib/redis-client";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a relative specifier resolves to the owned module
 import { createRedisClient as relativeClient } from "../../apps/api/src/lib/redis-client.ts";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a deep relative import of an owned package source file is rejected
+import { countryCodeFromAlpha3 } from "../../packages/country-codes/src/alpha3.ts";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
 export { createDocx as serialize } from "@stll/folio-core/server";
@@ -84,4 +86,5 @@ void paragraph;
 void runChat;
 void toolDefinition;
 void relativeClient;
+void countryCodeFromAlpha3;
 type _Connection = typeof createBullMqConnection;

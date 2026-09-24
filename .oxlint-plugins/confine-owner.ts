@@ -162,7 +162,10 @@ const coversFile = (allowedPath: string, filename: string): boolean =>
     : filename.endsWith(allowedPath);
 
 // A canonical id that is still a bare package specifier (not a repository
-// path) owns its subpaths too.
+// path) owns its subpaths too. A listed source file must be spelled as its
+// repository path (`packages/<name>/src/<file>`): relative imports resolve to
+// that path, and a shorter spelling would read as a bare package no relative
+// import can reach.
 const isBarePackage = (moduleId: string): boolean =>
   !moduleId.startsWith("apps/") &&
   !moduleId.startsWith("packages/") &&
