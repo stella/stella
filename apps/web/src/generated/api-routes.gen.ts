@@ -9520,6 +9520,63 @@ export type WebRoutes = {
       };
     } & {
       statutes: {
+        resolve: {
+          post: {
+            body: {
+              works: Array<{
+                country: string;
+                eli: string;
+                asOf: string;
+              }>;
+            };
+            params: T6d90fb7f32;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (Te35800633c | {
+                items: Array<{
+                  country: string;
+                  eli: string;
+                  asOf: string;
+                  statute: (null | {
+                    id: Td90f3cb611;
+                    eli: string;
+                    slug: T432e07d100;
+                    title: string;
+                    country: string;
+                    language: string;
+                    versionValidFrom: T432e07d100;
+                    versionValidTo: T432e07d100;
+                  });
+                }>;
+              });
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: Tc642053948;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      statutes: {
         "by-slug": {
           ":slug": {
             get: {
@@ -9618,7 +9675,7 @@ export type WebRoutes = {
               401: Tc642053948;
               402: Tc642053948;
               403: Tc642053948;
-              404: T347fcc9c9d;
+              404: Tfe81175840;
               409: Tc642053948;
               413: Tc642053948;
               422: (Tc642053948 | {
@@ -9758,7 +9815,7 @@ export type WebRoutes = {
                   };
                   headers: unknown;
                   response: {
-                    200: (Te35800633c | T777a94a413);
+                    200: (Te35800633c | Tffb9800473);
                     400: Tc642053948;
                     401: Tc642053948;
                     402: Tc642053948;
@@ -10373,6 +10430,7 @@ export type WebRoutes = {
                   effectiveDate: T432e07d100;
                   documentId: string;
                   score: number;
+                  slug: T432e07d100;
                 }>;
                 total: stll_api_contract_SearchTotal;
               };
@@ -10409,7 +10467,7 @@ export type WebRoutes = {
               401: Tc642053948;
               402: Tc642053948;
               403: T82c7fa9c31;
-              404: T347fcc9c9d;
+              404: Tfe81175840;
               409: Tc642053948;
               413: Tc642053948;
               422: (Tc642053948 | {
@@ -22325,7 +22383,7 @@ export type WebRoutes = {
                   nextCursor: T432e07d100;
                   limit: number;
                 } & {
-                  previews: Array<(T777a94a413 & {
+                  previews: Array<(Tffb9800473 & {
                     key: string;
                   })>;
                 });
@@ -22442,11 +22500,13 @@ export type WebRoutes = {
                   slug: T432e07d100;
                   court: string;
                   country: string;
+                  language: string;
                   decisionDate: T432e07d100;
                   citationAuthority: number;
                   sentenceText: T432e07d100;
                   spanStart: number;
                   spanEnd: number;
+                  languageAlternates: ReadonlyArray<T4410c591d7>;
                 }>;
                 limit: number;
               });
@@ -32399,7 +32459,7 @@ type Tc5f67256c1 = {
 
 type T7c3a881b37 = T96412b8318 | Te35800633c;
 
-type T347fcc9c9d = {
+type Tfe81175840 = {
   code?: string;
   message: string;
   hint?: string;
@@ -32421,7 +32481,7 @@ type T347fcc9c9d = {
   readonly message: "Legislation document not found";
 };
 
-type T777a94a413 = {
+type Tffb9800473 = {
   documentId: Td90f3cb611;
   language: string;
   anchorId: string;
@@ -33991,6 +34051,13 @@ type T7bba2468e2 = T2430547df2 | {
   documentReadFailed: T1bdf39f14a;
   documentUnavailable: T1bdf39f14a;
   id: Tf4b485f2ea;
+  resolution: {
+    type: "direct";
+  } | {
+    type: "absorbed-supplement";
+    absorbedDecisionId: Tf4b485f2ea;
+    anchorPrefix: string;
+  };
   caseNumber: string;
   slug: T432e07d100;
   ecli: T432e07d100;
@@ -34162,6 +34229,7 @@ type T4c9fd159c8 = {
   decisionType: T432e07d100;
   ecli: T432e07d100;
   language: string;
+  languageAlternates: ReadonlyArray<T4410c591d7>;
   slug: T432e07d100;
 } & {
   citationAuthority: number;
