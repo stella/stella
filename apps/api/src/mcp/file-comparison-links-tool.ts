@@ -9,9 +9,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
-import { fetchWithTimeout } from "@stll/fetch";
 
-import { presignUploadUrl } from "@/api/lib/s3-presign";
+import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,
   safeOutboundFetchBytes,
@@ -151,16 +150,11 @@ const putPresignedFile = async ({
 }) =>
   await Result.tryPromise({
     try: async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- upload to the presigned URL Stella's own upload reservation produced
-      await fetchWithTimeout(reservation.url, {
-        method: "PUT",
+      await putPresignedUpload({
+        bytes,
         headers: reservation.headers,
-        // Copy into an ArrayBuffer-backed view. `safeOutboundFetchBytes` may
-        // return a Uint8Array<ArrayBufferLike>; DOM fetch deliberately rejects
-        // SharedArrayBuffer-backed bodies even though Bun's narrower fetch
-        // types accept the wider view.
-        body: new Uint8Array(bytes).buffer,
         timeoutMs: TRANSFER_TIMEOUT_MS,
+        url: reservation.url,
       }),
     catch: (cause) => cause,
   });

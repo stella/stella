@@ -72,6 +72,29 @@ const readStringField = (
   });
 };
 
+/**
+ * POST a JSON body to the provider API. The one outbound boundary of this
+ * client: every endpoint is a path under the configured base URL.
+ */
+const postProviderJson = async (
+  credentials: HostedUsageProviderApiCredentials,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Response> =>
+  await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
+    `${credentials.baseUrl}/v1/${path}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${credentials.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    },
+  );
+
 const createNeutralSetupSession = async ({
   credentials,
   policyRef,
@@ -86,27 +109,15 @@ const createNeutralSetupSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithTimeout(
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-        `${credentials.baseUrl}/v1/setup-sessions/`,
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${credentials.apiKey}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            policy_refs: [policyRef],
-            success_url: successUrl,
-            return_url: returnUrl,
-            account_ref: accountRef,
-            external_account_ref: externalAccountRef,
-            quantity: seats,
-            metadata,
-          }),
-          timeoutMs: REQUEST_TIMEOUT_MS,
-        },
-      );
+      const response = await postProviderJson(credentials, "setup-sessions/", {
+        policy_refs: [policyRef],
+        success_url: successUrl,
+        return_url: returnUrl,
+        account_ref: accountRef,
+        external_account_ref: externalAccountRef,
+        quantity: seats,
+        metadata,
+      });
       if (!response.ok) {
         throw new HostedUsageProviderApiError({
           message: `Hosted setup session returned ${response.status}`,
@@ -143,30 +154,18 @@ export const createPolarSetupSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithTimeout(
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-        `${credentials.baseUrl}/v1/checkouts/`,
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${credentials.apiKey}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            products: [policyRef],
-            // Polar links the resulting customer by external id, so the
-            // org-scoped ref keeps repeat checkouts attached to one customer.
-            external_customer_id: externalAccountRef,
-            success_url: successUrl,
-            return_url: returnUrl,
-            // Seat-based products take the seat count at checkout; the
-            // resulting subscription reports it back on webhook events.
-            seats,
-            metadata,
-          }),
-          timeoutMs: REQUEST_TIMEOUT_MS,
-        },
-      );
+      const response = await postProviderJson(credentials, "checkouts/", {
+        products: [policyRef],
+        // Polar links the resulting customer by external id, so the
+        // org-scoped ref keeps repeat checkouts attached to one customer.
+        external_customer_id: externalAccountRef,
+        success_url: successUrl,
+        return_url: returnUrl,
+        // Seat-based products take the seat count at checkout; the
+        // resulting subscription reports it back on webhook events.
+        seats,
+        metadata,
+      });
       if (!response.ok) {
         throw new HostedUsageProviderApiError({
           message: `Hosted setup session returned ${response.status}`,
@@ -216,20 +215,12 @@ const createNeutralManagementSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithTimeout(
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-        `${credentials.baseUrl}/v1/management-sessions`,
+      const response = await postProviderJson(
+        credentials,
+        "management-sessions",
         {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${credentials.apiKey}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            account_ref: accountRef,
-            return_url: returnUrl,
-          }),
-          timeoutMs: REQUEST_TIMEOUT_MS,
+          account_ref: accountRef,
+          return_url: returnUrl,
         },
       );
       if (!response.ok) {
@@ -270,20 +261,12 @@ export const createPolarManagementSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithTimeout(
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-        `${credentials.baseUrl}/v1/customer-sessions/`,
+      const response = await postProviderJson(
+        credentials,
+        "customer-sessions/",
         {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${credentials.apiKey}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            customer_id: accountRef,
-            return_url: returnUrl,
-          }),
-          timeoutMs: REQUEST_TIMEOUT_MS,
+          customer_id: accountRef,
+          return_url: returnUrl,
         },
       );
       if (!response.ok) {

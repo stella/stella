@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -298,13 +298,24 @@ const searchBaseUrl = (cluster: QuickwitCluster): string => {
   return value;
 };
 
+/**
+ * The client's one outbound boundary: every request is a Stella-built path
+ * on one of the configured corpus index cluster URLs.
+ */
+const fetchCorpusIndex = async (
+  baseUrl: string,
+  path: string,
+  init: FetchWithTimeoutInit,
+): Promise<Response> =>
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
+  await fetchWithTimeout(`${baseUrl}${path}`, init);
+
 /** Liveness of the cluster's search endpoint; resolves with the raw response. */
 export const probeCorpusIndexSearchLiveness = async (
   cluster: QuickwitCluster,
   timeoutMs: number,
 ): Promise<Response> =>
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- corpus index cluster URL from validated operator configuration
-  await fetchWithTimeout(`${searchBaseUrl(cluster)}/health/livez`, {
+  await fetchCorpusIndex(searchBaseUrl(cluster), "/health/livez", {
     timeoutMs,
   });
 
@@ -368,8 +379,7 @@ const requestFailure = ({
   });
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
-  await fetchWithTimeout(`${request.baseUrl}${request.path}`, {
+  await fetchCorpusIndex(request.baseUrl, request.path, {
     ...request.init,
     timeoutMs: request.timeoutMs,
   }).catch((error: unknown) => {
