@@ -54,17 +54,17 @@ export const useStartVerification = ({
   const start = async (target: VerificationTarget, confirmedUnits?: number) => {
     setSizeConfirmation(null);
     setStartingFor(target);
-    const sent = await Result.tryPromise(
-      async () =>
-        await api
-          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .verifications.post({
-            listId: toSafeId<"legalList">(listId),
-            entityId: toSafeId<"entity">(target.entityId),
-            fileFieldId: toSafeId<"field">(target.fileFieldId),
-            ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
-          }),
-    );
+    const sent = await Result.tryPromise(async () => {
+      const { data, error } = await api
+        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .verifications.post({
+          listId: toSafeId<"legalList">(listId),
+          entityId: toSafeId<"entity">(target.entityId),
+          fileFieldId: toSafeId<"field">(target.fileFieldId),
+          ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+        });
+      return error ? { data: null, error } : { data, error: null };
+    });
     setStartingFor(null);
 
     if (Result.isError(sent)) {
