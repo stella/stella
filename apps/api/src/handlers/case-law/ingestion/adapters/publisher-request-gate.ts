@@ -82,15 +82,27 @@ type ConnectableGateClient = PublisherGateClient & {
  * next reservation retries it instead of inheriting a rejected promise
  * forever. `createClient` is the seam: the connect-then-send order is what a
  * test asserts, without a Redis.
+ *
+ * Every adapter runs its own loop, so the reservations that race this are
+ * concurrent. Memoise the client's *promise*, not the client: awaiting the
+ * construction before storing it lets a second caller start a second client
+ * and install it over the first, while `connected` still tracks the first
+ * one's handshake — so that caller awaits a connection its own client never
+ * opened and its command is rejected, and each racing caller leaves another
+ * connection behind. One promise is one client, and the connection it awaits
+ * is that client's.
  */
 export const connectedGateClient = (
   createClient: () => Promise<ConnectableGateClient>,
 ): (() => Promise<PublisherGateClient>) => {
-  let client: ConnectableGateClient | undefined;
+  let clientPromise: Promise<ConnectableGateClient> | undefined;
   let connected: Promise<unknown> | undefined;
   return async () => {
-    client ??= await createClient();
-    const redis = client;
+    clientPromise ??= createClient().catch((error: unknown) => {
+      clientPromise = undefined;
+      throw error;
+    });
+    const redis = await clientPromise;
     connected ??= redis.connect().catch((error: unknown) => {
       connected = undefined;
       throw error;
