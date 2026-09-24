@@ -87,15 +87,14 @@ describe("cited statute resolution", () => {
     // One request past the old per-work fan-out, with each work once.
     expect(bodies).toHaveLength(1);
     expect(bodies[0]?.works).toHaveLength(works.length);
-    expect(
-      statutes.get(
-        citedWorkAtDateKey({
-          asOf: "2011-03-22",
-          country: "CZE",
-          eli: LISTINA_ELI,
-        }),
-      )?.id,
-    ).toBe(statute.id);
+    const resolvedId: string | undefined = statutes.get(
+      citedWorkAtDateKey({
+        asOf: "2011-03-22",
+        country: "CZE",
+        eli: LISTINA_ELI,
+      }),
+    )?.id;
+    expect(resolvedId).toBe(statute.id);
     // An unheld work is absent, and the same work at another date is another
     // question.
     expect(statutes.size).toBe(1);
