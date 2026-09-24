@@ -381,6 +381,39 @@ const namedMatterDefects = (events: readonly BuilderEvent[]): string[] => {
   return defects;
 };
 
+const isMattersQuestion = ({ question }: AskedQuestion) =>
+  classifyQuestion(question) === "matters";
+
+/**
+ * The "which matters" question is answered by picking, not typing: the
+ * matters were listed first and every one is offered as an option.
+ */
+const mattersQuestionDefects = (events: readonly BuilderEvent[]): string[] => {
+  const asked = indexOfFirst(events, ({ questions }) =>
+    questions.some(isMattersQuestion),
+  );
+  if (asked === Number.POSITIVE_INFINITY) {
+    return [];
+  }
+  const defects: string[] = [];
+  const listed = indexOfFirst(events, ({ name }) => name === "list_matters");
+  if (listed > asked) {
+    defects.push("asked which matters before listing them");
+  }
+  const options = askedQuestions(events.slice(asked, asked + 1))
+    .filter(isMattersQuestion)
+    .flatMap((question) => question.options);
+  const unoffered = MATTERS.filter(
+    ({ name }) => !options.some((option) => option.includes(name)),
+  );
+  if (unoffered.length > 0) {
+    defects.push(
+      `asked which matters without offering ${unoffered.map(({ name }) => name).join(", ")} as an option`,
+    );
+  }
+  return defects;
+};
+
 const discoveredNames = (input: unknown): string[] => {
   const names =
     typeof input === "object" && input !== null && "toolNames" in input
@@ -648,6 +681,7 @@ const discovery: BuilderScenario = {
       defects.push("searched matters before the user agreed");
     }
     defects.push(
+      ...mattersQuestionDefects(events),
       ...namedMatterDefects(events),
       ...confirmedReadDefects(events),
       ...liabilityGroundingDefects(playbooks),
@@ -668,8 +702,9 @@ const answerContractsLaterTopic = answerByTopic({
 /**
  * The user declines contracts, lets the first positions land, then asks for
  * their matters mid-flow. The switch re-enters "Look for them" at its first
- * step: ask which matters, list the named one, offer the candidates, read
- * only the picks; never a search across every matter, never subagents.
+ * step: list the matters and offer them, list the chosen one, offer the
+ * candidates, read only the picks; never a search across every matter,
+ * never subagents.
  */
 const contractsLater: BuilderScenario = {
   id: "contracts-later",
@@ -694,9 +729,7 @@ const contractsLater: BuilderScenario = {
     }
     const later = eventsOfTurn(events, 2);
     const firstMattersQuestion = indexOfFirst(later, ({ questions }) =>
-      questions.some(
-        ({ question }) => classifyQuestion(question) === "matters",
-      ),
+      questions.some(isMattersQuestion),
     );
     const firstLookup = indexOfFirst(
       later,
@@ -711,6 +744,7 @@ const contractsLater: BuilderScenario = {
       defects.push("saved nothing after the user asked for contracts");
     }
     defects.push(
+      ...mattersQuestionDefects(later),
       ...namedMatterDefects(later),
       ...confirmedReadDefects(later),
       ...liabilityGroundingDefects(playbooks),

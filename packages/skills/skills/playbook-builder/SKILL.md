@@ -79,11 +79,14 @@ before it is read, and a subagent cannot ask them.
   then read it.
 - **Look for them:** only when the user asks, whether at the open or once
   positions are saved, and always in this order:
-  1. Ask which matters to search, or whether to search all they can access.
-     Never call `list_matters` or `list_documents` before this answer.
-  2. For named matters, find them with `list_matters` and list their
-     documents with `list_documents`. `search_across_matters` spans every
-     matter the user can access, so use it only when they chose all.
+  1. Call `list_matters` once, then ask which matters to search: one
+     question, each matter an option by name, plus one to search all they
+     can access. With many matters, offer the most recently active; the
+     user can still name another. Never call `list_documents` or search
+     before this answer.
+  2. For the chosen matters, list their documents with `list_documents`.
+     `search_across_matters` spans every matter the user can access, so use
+     it only when they chose all.
   3. Ask the user to pick from the candidates: one question, each document an
      option named with its matter.
   4. Read only the documents the user picked, at most eight. Never read one

@@ -21,21 +21,23 @@ const scenario = (id: string): BuilderScenario =>
   BUILDER_SCENARIOS.find((candidate) => candidate.id === id) ??
   panic(`no scenario ${id}`);
 
-/** The ids a fixture answer lists under `key`, in order. */
-const listedIds = (result: InternalToolResult, key: string): string[] => {
+/** The rows a fixture answer lists under `key`, in order. */
+const listedRows = (result: InternalToolResult, key: string) => {
   if (result.status !== "success") {
     return panic("the fixture refused a read");
   }
   const rows = isRecord(result.data) ? result.data[key] : undefined;
-  return v
-    .parse(v.array(v.object({ id: v.string() })), rows)
-    .map(({ id }) => id);
+  return v.parse(v.array(v.object({ id: v.string(), name: v.string() })), rows);
 };
+const listedIds = (result: InternalToolResult, key: string): string[] =>
+  listedRows(result, key).map(({ id }) => id);
 
-const [supplyMatterId] = listedIds(
-  answerMatterTool("list_matters", {}),
-  "matters",
-);
+const matters = listedRows(answerMatterTool("list_matters", {}), "matters");
+const [supplyMatterId] = matters.map(({ id }) => id);
+const MATTER_OPTIONS = [
+  ...matters.map(({ name }) => name),
+  "All matters I can access",
+];
 const [keller, brandt, vogel] = listedIds(
   answerMatterTool("list_documents", { matter_id: supplyMatterId }),
   "documents",
@@ -92,6 +94,7 @@ const event = (
   name: string,
   input: unknown = {},
   questions: readonly string[] = [],
+  options: readonly string[] = [],
 ): BuilderEvent => ({
   turn,
   name,
@@ -99,7 +102,7 @@ const event = (
   questions: questions.map((question) => ({
     question,
     reason: "",
-    options: [],
+    options,
     default: undefined,
   })),
   resentUnchanged: [],
@@ -108,6 +111,10 @@ const event = (
 
 const ask = (turn: number, ...questions: string[]) =>
   event(turn, "ask-user", {}, questions);
+/** One question answered by picking from `options`. */
+const askWith = (turn: number, question: string, options: readonly string[]) =>
+  event(turn, "ask-user", {}, [question], options);
+const WHICH_MATTERS = "Which matters should I search, or all you can access?";
 const read = (turn: number, entityId: string) =>
   event(turn, "read_content_across_matters", { entity_id: entityId });
 
@@ -121,8 +128,8 @@ const contractsLaterRun = (): BuilderEvent[] => [
     "What language should the playbook be written in?",
   ),
   event(1, "save_playbook"),
-  ask(2, "Which matters should I search, or all you can access?"),
   event(2, "list_matters"),
+  askWith(2, WHICH_MATTERS, MATTER_OPTIONS),
   event(2, "list_documents", { matter_id: supplyMatterId }),
   ask(2, "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)"),
   read(2, keller),
@@ -173,10 +180,27 @@ describe("contracts-later scoring", () => {
   test("looking in matters before asking which ones is a defect", () => {
     const events = contractsLaterRun();
     // Move the "which matters" question below the listing that answered it.
-    const [question] = events.splice(2, 1);
+    const [question] = events.splice(3, 1);
     events.splice(4, 0, question ?? panic("the run asks which matters"));
     expect(score("contracts-later", events)).toEqual([
       "looked in matters before asking which ones",
+    ]);
+  });
+
+  test("asking which matters before listing them is a defect", () => {
+    const events = contractsLaterRun();
+    const [listing] = events.splice(2, 1);
+    events.splice(3, 0, listing ?? panic("the run lists the matters"));
+    expect(score("contracts-later", events)).toEqual([
+      "asked which matters before listing them",
+    ]);
+  });
+
+  test("asking which matters without offering them is a defect", () => {
+    const events = contractsLaterRun();
+    events[3] = ask(2, WHICH_MATTERS);
+    expect(score("contracts-later", events)).toEqual([
+      `asked which matters without offering ${matters.map(({ name }) => name).join(", ")} as an option`,
     ]);
   });
 
