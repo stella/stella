@@ -18,8 +18,10 @@ import {
   getChatValidationTools,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
+  builtInCodeModePromptVariants,
   CHAT_CODE_MODE_SYSTEM_PROMPT,
   chatCodeModeSystemPrompt,
+  codeModePromptVariantKey,
   createChatCodeModeSurface,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
@@ -323,6 +325,36 @@ describe("skill-documented chat reads", () => {
     expect(chatCodeModeSystemPrompt([first])).not.toBe(
       CHAT_CODE_MODE_SYSTEM_PROMPT,
     );
+  });
+
+  test("only the base and the built-in skills' sets are retained; an installed set is rendered per turn", async () => {
+    const shipped = [
+      codeModePromptVariantKey([]),
+      ...(await Promise.all(
+        listSkillMetadata().map(async ({ name }) =>
+          codeModePromptVariantKey(
+            (await resolveBuiltInSkill(name)).documentedChatReads,
+          ),
+        ),
+      )),
+    ];
+    // A set no shipped skill declares: the ceiling test keeps built-ins far
+    // below the limit.
+    const installedSet = DOCUMENTABLE_CHAT_READ_NAMES.slice(
+      0,
+      MAX_DOCUMENTED_CHAT_READS,
+    );
+    const table = builtInCodeModePromptVariants();
+
+    expect([...table.keys()].toSorted()).toEqual(
+      [...new Set(shipped)].toSorted(),
+    );
+    expect(table.has(codeModePromptVariantKey(installedSet))).toBe(false);
+    expect(chatCodeModeSystemPrompt(installedSet)).toBe(
+      chatCodeModeSystemPrompt(installedSet),
+    );
+    expect(table.has(codeModePromptVariantKey(installedSet))).toBe(false);
+    expect(builtInCodeModePromptVariants().size).toBe(table.size);
   });
 
   test("the streaming set documents the skill's reads; the validation set keeps them discoverable", async () => {
