@@ -31,7 +31,7 @@ const UNPUBLISHED_DECISION = {
   court: "Synthetic court",
   courtAbbreviation: null,
   courtTier: "other",
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  createdAt: "2026-01-01T00:00:00.000Z",
   decisionDate: null,
   decisionType: null,
   documentAst: null,
@@ -71,7 +71,7 @@ const UNPUBLISHED_DECISION = {
     legalSentence: ABSENT_TEXT_FIELD,
     summary: ABSENT_TEXT_FIELD,
   },
-  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  updatedAt: "2026-01-01T00:00:00.000Z",
 } satisfies DecisionBySlug;
 
 const PUBLISHED_DECISION = {

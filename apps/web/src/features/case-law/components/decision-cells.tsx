@@ -81,7 +81,7 @@ export type Decision = {
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
   /** Every identifier the publisher supplied; search hits carry them, list rows do not. */
   identifiers?: readonly { type: string; value: string }[] | undefined;
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionType: string | null;
   sourceUrl?: string | null | undefined;
   /** The search snippet, highlighted, when the row came from a search. */
@@ -92,7 +92,6 @@ export type Decision = {
   headnote: DecisionHeadnotePreview;
   /** Decisions in the corpus that cite this one. */
   citationCount: number;
-  createdAt?: Date | string | undefined;
 };
 
 type IntlFormatter = ReturnType<typeof useFormatter>;

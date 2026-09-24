@@ -168,7 +168,7 @@ const buildDescription = (decision: {
   caseNumber: string;
   court: string;
   country: string;
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
 }) =>
   [decision.caseNumber, decision.court, decision.decisionDate, decision.country]
     .filter(Boolean)

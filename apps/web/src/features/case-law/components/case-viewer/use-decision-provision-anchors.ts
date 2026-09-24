@@ -38,7 +38,7 @@ type UseDecisionProvisionAnchorsOptions = {
   blocks: readonly Block[];
   /** The citing court's jurisdiction; null while the decision is loading. */
   country: string | null;
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
 };
 
