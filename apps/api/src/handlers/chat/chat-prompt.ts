@@ -51,6 +51,7 @@ import {
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { corpusStorageMode } from "@/api/env-base";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
@@ -60,7 +61,6 @@ import type {
   IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
-  IncomingActiveSkill,
   IncomingActiveStatute,
   IncomingActiveTemplate,
   IncomingUserContext,
@@ -70,16 +70,13 @@ import {
   CHAT_CODE_MODE_SYSTEM_PROMPT,
   chatCodeModeSystemPrompt,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { documentedChatReadsOf } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
   getChatSkillMetadata,
   listAvailableChatSkillMetadata,
-  resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -465,7 +462,8 @@ type BuildChatSystemPromptProps = {
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
-  activeSkill?: IncomingActiveSkill | undefined;
+  /** The turn's active skill, resolved and narrowed once by the sender. */
+  activeSkillContext: ActiveChatSkillContext | null;
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate?: IncomingActiveTemplate | undefined;
   /**
@@ -476,7 +474,6 @@ type BuildChatSystemPromptProps = {
    * also enforces the constraint at call time).
    */
   contextMatterIds: SafeId<"workspace">[];
-  memberRole?: { role: string } | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -638,11 +635,10 @@ export const buildChatSystemPromptParts = async ({
   activeDraft,
   activeExternal,
   activeFile,
-  activeSkill,
+  activeSkillContext,
   activeStatute,
   activeTemplate,
   contextMatterIds,
-  memberRole,
   organizationId,
   practiceJurisdictions,
   refRegistry,
@@ -665,18 +661,6 @@ export const buildChatSystemPromptParts = async ({
             }),
           )
         : getChatSkillMetadata();
-    const activeSkillContext =
-      organizationId && userId
-        ? yield* Result.await(
-            resolveActiveChatSkillContext({
-              activeSkill,
-              memberRole: memberRole ?? { role: "member" },
-              organizationId,
-              safeDb,
-              userId,
-            }),
-          )
-        : null;
     const promptSkillMetadata = mergeActiveSkillMetadata({
       activeSkillContext,
       skillMetadata,
@@ -689,7 +673,8 @@ export const buildChatSystemPromptParts = async ({
     // pinned matter labels) lands in `untrustedSuffix` so the
     // boundary anonymizes only the parts that actually carry
     // third-party PII.
-    const documentedChatReads = documentedChatReadsOf(activeSkillContext);
+    const documentedChatReads =
+      activeSkillContext === null ? [] : activeSkillContext.documentedChatReads;
     const safeParts =
       workspaceId === null
         ? buildGlobalPromptParts({

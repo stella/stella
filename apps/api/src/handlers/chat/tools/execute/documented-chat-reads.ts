@@ -1,16 +1,12 @@
-import { panic } from "better-result";
-
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
-import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Which reads a skill may document up front on the chat surface, and the one
  * place a frontmatter string becomes a read tool name. The skills module is
  * shared lib code and cannot decide projectability (a chat decision in the
- * ref-field map), so `ActiveChatSkillContext` carries the declared names and
- * `documentedChatReadsOf` narrows them where the chat turn is built. A leaf
+ * ref-field map), so the resolved skill carries the declared names and
+ * `resolveActiveChatSkillContext` narrows them where the chat turn is built. A leaf
  * over the ref-field map, kept out of the code-mode surface so the skills
  * tests and the prompt builders do not pull in the sandbox to narrow a name.
  */
@@ -81,7 +77,7 @@ export type DocumentedChatReads = {
 /**
  * A name outside `DOCUMENTABLE_CHAT_READ_NAMES` (unknown, not projectable, or
  * documented already) and every name past the limit come back in `rejected`;
- * `documentedChatReadsOf` decides what a rejection means per skill source.
+ * `narrowActiveChatSkillContext` decides what a rejection means per skill source.
  */
 export const toDocumentedChatReads = (
   names: readonly string[],
@@ -101,37 +97,4 @@ export const toDocumentedChatReads = (
     }
   }
   return { reads, rejected };
-};
-
-/**
- * The reads the active skill documents on this turn, narrowed from its
- * declaration. No skill documents nothing. A built-in skill's rejected name
- * panics, since a shipped skill is code and the guard test in
- * `skill-documented-reads.test.ts` fails it first; an installed skill's
- * rejected names are dropped with a log, since an org-authored `SKILL.md`
- * must not break the turn.
- */
-export const documentedChatReadsOf = (
-  skill: ActiveChatSkillContext | null | undefined,
-): readonly RegistryReadToolName[] => {
-  if (!skill) {
-    return [];
-  }
-  const { reads, rejected } = toDocumentedChatReads(skill.documentedChatReads);
-  if (rejected.length === 0) {
-    return reads;
-  }
-  const described = rejected
-    .map(({ name, reason }) => `${name} (${reason})`)
-    .join(", ");
-  if (skill.source === "built-in") {
-    return panic(
-      `Built-in skill ${skill.toolName} documents chat reads it cannot: ${described}`,
-    );
-  }
-  logger.warn("chat.skill.documented_reads_rejected", {
-    ...(skill.id === null ? {} : { "skill.id": skill.id }),
-    "skill.rejected_reads": described,
-  });
-  return reads;
 };

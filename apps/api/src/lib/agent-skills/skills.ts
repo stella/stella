@@ -54,27 +54,20 @@ type ChatMemberRole = {
   role: string;
 };
 
-export type ActiveChatSkillContext = {
+/**
+ * The active skill as resolved from its source, before any surface acts on
+ * it. The two frontmatter lists are the declared strings: which names chat
+ * can honour is a chat decision, made once in
+ * `handlers/chat/active-skill-context.ts`, which is the type chat code reads.
+ */
+export type ActiveSkillContext = {
   body: string;
   description: string;
   displayName: string;
-  /**
-   * Registry reads the skill's frontmatter documents up front on the chat
-   * surface (`stella-chat-documented-reads`), as declared. The chat slice
-   * narrows them once, in `documentedChatReadsOf`; code-mode then registers
-   * them non-lazy and the prompt carries their full stubs while the skill is
-   * active. The validation tool set ignores it, as it ignores the exclusion:
-   * laziness does not change a tool's schema, so persisted calls parse the
-   * same either way.
-   */
+  /** `stella-chat-documented-reads`, as declared. */
   documentedChatReads: readonly string[];
   editable: boolean;
-  /**
-   * Chat tools the skill's frontmatter excludes from a turn it is active in
-   * (`stella-chat-excluded-tools`). Read by the registration predicates in
-   * chat-tools.ts; the validation tool set ignores it so persisted calls
-   * from before the skill was activated still parse.
-   */
+  /** `stella-chat-excluded-tools`, as declared. */
   excludedChatTools: readonly string[];
   id: SafeId<"agentSkill"> | null;
   origin: AgentSkillOrigin | "built-in";
@@ -84,7 +77,7 @@ export type ActiveChatSkillContext = {
   version: string | null;
 };
 
-export const resolveActiveChatSkillContext = async ({
+export const resolveActiveSkillContext = async ({
   activeSkill,
   memberRole,
   organizationId,
@@ -94,7 +87,7 @@ export const resolveActiveChatSkillContext = async ({
   activeSkill: ActiveChatSkillRequest | undefined;
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext | null, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext | null, HandlerError<403 | 404> | SafeDbError>
 > => {
   if (!activeSkill) {
     return Result.ok(null);
@@ -147,7 +140,7 @@ const resolveInstalledActiveSkill = async ({
   activeSkill: ActiveChatSkillRequest & { skillId: SafeId<"agentSkill"> };
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext, HandlerError<403 | 404> | SafeDbError>
 > => {
   const skillRows = await safeDb((tx) =>
     tx

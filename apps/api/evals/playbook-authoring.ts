@@ -46,6 +46,8 @@ import { writeFile } from "node:fs/promises";
 
 import { DEFAULT_MODELS } from "@stll/ai-catalog";
 
+import { resolveActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   buildActiveSkillSection,
   SUBAGENT_DELEGATION_SECTION,
@@ -56,15 +58,12 @@ import {
   createChatCodeModeSurface,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatCodeModeReadRunner } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { documentedChatReadsOf } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { SPAWN_SUBAGENTS_TOOL_DEFINITION } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -834,7 +833,7 @@ const behaviorSystemPrompt = ({
     BEHAVIOR_SYSTEM_PREAMBLE,
     ...(surface === "chat"
       ? [
-          chatCodeModeSystemPrompt(documentedChatReadsOf(skill)),
+          chatCodeModeSystemPrompt(skill.documentedChatReads),
           ...(subagentsOfferedWith(skill) ? [SUBAGENT_DELEGATION_SECTION] : []),
         ]
       : []),
@@ -1038,7 +1037,7 @@ const chatMatterTools = ({
   };
   const { tool, discoveryTool } = createChatCodeModeSurface({
     concurrencyKey: EVAL_SANDBOX_KEY,
-    documentedReads: documentedChatReadsOf(skill),
+    documentedReads: skill.documentedChatReads,
     runReadTool,
   });
   const discovery =
@@ -1230,7 +1229,7 @@ const runScenario = async ({
   const playbooks = store.playbooks();
   const defects = scoreScenario(scenario, {
     surface,
-    documentedReads: new Set(documentedChatReadsOf(skill)),
+    documentedReads: new Set(skill.documentedChatReads),
     events,
     playbooks,
   });

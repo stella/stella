@@ -12,6 +12,7 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -31,11 +32,11 @@ import {
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
 import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import type { ExcludableChatToolName } from "@/api/handlers/chat/tools/excluded-chat-tools";
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { documentedChatReadsOf } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
@@ -77,7 +78,6 @@ import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -162,17 +162,8 @@ type SubagentToolsRegisteredProps = {
    * has the user pick each document before it is read cannot let a
    * subagent, which cannot ask them, read on its behalf.
    */
-  excludedChatTools?: readonly string[] | undefined;
+  excludedChatTools?: readonly ExcludableChatToolName[] | undefined;
 };
-
-/**
- * Chat tool names a skill's `stella-chat-excluded-tools` frontmatter can
- * withhold. `spawn_subagents` is the one gated tool today; a name outside
- * this list has no effect, and the registry guard test fails a built-in
- * skill that declares one. Generalise to a filter over the tool map only
- * when a second tool needs excluding.
- */
-export const EXCLUDABLE_CHAT_TOOL_NAMES = [SPAWN_SUBAGENTS_TOOL_NAME] as const;
 
 /**
  * Single source of truth for "is `spawn_subagents` registered on this
@@ -697,9 +688,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // validation set ignores them, as it ignores the exclusion below, since
   // laziness does not change a tool's schema.
   const executionTools = buildChatCodeModeTools({
-    documentedReads: forValidation
-      ? []
-      : documentedChatReadsOf(activeSkillContext),
+    documentedReads:
+      forValidation || !activeSkillContext
+        ? []
+        : activeSkillContext.documentedChatReads,
     memberRole,
     organizationId,
     recordAuditEvent,

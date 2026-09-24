@@ -14,7 +14,7 @@ import {
 } from "@/api/lib/agent-skills/resource-path";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
+  type ActiveSkillContext,
   listAvailableChatSkillResources,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
@@ -35,7 +35,7 @@ type AvailableSkillMetadata = SkillMetadata & {
 };
 
 type CreateSkillToolsProps = {
-  activeSkillContext?: ActiveChatSkillContext | null | undefined;
+  activeSkillContext?: ActiveSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   /**
    * A `validation` set registers the catalog tools whatever `skills` holds and
@@ -261,14 +261,14 @@ const readSkillResourceContent = async ({
   return resourceResult.value;
 };
 
-type ActiveEditableSkillContext = ActiveChatSkillContext & {
+type ActiveEditableSkillContext = ActiveSkillContext & {
   editable: true;
   id: SafeId<"agentSkill">;
   origin: AgentSkillOrigin;
 };
 
 const toActiveEditableSkillContext = (
-  activeSkillContext: ActiveChatSkillContext | null | undefined,
+  activeSkillContext: ActiveSkillContext | null | undefined,
 ): ActiveEditableSkillContext | null => {
   if (
     activeSkillContext?.editable === true &&

@@ -23,6 +23,10 @@ import {
   type ActiveFileSourceForModel,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
+  resolveActiveChatSkillContext,
+  type ActiveChatSkillContext,
+} from "@/api/handlers/chat/active-skill-context";
+import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
@@ -56,7 +60,6 @@ import type {
   IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
-  IncomingActiveSkill,
   IncomingActiveStatute,
   IncomingActiveTemplate,
   IncomingUserContext,
@@ -167,10 +170,6 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
-import {
-  resolveActiveChatSkillContext,
-  type ActiveChatSkillContext,
-} from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -1837,11 +1836,10 @@ export const createSendMessage = (
           activeDraft: body.activeDraft,
           activeExternal: body.activeExternal,
           activeFile: body.activeFile,
-          activeSkill: body.activeSkill,
+          activeSkillContext: validationActiveSkillContext,
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
-          memberRole,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
           messageWindow: messagesForContextResult.value,
@@ -2415,11 +2413,10 @@ type PrepareChatContextProps = {
   activeDraft: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
-  activeSkill: IncomingActiveSkill | undefined;
+  activeSkillContext: ActiveChatSkillContext | null;
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
-  memberRole: { role: string };
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
   messageWindow: ChatMessage[];
@@ -2459,11 +2456,10 @@ const prepareChatContext = async ({
   activeDraft,
   activeExternal,
   activeFile,
-  activeSkill,
+  activeSkillContext,
   activeStatute,
   activeTemplate,
   contextMatterIds,
-  memberRole,
   latestMentions,
   latestUserMessageId,
   messageWindow,
@@ -2495,11 +2491,10 @@ const prepareChatContext = async ({
         activeDraft,
         activeExternal,
         activeFile,
-        activeSkill,
+        activeSkillContext,
         activeStatute,
         activeTemplate,
         contextMatterIds,
-        memberRole,
         organizationId,
         practiceJurisdictions,
         refRegistry,
