@@ -4,6 +4,7 @@ import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
@@ -15,6 +16,16 @@ export const CONTENTION_RECONCILIATION = {
 
 type ContentionReconciliation =
   (typeof CONTENTION_RECONCILIATION)[keyof typeof CONTENTION_RECONCILIATION];
+
+/**
+ * What a phase of a decision attempt answers when a concurrent writer moved
+ * the row under it. The attempt runs once more from the start; on that second
+ * run the same answer holds the page's cursor instead.
+ */
+export const RECONCILE_CONTENTION = { status: "reconcile-contention" } as const;
+
+/** A phase's answer: the attempt's outcome, or a contention to reconcile. */
+export type AttemptStep = ProcessResult | typeof RECONCILE_CONTENTION;
 
 export const DECISION_ROW_WRITE_STATUS = {
   APPLIED: "applied",

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 const decisionWrite = await Bun.file(
-  new URL("pipeline/decision.ts", import.meta.url),
+  new URL("pipeline/decision-row-update.ts", import.meta.url),
 ).text();
 const citationWrite = await Bun.file(
   new URL("pipeline/citations.ts", import.meta.url),
