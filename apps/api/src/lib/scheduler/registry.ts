@@ -48,10 +48,6 @@ import {
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
-  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
-  reconcileListVerificationRuns,
-} from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
-import {
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
   sweepFileComparisonUploads,
 } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -71,6 +67,10 @@ import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
+import {
+  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+  reconcileListVerificationRuns,
+} from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
   MEMORY_CURATOR_TASK,
   curateAiMemories,

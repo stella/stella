@@ -75,8 +75,7 @@ export const locateQuote = (
   const haystack = fold(text);
   const needle = fold(trimmed).folded.trim();
   const foldedFrom = haystack.origin.findIndex((index) => index >= from);
-  let at =
-    foldedFrom === -1 ? -1 : haystack.folded.indexOf(needle, foldedFrom);
+  let at = foldedFrom === -1 ? -1 : haystack.folded.indexOf(needle, foldedFrom);
   if (at === -1) {
     at = haystack.folded.indexOf(needle);
   }
