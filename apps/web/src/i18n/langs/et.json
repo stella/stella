@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektiivne kontrollitav väide, mida hinnatakse registri põhjal. Hõlmab omaksvõtu või eituse vormis väiteid: hinnatakse aluseks olevat asjaolu, mitte üksnes sõnastust.",
-        "label": "Fakt"
+        "hint": "Objektiivne kontrollitav väide, mida hinnatakse registri põhjal. Hõlmab omaksvõtu või eituse vormis väiteid: hinnatakse aluseks olevat asjaolu, mitte üksnes sõnastust."
       },
       "opinion": {
         "hint": "Väärtushinnang või iseloomustus, mida ükski dokument ei saa kinnitada ega ümber lükata; see jäetakse kõrvale, mitte ei hinnata.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Tõlgendus",
-      "levels": {
-        "high": "Kõrge",
-        "low": "Madal",
-        "medium": "Keskmine"
-      },
       "tooltip": "Tõlgenduse kindlus näitab, kui üheselt mõistetav on tõendi tähendus. See ei sõltu allika kandjast, näiteks käsikirjast või skannist."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Vastuolus: {contradicted} · Osaliselt vastuolus: {tension} · Registri vastuolu: {conflicts}",
       "empty": "Laadige dokument selle kontrollimiseks toimikusse üles.",
       "notVerified": "Veel kontrollimata",
-      "open": "Ava",
       "otherList": "Kontrollitud teise loendi alusel",
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
       "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
-      "verify": "Kontrolli",
       "verifyAgain": "Kontrolli uuesti"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
-      "next": "Järgmine vaste",
-      "position": "{current}/{total}",
-      "previous": "Eelmine vaste"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Vaidlustatud · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Sellest dokumendist ei leitud ühtegi väidet.",
       "startFailed": "Kontrolli ei õnnestunud käivitada",
       "status": {
-        "completed": "Kontrollitud",
-        "failed": "Nurjus",
-        "queued": "Järjekorras",
         "running": "Kontrollimine"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
-      "page": "Lehekülg {page}",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Vali loend",
-      "documents": "Dokumendid",
       "evidenceList": "Faktid allikast",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
-      "page": "Lehekülg {page}",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
-    "spawnSubagents": {
-      "failed": "Ebaõnnestus"
-    },
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "suggestTitle": "Paku pealkiri",
@@ -1469,6 +1450,7 @@
     "documentReference": "Dokumendi viitenumber",
     "documentTitle": "Dokumendi pealkiri",
     "documentation": "Dokumentatsioon",
+    "documents": "Dokumendid",
     "done": "Valmis",
     "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
@@ -1508,6 +1490,8 @@
       "inline": "Tekstisisene",
       "title": "Salvesta sõnum"
     },
+    "fact": "Fakt",
+    "failed": "Ebaõnnestus",
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Tagasi muutma",
     "hideDetails": "Peida üksikasjad",
     "hideSecretValue": "Peida salajane väärtus",
+    "high": "Kõrge",
     "history": "Ajalugu",
     "import": "Impordi",
     "invite": "Kutsu",
@@ -1568,8 +1553,10 @@
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
+    "low": "Madal",
     "matter": "Toimik",
     "matters": "Toimikud",
+    "medium": "Keskmine",
     "members": "Liikmed",
     "metadata": "Metaandmed",
     "moveDown": "Liiguta alla",
@@ -1578,6 +1565,7 @@
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
+    "nextMatch": "Järgmine vaste",
     "noFileChosen": "Faili pole valitud",
     "noResults": "Tulemused puuduvad",
     "noVersions": "Versiooniajalogu pole",
@@ -1589,14 +1577,17 @@
     "or": "Või",
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
+    "page": "Lehekülg {page}",
     "pin": "Kinnita",
     "playbooks": "Playbookid",
     "preparing": "Ettevalmistamine…",
     "preview": "Eelvaade",
     "previous": "Eelmine",
+    "previousMatch": "Eelmine vaste",
     "print": "Prindi",
     "profile": "Profiil",
     "properties": "Omadused",
+    "queued": "Ootel",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Lühitunnus",
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
+    "verified": "Kinnitatud",
     "verify": "Kinnita",
     "version": "Versioon",
     "versionLabel": "Versioon {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Lükka tagasi",
     "rejectAll": "Lükka kõik tagasi",
     "revert": "Taasta",
-    "severityHigh": "Kõrge",
-    "severityLow": "Madal",
-    "severityMedium": "Keskmine",
     "severityUnspecified": "Määramata",
     "skipped": "Ei saanud rakendada: {reason}",
     "staleResolution": "See ettepanek on juba mujal lahendatud.",
@@ -2442,10 +2431,8 @@
       "findText": "Otsitav tekst",
       "matchCase": "Tõstutundlik",
       "matchCounter": "{current} / {total}",
-      "next": "Järgmine vaste",
       "nextShortcut": "Järgmine vaste (Enter)",
       "noResults": "Tulemusi pole",
-      "previous": "Eelmine vaste",
       "previousShortcut": "Eelmine vaste (Shift+Enter)",
       "replaceAll": "Asenda kõik",
       "replaceCurrent": "Asenda praegune vaste",
@@ -3041,9 +3028,6 @@
       "reviewing": "Ülevaatamine käib…",
       "reviewingHint": "Suurte dokumentide puhul võib selleks kuluda mõni minut.",
       "run": "Alusta ülevaatust",
-      "runStatus": {
-        "queued": "Ootel"
-      },
       "saveAsPlaybook": "Salvesta playbookina",
       "saveAsPlaybookFailed": "Selle ülevaatuse salvestamine playbookina ebaõnnestus",
       "savedAsPlaybook": "Salvestatud playbookina",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "nt Maksetähtaeg ei tohi ületada 30 päeva",
       "saveFailed": "Playbooki salvestamine ebaõnnestus",
       "severity": {
-        "blocker": "Blokeeriv",
-        "high": "Kõrge",
-        "low": "Madal",
-        "medium": "Keskmine"
+        "blocker": "Blokeeriv"
       },
       "severityLabel": "Raskusaste",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Mälus pole veel midagi.",
     "kinds": {
       "decision": "Otsus",
-      "fact": "Fakt",
       "instruction": "Juhis",
       "preference": "Eelistus",
       "relationship": "Suhe"
@@ -5112,7 +5092,6 @@
         "title": "Kas eemaldada Wordi mallide lingid?",
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
-      "defaultPropertyName": "Dokumendid",
       "desktopEdit": {
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Kustuta omadus",
       "deletePropertyConfirmDescription": "Kas olete kindel, et soovite kustutada omaduse \"{propertyName}\"? Seda toimingut ei saa tagasi võtta.",
       "dependencyLimit": "Kuni {max} sisendit veeru kohta",
-      "documentsLabel": "Dokumendid",
       "editColumn": "Muuda veergu",
       "editConditions": "Muuda tingimusi",
       "editConditionsDescription": "Määrake tingimused, millal seda omadust genereeritakse.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Märgib võtmeväärtuse.",
         "needsReview": "Vajab ülevaatust",
         "needsReviewDescription": "Vajab käsitsi ülevaatust.",
-        "verified": "Kinnitatud",
         "verifiedDescription": "Käsitsi kinnitatud."
       },
       "lock": {

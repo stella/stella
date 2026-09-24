@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektīvs, pārbaudāms apgalvojums, ko vērtē pret reģistru. Ietver apgalvojumus, kas formulēti kā atzīšana vai noliegums: tiek vērtēts pamatā esošais apgalvojums, nevis tikai vārdi.",
-        "label": "Fakts"
+        "hint": "Objektīvs, pārbaudāms apgalvojums, ko vērtē pret reģistru. Ietver apgalvojumus, kas formulēti kā atzīšana vai noliegums: tiek vērtēts pamatā esošais apgalvojums, nevis tikai vārdi."
       },
       "opinion": {
         "hint": "Vērtējums vai raksturojums, ko neviens dokuments nevar apstiprināt vai atspēkot; tas tiek atlikts, nevis vērtēts.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Interpretācija",
-      "levels": {
-        "high": "Augsta",
-        "low": "Zema",
-        "medium": "Vidēja"
-      },
       "tooltip": "Interpretācijas ticamība norāda, cik nepārprotama ir pierādījuma nozīme. Tā nav atkarīga no avota nesēja, piemēram, rokraksta vai skenējuma."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Pretrunā: {contradicted} · Daļēji pretrunā: {tension} · Reģistra pretruna: {conflicts}",
       "empty": "Augšupielādējiet dokumentu šajā lietā, lai to pārbaudītu.",
       "notVerified": "Vēl nav pārbaudīts",
-      "open": "Atvērt",
       "otherList": "Pārbaudīts pret citu sarakstu",
       "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
       "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
-      "verify": "Pārbaudīt",
       "verifyAgain": "Pārbaudīt vēlreiz"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
-      "next": "Nākamā atbilstība",
-      "position": "{current}/{total}",
-      "previous": "Iepriekšējā atbilstība"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Apstrīdēts · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Šajā dokumentā apgalvojumi nav atrasti.",
       "startFailed": "Neizdevās sākt pārbaudi",
       "status": {
-        "completed": "Pārbaudīts",
-        "failed": "Neizdevās",
-        "queued": "Rindā",
         "running": "Notiek pārbaude"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
       "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
-      "page": "{page}. lapa",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Izvēlēties sarakstu",
-      "documents": "Dokumenti",
       "evidenceList": "Fakti no",
       "noLists": "Šai lietai nav sarakstu.",
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
-      "page": "{page}. lapa",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",
-    "spawnSubagents": {
-      "failed": "Neizdevās"
-    },
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "suggestTitle": "Ieteikt nosaukumu",
@@ -1469,6 +1450,7 @@
     "documentReference": "Dokumenta atsauces numurs",
     "documentTitle": "Dokumenta nosaukums",
     "documentation": "Dokumentācija",
+    "documents": "Dokumenti",
     "done": "Gatavs",
     "doubleClickToRename": "Veiciet dubultklikšķi, lai pārdēvētu",
     "download": "Lejupielādēt",
@@ -1508,6 +1490,8 @@
       "inline": "Tekstā",
       "title": "Saglabāt ziņojumu"
     },
+    "fact": "Fakts",
+    "failed": "Neizdevās",
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Atpakaļ pie rediģēšanas",
     "hideDetails": "Slēpt detaļas",
     "hideSecretValue": "Paslēpt slepeno vērtību",
+    "high": "Augsta",
     "history": "Vēsture",
     "import": "Importēt",
     "invite": "Uzaicināt",
@@ -1568,8 +1553,10 @@
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
+    "low": "Zema",
     "matter": "Lieta",
     "matters": "Lietas",
+    "medium": "Vidēja",
     "members": "Dalībnieki",
     "metadata": "Metadati",
     "moveDown": "Pārvietot lejup",
@@ -1578,6 +1565,7 @@
     "newMatter": "Jauna lieta",
     "newRow": "Jauna rinda",
     "next": "Tālāk",
+    "nextMatch": "Nākamā atbilstība",
     "noFileChosen": "Nav izvēlēts neviens fails",
     "noResults": "Nav rezultātu",
     "noVersions": "Nav versiju vēstures",
@@ -1589,14 +1577,17 @@
     "or": "Vai",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
+    "page": "{page}. lapa",
     "pin": "Piespraust",
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
     "previous": "Iepriekšējais",
+    "previousMatch": "Iepriekšējā atbilstība",
     "print": "Drukāt",
     "profile": "Profils",
     "properties": "Rekvizīti",
+    "queued": "Rindā",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identifikators",
     "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
+    "verified": "Pārbaudīts",
     "verify": "Verificēt",
     "version": "Versija",
     "versionLabel": "{version}. versija",
@@ -1935,9 +1927,6 @@
     "reject": "Noraidīt",
     "rejectAll": "Noraidīt visu",
     "revert": "Atjaunot",
-    "severityHigh": "Augsta",
-    "severityLow": "Zema",
-    "severityMedium": "Vidēja",
     "severityUnspecified": "Nenorādīta",
     "skipped": "Neizdevās lietot: {reason}",
     "staleResolution": "Šis ieteikums jau ir atrisināts citur.",
@@ -2442,10 +2431,8 @@
       "findText": "Meklējamais teksts",
       "matchCase": "Reģistrjutīgs",
       "matchCounter": "{current} / {total}",
-      "next": "Nākamā atbilstība",
       "nextShortcut": "Nākamā atbilstība (Enter)",
       "noResults": "Nav rezultātu",
-      "previous": "Iepriekšējā atbilstība",
       "previousShortcut": "Iepriekšējā atbilstība (Shift+Enter)",
       "replaceAll": "Aizstāt visu",
       "replaceCurrent": "Aizstāt pašreizējo atbilstību",
@@ -3041,9 +3028,6 @@
       "reviewing": "Pārbaude notiek…",
       "reviewingHint": "Lielu dokumentu pārbaude var aizņemt dažas minūtes.",
       "run": "Sākt pārbaudi",
-      "runStatus": {
-        "queued": "Rindā"
-      },
       "saveAsPlaybook": "Saglabāt kā pārbaudes ceļvedi",
       "saveAsPlaybookFailed": "Neizdevās saglabāt šo pārbaudi kā pārbaudes ceļvedi",
       "savedAsPlaybook": "Saglabāts kā pārbaudes ceļvedis",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "piem. Samaksas termiņš nedrīkst pārsniegt 30 dienas",
       "saveFailed": "Neizdevās saglabāt pārbaudes ceļvedi",
       "severity": {
-        "blocker": "Bloķējoša",
-        "high": "Augsta",
-        "low": "Zema",
-        "medium": "Vidēja"
+        "blocker": "Bloķējoša"
       },
       "severityLabel": "Nopietnība",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Atmiņā vēl nekā nav.",
     "kinds": {
       "decision": "Lēmums",
-      "fact": "Fakts",
       "instruction": "Norādījums",
       "preference": "Vēlme",
       "relationship": "Saistība"
@@ -5112,7 +5092,6 @@
         "title": "Noņemt Word veidņu saites?",
         "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
       },
-      "defaultPropertyName": "Dokumenti",
       "desktopEdit": {
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Dzēst rekvizītu",
       "deletePropertyConfirmDescription": "Vai tiešām vēlaties dzēst rekvizītu \"{propertyName}\"? Šo darbību nevar atsaukt.",
       "dependencyLimit": "Ne vairāk kā {max} ievades vienā kolonnā",
-      "documentsLabel": "Dokumenti",
       "editColumn": "Rediģēt kolonnu",
       "editConditions": "Rediģēt nosacījumus",
       "editConditionsDescription": "Iestatiet nosacījumus, kad šis rekvizīts tiks ģenerēts.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Atzīmē būtisku vērtību.",
         "needsReview": "Jāpārskata",
         "needsReviewDescription": "Nepieciešama manuāla pārbaude.",
-        "verified": "Pārbaudīts",
         "verifiedDescription": "Manuāli apstiprināts."
       },
       "lock": {

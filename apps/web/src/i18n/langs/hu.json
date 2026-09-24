@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektív, ellenőrizhető állítás — a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat.",
-        "label": "Tény"
+        "hint": "Objektív, ellenőrizhető állítás — a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
       },
       "opinion": {
         "hint": "Értékítélet vagy minősítés — egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Értelmezés",
-      "levels": {
-        "high": "Magas",
-        "low": "Alacsony",
-        "medium": "Közepes"
-      },
       "tooltip": "Értelmezési bizonyosság — mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
       "empty": "Töltsön fel egy iratot ehhez az ügyhöz, hogy ellenőrizhesse.",
       "notVerified": "Még nincs ellenőrizve",
-      "open": "Megnyitás",
       "otherList": "Másik listához viszonyítva ellenőrizve",
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
-      "verify": "Ellenőrzés",
       "verifyAgain": "Ismételt ellenőrzés"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
-      "next": "Következő találat",
-      "position": "{current}/{total}",
-      "previous": "Előző találat"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Vitatott · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Ebben az iratban nem található állítás.",
       "startFailed": "Az ellenőrzést nem sikerült elindítani",
       "status": {
-        "completed": "Ellenőrizve",
-        "failed": "Sikertelen",
-        "queued": "Várólistán",
         "running": "Ellenőrzés folyamatban"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
-      "page": "{page}. oldal",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Lista kiválasztása",
-      "documents": "Iratok",
       "evidenceList": "Tények forrása",
       "noLists": "Ehhez az ügyhöz nem tartozik lista.",
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
-      "page": "{page}. oldal",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
-    "spawnSubagents": {
-      "failed": "Sikertelen"
-    },
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "suggestTitle": "Cím javaslata",
@@ -1469,6 +1450,7 @@
     "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",
+    "documents": "Dokumentumok",
     "done": "Kész",
     "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
@@ -1508,6 +1490,8 @@
       "inline": "Szövegközi",
       "title": "Üzenet mentése"
     },
+    "fact": "Tény",
+    "failed": "Sikertelen",
     "filter": "Szűrő",
     "filters": "Szűrők",
     "find": "Keresés",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Vissza a szerkesztéshez",
     "hideDetails": "Részletek elrejtése",
     "hideSecretValue": "Titkos érték elrejtése",
+    "high": "Magas",
     "history": "Előzmények",
     "import": "Importálás",
     "invite": "Meghívás",
@@ -1568,8 +1553,10 @@
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
+    "low": "Alacsony",
     "matter": "Ügy",
     "matters": "Ügyek",
+    "medium": "Közepes",
     "members": "Tagok",
     "metadata": "Metaadatok",
     "moveDown": "Mozgatás le",
@@ -1578,6 +1565,7 @@
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
+    "nextMatch": "Következő találat",
     "noFileChosen": "Nincs kiválasztott fájl",
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
@@ -1589,14 +1577,17 @@
     "or": "Vagy",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
+    "page": "{page}. oldal",
     "pin": "Rögzítés",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
     "previous": "Előző",
+    "previousMatch": "Előző találat",
     "print": "Nyomtatás",
     "profile": "Profil",
     "properties": "Tulajdonságok",
+    "queued": "Sorba állítva",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Azonosító (slug)",
     "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
+    "verified": "Ellenőrizve",
     "verify": "Ellenőrzés",
     "version": "Verzió",
     "versionLabel": "{version}. verzió",
@@ -1935,9 +1927,6 @@
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",
     "revert": "Visszaállítás",
-    "severityHigh": "Magas",
-    "severityLow": "Alacsony",
-    "severityMedium": "Közepes",
     "severityUnspecified": "Nincs megadva",
     "skipped": "Nem sikerült alkalmazni: {reason}",
     "staleResolution": "Ezt a javaslatot már máshol elbírálták.",
@@ -2442,10 +2431,8 @@
       "findText": "Keresett szöveg",
       "matchCase": "Kis- és nagybetű megkülönböztetése",
       "matchCounter": "{current} / {total}",
-      "next": "Következő találat",
       "nextShortcut": "Következő találat (Enter)",
       "noResults": "Nincs találat",
-      "previous": "Előző találat",
       "previousShortcut": "Előző találat (Shift+Enter)",
       "replaceAll": "Összes cseréje",
       "replaceCurrent": "Jelenlegi találat cseréje",
@@ -3041,9 +3028,6 @@
       "reviewing": "Ellenőrzés folyamatban…",
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",
       "run": "Ellenőrzés indítása",
-      "runStatus": {
-        "queued": "Sorba állítva"
-      },
       "saveAsPlaybook": "Mentés playbookként",
       "saveAsPlaybookFailed": "Ezt az ellenőrzést nem sikerült playbookként menteni",
       "savedAsPlaybook": "Playbookként mentve",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "pl. A fizetési határidő nem haladhatja meg a 30 napot",
       "saveFailed": "A playbook mentése nem sikerült",
       "severity": {
-        "blocker": "Blokkoló",
-        "high": "Magas",
-        "low": "Alacsony",
-        "medium": "Közepes"
+        "blocker": "Blokkoló"
       },
       "severityLabel": "Súlyosság",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",
-      "fact": "Tény",
       "instruction": "Utasítás",
       "preference": "Preferencia",
       "relationship": "Kapcsolat"
@@ -5112,7 +5092,6 @@
         "title": "Eltávolítja a Word-sablonok hivatkozásait?",
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
-      "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",
         "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Tulajdonság törlése",
       "deletePropertyConfirmDescription": "Biztosan törölni szeretné a(z) \"{propertyName}\" tulajdonságot? Ez a művelet nem vonható vissza.",
       "dependencyLimit": "Oszloponként legfeljebb {max} bemenet",
-      "documentsLabel": "Dokumentumok",
       "editColumn": "Oszlop szerkesztése",
       "editConditions": "Feltételek szerkesztése",
       "editConditionsDescription": "Adja meg a feltételeket, amelyek mellett ez a tulajdonság generálódjon.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Kulcsértéket jelöl.",
         "needsReview": "Ellenőrizendő",
         "needsReviewDescription": "Kézi ellenőrzést igényel.",
-        "verified": "Ellenőrizve",
         "verifiedDescription": "Kézzel megerősítve."
       },
       "lock": {

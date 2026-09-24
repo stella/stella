@@ -71,7 +71,7 @@ export const AvtView = ({
       ) : (
         <Tabs defaultValue="documents">
           <TabsList>
-            <TabsTab value="documents">{t("avt.view.documents")}</TabsTab>
+            <TabsTab value="documents">{t("common.documents")}</TabsTab>
             <TabsTab value="facts">{t("avt.anchorFacts.title")}</TabsTab>
           </TabsList>
           <TabsPanel value="documents">

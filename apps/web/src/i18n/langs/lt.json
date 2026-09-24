@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektyvus patikrinamas teiginys, vertinamas pagal registrą. Tai apima pripažinimo arba neigimo forma pateiktus teiginius: vertinamas pagrindinis teiginys, o ne vien žodžiai.",
-        "label": "Faktas"
+        "hint": "Objektyvus patikrinamas teiginys, vertinamas pagal registrą. Tai apima pripažinimo arba neigimo forma pateiktus teiginius: vertinamas pagrindinis teiginys, o ne vien žodžiai."
       },
       "opinion": {
         "hint": "Vertinamasis sprendimas arba apibūdinimas, kurio negali patvirtinti ar paneigti joks dokumentas; jis atidedamas, o ne vertinamas.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Aiškinimas",
-      "levels": {
-        "high": "Aukštas",
-        "low": "Žemas",
-        "medium": "Vidutinis"
-      },
       "tooltip": "Aiškinimo patikimumas rodo, kiek vienareikšmė yra įrodymo prasmė. Jis nepriklauso nuo šaltinio laikmenos, pavyzdžiui, rašysenos ar nuskaitymo."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",
       "empty": "Įkelkite į šią bylą dokumentą, kad jį patikrintumėte.",
       "notVerified": "Dar nepatikrinta",
-      "open": "Atverti",
       "otherList": "Patikrinta pagal kitą sąrašą",
       "sizeConfirmTitle": "Patikrinti šį dokumentą?",
       "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
-      "verify": "Tikrinti",
       "verifyAgain": "Tikrinti iš naujo"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
-      "next": "Kitas atitikmuo",
-      "position": "{current}/{total}",
-      "previous": "Ankstesnis atitikmuo"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Užginčyta · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Šiame dokumente teiginių nerasta.",
       "startFailed": "Nepavyko pradėti tikrinimo",
       "status": {
-        "completed": "Patikrinta",
-        "failed": "Nepavyko",
-        "queued": "Eilėje",
         "running": "Tikrinama"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
-      "page": "{page} psl.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
-      "documents": "Dokumentai",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
-      "page": "{page} psl.",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",
-    "spawnSubagents": {
-      "failed": "Nepavyko"
-    },
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "suggestTitle": "Pasiūlyti pavadinimą",
@@ -1469,6 +1450,7 @@
     "documentReference": "Dokumento nuorodos numeris",
     "documentTitle": "Dokumento pavadinimas",
     "documentation": "Dokumentacija",
+    "documents": "Dokumentai",
     "done": "Atlikta",
     "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
@@ -1508,6 +1490,8 @@
       "inline": "Tekste",
       "title": "Išsaugoti žinutę"
     },
+    "fact": "Faktas",
+    "failed": "Nepavyko",
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Grįžti į redagavimą",
     "hideDetails": "Slėpti detales",
     "hideSecretValue": "Slėpti slaptą reikšmę",
+    "high": "Aukšta",
     "history": "Istorija",
     "import": "Importuoti",
     "invite": "Pakviesti",
@@ -1568,8 +1553,10 @@
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
+    "low": "Žema",
     "matter": "Byla",
     "matters": "Bylos",
+    "medium": "Vidutinė",
     "members": "Nariai",
     "metadata": "Metaduomenys",
     "moveDown": "Perkelti žemyn",
@@ -1578,6 +1565,7 @@
     "newMatter": "Nauja byla",
     "newRow": "Nauja eilutė",
     "next": "Toliau",
+    "nextMatch": "Kitas atitikmuo",
     "noFileChosen": "Failas nepasirinktas",
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
@@ -1589,14 +1577,17 @@
     "or": "Arba",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
+    "page": "{page} psl.",
     "pin": "Prisegti",
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
     "previous": "Ankstesnis",
+    "previousMatch": "Ankstesnis atitikmuo",
     "print": "Spausdinti",
     "profile": "Profilis",
     "properties": "Savybės",
+    "queued": "Eilėje",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "URL identifikatorius",
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
+    "verified": "Patvirtinta",
     "verify": "Patvirtinti",
     "version": "Versija",
     "versionLabel": "{version} versija",
@@ -1935,9 +1927,6 @@
     "reject": "Atmesti",
     "rejectAll": "Atmesti visus",
     "revert": "Atstatyti",
-    "severityHigh": "Aukšta",
-    "severityLow": "Žema",
-    "severityMedium": "Vidutinė",
     "severityUnspecified": "Nenurodyta",
     "skipped": "Nepavyko pritaikyti: {reason}",
     "staleResolution": "Šis pasiūlymas jau išspręstas kitur.",
@@ -2442,10 +2431,8 @@
       "findText": "Ieškomas tekstas",
       "matchCase": "Skirti didžiąsias ir mažąsias raides",
       "matchCounter": "{current} / {total}",
-      "next": "Kitas atitikmuo",
       "nextShortcut": "Kitas atitikmuo (Enter)",
       "noResults": "Rezultatų nėra",
-      "previous": "Ankstesnis atitikmuo",
       "previousShortcut": "Ankstesnis atitikmuo (Shift+Enter)",
       "replaceAll": "Pakeisti viską",
       "replaceCurrent": "Pakeisti dabartinį atitikmenį",
@@ -3041,9 +3028,6 @@
       "reviewing": "Peržiūra vykdoma…",
       "reviewingHint": "Didelių dokumentų peržiūra gali užtrukti kelias minutes.",
       "run": "Pradėti peržiūrą",
-      "runStatus": {
-        "queued": "Eilėje"
-      },
       "saveAsPlaybook": "Išsaugoti kaip peržiūros vadovą",
       "saveAsPlaybookFailed": "Nepavyko išsaugoti šios peržiūros kaip peržiūros vadovo",
       "savedAsPlaybook": "Išsaugota kaip peržiūros vadovas",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "pvz. Mokėjimo terminas negali viršyti 30 dienų",
       "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
       "severity": {
-        "blocker": "Blokuojanti",
-        "high": "Aukšta",
-        "low": "Žema",
-        "medium": "Vidutinė"
+        "blocker": "Blokuojanti"
       },
       "severityLabel": "Svarba",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Atmintyje kol kas nieko nėra.",
     "kinds": {
       "decision": "Sprendimas",
-      "fact": "Faktas",
       "instruction": "Nurodymas",
       "preference": "Pageidavimas",
       "relationship": "Ryšys"
@@ -5112,7 +5092,6 @@
         "title": "Pašalinti „Word“ šablonų saitus?",
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
-      "defaultPropertyName": "Dokumentai",
       "desktopEdit": {
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Ištrinti savybę",
       "deletePropertyConfirmDescription": "Ar tikrai norite ištrinti savybę \"{propertyName}\"? Šio veiksmo negalima atšaukti.",
       "dependencyLimit": "Iki {max} įvesčių viename stulpelyje",
-      "documentsLabel": "Dokumentai",
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",
       "editConditionsDescription": "Nustatykite sąlygas, kada ši savybė turi būti generuojama.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Pažymi esminę reikšmę.",
         "needsReview": "Reikia peržiūros",
         "needsReviewDescription": "Reikia rankinės peržiūros.",
-        "verified": "Patvirtinta",
         "verifiedDescription": "Patvirtinta rankiniu būdu."
       },
       "lock": {

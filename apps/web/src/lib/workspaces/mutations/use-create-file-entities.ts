@@ -744,7 +744,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
 
     const response = await api.properties({ workspaceId }).put({
-      name: t("workspaces.files.defaultPropertyName"),
+      name: t("common.documents"),
       contentType: "file",
     });
     propertyId = unwrapEden(response).id;

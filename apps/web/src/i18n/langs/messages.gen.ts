@@ -208,7 +208,6 @@ type Messages = {
     "claimTypes": {
       "fact": {
         "hint": "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words.";
-        "label": "Fact";
       };
       "opinion": {
         "hint": "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.";
@@ -222,15 +221,10 @@ type Messages = {
     };
     "confidence": {
       "interpretation": "Interpretation";
-      "levels": {
-        "high": "High";
-        "low": "Low";
-        "medium": "Medium";
-      };
       "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.).";
     };
     "confirm": {
-      "acknowledge": "Acknowledge";
+      "acknowledge": "Mark as noted";
       "recordConflict": "Confirm resolution";
       "supported": "Confirm — ready";
       "verdict": "Confirm verdict";
@@ -248,11 +242,9 @@ type Messages = {
       "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}";
       "empty": "Upload a document to this matter to verify it.";
       "notVerified": "Not verified yet";
-      "open": "Open";
       "otherList": "Checked against another list";
       "sizeConfirmTitle": "Verify this document?";
       "statusLoadFailed": "The verification status of these documents could not be loaded.";
-      "verify": "Verify";
       "verifyAgain": "Verify again";
     };
     "guidance": {
@@ -263,9 +255,7 @@ type Messages = {
     };
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}";
-      "next": "Next match";
       "position": "{current}/{total}";
-      "previous": "Previous match";
     };
     "review": {
       "disputed": "Disputed · {decidedAt}";
@@ -292,9 +282,6 @@ type Messages = {
       "noClaims": "No claims were found in this document.";
       "startFailed": "Could not start the verification";
       "status": {
-        "completed": "Verified";
-        "failed": "Failed";
-        "queued": "Queued";
         "running": "Verifying";
       };
     };
@@ -336,7 +323,6 @@ type Messages = {
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}";
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}";
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
-      "page": "Page {page}";
       "selectClaim": "Select a claim to inspect the record.";
       "showQueue": "Show queue";
       "stats": {
@@ -347,7 +333,6 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
-      "documents": "Documents";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -739,7 +724,6 @@ type Messages = {
     "pagination": {
       "goToPage": "Go to page {page}";
       "label": "Result pages";
-      "page": "Page {page}";
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
@@ -1141,9 +1125,6 @@ type Messages = {
     "sourcePlaceholder": "Chat about {title}";
     "sourcePlaceholderAction": "Chat about";
     "sources": "Sources:";
-    "spawnSubagents": {
-      "failed": "Failed";
-    };
     "stopResponse": "Stop";
     "stopped": "Stopped";
     "suggestTitle": "Suggest a title";
@@ -1472,6 +1453,7 @@ type Messages = {
     "documentReference": "Document reference";
     "documentTitle": "Document title";
     "documentation": "Documentation";
+    "documents": "Documents";
     "done": "Done";
     "doubleClickToRename": "Double-click to rename";
     "download": "Download";
@@ -1511,6 +1493,8 @@ type Messages = {
       "inline": "Inline";
       "title": "Save message";
     };
+    "fact": "Fact";
+    "failed": "Failed";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -1519,6 +1503,7 @@ type Messages = {
     "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
     "hideSecretValue": "Hide secret value";
+    "high": "High";
     "history": "History";
     "import": "Import";
     "invite": "Invite";
@@ -1571,8 +1556,10 @@ type Messages = {
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
+    "low": "Low";
     "matter": "Matter";
     "matters": "Matters";
+    "medium": "Medium";
     "members": "Members";
     "metadata": "Metadata";
     "moveDown": "Move down";
@@ -1581,6 +1568,7 @@ type Messages = {
     "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
+    "nextMatch": "Next match";
     "noFileChosen": "No file selected";
     "noResults": "No results";
     "noVersions": "No version history";
@@ -1592,14 +1580,17 @@ type Messages = {
     "or": "Or";
     "organization": "Organization";
     "organizationName": "Organization name";
+    "page": "Page {page}";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";
     "preview": "Preview";
     "previous": "Previous";
+    "previousMatch": "Previous match";
     "print": "Print";
     "profile": "Profile";
     "properties": "Properties";
+    "queued": "Queued";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1667,6 +1658,7 @@ type Messages = {
     "urlIdentifier": "Slug";
     "urlIdentifierPlaceholder": "my-organization";
     "user": "User";
+    "verified": "Verified";
     "verify": "Verify";
     "version": "Version";
     "versionLabel": "Version {version}";
@@ -1938,9 +1930,6 @@ type Messages = {
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
-    "severityHigh": "High";
-    "severityLow": "Low";
-    "severityMedium": "Medium";
     "severityUnspecified": "Unspecified";
     "skipped": "Could not apply: {reason}";
     "staleResolution": "This suggestion was already resolved elsewhere.";
@@ -2445,10 +2434,8 @@ type Messages = {
       "findText": "Find text";
       "matchCase": "Match case";
       "matchCounter": "{current} / {total}";
-      "next": "Next match";
       "nextShortcut": "Next match (Enter)";
       "noResults": "No results";
-      "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
       "replaceAll": "Replace all";
       "replaceCurrent": "Replace current match";
@@ -3044,9 +3031,6 @@ type Messages = {
       "reviewing": "Review in progress…";
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
-      "runStatus": {
-        "queued": "Queued";
-      };
       "saveAsPlaybook": "Save as playbook";
       "saveAsPlaybookFailed": "Could not save this review as a playbook";
       "savedAsPlaybook": "Saved as a playbook";
@@ -3351,9 +3335,6 @@ type Messages = {
       "saveFailed": "Failed to save playbook";
       "severity": {
         "blocker": "Blocker";
-        "high": "High";
-        "low": "Low";
-        "medium": "Medium";
       };
       "severityLabel": "Severity";
       "starters": {
@@ -3539,7 +3520,6 @@ type Messages = {
     "empty": "No memory yet.";
     "kinds": {
       "decision": "Decision";
-      "fact": "Fact";
       "instruction": "Instruction";
       "preference": "Preference";
       "relationship": "Relationship";
@@ -5115,7 +5095,6 @@ type Messages = {
         "title": "Remove Word template links?";
         "unknownLocation": "Template location: an address stella cannot verify";
       };
-      "defaultPropertyName": "Documents";
       "desktopEdit": {
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
@@ -5583,7 +5562,6 @@ type Messages = {
       "deleteProperty": "Delete property";
       "deletePropertyConfirmDescription": "Are you sure you want to delete the \"{propertyName}\" property? This action cannot be undone.";
       "dependencyLimit": "Up to {max} inputs per column";
-      "documentsLabel": "Documents";
       "editColumn": "Edit column";
       "editConditions": "Edit conditions";
       "editConditionsDescription": "Set conditions for when this property should be generated.";
@@ -5683,7 +5661,6 @@ type Messages = {
         "importantDescription": "Marks a key value.";
         "needsReview": "Needs review";
         "needsReviewDescription": "Requires manual review.";
-        "verified": "Verified";
         "verifiedDescription": "Manually confirmed.";
       };
       "lock": {

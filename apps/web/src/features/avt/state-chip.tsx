@@ -258,7 +258,7 @@ export const MatchStepper = ({ stepper }: { stepper: MatchStepperState }) => {
             total: format.number(stepper.total),
           })}
       <Button
-        aria-label={t("avt.matches.previous")}
+        aria-label={t("common.previousMatch")}
         disabled={stepper.onPrev === null}
         onClick={stepper.onPrev ?? undefined}
         size="icon-xs"
@@ -267,7 +267,7 @@ export const MatchStepper = ({ stepper }: { stepper: MatchStepperState }) => {
         <ChevronUpIcon />
       </Button>
       <Button
-        aria-label={t("avt.matches.next")}
+        aria-label={t("common.nextMatch")}
         disabled={stepper.onNext === null}
         onClick={stepper.onNext ?? undefined}
         size="icon-xs"

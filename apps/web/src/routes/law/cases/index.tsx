@@ -1324,7 +1324,7 @@ function ListHeadingText({
     return (
       <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {page > 1
-          ? t("caseLaw.pagination.page", { page: String(page) })
+          ? t("common.page", { page: String(page) })
           : t("caseLaw.newestDecisions")}
       </h2>
     );
@@ -1358,7 +1358,7 @@ function ListHeadingText({
     case SEARCH_TOTAL_TYPE.NOT_COUNTED:
       return (
         <p className="text-xs tabular-nums">
-          {t("caseLaw.pagination.page", { page: String(page) })}
+          {t("common.page", { page: String(page) })}
         </p>
       );
     default:

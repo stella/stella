@@ -1,9 +1,14 @@
 {
   "duplicatesCommon": [
+    "caseLaw.results.excerpt.medium",
+    "chat.modelSelector.effortValues.high",
+    "chat.modelSelector.effortValues.low",
+    "chat.modelSelector.effortValues.medium",
     "contacts.fields.bankAccountIban",
     "contacts.fields.registrationNumber",
     "contacts.type.organization",
     "contacts.type.person",
+    "flows.status.failed",
     "flows.status.running",
     "folio.comments.cancel",
     "folio.copy",
@@ -26,6 +31,9 @@
     "settings.organization.auditLogsActionDelete",
     "settings.organization.auditLogsActionDownload",
     "tasks.assigneeRoles.assignee",
+    "tasks.priorityValues.high",
+    "tasks.priorityValues.low",
+    "tasks.priorityValues.medium",
     "tasks.priorityValues.none",
     "tasks.status",
     "tasks.statusValues.done",
@@ -58,7 +66,6 @@
     "caseLaw.analysis.categories.reasoning",
     "caseLaw.research.answers.no",
     "caseLaw.research.answers.yes",
-    "caseLaw.results.excerpt.medium",
     "catalogue.cost.free",
     "catalogue.cost.paid",
     "catalogue.filter.skills",
@@ -71,12 +78,8 @@
     "chat.createDocument.created",
     "chat.landing.prompts",
     "chat.modelSelector.autoLabel",
-    "chat.modelSelector.effortValues.high",
-    "chat.modelSelector.effortValues.low",
-    "chat.modelSelector.effortValues.medium",
     "chat.modelSelector.effortValues.none",
     "chat.modelSelector.effortValues.providerDefault",
-    "chat.spawnSubagents.failed",
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
@@ -97,9 +100,6 @@
     "contacts.search",
     "docxReview.applyTracked",
     "docxReview.reject",
-    "docxReview.severityHigh",
-    "docxReview.severityLow",
-    "docxReview.severityMedium",
     "docxReview.summary.replaceInBlock",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
@@ -119,7 +119,6 @@
     "flows.runs.start",
     "flows.status.cancelled",
     "flows.status.completed",
-    "flows.status.failed",
     "flows.status.pending",
     "flows.status.skipped",
     "flows.steps.createDocument",
@@ -159,9 +158,6 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
-    "knowledge.playbooks.severity.high",
-    "knowledge.playbooks.severity.low",
-    "knowledge.playbooks.severity.medium",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.prompts.title",
@@ -226,9 +222,6 @@
     "tasks.activity",
     "tasks.dueDate",
     "tasks.myTasksTitle",
-    "tasks.priorityValues.high",
-    "tasks.priorityValues.low",
-    "tasks.priorityValues.medium",
     "tasks.queue.completed",
     "tasks.sourceTypeValues.calendar",
     "tasks.sourceTypeValues.manual",
@@ -323,6 +316,9 @@
     "auth.emailPlaceholder": [
       "ar"
     ],
+    "avt.claimDetail.sourceCount": [
+      "fr"
+    ],
     "billing.codes.codeLabel": [
       "de",
       "fr"
@@ -412,6 +408,9 @@
       "fr"
     ],
     "common.documentation": [
+      "fr"
+    ],
+    "common.documents": [
       "fr"
     ],
     "common.error": [
@@ -893,9 +892,6 @@
       "fr",
       "pl"
     ],
-    "workspaces.files.defaultPropertyName": [
-      "fr"
-    ],
     "workspaces.filters.chips.lead": [
       "de"
     ],
@@ -952,9 +948,6 @@
       "sk"
     ],
     "workspaces.properties.conditions": [
-      "fr"
-    ],
-    "workspaces.properties.documentsLabel": [
       "fr"
     ],
     "workspaces.properties.optionsLabel": [

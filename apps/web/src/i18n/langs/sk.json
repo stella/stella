@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektívne, overiteľné tvrdenie — hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová.",
-        "label": "Fakt"
+        "hint": "Objektívne, overiteľné tvrdenie — hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová."
       },
       "opinion": {
         "hint": "Hodnotiaci úsudok alebo charakteristika — žiadny dokument ich nemôže potvrdiť ani vyvrátiť, preto sa odkladajú bez hodnotenia.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Výklad",
-      "levels": {
-        "high": "Vysoká",
-        "low": "Nízka",
-        "medium": "Stredná"
-      },
       "tooltip": "Istota výkladu — nakoľko je význam tohto dôkazu jednoznačný. Nezávisí od média zdroja (rukopis, sken a pod.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "V rozpore: {contradicted} · V napätí: {tension} · Rozpor v záznamoch: {conflicts}",
       "empty": "Nahrajte do tohto spisu dokument, ktorý chcete overiť.",
       "notVerified": "Zatiaľ neoverené",
-      "open": "Otvoriť",
       "otherList": "Skontrolované podľa iného zoznamu",
       "sizeConfirmTitle": "Overiť tento dokument?",
       "statusLoadFailed": "Stav overenia týchto dokumentov sa nepodarilo načítať.",
-      "verify": "Overiť",
       "verifyAgain": "Overiť znova"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# zhoda} few {# zhody} many {# zhôd} other {# zhody}}",
-      "next": "Ďalšia zhoda",
-      "position": "{current}/{total}",
-      "previous": "Predchádzajúca zhoda"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Spochybnené · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "V tomto dokumente sa nenašli žiadne tvrdenia.",
       "startFailed": "Overenie sa nepodarilo spustiť",
       "status": {
-        "completed": "Overené",
-        "failed": "Zlyhalo",
-        "queued": "Vo fronte",
         "running": "Overovanie"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
-      "page": "Stránka {page}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Vybrať zoznam",
-      "documents": "Dokumenty",
       "evidenceList": "Fakty zo zoznamu",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
-      "page": "Stránka {page}",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
-    "spawnSubagents": {
-      "failed": "Zlyhalo"
-    },
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "suggestTitle": "Navrhnúť názov",
@@ -1469,6 +1450,7 @@
     "documentReference": "Referenčné číslo dokumentu",
     "documentTitle": "Názov dokumentu",
     "documentation": "Dokumentácia",
+    "documents": "Dokumenty",
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikom premenujete",
     "download": "Stiahnuť",
@@ -1508,6 +1490,8 @@
       "inline": "V texte",
       "title": "Uložiť správu"
     },
+    "fact": "Fakt",
+    "failed": "Zlyhalo",
     "filter": "Filtrovať",
     "filters": "Filtre",
     "find": "Nájsť",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Späť k úpravám",
     "hideDetails": "Skryť detaily",
     "hideSecretValue": "Skryť tajnú hodnotu",
+    "high": "Vysoká",
     "history": "História",
     "import": "Importovať",
     "invite": "Pozvať",
@@ -1568,8 +1553,10 @@
     "loadMore": "Načítať ďalšie",
     "loading": "Načítavam",
     "logTime": "Zaznamenať čas",
+    "low": "Nízka",
     "matter": "Spis",
     "matters": "Spisy",
+    "medium": "Stredná",
     "members": "Členovia",
     "metadata": "Metadáta",
     "moveDown": "Posunúť nadol",
@@ -1578,6 +1565,7 @@
     "newMatter": "Nový spis",
     "newRow": "Nový riadok",
     "next": "Pokračovať",
+    "nextMatch": "Ďalší výskyt",
     "noFileChosen": "Nebol vybraný žiadny súbor",
     "noResults": "Žiadne výsledky",
     "noVersions": "Žiadna história verzií",
@@ -1589,14 +1577,17 @@
     "or": "Alebo",
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
+    "page": "Stránka {page}",
     "pin": "Pripnúť",
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
     "previous": "Predchádzajúci",
+    "previousMatch": "Predchádzajúci výskyt",
     "print": "Tlačiť",
     "profile": "Profil",
     "properties": "Vlastnosti",
+    "queued": "V poradí",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
     "refresh": "Obnoviť",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identifikátor URL",
     "urlIdentifierPlaceholder": "moja-organizacia",
     "user": "Používateľ",
+    "verified": "Overené",
     "verify": "Overiť",
     "version": "Verzia",
     "versionLabel": "Verzia {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Odmietnuť",
     "rejectAll": "Odmietnuť všetky",
     "revert": "Vrátiť",
-    "severityHigh": "Vysoká",
-    "severityLow": "Nízka",
-    "severityMedium": "Stredná",
     "severityUnspecified": "Neurčená",
     "skipped": "Nepodarilo sa použiť: {reason}",
     "staleResolution": "Tento návrh už bol vyriešený inde.",
@@ -2442,10 +2431,8 @@
       "findText": "Hľadaný text",
       "matchCase": "Rozlišovať veľkosť",
       "matchCounter": "{current} / {total}",
-      "next": "Ďalší výskyt",
       "nextShortcut": "Ďalší výskyt (Enter)",
       "noResults": "Žiadne výsledky",
-      "previous": "Predchádzajúci výskyt",
       "previousShortcut": "Predchádzajúci výskyt (Shift+Enter)",
       "replaceAll": "Nahradiť všetko",
       "replaceCurrent": "Nahradiť aktuálny výskyt",
@@ -3041,9 +3028,6 @@
       "reviewing": "Kontrola prebieha…",
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",
       "run": "Spustiť kontrolu",
-      "runStatus": {
-        "queued": "V poradí"
-      },
       "saveAsPlaybook": "Uložiť ako playbook",
       "saveAsPlaybookFailed": "Túto kontrolu sa nepodarilo uložiť ako playbook",
       "savedAsPlaybook": "Uložené ako playbook",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "napr. Splatnosť faktúr nesmie presiahnuť 30 dní",
       "saveFailed": "Playbook sa nepodarilo uložiť",
       "severity": {
-        "blocker": "Blokujúca",
-        "high": "Vysoká",
-        "low": "Nízka",
-        "medium": "Stredná"
+        "blocker": "Blokujúca"
       },
       "severityLabel": "Závažnosť",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Zatiaľ žiadna pamäť.",
     "kinds": {
       "decision": "Rozhodnutie",
-      "fact": "Fakt",
       "instruction": "Pokyn",
       "preference": "Preferencia",
       "relationship": "Vzťah"
@@ -5112,7 +5092,6 @@
         "title": "Odstrániť odkazy na vzory Wordu?",
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
-      "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Vymazať vlastnosť",
       "deletePropertyConfirmDescription": "Naozaj chcete vymazať vlastnosť \"{propertyName}\"? Túto akciu nemožno vrátiť.",
       "dependencyLimit": "Najviac {max} vstupov na stĺpec",
-      "documentsLabel": "Dokumenty",
       "editColumn": "Upraviť stĺpec",
       "editConditions": "Upraviť podmienky",
       "editConditionsDescription": "Nastavte podmienky, kedy sa má táto vlastnosť generovať.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Zvýrazňuje kľúčovú hodnotu.",
         "needsReview": "Skontrolovať",
         "needsReviewDescription": "Vyžaduje ručnú kontrolu.",
-        "verified": "Overené",
         "verifiedDescription": "Ručne potvrdené."
       },
       "lock": {

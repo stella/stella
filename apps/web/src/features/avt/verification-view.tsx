@@ -56,14 +56,22 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 
-type VerdictFilter = "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
+type VerdictFilter =
+  | "all"
+  | "conflicts"
+  | "needsreview"
+  | "reviewed"
+  | ClaimState;
 
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
 };
 
-export const VerificationView = ({ workspaceId, run }: VerificationViewProps) => {
+export const VerificationView = ({
+  workspaceId,
+  run,
+}: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
   const canReview = usePermissions({ entity: ["update"] });
@@ -252,12 +260,15 @@ export const VerificationView = ({ workspaceId, run }: VerificationViewProps) =>
                 <div className="space-y-1" key={passage.key}>
                   {passage.pageNumber !== null && (
                     <div className="text-muted-foreground text-2xs font-medium">
-                      {t("avt.verification.page", {
+                      {t("common.page", {
                         page: format.number(passage.pageNumber),
                       })}
                     </div>
                   )}
-                  <p className="font-serif text-base leading-relaxed" dir="auto">
+                  <p
+                    className="font-serif text-base leading-relaxed"
+                    dir="auto"
+                  >
                     {passage.claims.map((claim, index) => {
                       const { dim, highlight } = spanPresentation({
                         filterActive: filter !== "all",

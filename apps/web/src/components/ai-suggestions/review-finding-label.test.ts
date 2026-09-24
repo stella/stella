@@ -81,7 +81,7 @@ describe("the card header's label", () => {
         finding({ severity: "high", impact: "unfavourable" }),
         NEUTRAL,
       ).severityKey,
-    ).toBe("knowledge.playbooks.severity.high");
+    ).toBe("common.high");
     expect(
       findingHeaderLabelMessage(
         finding({ severity: "blocker", verdict: "missing" }),

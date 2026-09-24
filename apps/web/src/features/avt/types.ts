@@ -75,9 +75,9 @@ true satisfies Exclude<
   : never;
 
 export const CONFIDENCE_LABEL_KEYS = {
-  high: "avt.confidence.levels.high",
-  medium: "avt.confidence.levels.medium",
-  low: "avt.confidence.levels.low",
+  high: "common.high",
+  medium: "common.medium",
+  low: "common.low",
 } as const satisfies Record<FactConfidence, TranslationKey>;
 
 type StateMeta = {
@@ -129,7 +129,7 @@ type ClaimTypeMeta = {
 export const CLAIM_TYPE_META = {
   fact: {
     type: "fact",
-    labelKey: "avt.claimTypes.fact.label",
+    labelKey: "common.fact",
     verifiable: true,
     hintKey: "avt.claimTypes.fact.hint",
   },
@@ -148,10 +148,10 @@ export const CLAIM_TYPE_META = {
 } as const satisfies Record<ClaimType, ClaimTypeMeta>;
 
 export const RUN_STATUS_LABEL_KEYS = {
-  queued: "avt.runs.status.queued",
+  queued: "common.queued",
   running: "avt.runs.status.running",
-  completed: "avt.runs.status.completed",
-  failed: "avt.runs.status.failed",
+  completed: "common.verified",
+  failed: "common.failed",
 } as const satisfies Record<VerificationRunStatus, TranslationKey>;
 
 export const RUN_ERROR_KEYS = {

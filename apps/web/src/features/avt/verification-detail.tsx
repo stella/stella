@@ -198,7 +198,7 @@ const VerifyAgain = ({
         {t("avt.documents.verifyAgain")}
       </Button>
       <RunSizeConfirmDialog
-        confirmLabel={t("avt.documents.verify")}
+        confirmLabel={t("common.verify")}
         detail={confirmation}
         onConfirm={() => {
           if (confirmation === null) {

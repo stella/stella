@@ -74,7 +74,7 @@ export const FEEDBACK_KIND_LABEL_KEYS = {
 
 export const FEEDBACK_AREA_LABEL_KEYS = {
   matters: "common.matters",
-  documents: "workspaces.properties.documentsLabel",
+  documents: "common.documents",
   templates: "navigation.templates",
   case_law: "common.caseLaw",
   legislation: "feedback.areas.legislation",

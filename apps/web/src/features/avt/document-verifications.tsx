@@ -120,7 +120,7 @@ export const DocumentVerifications = ({
         ))}
       </ul>
       <RunSizeConfirmDialog
-        confirmLabel={t("avt.documents.verify")}
+        confirmLabel={t("common.verify")}
         detail={confirmation}
         onConfirm={() => {
           if (confirmation === null) {
@@ -197,13 +197,11 @@ const DocumentRow = ({
             variant="ghost"
           >
             <FileCheckIcon />
-            {t("avt.documents.open")}
+            {t("common.open")}
           </Button>
         )}
         <Button
-          disabled={
-            !canVerify || statusLoad !== "loaded" || active || starting
-          }
+          disabled={!canVerify || statusLoad !== "loaded" || active || starting}
           loading={starting}
           onClick={() =>
             onVerify({ entityId: file.entityId, fileFieldId: file.fieldId })
@@ -213,7 +211,7 @@ const DocumentRow = ({
         >
           <PlayIcon />
           {latest === null
-            ? t("avt.documents.verify")
+            ? t("common.verify")
             : t("avt.documents.verifyAgain")}
         </Button>
       </div>

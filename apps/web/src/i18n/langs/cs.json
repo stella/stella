@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektivní, ověřitelné tvrzení — hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova.",
-        "label": "Fakt"
+        "hint": "Objektivní, ověřitelné tvrzení — hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova."
       },
       "opinion": {
         "hint": "Hodnotící soud nebo charakteristika — žádný dokument je nemůže potvrdit ani vyvrátit, proto se odkládá bez hodnocení.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Výklad",
-      "levels": {
-        "high": "Vysoká",
-        "low": "Nízká",
-        "medium": "Střední"
-      },
       "tooltip": "Jistota výkladu — nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",
       "empty": "Nahrajte do tohoto spisu dokument, který chcete ověřit.",
       "notVerified": "Zatím neověřeno",
-      "open": "Otevřít",
       "otherList": "Zkontrolováno podle jiného seznamu",
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
-      "verify": "Ověřit",
       "verifyAgain": "Ověřit znovu"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod}}",
-      "next": "Další shoda",
-      "position": "{current}/{total}",
-      "previous": "Předchozí shoda"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Zpochybněno · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "V tomto dokumentu nebyla nalezena žádná tvrzení.",
       "startFailed": "Ověření se nepodařilo spustit",
       "status": {
-        "completed": "Ověřeno",
-        "failed": "Selhalo",
-        "queued": "Ve frontě",
         "running": "Ověřování"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
-      "page": "Stránka {page}",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Vybrat seznam",
-      "documents": "Dokumenty",
       "evidenceList": "Fakta ze seznamu",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Přejít na stránku {page}",
       "label": "Stránky výsledků",
-      "page": "Stránka {page}",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",
-    "spawnSubagents": {
-      "failed": "Selhalo"
-    },
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
     "suggestTitle": "Navrhnout název",
@@ -1469,6 +1450,7 @@
     "documentReference": "Referenční číslo dokumentu",
     "documentTitle": "Název dokumentu",
     "documentation": "Dokumentace",
+    "documents": "Dokumenty",
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikem přejmenujete",
     "download": "Stáhnout",
@@ -1508,6 +1490,8 @@
       "inline": "V textu",
       "title": "Uložit zprávu"
     },
+    "fact": "Fakt",
+    "failed": "Selhalo",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Najít",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Zpět k úpravám",
     "hideDetails": "Skrýt podrobnosti",
     "hideSecretValue": "Skrýt tajnou hodnotu",
+    "high": "Vysoká",
     "history": "Historie",
     "import": "Importovat",
     "invite": "Pozvat",
@@ -1568,8 +1553,10 @@
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
+    "low": "Nízká",
     "matter": "Spis",
     "matters": "Spisy",
+    "medium": "Střední",
     "members": "Členové",
     "metadata": "Metadata",
     "moveDown": "Posunout dolů",
@@ -1578,6 +1565,7 @@
     "newMatter": "Nový spis",
     "newRow": "Nový řádek",
     "next": "Pokračovat",
+    "nextMatch": "Další výskyt",
     "noFileChosen": "Žádný soubor nebyl vybrán",
     "noResults": "Žádné výsledky",
     "noVersions": "Žádná historie verzí",
@@ -1589,14 +1577,17 @@
     "or": "Nebo",
     "organization": "Organizace",
     "organizationName": "Název organizace",
+    "page": "Stránka {page}",
     "pin": "Připnout",
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
     "previous": "Předchozí",
+    "previousMatch": "Předchozí výskyt",
     "print": "Tisknout",
     "profile": "Profil",
     "properties": "Vlastnosti",
+    "queued": "Ve frontě",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identifikátor URL",
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
+    "verified": "Ověřeno",
     "verify": "Ověřit",
     "version": "Verze",
     "versionLabel": "Verze {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Odmítnout",
     "rejectAll": "Odmítnout vše",
     "revert": "Vrátit zpět",
-    "severityHigh": "Vysoká",
-    "severityLow": "Nízká",
-    "severityMedium": "Střední",
     "severityUnspecified": "Bez závažnosti",
     "skipped": "Nelze použít: {reason}",
     "staleResolution": "Tento návrh byl již vyřešen jinde.",
@@ -2442,10 +2431,8 @@
       "findText": "Hledaný text",
       "matchCase": "Rozlišovat velikost",
       "matchCounter": "{current} / {total}",
-      "next": "Další výskyt",
       "nextShortcut": "Další výskyt (Enter)",
       "noResults": "Žádné výsledky",
-      "previous": "Předchozí výskyt",
       "previousShortcut": "Předchozí výskyt (Shift+Enter)",
       "replaceAll": "Nahradit vše",
       "replaceCurrent": "Nahradit aktuální výskyt",
@@ -3041,9 +3028,6 @@
       "reviewing": "Probíhá kontrola…",
       "reviewingHint": "U rozsáhlých dokumentů může kontrola trvat až několik minut.",
       "run": "Spustit kontrolu",
-      "runStatus": {
-        "queued": "Ve frontě"
-      },
       "saveAsPlaybook": "Uložit jako playbook",
       "saveAsPlaybookFailed": "Kontrolu se nepodařilo uložit jako playbook",
       "savedAsPlaybook": "Uloženo jako playbook",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "např. Splatnost faktur nesmí přesáhnout 30 dnů",
       "saveFailed": "Playbook se nepodařilo uložit",
       "severity": {
-        "blocker": "Blokující",
-        "high": "Vysoká",
-        "low": "Nízká",
-        "medium": "Střední"
+        "blocker": "Blokující"
       },
       "severityLabel": "Závažnost",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Zatím žádná paměť.",
     "kinds": {
       "decision": "Rozhodnutí",
-      "fact": "Fakt",
       "instruction": "Pokyn",
       "preference": "Preference",
       "relationship": "Vztah"
@@ -5112,7 +5092,6 @@
         "title": "Odebrat odkazy na vzory Wordu?",
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
-      "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Smazat sloupec",
       "deletePropertyConfirmDescription": "Opravdu chcete smazat sloupec \"{propertyName}\"? Tuto akci nelze vrátit.",
       "dependencyLimit": "Nejvýše {max} vstupů na sloupec",
-      "documentsLabel": "Dokumenty",
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Zvýrazňuje klíčovou hodnotu.",
         "needsReview": "Zkontrolovat",
         "needsReviewDescription": "Vyžaduje ruční kontrolu.",
-        "verified": "Ověřeno",
         "verifiedDescription": "Ručně potvrzeno."
       },
       "lock": {

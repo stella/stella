@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie — oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa.",
-        "label": "Fakt"
+        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie — oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa."
       },
       "opinion": {
         "hint": "Ocena lub charakterystyka — żaden dokument nie może jej potwierdzić ani podważyć, dlatego zostaje odłożona bez oceny.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Interpretacja",
-      "levels": {
-        "high": "Wysoka",
-        "low": "Niska",
-        "medium": "Średnia"
-      },
       "tooltip": "Pewność interpretacji — stopień jednoznaczności znaczenia tego dowodu. Niezależna od nośnika źródła (pismo odręczne, skan itp.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Sprzeczne: {contradicted} · Częściowo sprzeczne: {tension} · Sprzeczność w rejestrze: {conflicts}",
       "empty": "Prześlij dokument do tej sprawy, aby go zweryfikować.",
       "notVerified": "Jeszcze nie zweryfikowano",
-      "open": "Otwórz",
       "otherList": "Zweryfikowano względem innej listy",
       "sizeConfirmTitle": "Zweryfikować ten dokument?",
       "statusLoadFailed": "Nie udało się wczytać stanu weryfikacji tych dokumentów.",
-      "verify": "Zweryfikuj",
       "verifyAgain": "Zweryfikuj ponownie"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
-      "next": "Następne trafienie",
-      "position": "{current}/{total}",
-      "previous": "Poprzednie trafienie"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Zakwestionowane · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "W tym dokumencie nie znaleziono żadnych twierdzeń.",
       "startFailed": "Nie udało się rozpocząć weryfikacji",
       "status": {
-        "completed": "Zweryfikowano",
-        "failed": "Niepowodzenie",
-        "queued": "W kolejce",
         "running": "Weryfikowanie"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
-      "page": "Strona {page}",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
-      "documents": "Dokumenty",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
-      "page": "Strona {page}",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "perPage": "Na stronę"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
-    "spawnSubagents": {
-      "failed": "Niepowodzenie"
-    },
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
     "suggestTitle": "Zaproponuj tytuł",
@@ -1469,6 +1450,7 @@
     "documentReference": "Numer referencyjny dokumentu",
     "documentTitle": "Tytuł dokumentu",
     "documentation": "Dokumentacja",
+    "documents": "Dokumenty",
     "done": "Gotowe",
     "doubleClickToRename": "Kliknij dwukrotnie, aby zmienić nazwę",
     "download": "Pobierz",
@@ -1508,6 +1490,8 @@
       "inline": "W tekście",
       "title": "Zapisz wiadomość"
     },
+    "fact": "Fakt",
+    "failed": "Niepowodzenie",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Znajdź",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Wróć do edycji",
     "hideDetails": "Ukryj szczegóły",
     "hideSecretValue": "Ukryj tajną wartość",
+    "high": "Wysoka",
     "history": "Historia",
     "import": "Importuj",
     "invite": "Zaproś",
@@ -1568,8 +1553,10 @@
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
+    "low": "Niska",
     "matter": "Sprawa",
     "matters": "Sprawy",
+    "medium": "Średnia",
     "members": "Członkowie",
     "metadata": "Metadane",
     "moveDown": "Przesuń w dół",
@@ -1578,6 +1565,7 @@
     "newMatter": "Nowa sprawa",
     "newRow": "Nowy wiersz",
     "next": "Dalej",
+    "nextMatch": "Następne wystąpienie",
     "noFileChosen": "Nie wybrano pliku",
     "noResults": "Brak wyników",
     "noVersions": "Brak historii wersji",
@@ -1589,14 +1577,17 @@
     "or": "Lub",
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
+    "page": "Strona {page}",
     "pin": "Przypnij",
     "playbooks": "Playbooki",
     "preparing": "Przygotowywanie…",
     "preview": "Podgląd",
     "previous": "Poprzedni",
+    "previousMatch": "Poprzednie wystąpienie",
     "print": "Drukuj",
     "profile": "Profil",
     "properties": "Właściwości",
+    "queued": "W kolejce",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identyfikator URL",
     "urlIdentifierPlaceholder": "moja-organizacja",
     "user": "Użytkownik",
+    "verified": "Zweryfikowane",
     "verify": "Zweryfikuj",
     "version": "Wersja",
     "versionLabel": "Wersja {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Odrzuć",
     "rejectAll": "Odrzuć wszystkie",
     "revert": "Cofnij",
-    "severityHigh": "Wysoka",
-    "severityLow": "Niska",
-    "severityMedium": "Średnia",
     "severityUnspecified": "Nieokreślona",
     "skipped": "Nie udało się zastosować: {reason}",
     "staleResolution": "Ta sugestia została już rozstrzygnięta gdzie indziej.",
@@ -2442,10 +2431,8 @@
       "findText": "Szukany tekst",
       "matchCase": "Uwzględnij wielkość liter",
       "matchCounter": "{current} / {total}",
-      "next": "Następne wystąpienie",
       "nextShortcut": "Następne wystąpienie (Enter)",
       "noResults": "Brak wyników",
-      "previous": "Poprzednie wystąpienie",
       "previousShortcut": "Poprzednie wystąpienie (Shift+Enter)",
       "replaceAll": "Zamień wszystko",
       "replaceCurrent": "Zamień bieżące wystąpienie",
@@ -3041,9 +3028,6 @@
       "reviewing": "Weryfikacja w toku…",
       "reviewingHint": "W przypadku obszernych dokumentów może to potrwać kilka minut.",
       "run": "Rozpocznij weryfikację",
-      "runStatus": {
-        "queued": "W kolejce"
-      },
       "saveAsPlaybook": "Zapisz jako playbook",
       "saveAsPlaybookFailed": "Nie udało się zapisać tej weryfikacji jako playbooka",
       "savedAsPlaybook": "Zapisano jako playbook",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "np. Termin płatności nie może przekraczać 30 dni",
       "saveFailed": "Nie udało się zapisać playbooka",
       "severity": {
-        "blocker": "Blokująca",
-        "high": "Wysoka",
-        "low": "Niska",
-        "medium": "Średnia"
+        "blocker": "Blokująca"
       },
       "severityLabel": "Waga",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Nic jeszcze w pamięci.",
     "kinds": {
       "decision": "Decyzja",
-      "fact": "Fakt",
       "instruction": "Instrukcja",
       "preference": "Preferencja",
       "relationship": "Relacja"
@@ -5112,7 +5092,6 @@
         "title": "Usunąć łącza do szablonów programu Word?",
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
-      "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Usuń właściwość",
       "deletePropertyConfirmDescription": "Czy na pewno chcesz usunąć właściwość \"{propertyName}\"? Tej operacji nie można cofnąć.",
       "dependencyLimit": "Maksymalnie {max} źródeł na kolumnę",
-      "documentsLabel": "Dokumenty",
       "editColumn": "Edytuj kolumnę",
       "editConditions": "Edytuj warunki",
       "editConditionsDescription": "Ustaw warunki, kiedy ta właściwość ma być generowana.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Oznacza kluczową wartość.",
         "needsReview": "Do sprawdzenia",
         "needsReviewDescription": "Wymaga ręcznej weryfikacji.",
-        "verified": "Zweryfikowane",
         "verifiedDescription": "Potwierdzone ręcznie."
       },
       "lock": {

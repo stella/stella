@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Asserção objetiva e verificável — pontuada contra o registro. Inclui alegações formuladas como admissões ou negações: julgadas pela proposição subjacente, não pelas meras palavras.",
-        "label": "Fato"
+        "hint": "Asserção objetiva e verificável — pontuada contra o registro. Inclui alegações formuladas como admissões ou negações: julgadas pela proposição subjacente, não pelas meras palavras."
       },
       "opinion": {
         "hint": "Um juízo de valor ou caracterização — nenhum documento pode confirmá-lo ou contradizê-lo, por isso é deixado de lado, não pontuado.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Interpretação",
-      "levels": {
-        "high": "Alta",
-        "low": "Baixa",
-        "medium": "Média"
-      },
       "tooltip": "Confiança interpretativa — quão inequívoco é o significado desta evidência. Independente do meio da fonte (manuscrito, digitalização etc.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Contradita: {contradicted} · Em tensão: {tension} · Conflito no registro: {conflicts}",
       "empty": "Envie um documento para este caso para verificá-lo.",
       "notVerified": "Ainda não verificado",
-      "open": "Abrir",
       "otherList": "Verificado em relação a outra lista",
       "sizeConfirmTitle": "Verificar este documento?",
       "statusLoadFailed": "Não foi possível carregar o status de verificação destes documentos.",
-      "verify": "Verificar",
       "verifyAgain": "Verificar novamente"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# correspondência} other {# correspondências}}",
-      "next": "Próxima correspondência",
-      "position": "{current}/{total}",
-      "previous": "Correspondência anterior"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Em disputa · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Nenhuma alegação foi encontrada neste documento.",
       "startFailed": "Não foi possível iniciar a verificação",
       "status": {
-        "completed": "Verificado",
-        "failed": "Falhou",
-        "queued": "Na fila",
         "running": "Verificando"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
-      "page": "Página {page}",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Escolher uma lista",
-      "documents": "Documentos",
       "evidenceList": "Fatos de",
       "noLists": "Este caso não tem listas.",
       "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
-      "page": "Página {page}",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
-    "spawnSubagents": {
-      "failed": "Falhou"
-    },
     "stopResponse": "Parar",
     "stopped": "Interrompido",
     "suggestTitle": "Sugerir um título",
@@ -1469,6 +1450,7 @@
     "documentReference": "Referência do documento",
     "documentTitle": "Título do documento",
     "documentation": "Documentação",
+    "documents": "Documentos",
     "done": "Concluído",
     "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
@@ -1508,6 +1490,8 @@
       "inline": "No texto",
       "title": "Salvar mensagem"
     },
+    "fact": "Fato",
+    "failed": "Falhou",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Localizar",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Voltar a editar",
     "hideDetails": "Ocultar detalhes",
     "hideSecretValue": "Ocultar valor secreto",
+    "high": "Alto",
     "history": "Histórico",
     "import": "Importar",
     "invite": "Convidar",
@@ -1568,8 +1553,10 @@
     "loadMore": "Carregar mais",
     "loading": "Carregando",
     "logTime": "Registrar tempo",
+    "low": "Baixo",
     "matter": "Caso",
     "matters": "Casos",
+    "medium": "Médio",
     "members": "Membros",
     "metadata": "Metadados",
     "moveDown": "Mover para baixo",
@@ -1578,6 +1565,7 @@
     "newMatter": "Novo caso",
     "newRow": "Nova linha",
     "next": "Próximo",
+    "nextMatch": "Próxima ocorrência",
     "noFileChosen": "Nenhum arquivo selecionado",
     "noResults": "Nenhum resultado",
     "noVersions": "Sem histórico de versões",
@@ -1589,14 +1577,17 @@
     "or": "Ou",
     "organization": "Organização",
     "organizationName": "Nome da organização",
+    "page": "Página {page}",
     "pin": "Fixar",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Visualização",
     "previous": "Anterior",
+    "previousMatch": "Ocorrência anterior",
     "print": "Imprimir",
     "profile": "Perfil",
     "properties": "Propriedades",
+    "queued": "Na fila",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identificador de URL",
     "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
+    "verified": "Verificado",
     "verify": "Verificar",
     "version": "Versão",
     "versionLabel": "Versão {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Rejeitar",
     "rejectAll": "Rejeitar tudo",
     "revert": "Reverter",
-    "severityHigh": "Alto",
-    "severityLow": "Baixo",
-    "severityMedium": "Médio",
     "severityUnspecified": "Não especificado",
     "skipped": "Não foi possível aplicar: {reason}",
     "staleResolution": "Esta sugestão já foi resolvida em outro lugar.",
@@ -2442,10 +2431,8 @@
       "findText": "Encontrar texto",
       "matchCase": "Diferenciar maiúsculas/minúsculas",
       "matchCounter": "{current} / {total}",
-      "next": "Próxima ocorrência",
       "nextShortcut": "Próxima ocorrência (Enter)",
       "noResults": "Nenhum resultado",
-      "previous": "Ocorrência anterior",
       "previousShortcut": "Ocorrência anterior (Shift+Enter)",
       "replaceAll": "Substituir tudo",
       "replaceCurrent": "Substituir correspondência atual",
@@ -3041,9 +3028,6 @@
       "reviewing": "Revisão em andamento…",
       "reviewingHint": "Isso pode levar alguns minutos para documentos grandes.",
       "run": "Iniciar revisão",
-      "runStatus": {
-        "queued": "Na fila"
-      },
       "saveAsPlaybook": "Salvar como playbook",
       "saveAsPlaybookFailed": "Não foi possível salvar esta revisão como playbook",
       "savedAsPlaybook": "Salvo como playbook",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "ex.: O prazo de pagamento não pode passar de 30 dias",
       "saveFailed": "Não foi possível salvar o playbook",
       "severity": {
-        "blocker": "Bloqueador",
-        "high": "Alto",
-        "low": "Baixo",
-        "medium": "Médio"
+        "blocker": "Bloqueador"
       },
       "severityLabel": "Gravidade",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Ainda não há nada na memória.",
     "kinds": {
       "decision": "Decisão",
-      "fact": "Fato",
       "instruction": "Instrução",
       "preference": "Preferência",
       "relationship": "Relação"
@@ -5112,7 +5092,6 @@
         "title": "Remover links para modelos do Word?",
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
-      "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar no desktop",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Excluir propriedade",
       "deletePropertyConfirmDescription": "Tem certeza de que deseja excluir a propriedade \"{propertyName}\"? Esta ação não pode ser desfeita.",
       "dependencyLimit": "No máximo {max} entradas por coluna",
-      "documentsLabel": "Documentos",
       "editColumn": "Editar coluna",
       "editConditions": "Editar condições",
       "editConditionsDescription": "Defina condições para quando esta propriedade deve ser gerada.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Marca um valor-chave.",
         "needsReview": "Precisa de revisão",
         "needsReviewDescription": "Requer revisão manual.",
-        "verified": "Verificado",
         "verifiedDescription": "Confirmado manualmente."
       },
       "lock": {

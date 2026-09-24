@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "Assertion objective et vérifiable — notée par rapport au dossier. Inclut les affirmations formulées comme des aveux ou des dénégations : jugées sur la proposition sous-jacente, pas sur les seuls mots.",
-        "label": "Fait"
+        "hint": "Assertion objective et vérifiable — notée par rapport au dossier. Inclut les affirmations formulées comme des aveux ou des dénégations : jugées sur la proposition sous-jacente, pas sur les seuls mots."
       },
       "opinion": {
         "hint": "Un jugement de valeur ou une qualification — aucun document ne peut le confirmer ni le contredire ; il est donc écarté, pas noté.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "Interprétation",
-      "levels": {
-        "high": "Élevée",
-        "low": "Faible",
-        "medium": "Moyenne"
-      },
       "tooltip": "Confiance interprétative — à quel point le sens de cette preuve est dénué d’ambiguïté. Indépendante du support de la source (manuscrit, scan, etc.)."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",
       "empty": "Téléversez un document dans ce dossier pour le vérifier.",
       "notVerified": "Pas encore vérifié",
-      "open": "Ouvrir",
       "otherList": "Vérifié par rapport à une autre liste",
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
-      "verify": "Vérifier",
       "verifyAgain": "Vérifier à nouveau"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances}}",
-      "next": "Correspondance suivante",
-      "position": "{current}/{total}",
-      "previous": "Correspondance précédente"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "Désaccord signalé · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "Aucune affirmation n’a été trouvée dans ce document.",
       "startFailed": "Impossible de lancer la vérification",
       "status": {
-        "completed": "Vérifié",
-        "failed": "Échec",
-        "queued": "En file d’attente",
         "running": "Vérification en cours"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
-      "page": "Page n° {page}",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "Choisir une liste",
-      "documents": "Documents",
       "evidenceList": "Faits de",
       "noLists": "Ce dossier n’a aucune liste.",
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
-      "page": "Page n° {page}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
-    "spawnSubagents": {
-      "failed": "Échec"
-    },
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "suggestTitle": "Suggérer un titre",
@@ -1469,6 +1450,7 @@
     "documentReference": "Référence du document",
     "documentTitle": "Titre du document",
     "documentation": "Documentation",
+    "documents": "Documents",
     "done": "Terminé",
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
@@ -1508,6 +1490,8 @@
       "inline": "Dans le texte",
       "title": "Enregistrer le message"
     },
+    "fact": "Fait",
+    "failed": "Échec",
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "Revenir à l’édition",
     "hideDetails": "Masquer les détails",
     "hideSecretValue": "Masquer la valeur secrète",
+    "high": "Élevée",
     "history": "Historique",
     "import": "Importer",
     "invite": "Inviter",
@@ -1568,8 +1553,10 @@
     "loadMore": "Charger plus",
     "loading": "Chargement",
     "logTime": "Saisir le temps",
+    "low": "Faible",
     "matter": "Dossier",
     "matters": "Dossiers",
+    "medium": "Moyenne",
     "members": "Membres",
     "metadata": "Métadonnées",
     "moveDown": "Descendre",
@@ -1578,6 +1565,7 @@
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
+    "nextMatch": "Occurrence suivante",
     "noFileChosen": "Aucun fichier sélectionné",
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
@@ -1589,14 +1577,17 @@
     "or": "Ou",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
+    "page": "Page n° {page}",
     "pin": "Épingler",
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
     "previous": "Précédent",
+    "previousMatch": "Occurrence précédente",
     "print": "Imprimer",
     "profile": "Profil",
     "properties": "Propriétés",
+    "queued": "En file d'attente",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "Identifiant URL",
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
+    "verified": "Vérifié",
     "verify": "Vérifier",
     "version": "Version",
     "versionLabel": "Version {version}",
@@ -1935,9 +1927,6 @@
     "reject": "Rejeter",
     "rejectAll": "Tout rejeter",
     "revert": "Rétablir",
-    "severityHigh": "Élevée",
-    "severityLow": "Faible",
-    "severityMedium": "Moyenne",
     "severityUnspecified": "Non précisée",
     "skipped": "Impossible d’appliquer : {reason}",
     "staleResolution": "Cette suggestion a déjà été traitée ailleurs.",
@@ -2442,10 +2431,8 @@
       "findText": "Texte à rechercher",
       "matchCase": "Respecter la casse",
       "matchCounter": "{current} / {total}",
-      "next": "Occurrence suivante",
       "nextShortcut": "Occurrence suivante (Entrée)",
       "noResults": "Aucun résultat",
-      "previous": "Occurrence précédente",
       "previousShortcut": "Occurrence précédente (Maj+Entrée)",
       "replaceAll": "Tout remplacer",
       "replaceCurrent": "Remplacer l’occurrence actuelle",
@@ -3041,9 +3028,6 @@
       "reviewing": "Révision en cours…",
       "reviewingHint": "Cela peut prendre quelques minutes pour les documents volumineux.",
       "run": "Lancer la révision",
-      "runStatus": {
-        "queued": "En file d'attente"
-      },
       "saveAsPlaybook": "Enregistrer comme playbook",
       "saveAsPlaybookFailed": "Impossible d'enregistrer cette révision comme playbook",
       "savedAsPlaybook": "Enregistré comme playbook",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "ex. Le délai de paiement ne doit pas dépasser 30 jours",
       "saveFailed": "Échec de l'enregistrement du playbook",
       "severity": {
-        "blocker": "Bloquant",
-        "high": "Élevée",
-        "low": "Faible",
-        "medium": "Moyenne"
+        "blocker": "Bloquant"
       },
       "severityLabel": "Gravité",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",
-      "fact": "Fait",
       "instruction": "Instruction",
       "preference": "Préférence",
       "relationship": "Relation"
@@ -5112,7 +5092,6 @@
         "title": "Supprimer les liens vers des modèles Word ?",
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
-      "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "Supprimer la propriété",
       "deletePropertyConfirmDescription": "Voulez-vous vraiment supprimer la propriété « {propertyName} » ? Cette action est irréversible.",
       "dependencyLimit": "Au plus {max} entrées par colonne",
-      "documentsLabel": "Documents",
       "editColumn": "Modifier la colonne",
       "editConditions": "Modifier les conditions",
       "editConditionsDescription": "Définissez les conditions de génération de cette propriété.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "Signale une valeur clé.",
         "needsReview": "À vérifier",
         "needsReviewDescription": "Nécessite une vérification manuelle.",
-        "verified": "Vérifié",
         "verifiedDescription": "Confirmé manuellement."
       },
       "lock": {

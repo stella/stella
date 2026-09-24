@@ -15,6 +15,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   createFirmMemory,
@@ -36,12 +37,12 @@ type MemoryCreateFormProps =
   | { scope: "workspace"; workspaceId: string };
 
 const MEMORY_KIND_KEYS = {
-  preference: "kinds.preference",
-  instruction: "kinds.instruction",
-  fact: "kinds.fact",
-  decision: "kinds.decision",
-  relationship: "kinds.relationship",
-} as const satisfies Record<MemoryKind, string>;
+  preference: "memory.kinds.preference",
+  instruction: "memory.kinds.instruction",
+  fact: "common.fact",
+  decision: "memory.kinds.decision",
+  relationship: "memory.kinds.relationship",
+} as const satisfies Record<MemoryKind, TranslationKey>;
 
 type MemoryToastKey = "createdToast" | "alreadyExistsToast" | "restoredToast";
 
@@ -56,6 +57,7 @@ const KINDS_BY_SCOPE = {
 export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
   const { scope } = props;
   const t = useTranslations("memory");
+  const tRoot = useTranslations();
   const commonT = useTranslations("common");
   const tErrors = useTranslations("errors");
   const analytics = useAnalytics();
@@ -139,7 +141,7 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
           <SelectPopup>
             {kinds.map((option) => (
               <SelectItem key={option} value={option}>
-                {t(MEMORY_KIND_KEYS[option])}
+                {tRoot(MEMORY_KIND_KEYS[option])}
               </SelectItem>
             ))}
           </SelectPopup>

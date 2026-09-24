@@ -204,8 +204,7 @@
     },
     "claimTypes": {
       "fact": {
-        "hint": "ادعاء موضوعي قابل للفحص، يُقيّم بالرجوع إلى السجل. يشمل الادعاءات المصاغة في صورة إقرار أو إنكار؛ إذ يُحكم على القضية الأساسية لا على مجرد الألفاظ.",
-        "label": "واقعة"
+        "hint": "ادعاء موضوعي قابل للفحص، يُقيّم بالرجوع إلى السجل. يشمل الادعاءات المصاغة في صورة إقرار أو إنكار؛ إذ يُحكم على القضية الأساسية لا على مجرد الألفاظ."
       },
       "opinion": {
         "hint": "حكم قيمي أو توصيف لا يمكن لأي مستند تأكيده أو مناقضته، ولذلك يُستبعد ولا يُقيّم.",
@@ -219,11 +218,6 @@
     },
     "confidence": {
       "interpretation": "التفسير",
-      "levels": {
-        "high": "عالية",
-        "low": "منخفضة",
-        "medium": "متوسطة"
-      },
       "tooltip": "الثقة في التفسير هي مدى وضوح معنى الدليل. وهي مستقلة عن وسيط المصدر، مثل الكتابة اليدوية أو المسح الضوئي."
     },
     "confirm": {
@@ -245,11 +239,9 @@
       "claimSummary": "متعارض: {contradicted} · متعارض جزئيًا: {tension} · تعارض في السجل: {conflicts}",
       "empty": "ارفع مستندًا إلى هذا الملف القانوني للتحقق منه.",
       "notVerified": "لم يُتحقق منه بعد",
-      "open": "فتح",
       "otherList": "جرى التحقق منه بالرجوع إلى قائمة أخرى",
       "sizeConfirmTitle": "هل تريد التحقق من هذا المستند؟",
       "statusLoadFailed": "تعذّر تحميل حالة التحقق من هذه المستندات.",
-      "verify": "التحقق",
       "verifyAgain": "إعادة التحقق"
     },
     "guidance": {
@@ -260,9 +252,7 @@
     },
     "matches": {
       "count": "{count, plural, zero {لا مطابقات} one {مطابقة واحدة} two {مطابقتان} few {# مطابقات} many {# مطابقة} other {# مطابقة}}",
-      "next": "المطابقة التالية",
-      "position": "{current}/{total}",
-      "previous": "المطابقة السابقة"
+      "position": "{current}/{total}"
     },
     "review": {
       "disputed": "متنازع عليه · {decidedAt}",
@@ -289,9 +279,6 @@
       "noClaims": "لم يُعثر على أي ادعاءات في هذا المستند.",
       "startFailed": "تعذّر بدء التحقق",
       "status": {
-        "completed": "تم التحقق",
-        "failed": "فشل",
-        "queued": "في قائمة الانتظار",
         "running": "جارٍ التحقق"
       }
     },
@@ -333,7 +320,6 @@
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
       "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
-      "page": "الصفحة {page}",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -344,7 +330,6 @@
     },
     "view": {
       "chooseList": "اختيار قائمة",
-      "documents": "المستندات",
       "evidenceList": "الوقائع من",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
@@ -736,7 +721,6 @@
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
-      "page": "الصفحة {page}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة"
@@ -1138,9 +1122,6 @@
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
-    "spawnSubagents": {
-      "failed": "فشل"
-    },
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "suggestTitle": "اقتراح عنوان",
@@ -1469,6 +1450,7 @@
     "documentReference": "مرجع المستند",
     "documentTitle": "عنوان المستند",
     "documentation": "التوثيق",
+    "documents": "المستندات",
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
@@ -1508,6 +1490,8 @@
       "inline": "مضمّنة",
       "title": "حفظ الرسالة"
     },
+    "fact": "حقيقة",
+    "failed": "فشل",
     "filter": "تصفية",
     "filters": "عوامل التصفية",
     "find": "بحث",
@@ -1516,6 +1500,7 @@
     "goBackToEditing": "العودة إلى التعديل",
     "hideDetails": "إخفاء التفاصيل",
     "hideSecretValue": "إخفاء القيمة السرية",
+    "high": "عالية",
     "history": "السجل",
     "import": "استيراد",
     "invite": "دعوة",
@@ -1568,8 +1553,10 @@
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
+    "low": "منخفضة",
     "matter": "ملف قانوني",
     "matters": "الملفات القانونية",
+    "medium": "متوسطة",
     "members": "الأعضاء",
     "metadata": "البيانات الوصفية",
     "moveDown": "نقل لأسفل",
@@ -1578,6 +1565,7 @@
     "newMatter": "ملف قانوني جديد",
     "newRow": "صف جديد",
     "next": "التالي",
+    "nextMatch": "النتيجة التالية",
     "noFileChosen": "لم يتم اختيار أي ملف",
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
@@ -1589,14 +1577,17 @@
     "or": "أو",
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
+    "page": "الصفحة {page}",
     "pin": "تثبيت",
     "playbooks": "أدلّة المراجعة",
     "preparing": "جارٍ التحضير…",
     "preview": "معاينة",
     "previous": "السابق",
+    "previousMatch": "النتيجة السابقة",
     "print": "طباعة",
     "profile": "الملف الشخصي",
     "properties": "الخصائص",
+    "queued": "قيد الانتظار",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1664,6 +1655,7 @@
     "urlIdentifier": "المعرّف",
     "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
+    "verified": "تم التحقق منه",
     "verify": "تحقّق",
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
@@ -1935,9 +1927,6 @@
     "reject": "رفض",
     "rejectAll": "رفض الكل",
     "revert": "تراجع",
-    "severityHigh": "عالية",
-    "severityLow": "منخفضة",
-    "severityMedium": "متوسطة",
     "severityUnspecified": "غير محدّدة",
     "skipped": "تعذّر التطبيق: {reason}",
     "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر.",
@@ -2442,10 +2431,8 @@
       "findText": "البحث عن نص",
       "matchCase": "مطابقة حالة الأحرف",
       "matchCounter": "{current} / {total}",
-      "next": "النتيجة التالية",
       "nextShortcut": "النتيجة التالية (Enter)",
       "noResults": "لا توجد نتائج",
-      "previous": "النتيجة السابقة",
       "previousShortcut": "النتيجة السابقة (Shift+Enter)",
       "replaceAll": "استبدال الكل",
       "replaceCurrent": "استبدال النتيجة الحالية",
@@ -3041,9 +3028,6 @@
       "reviewing": "المراجعة قيد التنفيذ…",
       "reviewingHint": "قد يستغرق ذلك بضع دقائق للمستندات الكبيرة.",
       "run": "بدء المراجعة",
-      "runStatus": {
-        "queued": "قيد الانتظار"
-      },
       "saveAsPlaybook": "حفظ كدليل مراجعة",
       "saveAsPlaybookFailed": "تعذّر حفظ هذه المراجعة كدليل مراجعة",
       "savedAsPlaybook": "تم الحفظ كدليل مراجعة",
@@ -3347,10 +3331,7 @@
       "rulePlaceholder": "مثال: ألا تتجاوز مهلة السداد 30 يومًا",
       "saveFailed": "فشل حفظ دليل المراجعة",
       "severity": {
-        "blocker": "حاسمة",
-        "high": "عالية",
-        "low": "منخفضة",
-        "medium": "متوسطة"
+        "blocker": "حاسمة"
       },
       "severityLabel": "الخطورة",
       "starters": {
@@ -3536,7 +3517,6 @@
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",
-      "fact": "حقيقة",
       "instruction": "تعليمات",
       "preference": "تفضيل",
       "relationship": "علاقة"
@@ -5112,7 +5092,6 @@
         "title": "هل تريد إزالة روابط قوالب Word؟",
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
-      "defaultPropertyName": "المستندات",
       "desktopEdit": {
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
@@ -5580,7 +5559,6 @@
       "deleteProperty": "حذف الخاصية",
       "deletePropertyConfirmDescription": "هل أنت متأكد من رغبتك في حذف الخاصية «{propertyName}»؟ لا يمكن التراجع عن هذا الإجراء.",
       "dependencyLimit": "حتى {max} مدخلاً لكل عمود",
-      "documentsLabel": "المستندات",
       "editColumn": "تعديل العمود",
       "editConditions": "تعديل الشروط",
       "editConditionsDescription": "حدِّد الشروط التي يتم عندها إنشاء هذه الخاصية.",
@@ -5680,7 +5658,6 @@
         "importantDescription": "يشير إلى قيمة أساسية.",
         "needsReview": "يحتاج إلى مراجعة",
         "needsReviewDescription": "يتطلب مراجعة يدوية.",
-        "verified": "تم التحقق منه",
         "verifiedDescription": "تم تأكيده يدويًا."
       },
       "lock": {
