@@ -1645,7 +1645,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 56,
+    "count": 54,
     "files": {
       ".oxlint-plugins/no-object-url-leak.ts": 1,
       ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
