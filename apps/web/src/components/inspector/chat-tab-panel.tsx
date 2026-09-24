@@ -804,7 +804,7 @@ const ChatTabPanelChrome = ({
 
   return (
     <div
-      className="bg-muted/40 relative flex min-w-0 flex-1 flex-col"
+      className="relative flex min-w-0 flex-1 flex-col"
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader
