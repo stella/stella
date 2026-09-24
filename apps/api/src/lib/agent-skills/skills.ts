@@ -6,6 +6,7 @@ import {
   listSkillMetadata,
   listSkillResources,
   loadSkill,
+  readDocumentedChatReads,
   readExcludedChatTools,
   readSkillResource,
 } from "@stll/skills";
@@ -57,6 +58,16 @@ export type ActiveChatSkillContext = {
   body: string;
   description: string;
   displayName: string;
+  /**
+   * Registry reads the skill's frontmatter documents up front on the chat
+   * surface (`stella-chat-documented-reads`), as declared. The chat slice
+   * narrows them once, in `documentedChatReadsOf`; code-mode then registers
+   * them non-lazy and the prompt carries their full stubs while the skill is
+   * active. The validation tool set ignores it, as it ignores the exclusion:
+   * laziness does not change a tool's schema, so persisted calls parse the
+   * same either way.
+   */
+  documentedChatReads: readonly string[];
   editable: boolean;
   /**
    * Chat tools the skill's frontmatter excludes from a turn it is active in
@@ -114,6 +125,7 @@ export const resolveActiveChatSkillContext = async ({
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: false,
     excludedChatTools: readExcludedChatTools(skill.metadata),
     id: null,
@@ -209,6 +221,7 @@ const resolveInstalledActiveSkill = async ({
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: canEditActiveSkill({
       memberRole,
       origin: skill.origin,

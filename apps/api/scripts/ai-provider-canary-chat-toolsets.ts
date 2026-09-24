@@ -79,6 +79,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   description: "Synthetic provider schema canary.",
   displayName: "Provider Schema Canary",
   editable: true,
+  documentedChatReads: [],
   excludedChatTools: [],
   id: skillId,
   origin: "authored",

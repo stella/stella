@@ -1037,6 +1037,7 @@ const chatMatterTools = ({
   };
   const { tool, discoveryTool } = createChatCodeModeSurface({
     concurrencyKey: EVAL_SANDBOX_KEY,
+    documentedReads: [],
     runReadTool,
   });
   const discovery =

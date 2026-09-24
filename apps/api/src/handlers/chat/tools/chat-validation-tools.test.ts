@@ -75,6 +75,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   description: "Review closing files.",
   displayName: "Closing Review",
   editable: true,
+  documentedChatReads: [],
   excludedChatTools: [],
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",

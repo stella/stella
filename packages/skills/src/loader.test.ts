@@ -5,6 +5,7 @@ import {
   listSkillMetadata,
   loadSkill,
   parseSkillFile,
+  readDocumentedChatReads,
   readExcludedChatTools,
 } from "./loader";
 import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
@@ -188,6 +189,30 @@ Body.`);
     expect(readExcludedChatTools(absent.metadata.metadata)).toEqual([]);
     expect(readExcludedChatTools(blank.metadata.metadata)).toEqual([]);
     expect(readExcludedChatTools(undefined)).toEqual([]);
+  });
+
+  test("reads the chat reads a skill documents up front from its metadata", () => {
+    const parsed = parseSkillFile(`---
+name: documenting-skill
+description: Documents two reads.
+metadata:
+  stella-chat-documented-reads: "list_documents\tread_content_across_matters  list_documents"
+---
+
+Body.`);
+    const absent = parseSkillFile(`---
+name: plain-skill
+description: Documents nothing.
+---
+
+Body.`);
+
+    expect(readDocumentedChatReads(parsed.metadata.metadata)).toEqual([
+      "list_documents",
+      "read_content_across_matters",
+    ]);
+    expect(readDocumentedChatReads(absent.metadata.metadata)).toEqual([]);
+    expect(readDocumentedChatReads(undefined)).toEqual([]);
   });
 
   test("ignores unsupported top-level fields without widening the output", () => {

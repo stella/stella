@@ -11,6 +11,7 @@ import {
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 
+import { EAGER_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
@@ -50,25 +51,6 @@ import {
  */
 
 /**
- * The only read tool documented eagerly (full type stub) in the system prompt;
- * every other chat-projectable read is held out of the eager catalog and reached
- * through `discover_tools`.
- *
- * Rationale: code-mode's eager catalog emits a full `interface` + JSDoc +
- * `declare function` per tool, so documenting all reads eagerly ballooned the
- * injected section to ~5.6x the hand-written `READONLY_API_HINT` it replaces.
- * Jan's hard rule is that system prompts stay brief. `list_matters` is the
- * entry-point read (the model almost always lists matters first to get the refs
- * later tools need), so it keeps its eager stub; every other read is advertised
- * by name + first sentence in the Discoverable APIs catalog and its exact schema
- * is fetched on demand via `discover_tools` — the same describe-on-demand
- * ergonomics the old `describe-stella-api` tool gave. This holds the eager
- * section in the same size class as `READONLY_API_HINT` while keeping the full
- * read surface reachable.
- */
-const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>(["list_matters"]);
-
-/**
  * The chat-projectable read tools, in registry order. Derived from the
  * `as const` registry array so each `access: "read"` element's `name` narrows
  * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
@@ -102,12 +84,6 @@ const CODE_MODE_RUNTIME_CONFIG = {
 } as const;
 
 /**
- * Build the read-tool projections in registry order. The server binding is
- * supplied by the caller so the same definitions (names, descriptions, schemas,
- * lazy flags) back both the runtime tools (real registry runner) and the static
- * system-prompt constant (no-op runner, never invoked for prompt generation).
- */
-/**
  * The registry description, plus a compact `Returns:` shape derived from the
  * tool's projection schema. Every chat-projectable tool carries a schema, so
  * every advertised read tool gets the line. The runtime strict-parses
@@ -129,10 +105,29 @@ const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
   return `${definition.description}\nReturns: ${renderProjectionShape(entry.projection)}`;
 };
 
-const buildChatReadTools = (
-  runReadTool: (toolName: RegistryReadToolName, args: unknown) => unknown,
-): CodeModeTool[] =>
-  chatProjectableReadToolNames().map((toolName) => {
+type BuildChatReadToolsProps = {
+  /** Reads the active skill documents up front, beside the always-eager set. */
+  documentedReads: readonly RegistryReadToolName[];
+  runReadTool: (toolName: RegistryReadToolName, args: unknown) => unknown;
+};
+
+/**
+ * Build the read-tool projections in registry order. The server binding is
+ * supplied by the caller so the same definitions (names, descriptions, schemas,
+ * lazy flags) back both the runtime tools (real registry runner) and the
+ * system-prompt variants (no-op runner, never invoked for prompt generation).
+ * A read is eager when the base set or the active skill documents it; the
+ * two are disjoint by construction (`documented-chat-reads.ts`).
+ */
+const buildChatReadTools = ({
+  documentedReads,
+  runReadTool,
+}: BuildChatReadToolsProps): CodeModeTool[] => {
+  const eager = new Set<RegistryReadToolName>([
+    ...EAGER_CHAT_READ_TOOLS,
+    ...documentedReads,
+  ]);
+  return chatProjectableReadToolNames().map((toolName) => {
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
@@ -149,9 +144,10 @@ const buildChatReadTools = (
       // projection is rendered in the description above; exposing the raw
       // Valibot schema here would reintroduce fields that projection strips.
       outputSchema: {},
-      lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
+      lazy: !eager.has(toolName),
     }).server(async (args: unknown) => await runReadTool(toolName, args));
   });
+};
 
 /**
  * Runs one projected read for the sandbox: `args` is whatever the script
@@ -168,6 +164,7 @@ export type ChatCodeModeReadRunner = (
 
 type CreateChatCodeModeSurfaceProps = {
   concurrencyKey: string;
+  documentedReads: readonly RegistryReadToolName[];
   runReadTool: ChatCodeModeReadRunner;
 };
 
@@ -177,14 +174,16 @@ type CreateChatCodeModeSurfaceProps = {
  */
 export const createChatCodeModeSurface = ({
   concurrencyKey,
+  documentedReads,
   runReadTool,
 }: CreateChatCodeModeSurfaceProps): CreateCodeModeResult =>
   createCodeMode({
     driver: createStellaIsolateDriver({ concurrencyKey }),
-    tools: buildChatReadTools(
-      async (toolName, args) =>
+    tools: buildChatReadTools({
+      documentedReads,
+      runReadTool: async (toolName, args) =>
         await runReadTool(toolName, isRecord(args) ? args : {}),
-    ),
+    }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });
 
@@ -192,6 +191,8 @@ type BuildChatCodeModeProps = Omit<
   ChatRegistryContextDeps,
   "pinServerValidatedWorkspaceId"
 > & {
+  /** The active skill's documented reads (`ActiveChatSkillContext`). */
+  documentedReads: readonly RegistryReadToolName[];
   refRegistry: ChatRefRegistry;
   toolDefectMemo: ChatToolDefectMemo;
 };
@@ -199,11 +200,13 @@ type BuildChatCodeModeProps = Omit<
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
-  const { refRegistry, toolDefectMemo, ...contextDeps } = props;
+  const { documentedReads, refRegistry, toolDefectMemo, ...contextDeps } =
+    props;
   const context = buildMcpContextFromChat(contextDeps);
 
   return createChatCodeModeSurface({
     concurrencyKey: contextDeps.userId,
+    documentedReads,
     runReadTool: async (toolName, toolArgs) => {
       // Mechanical retry policy: an identical call that already failed with a
       // server defect this turn is refused before dispatch. "Do not retry this
@@ -236,8 +239,9 @@ export const buildChatCodeMode = (
  * runner and its `discover_tools` companion, keyed by their own names so the
  * map satisfies the `ChatToolMap` name-equals-key invariant and flows the two
  * tool names into `ChatUITools` for the frontend. `discover_tools` is always
- * present: every read but `list_matters` is lazy, so code-mode always emits the
- * discovery companion.
+ * present: a skill documents at most `MAX_DOCUMENTED_CHAT_READS` of the reads,
+ * so some read is always lazy and code-mode always emits the discovery
+ * companion.
  */
 export type ChatCodeModeToolMap = {
   execute_typescript: WithToolSchemaInputs<
@@ -268,19 +272,44 @@ export const buildChatCodeModeTools = (
   return { execute_typescript: tool, discover_tools: discovery };
 };
 
+const codeModePromptVariants = new Map<string, string>();
+
 /**
- * The chat code-mode system-prompt section, injected in place of the
- * hand-written `READONLY_API_HINT`. Generated once from the static tool
- * definitions (names/descriptions/schemas/lazy flags), so it is request-
- * independent and cache-stable, exactly like the constant it replaces. Built
- * from the same `buildChatReadTools` definitions the runtime uses, so the prompt
- * and the registered tools never drift. The no-op runner is never invoked here;
- * `createCodeModeSystemPrompt` only reads the definitions.
+ * The chat code-mode system-prompt section for a turn whose active skill
+ * documents `documentedReads` up front, injected in place of the hand-written
+ * `READONLY_API_HINT`. A pure function of the set, memoized on its sorted,
+ * deduplicated key, so it is request-independent within a skill and
+ * cache-stable: two threads with the same active skill share one string and
+ * one prompt-cache key. Built from the same `buildChatReadTools` definitions
+ * the runtime uses, so the prompt and the registered tools never drift. The
+ * no-op runner is never invoked here; `createCodeModeSystemPrompt` only reads
+ * the definitions. The cache holds one entry per distinct set a skill in use
+ * declares.
  */
-export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = createCodeModeSystemPrompt({
-  driver: createStellaIsolateDriver({
-    concurrencyKey: "chat-code-mode-prompt",
-  }),
-  tools: buildChatReadTools(() => ({})),
-  ...CODE_MODE_RUNTIME_CONFIG,
-});
+export const chatCodeModeSystemPrompt = (
+  documentedReads: readonly RegistryReadToolName[],
+): string => {
+  const reads = [...new Set(documentedReads)].toSorted();
+  const key = reads.join(" ");
+  const cached = codeModePromptVariants.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const prompt = createCodeModeSystemPrompt({
+    driver: createStellaIsolateDriver({
+      concurrencyKey: "chat-code-mode-prompt",
+    }),
+    tools: buildChatReadTools({
+      documentedReads: reads,
+      runReadTool: () => ({}),
+    }),
+    ...CODE_MODE_RUNTIME_CONFIG,
+  });
+  codeModePromptVariants.set(key, prompt);
+  return prompt;
+};
+
+/** The base variant: no active skill, so only `list_matters` is documented. */
+export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = chatCodeModeSystemPrompt(
+  [],
+);
