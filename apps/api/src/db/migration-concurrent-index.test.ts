@@ -108,6 +108,12 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Adds the cleanup-status CHECK only when absent. The body is static DDL;
   // the conditional makes a partially applied migration retryable.
   "20260830150000_workspace_reference_cleanup_indexes/migration.sql:157817473ab2cf147be3836c532ca148079553e488ae4df0bdb9ae19ecaa32e2",
+  // Add each supplements foreign key and CHECK only when absent. The bodies
+  // are static DDL; the conditional makes a re-applied migration a no-op.
+  "20260924100000_case_law_decision_supplements/migration.sql:784ee86bc5f375503326b7b432485d292dc5bafbe6d5c1ea1b63f7a55b81ba61",
+  "20260924100000_case_law_decision_supplements/migration.sql:c164fa270ee521594466ebf9458f712658d300a1e83106f6c866698c9f407642",
+  "20260924100000_case_law_decision_supplements/migration.sql:d6003f318eb66d4f93b252378c7e0e97a397a8827a7568ceb6036e9043784d0f",
+  "20260924100000_case_law_decision_supplements/migration.sql:db38e6608b819f8b1bbc93274349ab1b5212a352dd36ce6b84294983dfac267d",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
