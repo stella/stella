@@ -53,6 +53,7 @@ if (!databaseUrl || !runPostgresTests) {
         panic("expected scheduler job");
       }
       await backfillCaseLawRedactionTombstones({
+        db,
         job,
         payload: job.payload,
         runId: createSafeId<"schedulerJobRun">(),

@@ -9,13 +9,15 @@
  */
 import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 const WORKSPACE_BATCH_SIZE = Number(
   process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
 );
 const STATEMENT_TIMEOUT_MS = 60_000;
 const STATEMENT_TIMEOUT = `${STATEMENT_TIMEOUT_MS}ms`;
+
+const db = openMaintenanceDb({ readOnly: false });
 
 type BatchResult = {
   next_cursor: string | null;
@@ -30,7 +32,7 @@ const backfillBatch = async (
     ? sql`WHERE workspace_id > ${cursorWorkspaceId}::uuid`
     : sql``;
 
-  const rows = await rootDb.transaction(async (tx) => {
+  const rows = await db.transaction(async (tx) => {
     await tx.execute(
       sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
     );

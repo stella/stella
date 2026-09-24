@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +32,7 @@ const scoutCursor = (
  * tick replays the page and the scout's dedupe keys absorb the repeat.
  */
 export const runWorkAttentionScoutTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
@@ -49,7 +49,7 @@ export const runWorkAttentionScoutTask: SchedulerTask = async ({
   });
 
   signal.throwIfAborted();
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({ payload: { cursor: outcome.nextCursor } })
     .where(
