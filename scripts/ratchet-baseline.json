@@ -1186,7 +1186,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 298,
+    "count": 299,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1275,6 +1275,7 @@
       "apps/api/src/mcp/template-persistence.ts": 1,
       "apps/api/src/mcp/tool-utils.ts": 1,
       "apps/api/src/scripts/adapter-health.ts": 1,
+      "apps/api/src/scripts/citation-probe.ts": 1,
       "apps/api/src/scripts/mcp-canary.ts": 3,
       "apps/api/src/scripts/post-deploy-smoke.ts": 1,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,

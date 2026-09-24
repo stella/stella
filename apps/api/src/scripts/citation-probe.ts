@@ -349,6 +349,7 @@ const probeKey = async (
 ): Promise<ProbedDoc> => {
   // Keep the presigned fetch here because the probe requires a hard request
   // timeout; Bun's native S3 body reads do not yet accept an AbortSignal.
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator script; presigned by this script's own client, built from its fixed bucket and region config
   const response = await fetchWithTimeout(s3.presign(key, { expiresIn: 300 }), {
     timeoutMs: 30_000,
   });

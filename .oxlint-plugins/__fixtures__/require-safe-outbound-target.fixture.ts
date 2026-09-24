@@ -70,6 +70,12 @@ export const mustFlagUnprovenConfiguredTargets = async () => {
   await fetchWithTimeout(foreignStore.presign("fixtures/outbound-target"), {
     timeoutMs: 1000,
   });
+
+  const bunStore = new Bun.S3Client({ endpoint: dynamicBase });
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a client constructed outside the S3 module may take its endpoint from anywhere
+  await fetchWithTimeout(bunStore.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
 };
 
 export const mustAllowConfiguredTargets = async () => {
@@ -85,9 +91,9 @@ export const mustAllowConfiguredTargets = async () => {
     timeoutMs: 1000,
   });
 
-  const bunStore = new Bun.S3Client({ bucket: "fixtures" });
+  const corpusStore = getCorpusS3();
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target
-  await fetchWithTimeout(bunStore.presign("fixtures/outbound-target"), {
+  await fetchWithTimeout(corpusStore.presign("fixtures/outbound-target"), {
     timeoutMs: 1000,
   });
 };
