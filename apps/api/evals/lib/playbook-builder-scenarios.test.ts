@@ -135,7 +135,27 @@ const score = (
   events: BuilderEvent[],
   stored = playbook("buyer"),
 ) =>
-  scoreScenario(scenario(id), { surface: "mcp", events, playbooks: [stored] });
+  scoreScenario(scenario(id), {
+    surface: "mcp",
+    documentedReads: new Set(),
+    events,
+    playbooks: [stored],
+  });
+
+/** The same run on the chat surface, with `documentedReads` stubbed up front. */
+const scoreOnChat = (
+  events: BuilderEvent[],
+  documentedReads: readonly string[],
+) =>
+  scoreScenario(scenario("contracts-later"), {
+    surface: "chat",
+    documentedReads: new Set(documentedReads),
+    events,
+    playbooks: [playbook("buyer")],
+  });
+
+const discoveryDefects = (defects: readonly string[]) =>
+  defects.filter((defect) => defect.includes("before discover_tools"));
 
 describe("contracts-later scoring", () => {
   test("the described run has no defects", () => {
@@ -177,6 +197,41 @@ describe("contracts-later scoring", () => {
   });
 });
 
+describe("chat-surface discovery scoring", () => {
+  test("a documented read written without discover_tools is not a defect", () => {
+    const run = contractsLaterRun();
+    expect(
+      discoveryDefects(
+        scoreOnChat(run, ["list_documents", "read_content_across_matters"]),
+      ),
+    ).toEqual([]);
+    expect(discoveryDefects(scoreOnChat(run, []))).toEqual([
+      "called list_documents before discover_tools named it",
+      "called read_content_across_matters before discover_tools named it",
+    ]);
+  });
+
+  test("an undocumented read is still a defect until discover_tools names it", () => {
+    const run = contractsLaterRun();
+    expect(discoveryDefects(scoreOnChat(run, ["list_documents"]))).toEqual([
+      "called read_content_across_matters before discover_tools named it",
+    ]);
+    const discovered = run.flatMap((entry) =>
+      entry.name === "list_documents"
+        ? [
+            event(2, "discover_tools", {
+              toolNames: ["external_read_content_across_matters"],
+            }),
+            entry,
+          ]
+        : [entry],
+    );
+    expect(
+      discoveryDefects(scoreOnChat(discovered, ["list_documents"])),
+    ).toEqual([]);
+  });
+});
+
 describe("perspective scoring", () => {
   test("a customer may be saved as a buyer or with no perspective", () => {
     expect(
@@ -198,6 +253,7 @@ describe("perspective scoring", () => {
     expect(
       scoreScenario(scenario("no-documents"), {
         surface: "mcp",
+        documentedReads: new Set(),
         events,
         playbooks: [playbook("neutral")],
       }),

@@ -52,10 +52,11 @@ import {
 } from "@/api/handlers/chat/chat-prompt";
 import { areSubagentToolsRegistered } from "@/api/handlers/chat/tools/chat-tools";
 import {
-  CHAT_CODE_MODE_SYSTEM_PROMPT,
+  chatCodeModeSystemPrompt,
   createChatCodeModeSurface,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatCodeModeReadRunner } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { documentedChatReadsOf } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
@@ -817,9 +818,10 @@ const subagentsOfferedWith = (skill: ActiveChatSkillContext): boolean =>
 
 /**
  * The system prompt a chat with the built-in skill active carries, rendered
- * from the shipped `SKILL.md`. On the chat surface the code-mode section and,
- * when the skill does not exclude `spawn_subagents`, the delegation rule
- * precede it, where `buildPromptParts` (`chat-prompt.ts`) places them.
+ * from the shipped `SKILL.md`. On the chat surface the code-mode section for
+ * the reads the skill documents and, when the skill does not exclude
+ * `spawn_subagents`, the delegation rule precede it, where `buildPromptParts`
+ * (`chat-prompt.ts`) places them.
  */
 const behaviorSystemPrompt = ({
   skill,
@@ -832,7 +834,7 @@ const behaviorSystemPrompt = ({
     BEHAVIOR_SYSTEM_PREAMBLE,
     ...(surface === "chat"
       ? [
-          CHAT_CODE_MODE_SYSTEM_PROMPT,
+          chatCodeModeSystemPrompt(documentedChatReadsOf(skill)),
           ...(subagentsOfferedWith(skill) ? [SUBAGENT_DELEGATION_SECTION] : []),
         ]
       : []),
@@ -980,12 +982,11 @@ const mcpMatterTools = (record: Recorder): AnyServerTool[] =>
 const chatMatterTools = ({
   store,
   record,
-  subagentsOffered,
+  skill,
 }: {
   store: PlaybookStore;
   record: Recorder;
-  /** Whether chat would register `spawn_subagents` on this turn. */
-  subagentsOffered: boolean;
+  skill: ActiveChatSkillContext;
 }): AnyServerTool[] => {
   const refRegistry = createChatRefRegistry();
   const listPlaybooks =
@@ -1037,7 +1038,7 @@ const chatMatterTools = ({
   };
   const { tool, discoveryTool } = createChatCodeModeSurface({
     concurrencyKey: EVAL_SANDBOX_KEY,
-    documentedReads: [],
+    documentedReads: documentedChatReadsOf(skill),
     runReadTool,
   });
   const discovery =
@@ -1048,7 +1049,7 @@ const chatMatterTools = ({
   return [
     recordedTool({ tool, record, failureOf: scriptFailureOf }),
     recordedTool({ tool: discovery, record, failureOf: () => null }),
-    ...(subagentsOffered
+    ...(subagentsOfferedWith(skill)
       ? [
           recordedTool({
             tool: spawnSubagentsStub(),
@@ -1143,11 +1144,7 @@ const createBehaviorTools = ({
 
   const matterTools =
     surface === "chat"
-      ? chatMatterTools({
-          store,
-          record,
-          subagentsOffered: subagentsOfferedWith(skill),
-        })
+      ? chatMatterTools({ store, record, skill })
       : mcpMatterTools(record);
 
   return [
@@ -1231,7 +1228,12 @@ const runScenario = async ({
     }
   }
   const playbooks = store.playbooks();
-  const defects = scoreScenario(scenario, { surface, events, playbooks });
+  const defects = scoreScenario(scenario, {
+    surface,
+    documentedReads: new Set(documentedChatReadsOf(skill)),
+    events,
+    playbooks,
+  });
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbooks.some(
