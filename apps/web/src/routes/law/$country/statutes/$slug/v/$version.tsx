@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 import { PublicStatuteViewer } from "@/routes/law/-statute-detail";
 import {
   createPublicStatuteHead,
   loadPublicStatuteRoute,
-  publicStatuteSearchSchema,
 } from "@/routes/law/-statute-detail.logic";
 
 /**

@@ -12,12 +12,10 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
+import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  loadPublicStatuteRoute,
-  publicStatuteSearchSchema,
-} from "@/routes/law/-statute-detail.logic";
+import { loadPublicStatuteRoute } from "@/routes/law/-statute-detail.logic";
 
 const SLUG = "89-2012-sb-obcansky-zakonik";
 const COUNTRY_SEGMENT = "cze";

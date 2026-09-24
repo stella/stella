@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/statute-route";
 
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
-import { publicStatuteSearchSchema } from "@/routes/law/-statute-detail.logic";
+import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 
 /**
  * A statute page's address, the `?asOf` day it asks the act on, and the
