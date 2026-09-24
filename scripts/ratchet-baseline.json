@@ -441,7 +441,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 947,
+    "count": 945,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -474,7 +474,6 @@
       "apps/api/src/handlers/chat/third-party-boundary.ts": 4,
       "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 3,
-      "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts": 2,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
       "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts": 6,
