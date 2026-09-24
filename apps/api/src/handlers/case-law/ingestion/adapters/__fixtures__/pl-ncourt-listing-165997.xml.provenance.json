@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "aa70c14ac074bf5957d2a49d474472142a8cbdf92485d72fcbbb6ab9875fe77a",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?offset=165997&limit=5&sort=signature-asc",
+  "capturedAt": "2026-09-23T10:19:49.677Z",
+  "note": "the five rows after that offset"
+}

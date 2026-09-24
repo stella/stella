@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "e6194c7d7b91378df055f43f05961bd1bf186ea8871c35f0a1850983a8a3cf33",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?court=15999999&limit=1&sort=signature-asc",
+  "capturedAt": "2026-09-23T10:19:55.432Z",
+  "note": "a court id the API does not know: the filter dropped"
+}

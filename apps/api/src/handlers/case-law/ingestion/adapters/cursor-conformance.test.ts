@@ -132,6 +132,42 @@ const TK_ONE_ROW_LISTING = `<html><body>
 /** A case page whose record states nothing and which holds no ruling tab. */
 const TK_EMPTY_CASE_PAGE =
   '<html><body><div id="sprawaForm:tabView:metryka"></div></body></html>';
+const xmlResponse = (body: string): Response =>
+  new Response(body, { headers: { "Content-Type": "text/xml" } });
+
+/** How many judgments the ncourt-api stub holds, fewer than one window. */
+const NCOURT_ENTRIES = 3;
+
+/**
+ * The ncourt-api stays populated, like the other offset sources. A row's
+ * publication date is the tip's own `publicationDateFrom` where it states
+ * one, so each tip lap lists rows its filter admits, all published before
+ * the lap's mark once one lap has read them.
+ */
+const ncourtExhaustedSource = ({ url }: { url: string }): Response => {
+  const { pathname, searchParams } = new URL(url);
+  if (pathname.endsWith("/judgement/details")) {
+    const id = searchParams.get("id") ?? "";
+    return xmlResponse(
+      `<judgement id="${id}"><signature>I C ${id}/20</signature><date>2020-01-02 01:00:00.0 CET</date><courtId>15050505</courtId><type>SENTENCE</type><judges><judge>Anna Nowak</judge></judges></judgement>`,
+    );
+  }
+  if (pathname.endsWith("/judgement/content")) {
+    return xmlResponse(
+      '<xPart xDocType="Uz"><xName>Wyrok</xName><xBlock><xText>Wyrok</xText></xBlock></xPart>',
+    );
+  }
+  const offset = Number(searchParams.get("offset") ?? "0");
+  const published = `${searchParams.get("publicationDateFrom") ?? "2020-01-03"} 12:00:00.0 CET`;
+  const rows = Array.from(
+    { length: Math.max(0, NCOURT_ENTRIES - offset) },
+    (_, index) =>
+      `<judgement><id>${offset + index + 1}</id><signature>I C ${offset + index + 1}/20</signature><date>2020-01-02 01:00:00.0 CET</date><publicationDate>${published}</publicationDate><courtId>15050505</courtId><type>SENTENCE</type></judgement>`,
+  );
+  return xmlResponse(
+    `<judgements total="${NCOURT_ENTRIES}" results="${rows.length}" offset="${offset}" limit="200">${rows.join("")}</judgements>`,
+  );
+};
 
 // ── Coverage declaration ─────────────────────────────────
 
@@ -350,6 +386,15 @@ const ADAPTER_CONFORMANCE = {
     // rulings with no issue date sit past every month and are only reachable
     // there.
     maxSteadyStatePositions: 3,
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    disposition: "exercised",
+    // The walk reads the corpus once and hands over to the tip. After a tip
+    // lap the lane waits for its day to close: a cycle within it makes no
+    // request and returns the cursor it was given.
+    exhaustedSource: ncourtExhaustedSource,
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
   },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 

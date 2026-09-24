@@ -309,6 +309,21 @@ export const ADAPTER_MANIFESTS = {
       through: { type: "inclusive", date: "2025-03-05" },
     },
   },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    key: ADAPTER_KEYS.PL_NCOURT,
+    name: "Polish Common Courts (Ministry of Justice)",
+    publisher: "Ministerstwo Sprawiedliwości",
+    publicHomeUrl: "https://orzeczenia.ms.gov.pl",
+    ...ADAPTER_JURISDICTIONS.POL,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      // The oldest judgment date the listing answers with, sorted by date.
+      fromInclusive: "1994-07-20",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",

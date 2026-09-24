@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "0993909fef90249cc05360addd32beb99a881367020cfc7aec414cfec2384fae",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?signature=II+Ca+236%2F18&court=15502000&sort=signature-asc",
+  "capturedAt": "2026-09-23T10:21:14.148Z",
+  "note": "one signature at one court: the listed row of a judgment SAOS also holds"
+}

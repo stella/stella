@@ -21,6 +21,7 @@ import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj"
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
@@ -53,6 +54,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.PL_KIO]: plKioAdapter,
   [ADAPTER_KEYS.PL_TK]: plTkAdapter,
   [ADAPTER_KEYS.PL_NSA]: plNsaAdapter,
+  [ADAPTER_KEYS.PL_NCOURT]: plNcourtAdapter,
   [ADAPTER_KEYS.AT_COURTS]: atCourtsAdapter,
   [ADAPTER_KEYS.AT_VFGH]: atVfghAdapter,
   [ADAPTER_KEYS.AT_VWGH]: atVwghAdapter,
