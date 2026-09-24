@@ -1769,8 +1769,9 @@ const parseJsonUnknown = (value: string): unknown => JSON.parse(value);
  * agree with it once nulls are folded on both sides (the same comparison a
  * continuation gets in `validateContinuationToolCallTransition`), and only
  * `input` meets the schema. A part with no `input` (rebuilt by a client, or
- * persisted before adapters attached one) has only the text, which then is the
- * input.
+ * persisted before adapters attached one) has only the text, which is folded
+ * the same way and then is the input, so a call has one canonical spelling
+ * whichever copy arrived.
  */
 const validateCanonicalToolInput = ({
   parsedArguments,
@@ -1783,7 +1784,7 @@ const validateCanonicalToolInput = ({
 }): Result<unknown, HandlerError<400>> => {
   if (part.input === undefined) {
     return validateToolPayload({
-      payload: parsedArguments,
+      payload: withNullsOmitted(parsedArguments),
       payloadName: "arguments",
       schema,
       toolName: part.name,

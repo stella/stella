@@ -684,15 +684,17 @@ describe("validateMessage", () => {
     });
 
     // The text alone does not meet the schema: `optional` admits absence,
-    // not null. That is the fault the folded input has to carry the call past.
+    // not null. A part with only the text (rebuilt by a client, or persisted
+    // before adapters attached `input`) is folded the same way the adapter
+    // folds, so it validates and persists the one canonical spelling.
     const { input: _omitted, ...textOnlyCall } = call;
     const textOnly = validateToolCallParts({
       message: messageWith(textOnlyCall),
       tools: registeredAskUserTools,
     });
-    expect(Result.isError(textOnly) && textOnly.error.message).toBe(
-      "Invalid chat tool arguments for ask-user",
-    );
+    expect(Result.isOk(textOnly) && textOnly.value).toEqual([
+      { ...call, arguments: JSON.stringify(input) },
+    ]);
 
     const validated = validateToolCallParts({
       message: messageWith(call),
