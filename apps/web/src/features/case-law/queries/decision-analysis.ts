@@ -7,6 +7,7 @@ import {
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
 
@@ -68,11 +69,28 @@ const isTerminal = (result: AnalysisQueryResult | undefined): boolean =>
  * reader has taken the run up; a route loader must not prefetch it.
  *
  * Its own key root, apart from the public decision reads, so invalidating or
- * refetching those never touches a finished analysis.
+ * refetching those never touches a finished analysis. The key carries the
+ * version of the decision the reader holds: a finished analysis is final for
+ * that version only, since a re-parse renumbers the blocks its anchors name.
+ * A decision read at a new version asks again; the server answers the stored
+ * analysis while it still matches the document, and runs anew when not.
  */
-export const decisionAnalysisOptions = (decisionId: string) =>
+export type DecisionAnalysisKey = {
+  decisionId: string;
+  /**
+   * The decision's `updatedAt` as the public read answered it. Kept as given:
+   * the typed `Date` can arrive as the wire's ISO string, and the key hash
+   * serialises either to the same text, so no date method is called on it.
+   */
+  decisionUpdatedAt: PublicCaseLawDecision["updatedAt"];
+};
+
+export const decisionAnalysisOptions = ({
+  decisionId,
+  decisionUpdatedAt,
+}: DecisionAnalysisKey) =>
   queryOptions({
-    queryKey: ["case-law-decision-analysis", decisionId],
+    queryKey: ["case-law-decision-analysis", decisionId, { decisionUpdatedAt }],
     queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
       const response = await fetchWithTimeout(
         apiUrl(`/case/decisions/${decisionId}/analysis`),

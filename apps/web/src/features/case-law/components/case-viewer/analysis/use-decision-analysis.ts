@@ -14,6 +14,7 @@ import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import {
   type AnalysisQueryResult,
+  type DecisionAnalysisKey,
   decisionAnalysisOptions,
 } from "@/features/case-law/queries/decision-analysis";
 import { detached } from "@/lib/detached";
@@ -62,7 +63,8 @@ export const analysisStateFromQuery = ({
     : { status: "generating", tree: [] };
 };
 
-export const useDecisionAnalysis = (decisionId: string) => {
+export const useDecisionAnalysis = (key: DecisionAnalysisKey) => {
+  const { decisionId } = key;
   // Track which decision the user kicked generation off for. Comparing
   // against the current `decisionId` in the same render keeps a stale
   // value from enabling a fetch (and an unintended backend kick-off)
@@ -83,7 +85,7 @@ export const useDecisionAnalysis = (decisionId: string) => {
   // Disabled, the observer still reads the cache, so an analysis finished
   // earlier is drawn without asking for a run.
   const query = useQuery({
-    ...decisionAnalysisOptions(decisionId),
+    ...decisionAnalysisOptions(key),
     enabled: isGenerating,
   });
   const finishedAnalysis =

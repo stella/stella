@@ -72,6 +72,7 @@ type DecisionWorkspaceDecision = Pick<
   | "metadata"
   | "sourceAttributionUrl"
   | "textFields"
+  | "updatedAt"
 >;
 
 type DecisionWorkspaceBaseProps = {
@@ -207,7 +208,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
-    useDecisionAnalysis(decisionId);
+    useDecisionAnalysis({
+      decisionId,
+      decisionUpdatedAt: decision.updatedAt,
+    });
   const generate = useCallback(async () => {
     if (!ensureAIAvailable) {
       return;

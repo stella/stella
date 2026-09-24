@@ -44,33 +44,44 @@ const json = (body: unknown) =>
     headers: { "Content-Type": "application/json" },
   });
 
+const VERSION_1 = "2026-09-01T10:00:00.000Z";
+const VERSION_2 = "2026-09-02T10:00:00.000Z";
+
+/** Answers `answers` in turn, holding the last once they run out. */
+const inTurn = (answers: readonly unknown[], served: number): unknown =>
+  answers.at(served - 1) ?? answers.at(-1) ?? null;
+
+type MockReadsOptions = {
+  analysisAnswers: readonly unknown[];
+  /** The `updatedAt` each public decision read answers, in turn. */
+  decisionVersions: readonly string[];
+};
+
 /**
- * Stands in for the public decision read and the analysis read. The analysis
- * answers from `analysisAnswers` in turn, holding the last; every request's
- * path is recorded.
+ * Stands in for the public decision read and the analysis read; every
+ * request's path is recorded.
  */
-const mockReads = (analysisAnswers: readonly unknown[]) => {
+const mockReads = ({ analysisAnswers, decisionVersions }: MockReadsOptions) => {
   const paths: string[] = [];
+  const count = (suffix: string) =>
+    paths.filter((path) => path.endsWith(suffix)).length;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const { pathname } = new URL(new Request(input, init).url);
       paths.push(pathname);
       if (pathname.endsWith(ANALYSIS_PATH)) {
-        const served = paths.filter((path) =>
-          path.endsWith(ANALYSIS_PATH),
-        ).length;
-        return json(
-          analysisAnswers.at(served - 1) ?? analysisAnswers.at(-1) ?? null,
-        );
+        return json(inTurn(analysisAnswers, count(ANALYSIS_PATH)));
       }
       expect(pathname).toEndWith(DECISION_PATH);
       // The public read never carries the analysis.
-      return json({ id: DECISION_ID, caseNumber: "1 A 1/2026" });
+      return json({
+        id: DECISION_ID,
+        caseNumber: "1 A 1/2026",
+        updatedAt: inTurn(decisionVersions, count(DECISION_PATH)),
+      });
     },
     { preconnect: previousFetch.preconnect },
   );
-  const count = (suffix: string) =>
-    paths.filter((path) => path.endsWith(suffix)).length;
   return {
     analysisReads: () => count(ANALYSIS_PATH),
     decisionReads: () => count(DECISION_PATH),
@@ -80,29 +91,61 @@ const mockReads = (analysisAnswers: readonly unknown[]) => {
 const newQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+/** The analysis options as the reader builds them from the decision it holds. */
+const analysisOfReadDecision = async (queryClient: QueryClient) => {
+  const decision = await queryClient.query(decisionOptions(DECISION_ID));
+  return decisionAnalysisOptions({
+    decisionId: DECISION_ID,
+    decisionUpdatedAt: decision.updatedAt,
+  });
+};
+
+const refetchDecision = async (queryClient: QueryClient) => {
+  await queryClient.invalidateQueries(publicDecisionReadFilter(DECISION_ID));
+  await queryClient.refetchQueries(publicDecisionReadFilter(DECISION_ID));
+};
+
 describe("decision analysis query", () => {
-  test("a decision refetch keeps the finished analysis and does not ask for it again", async () => {
-    const reads = mockReads([DONE]);
+  test("a decision refetch at the same version keeps the finished analysis without asking again", async () => {
+    const reads = mockReads({
+      analysisAnswers: [DONE],
+      decisionVersions: [VERSION_1],
+    });
     const queryClient = newQueryClient();
 
-    await queryClient.query(decisionOptions(DECISION_ID));
-    await queryClient.query(decisionAnalysisOptions(DECISION_ID));
+    await queryClient.query(await analysisOfReadDecision(queryClient));
+    await refetchDecision(queryClient);
 
-    await queryClient.invalidateQueries(publicDecisionReadFilter(DECISION_ID));
-    await queryClient.refetchQueries(publicDecisionReadFilter(DECISION_ID));
-    await queryClient.query(decisionOptions(DECISION_ID));
-
-    expect(reads.decisionReads()).toBeGreaterThan(1);
     expect(
-      await queryClient.query(decisionAnalysisOptions(DECISION_ID)),
+      await queryClient.query(await analysisOfReadDecision(queryClient)),
     ).toEqual({ kind: "done", analysis });
+    expect(reads.decisionReads()).toBe(2);
     expect(reads.analysisReads()).toBe(1);
   });
 
-  test("a run still generating is asked again until it finishes, then held", async () => {
-    const reads = mockReads([GENERATING, GENERATING, DONE]);
+  test("a decision read at a new version asks for its analysis again", async () => {
+    const reads = mockReads({
+      analysisAnswers: [DONE, GENERATING],
+      decisionVersions: [VERSION_1, VERSION_2],
+    });
     const queryClient = newQueryClient();
-    const options = decisionAnalysisOptions(DECISION_ID);
+
+    await queryClient.query(await analysisOfReadDecision(queryClient));
+    await refetchDecision(queryClient);
+
+    expect(
+      await queryClient.query(await analysisOfReadDecision(queryClient)),
+    ).toEqual({ kind: "generating", tree: [] });
+    expect(reads.analysisReads()).toBe(2);
+  });
+
+  test("a run still generating is asked again until it finishes, then held", async () => {
+    const reads = mockReads({
+      analysisAnswers: [GENERATING, GENERATING, DONE],
+      decisionVersions: [VERSION_1],
+    });
+    const queryClient = newQueryClient();
+    const options = await analysisOfReadDecision(queryClient);
 
     expect(await queryClient.query(options)).toEqual({
       kind: "generating",
