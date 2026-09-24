@@ -13,6 +13,7 @@ import {
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -209,6 +210,13 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
+
+/** An ECLI's lookup spelling, or undefined when nothing searchable remains. */
+const ecliComparisonKey = (ecli: string): string | undefined =>
+  normalizeDecisionIdentifier({
+    type: DECISION_IDENTIFIER_TYPES.ECLI,
+    value: ecli,
+  }) || undefined;
 
 type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -1502,15 +1510,25 @@ const processDecisionAttempt = async ({
               },
               columns: identityColumns,
             });
+      // ECLIs compare the way identifiers are looked up: an adapter release
+      // may spell the same identifier with different case or separators.
+      // The legacy candidate is already pinned to this exact docket.
+      const legacyEcliKey =
+        legacy?.ecli === null || legacy?.ecli === undefined
+          ? undefined
+          : ecliComparisonKey(legacy.ecli);
+      const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
+        (ecli) => {
+          const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
+          return key === undefined ? [] : [key];
+        },
+      );
       const ecliMatches =
-        legacy !== undefined &&
-        observed.ecli !== undefined &&
-        legacy.ecli === observed.ecli;
+        legacyEcliKey !== undefined && incomingEcliKeys.includes(legacyEcliKey);
       const legacyEcliContradicts =
-        legacy !== undefined &&
-        legacy.ecli !== null &&
-        observed.ecli !== undefined &&
-        legacy.ecli !== observed.ecli;
+        legacyEcliKey !== undefined &&
+        incomingEcliKeys.length > 0 &&
+        !ecliMatches;
       const sourceUrlMatches =
         legacy !== undefined &&
         !legacyEcliContradicts &&

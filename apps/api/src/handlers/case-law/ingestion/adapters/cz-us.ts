@@ -269,15 +269,15 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
 };
 
 /**
- * Roman numeral senate prefix → number for ECLI.
- * Pl (Plenary) is not mapped here; it is normalized
- * to uppercase "PL" in buildEcli via explicit handling.
+ * Docket senate prefix → the senate segment NALUS prints in its ECLIs:
+ * chambers by number, the plenary as `Pl`.
  */
-const SENATE_MAP: Record<string, string> = {
+const ECLI_SENATE_SEGMENT: Record<string, string> = {
   I: "1",
   II: "2",
   III: "3",
   IV: "4",
+  Pl: "Pl",
 };
 
 const parseCaseNumberComponents = (
@@ -312,9 +312,31 @@ const buildEcli = (
     return undefined;
   }
   const { senate, caseIndex, shortYear } = components;
-  const mappedSenate = SENATE_MAP[senate] ?? senate.toUpperCase();
-  return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
+  const senateSegment = ECLI_SENATE_SEGMENT[senate];
+  if (senateSegment === undefined) {
+    return undefined;
+  }
+  return `ECLI:CZ:US:${decisionYear}:${senateSegment}.US.${caseIndex}.${shortYear}.${counter}`;
 };
+
+/** A NALUS ECLI printed without its trailing counter segment. */
+const UNCOUNTED_ECLI = /^ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2}$/iu;
+
+/**
+ * The counted ECLI earlier releases built for a record NALUS now lists
+ * without the counter: the listed spelling plus the record's own counter.
+ * Undefined for any other listed spelling, so the hint never names an
+ * identity the listing itself does not imply.
+ */
+const countedLegacyEcli = (
+  listedEcli: string | undefined,
+  counter: number | undefined,
+): string | undefined =>
+  listedEcli !== undefined &&
+  counter !== undefined &&
+  UNCOUNTED_ECLI.test(listedEcli)
+    ? `${listedEcli}.${counter}`
+    : undefined;
 
 const parseCounter = (raw: string | undefined): number | undefined => {
   if (raw === undefined) {
@@ -911,11 +933,11 @@ const parseDecisionPage = ({
     ? Number.parseInt(parsed.decisionDate.slice(0, 4), 10)
     : undefined;
   const ecliCounter = extractEcliCounter(html) ?? listedCounter;
-  const ecli =
-    listedEcli ??
-    (decisionYear !== undefined && ecliCounter !== undefined
+  const builtEcli =
+    decisionYear !== undefined && ecliCounter !== undefined
       ? buildEcli(parsed.caseNumber, decisionYear, ecliCounter)
-      : undefined);
+      : undefined;
+  const ecli = listedEcli ?? builtEcli;
 
   // The court NALUS states for this decision, read off the identifier NALUS
   // itself published. Not `ecli`: `buildEcli` reconstructs an identifier
@@ -967,6 +989,14 @@ const parseDecisionPage = ({
       ecliCounter,
       nalusSz,
     ),
+    // Earlier releases built the ECLI from the docket and the record's
+    // counter; only that exact counted form of the listed spelling counts.
+    legacyEcli:
+      builtEcli !== undefined &&
+      countedLegacyEcli(listedEcli, ecliCounter)?.toUpperCase() ===
+        builtEcli.toUpperCase()
+        ? builtEcli
+        : undefined,
     ecli,
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
@@ -2172,6 +2202,7 @@ const listedOnlyDecision = (
       listed.counter,
       listed.sz,
     ),
+    legacyEcli: countedLegacyEcli(listed.ecli, listed.counter),
     ecli: listed.ecli,
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,

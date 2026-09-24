@@ -272,6 +272,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     legacySourceUrls: result.legacySourceUrls
       ?.map((url) => strip(url))
       .filter((url): url is string => url !== undefined),
+    legacyEcli: strip(result.legacyEcli),
     sheetNumber: strip(result.sheetNumber),
     fulltext: result.fulltext
       ? collapseSpacedLetters(strip(result.fulltext) ?? "")

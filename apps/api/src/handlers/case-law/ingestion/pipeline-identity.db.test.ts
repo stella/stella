@@ -431,6 +431,131 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["identifiedCount"]) : 0).toBe(1);
     });
 
+    /** The rows stored under one docket, identity-less rows last. */
+    const docketRows = async (
+      caseNumber: string,
+    ): Promise<{ id: string; sourceDocumentId: string | null }[]> =>
+      await db.query.caseLawDecisions.findMany({
+        where: { sourceId: { eq: sourceId }, caseNumber },
+        columns: { id: true, sourceDocumentId: true },
+        orderBy: { sourceDocumentId: "asc" },
+      });
+
+    const storeLegacyRow = async (
+      caseNumber: string,
+      ecli: string,
+    ): Promise<{ id: string; sourceDocumentId: string | null }> => {
+      await processDecision({
+        input: {
+          ...decisionAt(`Legacy ECLI ${caseNumber}`, undefined),
+          caseNumber,
+          ecli,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows(caseNumber);
+      if (legacyRow === undefined) {
+        throw new Error("expected legacy row");
+      }
+      return legacyRow;
+    };
+
+    test("adopts a legacy row whose ECLI differs only in spelling", async () => {
+      const caseNumber = "Pl.ÚS 18/01";
+      const legacyRow = await storeLegacyRow(
+        caseNumber,
+        "ECLI:CZ:US:2002:PL.US.18.01.1",
+      );
+
+      await processDecision({
+        input: {
+          ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:plenary"),
+          caseNumber,
+          ecli: "ECLI:CZ:US:2002:Pl.US.18.01.1",
+          rawHash: "hash-nalus-plenary",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "nalus-record:plenary" },
+      ]);
+    });
+
+    test("adopts a legacy row through the ECLI an earlier release built", async () => {
+      const caseNumber = "II.ÚS 1030/25";
+      const legacyRow = await storeLegacyRow(
+        caseNumber,
+        "ECLI:CZ:US:2025:2.US.1030.25.1",
+      );
+
+      await processDecision({
+        input: {
+          ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:uncounted"),
+          caseNumber,
+          ecli: "ECLI:CZ:US:2025:2.US.1030.25",
+          legacyEcli: "ECLI:CZ:US:2025:2.US.1030.25.1",
+          rawHash: "hash-nalus-uncounted",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "nalus-record:uncounted" },
+      ]);
+    });
+
+    test("keeps a legacy row whose ECLI names a sibling under the docket", async () => {
+      const caseNumber = "Pl.ÚS 19/01";
+      const legacyUrl = "https://publisher.test/sibling-ecli-legacy";
+      await processDecision({
+        input: {
+          ...decisionAt(`Legacy ECLI ${caseNumber}`, undefined),
+          caseNumber,
+          ecli: "ECLI:CZ:US:2002:PL.US.19.01.1",
+          sourceUrl: legacyUrl,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows(caseNumber);
+
+      // Same docket, same retrieval URL hint, but the second decision of the
+      // docket: the URL alone must not pull the first decision's row over.
+      await processDecision({
+        input: {
+          ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:second"),
+          caseNumber,
+          ecli: "ECLI:CZ:US:2002:Pl.US.19.01.2",
+          legacyEcli: "ECLI:CZ:US:2002:Pl.US.19.01.2",
+          legacySourceUrls: [legacyUrl],
+          rawHash: "hash-nalus-second",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await docketRows(caseNumber);
+      expect(rows.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual([
+        "nalus-record:second",
+        null,
+      ]);
+      expect(rows.at(1)?.id).toBe(legacyRow?.id);
+    });
+
     test("replaces a listing placeholder when detail recovers the docket", async () => {
       const publisherId = "recovered-docket-publisher-id";
       const placeholder = {
