@@ -8,7 +8,9 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
+  attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
+  mergeAnonRestorations,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -32,8 +34,10 @@ import {
 } from "@/api/handlers/chat/persistent-compaction";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
+  ChatMessageMetadata,
   ChatTurnOutcome,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -277,6 +281,93 @@ export const persistMessage = async (props: PersistMessageProps) => {
   return result;
 };
 
+type TerminalAssistantMessageProps = {
+  outcome: ChatTurnOutcome;
+  owningAssistantMessage: PersistableChatMessage | undefined;
+  /** What the run produced; a failure before its first chunk produced nothing. */
+  responseMessage: PersistableChatMessage | undefined;
+};
+
+/**
+ * The one message a terminal turn writes. A continuation writes it over the
+ * owning assistant row, so it keeps what the run did not reproduce: the owning
+ * parts when the run produced none, and the owning metadata beneath the run's.
+ * Restoration pairs accumulate because the owning text still needs the earlier
+ * ones; token usage sums because the row now spans both runs.
+ */
+export const toTerminalAssistantMessage = ({
+  outcome,
+  owningAssistantMessage,
+  responseMessage,
+}: TerminalAssistantMessageProps): PersistableTerminalAssistantMessage => {
+  if (
+    owningAssistantMessage !== undefined &&
+    owningAssistantMessage.role !== "assistant"
+  ) {
+    panic("A terminal continuation owner must be an assistant message");
+  }
+  if (
+    owningAssistantMessage !== undefined &&
+    responseMessage !== undefined &&
+    responseMessage.id !== owningAssistantMessage.id
+  ) {
+    panic("A continuation must persist under its owning message id");
+  }
+  const runParts = responseMessage?.parts ?? [];
+  const message = toPersistableChatMessage({
+    id:
+      responseMessage?.id ??
+      owningAssistantMessage?.id ??
+      createSafeId<"chatMessage">(),
+    metadata: mergeContinuationMetadata({
+      owning: owningAssistantMessage?.metadata,
+      run: responseMessage?.metadata,
+    }),
+    parts:
+      runParts.length === 0 ? (owningAssistantMessage?.parts ?? []) : runParts,
+    role: responseMessage?.role ?? "assistant",
+    ...(owningAssistantMessage?.createdAt === undefined
+      ? {}
+      : { createdAt: owningAssistantMessage.createdAt }),
+  });
+  return attachTerminalTurnOutcome({ message, turnOutcome: outcome });
+};
+
+const mergeContinuationMetadata = ({
+  owning,
+  run,
+}: {
+  owning: ChatMessageMetadata | undefined;
+  run: ChatMessageMetadata | undefined;
+}): ChatMessageMetadata => {
+  const merged: ChatMessageMetadata = { ...owning, ...run };
+  if (
+    owning?.anonRestorations !== undefined &&
+    run?.anonRestorations !== undefined
+  ) {
+    merged.anonRestorations = mergeAnonRestorations(
+      owning.anonRestorations,
+      run.anonRestorations,
+    );
+  }
+  if (owning?.usage !== undefined && run?.usage !== undefined) {
+    const reasoningTokens =
+      (owning.usage.completionTokensDetails?.reasoningTokens ?? 0) +
+      (run.usage.completionTokensDetails?.reasoningTokens ?? 0);
+    merged.usage = {
+      completionTokens:
+        owning.usage.completionTokens + run.usage.completionTokens,
+      promptTokens: owning.usage.promptTokens + run.usage.promptTokens,
+      totalTokens: owning.usage.totalTokens + run.usage.totalTokens,
+      ...(owning.usage.completionTokensDetails === undefined &&
+      run.usage.completionTokensDetails === undefined
+        ? {}
+        : { completionTokensDetails: { reasoningTokens } }),
+    };
+  }
+  return merged;
+};
+
 /**
  * Persist the assistant message and settle its durable execution owner in the
  * same transaction. The stream boundary resolves refs and computes accessible
@@ -289,6 +380,7 @@ export const finalizeAssistantTurn = async ({
   existingIds,
   execution,
   outcome,
+  owningAssistantMessage,
   recordAuditEvent,
   responseMessage,
   safeDb,
@@ -302,6 +394,7 @@ export const finalizeAssistantTurn = async ({
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
+  owningAssistantMessage?: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
   responseMessage: PersistableChatMessage;
   safeDb: SafeDb;
@@ -310,10 +403,15 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
+  const assistantMessage = toTerminalAssistantMessage({
+    outcome,
+    owningAssistantMessage,
+    responseMessage,
+  });
   const persistencePlan = planAssistantFinishPersistence({
     existingIds,
     finishOutcome: outcome,
-    message: responseMessage,
+    message: assistantMessage,
   });
 
   // A terminal stream always supplies an assistant message. Silently
@@ -331,7 +429,7 @@ export const finalizeAssistantTurn = async ({
     safeDb,
     threadId,
     turnSettlement: {
-      assistantMessageId: responseMessage.id,
+      assistantMessageId: assistantMessage.id,
       execution,
       outcome,
     },
@@ -373,24 +471,10 @@ const persistTerminalAssistantTurn = async ({
   userId,
   workspaceId,
 }: PersistTerminalAssistantTurnProps) => {
-  if (
-    owningAssistantMessage !== undefined &&
-    owningAssistantMessage.role !== "assistant"
-  ) {
-    panic("A terminal continuation owner must be an assistant message");
-  }
-  const assistantMessage = toPersistableChatMessage({
-    id: owningAssistantMessage?.id ?? createSafeId<"chatMessage">(),
-    metadata: {
-      ...owningAssistantMessage?.metadata,
-      turnOutcome: outcome,
-    },
-    parts:
-      owningAssistantMessage === undefined ? [] : owningAssistantMessage.parts,
-    role: "assistant",
-    ...(owningAssistantMessage?.createdAt === undefined
-      ? {}
-      : { createdAt: owningAssistantMessage.createdAt }),
+  const assistantMessage = toTerminalAssistantMessage({
+    outcome,
+    owningAssistantMessage,
+    responseMessage: undefined,
   });
   return await persistMessage({
     persistencePlan:
