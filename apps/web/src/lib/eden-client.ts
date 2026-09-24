@@ -1,16 +1,17 @@
 import { createStellaEdenClient } from "@stll/api-client";
-import type { MemoriesAPI, WebAPI } from "@stll/api/eden-contract";
+import type { EdenRoutesApp } from "@stll/api-client";
 
+import type { MemoriesRoutes, WebRoutes } from "@/generated/api-routes.gen";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
 } from "@/lib/api-request-context";
 import { browserApiBaseUrl } from "@/lib/api-url";
 
-export type WebApiRoutes = WebAPI["~Routes"]["v1"];
+export type WebApiRoutes = WebRoutes["v1"];
 
 // Types the API owns and the browser reads by name, re-exported through the
-// one module allowed to import the API's Eden contract.
+// generated API types.
 export type {
   AskManual,
   DeterministicCheck,
@@ -32,7 +33,7 @@ export type {
   ViewLayout,
   ViewSort,
   ViewTemplateProperty,
-} from "@stll/api/eden-contract";
+} from "@/generated/api-routes.gen";
 
 const clientOptions = {
   async onRequest() {
@@ -41,8 +42,11 @@ const clientOptions = {
   headers: getApiRequestHeaders,
 };
 
-const eden = createStellaEdenClient<WebAPI>(browserApiBaseUrl(), clientOptions);
-const memoriesEden = createStellaEdenClient<MemoriesAPI>(
+const eden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
+  browserApiBaseUrl(),
+  clientOptions,
+);
+const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
   browserApiBaseUrl(),
   clientOptions,
 );

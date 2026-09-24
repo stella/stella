@@ -6,12 +6,6 @@
     "target": "apps/api"
   },
   {
-    "kind": "manifest-dependency",
-    "source": "apps/web/package.json",
-    "specifier": "@stll/api",
-    "target": "apps/api"
-  },
-  {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/db.ts",
     "specifier": "@/api/db/root",
@@ -372,18 +366,6 @@
     "target": "apps/web"
   },
   {
-    "kind": "source-import",
-    "source": "apps/web/src/lib/api-contract.ts",
-    "specifier": "@/api/handlers/chat/types",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/web/src/lib/eden-client.ts",
-    "specifier": "@stll/api/eden-contract",
-    "target": "apps/api"
-  },
-  {
     "kind": "tsconfig-include",
     "source": "apps/legal-atlas-runner/tsconfig.json",
     "specifier": "../api/src",
@@ -410,12 +392,6 @@
   {
     "kind": "tsconfig-path",
     "source": "apps/legal-atlas-runner/tsconfig.json",
-    "specifier": "@/api/* -> ../api/src/*",
-    "target": "apps/api"
-  },
-  {
-    "kind": "tsconfig-path",
-    "source": "apps/web/tsconfig.json",
     "specifier": "@/api/* -> ../api/src/*",
     "target": "apps/api"
   }

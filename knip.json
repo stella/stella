@@ -31,6 +31,8 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
+        // Read by scripts/generate-web-api-types.ts through the compiler.
+        "src/eden-contract.ts",
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",

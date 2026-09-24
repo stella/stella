@@ -23,7 +23,7 @@ import type {
   ChatPart,
   ChatSourceDocument,
   ChatUITools,
-} from "@/api/handlers/chat/types";
+} from "@/generated/api-routes.gen";
 import type {
   GlobalSearchHit,
   LegalListSourceLocator,

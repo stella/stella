@@ -1,8 +1,19 @@
 import { treaty } from "@elysia/eden";
 import type { Treaty } from "@elysia/eden";
-import type { AnyElysia } from "elysia";
+import type { AnyElysia, Elysia, RouteBase } from "elysia";
 
 export type StellaEdenClientOptions = Omit<Treaty.Config, "parseDate">;
+
+type EmptyElysia = Elysia;
+
+/** An app type carrying only a route tree: the one part Eden's treaty reads. */
+export type EdenRoutesApp<TRoutes extends RouteBase> = Elysia<
+  EmptyElysia["~Prefix"],
+  EmptyElysia["~Singleton"],
+  EmptyElysia["~Definitions"],
+  EmptyElysia["~Metadata"],
+  TRoutes
+>;
 
 /** Creates the versioned typed API client with shared transport defaults. */
 export const createStellaEdenClient = <TApi extends AnyElysia>(

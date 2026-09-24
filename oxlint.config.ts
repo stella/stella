@@ -408,11 +408,7 @@ const noZodImport = {
   message: "Use 'valibot' instead of 'zod'.",
 };
 
-const webLocalApiImportGroup = [
-  "@/api/*",
-  "@/api/**/*",
-  "!@/api/handlers/chat/types",
-];
+const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
 
 const webProtectedRouteImportGroup = [
   "@/routes/_protected",
@@ -423,8 +419,9 @@ const webProtectedRouteImportGroup = [
 
 const webCrossWorkspaceImports = [
   {
-    group: ["@stll/api", "@stll/api/**", "!@stll/api/eden-contract"],
-    message: "apps/web may only import the counted API Eden contract surface.",
+    group: ["@stll/api", "@stll/api/**"],
+    message:
+      "apps/web reads API types from '@/generated/api-routes.gen' (bun --filter @stll/api gen:web-api-types).",
   },
   {
     group: [
@@ -1075,6 +1072,8 @@ export default defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    // Printed API types, bound to the API by the generator's identity check.
+    "apps/web/src/generated/api-routes.gen.ts",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
