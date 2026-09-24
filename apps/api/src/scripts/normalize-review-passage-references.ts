@@ -8,7 +8,7 @@
  */
 import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import { openOperatorScriptDb } from "@/api/lib/db/operator-script-db";
 import {
   PASSAGE_REFERENCE_STEPS,
   PASSAGES_BY_ID_FUNCTION,
@@ -21,7 +21,7 @@ const STATEMENT_TIMEOUT = "60000ms";
 type Step = (typeof PASSAGE_REFERENCE_STEPS)[number];
 
 const rewriteBatch = async ({ rewrite }: Step): Promise<number> =>
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.execute(
       sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
     );
@@ -48,7 +48,7 @@ const report = async (
     return;
   }
   if (dryRun) {
-    const counted = await rootDb.execute<{ pending: number }>(current.pending);
+    const counted = await db.execute<{ pending: number }>(current.pending);
     console.log(
       `${current.name}: ${String(counted.at(0)?.pending ?? 0)} row(s) to rewrite`,
     );
@@ -60,6 +60,7 @@ const report = async (
 };
 
 const dryRun = process.argv.includes("--dry-run");
+const db = openOperatorScriptDb({ readOnly: dryRun });
 console.log(
   `=== NORMALIZE REVIEW PASSAGE REFERENCES${dryRun ? " (dry run)" : ""} ===`,
 );

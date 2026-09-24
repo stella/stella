@@ -3,7 +3,6 @@ import { and, eq, gt, inArray } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
 import {
   entities,
   schedulerJobs,
@@ -52,6 +51,7 @@ const backfillCursor = (
  * steady-state full-table anti-join.
  */
 export const backfillWorkObligations: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
@@ -65,7 +65,7 @@ export const backfillWorkObligations: SchedulerTask = async ({
   const leaseToken =
     job.lockedBy ??
     panic("Work-obligation backfill requires a scheduler lease");
-  const outcome = await rootDb.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const entityPage = await tx
       .select({
         id: entities.id,

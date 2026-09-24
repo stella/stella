@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
 import {
   entities,
   entityVersions,
@@ -33,7 +32,7 @@ import {
   brandPersistedFieldId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const REPAIR_FILE_DERIVATIVES_TASK = "files.repairDerivatives" as const;
 
@@ -230,13 +229,12 @@ const DERIVATIVE_UNSETTLED = sql`(
 )`;
 
 type RepairDependencies = {
-  db?: Pick<typeof rootDb, "select" | "update">;
   requeue?: typeof requeueFileDerivative;
 };
 
 const selectRepairPage = async (
   cursor: SafeId<"field"> | null,
-  db: Pick<typeof rootDb, "select" | "update">,
+  db: Pick<SchedulerDb, "select" | "update">,
 ) =>
   await db
     .select({
@@ -348,7 +346,7 @@ const persistCursor = async ({
   nextCursor,
   db,
 }: {
-  db: Pick<typeof rootDb, "select" | "update">;
+  db: Pick<SchedulerDb, "select" | "update">;
   jobId: string;
   leaseToken: string;
   nextCursor: SafeId<"field"> | null;
@@ -374,10 +372,9 @@ const persistCursor = async ({
  */
 export const createRepairFileDerivativesTask =
   ({
-    db = rootDb,
     requeue = requeueFileDerivative,
   }: RepairDependencies = {}): SchedulerTask =>
-  async ({ job, logger, signal }) => {
+  async ({ db, job, logger, signal }) => {
     signal.throwIfAborted();
     const leaseToken =
       job.lockedBy ??

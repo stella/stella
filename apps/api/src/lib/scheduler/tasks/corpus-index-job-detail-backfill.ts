@@ -16,7 +16,6 @@ import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
-import { rootDb } from "@/api/db/root";
 import {
   CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   caseLawIndexJobs,
@@ -351,6 +350,7 @@ const nextFamily = (
   FAMILY_ORDER[FAMILY_ORDER.indexOf(family) + 1] ?? null;
 
 export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
+  db,
   job,
   logger,
   scheduleContinuation,
@@ -368,7 +368,7 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
 
   const page = await Result.tryPromise({
     try: async () =>
-      await rootDb.transaction(async (tx) => {
+      await db.transaction(async (tx) => {
         await setTransactionBudget(tx, {
           lockTimeout: BATCH_LOCK_TIMEOUT,
           statementTimeout: BATCH_STATEMENT_TIMEOUT,
@@ -437,7 +437,7 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
   // nothing left to move, tries again.
   const validated = await Result.tryPromise({
     try: async () =>
-      await rootDb.transaction(async (tx) => {
+      await db.transaction(async (tx) => {
         await setTransactionBudget(tx, {
           lockTimeout: VALIDATE_LOCK_TIMEOUT,
           statementTimeout: VALIDATE_STATEMENT_TIMEOUT,

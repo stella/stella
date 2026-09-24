@@ -2,7 +2,6 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -13,7 +12,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const MEMORY_CURATOR_TASK = "memory.curator" as const;
 
@@ -41,7 +40,11 @@ const MEMORY_CURATOR_AUDIT_ACTOR = "system:memory-curator";
  * is by status/pinned/lastUsedAt only, which is correct for a global
  * maintenance pass that never reads tenant content.
  */
-export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
+export const curateAiMemories: SchedulerTask = async ({
+  db,
+  logger,
+  signal,
+}) => {
   if (!env.FEATURE_AI_MEMORY) {
     return;
   }
@@ -58,6 +61,7 @@ export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
   );
 
   const staled = await sweepLifecyclePhase({
+    db,
     signal,
     fromStatus: "active",
     newStatus: "stale",
@@ -66,6 +70,7 @@ export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
   });
 
   const archived = await sweepLifecyclePhase({
+    db,
     signal,
     fromStatus: "stale",
     newStatus: "archived",
@@ -75,6 +80,7 @@ export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
   });
 
   const archivedSuggestions = await sweepLifecyclePhase({
+    db,
     signal,
     fromStatus: "suggested",
     newStatus: "archived",
@@ -91,6 +97,7 @@ export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
 };
 
 type SweepLifecyclePhaseOptions = {
+  db: SchedulerDb;
   signal: AbortSignal;
   fromStatus: "active" | "stale" | "suggested";
   newStatus: "stale" | "archived";
@@ -114,6 +121,7 @@ type SweepLifecyclePhaseOptions = {
  * termination properties can be tested without the scheduler or a database.
  */
 const sweepLifecyclePhase = async ({
+  db,
   signal,
   fromStatus,
   newStatus,
@@ -126,7 +134,7 @@ const sweepLifecyclePhase = async ({
     maxBatches: MAX_CURATION_BATCHES_PER_RUN,
     signal,
     selectBatch: async () =>
-      await rootDb
+      await db
         .select({ id: aiMemories.id })
         .from(aiMemories)
         .where(
@@ -139,7 +147,7 @@ const sweepLifecyclePhase = async ({
         .orderBy(asc(cutoffColumn))
         .limit(CURATION_BATCH_SIZE),
     transitionBatch: async (ids) =>
-      await rootDb.transaction(async (tx) => {
+      await db.transaction(async (tx) => {
         const rows = await tx
           .update(aiMemories)
           .set({ status: newStatus, ...(archivedAt && { archivedAt }) })

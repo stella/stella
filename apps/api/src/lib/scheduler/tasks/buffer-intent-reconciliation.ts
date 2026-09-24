@@ -1,6 +1,5 @@
 import { Result, panic } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { reconcileStaleBufferIntentsGlobally } from "@/api/lib/buffer-intent-reconciliation";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
@@ -17,8 +16,7 @@ type ReconcileDependencies = {
 
 export const createReconcileBufferIntentsTask =
   ({
-    rootSafeDb = async (run) =>
-      await Result.tryPromise(async () => await rootDb.transaction(run)),
+    rootSafeDb,
     reconcile = reconcileStaleBufferIntentsGlobally,
   }: ReconcileDependencies = {}): SchedulerTask =>
   /**
@@ -26,12 +24,15 @@ export const createReconcileBufferIntentsTask =
    * sweep guarantees that a workspace never needs another write to reclaim
    * orphaned final-key S3 objects after a hard process death.
    */
-  async ({ logger, signal }) => {
+  async ({ db, logger, signal }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
     const claimedIntents = await reconcile({
-      safeDb: rootSafeDb,
+      safeDb:
+        rootSafeDb ??
+        (async (run) =>
+          await Result.tryPromise(async () => await db.transaction(run))),
       limit: RECONCILE_INTENT_LIMIT,
       signal,
     });

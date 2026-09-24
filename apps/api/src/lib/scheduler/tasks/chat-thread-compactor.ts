@@ -13,7 +13,6 @@
  */
 import { panic, Result } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -36,14 +35,18 @@ import type {
   ChatCompactionSettlement,
   QueuedCompactionThread,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor-queue";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const CHAT_THREAD_COMPACTOR_TASK = "chat.compactThreads" as const;
 
 const COMPACTION_TIMEOUT_MS = 60_000;
 
-export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
-  const claim = await claimCompactionBatch();
+export const compactChatThreads: SchedulerTask = async ({
+  db,
+  logger,
+  signal,
+}) => {
+  const claim = await claimCompactionBatch(db);
 
   let advanced = 0;
   let upToDate = 0;
@@ -75,6 +78,7 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
       // retry off, so a thread that fails every time cannot spend a claim slot
       // and a provider call on every tick.
       await settleThread({
+        db,
         claim,
         settlement: CHAT_COMPACTION_SETTLEMENT.FAILED,
         thread,
@@ -110,6 +114,7 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
     }
 
     await settleThread({
+      db,
       claim,
       settlement: settlementForOutcome(outcome.value),
       thread,
@@ -261,12 +266,14 @@ type ClaimedCompactionBatch = {
   threads: QueuedCompactionThread[];
 };
 
-const claimCompactionBatch = async (): Promise<ClaimedCompactionBatch> => {
+const claimCompactionBatch = async (
+  db: SchedulerDb,
+): Promise<ClaimedCompactionBatch> => {
   const now = new Date();
   const leaseExpiresAt = new Date(
     now.getTime() + CHAT_COMPACTION_QUEUE_LEASE_MS,
   );
-  const rows = await rootDb.execute(
+  const rows = await db.execute(
     buildClaimChatCompactionQueueQuery({ leaseExpiresAt, now }),
   );
   const { malformedRowCount, threads } = parseChatCompactionQueueRows(rows);
@@ -274,15 +281,17 @@ const claimCompactionBatch = async (): Promise<ClaimedCompactionBatch> => {
 };
 
 const settleThread = async ({
+  db,
   claim,
   settlement,
   thread,
 }: {
+  db: SchedulerDb;
   claim: ClaimedCompactionBatch;
   settlement: ChatCompactionSettlement;
   thread: QueuedCompactionThread;
 }): Promise<void> => {
-  await rootDb.execute(
+  await db.execute(
     buildSettleChatCompactionQueueQuery({
       leaseExpiresAt: claim.leaseExpiresAt,
       now: new Date(),

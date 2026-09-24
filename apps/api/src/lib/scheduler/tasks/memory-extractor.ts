@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -45,6 +44,7 @@ import {
   type ExtractableMemoryKind,
 } from "@/api/lib/scheduler/tasks/memory-extractor-scope";
 import type {
+  SchedulerDb,
   SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
@@ -108,6 +108,7 @@ type CompactionRow = QueuedMemoryCompaction;
  * never widens scope.
  */
 export const extractMemoriesFromCompactions: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -115,7 +116,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
     return;
   }
 
-  const claimedBatch = await claimMemoryExtractionBatch();
+  const claimedBatch = await claimMemoryExtractionBatch(db);
   const compactions = interleaveClaimedMemoryCompactions(
     claimedBatch.organizations,
   );
@@ -130,17 +131,18 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       return;
     }
 
-    if (!(await hasCurrentExtractionConsent(compaction))) {
+    if (!(await hasCurrentExtractionConsent(db, compaction))) {
       await processCompactionAt(index + 1);
       return;
     }
 
-    const candidatesResult = await extractCandidates(compaction, signal);
+    const candidatesResult = await extractCandidates(db, compaction, signal);
 
     if (Result.isError(candidatesResult)) {
       // Rotate failures behind untouched work. They remain retryable on a
       // later run, but cannot permanently occupy its tenant's oldest slots.
       await recordMemoryExtractionFailure({
+        db,
         compactionId: compaction.compactionId,
         error: candidatesResult.error,
         feature: "memory.extractor",
@@ -160,6 +162,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
     const persistedResult = await Result.tryPromise({
       try: async () =>
         await persistSuggestions({
+          db,
           candidates,
           compaction,
         }),
@@ -170,6 +173,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       // Keep that tenant-local race inside this compaction's failure boundary
       // so later organizations in the fair batch are still processed.
       await recordMemoryExtractionFailure({
+        db,
         compactionId: compaction.compactionId,
         error: persistedResult.error,
         feature: "memory.extractor.persistence",
@@ -192,7 +196,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   await processCompactionAt(0);
 
   if (!signal.aborted) {
-    await settleMemoryExtractionBatch(claimedBatch);
+    await settleMemoryExtractionBatch(db, claimedBatch);
   }
 
   logger.info("scheduler.memory_extractor", {
@@ -208,6 +212,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
 };
 
 type RecordMemoryExtractionFailureOptions = {
+  db: SchedulerDb;
   compactionId: SafeId<"chatThreadCompaction">;
   error: unknown;
   feature: "memory.extractor" | "memory.extractor.persistence";
@@ -218,6 +223,7 @@ type RecordMemoryExtractionFailureOptions = {
 };
 
 const recordMemoryExtractionFailure = async ({
+  db,
   compactionId,
   error,
   feature,
@@ -225,7 +231,7 @@ const recordMemoryExtractionFailure = async ({
   logger,
 }: RecordMemoryExtractionFailureOptions): Promise<void> => {
   const stampResult = await runMemoryExtractionFailureStamp(async () => {
-    await rootDb
+    await db
       .update(chatThreadCompactions)
       .set({ memoryExtractionAttemptedAt: new Date() })
       .where(eq(chatThreadCompactions.id, compactionId));
@@ -253,29 +259,30 @@ type ClaimedMemoryExtractionBatch = {
   organizations: ReturnType<typeof groupClaimedMemoryExtractionRows>;
 };
 
-const claimMemoryExtractionBatch =
-  async (): Promise<ClaimedMemoryExtractionBatch> => {
-    const now = new Date();
-    const leaseExpiresAt = new Date(
-      now.getTime() + MEMORY_EXTRACTION_QUEUE_LEASE_MS,
-    );
-    const rows = await rootDb.execute(
-      buildClaimMemoryExtractionQueueQuery({ leaseExpiresAt, now }),
-    );
-    return {
-      leaseExpiresAt,
-      organizations: groupClaimedMemoryExtractionRows(rows),
-    };
+const claimMemoryExtractionBatch = async (
+  db: SchedulerDb,
+): Promise<ClaimedMemoryExtractionBatch> => {
+  const now = new Date();
+  const leaseExpiresAt = new Date(
+    now.getTime() + MEMORY_EXTRACTION_QUEUE_LEASE_MS,
+  );
+  const rows = await db.execute(
+    buildClaimMemoryExtractionQueueQuery({ leaseExpiresAt, now }),
+  );
+  return {
+    leaseExpiresAt,
+    organizations: groupClaimedMemoryExtractionRows(rows),
   };
+};
 
-const settleMemoryExtractionBatch = async ({
-  leaseExpiresAt,
-  organizations,
-}: ClaimedMemoryExtractionBatch): Promise<void> => {
+const settleMemoryExtractionBatch = async (
+  db: SchedulerDb,
+  { leaseExpiresAt, organizations }: ClaimedMemoryExtractionBatch,
+): Promise<void> => {
   if (organizations.length === 0) {
     return;
   }
-  await rootDb.execute(
+  await db.execute(
     buildSettleMemoryExtractionQueueQuery({
       leaseExpiresAt,
       now: new Date(),
@@ -292,6 +299,7 @@ type ExtractedCandidate = {
 };
 
 const extractCandidates = async (
+  db: SchedulerDb,
   compaction: CompactionRow,
   schedulerSignal: AbortSignal,
 ): Promise<Result<ExtractedCandidate[] | null, unknown>> => {
@@ -355,7 +363,7 @@ const extractCandidates = async (
       // Re-read after potentially slow configuration loading and immediately
       // before provider transmission. The outer check avoids needless setup;
       // this one closes the opt-out window around the actual model call.
-      if (!(await hasCurrentExtractionConsent(compaction))) {
+      if (!(await hasCurrentExtractionConsent(db, compaction))) {
         return null;
       }
 
@@ -398,9 +406,10 @@ const extractCandidates = async (
 };
 
 const hasCurrentExtractionConsent = async (
+  db: SchedulerDb,
   compaction: CompactionRow,
 ): Promise<boolean> => {
-  const [settings] = await rootDb
+  const [settings] = await db
     .select({
       enabled: organizationSettings.memoryExtractionEnabled,
       enabledAt: organizationSettings.memoryExtractionEnabledAt,
@@ -442,11 +451,13 @@ const normalizeCandidates = (
 type SuggestionInsert = typeof aiMemories.$inferInsert;
 
 type PersistSuggestionsOptions = {
+  db: SchedulerDb;
   candidates: ExtractedCandidate[];
   compaction: CompactionRow;
 };
 
 const persistSuggestions = async ({
+  db,
   candidates,
   compaction,
 }: PersistSuggestionsOptions): Promise<number | null> => {
@@ -454,7 +465,7 @@ const persistSuggestions = async ({
     buildSuggestionRow({ candidate, compaction }),
   );
 
-  return await rootDb.transaction(async (tx): Promise<number | null> => {
+  return await db.transaction(async (tx): Promise<number | null> => {
     // Share the consent transition lock used by the settings handler. A
     // disable that wins the lock prevents persistence; a persistence that wins
     // commits before the administrator's disable returns.

@@ -19,7 +19,6 @@ import { panic, Result } from "better-result";
 import { asc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { chatMessages, chatThreads, workspaces } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -33,6 +32,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openOperatorScriptDb } from "@/api/lib/db/operator-script-db";
 
 const THREAD_BATCH_SIZE = 50;
 const STATEMENT_TIMEOUT = "60000ms";
@@ -143,27 +143,30 @@ type BatchOutcome = {
 };
 
 const readThreadBatch = async (after: Cursor | null) => {
-  const rows = await rootDb
-    .select({
-      id: chatThreads.id,
-      organizationId: chatThreads.organizationId,
-      userId: chatThreads.userId,
-      workspaceId: chatThreads.workspaceId,
-      dataWorkspaceIds: chatThreads.dataWorkspaceIds,
-    })
-    .from(chatThreads)
-    .where(
-      after === null
-        ? undefined
-        : sql`(${chatThreads.organizationId}, ${chatThreads.userId}, ${chatThreads.id})
-            > (${after.organizationId}, ${after.userId}, ${after.threadId}::uuid)`,
-    )
-    .orderBy(
-      asc(chatThreads.organizationId),
-      asc(chatThreads.userId),
-      asc(chatThreads.id),
-    )
-    .limit(THREAD_BATCH_SIZE);
+  const rows = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({
+          id: chatThreads.id,
+          organizationId: chatThreads.organizationId,
+          userId: chatThreads.userId,
+          workspaceId: chatThreads.workspaceId,
+          dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+        })
+        .from(chatThreads)
+        .where(
+          after === null
+            ? undefined
+            : sql`(${chatThreads.organizationId}, ${chatThreads.userId}, ${chatThreads.id})
+                > (${after.organizationId}, ${after.userId}, ${after.threadId}::uuid)`,
+        )
+        .orderBy(
+          asc(chatThreads.organizationId),
+          asc(chatThreads.userId),
+          asc(chatThreads.id),
+        )
+        .limit(THREAD_BATCH_SIZE),
+  );
   const first = rows.at(0);
   return first === undefined
     ? []
@@ -178,15 +181,18 @@ const readThreadBatch = async (after: Cursor | null) => {
 const readMessagesByThreadId = async (
   threadIds: readonly SafeId<"chatThread">[],
 ) => {
-  const rows = await rootDb
-    .select({
-      id: chatMessages.id,
-      threadId: chatMessages.threadId,
-      role: chatMessages.role,
-      content: chatMessages.content,
-    })
-    .from(chatMessages)
-    .where(inArray(chatMessages.threadId, [...threadIds]));
+  const rows = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({
+          id: chatMessages.id,
+          threadId: chatMessages.threadId,
+          role: chatMessages.role,
+          content: chatMessages.content,
+        })
+        .from(chatMessages)
+        .where(inArray(chatMessages.threadId, [...threadIds])),
+  );
 
   const held = new Set<string>();
   const messagesByThreadId = new Map<string, ChatMessage[]>();
@@ -240,13 +246,16 @@ const recomputeBatch = async ({
   const workspaceRows =
     mentionedWorkspaceIds.length === 0
       ? []
-      : await rootDb
-          .select({
-            id: workspaces.id,
-            organizationId: workspaces.organizationId,
-          })
-          .from(workspaces)
-          .where(inArray(workspaces.id, mentionedWorkspaceIds));
+      : await db.transaction(
+          async (tx) =>
+            await tx
+              .select({
+                id: workspaces.id,
+                organizationId: workspaces.organizationId,
+              })
+              .from(workspaces)
+              .where(inArray(workspaces.id, mentionedWorkspaceIds)),
+        );
   const planned = planThreadScopeAdditions({
     messagesByThreadId,
     threads,
@@ -271,7 +280,7 @@ const recomputeBatch = async ({
   if (dryRun) {
     // Counts derived rows already behind their thread; rows that fall behind
     // only once a planned thread widens are counted by the real run.
-    const counted = await rootDb.execute<{ stale: number }>(
+    const counted = await db.execute<{ stale: number }>(
       countStaleDerivedRows(readableThreadIds),
     );
     return {
@@ -298,7 +307,7 @@ const recomputeBatch = async ({
     threads.map((thread) => [thread.id, thread.workspaceId]),
   );
 
-  const outcome = await rootDb.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     await tx.execute(
       sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
     );
@@ -412,6 +421,7 @@ const runBatches = async ({
 
 const afterIndex = process.argv.indexOf("--after");
 const dryRun = process.argv.includes("--dry-run");
+const db = openOperatorScriptDb({ readOnly: dryRun });
 console.log(`=== RECOMPUTE CHAT DATA SCOPE${dryRun ? " (dry run)" : ""} ===`);
 const { heldThreadIds, ...totals } = await runBatches({
   after: parseCursor(

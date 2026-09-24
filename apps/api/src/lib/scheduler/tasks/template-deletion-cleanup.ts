@@ -1,11 +1,10 @@
 import { Result, UnhandledException } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { templateDeletionCleanupRequests } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { deleteS3Keys } from "@/api/lib/files/utils";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const CLEAN_TEMPLATE_DELETION_OBJECTS_TASK =
   "templates.cleanDeletionObjects" as const;
@@ -37,10 +36,12 @@ export const getTemplateDeletionCleanupRetryAt = ({
   return new Date(now.getTime() + delaySeconds * 1000);
 };
 
-const claimCleanupBatch = async (): Promise<ClaimedCleanup[]> => {
+const claimCleanupBatch = async (
+  db: SchedulerDb,
+): Promise<ClaimedCleanup[]> => {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - STALE_PROCESSING_MS);
-  return await rootDb.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const candidates = await tx
       .select({ id: templateDeletionCleanupRequests.id })
       .from(templateDeletionCleanupRequests)
@@ -89,7 +90,10 @@ const claimCleanupBatch = async (): Promise<ClaimedCleanup[]> => {
   });
 };
 
-const processCleanup = async (claim: ClaimedCleanup): Promise<boolean> => {
+const processCleanup = async (
+  db: SchedulerDb,
+  claim: ClaimedCleanup,
+): Promise<boolean> => {
   const deletion = await Result.tryPromise({
     try: async () => await deleteS3Keys(claim.s3Keys),
     catch: (cause) =>
@@ -104,7 +108,7 @@ const processCleanup = async (claim: ClaimedCleanup): Promise<boolean> => {
   if (error !== null) {
     captureError(error, { cleanupRequestId: claim.id });
     const failedAt = new Date();
-    await rootDb
+    await db
       .update(templateDeletionCleanupRequests)
       .set({
         errorMessage: error.message,
@@ -124,7 +128,7 @@ const processCleanup = async (claim: ClaimedCleanup): Promise<boolean> => {
       );
     return false;
   }
-  await rootDb
+  await db
     .update(templateDeletionCleanupRequests)
     .set({
       completedAt: new Date(),
@@ -144,13 +148,14 @@ const processCleanup = async (claim: ClaimedCleanup): Promise<boolean> => {
 };
 
 export const cleanTemplateDeletionObjects: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   if (signal.aborted) {
     return;
   }
-  const claims = await claimCleanupBatch();
+  const claims = await claimCleanupBatch(db);
   let next = 0;
   let cleaned = 0;
   let failed = 0;
@@ -160,7 +165,7 @@ export const cleanTemplateDeletionObjects: SchedulerTask = async ({
     if (!claim || signal.aborted) {
       return;
     }
-    if (await processCleanup(claim)) {
+    if (await processCleanup(db, claim)) {
       cleaned += 1;
     } else {
       failed += 1;

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
@@ -18,8 +17,7 @@ type SweepDependencies = {
 
 export const createSweepFileComparisonUploadsTask =
   ({
-    rootSafeDb = async (run) =>
-      await Result.tryPromise(async () => await rootDb.transaction(run)),
+    rootSafeDb,
     sweep = sweepExpiredFileComparisonUploads,
   }: SweepDependencies = {}): SchedulerTask =>
   /**
@@ -28,13 +26,16 @@ export const createSweepFileComparisonUploadsTask =
    * client whose PUT never lands, leaves rows and possibly objects behind. The
    * sweep is what makes the expiry in the row real.
    */
-  async ({ logger, signal }) => {
+  async ({ db, logger, signal }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
     const sweptUploads = await sweep({
       limit: FILE_COMPARISON_SWEEP_LIMIT,
-      safeDb: rootSafeDb,
+      safeDb:
+        rootSafeDb ??
+        (async (run) =>
+          await Result.tryPromise(async () => await db.transaction(run))),
       signal,
     });
 

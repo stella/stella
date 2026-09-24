@@ -4,7 +4,6 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { schedulerJobs } from "@/api/db/schema";
 import {
@@ -21,7 +20,11 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerDb,
+  SchedulerJob,
+  SchedulerTask,
+} from "@/api/lib/scheduler/types";
 
 /**
  * The three recurring passes that keep per-decision raw storage honest.
@@ -41,7 +44,10 @@ const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
 const CONTINUATION_DELAY_MS = 1000;
 
-const rootScopedDb: ScopedDb = async (run) => await rootDb.transaction(run);
+const rootScopedDb =
+  (db: SchedulerDb): ScopedDb =>
+  async (run) =>
+    await db.transaction(run);
 
 const leaseFence = (job: SchedulerJob) =>
   and(
@@ -54,11 +60,12 @@ const leaseFence = (job: SchedulerJob) =>
 
 /** Delete the raw prefixes owed a sweep: erased decisions, lost writes. */
 export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   const result = await reconcileCaseLawRawSweeps({
-    scopedDb: rootScopedDb,
+    scopedDb: rootScopedDb(db),
     limit: SWEEP_LIMIT,
     signal,
   });
@@ -88,6 +95,7 @@ const parseRowCursor = (payload: Record<string, unknown> | null) => {
  * yet been replaced are reached on a later pass.
  */
 export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   scheduleContinuation,
@@ -96,14 +104,14 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   signal.throwIfAborted();
   const cursor = parseRowCursor(job.payload);
   const page = await reconcileCaseLawRawLayoutPage({
-    scopedDb: rootScopedDb,
+    scopedDb: rootScopedDb(db),
     cursor,
     limit: ROW_PAGE_LIMIT,
     mode: RAW_LAYOUT_MODE.APPLY,
     signal,
   });
   // Checkpoint last, and only as far as every row before it is settled.
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({ payload: { cursor: page.resumeAfter } })
     .where(leaseFence(job));
@@ -160,19 +168,20 @@ const parseCensusCursor = (
  * erased or was never written are queued for a sweep.
  */
 export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
 }) => {
   signal.throwIfAborted();
   const page = await censusCaseLawRawObjectsPage({
-    scopedDb: rootScopedDb,
+    scopedDb: rootScopedDb(db),
     cursor: parseCensusCursor(job.payload),
     maxKeys: CENSUS_PAGE_KEYS,
     mode: RAW_CENSUS_MODE.APPLY,
     signal,
   });
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({
       payload:
