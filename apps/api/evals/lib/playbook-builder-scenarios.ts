@@ -613,7 +613,7 @@ const discovery: BuilderScenario = {
   brief:
     "I want a playbook for the IT services agreements we sign with our suppliers.",
   followUps: [],
-  perspectives: [undefined, "buyer"],
+  perspectives: [undefined],
   answer: (question) =>
     isCandidatesQuestion(question)
       ? pickConfirmedCandidates(question)
@@ -663,7 +663,7 @@ const contractsLater: BuilderScenario = {
   followUps: [
     "Use the existing contracts in my matters to inform the remaining positions.",
   ],
-  perspectives: [undefined, "buyer"],
+  perspectives: [undefined],
   answer: (question) =>
     isCandidatesQuestion(question)
       ? pickConfirmedCandidates(question)
