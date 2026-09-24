@@ -566,7 +566,7 @@ const SKILL_FIXTURES = resolveSkillToolPrecedence({
         "Checklist for reviewing risk clauses in a Czech commercial contract (obchodní smlouva).",
     }),
   ],
-});
+}).skills;
 
 const skillToolNameOf = (slug: string): string =>
   SKILL_FIXTURES.find((skill) => skill.slug === slug)?.exposedName ??

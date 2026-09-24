@@ -10,6 +10,7 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { logger } from "@/api/lib/observability/logger";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 
@@ -133,10 +134,18 @@ export const loadVisibleSkillTools = async ({
     });
   }
 
-  return resolveSkillToolPrecedence({
+  const { droppedInstalledSlugs, skills } = resolveSkillToolPrecedence({
     builtIn: listBuiltInSkillTools(),
     installed: rows.value,
   });
+  if (droppedInstalledSlugs > 0) {
+    logger.warn("mcp.gateway.skills_capped", {
+      "organization.id": context.organizationId,
+      "skills.cap": LIMITS.mcpGatewaySkillsMax,
+      "skills.dropped": droppedInstalledSlugs,
+    });
+  }
+  return skills;
 };
 
 export const resolveSkillTool = async ({
@@ -150,12 +159,22 @@ export const resolveSkillTool = async ({
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
+export type ResolvedSkillTools = {
+  /** Installed slugs the cap left unserved, after precedence. */
+  droppedInstalledSlugs: number;
+  skills: ResolvedSkillTool[];
+};
+
 /**
  * Pure naming and precedence step, exported so tests and the orientation eval
  * derive collision-safe exposed names through the served code path rather
  * than a hand-written mirror of it. An installed skill shadows a built-in with
  * the same slug, as a private row shadows a team row; chat resolves the same
- * way (`resolveSkillPrecedence` in `lib/agent-skills/skills.ts`).
+ * way (`resolveSkillPrecedence` in `lib/agent-skills/skills.ts`). The cap
+ * bounds installed rows only: every built-in is served regardless, since an
+ * organization at the cap must not silently lose the shipped skills, and a
+ * dropped installed row does not shadow the built-in that then serves its
+ * slug.
  */
 export const resolveSkillToolPrecedence = ({
   builtIn,
@@ -163,28 +182,12 @@ export const resolveSkillToolPrecedence = ({
 }: {
   builtIn: readonly SkillToolContent[];
   installed: readonly SkillToolRow[];
-}): ResolvedSkillTool[] => {
+}): ResolvedSkillTools => {
   const skills: ResolvedSkillTool[] = [];
   const seenSlugs = new Set<string>();
+  const droppedSlugs = new Set<string>();
   const seenToolNames = new Set<string>();
-  const candidates: SkillToolSource[] = [];
-  for (const row of installed.toSorted(
-    (a, b) => scopePriority(a.scope) - scopePriority(b.scope),
-  )) {
-    candidates.push({ ...row, source: SKILL_TOOL_SOURCE.installed });
-  }
-  for (const skill of builtIn) {
-    candidates.push({ ...skill, source: SKILL_TOOL_SOURCE.builtIn });
-  }
-
-  for (const candidate of candidates) {
-    if (
-      skills.length >= LIMITS.mcpGatewaySkillsMax ||
-      seenSlugs.has(candidate.slug)
-    ) {
-      continue;
-    }
-
+  const expose = (candidate: SkillToolSource) => {
     seenSlugs.add(candidate.slug);
     skills.push({
       ...candidate,
@@ -194,10 +197,33 @@ export const resolveSkillToolPrecedence = ({
         seen: seenToolNames,
       }),
     });
+  };
+
+  for (const row of installed.toSorted(
+    (a, b) => scopePriority(a.scope) - scopePriority(b.scope),
+  )) {
+    if (seenSlugs.has(row.slug) || droppedSlugs.has(row.slug)) {
+      continue;
+    }
+    if (skills.length >= LIMITS.mcpGatewaySkillsMax) {
+      droppedSlugs.add(row.slug);
+      continue;
+    }
+    expose({ ...row, source: SKILL_TOOL_SOURCE.installed });
+  }
+  for (const skill of builtIn) {
+    if (!seenSlugs.has(skill.slug)) {
+      expose({ ...skill, source: SKILL_TOOL_SOURCE.builtIn });
+    }
   }
 
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- exposedName is the MCP tool registry's machine identifier, not display text
-  return skills.toSorted((a, b) => a.exposedName.localeCompare(b.exposedName));
+  return {
+    droppedInstalledSlugs: droppedSlugs.size,
+    skills: skills.toSorted((a, b) =>
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- exposedName is the MCP tool registry's machine identifier, not display text
+      a.exposedName.localeCompare(b.exposedName),
+    ),
+  };
 };
 
 const scopePriority = (scope: "team" | "private") =>
