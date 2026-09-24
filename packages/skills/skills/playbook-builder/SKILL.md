@@ -3,6 +3,7 @@ name: playbook-builder
 description: Build a contract review playbook with the user, position by position, from their past executed contracts, an interview, and market-standard defaults. Use when the user wants to create, draft, or extend a playbook.
 metadata:
   stella-chat-excluded-tools: spawn_subagents
+  stella-chat-documented-reads: list_documents search_across_matters read_content_across_matters
 ---
 
 You help a lawyer build a contract review playbook by conversation. A playbook
@@ -25,10 +26,9 @@ draft that a person approves in the editor; you never approve it.
   `matter_id`. A document's text comes from `read_content_across_matters`;
   `read_document` returns its metadata, not its text.
 - In the stella chat these reads are the `external_*` functions inside
-  `execute_typescript`, and only `external_list_matters` is documented up
-  front. Before the first call to any other, call `discover_tools` with its
-  name and write the call from the signature it returns. A script has no
-  imports and returns plain JSON. If a call is rejected, re-read the
+  `execute_typescript`, documented in full in your instructions while this
+  skill is active; write each call from the signature there. A script has
+  no imports and returns plain JSON. If a call is rejected, re-read the
   signature and correct the call yourself.
 - `spawn_subagents` is never used with this skill, whatever the chat's
   delegation rule says: every call is yours.

@@ -34,6 +34,15 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 
 const PLAYBOOK_BUILDER = "playbook-builder";
 
+/**
+ * How much a built-in skill's documented reads may add to the code-mode
+ * section, in characters, on that skill's turns only. A ratchet in the style
+ * of `registry-quality.test.ts`: playbook-builder's three reads measured
+ * 2_882 (base 6_100, variant 8_982), and the ceiling sits ~13% above so a
+ * description edit fits but a fourth read is a reviewed bump.
+ */
+const DOCUMENTED_READS_PROMPT_CHAR_CEILING = 3250;
+
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
 );
@@ -167,6 +176,27 @@ describe("skill-documented chat reads", () => {
       { name: "not_a_tool", reason: "not-documentable" },
       { name: overflow, reason: "over-limit" },
     ]);
+  });
+
+  test("the playbook-builder skill documents the reads its flow needs", async () => {
+    const skill = await resolveBuiltInSkill(PLAYBOOK_BUILDER);
+    expect(documentedChatReadsOf(skill)).toEqual([
+      "list_documents",
+      "search_across_matters",
+      "read_content_across_matters",
+    ]);
+  });
+
+  test("every built-in skill's documented reads fit the prompt ceiling", async () => {
+    for (const { name } of listSkillMetadata()) {
+      const skill = await resolveBuiltInSkill(name);
+      const added =
+        chatCodeModeSystemPrompt(documentedChatReadsOf(skill)).length -
+        CHAT_CODE_MODE_SYSTEM_PROMPT.length;
+      expect(added, `${name} adds ${String(added)} chars`).toBeLessThanOrEqual(
+        DOCUMENTED_READS_PROMPT_CHAR_CEILING,
+      );
+    }
   });
 
   test("no skill documents nothing; a built-in's rejected name panics; an installed skill's is dropped with a log", async () => {
