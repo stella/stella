@@ -493,12 +493,58 @@ type HeldIdentityKeysOptions = {
   identities: readonly ListingIdentity[];
   /** See `SourceReconciliation.heldRequiresDetail`. */
   requireDetail: boolean;
+  /** See `SourceReconciliation.heldWithoutDetail`. */
+  heldWithoutDetail?: ((identity: ListingIdentity) => boolean) | undefined;
 };
 
-/** The identity keys, out of the given ones, this source already holds. */
+/**
+ * The identity keys, out of the given ones, this source already holds. Where
+ * the source requires detail, the identities it declares complete without a
+ * document are asked about without that filter, and every other one with it.
+ */
 const selectHeldIdentityKeys = async (
   scopedDb: ScopedDb,
-  { identities, requireDetail, sourceId }: HeldIdentityKeysOptions,
+  {
+    heldWithoutDetail,
+    identities,
+    requireDetail,
+    sourceId,
+  }: HeldIdentityKeysOptions,
+): Promise<Set<string>> => {
+  if (!requireDetail || heldWithoutDetail === undefined) {
+    return await selectHeldIdentityKeysUniformly(scopedDb, {
+      identities,
+      requireDetail,
+      sourceId,
+    });
+  }
+  const [exempt, detailed] = [
+    identities.filter((identity) => heldWithoutDetail(identity)),
+    identities.filter((identity) => !heldWithoutDetail(identity)),
+  ];
+  const held = await selectHeldIdentityKeysUniformly(scopedDb, {
+    identities: detailed,
+    requireDetail: true,
+    sourceId,
+  });
+  for (const key of await selectHeldIdentityKeysUniformly(scopedDb, {
+    identities: exempt,
+    requireDetail: false,
+    sourceId,
+  })) {
+    held.add(key);
+  }
+  return held;
+};
+
+/** The same question with one detail filter for every identity asked about. */
+const selectHeldIdentityKeysUniformly = async (
+  scopedDb: ScopedDb,
+  {
+    identities,
+    requireDetail,
+    sourceId,
+  }: Omit<HeldIdentityKeysOptions, "heldWithoutDetail">,
 ): Promise<Set<string>> => {
   const documentIds = new Set<string>();
   const caseNumbersByLanguage = new Map<string, Set<string>>();
@@ -1112,6 +1158,7 @@ const walkSlice = async ({
     sourceId,
     identities: items.map(({ identity }) => identity),
     requireDetail: reconciliation.heldRequiresDetail === true,
+    heldWithoutDetail: reconciliation.heldWithoutDetail,
   });
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
@@ -1240,6 +1287,7 @@ const retryParkedItems = async ({
     sourceId,
     identities: outstanding.map(({ identity }) => identity),
     requireDetail: reconciliation.heldRequiresDetail === true,
+    heldWithoutDetail: reconciliation.heldWithoutDetail,
   });
   const settled = outstanding.filter(({ identityKey }) =>
     held.has(identityKey),

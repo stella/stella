@@ -987,6 +987,18 @@ export type SourceReconciliation = SourceSliceWalk & {
    * thing for every source that opts in.
    */
   heldRequiresDetail?: boolean | undefined;
+  /**
+   * The identities `heldRequiresDetail` does not apply to: records the source
+   * publishes as metadata alone, which the pipeline stores under the same
+   * no-document marker a failed fetch leaves. Without this, a source mixing
+   * such records with documents it does serve has to pick one rule for both,
+   * and either counts its metadata-only records missing on every walk or
+   * stops hunting the documents that failed.
+   *
+   * Read off the identity alone, because the parked-retry path holds nothing
+   * else; absent, every identity follows `heldRequiresDetail`.
+   */
+  heldWithoutDetail?: ((identity: ListingIdentity) => boolean) | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;

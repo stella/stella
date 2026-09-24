@@ -26,6 +26,7 @@ import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-n
 import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
@@ -71,6 +72,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyAdapter,
   [ADAPTER_KEYS.PL_KIS]: plKisAdapter,
+  [ADAPTER_KEYS.PL_UODO]: plUodoAdapter,
 } as const satisfies AdapterRegistry;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

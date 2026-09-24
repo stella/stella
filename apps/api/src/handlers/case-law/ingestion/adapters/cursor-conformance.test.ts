@@ -409,6 +409,17 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.PL_UODO]: {
+    disposition: "exercised",
+    // The search answers a keyset it holds nothing past with an empty array.
+    // The crawl never reaches a body from here, because it only follows
+    // listed records.
+    exhaustedSource: () => jsonResponse([]),
+    // A lap that reaches the tip parks the cursor on the day it ended, and a
+    // cycle on that day makes no request and returns the cursor it was given.
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**

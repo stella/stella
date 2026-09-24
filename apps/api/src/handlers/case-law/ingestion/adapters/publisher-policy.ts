@@ -133,6 +133,11 @@ export const PUBLISHER_GATES = {
     publisher: "Hugging Face",
     intervalMs: POLITE_INTERVAL_MS,
   },
+  /**
+   * orzeczenia.uodo.gov.pl. Politeness, not a publisher statement: the portal
+   * states no limit, and this keeps it under one request a second.
+   */
+  "uodo-gov-pl": { publisher: "Prezes UODO", intervalMs: 1000 },
   /** eakta.birosag.hu. */
   "birosag-hu": {
     publisher: "Országos Bírósági Hivatal",
@@ -187,6 +192,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.EU_ECJ]: "cellar-eu",
   [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
+  [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** Minimum gap between two requests the adapter sends to its publisher. */
