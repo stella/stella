@@ -186,7 +186,7 @@ const CZ_US_GAZETTE_SOURCE = String.raw`\d{1,4}\/\d{4}\s+Sb\.`;
  * above all, ends the context, so `nálezu … ve věci zákona č. 82/1998 Sb.`
  * stays an act.
  */
-const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům|ech)?(?:\s+pléna|\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE})|\s+ze\s+dne\s+\d{1,2}\.\s*(?:\d{1,2}\.|\p{L}{3,9})\s*\d{4}|,?\s+sp\.\s*zn\.\s*(?:Pl|[IVX]{1,4})\.?\s*${US_MARK_SOURCE}(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*st\.)?\s*\d{1,5}\/\d{2,4}|,?\s+(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikován|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod){0,6},?\s+[čc]\.\s*`;
+const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům|ech)?(?:\s+pléna|\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE})|\s+ze\s+dne\s+\d{1,2}\.\s*(?:\d{1,2}\.|\p{L}{3,9})\s*\d{4}|,?\s+sp\.\s*zn\.\s*(?:Pl|[IVX]{1,4})\.?\s*${US_MARK_SOURCE}(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*st\.)?\s*\d{1,5}\/\d{2,4}|,?\s+(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikov[aá]n|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod){0,6},?\s+[čc]\.\s*`;
 
 /**
  * The Constitutional Court's own reporter, the Sbírka nálezů a usnesení, in
@@ -1586,7 +1586,7 @@ const COLLECTION_AFTER_DOCKET = new RegExp(
  * pod č. 234/2002 Sb.".
  */
 const CZ_US_COLLECTION_AFTER_DOCKET =
-  /^\s*(?:[,;(]\s*)?(?:(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikován|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod\s+[čc]\.\s*)?$/u;
+  /^\s*(?:[,;(]\s*)?(?:(?:(?:který|jenž)\s+)?(?:byl\s+)?(?:vyhlášen|publikov[aá]n|uveřejněn)\p{L}{0,3}(?:\s+ve\s+Sbírce\s+zákonů)?\s+pod\s+[čc]\.\s*)?$/u;
 
 const US_MARK_RE = new RegExp(US_MARK_SOURCE, "u");
 

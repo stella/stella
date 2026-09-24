@@ -3228,6 +3228,21 @@ describe("Constitutional Court rulings by their collection numbers", () => {
     expect(citations.every(reaches)).toBe(true);
   });
 
+  test("every inflection of the published-under words introduces the gazette number", () => {
+    for (const participle of [
+      "publikovaného",
+      "publikovaným",
+      "publikovaný",
+      "vyhlášeného",
+      "uveřejněného",
+    ]) {
+      const text = `v rozporu s nálezem Ústavního soudu ${participle} pod č. 234/2002 Sb. se`;
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(["234/2002 Sb."]);
+    }
+  });
+
   test("the spelled-out volume and number reach the entry without its page", () => {
     const text =
       "srov. např. Sbírka nálezů a usnesení Ústavního soudu, svazek 26, " +
