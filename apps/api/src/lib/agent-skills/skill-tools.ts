@@ -19,7 +19,7 @@ import {
 import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
+  type ActiveSkillContext,
   type ChatSkillRef,
   chatSkillId,
   chatSkillOrigin,
@@ -44,7 +44,7 @@ import {
 } from "./content-hash";
 
 type CreateSkillToolsProps = {
-  activeSkillContext?: ActiveChatSkillContext | null | undefined;
+  activeSkillContext?: ActiveSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   /**
    * A `validation` set registers the catalog tools whatever `skills` holds:
@@ -246,12 +246,12 @@ const skillNameSchema = v.pipe(
   v.description("Skill name exactly as listed in the chat skill catalog."),
 );
 
-type ActiveEditableSkillContext = ActiveChatSkillContext & {
+type ActiveEditableSkillContext = ActiveSkillContext & {
   editable: true;
 };
 
 const toActiveEditableSkillContext = (
-  activeSkillContext: ActiveChatSkillContext | null | undefined,
+  activeSkillContext: ActiveSkillContext | null | undefined,
 ): ActiveEditableSkillContext | null => {
   if (
     activeSkillContext?.editable === true &&

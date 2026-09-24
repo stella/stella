@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { listSkillMetadata, readExcludedChatTools } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { resolveActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   buildGlobalPrompt,
   SUBAGENT_DELEGATION_SECTION,
@@ -11,14 +13,15 @@ import { areSubagentToolsAvailableForTurn } from "@/api/handlers/chat/send-messa
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   areSubagentToolsRegistered,
-  EXCLUDABLE_CHAT_TOOL_NAMES,
   getChatTools,
   getChatValidationTools,
 } from "@/api/handlers/chat/tools/chat-tools";
+import {
+  EXCLUDABLE_CHAT_TOOL_NAMES,
+  toExcludedChatTools,
+} from "@/api/handlers/chat/tools/excluded-chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
-import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -103,11 +106,13 @@ const resolveBuiltInSkill = async (
 
 describe("skill-declared chat tool exclusions", () => {
   test("every built-in skill excludes only names the gate honours", () => {
-    const excludable = new Set<string>(EXCLUDABLE_CHAT_TOOL_NAMES);
     for (const skill of listSkillMetadata()) {
-      for (const name of readExcludedChatTools(skill.metadata)) {
-        expect(excludable, `${skill.name} excludes ${name}`).toContain(name);
-      }
+      const { rejected } = toExcludedChatTools(
+        readExcludedChatTools(skill.metadata),
+      );
+      expect(rejected, `${skill.name} excludes ${rejected.join(", ")}`).toEqual(
+        [],
+      );
     }
   });
 

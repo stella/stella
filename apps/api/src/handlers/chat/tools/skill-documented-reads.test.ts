@@ -4,6 +4,11 @@ import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  narrowActiveChatSkillContext,
+  resolveActiveChatSkillContext,
+} from "@/api/handlers/chat/active-skill-context";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import {
   buildGlobalPrompt,
   buildWorkspacePromptText,
 } from "@/api/handlers/chat/chat-prompt";
@@ -19,13 +24,13 @@ import {
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   DOCUMENTABLE_CHAT_READ_NAMES,
-  documentedChatReadsOf,
   MAX_DOCUMENTED_CHAT_READS,
   toDocumentedChatReads,
 } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
-import { resolveActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
+import { resolveActiveSkillContext } from "@/api/lib/agent-skills/skills";
+import type { ActiveSkillContext } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -112,6 +117,23 @@ const resolveBuiltInSkill = async (
   return resolved.value;
 };
 
+/** The shipped skill as the skills module resolves it, before chat narrows it. */
+const resolveDeclaredBuiltInSkill = async (
+  skillName: string,
+): Promise<ActiveSkillContext> => {
+  const resolved = await resolveActiveSkillContext({
+    activeSkill: { skillName },
+    memberRole: { role: "member" },
+    organizationId,
+    safeDb: unusedSafeDb,
+    userId,
+  });
+  if (resolved.isErr() || resolved.value === null) {
+    throw new Error(`${skillName} did not resolve as a built-in skill`);
+  }
+  return resolved.value;
+};
+
 /** The full type stub code-mode emits for an eagerly documented read. */
 const stubOf = (read: string) => `declare function external_${read}`;
 
@@ -180,7 +202,7 @@ describe("skill-documented chat reads", () => {
 
   test("the playbook-builder skill documents the reads its flow needs", async () => {
     const skill = await resolveBuiltInSkill(PLAYBOOK_BUILDER);
-    expect(documentedChatReadsOf(skill)).toEqual([
+    expect(skill.documentedChatReads).toEqual([
       "list_documents",
       "search_across_matters",
       "read_content_across_matters",
@@ -191,7 +213,7 @@ describe("skill-documented chat reads", () => {
     for (const { name } of listSkillMetadata()) {
       const skill = await resolveBuiltInSkill(name);
       const added =
-        chatCodeModeSystemPrompt(documentedChatReadsOf(skill)).length -
+        chatCodeModeSystemPrompt(skill.documentedChatReads).length -
         CHAT_CODE_MODE_SYSTEM_PROMPT.length;
       expect(added, `${name} adds ${String(added)} chars`).toBeLessThanOrEqual(
         DOCUMENTED_READS_PROMPT_CHAR_CEILING,
@@ -199,15 +221,16 @@ describe("skill-documented chat reads", () => {
     }
   });
 
-  test("no skill documents nothing; a built-in's rejected name panics; an installed skill's is dropped with a log", async () => {
+  test("a built-in's rejected declaration panics; an installed skill's is dropped with one log per list", async () => {
     const [documented] = DOCUMENTABLE_CHAT_READ_NAMES;
     if (documented === undefined) {
       throw new Error("the documentable set is empty");
     }
-    const builtIn = await resolveBuiltInSkill(PLAYBOOK_BUILDER);
-    const installed: ActiveChatSkillContext = {
+    const builtIn = await resolveDeclaredBuiltInSkill(PLAYBOOK_BUILDER);
+    const installed: ActiveSkillContext = {
       ...builtIn,
       documentedChatReads: [documented, "list_matters", "nothing_here"],
+      excludedChatTools: [SPAWN_SUBAGENTS_TOOL_NAME, "not_a_tool"],
       id: toSafeId<"agentSkill">("44444444-4444-4444-8444-444444444444"),
       origin: "authored",
       source: "installed",
@@ -215,18 +238,26 @@ describe("skill-documented chat reads", () => {
     const logs = installRecordingLogger();
 
     try {
-      expect(documentedChatReadsOf(null)).toEqual([]);
       expect(() =>
-        documentedChatReadsOf({
+        narrowActiveChatSkillContext({
           ...builtIn,
           documentedChatReads: ["nothing_here"],
         }),
       ).toThrow(
         "documents chat reads it cannot: nothing_here (not-documentable)",
       );
+      expect(() =>
+        narrowActiveChatSkillContext({
+          ...builtIn,
+          excludedChatTools: ["not_a_tool"],
+        }),
+      ).toThrow("excludes chat tools it cannot: not_a_tool");
       expect(logs.records).toEqual([]);
 
-      expect(documentedChatReadsOf(installed)).toEqual([documented]);
+      // Narrowed once at resolution, so one send logs each list once.
+      const narrowed = narrowActiveChatSkillContext(installed);
+      expect(narrowed.documentedChatReads).toEqual([documented]);
+      expect(narrowed.excludedChatTools).toEqual([SPAWN_SUBAGENTS_TOOL_NAME]);
       expect(logs.at("WARN")).toMatchObject([
         {
           message: "chat.skill.documented_reads_rejected",
@@ -236,7 +267,15 @@ describe("skill-documented chat reads", () => {
               "list_matters (not-documentable), nothing_here (not-documentable)",
           },
         },
+        {
+          message: "chat.skill.excluded_tools_rejected",
+          attributes: {
+            "skill.id": installed.id,
+            "skill.rejected_tools": "not_a_tool",
+          },
+        },
       ]);
+      expect(logs.records).toHaveLength(2);
     } finally {
       logs.restore();
     }
