@@ -38,7 +38,6 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -56,7 +55,11 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import type {
+  CaseLawIngestionHandle,
+  CaseLawRootHandle,
+} from "@/api/lib/case-law/maintenance-lane";
 
 type Args = {
   limit: number;
@@ -141,34 +144,37 @@ const readIdsFile = async (
   return raw.map((id) => toSafeId<"caseLawCitation">(id));
 };
 
-const seedRules = async () => {
+const seedRules = async (rootDb: CaseLawRootHandle) => {
   console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
-  await rootDb
-    .insert(caseLawPolarityRules)
-    .values(
-      SEED_RULES.map((rule) => ({
-        pattern: rule.pattern,
-        polarity: rule.polarity,
-        language: rule.language,
-        source: RULE_SOURCE.MANUAL,
-        confidence: 1,
-      })),
-    )
-    .onConflictDoNothing();
+  await rootDb.transaction(
+    async (tx) =>
+      await tx
+        .insert(caseLawPolarityRules)
+        .values(
+          SEED_RULES.map((rule) => ({
+            pattern: rule.pattern,
+            polarity: rule.polarity,
+            language: rule.language,
+            source: RULE_SOURCE.MANUAL,
+            confidence: 1,
+          })),
+        )
+        .onConflictDoNothing(),
+  );
 
   console.log("Seed rules applied.");
 };
-
-// The corpus writer role: the request role may read citations but not write
-// them, and neither the rule counters nor the verdicts would land.
-const scopedDb = getCaseLawIngestionDb();
 
 /**
  * Walk a language's labelled rows in id order and tighten the label where the
  * rules now read something more severe (see `polarity/recheck.ts`).
  */
-const recheck = async (args: Args, language: string) => {
+const recheck = async (
+  scopedDb: CaseLawIngestionHandle,
+  args: Args,
+  language: string,
+) => {
   const ruleCache: RuleCache = new Map();
   const rules = await loadRules(language, scopedDb, ruleCache);
   console.log(
@@ -201,12 +207,17 @@ const recheck = async (args: Args, language: string) => {
 const main = async () => {
   const args = parseArgs();
 
+  // Every pass holds the maintenance lane, so it never overlaps another
+  // operator pass over the same rows. Its writes go through the corpus
+  // writer role: the request role may read citations but not write them.
+  const { rootDb, ingestionDb: scopedDb } = await enterCaseLawMaintenanceLane();
+
   if (args.seed) {
-    await seedRules();
+    await seedRules(rootDb);
   }
 
   if (args.recheck && args.language !== null) {
-    await recheck(args, args.language);
+    await recheck(scopedDb, args, args.language);
     process.exit(0);
   }
 
@@ -222,22 +233,25 @@ const main = async () => {
   const limit = onlyIds === null ? args.limit : onlyIds.length;
 
   // Fetch unclassified citations with their decision context
-  const citations = await rootDb
-    .select({
-      id: caseLawCitations.id,
-      citationText: caseLawCitations.citationText,
-      sectionIndex: caseLawCitations.sectionIndex,
-      language: caseLawDecisions.language,
-      sections: caseLawDecisions.sections,
-    })
-    .from(caseLawCitations)
-    .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
-    )
-    .where(and(...conditions))
-    .orderBy(desc(caseLawCitations.createdAt))
-    .limit(limit);
+  const citations = await rootDb.transaction(
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawCitations.id,
+          citationText: caseLawCitations.citationText,
+          sectionIndex: caseLawCitations.sectionIndex,
+          language: caseLawDecisions.language,
+          sections: caseLawDecisions.sections,
+        })
+        .from(caseLawCitations)
+        .innerJoin(
+          caseLawDecisions,
+          eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
+        )
+        .where(and(...conditions))
+        .orderBy(desc(caseLawCitations.createdAt))
+        .limit(limit),
+  );
 
   if (citations.length === 0) {
     console.log("No unclassified citations found.");

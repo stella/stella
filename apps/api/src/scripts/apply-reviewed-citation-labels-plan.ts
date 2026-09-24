@@ -76,6 +76,31 @@ const citationIdentitiesStatement = (ids: readonly string[]): SQL => sql`
    )})
 `;
 
+/** The citing decision ids the entries name directly. */
+const decisionIdsOf = (
+  entries: readonly ReviewedCitationLabelEntry[],
+): string[] => [
+  ...new Set(
+    entries.flatMap((entry) =>
+      "citingDecisionId" in entry ? [entry.citingDecisionId] : [],
+    ),
+  ),
+];
+
+const existingDecisionsStatement = (ids: readonly string[]): SQL => sql`
+  SELECT id::text AS id
+    FROM case_law_decisions
+   WHERE id IN (${sql.join(
+     ids.map((id) => sql`${id}::uuid`),
+     sql`, `,
+   )})
+`;
+
+const decisionIdRowSchema = v.object({ id: v.string() });
+
+const parseDecisionIds = (rows: readonly unknown[]): Set<string> =>
+  new Set(rows.map((row) => v.parse(decisionIdRowSchema, row).id));
+
 const citationIdentityRowSchema = v.object({
   id: v.string(),
   citing_decision_id: v.string(),
@@ -114,11 +139,21 @@ type ResolvedReviewedLabels =
 const resolveReviewedCitationLabels = (
   entries: readonly ReviewedCitationLabelEntry[],
   identities: ReadonlyMap<string, CitationIdentity>,
+  decisionIds: ReadonlySet<string>,
 ): ResolvedReviewedLabels => {
   const problems: string[] = [];
   const labels: ReviewedCitationLabel[] = [];
   const seen = new Set<string>();
   for (const [index, entry] of entries.entries()) {
+    // A key with no current citation row is fine; a decision that does not
+    // exist is a typo the review could never apply to.
+    if (
+      "citingDecisionId" in entry &&
+      !decisionIds.has(entry.citingDecisionId)
+    ) {
+      problems.push(`#${index}: no such citing decision`);
+      continue;
+    }
     const identity =
       "citationId" in entry ? identities.get(entry.citationId) : entry;
     if (identity === undefined) {
@@ -311,7 +346,17 @@ export const runReviewedCitationLabels = async (
           await tx.execute(citationIdentitiesStatement(citationIds)),
         ),
   );
-  const resolved = resolveReviewedCitationLabels(entries, identities);
+  const decisionIds = decisionIdsOf(entries);
+  const existingDecisions = parseDecisionIds(
+    decisionIds.length === 0
+      ? []
+      : executedRows(await tx.execute(existingDecisionsStatement(decisionIds))),
+  );
+  const resolved = resolveReviewedCitationLabels(
+    entries,
+    identities,
+    existingDecisions,
+  );
   if (resolved.type === "rejected") {
     return resolved;
   }

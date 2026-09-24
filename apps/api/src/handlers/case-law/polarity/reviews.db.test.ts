@@ -396,6 +396,15 @@ describe("reviewed citation labels", () => {
           reviewRef: "review-of-nothing",
         },
       ],
+      [
+        valid,
+        {
+          citingDecisionId: createSafeId<"caseLawDecision">(),
+          citationKey: "no-such-decision",
+          polarity: POLARITY.NEUTRAL,
+          reviewRef: "review-of-nothing",
+        },
+      ],
     ]) {
       const outcome = await runReviewedCitationLabels(db, entries, "apply");
       expect(outcome.type).toBe("rejected");

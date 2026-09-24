@@ -142,11 +142,14 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
   const tightened: Tightened[] = [];
   let noContext = 0;
   for (const citation of page) {
-    const windows = extractContexts(
-      citation.sections ?? [],
-      citation.citationText,
-      citation.sectionIndex,
-    );
+    const windows =
+      citation.sections === null
+        ? null
+        : extractContexts(
+            citation.sections,
+            citation.citationText,
+            citation.sectionIndex,
+          );
     if (windows === null) {
       noContext++;
       continue;

@@ -37,7 +37,13 @@ export const applyCitationReviews = async (
   rows: readonly CitationInsert[],
 ): Promise<readonly CitationInsert[]> => {
   const decisionIds = [...new Set(rows.map((row) => row.citingDecisionId))];
-  const keys = [...new Set(rows.flatMap((row) => row.citationKey ?? []))];
+  const keys = [
+    ...new Set(
+      rows.flatMap((row) =>
+        typeof row.citationKey === "string" ? [row.citationKey] : [],
+      ),
+    ),
+  ];
   if (keys.length === 0) {
     return rows;
   }

@@ -25,10 +25,9 @@ export const resetRetiredRuleVerdicts = async (
   if (retiredIds.length === 0) {
     return [];
   }
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   const reset = await db.transaction(async (tx) => {
     // audit: skip — operator rule retirement; derived labels only
-    return await tx
+    const rows = await tx
       .update(caseLawCitations)
       .set({ polarity: null, polarityRuleId: null })
       .where(
@@ -39,6 +38,7 @@ export const resetRetiredRuleVerdicts = async (
         )`,
       )
       .returning({ id: caseLawCitations.id });
+    return rows;
   });
   const ids = reset.map((row) => row.id);
   return reset.length < RESET_BATCH
