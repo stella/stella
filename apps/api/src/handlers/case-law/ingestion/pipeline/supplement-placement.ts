@@ -210,7 +210,7 @@ export const placeSupplementTx = async (
   };
 };
 
-export const supplementRawWriteFailed = (
+const supplementRawWriteFailed = (
   { sourceId, document }: SupplementPlacement,
   error: unknown,
 ): ProcessSupplementResult => {

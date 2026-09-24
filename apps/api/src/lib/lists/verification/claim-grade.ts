@@ -70,7 +70,7 @@ type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 export type ClaimGrade = ClaimVerdict & { refs: ClaimRef[] };
 
 /** A claim to grade, with the text of the block it sits in for meaning. */
-export type GradeableClaim = { key: string; text: string; context: string };
+type GradeableClaim = { key: string; text: string; context: string };
 
 /** Characters of a claim's block shown beside it. */
 const CLAIM_CONTEXT_MAX = 1500;

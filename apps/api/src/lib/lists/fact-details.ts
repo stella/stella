@@ -11,7 +11,6 @@ export type FactConfidence = (typeof FACT_CONFIDENCES)[number];
 /** Whether verdicts may rest on a fact. `held` keeps it out of scoring until
  *  a reviewer confirms it. */
 export const FACT_SCORING = ["included", "held"] as const;
-export type FactScoring = (typeof FACT_SCORING)[number];
 
 /** How much of `occurredOn` is known: `2021-07-01` at `month` is July 2021. */
 export const FACT_DATE_PRECISIONS = ["day", "month", "year"] as const;
