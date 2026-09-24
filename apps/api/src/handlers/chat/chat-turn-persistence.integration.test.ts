@@ -29,6 +29,7 @@ import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -452,6 +453,7 @@ describe("durable chat turn persistence", () => {
         parts: [{ content: "Here is the NDA.", type: "text" }],
         role: "assistant",
       }),
+      resumedMessageId: undefined,
       safeDb,
       threadId,
       userId: ids.userA1,
@@ -542,6 +544,7 @@ describe("durable chat turn persistence", () => {
         parts: [{ content: "Here is the NDA.", type: "text" }],
         role: "assistant",
       }),
+      resumedMessageId: undefined,
       safeDb,
       threadId,
       userId: ids.userA1,
@@ -1791,4 +1794,128 @@ describe("durable chat turn persistence", () => {
     expect(turn).toMatchObject({ status: "failed" });
     expect(turn?.settledAt).not.toBeNull();
   });
+});
+
+describe("settling a turn that resumed an earlier message", () => {
+  const approvedCall = {
+    approval: {
+      approved: true,
+      id: "approval_resumed-call",
+      needsApproval: true,
+    },
+    arguments: '{"name":"NDA"}',
+    id: "resumed-call",
+    input: { name: "NDA" },
+    name: "mcp__external__delete",
+    state: "approval-responded",
+    type: "tool-call",
+  } satisfies ChatPart;
+
+  test.each([
+    { expectedReports: 1, resumed: approvedCall, shape: "without its result" },
+    {
+      expectedReports: 0,
+      resumed: { ...approvedCall, output: {}, state: "complete" },
+      shape: "with its result",
+    },
+  ] satisfies {
+    expectedReports: number;
+    resumed: ChatPart;
+    shape: string;
+  }[])(
+    "reports an approved call stored $shape $expectedReports time(s)",
+    async ({ expectedReports, resumed }) => {
+      const { assistantMessageId, threadId, userMessageId } =
+        await seedThread();
+      const acceptance = createChatTurnAcceptance({
+        organizationId: ids.orgA,
+        threadId,
+        userId: ids.userA1,
+        userMessageId,
+        workspaceId: ids.wsA1,
+      });
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values([
+            {
+              content: {
+                data: [{ text: "Draft it", type: "text" }],
+                version: 1,
+              },
+              id: userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: ids.wsA1,
+            },
+            {
+              content: toChatMessageContent({ data: [resumed], version: 2 }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: ids.wsA1,
+            },
+          ]);
+          expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
+            true,
+          );
+        }),
+      );
+      const execution = unwrap(
+        await claimChatTurnForExecution({
+          acceptedTurnId: acceptance.id,
+          incomingMessageId: userMessageId,
+          incomingMessageRole: "user",
+          organizationId: ids.orgA,
+          safeDb,
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        }),
+      );
+      if (execution === null) {
+        throw new Error("Expected the accepted turn to be claimed");
+      }
+
+      const analytics = installRecordingAnalytics();
+      try {
+        const result = await finalizeAssistantTurn({
+          acceptedSendMode: null,
+          existingIds: new Set([userMessageId, assistantMessageId]),
+          execution,
+          outcome: { type: "completed" },
+          recordAuditEvent: async () => {},
+          responseMessage: toPersistableChatMessage({
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Drafted.", type: "text" }],
+            role: "assistant",
+          }),
+          resumedMessageId: assistantMessageId,
+          safeDb,
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+
+        expect(Result.isOk(result)).toBe(true);
+        const reports = analytics
+          .exceptions()
+          .filter(
+            ({ properties }) =>
+              properties.$exception_type === "ChatTurnUnsettledToolCallError",
+          );
+        expect(reports).toHaveLength(expectedReports);
+        for (const { properties } of reports) {
+          expect(properties).toMatchObject({
+            message: "resumed",
+            outcome: "completed",
+            tool_call_states: "approval-responded",
+          });
+        }
+      } finally {
+        analytics.restore();
+      }
+    },
+  );
 });

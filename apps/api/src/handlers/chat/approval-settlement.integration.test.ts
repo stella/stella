@@ -14,7 +14,6 @@ import {
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
-import { findUnsettledToolCalls } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -27,6 +26,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // An approved server tool runs inside the continuation that resumes its turn.
 // Whatever the model does next, the stored thread must carry that call's
 // result, so a reload shows it settled and the thread's next turn starts clean.
+// The harness checks the stored thread's invariants after every send.
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -151,7 +151,6 @@ describe("an approved server tool's result", () => {
     expect(
       storedCall(await harness.readThreadMessages(threadId), callId),
     ).toMatchObject({ output: { deleted: "NDA" }, state: "complete" });
-    expect(await findUnsettledToolCalls({ db: testDb, threadId })).toEqual([]);
   });
 
   test("is stored on its owning message when the model answers in text", async () => {
@@ -170,7 +169,6 @@ describe("an approved server tool's result", () => {
     expect(
       storedCall(await harness.readThreadMessages(threadId), callId),
     ).toMatchObject({ output: { deleted: "NDA" }, state: "complete" });
-    expect(await findUnsettledToolCalls({ db: testDb, threadId })).toEqual([]);
   });
 
   test("leaves a later approval in the same thread answerable", async () => {
@@ -193,6 +191,5 @@ describe("an approved server tool's result", () => {
     });
 
     expect(harness.executions).toEqual(["NDA", "Lease"]);
-    expect(await findUnsettledToolCalls({ db: testDb, threadId })).toEqual([]);
   });
 });

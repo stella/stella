@@ -25,6 +25,7 @@ import {
   createScriptedTextAdapter,
   drainResponse,
 } from "@/api/tests/helpers/chat-round-trip";
+import { findThreadInvariantViolations } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -111,6 +112,7 @@ export const createApprovalHarness = ({
     uploadMessageFiles: uploadMessageFilesWithRollback,
   });
   type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
+  const threadIdByContext = new WeakMap<SendMessageCtx, SafeId<"chatThread">>();
 
   const sendContext = ({
     message,
@@ -136,7 +138,7 @@ export const createApprovalHarness = ({
       threadId,
       ...continuation,
     };
-    return asTestRaw<SendMessageCtx>({
+    const ctx = asTestRaw<SendMessageCtx>({
       body: {
         threadId,
         runId: forwardedProps.runId,
@@ -169,22 +171,39 @@ export const createApprovalHarness = ({
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
     });
+    threadIdByContext.set(ctx, threadId);
+    return ctx;
   };
 
-  /** A streamed response is drained so its terminal persistence runs; any
-   *  other handler result is a rejection and is returned as-is for the
-   *  assertion. */
+  /**
+   * A streamed response is drained so its terminal persistence runs, then the
+   * stored thread is read back and must hold every persisted-thread invariant;
+   * any other handler result is a rejection and is returned as-is for the
+   * assertion.
+   */
   const send = async (
     ctx: SendMessageCtx,
   ): Promise<
     { status: "streamed" } | { rejection: unknown; status: "rejected" }
   > => {
     const result = await sendMessage.handler(ctx);
-    if (result instanceof Response && result.ok) {
-      await drainResponse(result);
-      return { status: "streamed" };
+    if (!(result instanceof Response && result.ok)) {
+      return { rejection: result, status: "rejected" };
     }
-    return { rejection: result, status: "rejected" };
+    await drainResponse(result);
+    const threadId =
+      threadIdByContext.get(ctx) ??
+      panic("Send contexts come from this harness's sendContext");
+    const violations = await findThreadInvariantViolations({
+      db: testDb,
+      threadId,
+    });
+    if (Object.values(violations).some((found) => found.length > 0)) {
+      panic(
+        `The stored thread breaks an invariant: ${JSON.stringify(violations)}`,
+      );
+    }
+    return { status: "streamed" };
   };
 
   const readThreadMessages = async (threadId: SafeId<"chatThread">) =>

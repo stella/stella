@@ -687,6 +687,24 @@ const countDirectAuditLogInserts = (content: string): number => {
   );
 };
 
+const countStreamProcessorConstructions = (content: string): number => {
+  const code = stripComments(content);
+  const processorBindings = importedLocalBindings(
+    code,
+    "@tanstack/ai",
+    "StreamProcessor",
+  );
+  return [...processorBindings].reduce(
+    (total, binding) =>
+      total +
+      countMatches(
+        code,
+        new RegExp("\\bnew\\s+" + escapeRegExp(binding) + "\\s*\\(", "gu"),
+      ),
+    0,
+  );
+};
+
 // Value imports of the root connection handle, static or dynamic, by alias
 // or relative path. Request handlers are covered by lint; this keeps the
 // remaining sites visible. Type-only imports are not counted.
@@ -2089,6 +2107,17 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
     count: countDirectAuditLogInserts,
+  },
+  {
+    scope: "file",
+    id: "stream-processor-constructions",
+    description:
+      "`new StreamProcessor(` outside `processTurnForPersistence` in apps/api/src/handlers/chat/stream-chat.ts, test helpers included; a turn persisted through its own processor wiring can drift from what production stores, so tests and callers route through that function",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      /\.test\./u.test(file) ||
+      file === "apps/api/src/handlers/chat/stream-chat.ts",
+    count: countStreamProcessorConstructions,
   },
   {
     scope: "file",

@@ -10,6 +10,7 @@ import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
+  chatMessageFromPersisted,
   mergeAnonRestorations,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -25,6 +26,12 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  ChatTurnUnsettledToolCallError,
+  findUnsettledToolCallsForOutcome,
+  findUnsettledToolCallsOnResumedMessage,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import type { UnsettledToolCall } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -387,6 +394,7 @@ export const finalizeAssistantTurn = async ({
   owningAssistantMessage,
   recordAuditEvent,
   responseMessage,
+  resumedMessageId,
   safeDb,
   threadId,
   userId,
@@ -401,6 +409,8 @@ export const finalizeAssistantTurn = async ({
   owningAssistantMessage?: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
   responseMessage: PersistableChatMessage;
+  /** The assistant message a continuation resumed, when there is one. */
+  resumedMessageId: SafeId<"chatMessage"> | undefined;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -425,6 +435,15 @@ export const finalizeAssistantTurn = async ({
     panic("Assistant turn produced no persistence plan");
   }
 
+  reportUnsettledToolCalls({
+    message: "terminal",
+    outcome,
+    unsettled: findUnsettledToolCallsForOutcome({
+      outcome,
+      parts: responseMessage.parts,
+    }),
+  });
+
   const persistResult = await persistMessage({
     acceptedSendMode,
     dataScopeExpansion,
@@ -444,7 +463,95 @@ export const finalizeAssistantTurn = async ({
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  if (
+    resumedMessageId !== undefined &&
+    resumedMessageId !== responseMessage.id
+  ) {
+    await reportUnsettledResumedMessage({
+      messageId: resumedMessageId,
+      outcome,
+      safeDb,
+      threadId,
+    });
+  }
   return Result.ok({ persistencePlan });
+};
+
+/**
+ * A continuation that answered on a new message leaves the message it resumed
+ * as stored before the turn; that stored copy is what reloads.
+ */
+const reportUnsettledResumedMessage = async ({
+  messageId,
+  outcome,
+  safeDb,
+  threadId,
+}: {
+  messageId: SafeId<"chatMessage">;
+  outcome: ChatTurnOutcome;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}) => {
+  const stored = await safeDb(
+    async (tx) =>
+      await tx
+        .select({
+          content: chatMessages.content,
+          id: chatMessages.id,
+          role: chatMessages.role,
+        })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.id, messageId),
+            eq(chatMessages.threadId, threadId),
+          ),
+        )
+        .limit(1),
+  );
+  if (Result.isError(stored)) {
+    captureError(stored.error, { threadId });
+    return;
+  }
+  const row = stored.value.at(0);
+  if (row === undefined) {
+    return;
+  }
+  reportUnsettledToolCalls({
+    message: "resumed",
+    outcome,
+    unsettled: findUnsettledToolCallsOnResumedMessage({
+      outcome,
+      parts: chatMessageFromPersisted(row).parts,
+    }),
+  });
+};
+
+/** The turn still settles: its answer is already streamed and belongs in the
+ *  thread. The report flags a message that reloads with an open call. */
+const reportUnsettledToolCalls = ({
+  message,
+  outcome,
+  unsettled,
+}: {
+  message: "resumed" | "terminal";
+  outcome: ChatTurnOutcome;
+  unsettled: readonly UnsettledToolCall[];
+}) => {
+  if (unsettled.length === 0) {
+    return;
+  }
+  captureError(
+    new ChatTurnUnsettledToolCallError({
+      message: "A settled chat turn stored a tool call without its result",
+    }),
+    {
+      message,
+      outcome: outcome.type,
+      tool_call_states: unsettled.map(({ state }) => state).join(","),
+      unsettled_count: String(unsettled.length),
+    },
+  );
 };
 
 type PersistTerminalAssistantTurnProps = {

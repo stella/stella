@@ -1,20 +1,16 @@
 import {
   EventType,
   maxIterations,
-  StreamProcessor,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 
 import {
-  processServerChatStream,
+  processTurnForPersistence,
   pruneOrphanedToolParts,
-  toChatMessage,
 } from "@/api/handlers/chat/stream-chat";
 import type { streamChat } from "@/api/handlers/chat/stream-chat";
-import { createTurnMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
-import type { ChatMessage } from "@/api/handlers/chat/types";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { withSseHeartbeat } from "@/api/lib/sse";
@@ -214,15 +210,6 @@ export const createScriptedStreamResponse = (
   }) => {
     const messages = pruneOrphanedToolParts(rawMessages);
     const abortController = abortControllerFromSignal(abortSignal);
-    const captured: { message: ChatMessage | null } = { message: null };
-    const processor = new StreamProcessor({
-      initialMessages: messages,
-      events: {
-        onStreamEnd: (message) => {
-          captured.message = toChatMessage(message);
-        },
-      },
-    });
     const source = streamChatChunks({
       abortController,
       adapter: nextAdapter(),
@@ -234,14 +221,13 @@ export const createScriptedStreamResponse = (
       ...(parentRunId === undefined ? {} : { parentRunId }),
       ...(resume === undefined ? {} : { resume }),
     });
-    const processed = processServerChatStream({
+    const processed = processTurnForPersistence({
       abortSignal: abortController.signal,
       deadlineSignal: abortSignal,
-      existingMessageIds: new Set(messages.map(({ id }) => id)),
-      getResponseMessage: () => captured.message,
-      mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
+      initialMessages: messages,
       onFinish,
-      processor,
+      owningAssistantMessageId,
+      restorationPairs: [],
       source,
     });
     return await Promise.resolve(
