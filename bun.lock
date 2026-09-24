@@ -126,7 +126,7 @@
         "@valibot/to-json-schema": "^1.8.0",
         "better-auth": "catalog:",
         "better-result": "catalog:",
-        "bullmq": "^6.3.6",
+        "bullmq": "^6.3.8",
         "cheerio": "^1.2.0",
         "client-zip": "^2.5.1",
         "diff": "catalog:",
@@ -3411,7 +3411,7 @@
 
     "buffer-from": ["buffer-from@1.1.2", "", {}, "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="],
 
-    "bullmq": ["bullmq@6.3.6", "", { "dependencies": { "cron-parser": "5.10.1", "msgpackr": "2.1.0", "node-abort-controller": "3.1.1", "semver": "7.8.5", "tslib": "2.8.1" }, "peerDependencies": { "bullmq-otel": ">=2.0.0", "ioredis": ">=5.0.0", "pg": ">=8.0.0", "redis": ">=5.0.0" }, "optionalPeers": ["bullmq-otel", "ioredis", "pg", "redis"] }, "sha512-+T6T6jeONZ5AvCj4xDkjuqdXI+/Kezvi/PvNS2YrIiO3HZNS4MgI+397ORyfO3Mx6jP127jowte6fNOxAfUN2w=="],
+    "bullmq": ["bullmq@6.3.8", "", { "dependencies": { "cron-parser": "5.10.1", "msgpackr": "2.1.0", "node-abort-controller": "3.1.1", "semver": "7.8.5", "tslib": "2.8.1" }, "peerDependencies": { "bullmq-otel": ">=2.0.0", "ioredis": ">=5.0.0", "pg": ">=8.0.0", "redis": ">=5.0.0" }, "optionalPeers": ["bullmq-otel", "ioredis", "pg", "redis"] }, "sha512-09zcOQ1uycyCK2C9iY2Pm+/JPa/gIXiZqGBUiIlO1v3VshwBgarmAgWRTWDL/IAvI8NFE1zqrkdKFgRfXHHM5A=="],
 
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
