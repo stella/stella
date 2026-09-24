@@ -7,6 +7,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- later write of its judgment can compose it again; decision_id names the
 -- judgment whose document includes it, merged_source_hash the version it
 -- included, and a row without a judgment is parked until one is stored.
+--
+-- Every statement can be run again: a database that applied this file under
+-- an earlier name re-enters the same state.
 CREATE TABLE IF NOT EXISTS "case_law_decision_supplements" (
   "source_id" uuid NOT NULL,
   "source_document_id" varchar(256) NOT NULL,
@@ -33,21 +36,37 @@ CREATE TABLE IF NOT EXISTS "case_law_decision_supplements" (
     PRIMARY KEY ("source_id", "source_document_id")
 );--> statement-breakpoint
 
--- squawk-ignore prefer-robust-stmts
-ALTER TABLE "case_law_decision_supplements"
-  ADD CONSTRAINT "case_law_decision_supplements_source_fk"
-  FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id")
-  ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'case_law_decision_supplements_source_fk'
+      AND conrelid = 'case_law_decision_supplements'::regclass
+  ) THEN
+    ALTER TABLE "case_law_decision_supplements"
+      ADD CONSTRAINT "case_law_decision_supplements_source_fk"
+      FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id")
+      ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
 
 -- Validating rather than NOT VALID + VALIDATE: the table is created empty in
 -- this migration, so the scan is over no rows. The referenced table is only
 -- read for existence, and the lock this takes on it is SHARE ROW EXCLUSIVE,
 -- which the corpus schema lane has already drained writers for.
--- squawk-ignore prefer-robust-stmts
-ALTER TABLE "case_law_decision_supplements"
-  ADD CONSTRAINT "case_law_decision_supplements_decision_fk"
-  FOREIGN KEY ("decision_id") REFERENCES "public"."case_law_decisions"("id")
-  ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'case_law_decision_supplements_decision_fk'
+      AND conrelid = 'case_law_decision_supplements'::regclass
+  ) THEN
+    ALTER TABLE "case_law_decision_supplements"
+      ADD CONSTRAINT "case_law_decision_supplements_decision_fk"
+      FOREIGN KEY ("decision_id") REFERENCES "public"."case_law_decisions"("id")
+      ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
 
 -- The judgment a supplement joins is found by court, docket and language.
 CREATE INDEX IF NOT EXISTS "case_law_decision_supplements_target_idx"
@@ -57,20 +76,41 @@ CREATE INDEX IF NOT EXISTS "case_law_decision_supplements_decision_idx"
   ON "case_law_decision_supplements" ("decision_id")
   WHERE "decision_id" IS NOT NULL;--> statement-breakpoint
 
-ALTER TABLE "case_law_decision_supplements"
-  -- squawk-ignore constraint-missing-not-valid
-  ADD CONSTRAINT "case_law_decision_supplements_kind_values"
-  CHECK ("kind" IN ('reasons'));--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'case_law_decision_supplements_kind_values'
+      AND conrelid = 'case_law_decision_supplements'::regclass
+  ) THEN
+    ALTER TABLE "case_law_decision_supplements"
+      ADD CONSTRAINT "case_law_decision_supplements_kind_values"
+      CHECK ("kind" IN ('reasons'));
+  END IF;
+END $$;--> statement-breakpoint
 
 -- A merged supplement names the version its judgment composed. A judgment
 -- deleted from under it nulls decision_id and leaves the hash: parked again.
-ALTER TABLE "case_law_decision_supplements"
-  -- squawk-ignore constraint-missing-not-valid
-  ADD CONSTRAINT "case_law_decision_supplements_merged_has_hash"
-  CHECK ("decision_id" IS NULL OR "merged_source_hash" IS NOT NULL);--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'case_law_decision_supplements_merged_has_hash'
+      AND conrelid = 'case_law_decision_supplements'::regclass
+  ) THEN
+    ALTER TABLE "case_law_decision_supplements"
+      ADD CONSTRAINT "case_law_decision_supplements_merged_has_hash"
+      CHECK ("decision_id" IS NULL OR "merged_source_hash" IS NOT NULL);
+  END IF;
+END $$;--> statement-breakpoint
 
 ALTER TABLE "case_law_decision_supplements"
   ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates with the same name and rule, so a re-applied
+-- migration re-enters the same state; rollback is dropping the table.
+DROP POLICY IF EXISTS "case_law_ingestion_access"
+  ON "case_law_decision_supplements";--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access"
   ON "case_law_decision_supplements"
   AS PERMISSIVE FOR ALL TO stella_ingestion
