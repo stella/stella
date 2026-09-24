@@ -25,6 +25,7 @@ function PublicDecisionRoute() {
     <PublicDecisionViewer
       decision={decision}
       initialSearchQuery={initialSearchQuery}
+      routeId={Route.id}
     />
   );
 }

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASONS,
@@ -25,7 +26,6 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
-import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import {
   DECISION_READ_ABSENCE_STATUSES,

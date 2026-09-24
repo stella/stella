@@ -28,6 +28,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -144,7 +145,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
@@ -1283,17 +1283,19 @@ export const SearchDialog = ({
         return;
       }
 
-      const slug =
-        "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
       navigateAfterClose(async () => {
         await navigate({
           to: "/law/$country/cases/$court/$slug",
+          // A global-search hit carries no slug or language versions, so it
+          // opens by the id form; the decision page canonicalises the path.
           params: createCaseLawDecisionRouteParams({
             caseNumber: hit.caseNumber,
             country: hit.country,
             court: hit.court,
             decisionId: hit.decisionId,
-            slug,
+            language: null,
+            languageAlternates: null,
+            slug: null,
           }),
           search: {
             ...(hit.headline && {

@@ -273,6 +273,7 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
                   court: row.decision.court,
                   decisionId: row.decision.id,
                   language: row.decision.language,
+                  languageAlternates: row.decision.languageAlternates,
                   slug: row.decision.slug,
                 }),
               );

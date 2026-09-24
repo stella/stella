@@ -39,7 +39,6 @@ for (const kind of BUILT_IN_KINDS) {
     // fallback.
     render: () => null,
     railIcon: () => null,
-    navigationPolicy: "persist",
     validate: acceptAnyPayload,
   });
 }

@@ -1,14 +1,14 @@
 import { sql } from "drizzle-orm";
 
+import {
+  COURT_TIER_LABELS,
+  type CourtTierLabel,
+} from "@stll/api-contract/case-law-court-tiers";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
-import {
-  COURT_TIER_LABELS,
-  type CourtTierLabel,
-} from "@/api/lib/case-law/court-tiers";
 import {
   courtTierLabelFromMap,
   type CourtWeightMap,

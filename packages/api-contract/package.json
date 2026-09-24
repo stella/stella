@@ -10,7 +10,9 @@
     "./chat": "./src/chat.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
+    "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
+    "./case-law-decision-route": "./src/case-law-decision-route.ts",
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
@@ -37,6 +39,7 @@
     "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
+    "./statute-route": "./src/statute-route.ts",
     "./workflow-status": "./src/workflow-status.ts"
   },
   "scripts": {
@@ -51,6 +54,7 @@
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
     "@stll/template-conditions": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/uuid-codec": "workspace:*",
     "better-result": "catalog:",

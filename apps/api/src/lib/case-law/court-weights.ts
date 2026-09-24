@@ -1,15 +1,13 @@
-import { Temporal } from "@stll/time";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 /**
  * Court weight loader with in-memory cache: the seeded per-jurisdiction rank
  * table, compiled once a minute.
  */
+import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
-import {
-  type CourtTierLabel,
-  courtTierLabel,
-} from "@/api/lib/case-law/court-tiers";
+import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
 import { logger } from "@/api/lib/observability/logger";
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";

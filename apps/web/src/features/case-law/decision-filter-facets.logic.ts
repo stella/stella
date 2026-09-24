@@ -1,20 +1,16 @@
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
  * How high a court stands, which is the only ordering of courts a reader can
- * scan: an apex court answers a question differently from a district one. The
- * order here is the popover's order, so the order the facets happen to arrive
- * in cannot reshuffle the sections between two searches.
+ * scan. The contract's order (apex first) is the popover's order, so the order
+ * the facets happen to arrive in cannot reshuffle the sections between two
+ * searches.
  */
-const COURT_TIER_ORDER = [
-  "constitutional",
-  "supreme",
-  "regional",
-  "other",
-] as const;
-
-export type CourtTier = (typeof COURT_TIER_ORDER)[number];
+export type CourtTier = CourtTierLabel;
 
 export const COURT_TIER_LABEL_KEYS = {
   constitutional: "caseLaw.courtTiers.constitutional",
@@ -48,7 +44,7 @@ export type DecisionFilterFacets = {
 
 /** Whether a stored tier label is one the UI has a heading and a chip for. */
 export const isCourtTier = (value: string): value is CourtTier =>
-  COURT_TIER_ORDER.some((tier) => tier === value);
+  COURT_TIER_LABELS.some((tier) => tier === value);
 
 /**
  * Court tiers in the popover's own order. A tier name the UI has no heading for
@@ -73,7 +69,7 @@ export const orderCourtTiers = (
   for (const { courts, tierLabel } of tiers) {
     byTier[isCourtTier(tierLabel) ? tierLabel : "other"].push(...courts);
   }
-  return COURT_TIER_ORDER.flatMap((tier) =>
+  return COURT_TIER_LABELS.flatMap((tier) =>
     byTier[tier].length === 0 ? [] : [{ tier, courts: byTier[tier] }],
   );
 };

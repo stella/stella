@@ -77,14 +77,15 @@ export const DecisionMainViewAction = ({
     action.type === "swap-with-main"
       ? t("inspector.swapViews")
       : t("inspector.moveToMain");
+  const { route } = payload;
   const link =
-    payload.language === undefined ? (
+    route.language === undefined ? (
       <Link
         onClick={onNavigate}
         params={{
-          country: payload.country,
-          court: payload.court,
-          slug: payload.slug,
+          country: route.country,
+          court: route.court,
+          slug: route.slug,
         }}
         to="/law/$country/cases/$court/$slug"
       />
@@ -92,10 +93,10 @@ export const DecisionMainViewAction = ({
       <Link
         onClick={onNavigate}
         params={{
-          country: payload.country,
-          court: payload.court,
-          language: payload.language,
-          slug: payload.slug,
+          country: route.country,
+          court: route.court,
+          language: route.language,
+          slug: route.slug,
         }}
         to="/law/$country/cases/$court/$language/$slug"
       />

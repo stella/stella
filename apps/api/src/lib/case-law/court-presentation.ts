@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+
 import {
   courtAbbreviation,
   type CourtAbbreviationInput,
 } from "@/api/lib/case-law/court-abbreviations";
-import type { CourtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   courtTierLabelFromMap,
   type CourtWeightMap,

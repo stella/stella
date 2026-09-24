@@ -11,7 +11,11 @@ import fc from "fast-check";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
-import { decodeCompactUuid, encodeCompactUuid } from "./index";
+import {
+  decodeCompactUuid,
+  decodeUuidSuffix,
+  encodeCompactUuid,
+} from "./index";
 
 setDefaultTimeout(propertyTestTimeout(20_000));
 
@@ -113,6 +117,28 @@ describe("compact uuid properties", () => {
           value.toLowerCase(),
         );
       }),
+      propertyConfig({ numRuns: 500 }),
+    );
+  });
+
+  test("a suffixed uuid reads back whatever the prefix and compact spelling", () => {
+    // The separator is drawn from the base64url alphabet on purpose: a
+    // compact id starting with or containing it must not move the split.
+    fc.assert(
+      fc.property(
+        uuidArbitrary,
+        fc.string(),
+        fc.constantFrom("--", "-", "_"),
+        fc.boolean(),
+        (uuid, prefix, separator, compact) => {
+          const tail = compact ? Result.unwrap(encodeCompactUuid(uuid)) : uuid;
+          const decoded = decodeUuidSuffix({
+            segment: `${prefix}${separator}${tail}`,
+            separator,
+          });
+          expect(Result.unwrap(decoded)).toBe(uuid);
+        },
+      ),
       propertyConfig({ numRuns: 500 }),
     );
   });

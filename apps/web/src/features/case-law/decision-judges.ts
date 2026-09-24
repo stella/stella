@@ -1,24 +1,16 @@
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
- * A judge the court printed on a decision. The name is always there; the
- * roster row and its portrait only where the printed name matched one, so a
- * bench still draws when the roster does not know a name yet.
- *
- * The shape is stated here because the contract carries the roles, not the
- * read's row. The read's array is assigned to this type at every surface that
- * draws a bench, so a field the API drops fails to compile here instead of
- * rendering blank.
+ * A judge the court printed on a decision, as the read answers it. The name
+ * is always there; the roster row and its portrait only where the printed
+ * name matched one, so a bench still draws when the roster does not know a
+ * name yet.
  */
-export type DecisionJudge = {
-  judgeId: string | null;
-  name: string;
-  portrait: { attribution: string; url: string } | null;
-  role: DecisionJudgeRole;
-};
+export type DecisionJudge = PublicCaseLawDecision["judges"][number];
 
 /**
  * The order the bench is read in, independent of the order the read returned

@@ -7,6 +7,11 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  type CaseLawDecisionRouteParams,
+  createCaseLawDecisionRouteParams,
+  normalizeCaseLawLanguageSegment,
+} from "@stll/api-contract/case-law-decision-route";
+import {
   DECISION_HEADNOTE_KEYWORDS,
   decisionHeadnoteText,
   TEXT_FIELD_TYPE,
@@ -45,11 +50,6 @@ import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  type CaseLawDecisionRouteParams,
-  createCaseLawDecisionRouteParams,
-  normalizeCaseLawLanguageSegment,
-} from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 
 export { decisionYear } from "@/features/case-law/citation-format";
@@ -64,7 +64,7 @@ const NO_QUERY_TOKENS: readonly string[] = [];
 export type Decision = {
   id: string;
   caseNumber: string;
-  slug?: string | null;
+  slug: string | null;
   ecli: string | null;
   court: string;
   /**

@@ -76,6 +76,7 @@ const benchDecisions = (): Decision[] =>
       country: "CZ",
       language: "cs",
       languageAlternates: [],
+      slug: null,
       decisionDate: benchDate(index),
       decisionType: BENCH_TYPES[index % BENCH_TYPES.length] ?? "judgment",
       headline: BENCH_HEADNOTES[index % BENCH_HEADNOTES.length] ?? null,

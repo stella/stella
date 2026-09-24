@@ -1,4 +1,5 @@
 import { isBusinessRegistrySlug } from "@stll/api-contract";
+import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 
 import type {
   BusinessRegistrySourceReference,
@@ -6,7 +7,6 @@ import type {
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
 import type { ChatSourceDocument } from "@/lib/api-contract";
-import { isCaseLawDecisionId } from "@/lib/case-law-route";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type SourceDocumentEntry = {

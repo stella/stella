@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
 const monolingual: Decision = {
   id: "decision-cs",

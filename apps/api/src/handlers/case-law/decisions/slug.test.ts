@@ -1,17 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createCaseLawDecisionSlug,
-  createCaseLawDecisionSlugCandidate,
-} from "@/api/handlers/case-law/decisions/slug";
+import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 
 describe("case-law public slugs", () => {
-  test("normalizes case numbers into stable ASCII slugs", () => {
-    expect(createCaseLawDecisionSlug("Nao 66/2026")).toBe("nao-66-2026");
-    expect(createCaseLawDecisionSlug("ÚS 10/24")).toBe("us-10-24");
-    expect(createCaseLawDecisionSlug("!!!")).toBe("unknown");
-  });
-
   test("keeps the base first, then derives stable collision candidates", () => {
     const baseSlug = "nao-66-2026";
     const identity = "source-id\u0000document\u0000publisher-id";

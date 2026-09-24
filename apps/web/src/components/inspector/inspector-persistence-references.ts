@@ -35,15 +35,13 @@ const projectCaseDecision = ({
   country,
   court,
   decisionId,
-  language,
-  slug,
+  route,
 }: CaseDecisionViewPayload): CaseDecisionViewPayload => ({
   caseNumber,
   country,
   court,
   decisionId,
-  slug,
-  ...(language === undefined ? {} : { language }),
+  route,
   ...(anchorId === undefined ? {} : { anchorId }),
 });
 

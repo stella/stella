@@ -380,11 +380,11 @@ describe("apparatus block ids", () => {
   });
 });
 
-// The chip is drawn from the tier, so one drawn without a tier would show a
-// rank nobody stated. Everything the read left open is the same answer: no
-// chip, and the court named in words instead.
+// The chip is drawn from the tier, and a read that could not reach the court
+// registry states no abbreviation beside its placeholder tier. Everything the
+// read left open is the same answer: no chip, and the court named in words.
 describe("the mark on the court's own headnote", () => {
-  test("carries the chip only where the read stated both halves of it", () => {
+  test("carries the chip where the read abbreviated the court", () => {
     expect(
       courtHeadnoteOrigin({ courtAbbreviation: "NS", courtTier: "supreme" }),
     ).toEqual({ type: "court", chip: { abbreviation: "NS", tier: "supreme" } });
@@ -393,15 +393,11 @@ describe("the mark on the court's own headnote", () => {
   test("invents no chip for a court the read did not resolve", () => {
     const unmarked: HeadnoteOrigin = { type: "court", chip: null };
 
-    expect(courtHeadnoteOrigin({})).toEqual(unmarked);
-    expect(courtHeadnoteOrigin({ courtAbbreviation: "NS" })).toEqual(unmarked);
-    expect(courtHeadnoteOrigin({ courtTier: "supreme" })).toEqual(unmarked);
+    expect(
+      courtHeadnoteOrigin({ courtAbbreviation: null, courtTier: "other" }),
+    ).toEqual(unmarked);
     expect(
       courtHeadnoteOrigin({ courtAbbreviation: "", courtTier: "supreme" }),
-    ).toEqual(unmarked);
-    // A tier the client does not know is a registry the client cannot read.
-    expect(
-      courtHeadnoteOrigin({ courtAbbreviation: "NS", courtTier: "district" }),
     ).toEqual(unmarked);
   });
 });

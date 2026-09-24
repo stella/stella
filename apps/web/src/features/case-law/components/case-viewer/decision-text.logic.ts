@@ -19,30 +19,26 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
-import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 /**
  * The mark the court's own top matter carries: the court's chip where the
- * read both abbreviated and ranked it, and its name in words everywhere else.
+ * read abbreviated it, and its name in words everywhere else.
  *
- * No chip is invented for a court the registry did not answer for. The chip
- * is drawn from the tier, so a guessed one would show a rank nobody stated —
- * and the alternative costs the reader nothing, because the court's name
+ * No chip is invented for a court the registry did not answer for: the read
+ * then states no abbreviation and a placeholder tier (`courtPresentation`).
+ * The chip is drawn from the tier, so a guessed one would show a rank nobody
+ * stated, and the alternative costs the reader nothing: the court's name
  * stands in the reference line above either way.
  */
 export const courtHeadnoteOrigin = ({
   courtAbbreviation,
   courtTier,
-}: {
-  courtAbbreviation?: string | null | undefined;
-  courtTier?: string | null | undefined;
-}): HeadnoteOrigin =>
-  courtAbbreviation !== null &&
-  courtAbbreviation !== undefined &&
-  courtAbbreviation !== "" &&
-  courtTier !== null &&
-  courtTier !== undefined &&
-  isCourtTier(courtTier)
+}: Pick<
+  PublicCaseLawDecision,
+  "courtAbbreviation" | "courtTier"
+>): HeadnoteOrigin =>
+  courtAbbreviation !== null && courtAbbreviation !== ""
     ? {
         type: "court",
         chip: { abbreviation: courtAbbreviation, tier: courtTier },

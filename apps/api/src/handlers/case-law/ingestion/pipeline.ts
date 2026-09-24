@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -50,7 +51,6 @@ import {
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
-  createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import {

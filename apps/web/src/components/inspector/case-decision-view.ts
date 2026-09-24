@@ -1,15 +1,27 @@
 import type { useNavigate } from "@tanstack/react-router";
 
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import type {
+  CaseLawDecisionRouteInput,
+  CaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+
 import type {
   GenericTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
 import { decisionTitle } from "@/features/case-law/decision-title";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
 
+/**
+ * One decision in an inspector tab. The top-level fields are the decision
+ * record's own (the court's display name, the record's country); the public
+ * page's URL segments live only under `route`. Kept apart by name so a
+ * payload handed on as a decision target can never label a tab with a slug
+ * or fold a built route param a second time.
+ */
 export type CaseDecisionViewPayload = {
   /** A block to scroll to and mark once the text is shown. */
   anchorId?: string | undefined;
@@ -17,26 +29,34 @@ export type CaseDecisionViewPayload = {
   country: string;
   court: string;
   decisionId: string;
-  language?: string | undefined;
+  route: CaseLawDecisionRouteParams;
   /** The words that found the decision, so the reader opens on them marked. */
   searchQuery?: string | undefined;
-  slug: string;
 };
 
-type CaseDecisionTarget = {
+type CaseDecisionTarget = CaseLawDecisionRouteInput & {
   anchorId?: string | undefined;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionId: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
   searchQuery?: string | undefined;
-  slug?: string | null | undefined;
 };
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
+
+const isOptionalNonEmptyString = (value: unknown): boolean =>
+  value === undefined || isNonEmptyString(value);
+
+const isCaseLawDecisionRouteParams = (
+  value: unknown,
+): value is CaseLawDecisionRouteParams =>
+  typeof value === "object" &&
+  value !== null &&
+  "country" in value &&
+  isNonEmptyString(value.country) &&
+  "court" in value &&
+  isNonEmptyString(value.court) &&
+  "slug" in value &&
+  isNonEmptyString(value.slug) &&
+  (!("language" in value) || isOptionalNonEmptyString(value.language));
 
 export const isCaseDecisionViewPayload = (
   value: unknown,
@@ -54,17 +74,10 @@ export const isCaseDecisionViewPayload = (
     isNonEmptyString(value.court) &&
     "decisionId" in value &&
     isNonEmptyString(value.decisionId) &&
-    "slug" in value &&
-    isNonEmptyString(value.slug) &&
-    (!("language" in value) ||
-      value.language === undefined ||
-      isNonEmptyString(value.language)) &&
-    (!("anchorId" in value) ||
-      value.anchorId === undefined ||
-      isNonEmptyString(value.anchorId)) &&
-    (!("searchQuery" in value) ||
-      value.searchQuery === undefined ||
-      isNonEmptyString(value.searchQuery))
+    "route" in value &&
+    isCaseLawDecisionRouteParams(value.route) &&
+    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId)) &&
+    (!("searchQuery" in value) || isOptionalNonEmptyString(value.searchQuery))
   );
 };
 
@@ -85,8 +98,8 @@ export const isCaseDecisionGenericTab = (
 
 /**
  * Navigate the main view to the decision an inspector tab holds. The
- * payload's route identity was resolved at tab creation, so this is a
- * pure param mapping onto the two public decision routes. A tab opened at a
+ * payload's route was resolved at tab creation, so this is a pure param
+ * mapping onto the two public decision routes. A tab opened at a
  * passage keeps it: the full page lands on the same block, with the same
  * words marked. The terms ride in `?q=`, outside the canonical path the
  * public routes are indexed under.
@@ -95,11 +108,8 @@ export const navigateToCaseDecisionMain = async (
   navigate: ReturnType<typeof useNavigate>,
   {
     anchorId,
-    country,
-    court,
-    language,
+    route: { country, court, language, slug },
     searchQuery,
-    slug,
   }: CaseDecisionViewPayload,
 ): Promise<void> => {
   const hash = anchorId === undefined ? {} : { hash: anchorId };
@@ -158,16 +168,13 @@ export const createCaseDecisionViewTab = ({
   return {
     type: CASE_DECISION_VIEW,
     id: caseDecisionTabId(decisionId),
-    // The court comes from the decision record, not from `route.court`: that
-    // one is the slugified path segment.
     label: decisionTitle({ caseNumber, court }),
     payload: {
       caseNumber,
-      country: route.country,
-      court: route.court,
+      country,
+      court,
       decisionId,
-      slug: route.slug,
-      ...(route.language === undefined ? {} : { language: route.language }),
+      route,
       ...(anchorId === undefined ? {} : { anchorId }),
       ...(searchQuery === undefined ? {} : { searchQuery }),
     },

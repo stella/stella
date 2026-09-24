@@ -3,6 +3,14 @@ import { redirect, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import {
+  createStatutePath,
+  createStatuteRouteParams,
+  extractStatuteDocumentIdFromRouteParam,
+  normalizeStatuteVersionSegment,
+  type StatuteRouteParams,
+  toStatuteCountrySegment,
+} from "@stll/api-contract/statute-route";
 import { parsePlainDate } from "@stll/time";
 
 import {
@@ -22,15 +30,7 @@ import {
   createStatuteJsonLd,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import {
-  isPublicStatuteCountry,
-  createStatutePath,
-  createStatuteRouteParams,
-  extractStatuteDocumentIdFromRouteParam,
-  normalizeStatuteVersionSegment,
-  type StatuteRouteParams,
-  toStatuteCountrySegment,
-} from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the

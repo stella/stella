@@ -66,6 +66,7 @@ const statuteHit = {
   documentId: "00000000-0000-4000-8000-0000000f0001",
   country: "CZE",
   eli: STATUTE_ELI,
+  slug: null,
   title: "Občanský zákoník",
   documentType: "act",
   effectiveDate: "2014-01-01",
@@ -376,10 +377,10 @@ describe("compat search reaching the public corpus", () => {
         title: "Nejvyšší soud 29 Cdo 1234/2020",
         url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/29-cdo-1234-2020`,
       });
-      // A search hit carries no stored slug, so its address is minted from
-      // the ELI and title the corpus minted the slug from.
+      // A statute the corpus holds no slug for is addressed by the id form,
+      // the same address the web routes it by.
       expect(payload.results?.at(2)?.url).toBe(
-        `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+        `${APP_BASE_URL}/law/cze/statutes/89-2012-sb--AAAAAAAAQACAAAAAAA8AAQ`,
       );
     });
   });

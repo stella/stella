@@ -23,9 +23,8 @@ type DecisionInspectorAnnotationTargetOptions = {
 };
 
 /**
- * The route payload carries URL segments, while the loaded decision carries
- * citable facts. Keep the payload only as the pre-load fallback so a citation
- * cannot mix a route slug with the decision's date or type.
+ * The loaded decision carries the citable facts; the payload's record fields
+ * stand in only before the read, so a citation never invents a date or type.
  */
 export const decisionInspectorAnnotationTarget = ({
   ast,

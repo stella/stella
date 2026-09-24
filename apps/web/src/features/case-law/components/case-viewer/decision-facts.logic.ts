@@ -1,5 +1,6 @@
 import { orderDecisionJudges } from "@/features/case-law/decision-judges";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -29,21 +30,19 @@ const readStringList = (
 
 export const DECISION_FACT_KEYWORD_LIMIT = 8;
 
-export type DecisionFactsInput = {
-  decisionType: string | null | undefined;
-  /** The bench, as the decision read returns it. */
-  judges: readonly DecisionJudge[];
-  metadata: Record<string, unknown> | null | undefined;
-  source: { name: string | null } | null | undefined;
-  sourceUrl: string | null | undefined;
-};
+type DecisionFactsSource = Pick<PublicCaseLawDecision["source"], "name">;
+
+export type DecisionFactsInput = Pick<
+  PublicCaseLawDecision,
+  "decisionType" | "judges" | "metadata" | "sourceUrl"
+> & { source: DecisionFactsSource };
 
 export type DecisionFacts = {
   decisionType: string | null;
   judges: readonly DecisionJudge[];
   keywords: string[];
   legalAreas: string[];
-  source: { name: string | null; url: string } | null;
+  source: (DecisionFactsSource & { url: string }) | null;
   subject: string | null;
 };
 
@@ -61,16 +60,15 @@ export const buildDecisionFacts = ({
   source,
   sourceUrl,
 }: DecisionFactsInput): DecisionFacts => {
-  const record = metadata ?? {};
   const legalAreas = [
-    ...readStringList(record, "legalArea"),
-    ...readStringList(record, "legalAreas"),
+    ...readStringList(metadata, "legalArea"),
+    ...readStringList(metadata, "legalAreas"),
   ];
   const safeSourceUrl = sanitizeHref(sourceUrl);
   return {
     decisionType: isNonEmptyString(decisionType) ? decisionType : null,
     judges: orderDecisionJudges(judges),
-    keywords: readStringList(record, "keywords").slice(
+    keywords: readStringList(metadata, "keywords").slice(
       0,
       DECISION_FACT_KEYWORD_LIMIT,
     ),
@@ -78,8 +76,8 @@ export const buildDecisionFacts = ({
     source:
       safeSourceUrl === undefined
         ? null
-        : { name: source?.name ?? null, url: safeSourceUrl },
-    subject: readString(record, "subjectOfProceeding"),
+        : { name: source.name, url: safeSourceUrl },
+    subject: readString(metadata, "subjectOfProceeding"),
   };
 };
 

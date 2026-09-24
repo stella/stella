@@ -33,6 +33,7 @@ const decisionRows = (count: number): DecisionRowData[] =>
       country: "cze",
       language: "cs",
       languageAlternates: [],
+      slug: null,
       decisionDate: null,
       decisionType: null,
       headnote: { type: "absent", reason: "not_published" } as const,

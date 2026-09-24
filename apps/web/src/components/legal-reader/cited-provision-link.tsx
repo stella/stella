@@ -33,10 +33,10 @@ export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */
   document: {
     country: string;
-    eli?: string | null;
+    eli: string | null;
     id: string;
-    slug?: string | null;
-    versionValidFrom?: string | null;
+    slug: string | null;
+    versionValidFrom: string | null;
   };
   payload: ProvisionViewPayload;
   /**

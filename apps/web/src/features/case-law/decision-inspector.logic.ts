@@ -8,21 +8,16 @@
  * cannot look open while another tab is showing.
  */
 
+import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
+
 import { caseDecisionTabId } from "@/components/inspector/case-decision-view";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 
 /** What `createCaseDecisionViewTab` needs, taken off one results row. */
-export type DecisionTabTarget = {
+export type DecisionTabTarget = CaseLawDecisionRouteInput & {
   anchorId?: string | undefined;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionId: string;
-  language?: string | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
   /** The words that found the row, so the opened text marks them. */
   searchQuery?: string | undefined;
-  slug?: string | null | undefined;
 };
 
 /** What the reader's gesture says about where in the decision it lands. */

@@ -9,6 +9,7 @@ import type { MouseEvent } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
+import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { opensCitationInInspector } from "@/components/inspector/case-decision-view";
@@ -16,7 +17,6 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { detached } from "@/lib/detached";
-import { createStatuteRouteParams } from "@/lib/statute-route";
 
 /** The page a listed statute opens on: the act's canonical address. */
 export const statuteListLinkTarget = (statute: StatuteListItem) => {
@@ -25,6 +25,7 @@ export const statuteListLinkTarget = (statute: StatuteListItem) => {
     documentId: statute.id,
     eli: statute.eli,
     slug: statute.slug,
+    version: null,
   });
   return {
     params: { country, slug },

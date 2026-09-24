@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
@@ -27,7 +28,6 @@ import {
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 
 type PublicLawShellProps = {

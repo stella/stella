@@ -2,11 +2,12 @@ import { panic, Result } from "better-result";
 import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { createStatuteSlug } from "@stll/api-contract/statute-route";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
-import { createStatuteSlug } from "@/api/handlers/legislation/slug";
 import {
   defectiveJunctions,
   storedWindow,

@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
   type DecisionQueryIntent,
@@ -22,7 +23,6 @@ import {
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */

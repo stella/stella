@@ -21,10 +21,10 @@ import { createStatuteLinkTarget } from "@/lib/statute-route";
 export type CitedStatuteTarget = {
   document: {
     country: string;
-    eli?: string | null;
+    eli: string | null;
     id: string;
-    slug?: string | null;
-    versionValidFrom?: string | null;
+    slug: string | null;
+    versionValidFrom: string | null;
   };
   statuteTitle: string;
 };

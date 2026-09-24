@@ -4,6 +4,14 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  type CaseLawDecisionRouteParams,
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+  extractCaseLawDecisionIdFromIdRouteParam,
+  normalizeCaseLawLanguageSegment,
+} from "@stll/api-contract/case-law-decision-route";
+
+import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
@@ -22,13 +30,6 @@ import {
 } from "@/features/case-law/queries/provisions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
-import {
-  type CaseLawDecisionRouteParams,
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-  extractCaseLawDecisionIdFromIdRouteParam,
-  normalizeCaseLawLanguageSegment,
-} from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -406,7 +407,7 @@ export const createPublicCaseLawDecisionHead = ({
       decisionType: decision.decisionType,
       ecli: decision.ecli,
       language: decision.language,
-      sourceName: decision.source?.name ?? null,
+      sourceName: decision.source.name,
       sourceUrl: decision.sourceUrl,
       updatedAt: decision.updatedAt,
     }),

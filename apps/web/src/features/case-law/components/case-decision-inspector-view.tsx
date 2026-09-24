@@ -213,7 +213,15 @@ export const CaseDecisionInspectorView = ({
                 <CitationHeader
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
-                  target={payload}
+                  target={{
+                    caseNumber: decision.caseNumber,
+                    country: decision.country,
+                    court: decision.court,
+                    decisionId: decision.id,
+                    language: decision.language,
+                    languageAlternates: decision.languageAlternates,
+                    slug: decision.slug,
+                  }}
                 />
                 <DecisionCitations
                   decision={{
@@ -225,6 +233,7 @@ export const CaseDecisionInspectorView = ({
                     ecli: decision.ecli,
                     id: decision.id,
                     language: decision.language,
+                    languageAlternates: decision.languageAlternates,
                     slug: decision.slug,
                   }}
                   decisionId={decisionId}

@@ -24,7 +24,12 @@ export const UUID_PATTERN =
   "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
 const UUID_REGEX = new RegExp(UUID_PATTERN, "u");
-const COMPACT_UUID_REGEX = /^[A-Za-z0-9_-]{22}$/u;
+const COMPACT_UUID_LENGTH = 22;
+const UUID_LENGTH = 36;
+const COMPACT_UUID_REGEX = new RegExp(
+  `^[A-Za-z0-9_-]{${COMPACT_UUID_LENGTH}}$`,
+  "u",
+);
 const BASE64URL_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -166,4 +171,39 @@ export const decodeCompactUuid = (
   return bytes === null
     ? Result.err(new InvalidCompactUuidError(segment))
     : Result.ok(bytesToUuid(bytes));
+};
+
+type DecodeUuidSuffixOptions = {
+  segment: string;
+  /** What the route puts between its readable prefix and the id. */
+  separator: string;
+};
+
+/**
+ * The uuid a `<prefix><separator><uuid>` segment ends with, in either
+ * spelling. Split on the fixed-length tail, never on the separator: the
+ * base64url alphabet contains `-`, so a compact uuid can start with or
+ * contain the separator itself.
+ */
+export const decodeUuidSuffix = ({
+  segment,
+  separator,
+}: DecodeUuidSuffixOptions): Result<string, InvalidCompactUuidError> => {
+  for (const tailLength of [COMPACT_UUID_LENGTH, UUID_LENGTH]) {
+    const tailStart = segment.length - tailLength;
+    const separatorStart = tailStart - separator.length;
+    if (
+      separatorStart < 0 ||
+      segment.slice(separatorStart, tailStart) !== separator
+    ) {
+      continue;
+    }
+
+    const decoded = decodeCompactUuid(segment.slice(tailStart));
+    if (Result.isOk(decoded)) {
+      return decoded;
+    }
+  }
+
+  return Result.err(new InvalidCompactUuidError(segment));
 };

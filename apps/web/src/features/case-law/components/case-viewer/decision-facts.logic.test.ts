@@ -7,9 +7,10 @@ import {
   hasDecisionFacts,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
+import { toSafeId } from "@/lib/safe-id";
 
 const RAPPORTEUR = {
-  judgeId: "00000000-0000-4000-8000-000000000001",
+  judgeId: toSafeId<"caseLawJudge">("00000000-0000-4000-8000-000000000001"),
   name: "Nováková Jana",
   portrait: {
     attribution: "Ústavní soud",
@@ -59,7 +60,7 @@ describe("decision facts", () => {
       decisionType: "rozsudek",
       judges: [],
       metadata: {},
-      source: null,
+      source: { name: "x" },
       sourceUrl: null,
     });
 
@@ -92,7 +93,7 @@ describe("decision facts", () => {
       decisionType: null,
       judges: [DISSENTER, RAPPORTEUR],
       metadata: {},
-      source: null,
+      source: { name: "x" },
       sourceUrl: null,
     });
 
@@ -109,7 +110,7 @@ describe("decision facts", () => {
       decisionType: null,
       judges: [],
       metadata: {},
-      source: null,
+      source: { name: "x" },
       sourceUrl: null,
     });
     expect(hasDecisionFacts({ facts: withoutBench, kinds: ["judges"] })).toBe(
@@ -132,14 +133,14 @@ describe("decision facts", () => {
     expect(facts.source).toBeNull();
   });
 
-  test("is empty without metadata, a bench or a source", () => {
+  test("is empty without metadata, a bench or a source address", () => {
     expect(
       hasDecisionFacts({
         facts: buildDecisionFacts({
           decisionType: null,
           judges: [],
-          metadata: null,
-          source: null,
+          metadata: {},
+          source: { name: "x" },
           sourceUrl: null,
         }),
         kinds: DECISION_FACT_KINDS,

@@ -98,7 +98,6 @@ export const DecisionFacts = ({
 };
 
 const SourceLink = ({ source }: { source: DecisionFactValues["source"] }) => {
-  const t = useTranslations();
   if (source === null) {
     return null;
   }
@@ -110,7 +109,7 @@ const SourceLink = ({ source }: { source: DecisionFactValues["source"] }) => {
       rel="noopener noreferrer"
       target="_blank"
     >
-      {source.name ?? t("inspector.external.openOriginal")}
+      {source.name}
       <ExternalLinkIcon aria-hidden="true" className="size-3" />
     </a>
   );

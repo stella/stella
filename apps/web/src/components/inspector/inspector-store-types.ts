@@ -1,3 +1,4 @@
+import type { RegisteredRouter, RouteIds } from "@tanstack/react-router";
 import type { Draft } from "immer";
 
 import type { TaskStatus } from "@stll/api-contract";
@@ -8,6 +9,9 @@ import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-k
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 export type ExternalTabId = `external:${string}`;
+
+/** The route a page-owned tab belongs to; the tab closes when it leaves. */
+export type InspectorOwnerRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
 /** Canonical file-inspector facet domain shared by state, UI, and broadcast validation. */
 export const FILE_FACETS = [
@@ -110,7 +114,7 @@ export type GenericTab = {
   id: string;
   label: string;
   payload: unknown;
-  ownerRouteId?: string | undefined;
+  ownerRouteId?: InspectorOwnerRouteId | undefined;
 };
 
 export type InspectorTab =
@@ -309,7 +313,7 @@ export type InspectorTabsActions = {
     id: string;
     label: string;
     payload: StructuredCloneable<P>;
-    ownerRouteId?: string;
+    ownerRouteId?: InspectorOwnerRouteId;
     pane?: InspectorPaneIntent;
   }) => void;
   updateView: <P>(args: {
@@ -317,7 +321,8 @@ export type InspectorTabsActions = {
     label: string;
     payload: StructuredCloneable<P>;
   }) => void;
-  closeTabsForRoute: (routeId: string) => void;
+  /** Close every route-owned tab whose owner route is not among `routeIds`. */
+  closeTabsOutsideRoutes: (routeIds: ReadonlySet<string>) => void;
   closeTab: (id: string, options?: CloseTabOptions) => void;
   closeOthers: (id: string) => void;
   reviveSuggestedTab: () => void;

@@ -199,6 +199,24 @@ export const readPublicDecisionLanguageAlternatesByGroup = async ({
   return groupPublicDecisionLanguageAlternates(rows);
 };
 
+/**
+ * Alternates for rows read inside an open transaction: the group keys of a
+ * page as selected (nulls and repeats included), one read for all of them.
+ */
+export const readPublicDecisionLanguageAlternatesInTx = async (
+  tx: CaseLawPublicReadTransaction,
+  languageGroupKeys: readonly (string | null)[],
+): Promise<PublicDecisionLanguageAlternatesByGroup> => {
+  const keys = [
+    ...new Set(languageGroupKeys.filter((key): key is string => key !== null)),
+  ];
+  return groupPublicDecisionLanguageAlternates(
+    keys.length === 0
+      ? []
+      : await readPublicDecisionLanguageAlternatesQuery(tx, keys),
+  );
+};
+
 /** The language versions of one decision; empty unless there is a choice. */
 export const listPublicDecisionLanguageAlternates = async ({
   tx,

@@ -314,6 +314,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
       decisionType: "nález",
       ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
       language: "cs",
+      languageAlternates: [],
       slug: "open-related",
     });
   }

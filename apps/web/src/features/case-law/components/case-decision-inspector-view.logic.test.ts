@@ -11,10 +11,12 @@ describe("the inspector decision citation", () => {
       country: "CZE",
       court: "Krajský soud v Plzni",
       decisionId: "decision-id",
+      language: null,
+      languageAlternates: null,
       slug: "56-co-24-2026-71",
     }).payload;
-    expect(payload.country).toBe("cze");
-    expect(payload.court).toBe("krajsky-soud-v-plzni");
+    expect(payload.court).toBe("Krajský soud v Plzni");
+    expect(payload.route.court).toBe("krajsky-soud-v-plzni");
 
     const target = decisionInspectorAnnotationTarget({
       ast: null,
@@ -41,6 +43,8 @@ describe("the inspector decision citation", () => {
       country: "CZE",
       court: "Krajský soud v Plzni",
       decisionId: "decision-id",
+      language: null,
+      languageAlternates: null,
       slug: "56-co-24-2026-71",
     }).payload;
 

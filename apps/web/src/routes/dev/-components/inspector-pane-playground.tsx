@@ -23,6 +23,8 @@
  * fixes at their call sites, not here.
  */
 
+import type { ComponentProps } from "react";
+
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -37,6 +39,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
+import { toSafeId } from "@/lib/safe-id";
 
 /**
  * The token. An embedded picture's identifier, as the Ústavní soud's RTF
@@ -163,17 +166,19 @@ const BENCH_TEXT_FIELDS = {
 const BENCH_DECISION = {
   caseNumber: "Pl. ÚS 20/21",
   court: "Ústavní soud",
+  courtAbbreviation: null,
+  courtTier: "other",
   documentAst: BENCH_DOCUMENT_AST,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
   fulltext: null,
-  id: "bench-decision",
+  id: toSafeId<"caseLawDecision">("bench-decision"),
   judges: [],
   language: "cs",
   sourceAttributionUrl: null,
   textFields: BENCH_TEXT_FIELDS,
-};
+} satisfies ComponentProps<typeof DecisionText>["decision"];
 
 /** Sixty years of citations: the strip at the widest span the API allows. */
 const BENCH_CITATION_YEARS = Array.from({ length: 60 }, (_, index) => ({

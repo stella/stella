@@ -16,9 +16,13 @@ Invalid input is a typed failure (`InvalidUuidError`,
 caller decides for itself whether an unreadable segment is a 404 or a value to
 pass through untouched.
 
+`decodeUuidSuffix` reads the id off the end of a `<prefix><separator><id>`
+segment by its fixed length, because the base64url alphabet contains `-` and a
+compact id can itself start with or contain the separator.
+
 ## What does not
 
-Route shapes. Which prefix leads a segment, what separates it from the id, and
+Route shapes. Which prefix leads a segment, which separator precedes the id, and
 what a reader does with an id it cannot resolve belong to the reader that owns
 the route.
 

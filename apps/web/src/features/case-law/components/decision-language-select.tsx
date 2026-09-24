@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { normalizeCaseLawLanguageSegment } from "@stll/api-contract/case-law-decision-route";
 import {
   Select,
   SelectItem,
@@ -9,14 +10,13 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { navigateToCaseDecisionMain } from "@/components/inspector/case-decision-view";
+import {
+  createCaseDecisionViewTab,
+  navigateToCaseDecisionMain,
+} from "@/components/inspector/case-decision-view";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useFormatter } from "@/i18n/formatting-context";
-import {
-  createCaseLawDecisionRouteParams,
-  normalizeCaseLawLanguageSegment,
-} from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 
 /**
@@ -59,7 +59,7 @@ const DecisionLanguageSelectFor = ({
     if (alternate === undefined) {
       return;
     }
-    const route = createCaseLawDecisionRouteParams({
+    const { payload } = createCaseDecisionViewTab({
       caseNumber: alternate.caseNumber,
       country: alternate.country,
       court: alternate.court,
@@ -69,14 +69,7 @@ const DecisionLanguageSelectFor = ({
       slug: alternate.slug,
     });
     detached(
-      navigateToCaseDecisionMain(navigate, {
-        caseNumber: alternate.caseNumber,
-        country: route.country,
-        court: route.court,
-        decisionId: alternate.id,
-        slug: route.slug,
-        ...(route.language === undefined ? {} : { language: route.language }),
-      }),
+      navigateToCaseDecisionMain(navigate, payload),
       "case-law.switch-language",
     );
   };

@@ -18,9 +18,10 @@ import { DecisionText } from "@/features/case-law/components/case-viewer/decisio
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 
 const RAPPORTEUR = {
-  judgeId: "00000000-0000-4000-8000-000000000001",
+  judgeId: toSafeId<"caseLawJudge">("00000000-0000-4000-8000-000000000001"),
   name: "Nováková Jana",
   portrait: {
     attribution: "Ústavní soud",
@@ -88,13 +89,15 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
         court: "Ústavní soud",
+        courtAbbreviation: null,
+        courtTier: "constitutional",
         documentAst: ast,
         documentPending: false,
         documentReadFailed: false,
         documentUnavailable: false,
         fulltext: null,
-        id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-        judges,
+        id: toSafeId<"caseLawDecision">("9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
+        judges: [...judges],
         language: "cs",
         sourceAttributionUrl: null,
         textFields: {

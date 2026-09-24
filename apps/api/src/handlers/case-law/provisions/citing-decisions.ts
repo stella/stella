@@ -14,6 +14,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
@@ -196,6 +197,8 @@ export const listCitingDecisionsHandler = async (
         slug: caseLawDecisions.slug,
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,
+        language: caseLawDecisions.language,
+        languageGroupKey: caseLawDecisions.languageGroupKey,
         decisionDate: caseLawDecisions.decisionDate,
         citationAuthority: caseLawDecisions.citationAuthority,
         // Keep the public citation relationship when its source decision is
@@ -226,13 +229,15 @@ export const listCitingDecisionsHandler = async (
       .where(and(...conditions))
       .as("citing_decision_mentions");
 
-    return await tx
+    const citing = await tx
       .select({
         decisionId: mentions.decisionId,
         caseNumber: mentions.caseNumber,
         slug: mentions.slug,
         court: mentions.court,
         country: mentions.country,
+        language: mentions.language,
+        languageGroupKey: mentions.languageGroupKey,
         decisionDate: mentions.decisionDate,
         citationAuthority: mentions.citationAuthority,
         sentenceText: mentions.sentenceText,
@@ -253,6 +258,17 @@ export const listCitingDecisionsHandler = async (
         desc(mentions.anchor),
       )
       .limit(limit + 1);
+    // The versions decide whether a citing decision's route names its
+    // language; one read for the page.
+    const alternates = await readPublicDecisionLanguageAlternatesInTx(
+      tx,
+      citing.map((row) => row.languageGroupKey),
+    );
+    return citing.map(({ languageGroupKey, ...row }) =>
+      Object.assign(row, {
+        languageAlternates: alternates.alternatesFor(languageGroupKey),
+      }),
+    );
   });
 
   const page = createCursorPage({
