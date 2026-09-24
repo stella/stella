@@ -313,7 +313,12 @@ export const toTerminalAssistantMessage = ({
   ) {
     panic("A continuation must persist under its owning message id");
   }
-  const runParts = responseMessage?.parts ?? [];
+  // A run that failed before its first chunk produced no parts; the owning
+  // message keeps the ones it already had.
+  const runProducedParts =
+    responseMessage !== undefined && responseMessage.parts.length > 0;
+  const owningParts =
+    owningAssistantMessage === undefined ? [] : owningAssistantMessage.parts;
   const message = toPersistableChatMessage({
     id:
       responseMessage?.id ??
@@ -323,8 +328,7 @@ export const toTerminalAssistantMessage = ({
       owning: owningAssistantMessage?.metadata,
       run: responseMessage?.metadata,
     }),
-    parts:
-      runParts.length === 0 ? (owningAssistantMessage?.parts ?? []) : runParts,
+    parts: runProducedParts ? responseMessage.parts : owningParts,
     role: responseMessage?.role ?? "assistant",
     ...(owningAssistantMessage?.createdAt === undefined
       ? {}
