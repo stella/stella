@@ -20,7 +20,6 @@ import {
 } from "@/api/agent-auth/constants";
 import { IdJagValidationError, validateIdJag } from "@/api/agent-auth/id-jag";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
-import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   AgentTokenError,
@@ -167,8 +166,7 @@ const autoProvision = async (
         }),
     );
     if (Result.isError(orgResult)) {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- rolls back the user row this function just created when its organization cannot be provisioned
-      await rootDb.delete(user).where(eq(user.id, createdUser.id));
+      await ctx.internalAdapter.deleteUser(createdUser.id);
       throw new ProvisionError();
     }
     return brandActorSessionIdentity({

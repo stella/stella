@@ -173,16 +173,6 @@
       "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
     },
     {
-      "id": "SW-0025",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/agent-auth-idjag.ts",
-      "symbol": "autoProvision",
-      "count": 1,
-      "reason": "rolls back the user row this function just created when its organization cannot be provisioned",
-      "evidence": "apps/api/src/lib/agent-auth-idjag.ts#validateIdJag"
-    },
-    {
       "id": "SW-0031",
       "kind": "permanent",
       "rule": "security-guards/no-unscoped-user-query",
