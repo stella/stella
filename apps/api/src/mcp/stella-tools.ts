@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -2231,6 +2232,11 @@ const decisionItemResult = ({
 
   return {
     decisionId,
+    ...(read.resolution.type === DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT
+      ? {
+          message: `This id named written reasons that are now part of decision ${read.id}, returned here. Cite ${read.id} from now on.`,
+        }
+      : {}),
     nextCursor: hasMore
       ? encodePaginationCursor([textBounds.end, read.citationsNextCursor])
       : null,

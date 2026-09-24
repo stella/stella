@@ -59,6 +59,7 @@ import {
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
+import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
 
 import {
@@ -1087,6 +1088,100 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
     p
       .index("case_law_decision_source_identities_decision_idx")
       .on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
+ * Documents a publisher serves under their own id that belong inside another
+ * decision's document: SAOS publishes the written reasons of a ruling apart
+ * from it. See `DecisionSupplement`.
+ *
+ * The row keeps the supplement's parsed text so every later write of its
+ * judgment can compose it again: the judgment's own observation carries none
+ * of it. `decisionId` names the judgment whose stored document includes this
+ * supplement, and `mergedSourceHash` the version it included; a supplement
+ * with no judgment is parked and waits for one. The judgment is found by
+ * `(source, court, docket, language)` and the target's types and date, which
+ * is why that tuple is indexed.
+ */
+export const caseLawDecisionSupplements = p.pgTable(
+  "case_law_decision_supplements",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 256 })
+      .notNull(),
+    kind: p.varchar({ length: 16, enum: DECISION_SUPPLEMENT_KINDS }).notNull(),
+    caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    court: p.varchar({ length: 512 }).notNull(),
+    language: p.varchar({ length: 8 }).notNull(),
+    /** The supplement's own date, and so the latest its judgment can carry. */
+    latestDecisionDate: p.date("latest_decision_date"),
+    /** The decision types a judgment it joins may carry. */
+    judgmentDecisionTypes: p
+      .varchar("judgment_decision_types", { length: 128 })
+      .array()
+      .notNull(),
+    fulltext: p.text(),
+    documentAst: jsonb("document_ast")
+      .$type<DocumentAst | EmptyAst>()
+      .notNull(),
+    sourceHash: p.varchar("source_hash", { length: 64 }).notNull(),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    documentUrl: p.varchar("document_url", { length: 2048 }),
+    metadata: jsonb().$type<Record<string, unknown>>().notNull(),
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", {
+      length: 128,
+    }),
+    decisionId: safeUuid<"caseLawDecision">("decision_id"),
+    mergedSourceHash: p.varchar("merged_source_hash", { length: 64 }),
+    observedAt: timestamptz("observed_at").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.sourceDocumentId],
+      name: "case_law_decision_supplements_pk",
+    }),
+    // Named here: the derived names run past PostgreSQL's identifier limit.
+    p
+      .foreignKey({
+        name: "case_law_decision_supplements_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_decision_supplements_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("set null"),
+    p
+      .index("case_law_decision_supplements_target_idx")
+      .on(t.sourceId, t.court, t.caseNumber, t.language),
+    p
+      .index("case_law_decision_supplements_decision_idx")
+      .on(t.decisionId)
+      .where(isNotNull(t.decisionId)),
+    p.check(
+      "case_law_decision_supplements_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        DECISION_SUPPLEMENT_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    // A merged supplement names the version its judgment composed. The
+    // reverse is allowed: a judgment deleted from under a merged supplement
+    // nulls `decision_id` and leaves the hash, which reads as parked.
+    p.check(
+      "case_law_decision_supplements_merged_has_hash",
+      sql`${t.decisionId} IS NULL OR ${t.mergedSourceHash} IS NOT NULL`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );

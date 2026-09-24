@@ -15,7 +15,10 @@ import {
   relations,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -28,7 +31,6 @@ import {
 import type {
   CaseLawReplayScope,
   ReplayVisitBound,
-  StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

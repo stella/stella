@@ -1415,7 +1415,8 @@ export const runCaseLawIngest = async (
     const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.reconciliationFetchDelayMs;
     const reconcilable: ReconciliationSource[] = [];
     for (const { adapterKey, name } of SOURCES) {
-      const reconciliation = getAdapter(adapterKey)?.reconciliation;
+      const adapter = getAdapter(adapterKey);
+      const reconciliation = adapter?.reconciliation;
       // Every case-law adapter implements the capability. Absence here means
       // the configured source key has no registered adapter.
       if (reconciliation === undefined) {
@@ -1437,6 +1438,7 @@ export const runCaseLawIngest = async (
                 adapterKey,
                 sourceId: source.id,
                 reconciliation,
+                reparseStoredRaw: adapter?.reparseStoredRaw,
                 scopedDb: backfillDb,
                 now: () => new Date(),
                 fetchDelayMs,

@@ -1,7 +1,18 @@
 import { Result, panic } from "better-result";
-import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -10,12 +21,13 @@ import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
+  caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawIngestionFailures,
   caseLawPolarityRules,
   caseLawSources,
 } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
+import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
   CITATION_KIND,
   classifyCitation,
@@ -40,10 +52,17 @@ import {
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { withSourceRawObjects } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  StoredRawReadError,
+  withSourceRawObjects,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
+  DecisionSupplement,
   IngestionResult,
+  SourceAdapter,
   SourceRawObjectRef,
+  StoredRawResultReader,
+  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
@@ -59,6 +78,27 @@ import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import {
+  absorbStandaloneSupplementRow,
+  rehomeSupplementRaw,
+} from "@/api/handlers/case-law/ingestion/supplement-absorption";
+import {
+  composeDecisionWithSupplements,
+  detachSupplement,
+  detachSupplementsLeftOut,
+  lockSupplementTarget,
+  markSupplementsMerged,
+  planSupplementComposition,
+  sameSupplementVersions,
+  selectComposableSupplements,
+  selectRulingsUnder,
+  selectSupplementJudgment,
+  supplementCanJoin,
+} from "@/api/handlers/case-law/ingestion/supplement-composition";
+import type {
+  StoredSupplement,
+  SupplementTargetKey,
+} from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import {
@@ -138,22 +178,34 @@ import {
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
+  classifyCaseLawRawKey,
   copyRawObject,
+  deleteRawKeys,
   homeRawPayloadObjects,
   openRawSourceWriteWindow,
+  RAW_KEY_OWNERSHIP,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
   sourceBinaryRef,
   writeCaseLawRawPayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
-import type { RawSourceWriteFailure } from "@/api/lib/legal-search/raw-source-storage";
+import type {
+  RawSourceWriteFailure,
+  RawSourceWriteWindow,
+} from "@/api/lib/legal-search/raw-source-storage";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isPgConstraintError,
   PG_ERROR,
   pgErrorFields,
 } from "@/api/lib/pg-error";
+import {
+  isMissingS3ObjectError,
+  readS3ObjectBounded,
+  S3ObjectBudgetError,
+} from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
@@ -245,6 +297,14 @@ export const PROCESS_DECISION_RETRY_REASON = {
   SOURCE_RAW_WRITE: "source-raw-write",
 } as const;
 
+/** Why a supplement's placement is retried beyond its writes' own reasons. */
+export const SUPPLEMENT_RETRY_REASON = {
+  /** Its standalone row still stands beside its judgment. */
+  ABSORB: "supplement-absorb",
+  /** Its judgment's stored payload could not be read this time. */
+  JUDGMENT_READ: "supplement-judgment-read",
+} as const;
+
 export type ProcessResult =
   | {
       status: typeof PROCESS_DECISION_STATUS.COMPLETE;
@@ -267,6 +327,8 @@ type ContentionReconciliation =
 
 const DECISION_ROW_WRITE_STATUS = {
   APPLIED: "applied",
+  /** The docket's supplements changed after this write composed them. */
+  SUPPLEMENTS_MOVED: "supplements-moved",
   WINNER_PENDING: "winner-pending",
   WINNER_REDACTED: "winner-redacted",
   WINNER_SETTLED: "winner-settled",
@@ -562,6 +624,97 @@ const planSourceRawPayload = ({
     return { payload, files: [] };
   }
   return { payload, files };
+};
+
+type WriteOwnedRawPayloadOptions = {
+  result: IngestionResult;
+  sourceId: SafeId<"caseLawSource">;
+  /** The decision whose prefix holds the payload and the files it names. */
+  ownerId: SafeId<"caseLawDecision">;
+  contentType: string;
+  /** The key the pointer being written already records, or null. */
+  storedKey: string | null;
+  storedContentType: string | null;
+  window: RawSourceWriteWindow;
+  /** Called once, before the first object write this call starts. */
+  onWriteStart?: () => void;
+};
+
+/**
+ * Store an observation's payload and the files it names under one
+ * decision's prefix, answering its key, or undefined when the observation
+ * carries none. Every write is content-addressed and created only if absent,
+ * so a retry after a failure between them lands nothing twice.
+ */
+const writeOwnedRawPayload = async ({
+  result,
+  sourceId,
+  ownerId,
+  contentType,
+  storedKey,
+  storedContentType,
+  window,
+  onWriteStart,
+}: WriteOwnedRawPayloadOptions): Promise<
+  Result<string | undefined, RawSourceWriteFailure>
+> => {
+  const plan = planSourceRawPayload({ result, sourceId, decisionId: ownerId });
+  if (plan === undefined) {
+    return Result.ok(undefined);
+  }
+  const owner = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId,
+    documentId: ownerId,
+  } as const;
+  // A payload read back from storage (a replay) names files where they
+  // were stored before; those are copied under this decision, so its
+  // erasure reaches them and no other decision's can.
+  const homed = homeRawPayloadObjects({ payload: plan.payload, owner });
+  if (Result.isError(homed)) {
+    return homed;
+  }
+  // The publisher's files first: the envelope names them, so it is
+  // never stored before they are. That order is also why a row that
+  // already records this exact envelope proves its files are stored,
+  // and an unchanged observation writes nothing at all.
+  const payloadAlreadyStored =
+    storedKey === rawSourcePayloadKey({ owner, data: homed.value.payload }) &&
+    storedContentType === contentType;
+  if (!payloadAlreadyStored) {
+    onWriteStart?.();
+    for (const { bytes, contentType: fileContentType } of plan.files) {
+      const file = await writeSourceBinary({
+        ...owner,
+        bytes,
+        contentType: fileContentType,
+        window,
+      });
+      if (Result.isError(file)) {
+        return file;
+      }
+    }
+    for (const copy of homed.value.copies) {
+      const copied = await copyRawObject({
+        copy,
+        window,
+        signal: AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+      });
+      if (Result.isError(copied)) {
+        return copied;
+      }
+    }
+  }
+  // Failing here holds the page cursor; see `rawWriteFailed` and
+  // `writeRawSourcePayload` for why that is safe.
+  return await writeCaseLawRawPayload({
+    owner,
+    window,
+    data: homed.value.payload,
+    contentType,
+    storedKey,
+    storedContentType,
+  });
 };
 
 type BuildCitationRowsOptions = {
@@ -964,6 +1117,118 @@ const caseLawDecisionIdentityWhere = ({
         sourceDocumentId: NULL_SOURCE_DOCUMENT_ID_FILTER,
       };
 
+type AbsorbComposedSupplementRowsOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  judgmentId: SafeId<"caseLawDecision">;
+  supplements: readonly Pick<StoredSupplement, "kind" | "sourceDocumentId">[];
+  /** Test seam; production absorbs through the corpus stores. */
+  absorb?: typeof absorbStandaloneSupplementRow;
+};
+
+type AbsorbComposedSupplementRowsOutcome =
+  | { type: "absorbed" }
+  /** Rows still standing beside the judgment; see the function comment. */
+  | { type: "incomplete"; sourceDocumentIds: string[] };
+
+/**
+ * Take the standalone rows of supplements this judgment now holds out of the
+ * corpus. Runs after the judgment's write committed, since the withdrawal
+ * reaches object storage. A row that stays standing is reported, not thrown:
+ * the judgment is already right. The caller decides whether to hold its
+ * cursor; either way the reconciliation reads a merged supplement whose row
+ * still stands as not held, so it is listed and placed again.
+ */
+const absorbComposedSupplementRows = async ({
+  scopedDb,
+  sourceId,
+  judgmentId,
+  supplements,
+  absorb = absorbStandaloneSupplementRow,
+}: AbsorbComposedSupplementRowsOptions): Promise<AbsorbComposedSupplementRowsOutcome> => {
+  // One at a time: each absorption takes the citation graph lock.
+  const standing = await mapWithConcurrency({
+    items: supplements,
+    limit: 1,
+    operation: async ({ kind, sourceDocumentId }) => {
+      // The payload moves under the judgment before the row's copy goes.
+      const rehomed = await Result.tryPromise({
+        try: async () =>
+          await rehomeSupplementRaw({
+            scopedDb,
+            sourceId,
+            sourceDocumentId,
+            judgmentId,
+          }),
+        catch: (cause) => cause,
+      });
+      const rehomeError = ((): unknown => {
+        if (Result.isError(rehomed)) {
+          return rehomed.error;
+        }
+        return Result.isError(rehomed.value) ? rehomed.value.error : null;
+      })();
+      if (rehomeError !== null) {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          ...errorSystemFields(rehomeError),
+          "error.detail": wrappedErrorDetail(rehomeError),
+        });
+        return [sourceDocumentId];
+      }
+      const absorbed = await absorb({
+        scopedDb,
+        sourceId,
+        kind,
+        sourceDocumentId,
+        judgmentId,
+      });
+      if (Result.isError(absorbed)) {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          ...errorSystemFields(absorbed.error),
+          "error.detail": wrappedErrorDetail(absorbed.error),
+        });
+        captureError(absorbed.error, {
+          sourceId,
+          step: "absorbComposedSupplementRows",
+        });
+        return [sourceDocumentId];
+      }
+      if (absorbed.value.type === "withdraw-incomplete") {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          "error.detail":
+            "a corpus object still holds the standalone row's document",
+        });
+        return [sourceDocumentId];
+      }
+      if (absorbed.value.type === "raw-incomplete") {
+        logger.error(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          ...errorSystemFields(absorbed.value.error),
+          "error.detail":
+            "a raw object still holds the standalone row's payload",
+        });
+        return [sourceDocumentId];
+      }
+      return [];
+    },
+  });
+  const sourceDocumentIds = standing.flat();
+  return sourceDocumentIds.length === 0
+    ? { type: "absorbed" }
+    : { type: "incomplete", sourceDocumentIds };
+};
+
 /**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
@@ -981,13 +1246,13 @@ const processDecisionAttempt = async ({
   corpusBatch,
   polarityRules,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
-  const result = sanitizeResult(input);
+  const observed = sanitizeResult(input);
   const rejectedDecisionDate =
-    result.decisionDate === undefined ? input.decisionDate : undefined;
+    observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {
     logger.warn(DECISION_DATE_OUT_OF_BOUNDS, {
       sourceId,
-      caseNumber: result.caseNumber,
+      caseNumber: observed.caseNumber,
       decisionDate: rejectedDecisionDate.slice(
         0,
         MAX_LOGGED_DECISION_DATE_LENGTH,
@@ -999,24 +1264,24 @@ const processDecisionAttempt = async ({
   // unusable one clears the column rather than leaving in place the value it
   // was meant to replace, and an unstated one leaves the row as it is.
   const persistedDecisionDate =
-    rejectedDecisionDate === undefined ? result.decisionDate : null;
+    rejectedDecisionDate === undefined ? observed.decisionDate : null;
   const proposedDecisionId = createSafeId<"caseLawDecision">();
   const exactSourceIdentityCandidates = (() => {
-    if (!result.sourceDocumentId) {
+    if (!observed.sourceDocumentId) {
       return [];
     }
-    const identities = [result.sourceDocumentId];
-    if (result.sourceDocumentIdAliases !== undefined) {
-      identities.push(...result.sourceDocumentIdAliases);
+    const identities = [observed.sourceDocumentId];
+    if (observed.sourceDocumentIdAliases !== undefined) {
+      identities.push(...observed.sourceDocumentIdAliases);
     }
     return [...new Set(identities)].toSorted();
   })();
   const repairSourceIdentityCandidates =
-    result.sourceDocumentId &&
-    result.sourceDocumentIdRepairAliases !== undefined
+    observed.sourceDocumentId &&
+    observed.sourceDocumentIdRepairAliases !== undefined
       ? [
           ...new Set(
-            result.sourceDocumentIdRepairAliases.filter(
+            observed.sourceDocumentIdRepairAliases.filter(
               (identity) => !exactSourceIdentityCandidates.includes(identity),
             ),
           ),
@@ -1120,9 +1385,9 @@ const processDecisionAttempt = async ({
         where:
           provisionalClaimedDecisionId === undefined
             ? caseLawDecisionIdentityWhere({
-                caseNumber: result.caseNumber,
-                language: result.language,
-                sourceDocumentId: result.sourceDocumentId,
+                caseNumber: observed.caseNumber,
+                language: observed.language,
+                sourceDocumentId: observed.sourceDocumentId,
                 sourceId,
               })
             : { id: { eq: provisionalClaimedDecisionId } },
@@ -1195,9 +1460,9 @@ const processDecisionAttempt = async ({
           ? provisionalIdentified
           : await tx.query.caseLawDecisions.findFirst({
               where: caseLawDecisionIdentityWhere({
-                caseNumber: result.caseNumber,
-                language: result.language,
-                sourceDocumentId: result.sourceDocumentId,
+                caseNumber: observed.caseNumber,
+                language: observed.language,
+                sourceDocumentId: observed.sourceDocumentId,
                 sourceId,
               }),
               columns: identityColumns,
@@ -1211,7 +1476,7 @@ const processDecisionAttempt = async ({
                 sourceId: { eq: sourceId },
                 sourceDocumentId: {
                   in: exactSourceIdentityCandidates.filter(
-                    (identity) => identity !== result.sourceDocumentId,
+                    (identity) => identity !== observed.sourceDocumentId,
                   ),
                 },
               },
@@ -1225,32 +1490,32 @@ const processDecisionAttempt = async ({
       // encounter order is not identity.
       const legacy =
         identified ||
-        !result.sourceDocumentId ||
+        !observed.sourceDocumentId ||
         claimedDecisionId !== undefined
           ? undefined
           : await tx.query.caseLawDecisions.findFirst({
               where: {
                 sourceId: { eq: sourceId },
-                caseNumber: result.caseNumber,
-                language: result.language,
+                caseNumber: observed.caseNumber,
+                language: observed.language,
                 sourceDocumentId: { isNull: true },
               },
               columns: identityColumns,
             });
       const ecliMatches =
         legacy !== undefined &&
-        result.ecli !== undefined &&
-        legacy.ecli === result.ecli;
+        observed.ecli !== undefined &&
+        legacy.ecli === observed.ecli;
       const legacyEcliContradicts =
         legacy !== undefined &&
         legacy.ecli !== null &&
-        result.ecli !== undefined &&
-        legacy.ecli !== result.ecli;
+        observed.ecli !== undefined &&
+        legacy.ecli !== observed.ecli;
       const sourceUrlMatches =
         legacy !== undefined &&
         !legacyEcliContradicts &&
         legacy.sourceUrl !== null &&
-        result.legacySourceUrls?.includes(legacy.sourceUrl) === true;
+        observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
       const legacyMatches = ecliMatches || sourceUrlMatches;
       const existing = identified ?? (legacyMatches ? legacy : undefined);
       return {
@@ -1262,17 +1527,18 @@ const processDecisionAttempt = async ({
     const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
     const existingIdentity = existing?.sourceDocumentId ?? undefined;
     const incomingSupersedesExisting =
-      result.sourceDocumentId !== undefined &&
+      observed.sourceDocumentId !== undefined &&
       (existing?.sourceDocumentId === null ||
-        existing?.sourceDocumentId === result.sourceDocumentId ||
+        existing?.sourceDocumentId === observed.sourceDocumentId ||
         (existingIdentity !== undefined &&
-          (result.sourceDocumentIdAliases?.includes(existingIdentity) ===
+          (observed.sourceDocumentIdAliases?.includes(existingIdentity) ===
             true ||
-            result.sourceDocumentIdRepairAliases?.includes(existingIdentity) ===
-              true)));
+            observed.sourceDocumentIdRepairAliases?.includes(
+              existingIdentity,
+            ) === true)));
     const persistedSourceDocumentId = incomingSupersedesExisting
-      ? result.sourceDocumentId
-      : (existingIdentity ?? result.sourceDocumentId);
+      ? observed.sourceDocumentId
+      : (existingIdentity ?? observed.sourceDocumentId);
 
     if (
       existing &&
@@ -1306,9 +1572,19 @@ const processDecisionAttempt = async ({
         .onConflictDoNothing();
     }
 
-    return { existing, decisionId, persistedSourceDocumentId };
+    // The supplements this judgment's document takes in: none for nearly
+    // every decision, which the docket index answers without a row. Read in
+    // this transaction rather than a later one of its own; the row write
+    // checks it again under the docket lock.
+    const composition = await planSupplementComposition(tx, {
+      sourceId,
+      decisionId,
+      observation: observed,
+    });
+
+    return { existing, decisionId, persistedSourceDocumentId, composition };
   });
-  const { existing, decisionId, persistedSourceDocumentId } =
+  const { existing, decisionId, persistedSourceDocumentId, composition } =
     identityResolution;
 
   if (existing?.redactedAt) {
@@ -1318,6 +1594,10 @@ const processDecisionAttempt = async ({
       searchVectorFailed: false,
     };
   }
+
+  const composedSupplements =
+    composition === null ? [] : composition.supplements;
+  const result = composeDecisionWithSupplements(observed, composedSupplements);
 
   const synchronizeSettledProjection = async (): Promise<void> => {
     if (existing === undefined) {
@@ -1741,66 +2021,19 @@ const processDecisionAttempt = async ({
      */
     const writeRaw = async (): Promise<
       Result<string | undefined, RawSourceWriteFailure>
-    > => {
-      const plan = planSourceRawPayload({ result, sourceId, decisionId });
-      if (plan === undefined) {
-        return Result.ok(undefined);
-      }
-      const owner = {
-        family: RAW_SOURCE_FAMILY.CASE_LAW,
+    > =>
+      await writeOwnedRawPayload({
+        result,
         sourceId,
-        documentId: decisionId,
-      } as const;
-      // A payload read back from storage (a replay) names files where they
-      // were stored before; those are copied under this decision, so its
-      // erasure reaches them and no other decision's can.
-      const homed = homeRawPayloadObjects({ payload: plan.payload, owner });
-      if (Result.isError(homed)) {
-        return homed;
-      }
-      // The publisher's files first: the envelope names them, so it is
-      // never stored before they are. That order is also why a row that
-      // already records this exact envelope proves its files are stored,
-      // and an unchanged observation writes nothing at all.
-      const payloadAlreadyStored =
-        storedRawKey ===
-          rawSourcePayloadKey({ owner, data: homed.value.payload }) &&
-        storedRawContentType === rawContentType;
-      if (!payloadAlreadyStored) {
-        rawWriteAttempted = true;
-        for (const { bytes, contentType } of plan.files) {
-          const file = await writeSourceBinary({
-            ...owner,
-            bytes,
-            contentType,
-            window: rawWriteWindow,
-          });
-          if (Result.isError(file)) {
-            return file;
-          }
-        }
-        for (const copy of homed.value.copies) {
-          const copied = await copyRawObject({
-            copy,
-            window: rawWriteWindow,
-            signal: AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
-          });
-          if (Result.isError(copied)) {
-            return copied;
-          }
-        }
-      }
-      // Failing here holds the page cursor; see `rawWriteFailed` and
-      // `writeRawSourcePayload` for why that is safe.
-      return await writeCaseLawRawPayload({
-        owner,
-        window: rawWriteWindow,
-        data: homed.value.payload,
+        ownerId: decisionId,
         contentType: rawContentType,
         storedKey: storedRawKey,
         storedContentType: storedRawContentType,
+        window: rawWriteWindow,
+        onWriteStart: () => {
+          rawWriteAttempted = true;
+        },
       });
-    };
 
     try {
       const written = await writeRaw();
@@ -2276,6 +2509,19 @@ const processDecisionAttempt = async ({
         family: "case_law",
         sourceId,
       });
+      if (composition !== null) {
+        // A supplement stored or merged since the composition was read would
+        // otherwise be left out of this write, and nothing would ask again.
+        await lockSupplementTarget(tx, composition.key);
+        const current = await selectComposableSupplements(tx, {
+          key: composition.key,
+          decisionId,
+          judgment: composition.judgment,
+        });
+        if (!sameSupplementVersions(current, composedSupplements)) {
+          return DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED;
+        }
+      }
       if (existing) {
         // A refresh with no document of its own may not overwrite one.
         // Ordinary empty refreshes therefore guard a separate payload
@@ -2366,6 +2612,18 @@ const processDecisionAttempt = async ({
             ),
           )
           .returning({ id: caseLawDecisions.id });
+
+        if (updated.length > 0 && composition !== null) {
+          const merged = {
+            sourceId,
+            decisionId: existing.id,
+            supplements: composedSupplements,
+          };
+          await markSupplementsMerged(tx, merged);
+          // The document this update wrote is the one the supplements left
+          // out are no longer in.
+          await detachSupplementsLeftOut(tx, merged);
+        }
 
         if (updated.length === 0) {
           // A newer observation owns the row. Its durable mirror state
@@ -2551,6 +2809,13 @@ const processDecisionAttempt = async ({
       if (!decisionRow) {
         panic("Failed to insert decision: no row returned");
       }
+      if (composedSupplements.length > 0) {
+        await markSupplementsMerged(tx, {
+          sourceId,
+          decisionId: decisionRow.id,
+          supplements: composedSupplements,
+        });
+      }
 
       await tx.insert(caseLawDecisionIdentifiers).values(
         identifierRows.map((identifier) => ({
@@ -2660,8 +2925,45 @@ const processDecisionAttempt = async ({
 
   const writeStatus = rowWrite.value;
   switch (writeStatus) {
-    case DECISION_ROW_WRITE_STATUS.APPLIED:
+    case DECISION_ROW_WRITE_STATUS.APPLIED: {
+      // The judgment itself is written; a row left standing is not a reason
+      // to observe it again. The reconciliation lists that supplement again.
+      const absorbed = await absorbComposedSupplementRows({
+        scopedDb,
+        sourceId,
+        judgmentId: decisionId,
+        supplements: composedSupplements,
+      });
+      if (absorbed.type === "incomplete") {
+        logger.warn(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId: decisionId,
+          "error.detail": `left for reconciliation: ${absorbed.sourceDocumentIds.join(", ")}`,
+        });
+      }
       break;
+    }
+    case DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED:
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt,
+        observationOrder,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
+        corpus,
+        corpusBatch,
+        judges,
+        polarityRules,
+      });
     case DECISION_ROW_WRITE_STATUS.WINNER_PENDING:
       return {
         status: PROCESS_DECISION_STATUS.RETRYABLE,
@@ -2834,6 +3136,872 @@ export const processDecision = async ({
     corpus,
     judges,
   });
+
+/** Emitted when a supplement's standalone row could not be absorbed. */
+export const SUPPLEMENT_ABSORB_FAILED =
+  "case_law.ingestion.supplement_absorb_failed";
+
+/** Emitted when a supplement's judgment could not be rebuilt to compose it. */
+export const SUPPLEMENT_JUDGMENT_UNREADABLE =
+  "case_law.ingestion.supplement_judgment_unreadable";
+
+/** Emitted when a supplement's judgment payload could not be read this time. */
+export const SUPPLEMENT_JUDGMENT_READ_FAILED =
+  "case_law.ingestion.supplement_judgment_read_failed";
+
+/** Why a supplement is kept as a decision of its own. */
+export const SUPPLEMENT_STANDALONE_REASON = {
+  /** No stored ruling under its docket can be its judgment. */
+  NO_JUDGMENT: "no-judgment",
+  /** Several stored rulings could be; attaching to one would be a guess. */
+  AMBIGUOUS: "ambiguous",
+  /** The judgment's stored payload could not be rebuilt to compose it. */
+  JUDGMENT_UNREADABLE: "judgment-unreadable",
+  /** The judgment holds no document of its own to compose it into yet. */
+  JUDGMENT_WITHOUT_DOCUMENT: "judgment-without-document",
+} as const;
+
+export type SupplementStandaloneReason =
+  (typeof SUPPLEMENT_STANDALONE_REASON)[keyof typeof SUPPLEMENT_STANDALONE_REASON];
+
+/** What became of one supplement. */
+export type SupplementDisposition =
+  /** Its judgment's stored document holds this version of it. */
+  | { type: "merged"; judgmentId: SafeId<"caseLawDecision"> }
+  /**
+   * Parked, and kept readable as a decision of its own until its judgment
+   * arrives: that judgment's write composes it and absorbs the row.
+   */
+  | { type: "standalone"; reason: SupplementStandaloneReason }
+  /**
+   * Its judgment is redacted. A takedown covers the reasons of the decision
+   * it took down, so the supplement is parked, nothing is published, and a
+   * standalone row it already has is absorbed into the judgment.
+   */
+  | { type: "withheld"; judgmentId: SafeId<"caseLawDecision"> }
+  /**
+   * Its own standalone row is erased. The erasure covers the supplement, so
+   * nothing of it is kept or placed.
+   */
+  | { type: "erased"; decisionId: SafeId<"caseLawDecision"> };
+
+export type ProcessSupplementResult =
+  | {
+      status: typeof PROCESS_DECISION_STATUS.COMPLETE;
+      disposition: SupplementDisposition;
+    }
+  | {
+      status: typeof PROCESS_DECISION_STATUS.RETRYABLE;
+      reason:
+        | (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON]
+        | (typeof SUPPLEMENT_RETRY_REASON)[keyof typeof SUPPLEMENT_RETRY_REASON];
+    };
+
+export type ProcessSupplementOptions = {
+  supplement: DecisionSupplement;
+  sourceId: SafeId<"caseLawSource">;
+  scopedDb: ScopedDb;
+  observedAt: Date;
+  /**
+   * The next observation order on the source's counter, under the lease the
+   * caller holds. A supplement writes its judgment again, and possibly in the
+   * page that just wrote it, so it cannot reuse the page's order: the row
+   * guard would read the rewrite as stale.
+   */
+  nextObservationOrder: () => Promise<bigint>;
+  /** Rebuilds the judgment from its stored payload: the adapter's replay. */
+  reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+  readStoredRaw: StoredRawResultReader;
+  corpus?: CaseLawCorpusDependencies;
+  polarityRules?: RuleCache | undefined;
+  /** Test seam; production absorbs through the corpus stores. */
+  absorb?: typeof absorbStandaloneSupplementRow;
+};
+
+type SupplementJudgmentRow = {
+  id: SafeId<"caseLawDecision">;
+  redacted: boolean;
+};
+
+/**
+ * Store one supplement and put it where it belongs: inside its judgment's
+ * document when a stored ruling is its judgment, otherwise as a decision of
+ * its own until one is.
+ *
+ * The judgment is composed by writing it again from its own stored payload,
+ * through `processDecision`: that write reads the supplement back, composes
+ * it, re-extracts the citations over the whole document, and records the
+ * merge in its own transaction. Replay-safe by construction: a supplement
+ * whose current version its judgment already holds is a fixed point, and a
+ * failure anywhere leaves it parked for the next observation of either
+ * document.
+ */
+export const processSupplement = async ({
+  supplement,
+  sourceId,
+  scopedDb,
+  observedAt,
+  nextObservationOrder,
+  reparseStoredRaw,
+  readStoredRaw,
+  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
+  polarityRules,
+  absorb = absorbStandaloneSupplementRow,
+}: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
+  const { sourceDocumentId } = supplement.document;
+  const document = sanitizeResult(supplement.document);
+  const key: SupplementTargetKey = {
+    sourceId,
+    court: document.court,
+    caseNumber: document.caseNumber,
+    language: document.language,
+  };
+
+  // The publisher's response is stored under the decision that owns the
+  // supplement: its judgment once it joins one, its own standalone row until
+  // then. Which one is known only once it is placed, so the row's pointer is
+  // written by the placement (`pointRawAt`), and an erasure of either owner
+  // reaches it by that owner's prefix.
+  const rawContentType = document.sourceRawContentType ?? "text/plain";
+  // Opened before the read below that proves the judgment live, as a
+  // decision's own write opens it; see `openRawSourceWriteWindow`.
+  const rawWriteWindow = openRawSourceWriteWindow();
+
+  const content = {
+    kind: supplement.kind,
+    caseNumber: document.caseNumber,
+    court: document.court,
+    language: document.language,
+    latestDecisionDate: supplement.target.latestDecisionDate ?? null,
+    judgmentDecisionTypes: [...supplement.target.decisionTypes],
+    fulltext: document.fulltext ?? null,
+    documentAst: document.documentAst,
+    sourceHash: document.rawHash,
+    sourceUrl: document.sourceUrl ?? null,
+    documentUrl: document.documentUrl ?? null,
+    metadata: document.metadata,
+  };
+  const placed = await scopedDb(async (tx) => {
+    await lockSupplementTarget(tx, key);
+    const erasedOwn = (
+      await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+            isNotNull(caseLawDecisions.redactedAt),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (erasedOwn !== undefined) {
+      // audit: skip — background case-law ingestion; public case-law data
+      await tx
+        .delete(caseLawDecisionSupplements)
+        .where(
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+          ),
+        );
+      return { type: "erased" as const, decisionId: erasedOwn.id };
+    }
+    // audit: skip — background case-law ingestion; public case-law data
+    const [row] = await tx
+      .insert(caseLawDecisionSupplements)
+      .values({ sourceId, sourceDocumentId, observedAt, ...content })
+      .onConflictDoUpdate({
+        target: [
+          caseLawDecisionSupplements.sourceId,
+          caseLawDecisionSupplements.sourceDocumentId,
+        ],
+        set: { ...content, observedAt, updatedAt: new Date() },
+      })
+      .returning({
+        decisionId: caseLawDecisionSupplements.decisionId,
+        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        sourceHash: caseLawDecisionSupplements.sourceHash,
+      });
+    if (row === undefined) {
+      return panic("Supplement upsert returned no row");
+    }
+    const rulings = await selectRulingsUnder(tx, {
+      key,
+      decisionTypes: supplement.target.decisionTypes,
+    });
+    const selection = selectSupplementJudgment({
+      target: supplement.target,
+      candidates: rulings,
+    });
+    // A merged supplement stays with its judgment even where a ruling stored
+    // since would now be picked: its text is in that judgment's document, and
+    // moving it would leave the text there. Only a correction that leaves the
+    // holder no longer a ruling it can join moves it.
+    const holder =
+      row.decisionId === null
+        ? undefined
+        : rulings.find(({ id }) => id === row.decisionId);
+    const leavesHolder =
+      row.decisionId !== null &&
+      (holder === undefined ||
+        !supplementCanJoin({ target: supplement.target, candidate: holder }));
+    const judgment = ((): SupplementJudgmentRow | null => {
+      if (leavesHolder) {
+        return null;
+      }
+      if (row.decisionId !== null) {
+        return { id: row.decisionId, redacted: holder?.redacted === true };
+      }
+      return selection.type === "judgment" ? selection.judgment : null;
+    })();
+    if (judgment?.redacted === true) {
+      // A takedown covers the reasons of the decision it took down, as its
+      // erasure removes those already merged: nothing of them is kept.
+      // audit: skip — background case-law ingestion; public case-law data
+      await tx
+        .delete(caseLawDecisionSupplements)
+        .where(
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+          ),
+        );
+    }
+    return {
+      type: "placed" as const,
+      row,
+      selection,
+      leavesHolder,
+      judgment,
+    };
+  });
+  if (placed.type === "erased") {
+    return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "erased", decisionId: placed.decisionId },
+    };
+  }
+  const { row, selection, leavesHolder, judgment } = placed;
+
+  const rawWriteFailed = (error: unknown): ProcessSupplementResult => {
+    logger.error("case_law.ingestion.source_raw_write_failed", {
+      sourceId,
+      caseNumber: document.caseNumber,
+      ...errorSystemFields(error),
+      "error.detail": wrappedErrorDetail(error),
+    });
+    captureError(error, { sourceId, step: "processSupplement.raw" });
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+    };
+  };
+
+  /**
+   * Point the supplement row at the payload its owner now holds. A payload
+   * an earlier owner held for it, under a judgment's prefix, is deleted
+   * first: a failure after that leaves the row pointing at nothing until the
+   * next placement writes it again, never an object no pointer names. A
+   * payload under the supplement's own standalone row is that row's, which
+   * its absorption removes; one in the source-wide older layout is shared
+   * and left to the legacy sweep.
+   */
+  const pointRawAt = async (
+    next: { key: string; contentType: string | null } | null,
+  ): Promise<void> => {
+    const current = await scopedDb(async (tx) => ({
+      pointer: (
+        await tx
+          .select({ key: caseLawDecisionSupplements.sourceRawS3Key })
+          .from(caseLawDecisionSupplements)
+          .where(
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1)
+      ).at(0),
+      standaloneId: (
+        await tx
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1)
+      ).at(0)?.id,
+    }));
+    if (current.pointer === undefined) {
+      return;
+    }
+    const previous = current.pointer.key;
+    if (previous === (next?.key ?? null)) {
+      return;
+    }
+    if (
+      previous !== null &&
+      previous.startsWith(
+        `${RAW_SOURCE_FAMILY.CASE_LAW}/raw/${sourceId}/documents/`,
+      ) &&
+      (current.standaloneId === undefined ||
+        classifyCaseLawRawKey(previous, {
+          sourceId,
+          documentId: current.standaloneId,
+        }) !== RAW_KEY_OWNERSHIP.OWN)
+    ) {
+      await deleteRawKeys(
+        [previous],
+        AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+      );
+    }
+    await scopedDb(async (tx) => {
+      // audit: skip — background case-law ingestion; public case-law data
+      await tx
+        .update(caseLawDecisionSupplements)
+        .set({
+          sourceRawS3Key: next?.key ?? null,
+          sourceRawContentType: next?.contentType ?? null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            previous === null
+              ? isNull(caseLawDecisionSupplements.sourceRawS3Key)
+              : eq(caseLawDecisionSupplements.sourceRawS3Key, previous),
+          ),
+        );
+    });
+  };
+
+  /**
+   * Store the payload under the judgment it joins and point the row at it.
+   * An unchanged payload the row already records under that judgment writes
+   * nothing.
+   */
+  const judgmentOwnsRaw = async (
+    judgmentId: SafeId<"caseLawDecision">,
+  ): Promise<ProcessSupplementResult | null> => {
+    const stored = (
+      await scopedDb((tx) =>
+        tx
+          .select({
+            key: caseLawDecisionSupplements.sourceRawS3Key,
+            contentType: caseLawDecisionSupplements.sourceRawContentType,
+          })
+          .from(caseLawDecisionSupplements)
+          .where(
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1),
+      )
+    ).at(0);
+    const written = await Result.tryPromise({
+      try: async () =>
+        await writeOwnedRawPayload({
+          result: document,
+          sourceId,
+          ownerId: judgmentId,
+          contentType: rawContentType,
+          storedKey: stored?.key ?? null,
+          storedContentType: stored?.contentType ?? null,
+          window: rawWriteWindow,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(written)) {
+      return rawWriteFailed(written.error);
+    }
+    if (Result.isError(written.value)) {
+      return rawWriteFailed(written.value.error);
+    }
+    const writtenKey = written.value.value;
+    if (writtenKey === undefined) {
+      return null;
+    }
+    const pointed = await Result.tryPromise({
+      try: async () =>
+        await pointRawAt({ key: writtenKey, contentType: rawContentType }),
+      catch: (cause) => cause,
+    });
+    return Result.isError(pointed) ? rawWriteFailed(pointed.error) : null;
+  };
+
+  /** Object storage did not answer for the judgment: try the placement again. */
+  const judgmentReadFailed = (
+    judgmentId: SafeId<"caseLawDecision">,
+    error: StoredRawReadError,
+  ): ProcessSupplementResult => {
+    logger.warn(SUPPLEMENT_JUDGMENT_READ_FAILED, {
+      sourceId,
+      judgmentId,
+      sourceDocumentId,
+      ...errorSystemFields(error.cause),
+    });
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      reason: SUPPLEMENT_RETRY_REASON.JUDGMENT_READ,
+    };
+  };
+
+  /**
+   * Take the supplement out of a judgment a correction says it no longer
+   * belongs to, then place it again. The former holder is written first, and
+   * its write leaves the supplement out (`selectComposableSupplements`); only
+   * once its stored document no longer holds the text is the association
+   * dropped, so a failure on the way keeps the association and the next
+   * observation starts over.
+   */
+  const leaveFormerHolder = async (
+    formerId: SafeId<"caseLawDecision">,
+  ): Promise<ProcessSupplementResult> => {
+    const rebuiltFormer = await rebuildStoredJudgment({
+      judgmentId: formerId,
+      scopedDb,
+      reparseStoredRaw,
+      readStoredRaw,
+    });
+    if (rebuiltFormer.type === "read-failed") {
+      return judgmentReadFailed(formerId, rebuiltFormer.error);
+    }
+    if (rebuiltFormer.type === "unreadable") {
+      logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
+        sourceId,
+        judgmentId: formerId,
+        sourceDocumentId,
+        "error.detail": rebuiltFormer.detail,
+      });
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: {
+          type: "standalone",
+          reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
+        },
+      };
+    }
+    const rewritten = await processDecision({
+      input: rebuiltFormer.result,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      corpus,
+      polarityRules,
+    });
+    if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+      return rewritten;
+    }
+    // The rewrite parks a supplement it leaves out; one still naming the
+    // former holder is detached here.
+    const detached = await scopedDb(async (tx) => {
+      if (
+        await detachSupplement(tx, {
+          sourceId,
+          sourceDocumentId,
+          decisionId: formerId,
+        })
+      ) {
+        return true;
+      }
+      const current = (
+        await tx
+          .select({ decisionId: caseLawDecisionSupplements.decisionId })
+          .from(caseLawDecisionSupplements)
+          .where(
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      return current?.decisionId === null;
+    });
+    if (!detached) {
+      // Moved by a concurrent placement; the next observation settles it.
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+      };
+    }
+    return await processSupplement({
+      supplement,
+      sourceId,
+      scopedDb,
+      observedAt,
+      nextObservationOrder,
+      reparseStoredRaw,
+      readStoredRaw,
+      corpus,
+      polarityRules,
+      absorb,
+    });
+  };
+
+  if (leavesHolder && row.decisionId !== null) {
+    return await leaveFormerHolder(row.decisionId);
+  }
+
+  const standalone = async (
+    reason: SupplementStandaloneReason,
+  ): Promise<ProcessSupplementResult> => {
+    // The refresh check reads the publisher's hash, which a row stored before
+    // supplements existed shares with this document; only its type differs,
+    // and a type is what the check does not read.
+    const storedType = (
+      await scopedDb((tx) =>
+        tx
+          .select({ decisionType: caseLawDecisions.decisionType })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1),
+      )
+    ).at(0);
+    const written = await processDecision({
+      input: supplement.document,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      refresh:
+        storedType !== undefined &&
+        storedType.decisionType !== (document.decisionType ?? null)
+          ? DECISION_REFRESH.ALWAYS
+          : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+      polarityRules,
+    });
+    if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+      return written;
+    }
+    // Standalone, the supplement is its own row's: that row stored the
+    // payload under its prefix, and the supplement names the same object.
+    const own = (
+      await scopedDb((tx) =>
+        tx
+          .select({
+            key: caseLawDecisions.sourceRawS3Key,
+            contentType: caseLawDecisions.sourceRawContentType,
+            redactedAt: caseLawDecisions.redactedAt,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+          .limit(1),
+      )
+    ).at(0);
+    const pointed = await Result.tryPromise({
+      try: async () =>
+        await pointRawAt(
+          own?.key === null || own?.key === undefined || own.redactedAt !== null
+            ? null
+            : { key: own.key, contentType: own.contentType },
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(pointed)) {
+      return rawWriteFailed(pointed.error);
+    }
+    return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "standalone", reason },
+    };
+  };
+
+  if (judgment === null) {
+    return await standalone(
+      selection.type === "ambiguous"
+        ? SUPPLEMENT_STANDALONE_REASON.AMBIGUOUS
+        : SUPPLEMENT_STANDALONE_REASON.NO_JUDGMENT,
+    );
+  }
+  /**
+   * Take the supplement's standalone row, if any, out of the corpus behind
+   * its judgment, then report `disposition`. A row left standing holds the
+   * cursor: reporting the placement done would leave a second public copy.
+   */
+  const absorbed = async (
+    disposition: SupplementDisposition,
+  ): Promise<ProcessSupplementResult> => {
+    const outcome = await absorbComposedSupplementRows({
+      scopedDb,
+      sourceId,
+      judgmentId: judgment.id,
+      supplements: [{ kind: supplement.kind, sourceDocumentId }],
+      absorb,
+    });
+    switch (outcome.type) {
+      case "absorbed":
+        return { status: PROCESS_DECISION_STATUS.COMPLETE, disposition };
+      case "incomplete":
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          reason: SUPPLEMENT_RETRY_REASON.ABSORB,
+        };
+      default: {
+        outcome satisfies never;
+        return panic(`Unhandled absorption: ${JSON.stringify(outcome)}`);
+      }
+    }
+  };
+
+  if (judgment.redacted) {
+    return await absorbed({ type: "withheld", judgmentId: judgment.id });
+  }
+
+  const merged = async (): Promise<ProcessSupplementResult> =>
+    (await judgmentOwnsRaw(judgment.id)) ??
+    (await absorbed({ type: "merged", judgmentId: judgment.id }));
+
+  if (
+    row.decisionId === judgment.id &&
+    row.mergedSourceHash === row.sourceHash
+  ) {
+    return await merged();
+  }
+
+  const rebuilt = await rebuildStoredJudgment({
+    judgmentId: judgment.id,
+    scopedDb,
+    reparseStoredRaw,
+    readStoredRaw,
+  });
+  if (rebuilt.type === "read-failed") {
+    return judgmentReadFailed(judgment.id, rebuilt.error);
+  }
+  if (rebuilt.type === "unreadable") {
+    logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
+      sourceId,
+      judgmentId: judgment.id,
+      sourceDocumentId,
+      "error.detail": rebuilt.detail,
+    });
+    if (row.decisionId === judgment.id) {
+      // The judgment still publishes an earlier version; a standalone row
+      // would be a second public copy of the same reasons.
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: {
+          type: "standalone",
+          reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
+        },
+      };
+    }
+    return await standalone(SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE);
+  }
+  const written = await processDecision({
+    input: rebuilt.result,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder: await nextObservationOrder(),
+    corpus,
+    polarityRules,
+  });
+  if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return written;
+  }
+
+  const after = (
+    await scopedDb((tx) =>
+      tx
+        .select({
+          decisionId: caseLawDecisionSupplements.decisionId,
+          mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+          sourceHash: caseLawDecisionSupplements.sourceHash,
+        })
+        .from(caseLawDecisionSupplements)
+        .where(
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+          ),
+        )
+        .limit(1),
+    )
+  ).at(0);
+  if (
+    after?.decisionId === judgment.id &&
+    after.mergedSourceHash === after.sourceHash
+  ) {
+    // The judgment's write absorbed the row already, or reported that it
+    // could not; asking again settles which.
+    return await merged();
+  }
+  return await standalone(
+    SUPPLEMENT_STANDALONE_REASON.JUDGMENT_WITHOUT_DOCUMENT,
+  );
+};
+
+type RebuildStoredJudgmentOptions = {
+  judgmentId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  reparseStoredRaw: ProcessSupplementOptions["reparseStoredRaw"];
+  readStoredRaw: StoredRawResultReader;
+};
+
+type RebuiltJudgment =
+  | { type: "rebuilt"; result: IngestionResult }
+  | { type: "unreadable"; detail: string }
+  /** Object storage did not answer; nothing is known about the payload. */
+  | { type: "read-failed"; error: StoredRawReadError };
+
+/**
+ * The judgment's own observation, rebuilt from the payload stored with it,
+ * as a replay rebuilds it. The payload travels with the result so the write
+ * keeps the row's raw pointer on the same content-addressed object.
+ */
+export const rebuildStoredJudgment = async ({
+  judgmentId,
+  scopedDb,
+  reparseStoredRaw,
+  readStoredRaw,
+}: RebuildStoredJudgmentOptions): Promise<RebuiltJudgment> => {
+  const row = (
+    await scopedDb((tx) =>
+      tx
+        .select({
+          caseNumber: caseLawDecisions.caseNumber,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          language: caseLawDecisions.language,
+          court: caseLawDecisions.court,
+          ecli: caseLawDecisions.ecli,
+          decisionDate: caseLawDecisions.decisionDate,
+          decisionType: caseLawDecisions.decisionType,
+          sourceUrl: caseLawDecisions.sourceUrl,
+          documentUrl: caseLawDecisions.documentUrl,
+          metadata: caseLawDecisions.metadata,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+          sourceRawContentType: caseLawDecisions.sourceRawContentType,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, judgmentId))
+        .limit(1),
+    )
+  ).at(0);
+  if (row === undefined) {
+    return { type: "unreadable", detail: "the judgment row is gone" };
+  }
+  if (row.sourceRawS3Key === null) {
+    return { type: "unreadable", detail: "the judgment has no stored payload" };
+  }
+  const read = await readStoredRaw(row.sourceRawS3Key);
+  if (Result.isError(read)) {
+    return read.error.permanent
+      ? { type: "unreadable", detail: read.error.message }
+      : { type: "read-failed", error: read.error };
+  }
+  const raw = read.value;
+  if (raw === null) {
+    return { type: "unreadable", detail: `no object at ${row.sourceRawS3Key}` };
+  }
+  const reparsed = await reparseStoredRaw({
+    raw,
+    contentType: row.sourceRawContentType,
+    caseNumber: row.caseNumber,
+    sourceDocumentId: row.sourceDocumentId,
+    language: row.language,
+    court: row.court,
+    ecli: row.ecli,
+    decisionDate: row.decisionDate,
+    decisionType: row.decisionType,
+    sourceUrl: row.sourceUrl,
+    documentUrl: row.documentUrl,
+    metadata: row.metadata ?? {},
+  });
+  switch (reparsed.type) {
+    case "rejected":
+      return {
+        type: "unreadable",
+        detail: `${reparsed.rejection}: ${reparsed.detail}`,
+      };
+    case "supplement":
+      return {
+        type: "unreadable",
+        detail: "the judgment's payload is itself a supplement",
+      };
+    case "parsed":
+      break;
+    default: {
+      reparsed satisfies never;
+      return panic(`Unhandled reparse outcome: ${String(reparsed)}`);
+    }
+  }
+  if ((reparsed.result.sourceDocumentId ?? null) !== row.sourceDocumentId) {
+    return {
+      type: "unreadable",
+      detail: `the payload names ${reparsed.result.sourceDocumentId ?? "no id"}`,
+    };
+  }
+  return {
+    type: "rebuilt",
+    result: {
+      ...reparsed.result,
+      sourceRawBytes: raw,
+      sourceRawContentType:
+        row.sourceRawContentType ?? reparsed.result.sourceRawContentType,
+    },
+  };
+};
+
+/** A stored payload is one document; nothing here should take longer. */
+const STORED_RAW_READ_TIMEOUT_MS = 30_000;
+
+/** What a page asks the database to write: its decisions and supplements. */
+const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
+  decisions.length + (supplements?.length ?? 0);
+
+/**
+ * The production reader of stored raw payloads. `null` only where the store
+ * confirmed it holds no such object; any other failure is raised, so a
+ * supplement is parked for another attempt rather than stored as if its
+ * judgment had no payload.
+ */
+export const readStoredRawFromS3: StoredRawResultReader = async (key) => {
+  const read = await Result.tryPromise({
+    try: async () =>
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key,
+        maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
+        signal: AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(read)) {
+    return Result.ok(read.value);
+  }
+  if (isMissingS3ObjectError(read.error)) {
+    return Result.ok(null);
+  }
+  return Result.err(
+    new StoredRawReadError({
+      message: `Stored payload read failed for ${key}`,
+      key,
+      cause: read.error,
+      permanent: read.error instanceof S3ObjectBudgetError,
+    }),
+  );
+};
 
 /**
  * Run the ingestion pipeline for a configured source.
@@ -3009,6 +4177,95 @@ export const runIngestionPipeline = async ({
     }
   };
 
+  const reparseStoredRaw = adapter.reparseStoredRaw;
+  const nextObservationOrder = async (): Promise<bigint> => {
+    await sourceLease.beforeDatabaseMark();
+    return await allocateSourceObservationOrder({
+      leaseToken: sourceLease.leaseToken,
+      scopedDb,
+      sourceId: source.id,
+    });
+  };
+
+  /**
+   * Place a page's supplements, one at a time, unless the page already
+   * halted. Returns the page's halt reason: the one it came with, or one
+   * naming a supplement that could not be placed, so the cursor holds and the
+   * page is read again.
+   */
+  const placePageSupplements = async ({
+    supplements,
+    halted,
+  }: {
+    supplements: SyncPage["supplements"];
+    halted: string | null;
+  }): Promise<string | null> => {
+    if (halted !== null || supplements === undefined) {
+      return halted;
+    }
+    if (reparseStoredRaw === undefined) {
+      return panic(
+        `Adapter ${adapter.key} emits supplements but cannot rebuild the judgments they join`,
+      );
+    }
+    const failures: (typeof caseLawIngestionFailures.$inferInsert)[] = [];
+    for (const supplement of supplements) {
+      const placed = await Result.tryPromise({
+        try: async () =>
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each supplement locks its docket and may rewrite its judgment, ordered per observation
+          await processSupplement({
+            supplement,
+            sourceId: source.id,
+            scopedDb,
+            observedAt: new Date(),
+            nextObservationOrder,
+            reparseStoredRaw,
+            readStoredRaw: readStoredRawFromS3,
+            corpus,
+            polarityRules,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(placed)) {
+        // As a decision's failure is: recorded and stepped over, so one
+        // poison supplement cannot pin the source. It is not lost: nothing
+        // holds its identity, so the reconciliation lists it again.
+        const { error } = placed;
+        const { document } = supplement;
+        logger.error("case_law.ingestion.supplement_failed", {
+          adapterKey: adapter.key,
+          caseNumber: document.caseNumber,
+          sourceDocumentId: document.sourceDocumentId,
+          ...errorSystemFields(error),
+          ...pgErrorFields(error),
+          "error.detail": wrappedErrorDetail(error),
+        });
+        captureError(error, {
+          adapterKey: adapter.key,
+          step: "runIngestionPipeline.processSupplement",
+        });
+        if (error instanceof TimeoutError) {
+          await flushIngestionFailures(failures);
+          return databaseTimeoutHaltReason(error);
+        }
+        failures.push({
+          sourceId: source.id,
+          caseNumber: document.caseNumber,
+          language: document.language,
+          errorType: errorTag(error).slice(0, 128),
+          errorMessage: wrappedErrorDetail(error).slice(0, 2048),
+          cursor,
+        });
+        continue;
+      }
+      if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+        await flushIngestionFailures(failures);
+        return `Supplement ${supplement.document.sourceDocumentId} not placed (${placed.value.reason}); cursor held for retry`;
+      }
+    }
+    return await flushIngestionFailures(failures);
+  };
+
   while (pagesProcessed < maxPages) {
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
@@ -3037,7 +4294,7 @@ export const runIngestionPipeline = async ({
     // discarding the forward progress the fetch had already made and
     // pinning the adapter to the same cursor on every later cycle.
     let pageHoldsDbSlot = false;
-    if (dbSlot && page.decisions.length > 0) {
+    if (dbSlot && pageItemCount(page) > 0) {
       try {
         await dbSlot.acquire(deadline?.signal);
         pageHoldsDbSlot = true;
@@ -3220,6 +4477,14 @@ export const runIngestionPipeline = async ({
         const flushHaltReason = await flushIngestionFailures(pageFailures);
         haltReason ??= flushHaltReason;
       }
+
+      // After the page's pack is flushed, so a judgment written on this page
+      // is settled before its supplement writes it again, and before the
+      // cursor moves, so a supplement that could not be placed holds it.
+      haltReason = await placePageSupplements({
+        supplements: page.supplements,
+        halted: haltReason,
+      });
 
       const pageInserted = inserted - insertedBefore;
       const pageSkipped = skipped - skippedBefore;

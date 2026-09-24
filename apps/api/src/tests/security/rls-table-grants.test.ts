@@ -154,6 +154,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  // The same: reasons and other supplements waiting for, or composed into,
+  // their judgment; only the ingestion role reads or writes them.
+  "case_law_decision_supplements",
   "account_deletion_effect_chunks",
   "entity_deletion_effect_chunks",
   // Filed feedback reports: no tenant read surface, and the request role must

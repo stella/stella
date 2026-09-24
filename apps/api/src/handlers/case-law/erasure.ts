@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawIndexJobs,
 } from "@/api/db/schema";
@@ -36,6 +37,11 @@ import {
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
+import {
+  classifyCaseLawRawKey,
+  deleteRawKeys,
+  RAW_KEY_OWNERSHIP,
+} from "@/api/lib/legal-search/raw-source-storage";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -58,6 +64,11 @@ const RAW_SWEEP_FOLLOW_UP_MS = 5 * 60 * 1000;
  *   4. The Postgres canonical columns (fulltext/sections/document_ast).
  *   5. The publisher's raw payloads and files, under the decision's own
  *      raw prefix (see `case-law-raw-sweeps.ts`).
+ *   6. Supplements (such as written reasons published apart from their
+ *      ruling): those merged into it, and the one it stood for when it is
+ *      a supplement's own standalone row. Their rows go, and their raw
+ *      payloads, which the decision owns under the same prefix; a copy its
+ *      judgment holds is deleted by key.
  *
  * The decision row itself is kept (citation-graph node) but stripped of
  * personal text. `content_hash` is nulled so nothing re-projects the body.
@@ -276,6 +287,8 @@ type RedactionFence =
         | "sourceRawS3Key"
         | "redactedAt"
       >;
+      /** Supplement payloads stored under another decision's prefix. */
+      supplementRawKeys: string[];
     }
   /** No such row, or none the projection knows: nothing to redact. */
   | { type: "missing" }
@@ -319,6 +332,7 @@ export const redactCaseLawDecision = async ({
           astS3Key: caseLawDecisions.astS3Key,
           sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
           redactedAt: caseLawDecisions.redactedAt,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
         })
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.id, decisionId))
@@ -344,6 +358,39 @@ export const redactCaseLawDecision = async ({
         sourceRaw: null,
       })
       .where(eq(caseLawDecisions.id, decisionId));
+    // Supplements carry the same personal text: those merged into this
+    // decision, and the one this row stands for. Payloads under this
+    // decision's prefix go with the sweep below; one its judgment holds is
+    // deleted by key. A supplement observed after this point finds its
+    // judgment or its own row redacted and is not kept.
+    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+    const erasedSupplements = await tx
+      .delete(caseLawDecisionSupplements)
+      .where(
+        or(
+          eq(caseLawDecisionSupplements.decisionId, decisionId),
+          decision.sourceDocumentId === null
+            ? undefined
+            : and(
+                eq(caseLawDecisionSupplements.sourceId, decision.sourceId),
+                eq(
+                  caseLawDecisionSupplements.sourceDocumentId,
+                  decision.sourceDocumentId,
+                ),
+              ),
+        ),
+      )
+      .returning({ key: caseLawDecisionSupplements.sourceRawS3Key });
+    const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
+      key !== null &&
+      classifyCaseLawRawKey(key, {
+        sourceId: decision.sourceId,
+        documentId: decisionId,
+      }) === RAW_KEY_OWNERSHIP.FOREIGN &&
+      key.startsWith(`case-law/raw/${decision.sourceId}/documents/`)
+        ? [key]
+        : [],
+    );
     // The raw prefix is swept below and again once every write that could
     // have started before this fence is over.
     await enqueueCaseLawRawSweepTx(tx, {
@@ -364,7 +411,7 @@ export const redactCaseLawDecision = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
-    return { type: "fenced", cancelledIntents, decision };
+    return { type: "fenced", cancelledIntents, decision, supplementRawKeys };
   });
 
   switch (fenced.type) {
@@ -383,7 +430,7 @@ export const redactCaseLawDecision = async ({
       fenced satisfies never;
       return panic(`Unhandled fence: ${String(fenced)}`);
   }
-  const { cancelledIntents, decision } = fenced;
+  const { cancelledIntents, decision, supplementRawKeys } = fenced;
 
   // 1. pg-fts projection.
   await removeDecisionFromIndex(decisionId, scopedDb);
@@ -476,9 +523,20 @@ export const redactCaseLawDecision = async ({
       }),
     catch: (cause) => cause,
   });
+  const supplementRawErased = await Result.tryPromise({
+    try: async () =>
+      await deleteRawKeys(
+        supplementRawKeys,
+        AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS),
+      ),
+    catch: (cause) => cause,
+  });
   const rawErasure = ((): RawErasure => {
     if (Result.isError(rawSwept)) {
       return { type: "incomplete", error: rawSwept.error };
+    }
+    if (Result.isError(supplementRawErased)) {
+      return { type: "incomplete", error: supplementRawErased.error };
     }
     if (rawSwept.value.type === "incomplete") {
       return { type: "incomplete", error: rawSwept.value.error };

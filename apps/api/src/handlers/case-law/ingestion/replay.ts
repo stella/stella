@@ -19,6 +19,7 @@ import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/
 import type {
   IngestionResult,
   SourceAdapter,
+  StoredRawReader,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   StoredRawReparseRejection,
@@ -31,6 +32,7 @@ import {
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
@@ -382,9 +384,6 @@ export const replayCapability = (adapter: SourceAdapter): ReplayCapability =>
     ? { type: "unsupported", adapterKey: adapter.key }
     : { type: "supported", reparse: adapter.reparseStoredRaw };
 
-/** Reads a stored payload by key; null when object storage does not hold it. */
-export type StoredRawReader = (key: string) => Promise<Uint8Array | null>;
-
 export type ReplayRowReport = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
@@ -438,6 +437,7 @@ const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
   [STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST]: 0,
   [STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT]: 0,
   [STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT]: 0,
+  [STORED_RAW_REPARSE_REJECTION.SUPPLEMENT]: 0,
 });
 
 /**
@@ -737,6 +737,17 @@ const replayRow = async ({
     language: row.language,
   };
 
+  if (reparsed.type === "supplement") {
+    // Written over its own row, a supplement would stay the standalone
+    // decision it is not. `supplement-fold.ts` folds it into its judgment.
+    return {
+      ...base,
+      outcome: REPLAY_ROW_OUTCOME.REJECTED,
+      rejection: STORED_RAW_REPARSE_REJECTION.SUPPLEMENT,
+      detail: `a ${reparsed.supplement.kind} supplement; fold it instead`,
+    };
+  }
+
   if (reparsed.type === "rejected") {
     return await withdrawRejectedRow({
       row,
@@ -770,7 +781,14 @@ const replayRow = async ({
 
   const changed = await replayWouldChangeRow({
     row,
-    result: reparsed.result,
+    // The row holds the document its supplements were composed into, which
+    // is what the write would store again.
+    result: await composeWithStoredSupplements({
+      scopedDb,
+      sourceId,
+      decisionId: row.id,
+      observation: reparsed.result,
+    }),
     scopedDb,
   });
 

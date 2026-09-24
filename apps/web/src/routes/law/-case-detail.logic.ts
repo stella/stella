@@ -198,6 +198,30 @@ const ensureRouteCountryDecision = <T extends { country: string }>(
   return decision;
 };
 
+type CanonicalDecisionHashOptions = {
+  decision: Pick<PublicCaseLawDecision, "documentAst" | "resolution">;
+  /** The fragment the requested URL carried, without its `#`. */
+  hash: string;
+};
+
+/** The fragment a canonical redirect carries; see `anchorAfterResolution`. */
+const canonicalDecisionHash = async ({
+  decision: { documentAst, resolution },
+  hash,
+}: CanonicalDecisionHashOptions): Promise<string> => {
+  // Loaded on redirect only: the document parser stays out of the chunks
+  // every page preloads.
+  const { anchorAfterResolution } =
+    await import("@/features/case-law/decision-resolution.logic");
+  return (
+    anchorAfterResolution({
+      resolution,
+      documentAst,
+      anchorId: hash === "" ? undefined : hash,
+    }) ?? ""
+  );
+};
+
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
   hash,
@@ -294,7 +318,11 @@ export const loadPublicCaseLawDecisionRoute = async ({
     const canonicalPath = createCaseLawDecisionPath(canonicalParams);
     const currentPath = createCaseLawDecisionPath(params);
     if (currentPath !== canonicalPath) {
-      redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
+      redirectToCanonicalDecisionPath({
+        canonicalParams,
+        hash: await canonicalDecisionHash({ decision, hash }),
+        search,
+      });
     }
 
     primeDecisionProvisions(queryClient, decision.id);
@@ -336,7 +364,11 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const canonicalPath = createCaseLawDecisionPath(canonicalParams);
   const currentPath = createCaseLawDecisionPath(params);
   if (currentPath !== canonicalPath) {
-    redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
+    redirectToCanonicalDecisionPath({
+      canonicalParams,
+      hash: await canonicalDecisionHash({ decision, hash }),
+      search,
+    });
   }
 
   primeDecisionProvisions(queryClient, decision.id);

@@ -301,7 +301,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   async ({
     citationsCursor,
     readCourtWeights = loadCourtWeights,
-    subject: { id: decisionId, tx },
+    subject: { id: decisionId, resolution, tx },
   }: ReadDecisionOptions) => {
     const citationCursors = decodeDecisionCitationCursor(citationsCursor);
     if (citationCursors === null) {
@@ -492,6 +492,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       documentReadFailed,
       documentUnavailable,
       id: decision.id,
+      // An address that named an absorbed supplement reads its judgment; the
+      // resolution says so, so a client can move to the judgment's address.
+      resolution,
       caseNumber: decision.caseNumber,
       slug: decision.slug,
       ecli: decision.ecli,

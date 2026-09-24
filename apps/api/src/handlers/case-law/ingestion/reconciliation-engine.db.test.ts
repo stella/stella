@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -16,6 +16,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
+  caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawReconciliationItems,
   caseLawSources,
@@ -35,12 +36,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-absorption";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   EMPTY_AST,
@@ -379,6 +382,7 @@ const runUnitWith = async ({
     adapterKey: "engine-fixture",
     sourceId,
     reconciliation,
+    reparseStoredRaw: undefined,
     scopedDb,
     now,
     fetchDelayMs: 0,
@@ -1538,6 +1542,123 @@ test("the docket half of the identity index applies the same filter", async () =
   });
 
   expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toHaveLength(1);
+});
+
+/** The publisher ids of the two listed items, in listing order. */
+const listedDocumentIds = (): [string, string] => [
+  LISTING_ITEMS[0].odkaz.split("/").at(-1) ?? "",
+  LISTING_ITEMS[1].odkaz.split("/").at(-1) ?? "",
+];
+
+type SeedSupplementInput = {
+  sourceId: SafeId<"caseLawSource">;
+  sourceDocumentId: string;
+  /** The judgment whose stored document holds it, or none: parked. */
+  judgmentId: SafeId<"caseLawDecision"> | null;
+};
+
+const seedSupplement = async ({
+  judgmentId,
+  sourceDocumentId,
+  sourceId,
+}: SeedSupplementInput): Promise<void> => {
+  await db.insert(caseLawDecisionSupplements).values({
+    sourceId,
+    sourceDocumentId,
+    kind: DECISION_SUPPLEMENT_KIND.REASONS,
+    caseNumber: FIXTURE_CASE_NUMBERS[0],
+    court: FIXTURE_COURT,
+    language: FIXTURE_LANGUAGE,
+    judgmentDecisionTypes: ["rozsudek"],
+    documentAst: EMPTY_AST,
+    sourceHash: "1".repeat(64),
+    metadata: {},
+    observedAt: NOW,
+    decisionId: judgmentId,
+    mergedSourceHash: judgmentId === null ? null : "1".repeat(64),
+  });
+};
+
+/** A judgment under another publisher id, for supplements to be merged into. */
+const seedJudgment = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<SafeId<"caseLawDecision">> => {
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: FIXTURE_CASE_NUMBERS[0],
+    sourceDocumentId: "judgment",
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    metadata: storedMetadata(false),
+  });
+  return id;
+};
+
+test("a supplement stored but not placed is listed again", async () => {
+  // Its judgment's write failed after the supplement row committed: the
+  // document is neither in a judgment nor readable on its own, and only this
+  // walk can ask for it again.
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const [parked, merged] = listedDocumentIds();
+  const judgmentId = await seedJudgment(sourceId);
+  await seedSupplement({
+    sourceId,
+    sourceDocumentId: parked,
+    judgmentId: null,
+  });
+  await seedSupplement({ sourceId, sourceDocumentId: merged, judgmentId });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toHaveLength(1);
+});
+
+test("a merged supplement whose standalone row still stands is listed again", async () => {
+  // The absorption failed after the merge: two public copies of the text,
+  // until a placement takes the row out.
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const [standing, absorbed] = listedDocumentIds();
+  const judgmentId = await seedJudgment(sourceId);
+  for (const [index, sourceDocumentId] of [standing, absorbed].entries()) {
+    await seedSupplement({ sourceId, sourceDocumentId, judgmentId });
+    await seedDecision({
+      sourceId,
+      caseNumber: FIXTURE_CASE_NUMBERS[index] ?? "",
+      sourceDocumentId,
+      isListingOnly: false,
+    });
+  }
+  await db
+    .update(caseLawDecisions)
+    .set({
+      metadata: metadataWithDecisionAbsorption(
+        sql`${caseLawDecisions.metadata}`,
+        {
+          decisionId: judgmentId,
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId: absorbed,
+        },
+      ),
+    })
+    .where(
+      and(
+        eq(caseLawDecisions.sourceId, sourceId),
+        eq(caseLawDecisions.sourceDocumentId, absorbed),
+      ),
+    );
+
+  expect(await runUnit(sourceId)).toMatchObject({
     type: "worked",
     summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
   });

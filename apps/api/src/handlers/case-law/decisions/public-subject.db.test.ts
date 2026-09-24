@@ -4,17 +4,28 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import Elysia, { t } from "elysia";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+
+import { authRelationsPart } from "@/api/db/auth-schema";
+import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  metadataWithDecisionAbsorption,
+  supplementAnchorPrefix,
+} from "@/api/lib/case-law/decision-absorption";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -46,12 +57,17 @@ let handles: CaseLawPublicReadTransaction[] = [];
 const echoSubject = async (subject: RedistributableDecisionSubject) => ({
   reached: subject.id,
   readOnHandle: handles.indexOf(subject.tx),
+  resolution: subject.resolution,
 });
 
 beforeAll(
   async () => {
     client = await createTestPglite();
-    const db = drizzle({ client });
+    // Relations for the decision read's relational query.
+    const db = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+    });
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
       options?: { isolation?: string },
@@ -272,6 +288,7 @@ test(
       // The first (and only) transaction of the request: the read's rows
       // come from the one that approved the subject.
       readOnHandle: 0,
+      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
     });
     expect(opened).toEqual(["repeatable-read"]);
   },
@@ -320,6 +337,138 @@ test(
     const after = await get(`/d/${decision}`);
     expect(after.status).toBe(404);
     expect(await after.json()).toEqual({ message: "Decision not found" });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+type AbsorbedRowOptions = {
+  slug: string;
+  sourceDocumentId: string;
+  judgmentId: SafeId<"caseLawDecision">;
+};
+
+/**
+ * A supplement row absorbed into `judgmentId`, marked through the writers
+ * the absorption itself uses.
+ */
+const insertAbsorbedRow = async ({
+  slug,
+  sourceDocumentId,
+  judgmentId,
+}: AbsorbedRowOptions): Promise<SafeId<"caseLawDecision">> => {
+  const db = drizzle({ client });
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "absorbed",
+    country: "CZE",
+    court: "Court",
+    id,
+    language: "cs",
+    slug,
+    sourceDocumentId,
+    sourceId: openSourceId,
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({
+      metadata: metadataWithDecisionAbsorption(
+        metadataMarkedListingOnly(caseLawDecisions.metadata),
+        {
+          decisionId: judgmentId,
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId,
+        },
+      ),
+    })
+    .where(eq(caseLawDecisions.id, id));
+  return id;
+};
+
+test(
+  "an absorbed supplement's id and slug reach the judgment it went into",
+  async () => {
+    const absorbedId = await insertAbsorbedRow({
+      slug: "absorbed-reasons",
+      sourceDocumentId: "syn-reasons-1",
+      judgmentId: openId,
+    });
+    const resolution = {
+      type: DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT,
+      absorbedDecisionId: absorbedId,
+      anchorPrefix: supplementAnchorPrefix({
+        kind: DECISION_SUPPLEMENT_KIND.REASONS,
+        sourceDocumentId: "syn-reasons-1",
+      }),
+    };
+
+    for (const path of [
+      `/d/${absorbedId}`,
+      "/s/absorbed-reasons?country=CZE",
+    ]) {
+      const response = await get(path);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        reached: openId,
+        readOnHandle: 0,
+        resolution,
+      });
+    }
+
+    // The decision read answers with the judgment itself, and says why.
+    const read = await withRedistributableSubject(
+      caseLawDb,
+      { kind: "id", id: absorbedId },
+      async (subject) =>
+        await readDecisionHandler({
+          subject,
+          readCourtWeights: async () => await Promise.resolve(new Map()),
+        }),
+    );
+    expect(read).toMatchObject({ id: openId, caseNumber: "open", resolution });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "an absorbed supplement is not found unless its judgment passes the gate",
+  async () => {
+    const db = drizzle({ client });
+    const unpublishedJudgment = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "unpublished",
+      country: "CZE",
+      court: "Court",
+      id: unpublishedJudgment,
+      language: "cs",
+      sourceId: openSourceId,
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ metadata: metadataMarkedListingOnly(caseLawDecisions.metadata) })
+      .where(eq(caseLawDecisions.id, unpublishedJudgment));
+
+    for (const [index, judgmentId] of [
+      closedId,
+      missingId,
+      unavailableCountryId,
+      unpublishedJudgment,
+    ].entries()) {
+      const absorbedId = await insertAbsorbedRow({
+        slug: `absorbed-into-hidden-${String(index)}`,
+        sourceDocumentId: `syn-hidden-${String(index)}`,
+        judgmentId,
+      });
+      for (const path of [
+        `/d/${absorbedId}`,
+        `/s/absorbed-into-hidden-${String(index)}?country=CZE`,
+      ]) {
+        const response = await get(path);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+          message: "Decision not found",
+        });
+      }
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );

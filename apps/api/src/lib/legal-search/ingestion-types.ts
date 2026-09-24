@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
@@ -11,6 +11,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
@@ -185,6 +186,95 @@ export type IngestionResult = {
   sourceRawContentType?: string | undefined;
 };
 
+/**
+ * Which decision a supplement belongs to, beyond the court, docket and
+ * language it shares with that decision.
+ */
+export type DecisionSupplementTarget = {
+  /**
+   * The decision types a judgment this supplement can join carries, in the
+   * stored vocabulary (`wyrok`, `postanowienie`, ...). A decision of any other
+   * type under the same docket is not a candidate.
+   */
+  decisionTypes: readonly string[];
+  /**
+   * The latest date that judgment can carry: the supplement's own date, since
+   * reasons are written on or after the ruling they explain. Absent where the
+   * publisher stated no usable date.
+   */
+  latestDecisionDate?: string | undefined;
+};
+
+/**
+ * A document the publisher serves under an id of its own that belongs inside
+ * another decision's document, such as the written reasons SAOS publishes
+ * apart from the ruling they explain.
+ *
+ * Not a decision with a flag: the pipeline never stores it as one while a
+ * judgment holds it. It joins the judgment's document, its citations are
+ * extracted as the judgment's, and it is kept in its own table so the
+ * judgment's later observations can compose it again.
+ */
+export type DecisionSupplement = {
+  kind: DecisionSupplementKind;
+  target: DecisionSupplementTarget;
+  /**
+   * The supplement as the publisher served it, in the shape one observation
+   * takes. Its court, docket and language are the judgment's too. It is
+   * written as a decision row of its own only while no stored judgment
+   * matches it, so its `decisionType` is the one such a row should carry.
+   */
+  document: IngestionResult & { sourceDocumentId: string };
+};
+
+/**
+ * Reads a stored raw payload by key; null only where object storage
+ * confirmed it holds no such object.
+ */
+export type StoredRawReader = (key: string) => Promise<Uint8Array | null>;
+
+/** A stored raw payload read that returned no payload. */
+export class StoredRawReadError extends TaggedError("StoredRawReadError")<{
+  message: string;
+  key: string;
+  cause: unknown;
+  /**
+   * The object is there but can never be read as a payload (past the size
+   * ceiling): asking again gives the same answer. Otherwise the store did
+   * not answer, and another attempt may.
+   */
+  permanent: boolean;
+}> {}
+
+/**
+ * Reads a stored raw payload as a value: `null` only where object storage
+ * confirmed it holds no such object; any other failure is an error, so the
+ * caller retries its work instead of treating the payload as absent.
+ */
+export type StoredRawResultReader = (
+  key: string,
+) => Promise<Result<Uint8Array | null, StoredRawReadError>>;
+
+/** A reader that raises, as one that returns its failure. */
+export const storedRawResultReader =
+  (read: StoredRawReader): StoredRawResultReader =>
+  async (key) =>
+    await Result.tryPromise({
+      try: async () => await read(key),
+      catch: (cause) =>
+        new StoredRawReadError({
+          message: `Stored payload read failed for ${key}`,
+          key,
+          cause,
+          permanent: false,
+        }),
+    });
+
+/** One item an adapter read off a page: a decision, or a supplement to one. */
+export type IngestionItem =
+  | { type: "decision"; decision: IngestionResult }
+  | { type: "supplement"; supplement: DecisionSupplement };
+
 /** One binary response, as the adapter that fetched it hands it over. */
 type SourceRawObjectPayload = {
   readonly bytes: Uint8Array;
@@ -219,6 +309,12 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
+  /**
+   * Supplements read off the same page. The pipeline processes them after
+   * the page's decisions, so a judgment and the reasons listed beside it are
+   * both stored before the reasons look for their judgment.
+   */
+  supplements?: readonly DecisionSupplement[] | undefined;
   nextCursor: string | null;
   /**
    * The listing request whose response these decisions were read from.
@@ -585,6 +681,8 @@ export const STORED_RAW_REPARSE_REJECTION = {
   UNSUPPORTED_CONTENT: "unsupported-content",
   /** The payload parsed to nothing that could be stored as a decision. */
   NO_DOCUMENT: "no-document",
+  /** The payload is a supplement to another decision, not one of its own. */
+  SUPPLEMENT: "supplement",
 } as const;
 
 export type StoredRawReparseRejection =
@@ -592,6 +690,11 @@ export type StoredRawReparseRejection =
 
 export type StoredRawReparseOutcome =
   | { type: "parsed"; result: IngestionResult }
+  /**
+   * The payload is a supplement to another decision. A replay does not write
+   * it over the row it was read from; the supplement fold does.
+   */
+  | { type: "supplement"; supplement: DecisionSupplement }
   | {
       type: "rejected";
       rejection: StoredRawReparseRejection;
@@ -806,6 +909,7 @@ export type ReconciliationSlicePageOptions = {
  */
 export type ReconciliationBuildOutcome =
   | { type: "built"; decision: IngestionResult }
+  | { type: "built-supplement"; supplement: DecisionSupplement }
   | { type: "unkeyable" }
   | { type: "detail-unavailable" };
 

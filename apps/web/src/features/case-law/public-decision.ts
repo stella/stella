@@ -1,3 +1,4 @@
+import type { DecisionReadResolution } from "@stll/api-contract/case-law-decision-resolution";
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
@@ -38,6 +39,8 @@ export type PublicCaseLawDecision = {
   language: string;
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
   metadata: Record<string, unknown>;
+  /** Whether the requested address named this decision or a part absorbed into it. */
+  resolution: DecisionReadResolution;
   slug?: string | null;
   source: { name: string | null } | null;
   sourceAttributionUrl: string | null;

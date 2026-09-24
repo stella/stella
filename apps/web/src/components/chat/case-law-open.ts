@@ -1,5 +1,9 @@
 import { panic } from "better-result";
 
+import {
+  DECISION_READ_RESOLUTION,
+  type DecisionReadResolution,
+} from "@stll/api-contract/case-law-decision-resolution";
 import { stellaToast } from "@stll/ui/toast";
 
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -37,6 +41,14 @@ const CASE_LAW_LINK_SEARCH_LIMIT = 5;
 
 type ResolvedDecision = Omit<DecisionTabTarget, "anchorId" | "searchQuery">;
 
+/** A decision a link resolved to, and how its address reached it. */
+type Resolution = {
+  decision: ResolvedDecision;
+  resolution: DecisionReadResolution;
+  /** The decision's document, where the read returned one. */
+  documentAst: unknown;
+};
+
 const toResolvedDecision = ({
   caseNumber,
   country,
@@ -63,21 +75,36 @@ const toResolvedDecision = ({
   slug,
 });
 
-const readDecisionById = async (
-  decisionId: string,
-): Promise<ResolvedDecision> => {
+/** A search hit names the decision itself and carries no document. */
+const directResolution = (decision: ResolvedDecision): Resolution => ({
+  decision,
+  resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+  documentAst: null,
+});
+
+type DecisionRead = Parameters<typeof toResolvedDecision>[0] & {
+  documentAst: unknown;
+  resolution: DecisionReadResolution;
+};
+
+/** A decision read: the old id or slug of absorbed reasons reads the judgment. */
+const fromDecisionRead = (read: DecisionRead): Resolution => ({
+  decision: toResolvedDecision(read),
+  resolution: read.resolution,
+  documentAst: read.documentAst,
+});
+
+const readDecisionById = async (decisionId: string): Promise<Resolution> => {
   const response = await api.case
     .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
     .get();
 
-  return toResolvedDecision(
+  return fromDecisionRead(
     unwrapPublicLawEden(response, "resolvePublicCaseLawDecision"),
   );
 };
 
-const resolveByRef = async (
-  rawRef: string,
-): Promise<ResolvedDecision | null> => {
+const resolveByRef = async (rawRef: string): Promise<Resolution | null> => {
   const ref = decodeCaseLawDecisionRef(rawRef);
   if (!ref) {
     return null;
@@ -106,14 +133,14 @@ const resolveByRef = async (
   const hit = pickCaseLawDecisionHit(ref, data.hits);
   return hit === null
     ? null
-    : toResolvedDecision({ ...hit, id: hit.decisionId });
+    : directResolution(toResolvedDecision({ ...hit, id: hit.decisionId }));
 };
 
 const resolveByRoute = async ({
   country,
   language,
   slug,
-}: CaseLawDecisionRouteParams): Promise<ResolvedDecision | null> => {
+}: CaseLawDecisionRouteParams): Promise<Resolution | null> => {
   const decisionId = extractCaseLawDecisionIdFromIdRouteParam(slug);
   if (decisionId !== null) {
     return await readDecisionById(decisionId);
@@ -131,14 +158,14 @@ const resolveByRoute = async ({
     },
   });
 
-  return toResolvedDecision(
+  return fromDecisionRead(
     unwrapPublicLawEden(response, "readPublicCaseLawDecisionBySlug"),
   );
 };
 
 const resolveCaseLawDecision = async (
   locator: CaseLawDecisionLocator,
-): Promise<ResolvedDecision | null> => {
+): Promise<Resolution | null> => {
   switch (locator.type) {
     case "ref":
       return await resolveByRef(locator.ref);
@@ -170,8 +197,8 @@ export const openCaseLawDecision = async (
       return;
     }
 
-    const decision = await resolveCaseLawDecision(locator);
-    if (!decision) {
+    const resolved = await resolveCaseLawDecision(locator);
+    if (!resolved) {
       const t = getTranslator();
       stellaToast.add({
         title: t("errors.actionFailed"),
@@ -180,7 +207,13 @@ export const openCaseLawDecision = async (
       return;
     }
 
-    open(anchorId === undefined ? decision : { ...decision, anchorId });
+    const { decision } = resolved;
+    // Loaded on open: the document parser stays out of the chunks every
+    // page preloads.
+    const { anchorAfterResolution } =
+      await import("@/features/case-law/decision-resolution.logic");
+    const target = anchorAfterResolution({ ...resolved, anchorId });
+    open(target === undefined ? decision : { ...decision, anchorId: target });
   } catch (error) {
     getAnalytics().captureError(error);
     const t = getTranslator();

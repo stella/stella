@@ -1472,7 +1472,9 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
     const outcome = await reparse(storedPayload(fulltextHtml));
 
     if (outcome.type !== "parsed") {
-      throw new TypeError(`Expected parsed, got ${outcome.rejection}`);
+      throw new TypeError(
+        `Expected parsed, got ${outcome.type === "rejected" ? outcome.rejection : outcome.type}`,
+      );
     }
     expect(outcome.result.fulltext ?? "").not.toBe("");
   });
