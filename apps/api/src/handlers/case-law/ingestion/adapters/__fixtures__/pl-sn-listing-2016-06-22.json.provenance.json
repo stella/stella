@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "831aa4fc38ee8645bdc69eb28017ff9c9fb8a835dd470edd4aaaefd4814b82fd",
+  "sourceUrl": "https://sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=searchOrzeczenia&data_wydania_od=2016-06-22&data_wydania_do=2016-06-22&strona=1&rozmiar_strony=100",
+  "capturedAt": "2026-09-23T10:17:11.000Z",
+  "note": "one decision date, the last this court's SAOS mirror holds"
+}
