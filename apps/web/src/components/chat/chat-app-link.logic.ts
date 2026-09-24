@@ -9,6 +9,8 @@ import {
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
+import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
+
 /** A statute page's address, and the provision anchor it lands on, if any. */
 export type StatuteLink = {
   anchor: string | null;
@@ -33,6 +35,31 @@ const readAnchor = (hash: string): string | null => {
 
   return Result.try(() => decodeURIComponent(fragment)).unwrapOr(null);
 };
+
+/** The consolidation a statute link resolved to, as the corpus reads it. */
+type LinkedStatute = {
+  country: string;
+  eli: string | null;
+  id: string;
+  slug: string | null;
+  title: string;
+  versionValidFrom: string | null;
+};
+
+/** The inspector tab a statute link opens: the act, landing on its anchor. */
+export const createStatuteLinkTab = (
+  statute: LinkedStatute,
+  { anchor }: StatuteLink,
+) =>
+  createStatuteViewTab({
+    country: statute.country,
+    documentId: statute.id,
+    eli: statute.eli,
+    slug: statute.slug,
+    statuteTitle: statute.title,
+    versionValidFrom: statute.versionValidFrom,
+    ...(anchor === null ? {} : { anchorId: anchor }),
+  });
 
 /** `appOrigins`: the origins this app answers on (the page's, the public URL). */
 export const classifyChatHttpLink = (

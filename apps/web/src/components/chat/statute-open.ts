@@ -3,14 +3,16 @@ import { useNavigate } from "@tanstack/react-router";
 
 import { useIsMobile } from "@stll/ui/use-mobile";
 
-import type { StatuteLink } from "@/components/chat/chat-app-link.logic";
+import {
+  createStatuteLinkTab,
+  type StatuteLink,
+} from "@/components/chat/chat-app-link.logic";
 import { openPublicLawLink } from "@/components/chat/public-law-open";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import {
   publicStatuteOptions,
   statuteBySlugOptions,
 } from "@/features/statutes/queries/statutes";
-import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { resolveStatuteRoute } from "@/features/statutes/statute-route-resolution";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
@@ -18,9 +20,8 @@ import { createStatuteLinkTarget } from "@/lib/statute-route";
  * Open the statute a chat link names, the way a cited act opens: an inspector
  * tab beside the chat, the act's own page on a phone, where there is no
  * beside. The link resolves as the act's page resolves it, so a `/v/` day
- * nothing was in force on opens the act, as the page redirects to it. The page
- * lands on the link's provision anchor; the inspector tab opens the act whole,
- * since it takes no anchor.
+ * nothing was in force on opens the act, as the page redirects to it. Both
+ * the tab and the page land on the link's provision anchor.
  */
 export const useOpenStatuteLink = () => {
   const queryClient = useQueryClient();
@@ -48,16 +49,7 @@ export const useOpenStatuteLink = () => {
       resolve: async () => await resolveLink(link),
       open: async (statute) => {
         if (inspectorAvailable) {
-          openView(
-            createStatuteViewTab({
-              country: statute.country,
-              documentId: statute.id,
-              eli: statute.eli,
-              slug: statute.slug,
-              statuteTitle: statute.title,
-              versionValidFrom: statute.versionValidFrom,
-            }),
-          );
+          openView(createStatuteLinkTab(statute, link));
           return;
         }
 

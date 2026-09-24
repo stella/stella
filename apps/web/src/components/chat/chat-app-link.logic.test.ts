@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -9,7 +10,11 @@ import {
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
-import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import {
+  classifyChatHttpLink,
+  createStatuteLinkTab,
+} from "@/components/chat/chat-app-link.logic";
+import { isStatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
 
 const APP_ORIGIN = "https://app.example.test";
 const APP_ORIGINS = new Set([APP_ORIGIN]);
@@ -76,5 +81,42 @@ describe("chat http links", () => {
     expect(classifyChatHttpLink(url, APP_ORIGINS)).toEqual({
       type: "external",
     });
+  });
+});
+
+describe("the tab a statute link opens", () => {
+  const statute = {
+    country: "CZE",
+    eli: "/eli/cz/sb/2012/89",
+    id: DOCUMENT_ID,
+    slug: "89-2012-sb-obcansky-zakonik",
+    title: "89/2012 Sb., občanský zákoník",
+    versionValidFrom: "2021-01-01",
+  };
+
+  const statuteLinkAt = (href: string) => {
+    const link = classifyChatHttpLink(new URL(href, APP_ORIGIN), APP_ORIGINS);
+    if (link.type !== "statute") {
+      return panic(`Expected a statute link, got ${link.type}`);
+    }
+    return link.link;
+  };
+
+  test("lands on the provision the link's fragment names", () => {
+    const tab = createStatuteLinkTab(
+      statute,
+      statuteLinkAt(`${statutePath}#par_90-odst_5`),
+    );
+
+    expect(tab.payload.anchorId).toBe("par_90-odst_5");
+    expect(tab.payload.documentId).toBe(DOCUMENT_ID);
+    expect(isStatuteViewPayload(tab.payload)).toBe(true);
+  });
+
+  test("opens the act whole when the link names no provision", () => {
+    const tab = createStatuteLinkTab(statute, statuteLinkAt(statutePath));
+
+    expect("anchorId" in tab.payload).toBe(false);
+    expect(isStatuteViewPayload(tab.payload)).toBe(true);
   });
 });
