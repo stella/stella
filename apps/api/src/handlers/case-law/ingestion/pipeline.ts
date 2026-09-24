@@ -2886,6 +2886,33 @@ const processDecisionAttempt = async ({
     });
   };
 
+  // The status of a write that another writer's row state turned away. The
+  // payload fence is this observation's only when it still owns the row.
+  const lostRowWriteStatus = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+    { payloadFenced }: { payloadFenced: boolean },
+  ): Promise<DecisionRowWriteStatus> => {
+    const winner = await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: id } },
+      columns: {
+        corpusMirrorStatus: true,
+        redactedAt: true,
+        sourceObservationOrder: true,
+      },
+    });
+    if (winner?.redactedAt) {
+      await sweepRawWriteLostToErasureTx(tx, id);
+      return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
+    }
+    if (payloadFenced && observationStillOwns(winner, observationOrder)) {
+      return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
+    }
+    return winner?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+      ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
+      : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
+  };
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -3058,30 +3085,12 @@ const processDecisionAttempt = async ({
           // A newer observation owns the row. Its durable mirror state
           // decides whether this page may advance: a pending winner still
           // needs the source page as its replay path.
-          const winner = await tx.query.caseLawDecisions.findFirst({
-            where: { id: { eq: existing.id } },
-            columns: {
-              corpusMirrorStatus: true,
-              redactedAt: true,
-              sourceObservationOrder: true,
-            },
+          // When it is still this observation's to write, the miss was the
+          // payload fence: another write replaced what the plan compared
+          // against.
+          return await lostRowWriteStatus(tx, existing.id, {
+            payloadFenced: storedPayloadUnchanged,
           });
-          if (winner?.redactedAt) {
-            await sweepRawWriteLostToErasureTx(tx, existing.id);
-            return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
-          }
-          // Still this observation's to write, so the miss was the payload
-          // fence: another write replaced what the plan compared against.
-          if (
-            storedPayloadUnchanged &&
-            observationStillOwns(winner, observationOrder)
-          ) {
-            return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
-          }
-          return winner?.corpusMirrorStatus ===
-            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-            ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
-            : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
         }
 
         if (payloadNeedsGuard) {
@@ -3105,18 +3114,9 @@ const processDecisionAttempt = async ({
               .limit(1)
           ).at(0);
           if (payloadState === undefined || payloadState.holdsDocument) {
-            const winner = await tx.query.caseLawDecisions.findFirst({
-              where: { id: { eq: existing.id } },
-              columns: { corpusMirrorStatus: true, redactedAt: true },
+            return await lostRowWriteStatus(tx, existing.id, {
+              payloadFenced: false,
             });
-            if (winner?.redactedAt) {
-              await sweepRawWriteLostToErasureTx(tx, existing.id);
-              return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
-            }
-            return winner?.corpusMirrorStatus ===
-              CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-              ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
-              : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
           }
           if (payloadState.differs) {
             await tx
