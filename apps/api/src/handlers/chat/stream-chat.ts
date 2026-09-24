@@ -64,7 +64,7 @@ import {
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
 import {
-  createChatMessageIdMapper,
+  createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
@@ -489,7 +489,9 @@ export const streamChat = async ({
       : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
   const restorationPairs: ChatAnonRestoration[] = [];
-  const mapAssistantMessageId = createChatMessageIdMapper();
+  const mapAssistantMessageId = createTurnMessageIdMapper(
+    owningAssistantMessageId,
+  );
   let responseMessage: ChatMessage | null = null;
   const processor = new StreamProcessor({
     initialMessages: preparedMessageList,
@@ -558,7 +560,6 @@ export const streamChat = async ({
     deadlineSignal: abortSignal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     flushPendingSource: persistenceVisibleStream.flushPending,
-    preservedTerminalMessageId: owningAssistantMessageId,
     onFinish,
     processor,
     source: persistenceVisibleStream,
@@ -1414,7 +1415,6 @@ type ProcessServerChatStreamProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
-  preservedTerminalMessageId?: SafeId<"chatMessage"> | undefined;
   processor: StreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
 };
@@ -1584,7 +1584,6 @@ export const processServerChatStream = async function* ({
   getResponseMessage,
   mapMessageId,
   onFinish,
-  preservedTerminalMessageId,
   processor,
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
@@ -1639,7 +1638,6 @@ export const processServerChatStream = async function* ({
     const terminalResponseMessage = createTerminalResponseMessage({
       mapMessageId,
       outcome,
-      preservedTerminalMessageId,
       responseMessage,
       usage,
     });
@@ -1854,7 +1852,6 @@ export const processServerChatStream = async function* ({
 type FinishResponseMessageProps = {
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
-  preservedTerminalMessageId: SafeId<"chatMessage"> | undefined;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
 };
@@ -1862,7 +1859,6 @@ type FinishResponseMessageProps = {
 const createTerminalResponseMessage = ({
   mapMessageId,
   outcome,
-  preservedTerminalMessageId,
   responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
@@ -1886,7 +1882,6 @@ const createTerminalResponseMessage = ({
           message: normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
-            preservedMessageId: preservedTerminalMessageId,
           }),
           usage,
         });

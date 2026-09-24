@@ -13,7 +13,7 @@ import {
   toChatMessage,
 } from "@/api/handlers/chat/stream-chat";
 import type { streamChat } from "@/api/handlers/chat/stream-chat";
-import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import { createTurnMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -233,9 +233,8 @@ export const createScriptedStreamResponse = (
       deadlineSignal: abortSignal,
       existingMessageIds: new Set(messages.map(({ id }) => id)),
       getResponseMessage: () => captured.message,
-      mapMessageId: createChatMessageIdMapper(),
+      mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
       onFinish,
-      preservedTerminalMessageId: owningAssistantMessageId,
       processor,
       source,
     });

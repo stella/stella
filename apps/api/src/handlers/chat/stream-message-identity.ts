@@ -26,21 +26,31 @@ export const createChatMessageIdMapper = (
   };
 };
 
+/**
+ * The id every assistant message a run emits is persisted under. A fresh turn
+ * mints one id for the whole turn. A continuation (an approval, a client
+ * tool) resumes the assistant message the client replayed: the SDK writes the
+ * approved tool's result onto that message, and the model's follow-up has to
+ * persist with it, so the run folds into the owning message. A follow-up
+ * persisted on its own would leave the owning message's call without a
+ * result, and every later resume in the thread would then rebuild that call
+ * as a pending interrupt and reject the client's batch.
+ */
+export const createTurnMessageIdMapper = (
+  owningAssistantMessageId: SafeId<"chatMessage"> | undefined,
+): MessageIdMapper =>
+  owningAssistantMessageId === undefined
+    ? createChatMessageIdMapper()
+    : () => owningAssistantMessageId;
+
 export const normalizeFinalAssistantMessageId = ({
   mapMessageId,
   message,
-  preservedMessageId,
 }: {
   mapMessageId: MessageIdMapper;
   message: ChatMessage;
-  preservedMessageId?: SafeId<"chatMessage"> | undefined;
-}): PersistableChatMessage => {
-  const id =
-    preservedMessageId !== undefined && message.id === preservedMessageId
-      ? preservedMessageId
-      : mapMessageId(message.id);
-  return toPersistableChatMessage({ ...message, id });
-};
+}): PersistableChatMessage =>
+  toPersistableChatMessage({ ...message, id: mapMessageId(message.id) });
 
 type RemapOutgoingMessageIdsProps = {
   existingMessageIds?: ReadonlySet<string> | undefined;
@@ -137,6 +147,7 @@ type SnapshotMessage = Extract<
   PublicStreamChunk,
   { type: EventType.MESSAGES_SNAPSHOT }
 >["messages"][number];
+type AssistantSnapshotMessage = Extract<SnapshotMessage, { role: "assistant" }>;
 
 /**
  * A native snapshot carries one assistant message per model iteration, but the
@@ -144,7 +155,9 @@ type SnapshotMessage = Extract<
  * every iteration, under the id `mapMessageId` fixes for the turn). The client
  * continues the persisted message, so the snapshot must present the same
  * shape: the run's new assistant messages fold into that one message, and
- * their tool messages keep anchoring by `toolCallId`.
+ * their tool messages keep anchoring by `toolCallId`. In a continuation that
+ * message is the owning one the snapshot already carries from history, so
+ * the run's messages fold into it rather than beside it.
  */
 const mergeSnapshotAssistantMessages = ({
   existingMessageIds,
@@ -159,7 +172,7 @@ const mergeSnapshotAssistantMessages = ({
 }): SnapshotMessage[] => {
   const isNewAssistant = (
     message: SnapshotMessage,
-  ): message is Extract<SnapshotMessage, { role: "assistant" }> =>
+  ): message is AssistantSnapshotMessage =>
     message.role === "assistant" && !existingMessageIds.has(message.id);
   const newAssistantMessages = messages.filter(isNewAssistant);
   const first = newAssistantMessages.at(0);
@@ -167,12 +180,19 @@ const mergeSnapshotAssistantMessages = ({
     return [...messages];
   }
   const mergedId = mapMessageId(first.id);
+  const owning = messages.find(
+    (message): message is AssistantSnapshotMessage =>
+      message.role === "assistant" && message.id === mergedId,
+  );
+  const base = owning ?? first;
   const contents: string[] = [];
-  const toolCalls: NonNullable<
-    Extract<SnapshotMessage, { role: "assistant" }>["toolCalls"]
-  > = [];
-  for (const message of newAssistantMessages) {
-    snapshotMessageIds.set(message.id, mergedId);
+  const toolCalls: NonNullable<AssistantSnapshotMessage["toolCalls"]> = [];
+  for (const message of owning === undefined
+    ? newAssistantMessages
+    : [owning, ...newAssistantMessages]) {
+    if (message !== owning) {
+      snapshotMessageIds.set(message.id, mergedId);
+    }
     if (typeof message.content === "string" && message.content.length > 0) {
       contents.push(message.content);
     }
@@ -180,7 +200,7 @@ const mergeSnapshotAssistantMessages = ({
       toolCalls.push(...message.toolCalls);
     }
   }
-  const { content: _content, toolCalls: _toolCalls, ...identity } = first;
+  const { content: _content, toolCalls: _toolCalls, ...identity } = base;
   const merged: SnapshotMessage = {
     ...identity,
     id: mergedId,
@@ -189,7 +209,7 @@ const mergeSnapshotAssistantMessages = ({
   };
   const result: SnapshotMessage[] = [];
   for (const message of messages) {
-    if (message === first) {
+    if (message === base) {
       result.push(merged);
       continue;
     }
