@@ -2112,11 +2112,9 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "stream-processor-constructions",
     description:
-      "`new StreamProcessor(` outside `processTurnForPersistence` in apps/api/src/handlers/chat/stream-chat.ts, test helpers included; a turn persisted through its own processor wiring can drift from what production stores, so tests and callers route through that function",
+      "`new StreamProcessor(` in API source and test helpers; the one in `processTurnForPersistence` (apps/api/src/handlers/chat/stream-chat.ts) is where a turn's persisted message is built, and a turn persisted through its own processor wiring can drift from what production stores, so tests and callers route through that function",
     include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      /\.test\./u.test(file) ||
-      file === "apps/api/src/handlers/chat/stream-chat.ts",
+    exclude: (file) => /\.test\./u.test(file),
     count: countStreamProcessorConstructions,
   },
   {

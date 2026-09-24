@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { findUnsettledToolCallsForOutcome } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  findUnsettledToolCallsForOutcome,
+  findUnsettledToolCallsOnResumedMessage,
+} from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
@@ -39,15 +42,20 @@ const streaming = call("streaming", { state: "input-streaming" });
 const completed = call("completed", { output: {}, state: "complete" });
 const failed = call("failed", { state: "error" });
 
-const openIds = (outcome: ChatTurnOutcome, parts: ChatPart[]) =>
+const openIds = (outcome: ChatTurnOutcome["type"], parts: ChatPart[]) =>
   findUnsettledToolCallsForOutcome({ outcome, parts }).map(
+    ({ toolCallId }) => toolCallId,
+  );
+
+const resumedOpenIds = (outcome: ChatTurnOutcome["type"], parts: ChatPart[]) =>
+  findUnsettledToolCallsOnResumedMessage({ outcome, parts }).map(
     ({ toolCallId }) => toolCallId,
   );
 
 describe("tool calls a settled turn may leave open", () => {
   test("a completed turn leaves none: an approved call without its result is reported", () => {
     expect(
-      openIds({ type: "completed" }, [
+      openIds("completed", [
         { content: "Done.", type: "text" },
         completed,
         failed,
@@ -60,26 +68,27 @@ describe("tool calls a settled turn may leave open", () => {
 
   test("a turn awaiting the user leaves only what the user can answer", () => {
     expect(
-      openIds(
-        {
-          interaction: { toolCallId: "pending", type: "approval" },
-          type: "awaiting-user",
-        },
-        [completed, pendingApproval, approvedWithoutOutput, streaming],
-      ),
+      openIds("awaiting-user", [
+        completed,
+        pendingApproval,
+        approvedWithoutOutput,
+        streaming,
+      ]),
     ).toEqual(["approved", "streaming"]);
   });
 
-  test.each([
-    { type: "cancelled", reason: "user-stop" },
-    { type: "failed", error: "unknown" },
-    { type: "interrupted", reason: "timeout" },
-  ] satisfies ChatTurnOutcome[])(
-    "a $type turn may stop with calls mid-flight",
+  test.each(["cancelled", "failed", "interrupted"] as const)(
+    "a %s turn may stop mid-flight, but not on an approved call without its result",
     (outcome) => {
       expect(
         openIds(outcome, [approvedWithoutOutput, streaming, pendingApproval]),
-      ).toEqual([]);
+      ).toEqual(["approved"]);
     },
   );
+
+  test("a resumed message keeps nothing to answer while its turn awaits the user elsewhere", () => {
+    expect(
+      resumedOpenIds("awaiting-user", [completed, pendingApproval, streaming]),
+    ).toEqual(["pending", "streaming"]);
+  });
 });

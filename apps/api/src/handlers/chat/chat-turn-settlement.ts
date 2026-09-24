@@ -4,17 +4,7 @@ import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 export type ToolCallState = ToolCallPart["state"];
-
-/** Tool-call states that are a final disposition of the call. */
-const SETTLED_TOOL_CALL_STATE = {
-  "approval-requested": false,
-  "approval-responded": false,
-  "awaiting-input": false,
-  complete: true,
-  error: true,
-  "input-complete": false,
-  "input-streaming": false,
-} as const satisfies Record<ToolCallState, boolean>;
+type OutcomeType = ChatTurnOutcome["type"];
 
 /**
  * Tool-call states a client can still answer from a reloaded thread: an
@@ -31,78 +21,105 @@ export const CLIENT_ANSWERABLE_TOOL_CALL_STATE = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
+/**
+ * Which open tool-call states a message may keep once its turn ends that way.
+ * A completed turn keeps none. A turn awaiting the user keeps what the user
+ * can answer. A turn that stopped early may keep calls whose input or answer
+ * never arrived, but never an approved call without its result: that call ran,
+ * or runs again on the next turn.
+ */
+const OPEN_STATE_ALLOWED = {
+  none: {
+    "approval-requested": false,
+    "approval-responded": false,
+    "awaiting-input": false,
+    complete: false,
+    error: false,
+    "input-complete": false,
+    "input-streaming": false,
+  },
+  "client-answerable": CLIENT_ANSWERABLE_TOOL_CALL_STATE,
+  stopped: {
+    "approval-requested": true,
+    "approval-responded": false,
+    "awaiting-input": true,
+    complete: false,
+    error: false,
+    "input-complete": true,
+    "input-streaming": true,
+  },
+} as const satisfies Record<string, Record<ToolCallState, boolean>>;
+
+type OpenCallPolicy = keyof typeof OPEN_STATE_ALLOWED;
+
+const OUTCOME_POLICY = {
+  "awaiting-user": "client-answerable",
+  cancelled: "stopped",
+  completed: "none",
+  failed: "stopped",
+  interrupted: "stopped",
+} as const satisfies Record<OutcomeType, OpenCallPolicy>;
+
+const SETTLED_TOOL_CALL_STATE = {
+  "approval-requested": false,
+  "approval-responded": false,
+  "awaiting-input": false,
+  complete: true,
+  error: true,
+  "input-complete": false,
+  "input-streaming": false,
+} as const satisfies Record<ToolCallState, boolean>;
+
 /** A call is settled once its result or error is stored, or its approval was
  *  denied. */
-export const isSettledToolCall = (part: ToolCallPart): boolean =>
+const isSettledToolCall = (part: ToolCallPart): boolean =>
   SETTLED_TOOL_CALL_STATE[part.state] ||
   ("approval" in part && part.approval.approved === false);
-
-/**
- * Which tool calls a turn with this outcome may leave open on its message. A
- * completed turn leaves none; a turn awaiting the user leaves only what the
- * user can answer; a turn that stopped early may hold calls mid-flight.
- */
-const OPEN_CALLS_ALLOWED = {
-  "awaiting-user": "client-answerable",
-  cancelled: "any",
-  completed: "none",
-  failed: "any",
-  interrupted: "any",
-} as const satisfies Record<
-  ChatTurnOutcome["type"],
-  "any" | "client-answerable" | "none"
->;
 
 export type UnsettledToolCall = {
   state: ToolCallState;
   toolCallId: string;
 };
 
+const findUnsettled = (
+  policy: OpenCallPolicy,
+  parts: readonly ChatPart[],
+): UnsettledToolCall[] =>
+  parts.flatMap((part) =>
+    part.type === "tool-call" &&
+    !isSettledToolCall(part) &&
+    !OPEN_STATE_ALLOWED[policy][part.state]
+      ? [{ state: part.state, toolCallId: part.id }]
+      : [],
+  );
+
 /**
- * The tool calls on a terminal assistant message that its turn outcome does
- * not allow to stay open. Empty for a sound turn.
+ * The tool calls on a turn's terminal assistant message that the way the turn
+ * ended does not allow to stay open. Empty for a sound turn.
  */
 export const findUnsettledToolCallsForOutcome = ({
   outcome,
   parts,
 }: {
-  outcome: ChatTurnOutcome;
+  outcome: OutcomeType;
   parts: readonly ChatPart[];
-}): UnsettledToolCall[] => {
-  const allowed = OPEN_CALLS_ALLOWED[outcome.type];
-  if (allowed === "any") {
-    return [];
-  }
-  return parts.flatMap((part) =>
-    part.type === "tool-call" &&
-    !isSettledToolCall(part) &&
-    !(
-      allowed === "client-answerable" &&
-      CLIENT_ANSWERABLE_TOOL_CALL_STATE[part.state]
-    )
-      ? [{ state: part.state, toolCallId: part.id }]
-      : [],
-  );
-};
+}): UnsettledToolCall[] => findUnsettled(OUTCOME_POLICY[outcome], parts);
 
 /**
  * The tool calls a continuation left open on the message it resumed, when the
  * turn's output went to another message. Whatever that turn awaits sits on its
- * own message, so the resumed one must be fully settled.
+ * own message, so the resumed one keeps nothing for the user to answer.
  */
 export const findUnsettledToolCallsOnResumedMessage = ({
   outcome,
   parts,
 }: {
-  outcome: ChatTurnOutcome;
+  outcome: OutcomeType;
   parts: readonly ChatPart[];
-}): UnsettledToolCall[] =>
-  OPEN_CALLS_ALLOWED[outcome.type] === "any"
-    ? []
-    : findUnsettledToolCallsForOutcome({
-        outcome: { type: "completed" },
-        parts,
-      });
+}): UnsettledToolCall[] => {
+  const policy = OUTCOME_POLICY[outcome];
+  return findUnsettled(policy === "client-answerable" ? "none" : policy, parts);
+};
 
 /** Reported, never thrown: a settled turn stored a tool call without its
  *  final disposition. */

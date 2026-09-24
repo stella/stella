@@ -435,15 +435,6 @@ export const finalizeAssistantTurn = async ({
     panic("Assistant turn produced no persistence plan");
   }
 
-  reportUnsettledToolCalls({
-    message: "terminal",
-    outcome,
-    unsettled: findUnsettledToolCallsForOutcome({
-      outcome,
-      parts: responseMessage.parts,
-    }),
-  });
-
   const persistResult = await persistMessage({
     acceptedSendMode,
     dataScopeExpansion,
@@ -463,13 +454,23 @@ export const finalizeAssistantTurn = async ({
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  // Reported once the turn is stored: the report says a stored thread holds
+  // the open call, which a failed write never made true.
+  reportUnsettledToolCalls({
+    message: "terminal",
+    outcome: outcome.type,
+    unsettled: findUnsettledToolCallsForOutcome({
+      outcome: outcome.type,
+      parts: responseMessage.parts,
+    }),
+  });
   if (
     resumedMessageId !== undefined &&
     resumedMessageId !== responseMessage.id
   ) {
     await reportUnsettledResumedMessage({
       messageId: resumedMessageId,
-      outcome,
+      outcome: outcome.type,
       safeDb,
       threadId,
     });
@@ -488,7 +489,7 @@ const reportUnsettledResumedMessage = async ({
   threadId,
 }: {
   messageId: SafeId<"chatMessage">;
-  outcome: ChatTurnOutcome;
+  outcome: ChatTurnOutcome["type"];
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 }) => {
@@ -535,7 +536,7 @@ const reportUnsettledToolCalls = ({
   unsettled,
 }: {
   message: "resumed" | "terminal";
-  outcome: ChatTurnOutcome;
+  outcome: ChatTurnOutcome["type"];
   unsettled: readonly UnsettledToolCall[];
 }) => {
   if (unsettled.length === 0) {
@@ -547,7 +548,7 @@ const reportUnsettledToolCalls = ({
     }),
     {
       message,
-      outcome: outcome.type,
+      outcome,
       tool_call_states: unsettled.map(({ state }) => state).join(","),
       unsettled_count: String(unsettled.length),
     },
