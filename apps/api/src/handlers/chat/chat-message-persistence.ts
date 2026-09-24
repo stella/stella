@@ -25,6 +25,12 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  ChatTurnDroppedPartsError,
+  ChatTurnUnsettledToolCallError,
+  findDroppedParts,
+  findUnsettledToolCallsForOutcome,
+} from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -444,7 +450,61 @@ export const finalizeAssistantTurn = async ({
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  reportStoredTurnDefects({
+    continued: owningAssistantMessage,
+    outcome: outcome.type,
+    stored: assistantMessage,
+  });
   return Result.ok({ persistencePlan });
+};
+
+/**
+ * Reports a stored turn message that breaks the settlement rules, once the
+ * write committed: the reports say a stored thread holds the defect, which a
+ * failed write never made true. The turn itself still settles; its answer is
+ * already streamed and belongs in the thread.
+ */
+const reportStoredTurnDefects = ({
+  continued,
+  outcome,
+  stored,
+}: {
+  continued: PersistableChatMessage | undefined;
+  outcome: ChatTurnOutcome["type"];
+  stored: PersistableChatMessage;
+}) => {
+  const unsettled = findUnsettledToolCallsForOutcome({
+    outcome,
+    parts: stored.parts,
+  });
+  if (unsettled.length > 0) {
+    captureError(
+      new ChatTurnUnsettledToolCallError({
+        message: "A settled chat turn stored a tool call without its result",
+      }),
+      {
+        outcome,
+        tool_call_states: unsettled.map(({ state }) => state).join(","),
+        unsettled_count: String(unsettled.length),
+      },
+    );
+  }
+  const dropped =
+    continued === undefined
+      ? null
+      : findDroppedParts({ continued: continued.parts, stored: stored.parts });
+  if (dropped !== null) {
+    captureError(
+      new ChatTurnDroppedPartsError({
+        message: "A continuation stored its message without earlier parts",
+      }),
+      {
+        dropped_tool_calls: String(dropped.droppedToolCallIds.length),
+        outcome,
+        part_count_drop: String(dropped.partCountDrop),
+      },
+    );
+  }
 };
 
 type PersistTerminalAssistantTurnProps = {

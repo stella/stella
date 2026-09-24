@@ -29,6 +29,7 @@ import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -1791,4 +1792,149 @@ describe("durable chat turn persistence", () => {
     expect(turn).toMatchObject({ status: "failed" });
     expect(turn?.settledAt).not.toBeNull();
   });
+});
+
+describe("settling a continuation reports a stored message that breaks the rules", () => {
+  const approvedCall = {
+    approval: {
+      approved: true,
+      id: "approval_continued-call",
+      needsApproval: true,
+    },
+    arguments: '{"name":"NDA"}',
+    id: "continued-call",
+    input: { name: "NDA" },
+    name: "mcp__external__delete",
+    state: "approval-responded",
+    type: "tool-call",
+  } satisfies ChatPart;
+  const completedCall = {
+    ...approvedCall,
+    output: { deleted: "NDA" },
+    state: "complete",
+  } satisfies ChatPart;
+  const followUp = { content: "Deleted.", type: "text" } satisfies ChatPart;
+
+  const settleContinuation = async ({
+    continued,
+    run,
+  }: {
+    continued: ChatPart[];
+    run: ChatPart[];
+  }) => {
+    const { assistantMessageId, threadId, userMessageId } = await seedThread();
+    const continuedMessage = toPersistableChatMessage({
+      id: assistantMessageId,
+      parts: continued,
+      role: "assistant",
+    });
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values([
+          {
+            content: {
+              data: [{ text: "Delete the NDA", type: "text" }],
+              version: 1,
+            },
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          },
+          {
+            content: toChatMessageContent({ data: continued, version: 2 }),
+            id: assistantMessageId,
+            role: "assistant",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          },
+        ]);
+        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
+          true,
+        );
+      }),
+    );
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+
+    const analytics = installRecordingAnalytics();
+    try {
+      const result = await finalizeAssistantTurn({
+        acceptedSendMode: null,
+        existingIds: new Set([userMessageId, assistantMessageId]),
+        execution,
+        outcome: { type: "completed" },
+        owningAssistantMessage: continuedMessage,
+        recordAuditEvent: async () => {},
+        responseMessage: toPersistableChatMessage({
+          id: assistantMessageId,
+          parts: run,
+          role: "assistant",
+        }),
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+      expect(Result.isOk(result)).toBe(true);
+      return analytics
+        .exceptions()
+        .map(({ properties }) => properties.$exception_type);
+    } finally {
+      analytics.restore();
+    }
+  };
+
+  test.each([
+    {
+      continued: [approvedCall],
+      reports: ["ChatTurnUnsettledToolCallError"],
+      run: [approvedCall, followUp],
+      shape: "an approved call without its result",
+    },
+    {
+      continued: [completedCall],
+      reports: ["ChatTurnDroppedPartsError"],
+      run: [followUp],
+      shape: "without a call the continued message had",
+    },
+    {
+      continued: [approvedCall],
+      reports: [],
+      run: [completedCall, followUp],
+      shape: "with the call settled and kept",
+    },
+  ] satisfies {
+    continued: ChatPart[];
+    reports: string[];
+    run: ChatPart[];
+    shape: string;
+  }[])(
+    "a continuation stored $shape reports $reports",
+    async ({ continued, reports, run }) => {
+      expect(await settleContinuation({ continued, run })).toEqual(reports);
+    },
+  );
 });
