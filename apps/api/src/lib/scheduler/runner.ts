@@ -18,6 +18,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
+  SchedulerDb,
   SchedulerJob,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
@@ -37,10 +38,10 @@ const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 // (cooperative tasks unwind), stops the heartbeat, and releases the job.
 const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
 
-// The scheduler owns the postgres-role `rootDb`; tests inject a structurally
-// equivalent database handle. Threaded explicitly so the claim, lease, and
-// completion paths are exercisable against a real (PGlite) database.
-export type SchedulerDb = typeof rootDb;
+// The scheduler owns the postgres-role `rootDb`. Threaded explicitly so the
+// claim, lease, and completion paths are exercisable against a real (PGlite)
+// database, and handed to every task through its context.
+export type { SchedulerDb };
 
 type RunSchedulerOnceOptions = {
   db?: SchedulerDb;
@@ -465,6 +466,7 @@ const runJob = async ({
     await Promise.race([
       Promise.resolve(
         task({
+          db,
           job,
           logger,
           payload: job.payload,

@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -12,7 +11,7 @@ import {
   type ExpiredDesktopEditSessionNotification,
   publishDesktopEditSessionExpiryNotificationsWithRetry,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import {
   publishSessionEvent,
   publishWorkspaceEvent,
@@ -33,6 +32,7 @@ const EXPIRE_SWEEP_BATCH_SIZE = 200;
  * re-opening the same file. This sweep is that "something".
  */
 export const expireDesktopEditSessions: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -40,7 +40,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
   while (!signal.aborted) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const unnotifiedExpiredSessions = await rootDb
+    const unnotifiedExpiredSessions = await db
       .select({
         id: desktopEditSessions.id,
         workspaceId: desktopEditSessions.workspaceId,
@@ -55,7 +55,8 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       .orderBy(asc(desktopEditSessions.closedAt))
       .limit(EXPIRE_SWEEP_BATCH_SIZE);
 
-    await publishAndMarkExpiryNotifications(unnotifiedExpiredSessions);
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: one batched publish per page of sessions
+    await publishAndMarkExpiryNotifications(db, unnotifiedExpiredSessions);
 
     if (unnotifiedExpiredSessions.length === EXPIRE_SWEEP_BATCH_SIZE) {
       continue;
@@ -65,7 +66,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const batch = await rootDb
+    const batch = await db
       .select({
         id: desktopEditSessions.id,
         workspaceId: desktopEditSessions.workspaceId,
@@ -90,7 +91,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     const batchIds = batch.map((session) => session.id);
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transition per swept page
-    const expiredSessions = await rootDb.transaction(async (tx) => {
+    const expiredSessions = await db.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
         .set({
@@ -157,7 +158,8 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     });
 
     expired += expiredSessions.length;
-    await publishAndMarkExpiryNotifications(expiredSessions);
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: one batched publish per page of sessions
+    await publishAndMarkExpiryNotifications(db, expiredSessions);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {
       break;
@@ -174,6 +176,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 };
 
 const publishAndMarkExpiryNotifications = async (
+  db: SchedulerDb,
   sessions: ExpiredDesktopEditSessionNotification[],
 ): Promise<void> => {
   if (sessions.length === 0) {
@@ -185,7 +188,7 @@ const publishAndMarkExpiryNotifications = async (
     sessions,
   });
 
-  await rootDb
+  await db
     .update(desktopEditSessions)
     .set({ expiryNotificationPublishedAt: new Date() })
     .where(

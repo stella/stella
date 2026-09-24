@@ -1,6 +1,6 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 
-import { maintenanceSafeDb } from "@/api/lib/db/maintenance-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { reconcileCaseLawCorpusUploadIntents } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -11,15 +11,18 @@ const CLEANUP_LIMIT = 50;
 
 /** Drain exact corpus-object cleanup work left by cancelled uploads. */
 export const reconcileCaseLawCorpusUploadIntentsTask: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
+  const rootSafeDb: SafeDb = async (run) =>
+    await Result.tryPromise(async () => await db.transaction(run));
   const result = await reconcileCaseLawCorpusUploadIntents({
     limit: CLEANUP_LIMIT,
-    safeDb: maintenanceSafeDb,
+    safeDb: rootSafeDb,
     signal,
   });
   logger.info("scheduler.case_law_corpus_upload_intents_reconciled", {

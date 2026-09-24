@@ -35,6 +35,7 @@ import type { RequeueFileDerivativeDependencies } from "@/api/lib/file-derivativ
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -100,7 +101,6 @@ const requeueDependencies = {
   markFailed: async () => undefined,
 } satisfies RequeueFileDerivativeDependencies;
 const repairFileDerivatives = createRepairFileDerivativesTask({
-  db: testDb,
   requeue: async (args) =>
     await requeueFileDerivative(args, requeueDependencies),
 });
@@ -199,6 +199,7 @@ const runRepair = async () => {
     panic("expected the repair scheduler job row");
   }
   await repairFileDerivatives({
+    db: asTestRaw<SchedulerDb>(testDb),
     job,
     payload: job.payload,
     runId: createSafeId<"schedulerJobRun">(),

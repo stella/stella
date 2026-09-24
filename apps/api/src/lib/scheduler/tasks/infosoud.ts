@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -11,12 +10,13 @@ import {
 } from "@/api/lib/infosoud/agenda-import";
 import { getInfoSoudClient } from "@/api/lib/infosoud/client";
 import { LIMITS } from "@/api/lib/limits";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const INFO_SOUD_SYNC_TRACKED_CASES_TASK =
   "infosoud.syncTrackedCases" as const;
 
 export const syncInfoSoudTrackedCases: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -27,7 +27,8 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   let total = 0;
 
   while (!signal.aborted) {
-    const trackedCases = await loadNextTrackedCaseBatch(syncStartedAt);
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: the next batch depends on the attempts this one recorded
+    const trackedCases = await loadNextTrackedCaseBatch(db, syncStartedAt);
     if (trackedCases.length === 0) {
       break;
     }
@@ -57,7 +58,9 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         }
 
         if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
           await markTrackedCaseFailed({
+            db,
             error: "InfoSoudAgendaImportLimit",
             trackedCaseId: trackedCase.id,
           });
@@ -66,7 +69,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         }
 
         // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case keeps a failed import isolated
-        const importResult = await rootDb.transaction(async (tx) => {
+        const importResult = await db.transaction(async (tx) => {
           const workspace = await tx.query.workspaces.findFirst({
             where: { id: { eq: trackedCase.workspaceId } },
             columns: { organizationId: true },
@@ -96,7 +99,9 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         });
 
         if (!importResult.ok) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
           await markTrackedCaseFailed({
+            db,
             error: "InfoSoudAgendaImportFailed",
             trackedCaseId: trackedCase.id,
           });
@@ -111,7 +116,9 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           break;
         }
 
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
         await markTrackedCaseFailed({
+          db,
           error: errorTag(error),
           trackedCaseId: trackedCase.id,
         });
@@ -131,8 +138,8 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   }
 };
 
-const loadNextTrackedCaseBatch = async (syncStartedAt: Date) =>
-  await rootDb
+const loadNextTrackedCaseBatch = async (db: SchedulerDb, syncStartedAt: Date) =>
+  await db
     .select()
     .from(infoSoudTrackedCases)
     .where(
@@ -173,15 +180,17 @@ const markTrackedCaseSynced = async ({
 };
 
 type MarkTrackedCaseFailedOptions = {
+  db: SchedulerDb;
   error: string;
   trackedCaseId: typeof infoSoudTrackedCases.$inferSelect.id;
 };
 
 const markTrackedCaseFailed = async ({
+  db,
   error,
   trackedCaseId,
 }: MarkTrackedCaseFailedOptions): Promise<void> => {
-  await rootDb
+  await db
     .update(infoSoudTrackedCases)
     .set({
       lastSyncAttemptAt: new Date(),

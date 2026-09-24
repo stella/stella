@@ -3,11 +3,10 @@ import { sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
 export const REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK =
@@ -31,7 +30,7 @@ type RepairPageRow = {
 };
 
 type RepairSearchSemanticTimestampsOptions = {
-  db?: Pick<typeof rootDb, "execute">;
+  db: Pick<SchedulerDb, "execute">;
   indexEntity?: typeof upsertSearchDocument;
   jobId: string;
   leaseToken: string;
@@ -101,7 +100,7 @@ export const repairSearchSemanticTimestamps = async ({
   now = new Date(),
   payload,
   signal,
-  db = rootDb,
+  db,
   indexEntity = upsertSearchDocument,
 }: RepairSearchSemanticTimestampsOptions): Promise<RepairSearchSemanticTimestampsOutcome> => {
   const isAborted = () => signal.aborted;
@@ -336,11 +335,13 @@ export const repairSearchSemanticTimestamps = async ({
 };
 
 export const repairSearchSemanticTimestampsTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
 }) => {
   const outcome = await repairSearchSemanticTimestamps({
+    db,
     jobId: job.id,
     leaseToken:
       job.lockedBy ??

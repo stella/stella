@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { rootDb } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
 import { shouldRunScheduledFlowNow } from "@/api/lib/flows/flow-trigger-logic";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
@@ -30,7 +29,11 @@ const flowRunPayloadSchema = v.strictObject({
   definitionId: v.pipe(v.string(), v.uuid()),
 });
 
-export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
+export const runScheduledFlow: SchedulerTask = async ({
+  db,
+  payload,
+  logger,
+}) => {
   const parsed = v.safeParse(flowRunPayloadSchema, payload);
   if (!parsed.success) {
     logger.error("flow.schedule_invalid_payload", {
@@ -42,7 +45,7 @@ export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
   const definitionId = brandPersistedFlowDefinitionId(
     parsed.output.definitionId,
   );
-  const definition = await rootDb.query.flowDefinitions.findFirst({
+  const definition = await db.query.flowDefinitions.findFirst({
     where: { id: { eq: definitionId } },
     columns: {
       id: true,
@@ -56,7 +59,7 @@ export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
   if (!definition) {
     // Definition deleted without a sync (e.g. cascade from org deletion): drop
     // the orphaned scheduler row so it stops firing.
-    await rootDb
+    await db
       .delete(schedulerJobs)
       .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
     logger.info("flow.schedule_definition_missing", { definitionId });
@@ -87,7 +90,7 @@ export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
     definition.organizationId,
   );
   const workspaceId = brandPersistedWorkspaceId(trigger.workspaceId);
-  const workspace = await rootDb.query.workspaces.findFirst({
+  const workspace = await db.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
     columns: { organizationId: true, status: true },
   });

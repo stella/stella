@@ -4,8 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { schedulerJobs } from "@/api/db/schema";
-import { maintenanceScopedDb } from "@/api/lib/db/maintenance-db";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,
@@ -20,7 +20,11 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerDb,
+  SchedulerJob,
+  SchedulerTask,
+} from "@/api/lib/scheduler/types";
 
 /**
  * The three recurring passes that keep per-decision raw storage honest.
@@ -40,6 +44,11 @@ const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
 const CONTINUATION_DELAY_MS = 1000;
 
+const rootScopedDb =
+  (db: SchedulerDb): ScopedDb =>
+  async (run) =>
+    await db.transaction(run);
+
 const leaseFence = (job: SchedulerJob) =>
   and(
     eq(schedulerJobs.id, job.id),
@@ -51,11 +60,12 @@ const leaseFence = (job: SchedulerJob) =>
 
 /** Delete the raw prefixes owed a sweep: erased decisions, lost writes. */
 export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   const result = await reconcileCaseLawRawSweeps({
-    scopedDb: maintenanceScopedDb,
+    scopedDb: rootScopedDb(db),
     limit: SWEEP_LIMIT,
     signal,
   });
@@ -85,6 +95,7 @@ const parseRowCursor = (payload: Record<string, unknown> | null) => {
  * yet been replaced are reached on a later pass.
  */
 export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   scheduleContinuation,
@@ -93,20 +104,17 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   signal.throwIfAborted();
   const cursor = parseRowCursor(job.payload);
   const page = await reconcileCaseLawRawLayoutPage({
-    scopedDb: maintenanceScopedDb,
+    scopedDb: rootScopedDb(db),
     cursor,
     limit: ROW_PAGE_LIMIT,
     mode: RAW_LAYOUT_MODE.APPLY,
     signal,
   });
   // Checkpoint last, and only as far as every row before it is settled.
-  await maintenanceScopedDb(
-    async (tx) =>
-      await tx
-        .update(schedulerJobs)
-        .set({ payload: { cursor: page.resumeAfter } })
-        .where(leaseFence(job)),
-  );
+  await db
+    .update(schedulerJobs)
+    .set({ payload: { cursor: page.resumeAfter } })
+    .where(leaseFence(job));
   logger.info("scheduler.case_law_raw_rows_reconciled", {
     "caseLawRawRows.current": page.counts.current,
     "caseLawRawRows.migrated": page.counts.migrated,
@@ -160,33 +168,28 @@ const parseCensusCursor = (
  * erased or was never written are queued for a sweep.
  */
 export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
 }) => {
   signal.throwIfAborted();
   const page = await censusCaseLawRawObjectsPage({
-    scopedDb: maintenanceScopedDb,
+    scopedDb: rootScopedDb(db),
     cursor: parseCensusCursor(job.payload),
     maxKeys: CENSUS_PAGE_KEYS,
     mode: RAW_CENSUS_MODE.APPLY,
     signal,
   });
-  await maintenanceScopedDb(
-    async (tx) =>
-      await tx
-        .update(schedulerJobs)
-        .set({
-          payload:
-            page.next === null
-              ? null
-              : {
-                  sourceId: page.next.sourceId,
-                  startAfter: page.next.startAfter,
-                },
-        })
-        .where(leaseFence(job)),
-  );
+  await db
+    .update(schedulerJobs)
+    .set({
+      payload:
+        page.next === null
+          ? null
+          : { sourceId: page.next.sourceId, startAfter: page.next.startAfter },
+    })
+    .where(leaseFence(job));
   logger.info("scheduler.case_law_raw_objects_censused", {
     "caseLawRawObjects.live": page.counts.live,
     "caseLawRawObjects.reserved": page.counts.reserved,

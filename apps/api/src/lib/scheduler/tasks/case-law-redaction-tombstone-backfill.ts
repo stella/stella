@@ -3,7 +3,6 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import { rootDb } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
@@ -39,6 +38,7 @@ const parseCursor = (
  * immutable historical range reaches a fixed point.
  */
 export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
+  db,
   job,
   logger,
   signal,
@@ -49,7 +49,7 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     job.lockedBy ??
     panic("Case-law redaction tombstone backfill requires a scheduler lease");
 
-  const outcome = await rootDb.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const page = await tx
       .selectDistinct({ decisionId: caseLawIndexJobs.decisionId })
       .from(caseLawIndexJobs)

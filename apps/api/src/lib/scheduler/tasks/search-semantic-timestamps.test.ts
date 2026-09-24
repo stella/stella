@@ -18,7 +18,7 @@ const { repairSearchSemanticTimestamps } =
   await import("@/api/lib/scheduler/tasks/search-semantic-timestamps");
 
 const runRepair = async (
-  options: Parameters<typeof repairSearchSemanticTimestamps>[0],
+  options: Omit<Parameters<typeof repairSearchSemanticTimestamps>[0], "db">,
 ) =>
   await repairSearchSemanticTimestamps({
     ...options,
