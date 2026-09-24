@@ -25,6 +25,12 @@ export const stellaCaseLawAnalysisWriter = p
   .pgRole("stella_case_law_analysis_writer")
   .existing();
 
+// Read-only role for internal case-law analysis. Column-restricted to the
+// corpus relations that analysis reads; it holds nothing on tenant tables.
+export const stellaCaseLawAnalysisReader = p
+  .pgRole("stella_case_law_analysis_reader")
+  .existing();
+
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
@@ -792,6 +798,18 @@ export const caseLawAnalysisWriterReadPolicies = () => [
   p.pgPolicy("case_law_analysis_writer_read", {
     for: "select",
     to: stellaCaseLawAnalysisWriter,
+    using: allowAllRows,
+  }),
+];
+
+/**
+ * Row visibility for the analysis reader. Applied only to the relations in its
+ * column map; the SELECT grants narrow the columns, this makes the rows visible.
+ */
+export const caseLawAnalysisReaderPolicies = () => [
+  p.pgPolicy("case_law_analysis_reader_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisReader,
     using: allowAllRows,
   }),
 ];

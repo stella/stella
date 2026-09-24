@@ -77,6 +77,46 @@ export const CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS = {
 } as const;
 
 /**
+ * Exact columns the internal case-law analysis reader may read. The migration
+ * owns these grants in production; the privilege test folds that SQL back
+ * against this map so the two cannot drift.
+ */
+export const CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS = {
+  case_law_citations: [
+    "id",
+    "citing_decision_id",
+    "cited_decision_id",
+    "citation_text",
+    "section_index",
+    "polarity",
+    "polarity_rule_id",
+    "kind",
+  ],
+  case_law_decisions: [
+    "id",
+    "case_number",
+    "court",
+    "decision_date",
+    "country",
+    "language",
+    "citation_authority",
+    "sections",
+    "text_s3_key",
+    "normalized_s3_key",
+  ],
+  case_law_polarity_rules: [
+    "id",
+    "language",
+    "polarity",
+    "pattern",
+    "match_count",
+    "source",
+  ],
+  case_law_court_weights: ["country", "court_pattern", "tier"],
+  case_law_corpus_tombstones: ["location"],
+} as const;
+
+/**
  * Every column of `case_law_sources` the ingestion role may write. The table
  * is otherwise migration-managed, so the role holds UPDATE column by column
  * and each column here matches a grant in a committed migration
@@ -418,6 +458,16 @@ export const ROLE_GRANT_STATEMENTS = [
         TO stella_case_law_analysis_writer
     `,
   ),
+  `
+    GRANT USAGE ON SCHEMA public TO stella_case_law_analysis_reader
+  `,
+  ...Object.entries(CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_case_law_analysis_reader
+    `,
+  ),
 ] as const;
 
 /**
@@ -438,6 +488,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await db.execute(
     sql.raw("CREATE ROLE stella_case_law_analysis_writer NOLOGIN"),
+  );
+  await db.execute(
+    sql.raw("CREATE ROLE stella_case_law_analysis_reader NOLOGIN"),
   );
   await installPgliteSchemaPrerequisites(db);
 
