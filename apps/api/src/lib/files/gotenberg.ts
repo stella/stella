@@ -76,7 +76,6 @@ const chromiumHtmlToPdf = async (
   }
 
   const response = await fetchWithTimeout(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-configured Gotenberg deployment from validated env; no request data selects the origin
     `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
     {
       method: "POST",
@@ -247,7 +246,6 @@ export const convertToPdf = async ({
         formData.append("exportNotesInMargin", "true");
 
         const response = await fetchWithTimeout(
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-configured Gotenberg deployment from validated env; no request data selects the origin
           `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
           {
             method: "POST",
