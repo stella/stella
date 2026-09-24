@@ -1,11 +1,11 @@
 {
   "api": {
-    "types": 1632670,
-    "instantiations": 8272264
+    "types": 1632622,
+    "instantiations": 8271921
   },
   "web": {
-    "types": 1898006,
-    "instantiations": 13713783
+    "types": 922509,
+    "instantiations": 5629100
   },
   "web-e2e": {
     "types": 43129,
