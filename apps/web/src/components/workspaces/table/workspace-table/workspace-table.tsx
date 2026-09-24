@@ -16,7 +16,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@stll/ui/utils";
 
-import { addColumnRailStyle } from "@/components/workspaces/table/add-column-rail";
+import {
+  addColumnHeaderCellStyle,
+  addColumnRailStyle,
+} from "@/components/workspaces/table/add-column-rail";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import {
   getNextSelectAllRowSelection,
@@ -386,12 +389,15 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     centerColumns: table.getCenterLeafColumns(),
     endColumns: table.getEndLeafColumns(),
   }).filter((column) => column.getIsVisible());
-  // Grouped sections drop the per-group add-column rail: it would repeat under
-  // every group and the toolbar already offers "+ new column". (Its trigger is
-  // absolute-positioned, so it also wouldn't pin in the shared scroll.)
-  const addPropertyColumn = inlineFlow
-    ? null
-    : (orderedColumns.find((column) => column.id === addPropertyColId) ?? null);
+  const addPropertyColumn =
+    orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
+  // A standalone table overlays one full-height rail on its own scroller.
+  // Grouped sections share the outer scroll, where that absolute overlay would
+  // not pin, so each section puts the trigger in its sticky header cell.
+  const addColumnHeaderTrigger =
+    inlineFlow && rowHost.addColumnRail !== undefined ? (
+      <div style={addColumnHeaderCellStyle}>{rowHost.addColumnRail}</div>
+    ) : undefined;
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
@@ -626,6 +632,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                       headerGroup.headers,
                       addPropertyColumn.id,
                     )}
+                    headerTrigger={addColumnHeaderTrigger}
                     index={renderColumns.length}
                     onToggleSelectAll={handleToggleSelectAll}
                     selectAllState={selectAllState}
@@ -718,17 +725,19 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           </div>
         </div>
       </div>
-      {addPropertyColumn !== null && rowHost.addColumnRail !== undefined && (
-        <div
-          className="absolute top-0 bottom-12 z-40 w-12"
-          style={addColumnRailStyle({
-            headerHeightPx: headerHeight,
-            scrollbarWidthPx: verticalScrollbarWidth,
-          })}
-        >
-          {rowHost.addColumnRail}
-        </div>
-      )}
+      {!inlineFlow &&
+        addPropertyColumn !== null &&
+        rowHost.addColumnRail !== undefined && (
+          <div
+            className="absolute top-0 bottom-12 z-40 w-12"
+            style={addColumnRailStyle({
+              headerHeightPx: headerHeight,
+              scrollbarWidthPx: verticalScrollbarWidth,
+            })}
+          >
+            {rowHost.addColumnRail}
+          </div>
+        )}
     </div>
   );
 };

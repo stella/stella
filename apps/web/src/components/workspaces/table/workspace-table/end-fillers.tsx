@@ -138,7 +138,7 @@ export const AddPropertyRailSpacer = ({
       gridColumn: "-2 / -1",
       height,
       position: "sticky",
-      right: 0,
+      insetInlineEnd: 0,
       zIndex: 2,
       ...tableEndFillerCellStyle,
     }}
