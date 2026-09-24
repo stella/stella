@@ -223,7 +223,7 @@ const buildCalendarDateConditions = ({
 
 const calendarTasks = createSafeHandler(
   config,
-  async function* ({ body, safeDb, workspaceId }) {
+  async function* ({ body, safeDb, session, workspaceId }) {
     if (body.dateFrom > body.dateTo) {
       return Result.err(
         new HandlerError({
@@ -265,7 +265,12 @@ const calendarTasks = createSafeHandler(
           .select({ id: entities.id })
           .from(entities)
           .where(whereClause)
-          .orderBy(...buildSortExpressions(arrayOrEmpty(body.sorts)))
+          .orderBy(
+            ...buildSortExpressions(
+              arrayOrEmpty(body.sorts),
+              session.activeOrganizationId,
+            ),
+          )
           .limit(limit + 1),
       ),
     );

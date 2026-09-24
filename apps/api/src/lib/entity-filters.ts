@@ -21,9 +21,10 @@ import {
   pruneIncomplete,
 } from "@stll/conditions";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   entityQueryScopeCondition,
   type EntityQueryScope,
@@ -881,24 +882,38 @@ export const buildFindConditions = ({
   ];
 };
 
+/**
+ * The creator's name, as the entity list shows it: read only for a member of
+ * `organizationId`, or for a deleted account kept for attribution.
+ */
+export const createdByNameSortExpr = (
+  organizationId: SafeId<"organization">,
+): SQL => sql`(
+  SELECT ${user.name} FROM ${user}
+  WHERE ${user.id} = ${entities.createdBy}
+    AND (
+      ${user.deletedAt} IS NOT NULL
+      OR EXISTS (
+        SELECT 1 FROM ${member}
+        WHERE ${member.userId} = ${user.id}
+          AND ${member.organizationId} = ${organizationId}
+      )
+    )
+)`;
+
 // Internal property sort expressions (metadata columns).
 const internalSortExpr = (
   propertyId: string,
   direction: boolean,
+  organizationId: SafeId<"organization">,
 ): SQL | null => {
   const dir = (col: SQL) => (direction ? sql`${col} DESC` : sql`${col} ASC`);
   switch (propertyId) {
     case "_name": {
       return dir(sql`${entities.displayName}`);
     }
-    case "_created-by": {
-      // oxlint-disable-next-line security-guards/no-unscoped-user-query -- sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped
-      const sub = sql`(
-        SELECT ${user.name} FROM ${user}
-        WHERE ${user.id} = ${entities.createdBy}
-      )`;
-      return dir(sub);
-    }
+    case "_created-by":
+      return dir(createdByNameSortExpr(organizationId));
     case "_created-at":
       return direction
         ? sql`${entities.createdAt} DESC`
@@ -941,7 +956,10 @@ const internalSortExpr = (
  * extracts the sort key from the fields table.
  * Falls back to createdAt ASC when no sorts are provided.
  */
-export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
+export const buildSortExpressions = (
+  sorts: readonly ViewSort[],
+  organizationId: SafeId<"organization">,
+): SQL[] => {
   if (sorts.length === 0) {
     return [asc(entities.createdAt), asc(entities.id)];
   }
@@ -949,7 +967,11 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
   const expressions: SQL[] = [];
 
   for (const sort of sorts) {
-    const internal = internalSortExpr(sort.propertyId, sort.desc);
+    const internal = internalSortExpr(
+      sort.propertyId,
+      sort.desc,
+      organizationId,
+    );
     if (internal) {
       expressions.push(internal);
       continue;

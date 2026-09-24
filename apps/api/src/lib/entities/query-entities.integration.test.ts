@@ -261,6 +261,43 @@ describe("entity creator projection", () => {
   });
 });
 
+describe("creator sort", () => {
+  test("orders named creators ahead of rows without one, in both directions", async () => {
+    await testDb
+      .update(entities)
+      .set({ createdBy: ids.userA1 })
+      .where(eq(entities.id, ids.entityA1));
+
+    try {
+      for (const desc of [false, true]) {
+        const result = await queryEntities({
+          safeDb,
+          scope: { type: "matter", workspaceId: ids.wsA1 },
+          currentUserId: ids.userA1,
+          currentOrganizationId: ids.orgA,
+          filters: [],
+          sorts: [{ propertyId: "_created-by", desc }],
+          limit: 10,
+          fieldMode: "visible",
+          fieldIds: [],
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        const creators = result.value.entities.map(
+          (entity) => entity.createdBy,
+        );
+        expect(creators.at(0)).toBe("User A1");
+      }
+    } finally {
+      await testDb
+        .update(entities)
+        .set({ createdBy: null })
+        .where(eq(entities.id, ids.entityA1));
+    }
+  });
+});
+
 describe("task assignee projection", () => {
   const taskEntityIds: SafeId<"entity">[] = [];
 

@@ -161,26 +161,6 @@
       "count": 1,
       "reason": "actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends",
       "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
-    },
-    {
-      "id": "SW-0031",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/entities/query-entities.ts",
-      "symbol": "internalSortKey",
-      "count": 1,
-      "reason": "sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped",
-      "evidence": "apps/api/src/lib/entities/query-entities.integration.test.ts"
-    },
-    {
-      "id": "SW-0032",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/entity-filters.ts",
-      "symbol": "internalSortExpr",
-      "count": 1,
-      "reason": "sort key reads the creator name of each entity row by its createdBy id; the entity rows are already workspace-scoped",
-      "evidence": "apps/api/src/lib/entity-filters.test.ts"
     }
   ]
 }
