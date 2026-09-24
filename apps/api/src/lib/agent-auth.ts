@@ -20,7 +20,6 @@ import {
   oauthClientResource,
   oauthResource,
   session,
-  user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
@@ -28,6 +27,7 @@ import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { readAccountEmail } from "@/api/lib/db/account-row";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
@@ -513,13 +513,7 @@ const confirmerEmailMatchesHint = async (
   userId: SafeId<"user">,
   loginHint: string,
 ): Promise<boolean> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- reads the confirming caller's own email by their session user id
-  const rows = await rootDb
-    .select({ email: user.email })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
-  const email = rows.at(0)?.email;
+  const email = await readAccountEmail(userId);
   return email !== undefined && email.toLowerCase() === loginHint.toLowerCase();
 };
 

@@ -35,6 +35,7 @@ import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -121,18 +122,6 @@ const findDelegation = async (
     organizationId: row.organizationId,
     userId: row.userId,
   });
-};
-
-const findUserByEmail = async (
-  email: string,
-): Promise<{ id: string } | undefined> => {
-  // oxlint-disable-next-line security-guards/no-unscoped-user-query -- resolves the asserted identity by email before provisioning; the account may not belong to any organization yet
-  const rows = await rootDb
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-  return rows.at(0);
 };
 
 class ProvisionError extends Error {
@@ -389,8 +378,8 @@ export const resolveIdJagIdentity = async (
     return await finishReady(delegation);
   }
 
-  const existingUser = await findUserByEmail(email);
-  if (existingUser) {
+  const existingUserId = await findAccountIdByEmail(email);
+  if (existingUserId !== undefined) {
     const ceremony = await startServiceAuthRegistration(email);
     await bindCeremonyToIssuer({
       registrationId: ceremony.registrationId,

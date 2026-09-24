@@ -3529,7 +3529,18 @@ export default defineConfig({
         "apps/api/src/tests/**/*.{ts,tsx}",
       ],
       rules: {
-        "security-guards/no-unscoped-user-query": "error",
+        "security-guards/no-unscoped-user-query": [
+          "error",
+          {
+            allowedFiles: [
+              {
+                file: "apps/api/src/lib/db/account-row.ts",
+                reason:
+                  "single-account reads and writes keyed by the caller's own user id, or by the email a sign-in or OTP request names before any organization exists",
+              },
+            ],
+          },
+        ],
       },
     },
     {

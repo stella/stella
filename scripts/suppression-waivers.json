@@ -193,26 +193,6 @@
       "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
     },
     {
-      "id": "SW-0023",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "finalizeDeletedUserRecord",
-      "count": 1,
-      "reason": "anonymizes the caller's own user row at the end of account deletion; account-level, no organization applies",
-      "evidence": "apps/api/src/lib/account-deletion-steps.test.ts"
-    },
-    {
-      "id": "SW-0024",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "lockUserRowForDeletion",
-      "count": 1,
-      "reason": "locks the caller's own user row while their account is deleted; account-level, no organization applies",
-      "evidence": "apps/api/src/lib/account-deletion-steps.test.ts"
-    },
-    {
       "id": "SW-0025",
       "kind": "permanent",
       "rule": "security-guards/no-unscoped-user-query",
@@ -221,56 +201,6 @@
       "count": 1,
       "reason": "rolls back the user row this function just created when its organization cannot be provisioned",
       "evidence": "apps/api/src/lib/agent-auth-idjag.ts#validateIdJag"
-    },
-    {
-      "id": "SW-0026",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/agent-auth-idjag.ts",
-      "symbol": "findUserByEmail",
-      "count": 1,
-      "reason": "resolves the asserted identity by email before provisioning; the account may not belong to any organization yet",
-      "evidence": "apps/api/src/lib/agent-auth-idjag.ts#validateIdJag"
-    },
-    {
-      "id": "SW-0027",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/agent-auth.ts",
-      "symbol": "confirmerEmailMatchesHint",
-      "count": 1,
-      "reason": "reads the confirming caller's own email by their session user id",
-      "evidence": "apps/api/src/tests/security/own-work-permissions.test.ts"
-    },
-    {
-      "id": "SW-0028",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/auth.ts",
-      "symbol": "authAccountExists",
-      "count": 1,
-      "reason": "sign-in pre-check for account existence by email; runs before any organization context exists",
-      "evidence": "apps/api/src/lib/auth.test.ts"
-    },
-    {
-      "id": "SW-0029",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/confirmation-otp.ts",
-      "symbol": "createConfirmationOtp",
-      "count": 1,
-      "reason": "locks the requesting account's own row by email to serialize OTP issuance; account-level",
-      "evidence": "apps/api/src/lib/confirmation-otp.test.ts"
-    },
-    {
-      "id": "SW-0030",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/delete-account.ts",
-      "symbol": "getUserEmail",
-      "count": 1,
-      "reason": "reads the caller's own email by their session user id",
-      "evidence": "apps/api/src/handlers/me/verify-delete.ts#currentUserId"
     },
     {
       "id": "SW-0031",
@@ -301,16 +231,6 @@
       "count": 2,
       "reason": "reads the authenticated actor's own name by their user id",
       "evidence": "apps/api/src/lib/notifications.integration.test.ts"
-    },
-    {
-      "id": "SW-0035",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/lib/two-factor.ts",
-      "symbol": "getUserEmailAndTwoFactorEnabled",
-      "count": 1,
-      "reason": "reads the caller's own email and two-factor flag by their session user id",
-      "evidence": "apps/api/src/handlers/me/two-factor-send-manage-otp.ts#currentUserId"
     }
   ]
 }
