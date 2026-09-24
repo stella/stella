@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "dda37698b88588f0a377897eb78d7b449e8c48eb48f195c5529398a0f80fdd94",
+  "sourceUrl": "https://eureka.mf.gov.pl/api/public/v1/wyszukiwarka/informacje/?size=2&page=0&sort=ID_INFORMACJI%2Cdesc (POST {\"filter\": {\"KATEGORIA_INFORMACJI\": [2]}, \"columns\": [\"ID_INFORMACJI\", \"KATEGORIA_INFORMACJI\", \"SYG\", \"DT_WYD\", \"TEZA\", \"STATUS_INFORMACJI\", \"DATA_PUBLIKACJI\", \"AUTOR\", \"SLOWA_KLUCZOWE\", \"PRZEPISY\", \"ZAGADNIENIA\", \"INFORMACJA_ZMIENIANA\", \"MIEJ_PUB\", \"INN_ZROD\", \"RODZAJ_DECYZJI\", \"DAT_WAZ_OD\", \"DAT_WAZ_DO\", \"STAN_PRAW\", \"NOMENKLATURA_SCALONA\", \"KLASYFIKACJA_PKWIU\", \"KLASYFIKACJA_PKOB\", \"RODZAJ_WYROBU_AKCYZOWEGO\", \"DATA_REJESTRACJI\", \"KOMENTARZE_BIP\", \"KOM_BIP_OPIS\"], \"searchInFullPhrase\": false, \"searchInContent\": false, \"searchInSynonyms\": false, \"warunkiDodatkowe\": []})",
+  "capturedAt": "2026-09-23T10:52:18.503259Z",
+  "note": "newest two rows of category 2 and the detail of the first"
+}

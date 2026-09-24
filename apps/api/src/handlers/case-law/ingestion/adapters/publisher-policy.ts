@@ -138,6 +138,11 @@ export const PUBLISHER_GATES = {
     publisher: "Országos Bírósági Hivatal",
     intervalMs: POLITE_INTERVAL_MS,
   },
+  /**
+   * eureka.mf.gov.pl. The service states no limit; one request a second is
+   * politeness, and its search stalls rather than refuses under load.
+   */
+  "eureka-mf": { publisher: "EUREKA", intervalMs: 1000 },
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
@@ -181,6 +186,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.AT_FINDOK]: "findok-bmf",
   [ADAPTER_KEYS.EU_ECJ]: "cellar-eu",
   [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
+  [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** Minimum gap between two requests the adapter sends to its publisher. */

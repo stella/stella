@@ -48,6 +48,7 @@ import {
   huBhgyFixture,
   plCourtsFixture,
   plKioFixture,
+  plKisFixture,
   plNsaFixture,
   plNcourtFixture,
   plSnFixture,
@@ -97,6 +98,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.PL_KIS]: plKisFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);

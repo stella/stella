@@ -161,9 +161,20 @@ describe("the Polish search grammar", () => {
     ["DKN.5131.6.2024", " DKN.5131.6.2024 "],
     ["ZSOŚS.440.82.2019", "ZSOŚS.440.82.2019"],
     ["DKE.561.1.2020", "DKE.561.1.2020"],
+    // Tax-ruling signatures, read by their own patterns rather than as an
+    // authority file number.
+    ["0114-KDIP1-2.4012.123.2024.1.AB", " 0114–kdip1–2.4012.123.2024.1.ab "],
+    ["KDIP1.4012.123.2024", "kdip1.4012.123.2024"],
   ])("accepts %p and keys %p the same", (docket, variant) => {
     expect(key(docket)).not.toBeNull();
     expect(key(variant)).toBe(key(docket));
+  });
+
+  test("keys a tax-ruling signature whole", () => {
+    expect(key("0114-KDIP1-2.4012.123.2024.1.AB")).toBe(
+      "0114-kdip1-2.4012.123.2024.1.ab",
+    );
+    expect(key("KDIP1.4012.123.2024")).toBe("kdip1.4012.123.2024");
   });
 
   test("keeps distinct dockets apart", () => {
@@ -207,12 +218,10 @@ describe("the Polish search grammar", () => {
     "sk 12/20",
     "X 2/26",
     "Kx 2/26",
-    // Statute references and tax-ruling signatures are not file numbers.
+    // Statute references are not file numbers.
     "art. 5.1",
     "Dz.U.2024.1061",
     "DZ.U.2024.1061",
-    "0114-KDIP1-2.4012.123.2024.1.AB",
-    "KDIP1.4012.123.2024",
     // One group, a short year, lower case, a code too short or too long.
     "DKN.5131.2024",
     "DKN.5131.6.24",

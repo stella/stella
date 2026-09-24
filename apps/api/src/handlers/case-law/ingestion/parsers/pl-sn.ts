@@ -224,7 +224,9 @@ export const plSnParagraphsToHtml = (
     .join("");
 
 /** Every line of every page, in reading order. */
-const extractPlSnLines = async (pdfBytes: Uint8Array): Promise<PlSnLine[]> => {
+export const extractPlSnLines = async (
+  pdfBytes: Uint8Array,
+): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
   return pdf.getPages().flatMap((page) => {
     const { lines } = page.extractText();

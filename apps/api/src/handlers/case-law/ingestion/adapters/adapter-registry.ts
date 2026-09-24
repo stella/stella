@@ -21,6 +21,7 @@ import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj"
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { plKisAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
@@ -69,6 +70,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyAdapter,
+  [ADAPTER_KEYS.PL_KIS]: plKisAdapter,
 } as const satisfies AdapterRegistry;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

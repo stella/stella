@@ -81,6 +81,26 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       canonical: "III AUa 999999/99",
       variants: ["iii a ua 999999/99", "III A/Ua 999999/99"],
     },
+    {
+      canonical: "9999-XYZW9-9.9999.999.2099.9.XY",
+      variants: [
+        "9999-xyzw9-9.9999.999.2099.9.xy",
+        " 9999–XYZW9–9.9999.999.2099.9.XY ",
+      ],
+    },
+    // The same numbers one sheet apart are two documents, not one.
+    {
+      canonical: "9999-XYZW9-9.9999.999.2099.8.XY",
+      variants: ["9999-xyzw9-9.9999.999.2099.8.xy"],
+    },
+    {
+      canonical: "XY9.9999.9.2099",
+      variants: ["xy9.9999.9.2099"],
+    },
+    {
+      canonical: "XYZW9/999-9999/99-9/XY",
+      variants: ["xyzw9/999-9999/99-9/xy", "XYZW9/999‑9999/99‑9/XY"],
+    },
   ],
   SVK: [
     {

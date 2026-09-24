@@ -428,6 +428,27 @@ const HUN_DOCKET_RE =
 const HUN_DOCKET_PATTERNS = [HUN_DOCKET_RE] as const;
 const POL_DOCKET_RE =
   /^(?<chamber>[ivx]{1,5}) (?<division1>\p{L}{1,5})(?:[ /](?<division2>\p{L}{1,5}))? (?<ordinal>\d{1,6})\/(?<year>\d{2}(?:\d{2})?)$/iu;
+/**
+ * The signature the tax administration gives an interpretation or a ruling,
+ * one entry per numbering scheme it has used. None of them contains a space,
+ * and every court docket above does, so the two families cannot claim one
+ * another's numbers.
+ */
+const POL_TAX_SIGNATURE_PATTERNS = [
+  // An office of the National Revenue Administration, from 2017:
+  // `0114-KDIP1-2.4012.123.2024.1.AB`, `1401-ICW.421.21.2023.13.WCH`,
+  // `0114-KDIP3-1.4011.419.2018.1.KS1`, `0114-KDIP2-1.4011.257.2021.2.KW/PD`.
+  /^\d{4}-\p{L}[\p{L}\d-]{1,11}(?=.*\.\d{4}\.)(?:\.[\p{L}\d]{1,8}){4,8}(?:\/\p{L}{1,4})?$/iu,
+  // A department of the ministry: `DD4.8201.2.2026`,
+  // `DOP3.8222.23.2026.EILK`, `PT8.8101.47.2015/WCH/179`.
+  /^(?=.*\.\d{4}(?:[./]|$))\p{L}{2,4}\d{1,2}(?:\.[\p{L}\d]{1,8}){3,6}(?:\/[\p{L}\d]{1,6}){0,2}$/iu,
+  // A tax chamber or the ministry before 2017, which numbered by hand:
+  // `IPPB3/423-1234/08-2/JG`, `IP-PB3-423-655/08-3/MB`,
+  // `ITPB1/423-39/a/07/AW`, `DD4/033/0892/KOI/07/PK-331`. An office code, then
+  // segments joined by slashes and hyphens, at least one of each and one
+  // number of three digits or more among them.
+  /^(?=[^/]*\/)(?=[^-]*-)(?=.*\d{3})(?:\p{L}-)?\p{L}{2,6}(?:-\p{L}{1,4})?\d{0,2}(?:[/-][\p{L}\d]{1,10}){3,8}$/iu,
+] as const;
 const POL_DOCKET_PATTERNS = [
   POL_DOCKET_RE,
   // A reader types an administrative docket in any case.
@@ -436,6 +457,7 @@ const POL_DOCKET_PATTERNS = [
   // As printed, never lower case: "k 2/26" is not a Tribunal docket.
   PL_TK_DOCKET_RE,
   PL_AUTHORITY_FILE_NUMBER_RE,
+  ...POL_TAX_SIGNATURE_PATTERNS,
 ] as const;
 const EU_DOCKET_PATTERNS = [
   /^(?:(?:case|vec|věc|sprawa|affaire|rechtssache|causa|asunto) )?[ctf]-\d{1,4}\/\d{2}(?: p)?$/iu,
@@ -499,9 +521,14 @@ const canonicalHungarianDocketKey = (formatted: string): string => {
  * not "DKN.513.16.2024").
  */
 const canonicalPolishDocketKey = (formatted: string): string =>
-  canonicalDocketKey(formatted)
-    .replace(/\/(?=\p{L})/gu, "")
-    .replace(/^(\p{L}{1,3})\.(?=\d{1,4}\/)/u, "$1");
+  // A tax signature is compared whole: its trailing numbers name the
+  // document, not a sheet of it, so the generic key's sheet strip does not
+  // apply.
+  POL_TAX_SIGNATURE_PATTERNS.some((pattern) => pattern.test(formatted))
+    ? formatted.toLocaleLowerCase("und").replace(/\s+/gu, "")
+    : canonicalDocketKey(formatted)
+        .replace(/\/(?=\p{L})/gu, "")
+        .replace(/^(\p{L}{1,3})\.(?=\d{1,4}\/)/u, "$1");
 
 export const DECISION_DOCKET_GRAMMARS = {
   AUT: createDecisionDocketGrammar({
