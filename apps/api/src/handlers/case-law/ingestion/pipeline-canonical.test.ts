@@ -10,13 +10,10 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import {
-  caseLawCanonicalPayload,
-  processDecision as processDecisionWithDependencies,
-  runIngestionPipeline as runIngestionPipelineWithDependencies,
-  sanitizeResult,
-} from "@/api/handlers/case-law/ingestion/pipeline";
-import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
+import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
+import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -32,7 +29,10 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
-import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  sanitizeResult,
+  partialObservationFromMetadata,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

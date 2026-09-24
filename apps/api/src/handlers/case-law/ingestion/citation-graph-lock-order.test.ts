@@ -1,28 +1,40 @@
 import { expect, test } from "bun:test";
 
-const pipeline = await Bun.file(new URL("pipeline.ts", import.meta.url)).text();
+const decisionWrite = await Bun.file(
+  new URL("pipeline/decision-row-update.ts", import.meta.url),
+).text();
+const citationWrite = await Bun.file(
+  new URL("pipeline/citations.ts", import.meta.url),
+).text();
 
 test("a refresh locks the citation graph before writing citation rows", () => {
   // Source-shape guard only: PGlite does not model PostgreSQL advisory and FK
   // lock concurrency. The database suites separately exercise both paths.
-  const documentRefresh = pipeline.indexOf("if (!incomingCarriesDocument)");
-  const graphLock = pipeline.indexOf(
+  const documentRefresh = decisionWrite.indexOf(
+    "if (!incomingCarriesDocument)",
+  );
+  const graphLock = decisionWrite.indexOf(
     "await lockCitationGraph(tx);",
     documentRefresh,
   );
-  const citationWrite = pipeline.indexOf(
+  const citationWriteCall = decisionWrite.indexOf(
     "await writeDecisionCitations(tx, {",
     documentRefresh,
   );
 
   expect(documentRefresh).toBeGreaterThan(-1);
   expect(graphLock).toBeGreaterThan(documentRefresh);
-  expect(citationWrite).toBeGreaterThan(graphLock);
+  expect(citationWriteCall).toBeGreaterThan(graphLock);
 
   // And the writer deletes before it resolves what it kept.
-  const writer = pipeline.indexOf("const writeDecisionCitations = async");
-  const citationDelete = pipeline.indexOf(".delete(caseLawCitations)", writer);
-  const inlineResolution = pipeline.indexOf(
+  const writer = citationWrite.indexOf(
+    "export const writeDecisionCitations = async",
+  );
+  const citationDelete = citationWrite.indexOf(
+    ".delete(caseLawCitations)",
+    writer,
+  );
+  const inlineResolution = citationWrite.indexOf(
     "await resolveCitationsForDecision(tx, decisionId);",
     writer,
   );

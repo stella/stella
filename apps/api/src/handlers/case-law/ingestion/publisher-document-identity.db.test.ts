@@ -38,7 +38,7 @@ import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/c
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

@@ -45,11 +45,9 @@ import {
   czRegionalEnvelopeWithChain,
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import {
-  allocateSourceObservationOrder,
-  DECISION_REFRESH,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { logger } from "@/api/lib/observability/logger";

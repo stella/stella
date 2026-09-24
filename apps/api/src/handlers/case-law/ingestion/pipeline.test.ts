@@ -27,11 +27,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CYCLE_HALT_REASON,
-  wrappedErrorDetail,
-  processDecision,
   runIngestionPipeline,
-  sanitizeResult,
 } from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -48,7 +47,10 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  sanitizeResult,
+  partialObservationFromMetadata,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
