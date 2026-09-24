@@ -1,0 +1,68 @@
+name: Cancel stale merge groups
+
+# When the merge queue rebuilds a group, it deletes the group's
+# gh-readonly-queue/* branch, but runs already started for that branch keep
+# their runner slots: the CI concurrency group is per ref, so nothing newer
+# ever replaces them. This cancels merge_group runs whose branch is gone. The
+# `delete` trigger reacts to the queue removing a branch; the schedule catches
+# any deletion that event missed.
+on:
+  delete:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Log the runs that would be cancelled without cancelling them
+        type: boolean
+        default: true
+
+concurrency:
+  group: cancel-stale-merge-groups
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  cancel:
+    if: >-
+      github.event_name != 'delete'
+      || (github.event.ref_type == 'branch'
+          && startsWith(github.event.ref, 'gh-readonly-queue/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel merge_group runs whose branch no longer exists
+        env:
+          DRY_RUN: ${{ inputs.dry-run == true }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for status in queued in_progress; do
+            gh api --paginate \
+              "repos/$REPO/actions/runs?event=merge_group&status=$status&per_page=100" \
+              --jq '.workflow_runs[] | "\(.id) \(.head_branch)"'
+          done | sort -u | while read -r run_id branch; do
+            # ls-remote exits 2 only when the ref is absent; any other
+            # failure leaves the run alone.
+            set +e
+            git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
+            code=$?
+            set -e
+            if (( code != 2 )); then
+              continue
+            fi
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "Would cancel run $run_id: $branch no longer exists."
+              continue
+            fi
+            echo "Cancelling run $run_id: $branch no longer exists."
+            # Force-cancel also stops `if: always()` jobs, which have nothing
+            # to report for a group the queue has already discarded.
+            gh api --method POST "repos/$REPO/actions/runs/$run_id/force-cancel" > /dev/null \
+              || echo "::warning::Could not cancel run $run_id ($branch)."
+          done

@@ -34,6 +34,11 @@ jobs:
       actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      # `fast` runs guards, lint, typecheck, unit tests, and builds. `full`
+      # adds the heavy suites (browsers, services, release images, other
+      # platforms). Every heavy job gates on `suite_depth == 'full'`.
+      suite_depth: ${{ steps.depth.outputs.suite_depth }}
+      changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -54,6 +59,30 @@ jobs:
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
+      - name: Resolve suite depth
+        id: depth
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Full on merge_group and workflow_dispatch, and on a pull request
+          # labelled `ci:full`, which a merge that bypasses the queue needs.
+          # The labels are read live rather than from the event payload, so
+          # re-running a pull request run after the label is added (what
+          # ci-full-label.yml does) plans full depth.
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
+          if grep -Fxq 'ci:full' <<< "$labels"; then
+            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check if PR is trusted
         id: check
         env:
@@ -343,7 +372,7 @@ jobs:
     name: Changeset present for published package changes
     needs: ci-plan
     if: >-
-      github.event_name == 'pull_request'
+      needs.ci-plan.outputs.changeset_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -407,6 +436,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -1406,8 +1436,9 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -1613,6 +1644,7 @@ jobs:
       needs.ci-plan.outputs.collab_redis_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1659,6 +1691,7 @@ jobs:
       needs.ci-plan.outputs.package_checks_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1719,6 +1752,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -1993,6 +2027,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -2045,6 +2080,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.mobile_build_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -2117,6 +2153,7 @@ jobs:
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.web-build.result == 'success'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -2287,6 +2324,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -2325,6 +2363,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -2488,6 +2527,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2573,6 +2613,7 @@ jobs:
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
       && (needs.ci-plan.outputs.web_build_required != 'true'
           || needs.web-build.result == 'success')
+      && needs.ci-plan.outputs.suite_depth == 'full'
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -2587,7 +2628,9 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   e2e:
-    if: always()
+    if: >-
+      always()
+      && needs.ci-plan.outputs.suite_depth == 'full'
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary, e2e-landing]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -2679,6 +2722,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     strategy:
       fail-fast: false
       matrix:
@@ -2722,6 +2766,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_deps_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -2870,6 +2915,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2903,6 +2949,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -2950,6 +2997,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
+      && needs.ci-plan.outputs.suite_depth == 'full'
     strategy:
       fail-fast: false
       matrix:
@@ -3041,6 +3089,9 @@ jobs:
         landing-build,
         marketing-screenshots,
         migration-upgrade-rehearsal,
+        e2e-production-shard,
+        e2e-vite-canary,
+        e2e-landing,
         e2e,
         stack-redaction-browsers,
         api-image-deps,
@@ -3055,34 +3106,47 @@ jobs:
     steps:
       - name: Evaluate CI outcome
         env:
-          API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
-          API_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.api_image_smoke_required }}
-          API_IMAGE_SMOKE_RESULT: ${{ needs.api-image-smoke.result }}
-          AGENT_SANDBOX_DOCKER_RESULT: ${{ needs.agent-sandbox-docker.result }}
-          CHANGESET_RESULT: ${{ needs.changeset.result }}
-          CI_RESULT: ${{ needs.ci-checks.result }}
-          CI_BROWSER_RESULT: ${{ needs.ci-browser.result }}
-          CI_TESTS_RESULT: ${{ needs.ci-tests.result }}
-          COLLAB_REDIS_RESULT: ${{ needs.collab-redis.result }}
-          DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
-          E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
-          LANDING_RESULT: ${{ needs.landing-build.result }}
-          CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
-          LEGAL_ATLAS_IMAGE_RESULT: ${{ needs.legal-atlas-image.result }}
-          MARKETING_SCREENSHOTS_RESULT: ${{ needs.marketing-screenshots.result }}
-          MIGRATION_REHEARSAL_RESULT: ${{ needs.migration-upgrade-rehearsal.result }}
-          MOBILE_RESULT: ${{ needs.mobile-build.result }}
-          TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
+          # Every job in `needs`, so a job added there is evaluated without a
+          # hand-kept list; scripts/ci-plan.test.ts requires every job to be
+          # in `needs`.
+          NEEDS: ${{ toJSON(needs) }}
+          PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
-          POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
-          RELEASE_TYPECHECK_RESULT: ${{ needs.release-typecheck.result }}
-          STACK_REDACTION_BROWSERS_RESULT: ${{ needs.stack-redaction-browsers.result }}
-          TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
-          WEB_RESULT: ${{ needs.web-build.result }}
-          WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
-          WEB_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.web_image_smoke_required }}
-          WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
+          SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
+          TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
+          # The ci-plan output each job's `if:` selects it by; null for a job
+          # that always runs at full depth. scripts/ci-plan.test.ts binds each
+          # entry to its job's `if:`, and a job missing here fails the run.
+          JOB_SCOPES: >-
+            {
+            "agent-sandbox-docker": "agent_sandbox_docker_required",
+            "api-image-deps": "api_image_deps_required",
+            "api-image-smoke": "api_image_smoke_required",
+            "changeset": "changeset_required",
+            "ci-browser": null,
+            "ci-checks": null,
+            "ci-tests": null,
+            "code-quality": "package_checks_required",
+            "collab-redis": "collab_redis_required",
+            "desktop-clippy": "desktop_rust_checks_required",
+            "e2e": null,
+            "e2e-landing": "e2e_landing_required",
+            "e2e-production-shard": "e2e_core_required",
+            "e2e-vite-canary": "e2e_core_required",
+            "landing-build": "landing_build_required",
+            "legal-atlas-image": "legal_atlas_image_required",
+            "marketing-screenshots": "marketing_screenshots_required",
+            "migration-upgrade-rehearsal": "migration_rehearsal_required",
+            "mobile-build": "mobile_build_required",
+            "postgres-suites": "package_checks_required",
+            "release-typecheck": "release_typecheck_required",
+            "stack-redaction-browsers": "stack_redaction_browsers_required",
+            "typecheck-baseline": "package_checks_required",
+            "web-build": "web_build_required",
+            "web-image-smoke": "web_image_smoke_required",
+            "windows-scripts": "windows_scripts_required"
+            }
         run: |
           # When the CI plan was skipped (draft PR), all downstream
           # jobs are also skipped. This is expected and should not
@@ -3092,51 +3156,15 @@ jobs:
             exit 0
           fi
 
-          # Selected artifact checks must positively succeed. A skipped,
-          # cancelled, or missing result cannot certify a release candidate.
-          if [[ "$API_IMAGE_SMOKE_REQUIRED" == "true" && "$API_IMAGE_SMOKE_RESULT" != "success" ]] \
-            || [[ "$WEB_IMAGE_SMOKE_REQUIRED" == "true" && "$WEB_IMAGE_SMOKE_RESULT" != "success" ]]; then
-            echo "::error::Required release image smoke did not succeed."
-            exit 1
-          fi
-
-          if [[ "$EVENT" == "workflow_dispatch" ]]; then
-            if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
-                  || "$CI_BROWSER_RESULT" == "failure" || "$CI_BROWSER_RESULT" == "cancelled" \
-                  || "$CI_TESTS_RESULT" == "failure" || "$CI_TESTS_RESULT" == "cancelled" \
-                  || "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" \
-                  || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
-                  || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
-                  || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" \
-                  || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" \
-                  || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
-                  || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
-                  || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" \
-                  || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
-                  || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
-                  || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" \
-                  || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" \
-                  || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
-                  || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
-                  || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" \
-                  || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
-                  || "$PLAN_RESULT" == "failure" || "$PLAN_RESULT" == "cancelled" \
-                  || "$CHANGESET_RESULT" == "failure" || "$CHANGESET_RESULT" == "cancelled" \
-                  || "$COLLAB_REDIS_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "cancelled" \
-                  || "$DESKTOP_CLIPPY_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
-              echo "::error::CI checks failed."
-              exit 1
-            fi
-            exit 0
-          fi
-
-          if [[ "$PLAN_RESULT" == "cancelled" ]]; then
+          # Only a pull request run is ever superseded by a newer run of
+          # the same ref; anywhere else a cancelled run certifies nothing.
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" == "pull_request" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
           if [[ "$PLAN_RESULT" != "success" ]]; then
-            echo "::error::CI planning failed."
+            echo "::error::CI planning did not succeed ($PLAN_RESULT)."
             exit 1
           fi
 
@@ -3145,14 +3173,45 @@ jobs:
             exit 1
           fi
 
-          # "cancelled" means cancel-in-progress replaced this
-          # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CI_BROWSER_RESULT" == "cancelled" || "$CI_TESTS_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
-            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
-            exit 0
-          fi
-
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CI_BROWSER_RESULT" == "failure" || "$CI_TESTS_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
-            echo "::error::CI checks failed."
-            exit 1
-          fi
+          case "$SUITE_DEPTH" in
+            full)
+              # Every job the plan selected must succeed: a skipped or
+              # cancelled one did not check this tree.
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" '
+                [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
+                  | if ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                    elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
+                      (if $result == "success" then empty else "\($job) (planned, \($result))" end)
+                    elif $result == "success" or $result == "skipped" then empty
+                    else "\($job) (\($result))"
+                    end]
+                | join(", ")' <<< "$NEEDS")
+              if [[ -n "$violations" ]]; then
+                echo "::error::CI checks did not succeed: $violations"
+                exit 1
+              fi
+              ;;
+            fast)
+              # Only an unlabelled pull request plans `fast`: its heavy
+              # suites skip by design, and a cancelled job means a newer run
+              # of the same ref replaced this one.
+              if [[ "$EVENT" != "pull_request" ]]; then
+                echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
+                exit 1
+              fi
+              # A failure stands even when a sibling job was cancelled.
+              failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+              if [[ -n "$failed" ]]; then
+                echo "::error::CI checks failed: $failed"
+                exit 1
+              fi
+              cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
+              if [[ -n "$cancelled" ]]; then
+                echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
+              fi
+              ;;
+            *)
+              echo "::error::CI plan produced no suite depth ('$SUITE_DEPTH')."
+              exit 1
+              ;;
+          esac

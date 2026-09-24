@@ -397,11 +397,6 @@ describe("detect-e2e-changes", () => {
 
     const result = workflowJob("ci-result");
     expect(result).toContain("release-typecheck");
-    expect(result).toContain(
-      `RELEASE_TYPECHECK_RESULT: ${githubExpression("needs.release-typecheck.result")}`,
-    );
-    expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "failure"');
-    expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "cancelled"');
   });
 
   test("revalidates release invariants on the merge queue tree", () => {
@@ -493,11 +488,6 @@ describe("detect-e2e-changes", () => {
 
     const result = workflowJob("ci-result");
     expect(result).toContain("marketing-screenshots");
-    expect(result).toContain(
-      `MARKETING_SCREENSHOTS_RESULT: ${githubExpression("needs.marketing-screenshots.result")}`,
-    );
-    expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "failure"');
-    expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "cancelled"');
   });
 
   test("regenerates a branch's baselines from workflow code on main", () => {
@@ -837,7 +827,6 @@ describe("detect-e2e-changes", () => {
     );
     expect(stackRedaction).not.toContain("setup-playwright");
     expect(result).toContain("stack-redaction-browsers");
-    expect(result).toContain("STACK_REDACTION_BROWSERS_RESULT");
   });
 
   test("mints the release App token only inside its deployment environment", () => {

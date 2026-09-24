@@ -1,0 +1,51 @@
+name: CI full label
+
+# Adding `ci:full` to a pull request re-runs its CI Checks run on the head, and
+# ci-plan reads the label live to plan full depth, so a merge that bypasses the
+# merge queue still has the heavy suites behind it. It stays a pull_request run:
+# the changeset and release gates apply, and its `ci-result` replaces the fast
+# one on the same head. Listening to `labeled` here instead of in ci.yml keeps
+# other labels from restarting CI.
+#
+# pull_request_target runs this file from the base branch with a write token:
+# it never checks out or runs pull request code, and reads only event fields
+# passed through the environment.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] reads event fields only, never checks out or executes PR code
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  rerun:
+    if: github.event.label.name == 'ci:full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run CI Checks on the pull request head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          read -r run_id status < <(
+            gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=1" \
+              --jq '.workflow_runs[0] | "\(.id) \(.status)"'
+          )
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "No CI Checks run for #$PR_NUMBER at $HEAD_SHA yet; the next one reads the label."
+            exit 0
+          fi
+          # A run that planned before the label cannot change depth, and a
+          # run in progress cannot be re-run.
+          if [[ "$status" != "completed" ]]; then
+            gh run cancel "$run_id" --repo "$REPO"
+            until [[ "$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)" == "completed" ]]; do
+              sleep 10
+            done
+          fi
+          gh run rerun "$run_id" --repo "$REPO"
+          echo "Re-running CI Checks run $run_id for #$PR_NUMBER at full depth."

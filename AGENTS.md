@@ -298,9 +298,12 @@ Database deployments use committed migrations via
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
 hand-picking individual checks. For changes confined to documentation or skill
 instructions, run the owning generators and validators plus formatting checks
-instead. Passing does not certify `ci-result`: release-image builds and smokes,
-service-backed checks, and separate build/e2e jobs run in CI. Confirm
-`ci-result` succeeds on the current PR head before merging.
+instead. Passing does not certify `ci-result`: a pull request runs the core
+checks plus the web and landing builds, while browser and e2e suites,
+service-backed suites, release images, and the mobile, Windows, and desktop
+Rust checks run only in the merge queue; label a pull request `ci:full` to run
+them before a merge that bypasses the queue. Confirm `ci-result` succeeds on the
+current PR head before merging.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
