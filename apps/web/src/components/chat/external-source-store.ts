@@ -7,8 +7,15 @@ export type BusinessRegistrySourceReference = {
   companyId: string;
 };
 
+/** A decision from stella's own corpus: it opens in stella, not at its publisher. */
+export type CaseLawDecisionSourceReference = {
+  caseNumber: string;
+  decisionId: string;
+};
+
 export type ExternalSourceReference = {
   businessRegistry?: BusinessRegistrySourceReference | undefined;
+  caseLawDecision?: CaseLawDecisionSourceReference | undefined;
   connectorSlug?: string | undefined;
   iconHref?: string | undefined;
   provider?: string | undefined;
@@ -39,6 +46,8 @@ export const useExternalSourceStore = create<ExternalSourceState>()(
             ...source,
             businessRegistry:
               source.businessRegistry ?? existing?.businessRegistry,
+            caseLawDecision:
+              source.caseLawDecision ?? existing?.caseLawDecision,
           };
         }
         return { sourcesByUrl };

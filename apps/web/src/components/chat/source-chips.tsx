@@ -2,15 +2,19 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ExternalLinkIcon } from "lucide-react";
+import { ExternalLinkIcon, LandmarkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
+import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import {
+  type CaseLawDecisionSourceReference,
+  useExternalSourceStore,
+} from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import type {
   ExternalSourceEntry,
@@ -23,6 +27,7 @@ import {
 } from "@/components/chat/source-chips.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
@@ -159,6 +164,7 @@ const collectSourceChipEntries = ({
     for (const source of toolExternalSources) {
       externalSources.push({
         ...source,
+        caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
         connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
         sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,
       });
@@ -201,7 +207,49 @@ const SourceIcon = ({
   />
 );
 
+const CaseLawDecisionSourceChip = ({
+  decision,
+}: {
+  decision: CaseLawDecisionSourceReference;
+}) => {
+  const { open } = useOpenDecisionTab();
+  return (
+    <button
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-md border",
+        "bg-muted/50 px-1.5 py-0.5 text-xs",
+        "hover:bg-muted cursor-pointer",
+      )}
+      onClick={() =>
+        detached(
+          openCaseLawDecision({ type: "ref", ref: decision.decisionId }, open),
+          "source-chips.open-case-law-decision",
+        )
+      }
+      type="button"
+    >
+      <LandmarkIcon className={cls} />
+      <BidiText as="span" className="max-w-[20ch] truncate">
+        {decision.caseNumber}
+      </BidiText>
+    </button>
+  );
+};
+
 const ExternalSourceChip = ({
+  source,
+  workspaceId,
+}: {
+  source: ExternalSourceEntry;
+  workspaceId: string | null;
+}) => {
+  if (source.caseLawDecision) {
+    return <CaseLawDecisionSourceChip decision={source.caseLawDecision} />;
+  }
+  return <PublisherSourceChip source={source} workspaceId={workspaceId} />;
+};
+
+const PublisherSourceChip = ({
   source,
   workspaceId,
 }: {

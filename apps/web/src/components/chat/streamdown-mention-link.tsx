@@ -1130,6 +1130,21 @@ const FaviconCitationChip = ({
   const source = useExternalSourceStore((state) =>
     state.getSource(url.toString()),
   );
+  // A publisher's URL for a decision stella holds opens that decision here.
+  if (source?.caseLawDecision) {
+    return (
+      <DecisionChip
+        interactive
+        label={
+          inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname)
+            ? children
+            : source.caseLawDecision.caseNumber
+        }
+        locator={{ type: "ref", ref: source.caseLawDecision.decisionId }}
+      />
+    );
+  }
+
   const hoverTitle = source?.title || inlineLabel || hostname;
   const showInlineLabel =
     inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
