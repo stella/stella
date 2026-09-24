@@ -22,7 +22,7 @@ export type ClaimReview = NonNullable<VerificationClaim["review"]>;
 export type ClaimVerdict = VerificationClaim["verdict"];
 export type ClaimState = ClaimVerdict["state"];
 export type ClaimType = VerificationClaim["type"];
-export type ClaimRef = VerificationClaim["refs"][number];
+type ClaimRef = VerificationClaim["refs"][number];
 export type ClaimFactRelation = ClaimRef["rel"];
 export type ClaimAnchor = VerificationClaim["anchor"];
 export type RecordConflict = NonNullable<ClaimVerdict["recordConflict"]>;
@@ -34,16 +34,12 @@ export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
-export type RecordConflictResolution = NonNullable<
-  ClaimReview["recordConflictResolution"]
->;
 
 export type ListItem =
   ListsRoutes[":listId"]["items"]["get"]["response"][200]["items"][number];
 export type FactDetails = NonNullable<ListItem["factDetails"]>;
 export type FactDetailsBody = ListsRoutes["item-fact-details"]["put"]["body"];
 export type FactConfidence = FactDetails["confidence"];
-export type FactScoring = FactDetails["scoring"];
 export type FactDatePrecision = NonNullable<FactDetails["occurredOnPrecision"]>;
 
 export const CLAIM_OVERRIDE_STATES = [

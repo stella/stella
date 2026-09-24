@@ -9,7 +9,7 @@ import { toSafeId } from "@/lib/safe-id";
 const RUN_POLL_INTERVAL_MS = 2500;
 
 /** Poll while the run is still waiting or checking; stop once it settles. */
-export const runPollInterval = (
+const runPollInterval = (
   status: VerificationRunStatus | undefined,
 ): number | false => {
   switch (status) {
