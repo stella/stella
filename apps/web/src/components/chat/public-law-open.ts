@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { stellaToast } from "@stll/ui/toast";
 
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
@@ -20,33 +22,31 @@ export const openPublicLawLink = async <Resolved>({
   open,
   resolve,
 }: OpenPublicLawLinkOptions<Resolved>) => {
-  try {
-    if (!isPublicLawPreviewEnabled()) {
-      const t = getTranslator();
-      stellaToast.add({
-        title: t("common.comingSoon"),
-        type: "neutral",
-      });
-      return;
-    }
+  const t = getTranslator();
+  if (!isPublicLawPreviewEnabled()) {
+    stellaToast.add({ title: t("common.comingSoon"), type: "neutral" });
+    return;
+  }
 
+  const result = await Result.tryPromise(async () => {
     const resolved = await resolve();
     if (resolved === null) {
-      const t = getTranslator();
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      return;
+      return false;
     }
-
     await open(resolved);
-  } catch (error) {
-    getAnalytics().captureError(error);
-    const t = getTranslator();
+    return true;
+  });
+
+  if (Result.isError(result)) {
+    getAnalytics().captureError(result.error.cause);
     stellaToast.add({
-      title: userErrorFromThrown(error, t("errors.actionFailed")),
+      title: userErrorFromThrown(result.error.cause, t("errors.actionFailed")),
       type: "error",
     });
+    return;
+  }
+
+  if (!result.value) {
+    stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
   }
 };
