@@ -81,7 +81,7 @@ export type RunSubagentOptions = {
  * did not end in a complete answer; `empty` is a run that ended with no
  * assistant message at all.
  */
-export type SubagentFailureReason =
+type SubagentFailureReason =
   | "content_filter"
   | "empty"
   | "length"

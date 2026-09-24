@@ -47,7 +47,7 @@ export type WorkspaceStreamHandlers = {
 };
 
 /** The part of an EventSource the connection loop drives. */
-export type WorkspaceStreamSource = {
+type WorkspaceStreamSource = {
   /** Whether the browser has given up on this source (readyState CLOSED). */
   isClosed: () => boolean;
   close: () => void;

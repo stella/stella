@@ -783,14 +783,23 @@ export const OWNERSHIP = [
       // that defines the table as a repository path. Relative imports resolve
       // to that path, so `@stll/country-codes` alone would leave a deep
       // relative import of the source file unconfined.
-      specifiers: ["@stll/country-codes", "packages/country-codes/src/alpha3"],
+      specifiers: [
+        "@stll/country-codes",
+        "packages/country-codes/src/alpha3.ts",
+      ],
       names: [
         "COUNTRY_ALPHA3_BY_CODE",
         "COUNTRY_ALPHA3_CODES",
         "countryCodeFromAlpha3",
         "isCountryAlpha3Code",
       ],
-      allowed: [],
+      allowed: [
+        {
+          path: "packages/country-codes/src/index.ts",
+          reason:
+            "The package entry point re-exports the table it defines; readers stay confined at the package specifier.",
+        },
+      ],
     },
   },
   {
