@@ -105,26 +105,50 @@ export const findUnsettledToolCallsForOutcome = ({
   parts: readonly ChatPart[];
 }): UnsettledToolCall[] => findUnsettled(OUTCOME_POLICY[outcome], parts);
 
+export type DroppedParts = {
+  droppedToolCallIds: string[];
+  partCountDrop: number;
+};
+
 /**
- * The tool calls a continuation left open on the message it resumed, when the
- * turn's output went to another message. Whatever that turn awaits sits on its
- * own message, so the resumed one keeps nothing for the user to answer.
+ * What a continuation's stored message lost from the message it continued. A
+ * continuation adds to that message and settles its calls in place, so every
+ * earlier tool call is still there and the message never gets shorter. Null
+ * when nothing was lost.
  */
-export const findUnsettledToolCallsOnResumedMessage = ({
-  outcome,
-  parts,
+export const findDroppedParts = ({
+  continued,
+  stored,
 }: {
-  outcome: OutcomeType;
-  parts: readonly ChatPart[];
-}): UnsettledToolCall[] => {
-  const policy = OUTCOME_POLICY[outcome];
-  return findUnsettled(policy === "client-answerable" ? "none" : policy, parts);
+  continued: readonly ChatPart[];
+  stored: readonly ChatPart[];
+}): DroppedParts | null => {
+  const storedToolCallIds = new Set(
+    stored.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),
+  );
+  const droppedToolCallIds = continued.flatMap((part) =>
+    part.type === "tool-call" && !storedToolCallIds.has(part.id)
+      ? [part.id]
+      : [],
+  );
+  const partCountDrop = Math.max(0, continued.length - stored.length);
+  return droppedToolCallIds.length === 0 && partCountDrop === 0
+    ? null
+    : { droppedToolCallIds, partCountDrop };
 };
 
 /** Reported, never thrown: a settled turn stored a tool call without its
  *  final disposition. */
 export class ChatTurnUnsettledToolCallError extends TaggedError(
   "ChatTurnUnsettledToolCallError",
+)<{
+  message: string;
+}> {}
+
+/** Reported, never thrown: a continuation stored its message without parts
+ *  the message already had. */
+export class ChatTurnDroppedPartsError extends TaggedError(
+  "ChatTurnDroppedPartsError",
 )<{
   message: string;
 }> {}

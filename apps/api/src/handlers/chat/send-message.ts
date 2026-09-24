@@ -2112,7 +2112,6 @@ export const createSendMessage = (
                       owningAssistantMessage,
                       recordAuditEvent,
                       responseMessage: resolvedResponseMessage,
-                      resumedMessageId: owningAssistantMessage?.id,
                       safeDb,
                       threadId: body.threadId,
                       userId: user.id,

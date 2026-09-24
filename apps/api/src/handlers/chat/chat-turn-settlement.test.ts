@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  findDroppedParts,
   findUnsettledToolCallsForOutcome,
-  findUnsettledToolCallsOnResumedMessage,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 
@@ -47,11 +47,6 @@ const openIds = (outcome: ChatTurnOutcome["type"], parts: ChatPart[]) =>
     ({ toolCallId }) => toolCallId,
   );
 
-const resumedOpenIds = (outcome: ChatTurnOutcome["type"], parts: ChatPart[]) =>
-  findUnsettledToolCallsOnResumedMessage({ outcome, parts }).map(
-    ({ toolCallId }) => toolCallId,
-  );
-
 describe("tool calls a settled turn may leave open", () => {
   test("a completed turn leaves none: an approved call without its result is reported", () => {
     expect(
@@ -85,10 +80,29 @@ describe("tool calls a settled turn may leave open", () => {
       ).toEqual(["approved"]);
     },
   );
+});
 
-  test("a resumed message keeps nothing to answer while its turn awaits the user elsewhere", () => {
+describe("parts a continuation may not drop", () => {
+  const text = { content: "Deleted.", type: "text" } satisfies ChatPart;
+
+  test("settling a call in place and adding text drops nothing", () => {
     expect(
-      resumedOpenIds("awaiting-user", [completed, pendingApproval, streaming]),
-    ).toEqual(["pending", "streaming"]);
+      findDroppedParts({
+        continued: [approvedWithoutOutput],
+        stored: [call("approved", { output: {}, state: "complete" }), text],
+      }),
+    ).toBeNull();
+  });
+
+  test("a stored message missing an earlier call reports it", () => {
+    expect(
+      findDroppedParts({ continued: [completed, failed], stored: [completed] }),
+    ).toEqual({ droppedToolCallIds: ["failed"], partCountDrop: 1 });
+  });
+
+  test("a stored message shorter than the one it continued reports the drop", () => {
+    expect(
+      findDroppedParts({ continued: [text, completed], stored: [completed] }),
+    ).toEqual({ droppedToolCallIds: [], partCountDrop: 1 });
   });
 });

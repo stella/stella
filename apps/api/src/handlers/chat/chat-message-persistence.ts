@@ -10,7 +10,6 @@ import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
-  chatMessageFromPersisted,
   mergeAnonRestorations,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -27,11 +26,11 @@ import type {
   ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
+  ChatTurnDroppedPartsError,
   ChatTurnUnsettledToolCallError,
+  findDroppedParts,
   findUnsettledToolCallsForOutcome,
-  findUnsettledToolCallsOnResumedMessage,
 } from "@/api/handlers/chat/chat-turn-settlement";
-import type { UnsettledToolCall } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -394,7 +393,6 @@ export const finalizeAssistantTurn = async ({
   owningAssistantMessage,
   recordAuditEvent,
   responseMessage,
-  resumedMessageId,
   safeDb,
   threadId,
   userId,
@@ -409,8 +407,6 @@ export const finalizeAssistantTurn = async ({
   owningAssistantMessage?: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
   responseMessage: PersistableChatMessage;
-  /** The assistant message a continuation resumed, when there is one. */
-  resumedMessageId: SafeId<"chatMessage"> | undefined;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -454,105 +450,61 @@ export const finalizeAssistantTurn = async ({
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
-  // Reported once the turn is stored: the report says a stored thread holds
-  // the open call, which a failed write never made true.
-  reportUnsettledToolCalls({
-    message: "terminal",
+  reportStoredTurnDefects({
+    continued: owningAssistantMessage,
     outcome: outcome.type,
-    unsettled: findUnsettledToolCallsForOutcome({
-      outcome: outcome.type,
-      parts: responseMessage.parts,
-    }),
+    stored: assistantMessage,
   });
-  if (
-    resumedMessageId !== undefined &&
-    resumedMessageId !== responseMessage.id
-  ) {
-    await reportUnsettledResumedMessage({
-      messageId: resumedMessageId,
-      outcome: outcome.type,
-      safeDb,
-      threadId,
-    });
-  }
   return Result.ok({ persistencePlan });
 };
 
 /**
- * A continuation that answered on a new message leaves the message it resumed
- * as stored before the turn; that stored copy is what reloads.
+ * Reports a stored turn message that breaks the settlement rules, once the
+ * write committed: the reports say a stored thread holds the defect, which a
+ * failed write never made true. The turn itself still settles; its answer is
+ * already streamed and belongs in the thread.
  */
-const reportUnsettledResumedMessage = async ({
-  messageId,
+const reportStoredTurnDefects = ({
+  continued,
   outcome,
-  safeDb,
-  threadId,
+  stored,
 }: {
-  messageId: SafeId<"chatMessage">;
+  continued: PersistableChatMessage | undefined;
   outcome: ChatTurnOutcome["type"];
-  safeDb: SafeDb;
-  threadId: SafeId<"chatThread">;
+  stored: PersistableChatMessage;
 }) => {
-  const stored = await safeDb(
-    async (tx) =>
-      await tx
-        .select({
-          content: chatMessages.content,
-          id: chatMessages.id,
-          role: chatMessages.role,
-        })
-        .from(chatMessages)
-        .where(
-          and(
-            eq(chatMessages.id, messageId),
-            eq(chatMessages.threadId, threadId),
-          ),
-        )
-        .limit(1),
-  );
-  if (Result.isError(stored)) {
-    captureError(stored.error, { threadId });
-    return;
-  }
-  const row = stored.value.at(0);
-  if (row === undefined) {
-    return;
-  }
-  reportUnsettledToolCalls({
-    message: "resumed",
+  const unsettled = findUnsettledToolCallsForOutcome({
     outcome,
-    unsettled: findUnsettledToolCallsOnResumedMessage({
-      outcome,
-      parts: chatMessageFromPersisted(row).parts,
-    }),
+    parts: stored.parts,
   });
-};
-
-/** The turn still settles: its answer is already streamed and belongs in the
- *  thread. The report flags a message that reloads with an open call. */
-const reportUnsettledToolCalls = ({
-  message,
-  outcome,
-  unsettled,
-}: {
-  message: "resumed" | "terminal";
-  outcome: ChatTurnOutcome["type"];
-  unsettled: readonly UnsettledToolCall[];
-}) => {
-  if (unsettled.length === 0) {
-    return;
+  if (unsettled.length > 0) {
+    captureError(
+      new ChatTurnUnsettledToolCallError({
+        message: "A settled chat turn stored a tool call without its result",
+      }),
+      {
+        outcome,
+        tool_call_states: unsettled.map(({ state }) => state).join(","),
+        unsettled_count: String(unsettled.length),
+      },
+    );
   }
-  captureError(
-    new ChatTurnUnsettledToolCallError({
-      message: "A settled chat turn stored a tool call without its result",
-    }),
-    {
-      message,
-      outcome,
-      tool_call_states: unsettled.map(({ state }) => state).join(","),
-      unsettled_count: String(unsettled.length),
-    },
-  );
+  const dropped =
+    continued === undefined
+      ? null
+      : findDroppedParts({ continued: continued.parts, stored: stored.parts });
+  if (dropped !== null) {
+    captureError(
+      new ChatTurnDroppedPartsError({
+        message: "A continuation stored its message without earlier parts",
+      }),
+      {
+        dropped_tool_calls: String(dropped.droppedToolCallIds.length),
+        outcome,
+        part_count_drop: String(dropped.partCountDrop),
+      },
+    );
+  }
 };
 
 type PersistTerminalAssistantTurnProps = {
