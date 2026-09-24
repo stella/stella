@@ -727,6 +727,8 @@ const isDetailStatus = (value: unknown): value is PlUokikDetailStatus =>
 /** What became of one decision file. */
 export const PL_UOKIK_FILE_STATUS = {
   READ: "read",
+  /** A scan served as an image file (TIFF, JPEG, PNG), which holds no text. */
+  IMAGE: "image",
   NOT_PDF: "not-pdf",
   NOT_FOUND: "file-http-404",
   GONE: "file-http-410",
@@ -753,8 +755,21 @@ const PERMANENT_ABSENCE: Readonly<Record<number, "404" | "410">> = {
 
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46];
 
-const isPdf = (bytes: Uint8Array): boolean =>
-  PDF_SIGNATURE.every((byte, index) => bytes[index] === byte);
+const startsWith = (bytes: Uint8Array, signature: readonly number[]): boolean =>
+  signature.every((byte, index) => bytes[index] === byte);
+
+const isPdf = (bytes: Uint8Array): boolean => startsWith(bytes, PDF_SIGNATURE);
+
+/** TIFF in either byte order, JPEG and PNG: the forms a scan is filed in. */
+const IMAGE_SIGNATURES = [
+  [0x49, 0x49, 0x2a, 0x00],
+  [0x4d, 0x4d, 0x00, 0x2a],
+  [0xff, 0xd8, 0xff],
+  [0x89, 0x50, 0x4e, 0x47],
+] as const;
+
+const isImage = (bytes: Uint8Array): boolean =>
+  IMAGE_SIGNATURES.some((signature) => startsWith(bytes, signature));
 
 type FetchDetailOptions = {
   cursor: string;
@@ -877,7 +892,12 @@ const fetchFile = async ({
               status: PL_UOKIK_FILE_STATUS.READ,
               bytes: answer.bytes,
             }
-          : { name: file.name, status: PL_UOKIK_FILE_STATUS.NOT_PDF },
+          : {
+              name: file.name,
+              status: isImage(answer.bytes)
+                ? PL_UOKIK_FILE_STATUS.IMAGE
+                : PL_UOKIK_FILE_STATUS.NOT_PDF,
+            },
       );
     case "redirected":
       return Result.ok({
@@ -999,27 +1019,90 @@ export type PlUokikCrossSourceKey = {
 const sha256 = (bytes: Uint8Array): string =>
   new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
+type DocumentRead =
+  | { type: "read"; output: ParsePlUokikDocumentOutput }
+  /** The files hold no text layer: a scan. */
+  | { type: "no-text" }
+  /** The reader failed on them. */
+  | { type: "failed" };
+
 /**
- * The document the files hold, or null where they hold no text layer or the
- * reader failed on them. A failure is not the decision's: the files are kept
- * beside the envelope, so their text is recoverable by reading them again.
+ * The document the files hold, or why there is none. A failure is not the
+ * decision's: the files are kept beside the envelope, so their text is
+ * recoverable by reading them again.
  */
 const readDocument = async (
   input: ParsePlUokikDocumentInput,
-): Promise<ParsePlUokikDocumentOutput | null> => {
+): Promise<DocumentRead> => {
+  if (input.pdfs.length === 0) {
+    return { type: "no-text" };
+  }
   const read = await Result.tryPromise({
     try: async () => await parsePlUokikDocument(input),
     catch: errorTag,
   });
   if (Result.isOk(read)) {
-    return read.value;
+    return read.value === null
+      ? { type: "no-text" }
+      : { type: "read", output: read.value };
   }
   logger.warn("case_law.ingestion.document_parse_failed", {
     adapterKey: ADAPTER_KEYS.PL_UOKIK,
     caseNumber: input.caseNumber,
     "error.type": read.error,
   });
-  return null;
+  return { type: "failed" };
+};
+
+/**
+ * Why a decision whose page was read holds no text, where the reason is one
+ * that holds for good: its files are scans, or it has none. A row stating one
+ * of these is complete without a document, so the census stops asking for it;
+ * a later pass that can read scans selects exactly these rows.
+ */
+export const PL_UOKIK_DOCUMENT_ABSENCE = {
+  /** Every decision file is an image, or a PDF without a text layer. */
+  SCANNED: "scanned",
+  /** The page lists no decision file. */
+  NO_ATTACHMENT: "no-attachment",
+} as const;
+
+export type PlUokikDocumentAbsence =
+  (typeof PL_UOKIK_DOCUMENT_ABSENCE)[keyof typeof PL_UOKIK_DOCUMENT_ABSENCE];
+
+/** The metadata key the reason is stored under. */
+export const PL_UOKIK_DOCUMENT_ABSENCE_KEY = "documentAbsence";
+
+const SCAN_FILE_STATUSES: ReadonlySet<PlUokikFileStatus> = new Set([
+  PL_UOKIK_FILE_STATUS.READ,
+  PL_UOKIK_FILE_STATUS.IMAGE,
+]);
+
+type DocumentAbsenceOptions = {
+  listed: number;
+  files: readonly PlUokikFetchedFile[];
+  read: DocumentRead;
+};
+
+/**
+ * The lasting reason a read page yields no text, or undefined where the
+ * absence may still clear (a file gone, too large, unreadable, of another
+ * format) and the census should keep asking.
+ */
+const documentAbsenceOf = ({
+  files,
+  listed,
+  read,
+}: DocumentAbsenceOptions): PlUokikDocumentAbsence | undefined => {
+  if (listed === 0) {
+    return PL_UOKIK_DOCUMENT_ABSENCE.NO_ATTACHMENT;
+  }
+  const allScans =
+    files.length === listed &&
+    files.every(({ status }) => SCAN_FILE_STATUSES.has(status));
+  return read.type === "no-text" && allScans
+    ? PL_UOKIK_DOCUMENT_ABSENCE.SCANNED
+    : undefined;
 };
 
 type PageMetadataOptions = {
@@ -1096,6 +1179,26 @@ const pageMetadataOf = ({
   };
 };
 
+type DocumentStateOptions = DocumentAbsenceOptions & { listingOnly: boolean };
+
+/**
+ * What the row states about its missing text: a lasting reason under the key
+ * the census reads, or that the files could not be read, which it keeps
+ * asking about. Nothing for a row with text, or one stored without its page.
+ */
+const documentStateOf = ({
+  listingOnly,
+  ...options
+}: DocumentStateOptions): Record<string, unknown> => {
+  if (listingOnly || options.read.type === "read") {
+    return {};
+  }
+  const absence = documentAbsenceOf(options);
+  return absence === undefined
+    ? { documentStatus: "unreadable" }
+    : { [PL_UOKIK_DOCUMENT_ABSENCE_KEY]: absence };
+};
+
 /** The quarantine digest a keyed row would have had, for a later repair. */
 const repairAliasesOf = (
   row: PlUokikViewRow,
@@ -1169,20 +1272,18 @@ export const assemblePlUokikDecision = async ({
   const pdfs = files.flatMap(({ bytes }) =>
     bytes === undefined ? [] : [bytes],
   );
-  const document =
-    pdfs.length === 0
-      ? null
-      : await readDocument({
-          pdfs,
-          caseNumber,
-          court: authority,
-          decisionDate,
-          decisionType: PL_UOKIK_DECISION_TYPE,
-          sourceUrl: sourceUrl ?? "",
-          documentUrl: firstFileUrl,
-          documentId: id,
-          keywords: practices,
-        });
+  const read = await readDocument({
+    pdfs,
+    caseNumber,
+    court: authority,
+    decisionDate,
+    decisionType: PL_UOKIK_DECISION_TYPE,
+    sourceUrl: sourceUrl ?? "",
+    documentUrl: firstFileUrl,
+    documentId: id,
+    keywords: practices,
+  });
+  const document = read.type === "read" ? read.output : null;
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
 
@@ -1231,12 +1332,12 @@ export const assemblePlUokikDecision = async ({
       }),
       ...(crossSourceKey === undefined ? {} : { crossSourceKey }),
       ...(listingOnly ? { detailStatus: missing } : {}),
-      ...(!listingOnly && document === null
-        ? {
-            documentStatus:
-              decisionFiles.length === 0 ? "no-decision-file" : "no-text-read",
-          }
-        : {}),
+      ...documentStateOf({
+        listingOnly,
+        read,
+        files,
+        listed: decisionFiles.length,
+      }),
     }),
     // The files are stored beside the envelope rather than in it, so a
     // corrected file under an unchanged page has to change the hash too.
@@ -2124,6 +2225,15 @@ export const plUokikAdapter = defineSourceAdapter({
     // count as held and its page would never be asked for again.
     heldRequiresDetail: true,
     heldWithoutDetail: plUokikHeldWithoutDetail,
+    // A decision whose files are scans, or which has none, is complete on its
+    // page: asking again would read the same images.
+    heldWithoutDocument: {
+      metadataKey: PL_UOKIK_DOCUMENT_ABSENCE_KEY,
+      reasons: [
+        PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+        PL_UOKIK_DOCUMENT_ABSENCE.NO_ATTACHMENT,
+      ],
+    },
     listSlicePage: listPlUokikSlicePage,
     buildDecision: buildPlUokikFromPayload,
   },

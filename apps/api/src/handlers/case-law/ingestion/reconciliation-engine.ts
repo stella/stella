@@ -28,6 +28,7 @@ import type { SQL } from "drizzle-orm";
 import {
   and,
   eq,
+  or,
   gte,
   inArray,
   isNotNull,
@@ -85,6 +86,7 @@ import {
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
+  HeldWithoutDocument,
   ListingIdentity,
   ReconciliationListingItem,
   SourceAdapter,
@@ -349,16 +351,32 @@ const forEachChunk = async <T>(
  * two different things depending on whether the publisher happened to state a
  * document id for the item.
  */
-const detailCondition = (requireDetail: boolean): SQL | undefined =>
-  requireDetail
-    ? storedObservationHasDetail(caseLawDecisions.metadata)
-    : undefined;
+const detailCondition = (
+  requireDetail: boolean,
+  withoutDocument: HeldWithoutDocument | undefined,
+): SQL | undefined => {
+  if (!requireDetail) {
+    return undefined;
+  }
+  const hasDetail = storedObservationHasDetail(caseLawDecisions.metadata);
+  return withoutDocument === undefined
+    ? hasDetail
+    : or(
+        hasDetail,
+        inArray(
+          sql<string>`jsonb_extract_path_text(${caseLawDecisions.metadata}, ${withoutDocument.metadataKey})`,
+          [...withoutDocument.reasons],
+        ),
+      );
+};
 
 type HeldDocumentIdsOptions = {
   sourceId: SafeId<"caseLawSource">;
   documentIds: readonly string[];
   /** See `SourceReconciliation.heldRequiresDetail`. */
   requireDetail: boolean;
+  /** See `SourceReconciliation.heldWithoutDocument`. */
+  withoutDocument?: HeldWithoutDocument | undefined;
 };
 
 /**
@@ -376,12 +394,17 @@ type HeldDocumentIdsOptions = {
  */
 const selectHeldDocumentIds = async (
   scopedDb: ScopedDb,
-  { documentIds, requireDetail, sourceId }: HeldDocumentIdsOptions,
+  {
+    documentIds,
+    requireDetail,
+    sourceId,
+    withoutDocument,
+  }: HeldDocumentIdsOptions,
 ): Promise<string[]> => {
   if (documentIds.length === 0) {
     return [];
   }
-  const detail = detailCondition(requireDetail);
+  const detail = detailCondition(requireDetail, withoutDocument);
   const { decisions, supplements } = await scopedDb(async (tx) => ({
     decisions: await tx
       .select({
@@ -441,6 +464,8 @@ type HeldCaseNumbersOptions = {
   caseNumbers: readonly string[];
   /** See `SourceReconciliation.heldRequiresDetail`. */
   requireDetail: boolean;
+  /** See `SourceReconciliation.heldWithoutDocument`. */
+  withoutDocument?: HeldWithoutDocument | undefined;
 };
 
 /**
@@ -450,7 +475,13 @@ type HeldCaseNumbersOptions = {
  */
 const selectHeldCaseNumbers = async (
   scopedDb: ScopedDb,
-  { caseNumbers, language, requireDetail, sourceId }: HeldCaseNumbersOptions,
+  {
+    caseNumbers,
+    language,
+    requireDetail,
+    sourceId,
+    withoutDocument,
+  }: HeldCaseNumbersOptions,
 ): Promise<string[]> => {
   if (caseNumbers.length === 0) {
     return [];
@@ -466,7 +497,7 @@ const selectHeldCaseNumbers = async (
             inArray(caseLawDecisions.caseNumber, [...caseNumbers]),
             eq(caseLawDecisions.language, language),
             isNull(caseLawDecisions.sourceDocumentId),
-            detailCondition(requireDetail),
+            detailCondition(requireDetail, withoutDocument),
           ),
         )
         .limit(caseNumbers.length),
@@ -493,6 +524,8 @@ type HeldIdentityKeysOptions = {
   requireDetail: boolean;
   /** See `SourceReconciliation.heldWithoutDetail`. */
   heldWithoutDetail?: ((identity: ListingIdentity) => boolean) | undefined;
+  /** See `SourceReconciliation.heldWithoutDocument`. */
+  withoutDocument?: HeldWithoutDocument | undefined;
 };
 
 /**
@@ -507,6 +540,7 @@ const selectHeldIdentityKeys = async (
     identities,
     requireDetail,
     sourceId,
+    withoutDocument,
   }: HeldIdentityKeysOptions,
 ): Promise<Set<string>> => {
   if (!requireDetail || heldWithoutDetail === undefined) {
@@ -514,6 +548,7 @@ const selectHeldIdentityKeys = async (
       identities,
       requireDetail,
       sourceId,
+      withoutDocument,
     });
   }
   const [exempt, detailed] = [
@@ -524,6 +559,7 @@ const selectHeldIdentityKeys = async (
     identities: detailed,
     requireDetail: true,
     sourceId,
+    withoutDocument,
   });
   for (const key of await selectHeldIdentityKeysUniformly(scopedDb, {
     identities: exempt,
@@ -542,6 +578,7 @@ const selectHeldIdentityKeysUniformly = async (
     identities,
     requireDetail,
     sourceId,
+    withoutDocument,
   }: Omit<HeldIdentityKeysOptions, "heldWithoutDetail">,
 ): Promise<Set<string>> => {
   const documentIds = new Set<string>();
@@ -565,6 +602,7 @@ const selectHeldIdentityKeysUniformly = async (
       sourceId,
       documentIds: chunk,
       requireDetail,
+      withoutDocument,
     })) {
       addHeldKey(held, { type: "document", sourceDocumentId });
     }
@@ -577,6 +615,7 @@ const selectHeldIdentityKeysUniformly = async (
         language,
         caseNumbers: chunk,
         requireDetail,
+        withoutDocument,
       })) {
         addHeldKey(held, { type: "case-number", caseNumber, language });
       }
@@ -1157,6 +1196,7 @@ const walkSlice = async ({
     identities: items.map(({ identity }) => identity),
     requireDetail: reconciliation.heldRequiresDetail === true,
     heldWithoutDetail: reconciliation.heldWithoutDetail,
+    withoutDocument: reconciliation.heldWithoutDocument,
   });
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
@@ -1286,6 +1326,7 @@ const retryParkedItems = async ({
     identities: outstanding.map(({ identity }) => identity),
     requireDetail: reconciliation.heldRequiresDetail === true,
     heldWithoutDetail: reconciliation.heldWithoutDetail,
+    withoutDocument: reconciliation.heldWithoutDocument,
   });
   const settled = outstanding.filter(({ identityKey }) =>
     held.has(identityKey),

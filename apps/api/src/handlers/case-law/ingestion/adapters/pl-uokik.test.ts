@@ -9,6 +9,7 @@
  * decision pages and the PDF are the register's own responses.
  */
 
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -28,6 +29,7 @@ import {
   parsePlUokikCursor,
   parsePlUokikDetail,
   PL_UOKIK_DETAIL_STATUS,
+  PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_UNDATED_SLICE,
   plUokikAdapter,
@@ -380,7 +382,9 @@ describe("a decision", () => {
     expect(decision.caseNumber).toBe("DIH-4/2009");
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.fulltext).toBeUndefined();
-    expect(decision.metadata["documentStatus"]).toBe("no-decision-file");
+    expect(decision.metadata["documentAbsence"]).toBe(
+      PL_UOKIK_DOCUMENT_ABSENCE.NO_ATTACHMENT,
+    );
     expect(decision.metadata["unlabelledFields"]).toBeDefined();
   });
 
@@ -436,6 +440,108 @@ describe("a decision", () => {
     );
     expect(plUokikFileUrl(WITH_RULINGS, "../x.pdf")).toBeNull();
     expect(plUokikFileUrl(WITH_RULINGS, "x?y.pdf")).toBeNull();
+  });
+});
+
+// ── Decisions with no text to read ───────────────────────
+
+describe("a decision with no text to read", () => {
+  /** A PDF of one blank page: a text layer that states nothing, as a scan's. */
+  const blankPdf = async (): Promise<Uint8Array> => {
+    const pdf = PDF.create();
+    pdf.addPage();
+    return await pdf.save();
+  };
+
+  /** DOK-9/2011's row and page, with its decision file answered as given. */
+  const withFile = async (
+    file: Parameters<typeof assemblePlUokikDecision>[0]["files"],
+  ) =>
+    decisionOf(
+      await buildFrom(
+        entryOf(await capturedEntries(), WITH_RULINGS),
+        await pageOf(WITH_RULINGS),
+        file,
+      ),
+    );
+
+  const fileName = async (): Promise<string> =>
+    parsePlUokikDetail(await pageOf(WITH_RULINGS))?.fields.find(
+      ({ label }) => label === "Decyzja",
+    )?.files[0]?.name ?? panic("no file");
+
+  test("a PDF with no text layer is a scan, held on its page", async () => {
+    const decision = await withFile([
+      {
+        name: await fileName(),
+        status: PL_UOKIK_FILE_STATUS.READ,
+        bytes: await blankPdf(),
+      },
+    ]);
+    expect(decision.fulltext).toBeUndefined();
+    expect(decision.isListingOnly).toBeUndefined();
+    expect(decision.metadata["documentAbsence"]).toBe(
+      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    );
+  });
+
+  test("a decision filed as an image is a scan too", async () => {
+    const decision = await withFile([
+      { name: await fileName(), status: PL_UOKIK_FILE_STATUS.IMAGE },
+    ]);
+    expect(decision.metadata["documentAbsence"]).toBe(
+      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    );
+  });
+
+  test("a file served as a TIFF is recognised as an image, not an unknown format", async () => {
+    const entries = await capturedEntries();
+    const model = await registerOverFixtures([entryOf(entries, WITH_RULINGS)]);
+    model.files.set(
+      WITH_RULINGS,
+      Uint8Array.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]),
+    );
+    serveRegister(model);
+    const walk = await walkCrawl(null);
+    const [decision] = walk.decisions;
+    expect(decision?.metadata["documentAbsence"]).toBe(
+      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    );
+    expect(JSON.stringify(decision?.metadata["decisionFiles"])).toContain(
+      PL_UOKIK_FILE_STATUS.IMAGE,
+    );
+  });
+
+  test("a file that is gone, or of another format, is not a lasting absence", async () => {
+    for (const status of [
+      PL_UOKIK_FILE_STATUS.NOT_FOUND,
+      PL_UOKIK_FILE_STATUS.NOT_PDF,
+      PL_UOKIK_FILE_STATUS.TOO_LARGE,
+    ]) {
+      const decision = await withFile([{ name: await fileName(), status }]);
+      expect(decision.metadata["documentAbsence"], status).toBeUndefined();
+      expect(decision.metadata["documentStatus"], status).toBe("unreadable");
+    }
+  });
+
+  test("a row stored without its page states no absence: that page may yet come", async () => {
+    const entry = entryOf(await capturedEntries(), FILELESS);
+    const decision = decisionOf(
+      await assemblePlUokikDecision({
+        entry,
+        rawParts: plUokikRawPartsOf(entry, undefined),
+        detailStatus: PL_UOKIK_DETAIL_STATUS.NOT_FOUND,
+      }),
+    );
+    expect(decision.metadata["documentAbsence"]).toBeUndefined();
+  });
+
+  test("the census reads exactly those reasons as complete", () => {
+    const held = plUokikAdapter.reconciliation.heldWithoutDocument;
+    expect(held?.metadataKey).toBe("documentAbsence");
+    expect([...(held?.reasons ?? [])].toSorted()).toEqual(
+      Object.values(PL_UOKIK_DOCUMENT_ABSENCE).toSorted(),
+    );
   });
 });
 

@@ -1435,6 +1435,8 @@ type SeedDecisionInput = {
   caseNumber: string;
   sourceDocumentId: string | null;
   isListingOnly: boolean;
+  /** Further metadata the adapter stated on the row. */
+  stated?: Record<string, unknown> | undefined;
 };
 
 const seedDecision = async ({
@@ -1442,6 +1444,7 @@ const seedDecision = async ({
   isListingOnly,
   sourceDocumentId,
   sourceId,
+  stated,
 }: SeedDecisionInput): Promise<void> => {
   await db.insert(caseLawDecisions).values({
     id: createSafeId<"caseLawDecision">(),
@@ -1451,7 +1454,7 @@ const seedDecision = async ({
     court: FIXTURE_COURT,
     country: "CZE",
     language: FIXTURE_LANGUAGE,
-    metadata: storedMetadata(isListingOnly),
+    metadata: { ...storedMetadata(isListingOnly), ...stated },
   });
 };
 
@@ -1706,6 +1709,65 @@ test("a record kind declared complete without a document is held on its record a
   });
   // The decision was hunted again; the ruling was left alone.
   expect(builds).toEqual([{ refid: decisionUrn }]);
+});
+
+test("a row stating a declared reason for holding no document is held on that reason", async () => {
+  // The competition authority files some decisions only as scans, and some
+  // with no file at all. Their rows hold no text by the publisher's doing and
+  // carry the no-document marker a failed fetch leaves too; the reason the
+  // adapter states on the row is what tells the two apart.
+  const scanned = "0000000000000000000000000000000A";
+  const failed = "0000000000000000000000000000000B";
+  const otherReason = "0000000000000000000000000000000C";
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDecision({
+    sourceId,
+    caseNumber: scanned,
+    sourceDocumentId: scanned,
+    isListingOnly: true,
+    stated: { documentAbsence: "scanned" },
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: failed,
+    sourceDocumentId: failed,
+    isListingOnly: true,
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: otherReason,
+    sourceDocumentId: otherReason,
+    isListingOnly: true,
+    stated: { documentAbsence: "not-declared" },
+  });
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [scanned, failed, otherReason].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { unid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    heldRequiresDetail: true,
+    heldWithoutDocument: {
+      metadataKey: "documentAbsence",
+      reasons: ["scanned", "no-attachment"],
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 3, heldBefore: 1 },
+  });
+  // The scan was left alone; the failed fetch and the undeclared reason were
+  // hunted again.
+  expect(builds).toEqual([{ unid: failed }, { unid: otherReason }]);
 });
 
 test("a failed item build reports the SQLSTATE without logging any message text", async () => {

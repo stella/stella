@@ -960,6 +960,12 @@ export type SourceSliceWalk = {
   tipWindowDays: number;
 };
 
+/** See `SourceReconciliation.heldWithoutDocument`. */
+export type HeldWithoutDocument = {
+  readonly metadataKey: string;
+  readonly reasons: readonly [string, ...string[]];
+};
+
 /**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
@@ -999,6 +1005,16 @@ export type SourceReconciliation = SourceSliceWalk & {
    * else; absent, every identity follows `heldRequiresDetail`.
    */
   heldWithoutDetail?: ((identity: ListingIdentity) => boolean) | undefined;
+  /**
+   * The stored rows `heldRequiresDetail` does not apply to, read off the row
+   * rather than the identity: a source whose records of one kind are complete
+   * or not depending on what the publisher served for each (a document that
+   * is an image, no document at all) states the reason on the row, under
+   * `metadataKey`, and names here the reasons that make a row complete
+   * without its text. The reason is a declared value, so a later pass that
+   * can read those documents selects exactly the rows it names.
+   */
+  heldWithoutDocument?: HeldWithoutDocument | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;
