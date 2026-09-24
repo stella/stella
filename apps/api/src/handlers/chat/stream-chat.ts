@@ -207,7 +207,7 @@ type AssistantToolOutputRefResolver = (props: {
   toolName: string;
 }) => unknown;
 
-type StreamChatFinishEvent = {
+export type StreamChatFinishEvent = {
   outcome: ChatTurnOutcome;
   responseMessage: PersistableTerminalAssistantMessage;
 };

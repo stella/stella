@@ -21,6 +21,7 @@ import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-n
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -101,6 +102,7 @@ const loadExternalMcpToolsForTest = async () => {
 };
 
 const sendMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,
   loadWebSearchProviders: async () => ({
