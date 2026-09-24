@@ -39,8 +39,8 @@
 // Three origins count as proven without being literal: a `*_URL` setting read
 // off the API's validated `env` (the operator chose it, no request selects
 // it), a choice between fixed origins, and a URL presigned by an object-store
-// client Stella configured (`getS3()` / `getCorpusS3()`, or any client inside
-// the S3 module that owns them). Other runtime-configured services and explicitly trusted URL
+// client Stella configured (the imported `getS3()` / `getCorpusS3()`
+// factories). Other runtime-configured services and explicitly trusted URL
 // producers take a narrow suppression at the call, naming the trust boundary;
 // this rule does not attempt whole-program taint analysis.
 
@@ -49,7 +49,6 @@ import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 import {
   getPropertyName,
   isAstNode,
-  isFileIn,
   isIdentifier,
   isIdentifierReference,
   isStringLiteral,
@@ -763,18 +762,14 @@ export default eslintCompatPlugin({
         };
 
         // An object-store client whose endpoint Stella configured, so the
-        // URLs it presigns point at that store: a client factory of the S3
-        // module (or a stable alias of one), or any client inside the S3
-        // module, which owns every store it presigns for. A client
-        // constructed elsewhere may take its endpoint from anywhere, so it
+        // URLs it presigns point at that store: the result of an imported S3
+        // module client factory, or a stable alias of one. Any other client,
+        // a parameter included, may carry an endpoint from anywhere, so it
         // proves nothing.
         const isConfiguredObjectStore = (
           node: unknown,
           visited: Set<Variable>,
         ): boolean => {
-          if (isFileIn(context, [`${S3_MODULE}.ts`])) {
-            return true;
-          }
           const store = unwrapExpression(node);
           if (store?.type === "CallExpression") {
             const producer = resolveImport(context, store.callee);

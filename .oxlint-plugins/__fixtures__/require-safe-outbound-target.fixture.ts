@@ -41,7 +41,14 @@ declare const useFreeTier: boolean;
 declare const foreignStore: { presign: (key: string) => string };
 declare const settings: { GOTENBERG_URL: string };
 
-export const mustFlagUnprovenConfiguredTargets = async () => {
+export const mustFlagUnprovenConfiguredTargets = async (store: {
+  presign: (key: string) => string;
+}) => {
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a parameter may be any client, so its presigned URL proves nothing
+  await fetchWithTimeout(store.presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a dynamic suffix on a configured origin can still rewrite its authority
   await fetchWithTimeout(`${env.GOTENBERG_URL}${dynamicPath}`, {
     timeoutMs: 1000,
