@@ -8,7 +8,7 @@
 // receive owner access without asking for it:
 //
 //   - a parameter or destructured default:    (db = rootDb) / { db = rootDb }
-//   - a fallback operand:                      db ?? rootDb / db || rootDb
+//   - a fallback operand:                      db ?? rootDb / s ??= make(rootDb)
 //   - a conditional operand:                   cond ? rootDb.transaction(f) : ...
 //   - an object-literal dependency property:   { db: rootDb } / { rootDb }
 //   - a module-level call taking it:           const store = createStore(rootDb)
@@ -315,7 +315,15 @@ const createRootReferenceTest = (bindings: RootBindings) => {
       }
     }
   };
-  return { isHandle, reachesHandle };
+  /** The expression builds something from the handle: `createStore(rootDb)`. */
+  const buildsFromHandle = (node: ts.Expression): boolean => {
+    const expression = unwrap(node);
+    return (
+      (ts.isCallExpression(expression) || ts.isNewExpression(expression)) &&
+      (expression.arguments ?? []).some(isHandle)
+    );
+  };
+  return { buildsFromHandle, isHandle, reachesHandle };
 };
 
 const FALLBACK_OPERATORS = new Set<ts.SyntaxKind>([
@@ -331,10 +339,9 @@ const isInsideFunction = (node: ts.Node): boolean => {
     current !== undefined;
     current = current.parent
   ) {
-    if (
-      ts.isFunctionLike(current) ||
-      ts.isClassStaticBlockDeclaration(current)
-    ) {
+    // A class `static {}` block runs once, when the module evaluates, so it
+    // is module level; only a real function defers the call.
+    if (ts.isFunctionLike(current)) {
       return true;
     }
   }
@@ -356,7 +363,8 @@ export const findRootConnectionShapesAs = (
   if (bindings.handles.size === 0 && bindings.namespaces.size === 0) {
     return [];
   }
-  const { isHandle, reachesHandle } = createRootReferenceTest(bindings);
+  const { buildsFromHandle, isHandle, reachesHandle } =
+    createRootReferenceTest(bindings);
   const hits: RootConnectionShapeHit[] = [];
   const record = (shape: RootConnectionShape, node: ts.Node): void => {
     hits.push({
@@ -377,7 +385,7 @@ export const findRootConnectionShapesAs = (
     } else if (
       ts.isBinaryExpression(node) &&
       FALLBACK_OPERATORS.has(node.operatorToken.kind) &&
-      reachesHandle(node.right)
+      (reachesHandle(node.right) || buildsFromHandle(node.right))
     ) {
       record(ROOT_CONNECTION_SHAPE.fallbackOperand, node.right);
     } else if (ts.isConditionalExpression(node)) {
