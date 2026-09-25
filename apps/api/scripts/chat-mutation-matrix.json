@@ -161,6 +161,138 @@
       },
       "oracle": "chat.client.requests-accepted",
       "reason": "The web client echoes the adapter's normalized input (TOOL_CALL_END.input), so no request the page builds carries strict-mode nulls and the mutation cannot fail there; chat-schema.continuation.property.test.ts covers the comparison with generated echoes, and the scenario stays as the end-to-end strict-null check."
+    },
+    {
+      "id": "rendered-snapshot-one-message-per-id",
+      "fix": "#3858",
+      "behaviour": "The rendered page, replaying what the server sends, keeps every card of a turn whose owning message already holds tool results.",
+      "status": "active",
+      "rerecord": true,
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      group.copies.push(message);\n      group.reasoning.push(...reasoning);",
+      "replace": "      order.push(...reasoning, message);",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "approval-after-tool-result shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.requests-match-recorded"
+    },
+    {
+      "id": "rendered-grant-answers-next-approval",
+      "fix": "#3858",
+      "behaviour": "With the tool allowed for the conversation, the approval card answers itself when it appears.",
+      "status": "active",
+      "file": "../web/src/components/chat/tool-approval-card.tsx",
+      "search": "          shouldRespond: isBlocked || shouldAutoApprove,",
+      "replace": "          shouldRespond: isBlocked,",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "conversation-grant shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.requests-match-recorded"
+    },
+    {
+      "id": "rendered-stop-settles-running-calls",
+      "fix": "#1077",
+      "behaviour": "Stop settles a tool call still running, so nothing on the page stays busy.",
+      "status": "active",
+      "file": "../web/src/features/chat/chat-runtime.ts",
+      "search": "        const sanitized = sanitizeRunningToolCalls(snapshot.messages, \"cancel\");",
+      "replace": "        const sanitized = snapshot.messages;",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "stop-mid-stream shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "id": "rendered-steps-fold-across-results",
+      "fix": "#1730",
+      "behaviour": "A turn's steps stay in one folded list across the tool results between them.",
+      "status": "active",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "  if (part.type === \"tool-result\") {\n    return true;\n  }\n  return (\n    part.type === \"tool-call\" &&",
+      "replace": "  return (\n    part.type === \"tool-call\" &&",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "approval-after-tool-result shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "id": "rendered-question-without-options",
+      "fix": "#1174",
+      "behaviour": "An ask-user question whose options a strict-mode provider spelled null renders as a free-text question.",
+      "status": "retired",
+      "file": "../web/src/components/chat/ask-user-card.tsx",
+      "search": "            const hasOptions = (q.options?.length ?? 0) > 0;",
+      "replace": "            const hasOptions = q.options !== undefined && q.options.length > 0;",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "ask-user shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored",
+      "reason": "The page renders the adapter's input (TOOL_CALL_END.input), which carries no strict-mode nulls, so the card never sees one and the mutation cannot fail there. The ask-user recording keeps a question sent with null options as the end-to-end check."
+    },
+    {
+      "id": "rendered-update-fields-summary",
+      "fix": "#1690",
+      "behaviour": "The update-entity-fields approval card summarizes the fields the call changes.",
+      "status": "retired",
+      "file": "../web/src/components/chat/tool-approval-card.tsx",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "single-approval shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored",
+      "reason": "No recorded conversation calls update-entity-fields yet; the entry returns with such a recording."
+    },
+    {
+      "id": "rendered-unknown-citation",
+      "fix": "#1686",
+      "behaviour": "A citation whose reference the turn never minted renders as plain text.",
+      "status": "retired",
+      "file": "../web/src/components/chat/streamdown-mention-link.tsx",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "single-approval shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored",
+      "reason": "No recorded conversation answers with citations yet; the entry returns with such a recording."
+    },
+    {
+      "id": "rendered-draft-preview-stays-mounted",
+      "fix": "#2208",
+      "behaviour": "The drafted document's preview stays mounted while its source streams.",
+      "status": "retired",
+      "file": "../web/src/components/chat/create-document-draft-preview.logic.ts",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "client-tool shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored",
+      "reason": "The client-tool recording streams the draft's source in one piece, so no partial revision reaches the preview; the entry returns with a recording that streams it in parts."
+    },
+    {
+      "id": "rendered-subagent-card-settles",
+      "fix": "#3796",
+      "behaviour": "The subagent card stops spinning once its approval is answered or declined.",
+      "status": "retired",
+      "file": "../web/src/components/chat/spawn-subagents-card.tsx",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
+        "test": "single-approval shows what the server stored, live and in a second tab"
+      },
+      "oracle": "chat.render.cards-match-stored",
+      "reason": "No recorded conversation spawns subagents yet; the entry returns with such a recording."
     }
   ]
 }

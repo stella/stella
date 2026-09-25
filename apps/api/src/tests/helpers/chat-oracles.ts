@@ -39,6 +39,17 @@ export const CHAT_ORACLE = {
   ledgerCallsPresent: "chat.ledger.calls-present",
   /** An approved call runs once; a denied or unanswered one never runs. */
   ledgerEffectsAuthorized: "chat.ledger.effects-authorized",
+  // Reported by the web app's rendered replay of recorded conversations
+  // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
+  /** The rendered page shows what the stored thread says: open cards,
+   *  approval marks, step lists, and nothing busy once idle. */
+  renderCardsMatchStored: "chat.render.cards-match-stored",
+  /** A second tab loading the thread renders what the live page shows. */
+  renderReloadMatchesLive: "chat.render.reload-matches-live",
+  /** The rendered page posts exactly the recorded requests. */
+  renderRequestsMatchRecorded: "chat.render.requests-match-recorded",
+  /** A conversation grant answers each matching approval exactly once. */
+  renderGrantAnswersOnce: "chat.render.grant-answers-once",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];
