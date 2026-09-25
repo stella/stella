@@ -156,6 +156,15 @@ describe("a UOKiK decision PDF", () => {
     ).toBe(false);
   });
 
+  test("is titled as the decision it is", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(DOK_9_2011)]),
+    );
+    const [first] = parsed?.documentAst.blocks ?? [];
+    expect(first?.type).toBe("heading");
+    expect(first?.plainText).toBe("DECYZJA");
+  });
+
   test("records the register as the document's source", async () => {
     const parsed = await parsePlUokikDocument(
       inputOf([await bytesOf(DOK_9_2011)]),

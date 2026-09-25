@@ -30,6 +30,7 @@ import {
   normalizePlUokikRow,
   parsePlUokikCursor,
   parsePlUokikDetail,
+  PL_UOKIK_APPEAL_WATCH,
   PL_UOKIK_DETAIL_STATUS,
   PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_FILE_STATUS,
@@ -532,6 +533,11 @@ describe("a decision with no text to read", () => {
     expect(JSON.stringify(decision?.metadata["decisionFiles"])).toContain(
       PL_UOKIK_FILE_STATUS.IMAGE,
     );
+    // The scan is the copy a later pass reads, so it is kept as served.
+    expect(decision?.sourceRawObjects?.["decision-file"]).toEqual({
+      bytes: Uint8Array.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]),
+      contentType: "image/tiff",
+    });
   });
 
   test("a file that is gone, or of another format, is not a lasting absence", async () => {
@@ -610,6 +616,21 @@ describe("what the register does not serve", () => {
     expect(JSON.stringify(decision?.metadata["decisionFiles"])).toContain(
       PL_UOKIK_FILE_STATUS.NOT_FOUND,
     );
+  });
+
+  test("a view answering no rows for positions inside it fails the page rather than reading as caught up", async () => {
+    const model = await registerOverFixtures();
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(
+        typeof input === "string" || input instanceof URL ? input : input.url,
+      );
+      return await Promise.resolve(
+        url.searchParams.get("Count") === "1"
+          ? answerRegister(model, url)
+          : Response.json({ "@toplevelentries": String(model.entries.length) }),
+      );
+    });
+    expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 
   test("a view answer that is not a view fails the page rather than reading as empty", async () => {
@@ -965,9 +986,8 @@ describe("the court rulings a decision page attaches", () => {
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 
-  test("the census builds the decision alone, spending no request on its rulings", async () => {
-    const model = await registerWithRulings();
-    serveRegister(model);
+  test("the census builds them with the decision, as rows written beside it", async () => {
+    serveRegister(await registerWithRulings());
     const window = entriesOf(
       await Bun.file(
         new URL("pl-uokik-view-2007-window.json", FIXTURES),
@@ -977,13 +997,58 @@ describe("the court rulings a decision page attaches", () => {
       entryOf(window, APPEALED_TO_SUPREME),
     );
     expect(outcome.type).toBe("built");
+    const built = outcome.type === "built" ? outcome : undefined;
+    expect(built?.decision.sourceDocumentId).toBe(APPEALED_TO_SUPREME);
     expect(
-      model.requests.filter(({ pathname }) =>
-        Object.keys(RULING_FILES).some((name) =>
-          decodeURIComponent(pathname).endsWith(name),
+      new Set(
+        built?.companions?.map(({ sourceDocumentId }) => sourceDocumentId),
+      ),
+    ).toEqual(
+      new Set(
+        Object.keys(RULING_FILES).map((name) =>
+          plUokikRulingId(APPEALED_TO_SUPREME, name),
         ),
       ),
-    ).toEqual([]);
+    );
+  });
+
+  test("a decision whose appeal is still before the courts is read again on each census walk", async () => {
+    const entries = await capturedEntries();
+    // DOK-2/2024's page, read under a captured row: the view windows hold
+    // no row of 2024.
+    const pending = decisionOf(
+      await buildFrom(entryOf(entries, WITH_RULINGS), await pageOf(APPEALED)),
+    );
+    // The page says the case is pending before the court.
+    expect(pending.metadata["appealWatch"]).toBe(
+      PL_UOKIK_APPEAL_WATCH.AWAITING_RULING,
+    );
+    // Appealed, with its rulings attached and no status printed.
+    const ruled = decisionOf(
+      await buildFrom(
+        entryOf(entries, WITH_RULINGS),
+        await pageOf(WITH_RULINGS),
+      ),
+    );
+    expect(ruled.metadata["appealWatch"]).toBeUndefined();
+    // Not appealed.
+    const final = decisionOf(
+      await buildFrom(entryOf(entries, FILELESS), await pageOf(FILELESS)),
+    );
+    expect(final.metadata["appealWatch"]).toBeUndefined();
+    // Appealed, no status and no ruling yet.
+    const awaiting = (await pageOf(WITH_RULINGS)).replace(
+      /<b>Orzecznictwo:<\/b><\/td><td width="397">[\s\S]*?<\/td><\/tr>/u,
+      '<b>Orzecznictwo:</b></td><td width="397"></td></tr>',
+    );
+    expect(
+      decisionOf(await buildFrom(entryOf(entries, WITH_RULINGS), awaiting))
+        .metadata["appealWatch"],
+    ).toBe(PL_UOKIK_APPEAL_WATCH.AWAITING_RULING);
+    expect(plUokikAdapter.reconciliation.recheckHeld).toEqual({
+      metadataKey: "appealWatch",
+      values: [PL_UOKIK_APPEAL_WATCH.AWAITING_RULING],
+    });
   });
 
   test("a ruling's stored envelope is not replayed as a decision", async () => {
@@ -1018,9 +1083,39 @@ describe("the court rulings a decision page attaches", () => {
 // ── Identity, replay and inventory ───────────────────────
 
 describe("a listed row is never dropped silently", () => {
-  test("a row with no UNID is kept verbatim under a quarantine identity", async () => {
+  /** The row with its UNID gone from both the entry and its link. */
+  const withoutAnyUnid = (entry: Entry): Entry => {
+    const stripped: unknown = JSON.parse(
+      JSON.stringify(entry).replaceAll(unidOf(entry), "not-a-unid"),
+    );
+    if (!isRecord(stripped)) {
+      return panic("the stripped row is not an object");
+    }
+    delete stripped["@unid"];
+    return stripped;
+  };
+
+  test("a row whose entry states no usable UNID is keyed by the one its link names", async () => {
     const entry = { ...entryOf(await capturedEntries(), FILELESS) };
     delete entry["@unid"];
+    const row = normalizePlUokikRow(entry);
+    expect(row.unid).toBe(FILELESS);
+    expect(row.unidFrom).toBe("link");
+    const lowerCased = {
+      ...entryOf(await capturedEntries(), FILELESS),
+      "@unid": FILELESS.toLowerCase(),
+    };
+    expect(normalizePlUokikRow(lowerCased).unid).toBe(FILELESS);
+
+    const model = await registerOverFixtures([entry]);
+    serveRegister(model);
+    const { decisions } = await walkCrawl(null);
+    expect(decisions[0]?.sourceDocumentId).toBe(FILELESS);
+    expect(decisions[0]?.isListingOnly).toBeUndefined();
+  });
+
+  test("a row with no UNID anywhere is kept verbatim under a quarantine identity", async () => {
+    const entry = withoutAnyUnid(entryOf(await capturedEntries(), FILELESS));
     const identity = plUokikListingIdentity(normalizePlUokikRow(entry));
     expect(identity.type).toBe("document");
     const built = await buildFrom(entry, undefined);
@@ -1036,9 +1131,9 @@ describe("a listed row is never dropped silently", () => {
 
   test("the same row, once its UNID is back, can adopt the quarantined one", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
-    const withoutUnid = { ...entry };
-    delete withoutUnid["@unid"];
-    const quarantined = decisionOf(await buildFrom(withoutUnid, undefined));
+    const quarantined = decisionOf(
+      await buildFrom(withoutAnyUnid(entry), undefined),
+    );
     const recovered = decisionOf(
       await buildFrom(entry, await pageOf(FILELESS)),
     );

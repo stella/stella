@@ -1770,6 +1770,81 @@ test("a row stating a declared reason for holding no document is held on that re
   expect(builds).toEqual([{ unid: failed }, { unid: otherReason }]);
 });
 
+/** A decision with no document, as an adapter hands one over. */
+const plainDecision = (sourceDocumentId: string): IngestionResult => ({
+  caseNumber: sourceDocumentId,
+  sourceDocumentId,
+  court: FIXTURE_COURT,
+  country: "CZE",
+  language: FIXTURE_LANGUAGE,
+  metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
+  documentAst: EMPTY_AST,
+});
+
+test("a held row stating a recheck value is asked for again, and what its page adds is written beside it", async () => {
+  // The competition authority attaches the court rulings on a decision's
+  // appeal to the decision's own page, months or years later. A decision
+  // whose appeal is pending says so on its row; the walk reads its page again
+  // and writes the rulings the build returns beside it.
+  const watched = "0000000000000000000000000000000D";
+  const settled = "0000000000000000000000000000000E";
+  const ruling = `${watched}/Wyrok.pdf`;
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDecision({
+    sourceId,
+    caseNumber: watched,
+    sourceDocumentId: watched,
+    isListingOnly: false,
+    stated: { appealWatch: "awaiting-ruling" },
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: settled,
+    sourceDocumentId: settled,
+    isListingOnly: false,
+  });
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [watched, settled].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { unid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({
+        type: "built",
+        decision: plainDecision(watched),
+        companions: [plainDecision(ruling)],
+      });
+    },
+    heldRequiresDetail: true,
+    recheckHeld: { metadataKey: "appealWatch", values: ["awaiting-ruling"] },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ unid: watched }]);
+  const rows = await db
+    .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(new Set(rows.map((row) => row.sourceDocumentId))).toEqual(
+    new Set([ruling, settled, watched]),
+  );
+});
+
 test("a failed item build reports the SQLSTATE without logging any message text", async () => {
   // Two halves of one invariant. Parking stores the tag alone, so this log
   // line is the only record of why a listed decision could not be built, and

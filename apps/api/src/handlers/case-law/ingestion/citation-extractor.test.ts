@@ -2201,9 +2201,20 @@ describe("extractCitations", () => {
       ["decyzji Prezesa UOKiK (DNR-1-20/2026)", ["DNR-1-20/2026"]],
       ["UOKiK, decyzja nr RGD- 16/2024", ["RGD- 16/2024"]],
       ["Prezes UOKiK wydał decyzję DKK – 212/2026", ["DKK – 212/2026"]],
+      // The author named right after the number.
+      ["w decyzji nr DOK-1/2020 Prezesa UOKiK", ["DOK-1/2020"]],
+      [
+        "decyzja nr RKT-12/2019 Prezesa Urzędu Ochrony Konkurencji i Konsumentów",
+        ["RKT-12/2019"],
+      ],
       // No cue: other bodies number their files the same way.
       ["pismo MZDR 6206/2025 w aktach", []],
       ["decyzja nr DOK-1/2020", []],
+      // A cue far past the number belongs to something else.
+      [
+        "decyzja nr DOK-1/2020 z dnia 5 marca 2020 r. w sprawie, o której mowa w piśmie z dnia 1 czerwca, a później Prezes UOKiK",
+        [],
+      ],
       // Cued, but not a decision number: a two-digit year, lower case, a
       // unit code too short, a number running on.
       ["Prezes UOKiK, RKR 51/06", []],

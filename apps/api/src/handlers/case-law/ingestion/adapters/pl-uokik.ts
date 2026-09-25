@@ -26,10 +26,11 @@
  * decision's UNID and the file's name, filed under the court, docket, date and
  * kind their own header states, and keyed as the courts' own sources key the
  * same judgments. A ruling whose header states none of that readably (a scan,
- * most of the older ones) is kept unpublished, never filed under a guess. The
- * crawl reads them when it reads the decision's page; the year census does
- * not, so a ruling the register attaches to a decision after the crawl passed
- * it is read only when that page is read again.
+ * most of the older ones) is kept unpublished, never filed under a guess.
+ * Both the crawl and the year census read them with the decision's page, and
+ * a decision whose page says its appeal is still before the courts is read
+ * again each time the census walks its year, so a ruling attached later is
+ * found there.
  *
  * The crawl walks the flat view oldest first (`NavigateReverse`), counting
  * positions from its oldest end, where a newly published decision never lands:
@@ -333,7 +334,10 @@ const request = async ({
 export type PlUokikViewRow = {
   /** The row's position in the view, counted from its newest end. */
   position: number | undefined;
+  /** The row's UNID: the entry's own, or the one its detail link names. */
   unid: string | undefined;
+  /** Where `unid` was read from, where it was not the entry's own field. */
+  unidFrom: "link" | undefined;
   noteId: string | undefined;
   /** The one column the view states, as markup. */
   column: string | undefined;
@@ -402,6 +406,23 @@ const columnOf = (entry: Record<string, unknown>): string | undefined => {
   return undefined;
 };
 
+/**
+ * The row's exact publisher key: the entry's `@unid`, in any letter case, or
+ * where the entry states none usable, the UNID its detail link addresses the
+ * same document by.
+ */
+const unidOf = (
+  stated: string | undefined,
+  linked: string | undefined,
+): Pick<PlUokikViewRow, "unid" | "unidFrom"> => {
+  if (isUnid(stated)) {
+    return { unid: stated, unidFrom: undefined };
+  }
+  return isUnid(linked)
+    ? { unid: linked, unidFrom: "link" }
+    : { unid: undefined, unidFrom: undefined };
+};
+
 export const normalizePlUokikRow = (
   entry: Record<string, unknown>,
 ): PlUokikViewRow => {
@@ -418,7 +439,7 @@ export const normalizePlUokikRow = (
   return {
     position:
       Number.isSafeInteger(position) && position > 0 ? position : undefined,
-    unid: isUnid(unid) ? unid : undefined,
+    ...unidOf(unid?.toUpperCase(), link?.groups?.["unid"]?.toUpperCase()),
     noteId: typeof entry["@noteid"] === "string" ? entry["@noteid"] : undefined,
     column,
     decisionNumber: nonEmpty(textOf(number?.groups?.["number"] ?? "")),
@@ -487,6 +508,23 @@ export const readPlUokikView = (
   };
 };
 
+/**
+ * How many rows a read of `count` from `start` holds in a view of `total`:
+ * none for a start outside it, otherwise every position up to its end. A
+ * read answering fewer is a failure, never the view's end.
+ */
+const rowsInRange = (
+  start: number,
+  count: number,
+  reverse: boolean,
+  total: number,
+): number => {
+  if (start < 1 || start > total) {
+    return 0;
+  }
+  return Math.min(count, reverse ? start : total - start + 1);
+};
+
 type ReadViewOptions = {
   cursor: string;
   start: number;
@@ -540,9 +578,15 @@ const readView = async ({
   const ordered = view.rows.every(
     ({ row }, index) => row.position === start + step * index,
   );
-  if (!ordered || view.rows.length > count) {
+  if (
+    !ordered ||
+    view.rows.length !== rowsInRange(start, count, reverse, view.total)
+  ) {
     return Result.err(
-      publisherError(cursor, "view answered rows out of the positions asked"),
+      publisherError(
+        cursor,
+        "view answered other rows than the positions asked hold",
+      ),
     );
   }
   return Result.ok({ ...view, url: answer.url });
@@ -551,6 +595,9 @@ const readView = async ({
 // ── Identity ─────────────────────────────────────────────
 
 const QUARANTINE_PREFIX = "pl-uokik-quarantine:";
+
+/** A link's target inside the view column, whatever it addresses. */
+const LINK_TARGET = /HREF=[^\s>]*/gu;
 
 /**
  * The audit identity of a row that states no usable UNID: a digest of its
@@ -561,7 +608,11 @@ const QUARANTINE_PREFIX = "pl-uokik-quarantine:";
 export const plUokikQuarantineId = (row: PlUokikViewRow): string | undefined =>
   row.column === undefined
     ? undefined
-    : `${QUARANTINE_PREFIX}${hashContent(row.column)}`;
+    : `${QUARANTINE_PREFIX}${hashContent(
+        // The link's target is the identity that went missing, so the digest
+        // is taken without it and still names the row once it is back.
+        row.column.replaceAll(LINK_TARGET, "HREF="),
+      )}`;
 
 const isQuarantineId = (sourceDocumentId: string): boolean =>
   sourceDocumentId.startsWith(QUARANTINE_PREFIX);
@@ -768,7 +819,10 @@ export type PlUokikFileStatus =
 export type PlUokikFetchedFile = {
   name: string;
   status: PlUokikFileStatus;
+  /** The bytes of a PDF or an image, kept beside the row. */
   bytes?: Uint8Array | undefined;
+  /** An image's media type; a PDF's is implied by its status. */
+  contentType?: string | undefined;
 };
 
 /** Answers that say a page or file is not there, as opposed to not now. */
@@ -779,6 +833,8 @@ const PERMANENT_ABSENCE: Readonly<Record<number, "404" | "410">> = {
 
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46];
 
+const PDF_CONTENT_TYPE = "application/pdf";
+
 const startsWith = (bytes: Uint8Array, signature: readonly number[]): boolean =>
   signature.every((byte, index) => bytes[index] === byte);
 
@@ -786,14 +842,16 @@ const isPdf = (bytes: Uint8Array): boolean => startsWith(bytes, PDF_SIGNATURE);
 
 /** TIFF in either byte order, JPEG and PNG: the forms a scan is filed in. */
 const IMAGE_SIGNATURES = [
-  [0x49, 0x49, 0x2a, 0x00],
-  [0x4d, 0x4d, 0x00, 0x2a],
-  [0xff, 0xd8, 0xff],
-  [0x89, 0x50, 0x4e, 0x47],
+  { signature: [0x49, 0x49, 0x2a, 0x00], contentType: "image/tiff" },
+  { signature: [0x4d, 0x4d, 0x00, 0x2a], contentType: "image/tiff" },
+  { signature: [0xff, 0xd8, 0xff], contentType: "image/jpeg" },
+  { signature: [0x89, 0x50, 0x4e, 0x47], contentType: "image/png" },
 ] as const;
 
-const isImage = (bytes: Uint8Array): boolean =>
-  IMAGE_SIGNATURES.some((signature) => startsWith(bytes, signature));
+/** The media type of an image a scan is filed as, or undefined for another file. */
+const imageContentTypeOf = (bytes: Uint8Array): string | undefined =>
+  IMAGE_SIGNATURES.find(({ signature }) => startsWith(bytes, signature))
+    ?.contentType;
 
 type FetchDetailOptions = {
   cursor: string;
@@ -908,21 +966,27 @@ const fetchFile = async ({
   }
   const answer = answered.value;
   switch (answer.type) {
-    case "body":
+    case "body": {
+      if (isPdf(answer.bytes)) {
+        return Result.ok({
+          name: file.name,
+          status: PL_UOKIK_FILE_STATUS.READ,
+          bytes: answer.bytes,
+        });
+      }
+      // A scan is kept as served: it is the copy a later pass reads.
+      const image = imageContentTypeOf(answer.bytes);
       return Result.ok(
-        isPdf(answer.bytes)
-          ? {
-              name: file.name,
-              status: PL_UOKIK_FILE_STATUS.READ,
-              bytes: answer.bytes,
-            }
+        image === undefined
+          ? { name: file.name, status: PL_UOKIK_FILE_STATUS.NOT_PDF }
           : {
               name: file.name,
-              status: isImage(answer.bytes)
-                ? PL_UOKIK_FILE_STATUS.IMAGE
-                : PL_UOKIK_FILE_STATUS.NOT_PDF,
+              status: PL_UOKIK_FILE_STATUS.IMAGE,
+              bytes: answer.bytes,
+              contentType: image,
             },
       );
+    }
     case "redirected":
       return Result.ok({
         name: file.name,
@@ -1064,6 +1128,19 @@ export const plUokikDecisionIdentifiers = (
       ];
 };
 
+type KeptFile = { bytes: Uint8Array; contentType: string };
+
+/** The files whose bytes the row keeps: its PDFs and its scans. */
+const keptFilesOf = (files: readonly PlUokikFetchedFile[]): KeptFile[] =>
+  files.flatMap(({ bytes, contentType, status }) => {
+    // A file read as a PDF is one by its signature.
+    const type =
+      status === PL_UOKIK_FILE_STATUS.READ ? PDF_CONTENT_TYPE : contentType;
+    return bytes === undefined || type === undefined
+      ? []
+      : [{ bytes, contentType: type }];
+  });
+
 const sha256 = (bytes: Uint8Array): string =>
   new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
@@ -1120,6 +1197,43 @@ export type PlUokikDocumentAbsence =
 
 /** The metadata key the reason is stored under. */
 export const PL_UOKIK_DOCUMENT_ABSENCE_KEY = "documentAbsence";
+
+/**
+ * A decision whose page says it was appealed and that no court has ruled for
+ * good: the register attaches the rulings to this page as they come, so the
+ * census reads the page again each time it walks the decision's year.
+ */
+export const PL_UOKIK_APPEAL_WATCH = {
+  AWAITING_RULING: "awaiting-ruling",
+} as const;
+
+/** The metadata key the watch is stored under. */
+export const PL_UOKIK_APPEAL_WATCH_KEY = "appealWatch";
+
+/** What the page prints for an appeal lodged, and for a case still before the court. */
+const APPEALED = "Tak";
+const CASE_PENDING = "Sprawa w toku";
+
+/**
+ * Whether the page states an appeal still waiting on a court: a case the page
+ * says is pending, or, where it prints no status, an appeal with no ruling
+ * attached yet.
+ */
+const appealWatchOf = (
+  detail: PlUokikDetail | undefined,
+): Record<string, unknown> => {
+  if (fieldText(detail, PL_UOKIK_LABEL.APPEALED) !== APPEALED) {
+    return {};
+  }
+  const status = fieldText(detail, PL_UOKIK_LABEL.COURT_STATUS);
+  const waiting =
+    status === undefined
+      ? fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).length === 0
+      : status === CASE_PENDING;
+  return waiting
+    ? { [PL_UOKIK_APPEAL_WATCH_KEY]: PL_UOKIK_APPEAL_WATCH.AWAITING_RULING }
+    : {};
+};
 
 const SCAN_FILE_STATUSES: ReadonlySet<PlUokikFileStatus> = new Set([
   PL_UOKIK_FILE_STATUS.READ,
@@ -1322,9 +1436,10 @@ export const assemblePlUokikDecision = async ({
     fieldText(detail, PL_UOKIK_LABEL.PRACTICE)?.replaceAll("\n", ";"),
   );
 
-  const pdfs = files.flatMap(({ bytes }) =>
-    bytes === undefined ? [] : [bytes],
+  const pdfs = files.flatMap(({ bytes, status }) =>
+    bytes === undefined || status !== PL_UOKIK_FILE_STATUS.READ ? [] : [bytes],
   );
+  const kept = keptFilesOf(files);
   const read = await readDocument({
     pdfs,
     caseNumber,
@@ -1377,6 +1492,7 @@ export const assemblePlUokikDecision = async ({
         files,
       }),
       ...(listingOnly ? { detailStatus: missing } : {}),
+      ...appealWatchOf(detail),
       ...documentStateOf({
         listingOnly,
         read,
@@ -1386,18 +1502,17 @@ export const assemblePlUokikDecision = async ({
     }),
     // The files are stored beside the envelope rather than in it, so a
     // corrected file under an unchanged page has to change the hash too.
-    rawHash: hashContent([sourceRaw, ...pdfs.map(sha256)].join("\n")),
+    rawHash: hashContent(
+      [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
+    ),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
     documentAst,
     sourceRaw,
-    ...(pdfs.length === 0
+    ...(kept.length === 0
       ? {}
       : {
           sourceRawObjects: Object.fromEntries(
-            pdfs.map((bytes, index) => [
-              plUokikFileObjectName(index),
-              { bytes, contentType: "application/pdf" },
-            ]),
+            kept.map((file, index) => [plUokikFileObjectName(index), file]),
           ),
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1482,7 +1597,9 @@ export const assemblePlUokikRuling = async ({
   const id = plUokikRulingId(unid, file.name);
   const documentUrl = plUokikFileUrl(unid, file.name) ?? undefined;
   const sourceUrl = plUokikDetailUrl(unid);
-  const bytes = fetched.bytes;
+  const [kept] = keptFilesOf([fetched]);
+  const bytes =
+    fetched.status === PL_UOKIK_FILE_STATUS.READ ? fetched.bytes : undefined;
   const header =
     bytes === undefined
       ? undefined
@@ -1545,7 +1662,7 @@ export const assemblePlUokikRuling = async ({
       attachmentName: file.name,
       attachmentTitle: file.title,
       attachmentStatus: fetched.status,
-      attachmentSha256: bytes === undefined ? undefined : sha256(bytes),
+      attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
       ...(read === undefined
         ? { rulingStatus: status }
         : {
@@ -1554,39 +1671,27 @@ export const assemblePlUokikRuling = async ({
           }),
     }),
     rawHash: hashContent(
-      [sourceRaw, ...(bytes === undefined ? [] : [sha256(bytes)])].join("\n"),
+      [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
+        "\n",
+      ),
     ),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
     documentAst: parsed?.documentAst ?? EMPTY_AST,
     sourceRaw,
-    ...(bytes === undefined
+    ...(kept === undefined
       ? {}
       : {
           sourceRawObjects: {
-            [RULING_OBJECT]: { bytes, contentType: "application/pdf" },
+            [RULING_OBJECT]: kept,
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   };
 };
 
-/**
- * Whether a build also reads the court rulings the decision page attaches.
- * The crawl does; the census does not, because it stores the one row it asks
- * about and would spend the requests for nothing.
- */
-export const PL_UOKIK_RULINGS = {
-  FETCH: "fetch",
-  SKIP: "skip",
-} as const;
-
-type PlUokikRulingsMode =
-  (typeof PL_UOKIK_RULINGS)[keyof typeof PL_UOKIK_RULINGS];
-
 type BuildOptions = {
   cursor: string;
   entry: Record<string, unknown>;
-  rulings: PlUokikRulingsMode;
   signal?: AbortSignal | undefined;
 };
 
@@ -1604,7 +1709,6 @@ type PlUokikObservation = {
 const buildPlUokikDecision = async ({
   cursor,
   entry,
-  rulings: rulingsMode,
   signal,
 }: BuildOptions): Promise<Result<PlUokikObservation, AdapterFetchError>> => {
   const row = normalizePlUokikRow(entry);
@@ -1650,7 +1754,7 @@ const buildPlUokikDecision = async ({
     rawParts: plUokikRawPartsOf(entry, html),
     files,
   });
-  if (rulingsMode === PL_UOKIK_RULINGS.SKIP || built.type !== "built") {
+  if (built.type !== "built") {
     return Result.ok({ built, rulings: [] });
   }
   const decision: PlUokikDecisionLink = {
@@ -2049,7 +2153,6 @@ const collectDecisions = async (
     const attempted = await buildPlUokikDecision({
       cursor,
       entry,
-      rulings: PL_UOKIK_RULINGS.FETCH,
       signal,
     });
     if (Result.isError(attempted)) {
@@ -2414,18 +2517,15 @@ const buildPlUokikFromPayload = async (
   const attempted = await buildPlUokikDecision({
     cursor: normalizePlUokikRow(payload).unid ?? "",
     entry: payload,
-    // The census stores the one row it asks about; the rulings filed under a
-    // decision reach the corpus through the crawl that reads its page.
-    rulings: PL_UOKIK_RULINGS.SKIP,
     ...(signal === undefined ? {} : { signal }),
   });
   if (Result.isError(attempted)) {
     return await Promise.reject(attempted.error);
   }
-  const { built } = attempted.value;
+  const { built, rulings } = attempted.value;
   switch (built.type) {
     case "built":
-      return { type: "built", decision: built.decision };
+      return { type: "built", decision: built.decision, companions: rulings };
     case "unkeyable":
       return { type: "unkeyable" };
     case "detail-unavailable":
@@ -2498,6 +2598,12 @@ export const plUokikAdapter = defineSourceAdapter({
     heldWithoutDetail: plUokikHeldWithoutDetail,
     // A decision whose files are scans, or which has none, is complete on its
     // page: asking again would read the same images.
+    // An appeal still before the courts gets its rulings attached to the
+    // decision's page; the census reads such a page again on each walk.
+    recheckHeld: {
+      metadataKey: PL_UOKIK_APPEAL_WATCH_KEY,
+      values: [PL_UOKIK_APPEAL_WATCH.AWAITING_RULING],
+    },
     heldWithoutDocument: {
       metadataKey: PL_UOKIK_DOCUMENT_ABSENCE_KEY,
       reasons: [

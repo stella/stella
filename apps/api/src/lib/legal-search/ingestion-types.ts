@@ -916,7 +916,15 @@ export type ReconciliationSlicePageOptions = {
  * document out of every later reconciliation.
  */
 export type ReconciliationBuildOutcome =
-  | { type: "built"; decision: IngestionResult }
+  | {
+      type: "built";
+      decision: IngestionResult;
+      /**
+       * Rows of their own the publisher states on the same page (the court
+       * rulings attached to a decision), written after the decision.
+       */
+      companions?: readonly IngestionResult[] | undefined;
+    }
   | { type: "built-supplement"; supplement: DecisionSupplement }
   | { type: "unkeyable" }
   | { type: "detail-unavailable" };
@@ -964,6 +972,18 @@ export type SourceSliceWalk = {
 export type HeldWithoutDocument = {
   readonly metadataKey: string;
   readonly reasons: readonly [string, ...string[]];
+};
+
+/** See `SourceReconciliation.recheckHeld`. */
+export type HeldRecheck = {
+  readonly metadataKey: string;
+  readonly values: readonly [string, ...string[]];
+};
+
+/** The row-level rules that decide whether a stored row counts as held. */
+export type HeldRowRules = {
+  readonly withoutDocument?: HeldWithoutDocument | undefined;
+  readonly recheck?: HeldRecheck | undefined;
 };
 
 /**
@@ -1015,6 +1035,15 @@ export type SourceReconciliation = SourceSliceWalk & {
    * can read those documents selects exactly the rows it names.
    */
   heldWithoutDocument?: HeldWithoutDocument | undefined;
+  /**
+   * Held rows the walk asks for again whenever it walks their slice: a record
+   * the publisher is still adding to (a decision awaiting the court ruling on
+   * its appeal, which the publisher attaches to the decision's own page) states
+   * so on the row, under `metadataKey`, with one of `values`. Bounded by the
+   * slice cadence and by how many rows state it; a row stops being asked for
+   * once its build no longer states it.
+   */
+  recheckHeld?: HeldRecheck | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;

@@ -676,6 +676,12 @@ const PL_UOKIK_DECISION_CUE_RE =
 /** How far before a decision number its cue may sit. */
 const PL_UOKIK_DECISION_CUE_WINDOW = 160;
 
+/**
+ * How far after it: "decyzja nr DOK-1/2020 Prezesa UOKiK" names its author
+ * right after the number, so the window is short.
+ */
+const PL_UOKIK_DECISION_TRAILING_CUE_WINDOW = 60;
+
 /** What marks a nearby authority file number as the data protection authority's. */
 const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
   /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
@@ -1780,6 +1786,14 @@ export const extractCitations = (
             section.text.slice(
               Math.max(0, match.index - PL_UOKIK_DECISION_CUE_WINDOW),
               match.index,
+            ),
+          ) &&
+          !PL_UOKIK_DECISION_CUE_RE.test(
+            section.text.slice(
+              match.index + match[0].length,
+              match.index +
+                match[0].length +
+                PL_UOKIK_DECISION_TRAILING_CUE_WINDOW,
             ),
           )
         ) {
