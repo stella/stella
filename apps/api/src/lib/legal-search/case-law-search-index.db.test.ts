@@ -12,7 +12,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -26,7 +26,10 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import {
+  backfillSearchIndex,
+  indexDecision,
+} from "@/api/lib/legal-search/case-law-search-index";
 import { logger } from "@/api/lib/observability/logger";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -192,6 +195,74 @@ test(
       });
     } finally {
       warn.mockRestore();
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the backfill indexes every missing decision and counts only the ones that landed",
+  async () => {
+    // More decisions than the backfill runs at once, so the count has to
+    // survive results arriving from several in-flight operations.
+    const indexable = Array.from({ length: 6 }, () =>
+      createSafeId<"caseLawDecision">(),
+    );
+    const failing = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values([
+      ...indexable.map((id, index) => ({
+        caseNumber: `21 Cdo ${index + 1}/2022`,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        fulltext: `Rozhodnutí číslo ${index + 1}.`,
+        id,
+        language: "cs",
+        sourceId,
+      })),
+      {
+        caseNumber: "21 Cdo 99/2022",
+        country: "CZE",
+        court: "Nejvyšší soud",
+        fulltext: "Rozhodnutí, které se nepodaří zaindexovat.",
+        id: failing,
+        language: "xx",
+        sourceId,
+      },
+    ]);
+
+    const failingConfig: typeof resolveConfig = async (language) => {
+      if (language === "xx") {
+        throw new Error("fts configuration unavailable");
+      }
+      return await resolveConfig(language);
+    };
+    const error = spyOn(logger, "error");
+    try {
+      const result = await backfillSearchIndex(scopedDb, 32, failingConfig);
+
+      const projected = await db
+        .select({ decisionId: caseLawSearchDocuments.decisionId })
+        .from(caseLawSearchDocuments)
+        .where(
+          inArray(caseLawSearchDocuments.decisionId, [...indexable, failing]),
+        );
+      expect(new Set(projected.map(({ decisionId }) => decisionId))).toEqual(
+        new Set(indexable),
+      );
+      expect(result.indexed).toBe(result.found - 1);
+      expect(result.found).toBeGreaterThanOrEqual(indexable.length + 1);
+      expect(
+        error.mock.calls.filter(
+          ([signature, fields]) =>
+            signature === "case_law.search_index.backfill_failed" &&
+            typeof fields === "object" &&
+            fields !== null &&
+            "decisionId" in fields &&
+            fields.decisionId === failing,
+        ),
+      ).toHaveLength(1);
+    } finally {
+      error.mockRestore();
     }
   },
   DB_TEST_TIMEOUT_MS,
