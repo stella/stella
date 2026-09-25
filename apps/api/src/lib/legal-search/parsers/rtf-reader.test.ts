@@ -143,6 +143,20 @@ describe("code pages", () => {
     }
   });
 
+  test("an escaped brace or backslash replacement character is not text", () => {
+    for (const replacement of [
+      String.raw`\{`,
+      String.raw`\}`,
+      String.raw`\\`,
+    ]) {
+      expect(
+        paragraphsOf(
+          String.raw`{\rtf1\ansi\ansicpg1252\uc2 a舑${replacement}?b\par }`,
+        ),
+      ).toEqual(["a–b"]);
+    }
+  });
+
   test("`\\ucN` holds for its group and the outer count returns after it", () => {
     expect(
       paragraphsOf(

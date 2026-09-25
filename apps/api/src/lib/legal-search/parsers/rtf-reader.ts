@@ -462,10 +462,10 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
 /**
  * Where reading resumes after the replacement characters a `\uN` escape is
  * followed by, `count` of them as `\ucN` states. The writer gives each either
- * as the byte itself or as a `\'xx` escape, and either may sit on the next
- * line: a line ending is the file's formatting, not a character, so it is
- * passed over first. Anything else (a control word, a group) ends the
- * replacement early and is left to the scanner.
+ * as the byte itself, as a `\'xx` escape, or as an escaped `\{`, `\}` or `\\`,
+ * and each may sit on the next line: a line ending is the file's formatting,
+ * not a character, so it is passed over first. Anything else (a control word,
+ * a group) ends the replacement early and is left to the scanner.
  */
 const afterFallbackCharacters = (
   source: Uint8Array,
@@ -484,6 +484,11 @@ const afterFallbackCharacters = (
     }
     if (byte !== 0x5c) {
       resume = cursor + 1;
+      continue;
+    }
+    const escaped = source[cursor + 1];
+    if (escaped === 0x7b || escaped === 0x7d || escaped === 0x5c) {
+      resume = cursor + 2;
       continue;
     }
     const high = String.fromCodePoint(source[cursor + 2] ?? 0);
