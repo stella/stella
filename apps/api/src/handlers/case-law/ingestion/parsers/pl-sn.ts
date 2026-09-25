@@ -16,6 +16,7 @@
  */
 
 import { PDF } from "@libpdf/core";
+import { panic } from "better-result";
 
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
@@ -129,8 +130,43 @@ const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
   });
 };
 
+/**
+ * Which departures from a page's body margin open a paragraph.
+ *
+ * The Supreme Court indents a paragraph's first line. Other publishers set
+ * numbered paragraphs with a hanging indent instead: the number sits left of
+ * the margin the paragraph's other lines share, so a first line departs from
+ * it in the other direction.
+ */
+export const PL_PDF_PARAGRAPH_START = {
+  INDENT: "indent",
+  INDENT_OR_OUTDENT: "indent-or-outdent",
+} as const;
+
+export type PlPdfParagraphStart =
+  (typeof PL_PDF_PARAGRAPH_START)[keyof typeof PL_PDF_PARAGRAPH_START];
+
+const opensParagraph = (
+  offset: number,
+  paragraphStart: PlPdfParagraphStart,
+): boolean => {
+  switch (paragraphStart) {
+    case PL_PDF_PARAGRAPH_START.INDENT:
+      return offset >= INDENT_THRESHOLD_PT;
+    case PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT:
+      return Math.abs(offset) >= INDENT_THRESHOLD_PT;
+    default: {
+      paragraphStart satisfies never;
+      return panic(`Unhandled paragraph start: ${String(paragraphStart)}`);
+    }
+  }
+};
+
 /** Read one page's lines, keeping blanks and the indent decision. */
-const readPage = (lines: readonly ExtractedLine[]): PlSnLine[] => {
+const readPage = (
+  lines: readonly ExtractedLine[],
+  paragraphStart: PlPdfParagraphStart,
+): PlSnLine[] => {
   const margin = bodyMarginOf(
     lines.filter(({ text }) => text.length > 0).map(({ x }) => x),
   );
@@ -140,7 +176,7 @@ const readPage = (lines: readonly ExtractedLine[]): PlSnLine[] => {
       : {
           type: "text" as const,
           runs: runsOfLine(line),
-          indented: line.x - margin >= INDENT_THRESHOLD_PT,
+          indented: opensParagraph(line.x - margin, paragraphStart),
         },
   );
 };
@@ -226,6 +262,7 @@ export const plSnParagraphsToHtml = (
 /** Every line of every page, in reading order. */
 export const extractPlSnLines = async (
   pdfBytes: Uint8Array,
+  paragraphStart: PlPdfParagraphStart = PL_PDF_PARAGRAPH_START.INDENT,
 ): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
   return pdf.getPages().flatMap((page) => {
@@ -236,6 +273,7 @@ export const extractPlSnLines = async (
         text: normalizeSpanText(line.text),
         x: line.bbox.x,
       })),
+      paragraphStart,
     );
   });
 };

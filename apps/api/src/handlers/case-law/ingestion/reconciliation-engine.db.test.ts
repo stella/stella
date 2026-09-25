@@ -1435,6 +1435,8 @@ type SeedDecisionInput = {
   caseNumber: string;
   sourceDocumentId: string | null;
   isListingOnly: boolean;
+  /** Further metadata the adapter stated on the row. */
+  stated?: Record<string, unknown> | undefined;
 };
 
 const seedDecision = async ({
@@ -1442,6 +1444,7 @@ const seedDecision = async ({
   isListingOnly,
   sourceDocumentId,
   sourceId,
+  stated,
 }: SeedDecisionInput): Promise<void> => {
   await db.insert(caseLawDecisions).values({
     id: createSafeId<"caseLawDecision">(),
@@ -1451,7 +1454,7 @@ const seedDecision = async ({
     court: FIXTURE_COURT,
     country: "CZE",
     language: FIXTURE_LANGUAGE,
-    metadata: storedMetadata(isListingOnly),
+    metadata: { ...storedMetadata(isListingOnly), ...stated },
   });
 };
 
@@ -1706,6 +1709,140 @@ test("a record kind declared complete without a document is held on its record a
   });
   // The decision was hunted again; the ruling was left alone.
   expect(builds).toEqual([{ refid: decisionUrn }]);
+});
+
+test("a row stating a declared reason for holding no document is held on that reason", async () => {
+  // The competition authority files some decisions only as scans, and some
+  // with no file at all. Their rows hold no text by the publisher's doing and
+  // carry the no-document marker a failed fetch leaves too; the reason the
+  // adapter states on the row is what tells the two apart.
+  const scanned = "0000000000000000000000000000000A";
+  const failed = "0000000000000000000000000000000B";
+  const otherReason = "0000000000000000000000000000000C";
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDecision({
+    sourceId,
+    caseNumber: scanned,
+    sourceDocumentId: scanned,
+    isListingOnly: true,
+    stated: { documentAbsence: "scanned" },
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: failed,
+    sourceDocumentId: failed,
+    isListingOnly: true,
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: otherReason,
+    sourceDocumentId: otherReason,
+    isListingOnly: true,
+    stated: { documentAbsence: "not-declared" },
+  });
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [scanned, failed, otherReason].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { unid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    heldRequiresDetail: true,
+    heldWithoutDocument: {
+      metadataKey: "documentAbsence",
+      reasons: ["scanned", "no-attachment"],
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 3, heldBefore: 1 },
+  });
+  // The scan was left alone; the failed fetch and the undeclared reason were
+  // hunted again.
+  expect(builds).toEqual([{ unid: failed }, { unid: otherReason }]);
+});
+
+/** A decision with no document, as an adapter hands one over. */
+const plainDecision = (sourceDocumentId: string): IngestionResult => ({
+  caseNumber: sourceDocumentId,
+  sourceDocumentId,
+  court: FIXTURE_COURT,
+  country: "CZE",
+  language: FIXTURE_LANGUAGE,
+  metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
+  documentAst: EMPTY_AST,
+});
+
+test("a held row stating a recheck value is asked for again, and what its page adds is written beside it", async () => {
+  // The competition authority attaches the court rulings on a decision's
+  // appeal to the decision's own page, months or years later. A decision
+  // whose appeal is pending says so on its row; the walk reads its page again
+  // and writes the rulings the build returns beside it.
+  const watched = "0000000000000000000000000000000D";
+  const settled = "0000000000000000000000000000000E";
+  const ruling = `${watched}/Wyrok.pdf`;
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDecision({
+    sourceId,
+    caseNumber: watched,
+    sourceDocumentId: watched,
+    isListingOnly: false,
+    stated: { appealWatch: "awaiting-ruling" },
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: settled,
+    sourceDocumentId: settled,
+    isListingOnly: false,
+  });
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [watched, settled].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { unid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({
+        type: "built",
+        decision: plainDecision(watched),
+        companions: [plainDecision(ruling)],
+      });
+    },
+    heldRequiresDetail: true,
+    recheckHeld: { metadataKey: "appealWatch", values: ["awaiting-ruling"] },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ unid: watched }]);
+  const rows = await db
+    .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(new Set(rows.map((row) => row.sourceDocumentId))).toEqual(
+    new Set([ruling, settled, watched]),
+  );
 });
 
 test("a failed item build reports the SQLSTATE without logging any message text", async () => {

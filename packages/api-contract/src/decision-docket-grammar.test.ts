@@ -113,6 +113,13 @@ const canonicalDocketArbitraries = {
         ([office, ordinal, year, sheet]) =>
           `${office.toString().padStart(4, "0")}-XYZ9-9.9999.${ordinal}.${year}.${sheet}.XY`,
       ),
+    fc
+      .tuple(
+        fc.constantFrom("XYZ", "XYZW", "ŁXY", "XYZ-II", "XYZ-9"),
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 1990, max: 2099 }),
+      )
+      .map(([unit, ordinal, year]) => `${unit}-${ordinal}/${year}`),
   ),
   SVK: fc
     .tuple(

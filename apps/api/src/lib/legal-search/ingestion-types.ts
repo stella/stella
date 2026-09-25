@@ -916,7 +916,15 @@ export type ReconciliationSlicePageOptions = {
  * document out of every later reconciliation.
  */
 export type ReconciliationBuildOutcome =
-  | { type: "built"; decision: IngestionResult }
+  | {
+      type: "built";
+      decision: IngestionResult;
+      /**
+       * Rows of their own the publisher states on the same page (the court
+       * rulings attached to a decision), written after the decision.
+       */
+      companions?: readonly IngestionResult[] | undefined;
+    }
   | { type: "built-supplement"; supplement: DecisionSupplement }
   | { type: "unkeyable" }
   | { type: "detail-unavailable" };
@@ -960,6 +968,24 @@ export type SourceSliceWalk = {
   tipWindowDays: number;
 };
 
+/** See `SourceReconciliation.heldWithoutDocument`. */
+type HeldWithoutDocument = {
+  readonly metadataKey: string;
+  readonly reasons: readonly [string, ...string[]];
+};
+
+/** See `SourceReconciliation.recheckHeld`. */
+type HeldRecheck = {
+  readonly metadataKey: string;
+  readonly values: readonly [string, ...string[]];
+};
+
+/** The row-level rules that decide whether a stored row counts as held. */
+export type HeldRowRules = {
+  readonly withoutDocument?: HeldWithoutDocument | undefined;
+  readonly recheck?: HeldRecheck | undefined;
+};
+
 /**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
@@ -999,6 +1025,25 @@ export type SourceReconciliation = SourceSliceWalk & {
    * else; absent, every identity follows `heldRequiresDetail`.
    */
   heldWithoutDetail?: ((identity: ListingIdentity) => boolean) | undefined;
+  /**
+   * The stored rows `heldRequiresDetail` does not apply to, read off the row
+   * rather than the identity: a source whose records of one kind are complete
+   * or not depending on what the publisher served for each (a document that
+   * is an image, no document at all) states the reason on the row, under
+   * `metadataKey`, and names here the reasons that make a row complete
+   * without its text. The reason is a declared value, so a later pass that
+   * can read those documents selects exactly the rows it names.
+   */
+  heldWithoutDocument?: HeldWithoutDocument | undefined;
+  /**
+   * Held rows the walk asks for again whenever it walks their slice: a record
+   * the publisher is still adding to (a decision awaiting the court ruling on
+   * its appeal, which the publisher attaches to the decision's own page) states
+   * so on the row, under `metadataKey`, with one of `values`. Bounded by the
+   * slice cadence and by how many rows state it; a row stops being asked for
+   * once its build no longer states it.
+   */
+  recheckHeld?: HeldRecheck | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;

@@ -55,6 +55,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
   huggingFaceShardSource,
   PL_NSA_SNAPSHOT,
@@ -1183,6 +1184,13 @@ export const assemblePlNsaDecision = ({
           sourceUrl:
             relatedId?.portal === true ? plNsaPortalUrl(relatedId.id) : null,
         };
+      }),
+      rulingKeys: plAdministrativeCourtRulingKeys({
+        caseNumber,
+        court: court.name,
+        decisionDate,
+        decisionType: kind.type,
+        portalDocumentId: identity.kind === "portal" ? identity.id : undefined,
       }),
       challengedAuthority: nonEmpty(row.challenged_authority) ?? undefined,
       outcome: row.decision ?? undefined,

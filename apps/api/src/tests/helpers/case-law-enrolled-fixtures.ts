@@ -19,6 +19,7 @@
  */
 
 import { panic } from "better-result";
+import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -104,6 +105,14 @@ import {
   plUodoBodyFrom,
   plUodoRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import {
+  assemblePlUokikDecision,
+  assemblePlUokikRuling,
+  parsePlUokikDetail,
+  PL_UOKIK_FILE_STATUS,
+  PL_UOKIK_LABEL,
+  plUokikRawPartsOf,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -2340,5 +2349,206 @@ export const plUodoFixture = (): EnrolledAdapterFixture => ({
     return built.type === "built"
       ? built.decision
       : panic(`pl-uodo fixture did not build: ${built.type}`);
+  },
+});
+
+// ── PL UOKiK fixture ─────────────────────────────────────
+
+/** Decision year 2011 as the year census read it from the flat view. */
+const PL_UOKIK_VIEW_2011 = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-view-2011.json.gz",
+  import.meta.url,
+);
+
+/** The page the register served for DOK-9/2011. */
+const PL_UOKIK_DETAIL = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
+  import.meta.url,
+);
+
+/** Its decision file. */
+const PL_UOKIK_PDF = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/pl-uokik-dok-9-2011.pdf",
+  import.meta.url,
+);
+
+const PL_UOKIK_DECISION_UNID = "2520D55B0F17A317C1257EC6007B9773";
+
+/** A page under appeal, which prints the court-status row. */
+const PL_UOKIK_APPEALED_DETAIL = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-detail-71c0a3dfe2eb6946c1258bf0003d546a.html",
+  import.meta.url,
+);
+
+/** A page with no files, whose file rows render unlabelled. */
+const PL_UOKIK_FILELESS_DETAIL = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-detail-9c652284e9a4958dc1257ec6007b8be1.html",
+  import.meta.url,
+);
+
+/** The rows of a captured page's table other than the back link, as markup. */
+const plUokikTableRows = (html: string): string[] => {
+  const $ = cheerio.load(html);
+  return $("div.ck-content table")
+    .first()
+    .find("tr")
+    .toArray()
+    .filter((row) => $(row).children("td").first().find("a").length === 0)
+    .map((row) => $.html(row));
+};
+
+/**
+ * The captured page with the rows the other captured pages print and this
+ * one does not added before its back link: the court-status row a page under
+ * appeal shows and the unlabelled rows a page with no files shows. Every row
+ * is one the register served, so the page states the union of the labels.
+ */
+const plUokikUnionPage = async (html: string): Promise<string> => {
+  const appealed = plUokikTableRows(
+    await Bun.file(PL_UOKIK_APPEALED_DETAIL).text(),
+  ).filter((row) => row.includes("Status sprawy"));
+  const unlabelled = plUokikTableRows(
+    await Bun.file(PL_UOKIK_FILELESS_DETAIL).text(),
+  ).filter((row) => !row.includes("<b>"));
+  const backLink = html.indexOf('<tr valign="top"><td width="113"><a');
+  if (backLink === -1 || appealed.length === 0 || unlabelled.length === 0) {
+    return panic("the pl-uokik page fixtures lost the rows they are kept for");
+  }
+  return `${html.slice(0, backLink)}${[...appealed, ...unlabelled].join("\n")}\n${html.slice(backLink)}`;
+};
+
+const PL_UOKIK_SOURCE_ID = "pl-uokik-inventory-fixture";
+
+/**
+ * Built from the captured view row, page and file through the adapter's own
+ * assembly, with the file's object reference closed into the envelope the way
+ * the pipeline closes it.
+ */
+export const plUokikFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const view = await readGzipJson(PL_UOKIK_VIEW_2011);
+    const listed: unknown[] =
+      isRecord(view) && Array.isArray(view["viewentry"])
+        ? view["viewentry"]
+        : [];
+    const entry = listed
+      .filter(isRecord)
+      .find((item) => item["@unid"] === PL_UOKIK_DECISION_UNID);
+    if (entry === undefined) {
+      return panic("the pl-uokik view fixture lost its decision");
+    }
+    const html = await plUokikUnionPage(await Bun.file(PL_UOKIK_DETAIL).text());
+    const name =
+      parsePlUokikDetail(html)
+        ?.fields.find(({ label }) => label === PL_UOKIK_LABEL.DECISION_FILES)
+        ?.files.at(0)?.name ?? panic("the pl-uokik page names no file");
+    const built = await assemblePlUokikDecision({
+      entry,
+      rawParts: plUokikRawPartsOf(entry, html),
+      files: [
+        {
+          name,
+          status: PL_UOKIK_FILE_STATUS.READ,
+          bytes: new Uint8Array(await Bun.file(PL_UOKIK_PDF).arrayBuffer()),
+        },
+      ],
+    });
+    if (built.type !== "built") {
+      return panic(`pl-uokik fixture did not build: ${built.type}`);
+    }
+    const { decision } = built;
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: PL_UOKIK_SOURCE_ID,
+            documentId: PL_UOKIK_DECISION_UNID,
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
+});
+
+/** A decision whose appeal reached the appeal court, with its ruling file. */
+const PL_UOKIK_RULING_UNID = "E1054A6198F37B72C1257EC6007B8007";
+
+const PL_UOKIK_RULING_WINDOW = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-view-2007-window.json",
+  import.meta.url,
+);
+
+const PL_UOKIK_RULING_DETAIL = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-uokik-detail-e1054a6198f37b72c1257ec6007b8007.html",
+  import.meta.url,
+);
+
+const PL_UOKIK_RULING_PDF = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/pl-uokik-ruling-vi-aca-527-08.pdf",
+  import.meta.url,
+);
+
+/**
+ * An appeal court judgment the register attaches to RLU-17/2007, built as a
+ * row of its own through the adapter's assembly, with its file's object
+ * reference closed into the envelope the way the pipeline closes it.
+ */
+export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const view: unknown = await Bun.file(PL_UOKIK_RULING_WINDOW).json();
+    const listed: unknown[] =
+      isRecord(view) && Array.isArray(view["viewentry"])
+        ? view["viewentry"]
+        : [];
+    const entry =
+      listed
+        .filter(isRecord)
+        .find((item) => item["@unid"] === PL_UOKIK_RULING_UNID) ??
+      panic("the pl-uokik ruling window lost its decision");
+    const bytes = new Uint8Array(
+      await Bun.file(PL_UOKIK_RULING_PDF).arrayBuffer(),
+    );
+    const decision = await assemblePlUokikRuling({
+      entry,
+      detailHtml: await Bun.file(PL_UOKIK_RULING_DETAIL).text(),
+      unid: PL_UOKIK_RULING_UNID,
+      file: { name: "Wyrok VI ACa 527_08.pdf", title: undefined },
+      fetched: {
+        name: "Wyrok VI ACa 527_08.pdf",
+        status: PL_UOKIK_FILE_STATUS.READ,
+        bytes,
+      },
+      decision: {
+        sourceDocumentId: PL_UOKIK_RULING_UNID,
+        caseNumber: "RLU-17/2007",
+        decisionDate: "2007-05-16",
+      },
+    });
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes: payload, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: PL_UOKIK_SOURCE_ID,
+            documentId: decision.sourceDocumentId ?? PL_UOKIK_RULING_UNID,
+            bytes: payload,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
   },
 });

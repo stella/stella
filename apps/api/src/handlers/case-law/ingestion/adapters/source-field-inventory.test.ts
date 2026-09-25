@@ -54,6 +54,7 @@ import {
   plSnFixture,
   plTkFixture,
   plUodoFixture,
+  plUokikFixture,
   skCourtsFixture,
   skUsFixture,
   type EnrolledAdapterFixture,
@@ -101,6 +102,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
+  [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);
