@@ -277,12 +277,14 @@ const selfTest = async (): Promise<number> => {
   const failures: string[] = [];
   try {
     const endings = [
-      ...Object.entries(TERMINATION_SIGNALS).map(([signal, code]) => ({
-        code,
-        label: signal,
-        signal,
-        throws: false,
-      })),
+      ...(["SIGHUP", "SIGINT", "SIGTERM"] as const).map(
+        (signal: TerminationSignal) => ({
+          code: TERMINATION_SIGNALS[signal],
+          label: signal,
+          signal,
+          throws: false,
+        }),
+      ),
       { code: 1, label: "uncaught error", signal: undefined, throws: true },
     ];
     for (const ending of endings) {
