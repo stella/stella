@@ -362,7 +362,7 @@ export const createRawChatFilePart = ({
  * is provider-bound context, not user-facing UI; the user still sees the
  * attachment chip from the persisted reference part.
  */
-const attachmentText = ({
+export const attachmentText = ({
   fileName,
   content,
 }: {

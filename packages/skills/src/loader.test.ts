@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { getSkillResourceKind, parseSkillFile } from "./loader";
+import {
+  getSkillResourceKind,
+  listSkillMetadata,
+  loadSkill,
+  parseSkillFile,
+  readDocumentedChatReads,
+  readExcludedChatTools,
+} from "./loader";
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 describe("Stella skill loader", () => {
   test("parses standard Agent Skills metadata fields", () => {
@@ -141,6 +150,69 @@ metadata: [one, two]
 
 Body.`),
     ).toThrow("Skill file frontmatter metadata must be a string mapping");
+  });
+
+  test("reads the chat tools a skill excludes from its metadata", () => {
+    const parsed = parseSkillFile(`---
+name: excluding-skill
+description: Excludes a chat tool.
+metadata:
+  stella-chat-excluded-tools: "spawn_subagents   web_search\tspawn_subagents"
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(parsed.metadata.metadata)).toEqual([
+      "spawn_subagents",
+      "web_search",
+    ]);
+  });
+
+  test("excludes no chat tool when the metadata key is absent or blank", () => {
+    const absent = parseSkillFile(`---
+name: plain-skill
+description: Excludes nothing.
+metadata:
+  author: stella
+---
+
+Body.`);
+    const blank = parseSkillFile(`---
+name: blank-skill
+description: Declares the key with nothing in it.
+metadata:
+  stella-chat-excluded-tools: "  "
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(absent.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(blank.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(undefined)).toEqual([]);
+  });
+
+  test("reads the chat reads a skill documents up front from its metadata", () => {
+    const parsed = parseSkillFile(`---
+name: documenting-skill
+description: Documents two reads.
+metadata:
+  stella-chat-documented-reads: "list_documents\tread_content_across_matters  list_documents"
+---
+
+Body.`);
+    const absent = parseSkillFile(`---
+name: plain-skill
+description: Documents nothing.
+---
+
+Body.`);
+
+    expect(readDocumentedChatReads(parsed.metadata.metadata)).toEqual([
+      "list_documents",
+      "read_content_across_matters",
+    ]);
+    expect(readDocumentedChatReads(absent.metadata.metadata)).toEqual([]);
+    expect(readDocumentedChatReads(undefined)).toEqual([]);
   });
 
   test("ignores unsupported top-level fields without widening the output", () => {
@@ -313,5 +385,33 @@ Body.`);
     expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
     expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
     expect(getSkillResourceKind("unknown/file.md")).toBeNull();
+  });
+});
+
+describe("shipped built-in skills", () => {
+  // Chat resolves a built-in by its frontmatter name and loads it by its
+  // directory id, so the two must be the same string.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s is named after its directory and fits the package limits",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(skill.name).toBe(id);
+      expect(skill.name).toMatch(SKILL_NAME_PATTERN);
+      expect(skill.description.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+      );
+      expect(skill.body.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.bodyMaxChars,
+      );
+    },
+  );
+
+  test("the metadata list names every shipped skill", () => {
+    expect(listSkillMetadata().map(({ name }) => name)).toEqual(
+      GENERATED_SKILLS.map(({ id }) => id).toSorted((a, b) =>
+        a.localeCompare(b),
+      ),
+    );
   });
 });

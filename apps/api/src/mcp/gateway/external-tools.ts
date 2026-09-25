@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -19,6 +19,8 @@ import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
+import { SKILL_TOOL_SOURCE } from "@/api/mcp/gateway/skills";
+import type { SkillToolSource } from "@/api/mcp/gateway/skills";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import {
   MCP_INTERNAL_ERROR_HINT,
@@ -235,31 +237,52 @@ export const callGatewayExternalMcpTool = async ({
   }
 };
 
+/**
+ * The audit subject of a skill read: an installed skill by its row id, a
+ * built-in by its slug, since it has no row. `skillSource` says which.
+ */
+const skillAuditSubject = (
+  skill: SkillToolSource,
+): { resourceId: string; skillSource: SkillToolSource["source"] } => {
+  switch (skill.source) {
+    case SKILL_TOOL_SOURCE.installed:
+      return { resourceId: skill.id, skillSource: skill.source };
+    case SKILL_TOOL_SOURCE.builtIn:
+      return { resourceId: skill.slug, skillSource: skill.source };
+    default: {
+      skill satisfies never;
+      return panic(`Unhandled skill source: ${String(skill)}`);
+    }
+  }
+};
+
 export const recordSkillGatewayToolAudit = async ({
   context,
   durationMs,
   outcome,
-  skillId,
+  skill,
   toolName,
 }: {
   context: McpRequestContext;
   durationMs: number;
   outcome: "error" | "success";
-  skillId: string;
+  skill: SkillToolSource;
   toolName: string;
 }) => {
   const recordAuditEvent = context.recordAuditEvent;
+  const { resourceId, skillSource } = skillAuditSubject(skill);
 
   const result = await context.safeDb(
     async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.EXECUTE,
         resourceType: AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL,
-        resourceId: skillId,
+        resourceId,
         workspaceId: null,
         metadata: {
           durationMs,
           outcome,
+          skillSource,
           toolKind: "skill",
           toolName,
         },

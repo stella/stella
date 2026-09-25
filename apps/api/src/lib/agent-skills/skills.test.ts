@@ -8,7 +8,7 @@ import {
   canEditActiveSkill,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
-  resolveActiveChatSkillContext,
+  resolveActiveSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -88,7 +88,7 @@ describe("canEditActiveSkill", () => {
   });
 });
 
-describe("resolveActiveChatSkillContext", () => {
+describe("resolveActiveSkillContext", () => {
   test("allows enabled team skills as active chat skills for members", async () => {
     const skillId = await insertSkill({
       enabled: true,
@@ -98,7 +98,7 @@ describe("resolveActiveChatSkillContext", () => {
     });
     await insertResource({ path: "knowledge/enabled.md", skillId });
 
-    const result = await resolveActiveChatSkillContext({
+    const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Enabled Team Skill" },
       memberRole: { role: "member" },
       organizationId: ids.orgA,
@@ -126,7 +126,7 @@ describe("resolveActiveChatSkillContext", () => {
     });
     await insertResource({ path: "knowledge/disabled.md", skillId });
 
-    const result = await resolveActiveChatSkillContext({
+    const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Team Skill" },
       memberRole: { role: "member" },
       organizationId: ids.orgA,
@@ -149,7 +149,7 @@ describe("resolveActiveChatSkillContext", () => {
       userId: ids.userA1,
     });
 
-    const result = await resolveActiveChatSkillContext({
+    const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Team Skill" },
       memberRole: { role: "admin" },
       organizationId: ids.orgA,
@@ -174,7 +174,7 @@ describe("resolveActiveChatSkillContext", () => {
       userId: ids.userA1,
     });
 
-    const result = await resolveActiveChatSkillContext({
+    const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Bundled Skill" },
       memberRole: { role: "admin" },
       organizationId: ids.orgA,
@@ -197,14 +197,14 @@ describe("resolveActiveChatSkillContext", () => {
       userId: ids.userA1,
     });
 
-    const ownerResult = await resolveActiveChatSkillContext({
+    const ownerResult = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Private Skill" },
       memberRole: { role: "member" },
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA1,
     });
-    const otherUserResult = await resolveActiveChatSkillContext({
+    const otherUserResult = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Private Skill" },
       memberRole: { role: "admin" },
       organizationId: ids.orgA,
@@ -292,7 +292,7 @@ describe("available active chat skills", () => {
 });
 
 type ActiveSkillContextResult = Awaited<
-  ReturnType<typeof resolveActiveChatSkillContext>
+  ReturnType<typeof resolveActiveSkillContext>
 >;
 
 const expectHandlerStatus = ({

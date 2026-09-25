@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
@@ -20,7 +22,10 @@ import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
-import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolDefinition,
+} from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type {
@@ -28,8 +33,10 @@ import type {
   AssertTrue,
   HandlerOutputsMatchByName,
   McpToolHandler,
+  McpToolResponse,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
+import { validationErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
   ChatProjectableToolName,
@@ -129,6 +136,51 @@ export type RunRegistryReadToolProps = {
   args: Record<string, unknown>;
   context: McpRequestContext;
   refRegistry: ChatRefRegistry;
+  /**
+   * Eval seam: answers the tool in place of its registry handler. Everything
+   * around the handler stays production (ref dehydration, boundary
+   * normalization, the handler's own argument parse and its envelope, egress,
+   * the strict projection), so an eval fixture meets the surface a model
+   * meets, without a database.
+   */
+  handler?: McpToolHandler | undefined;
+};
+
+/**
+ * Every registry handler opens by parsing its arguments with the definition's
+ * own valibot schema and answering a failure with `validationErrorResult`. An
+ * injected handler gets that step here, so a refused call (an unknown key, a
+ * bad value) meets the handler's envelope and an accepted one the parsed
+ * arguments. A legacy definition without a valibot source validates by hand
+ * inside its handler; its injected handler sees the normalized arguments.
+ * The definition comes from the `as const` registry array, whose element
+ * union keeps each valibot source's own type.
+ */
+const runInjectedHandler = async ({
+  args,
+  context,
+  toolName,
+  handler,
+}: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  toolName: RegistryReadToolName;
+  handler: McpToolHandler;
+}): Promise<McpToolResponse> => {
+  const definition =
+    DEFAULT_MCP_TOOL_DEFINITIONS.find(({ name }) => name === toolName) ??
+    panic(`Read tool ${toolName} is missing from the static registry`);
+  if (!("inputSchemaSource" in definition)) {
+    return await handler({ args, context });
+  }
+  const parsed = v.safeParse(definition.inputSchemaSource, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  if (!isRecord(parsed.output)) {
+    return panic("An object input schema parsed to a non-object value");
+  }
+  return await handler({ args: parsed.output, context });
 };
 
 /**
@@ -149,6 +201,7 @@ export const runRegistryReadTool = async ({
   args,
   context,
   refRegistry,
+  handler,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
@@ -192,10 +245,18 @@ export const runRegistryReadTool = async ({
     );
   }
 
-  const response = await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-    args: normalized.value,
-    context,
-  });
+  const response =
+    handler === undefined
+      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+          args: normalized.value,
+          context,
+        })
+      : await runInjectedHandler({
+          args: normalized.value,
+          context,
+          toolName,
+          handler,
+        });
   const finished = await finalizeToolEgress({
     context,
     mode: "default",

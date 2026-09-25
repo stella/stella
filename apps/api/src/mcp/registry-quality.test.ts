@@ -329,8 +329,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // then adds 161 default: the projection states bounds and defaults the
 // validators already enforced (`minLength`, the cursor's `maxLength`,
 // `access`/`limit` defaults) plus Valibot's empty `required`.
+// save_playbook's `scope.perspective` then measures 172_389 default: the description
+// now says when the side maps to no value (a recipient, controller, or
+// customer), so the rule holds for a caller without the playbook-builder
+// skill. Small models set a value on every side without it. The knowledge
+// tools are not on the anonymized or law surfaces.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 172_400,
+  default: 172_500,
   anonymized: 75_400,
   law: 28_250,
 };

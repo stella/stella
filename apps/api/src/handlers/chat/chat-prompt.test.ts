@@ -10,12 +10,10 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import {
-  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
-} from "@/api/lib/agent-skills/skills";
+import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -665,6 +663,8 @@ describe("chat prompt builders", () => {
       description: "Active workflow description.",
       displayName: "Active Workflow",
       editable: true,
+      documentedChatReads: [],
+      excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
@@ -693,6 +693,8 @@ describe("chat prompt builders", () => {
       description: "Active workflow description.",
       displayName: "Active Workflow",
       editable: true,
+      documentedChatReads: [],
+      excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [],

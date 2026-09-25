@@ -6,6 +6,8 @@ import {
   listSkillMetadata,
   listSkillResources,
   loadSkill,
+  readDocumentedChatReads,
+  readExcludedChatTools,
   readSkillResource,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResource, StellaSkill } from "@stll/skills";
@@ -52,11 +54,21 @@ type ChatMemberRole = {
   role: string;
 };
 
-export type ActiveChatSkillContext = {
+/**
+ * The active skill as resolved from its source, before any surface acts on
+ * it. The two frontmatter lists are the declared strings: which names chat
+ * can honour is a chat decision, made once in
+ * `handlers/chat/active-skill-context.ts`, which is the type chat code reads.
+ */
+export type ActiveSkillContext = {
   body: string;
   description: string;
   displayName: string;
+  /** `stella-chat-documented-reads`, as declared. */
+  documentedChatReads: readonly string[];
   editable: boolean;
+  /** `stella-chat-excluded-tools`, as declared. */
+  excludedChatTools: readonly string[];
   id: SafeId<"agentSkill"> | null;
   origin: AgentSkillOrigin | "built-in";
   resources: SkillResource[];
@@ -65,7 +77,7 @@ export type ActiveChatSkillContext = {
   version: string | null;
 };
 
-export const resolveActiveChatSkillContext = async ({
+export const resolveActiveSkillContext = async ({
   activeSkill,
   memberRole,
   organizationId,
@@ -75,7 +87,7 @@ export const resolveActiveChatSkillContext = async ({
   activeSkill: ActiveChatSkillRequest | undefined;
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext | null, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext | null, HandlerError<403 | 404> | SafeDbError>
 > => {
   if (!activeSkill) {
     return Result.ok(null);
@@ -106,7 +118,9 @@ export const resolveActiveChatSkillContext = async ({
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: false,
+    excludedChatTools: readExcludedChatTools(skill.metadata),
     id: null,
     origin: "built-in",
     resources: skill.resources,
@@ -126,7 +140,7 @@ const resolveInstalledActiveSkill = async ({
   activeSkill: ActiveChatSkillRequest & { skillId: SafeId<"agentSkill"> };
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext, HandlerError<403 | 404> | SafeDbError>
 > => {
   const skillRows = await safeDb((tx) =>
     tx
@@ -135,6 +149,7 @@ const resolveInstalledActiveSkill = async ({
         body: agentSkills.body,
         description: agentSkills.description,
         enabled: agentSkills.enabled,
+        metadata: agentSkills.metadata,
         name: agentSkills.name,
         origin: agentSkills.origin,
         scope: agentSkills.scope,
@@ -199,6 +214,7 @@ const resolveInstalledActiveSkill = async ({
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: canEditActiveSkill({
       memberRole,
       origin: skill.origin,
@@ -206,6 +222,7 @@ const resolveInstalledActiveSkill = async ({
       skillUserId: skill.userId,
       userId,
     }),
+    excludedChatTools: readExcludedChatTools(skill.metadata),
     id: skill.id,
     origin: skill.origin,
     resources: resources.value,

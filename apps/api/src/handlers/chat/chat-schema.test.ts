@@ -13,7 +13,7 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
@@ -37,6 +37,7 @@ import {
   validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
+import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
@@ -118,6 +119,14 @@ const askUserTools = {
     description: "Ask a user for missing information",
   },
 } satisfies ChatToolMap;
+/** The registered ask-user tool, schema and all, not a stand-in for it. */
+const registeredAskUserTools = createOrgTools({
+  accessibleWorkspaceIds: [],
+  organizationId: toSafeId<"organization">("org_registered_ask_user"),
+  scopedDb: (async () => {
+    throw new Error("The ask-user tool schema needs no database");
+  }) satisfies ScopedDb,
+});
 const suggestChangesTools = {
   suggest_changes: {
     name: "suggest_changes",
@@ -642,6 +651,75 @@ describe("validateMessage", () => {
     expect(
       Result.isError(validateToolCallParts({ message, tools: askUserTools })),
     ).toBe(true);
+  });
+
+  test("validates the adapter's folded input, not a strict provider's null-widened text", () => {
+    const input = {
+      analysis: "The side and governing law are not in the request.",
+      questions: [
+        { question: "Which side are you on?", reason: "Sets the tiers." },
+      ],
+    };
+    // What a strict provider schema streams: every optional spelled as null.
+    const widenedArguments = JSON.stringify({
+      ...input,
+      questions: input.questions.map((question) => ({
+        ...question,
+        options: null,
+        default: null,
+      })),
+    });
+    const call = {
+      arguments: widenedArguments,
+      id: "ask-user-widened",
+      input,
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } as const satisfies ChatMessage["parts"][number];
+    const messageWith = (part: ChatMessage["parts"][number]): ChatMessage => ({
+      id: chatMessageId("msg_widened_ask_user"),
+      role: "assistant",
+      parts: [part],
+    });
+
+    // The text alone does not meet the schema: `optional` admits absence,
+    // not null. A part with only the text (rebuilt by a client, or persisted
+    // before adapters attached `input`) is folded the same way the adapter
+    // folds, so it validates and persists the one canonical spelling.
+    const { input: _omitted, ...textOnlyCall } = call;
+    const textOnly = validateToolCallParts({
+      message: messageWith(textOnlyCall),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isOk(textOnly) && textOnly.value).toEqual([
+      { ...call, arguments: JSON.stringify(input) },
+    ]);
+
+    const validated = validateToolCallParts({
+      message: messageWith(call),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isOk(validated)).toBe(true);
+    if (Result.isError(validated)) {
+      return;
+    }
+    // One spelling is persisted: the folded input, and the text derived from it.
+    expect(validated.value).toEqual([
+      { ...call, arguments: JSON.stringify(input) },
+    ]);
+
+    // Folding nulls never admits a different call.
+    const drifted = validateToolCallParts({
+      message: messageWith({
+        ...call,
+        arguments: widenedArguments.replace("Which side", "Which law"),
+      }),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isError(drifted) && drifted.error.message).toBe(
+      "Chat tool input does not match arguments for ask-user",
+    );
   });
 
   test("accepts TanStack text parts at the live boundary", async () => {

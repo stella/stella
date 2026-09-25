@@ -25,7 +25,7 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
  * skill chips as `[label](#stella-skill-ref=slug)`). The slug sits inside the
  * markdown link target, so it runs up to the closing paren or whitespace.
  */
-const SKILL_REF_RE = /#stella-skill-ref=(?<slug>[^)\s]+)/u;
+const SKILL_REF_RE = /#stella-skill-ref=(?<slug>[^)\s]+)/gu;
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -36,19 +36,26 @@ export type SkillToolsContext = {
 
 /**
  * Returns the `load-skill` + `read-skill-resource` tool set when `prompt`
- * references at least one skill, otherwise `undefined` so the caller keeps its
- * existing no-tools behaviour. `ctx` is omitted at boundaries that cannot wire
- * the skill identity yet; in that case skill refs stay inert (no tools).
+ * references at least one skill in the catalog, otherwise `undefined` so the
+ * caller keeps its existing no-tools behaviour. `ctx` is omitted at boundaries
+ * that cannot wire the skill identity yet; in that case skill refs stay inert
+ * (no tools).
  */
 export const maybeSkillTools = (
   prompt: string,
   ctx: SkillToolsContext | undefined,
 ): ChatToolMap | undefined => {
-  if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
+  if (ctx === undefined) {
     return undefined;
   }
+  const referencedSlugs = new Set(
+    Array.from(
+      prompt.matchAll(SKILL_REF_RE),
+      (match) => match.groups?.["slug"],
+    ),
+  );
   const skills = getChatSkillMetadata();
-  if (skills.length === 0) {
+  if (!skills.some(({ name }) => referencedSlugs.has(name))) {
     return undefined;
   }
   return createSkillTools({

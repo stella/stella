@@ -30,6 +30,7 @@ const context = asTestRaw<McpRequestContext>({
 });
 
 const resolvedSkill = asTestRaw<ResolvedSkillTool>({
+  source: "installed",
   id: toSafeId<"agentSkill">("skill_alpha"),
   slug: "alpha",
   body: "# Alpha skill body",
@@ -163,10 +164,53 @@ describe("dispatchGatewayToolCall", () => {
       expect.objectContaining({
         context,
         outcome: "success",
-        skillId: resolvedSkill.id,
+        skill: resolvedSkill,
         toolName: "skill__alpha",
         durationMs: expect.any(Number),
       }),
+    );
+  });
+
+  test("serves a built-in skill, which has no row, with its own origin", async () => {
+    const builtIn: ResolvedSkillTool = {
+      source: "built-in",
+      slug: "playbook-builder",
+      name: "playbook-builder",
+      description: "Build a playbook",
+      body: "# Built-in body",
+      metadata: {},
+      version: null,
+      license: null,
+      compatibility: null,
+      exposedName: "skill__playbook-builder",
+    };
+    resolveSkillToolMock.mockResolvedValue(builtIn);
+
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: builtIn.exposedName,
+      dependencies,
+    });
+
+    expect(result).toEqual({
+      type: "internal",
+      result: {
+        status: "success",
+        data: {
+          body: "# Built-in body",
+          compatibility: null,
+          license: null,
+          metadata: {},
+          name: "playbook-builder",
+          origin: "built-in",
+          version: null,
+        },
+      },
+    });
+    expect(recordSkillGatewayToolAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "success", skill: builtIn }),
     );
   });
 

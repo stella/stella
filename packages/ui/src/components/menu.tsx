@@ -32,7 +32,7 @@ const MenuPopup = ({
   children,
   className,
   sideOffset = 4,
-  align = "center",
+  align,
   alignOffset,
   side = "bottom",
   anchor,
@@ -46,12 +46,12 @@ const MenuPopup = ({
 }) => (
   <MenuPrimitive.Portal>
     <MenuPrimitive.Positioner
-      align={anchor ? "start" : align}
+      align={align ?? (anchor ? "start" : "center")}
       alignOffset={alignOffset}
       anchor={anchor}
       className={OVERLAY_LAYER_CLASS_NAMES.popup}
       data-slot="menu-positioner"
-      side={anchor ? "bottom" : side}
+      side={side}
       sideOffset={sideOffset}
     >
       <MenuPrimitive.Popup

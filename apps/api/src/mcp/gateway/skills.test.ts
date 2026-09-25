@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
@@ -9,10 +9,15 @@ import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
+  listBuiltInSkillTools,
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -32,6 +37,12 @@ type SkillRow = {
 };
 
 const OWNER = "user_owner";
+
+const installedOnly = (tools: readonly ResolvedSkillTool[]) =>
+  tools.filter((tool) => tool.source === "installed");
+
+// Every organization has the shipped skills, with no row.
+const BUILT_IN = listBuiltInSkillTools().at(0);
 
 const skillRow = (
   overrides: Partial<SkillRow> & { slug: string },
@@ -106,7 +117,7 @@ describe("MCP gateway skill tools", () => {
 
     const tools = await loadVisibleSkillTools({ context });
 
-    expect(tools.map((tool) => tool.exposedName)).toEqual([
+    expect(installedOnly(tools).map((tool) => tool.exposedName)).toEqual([
       "skill__alpha",
       "skill__beta",
     ]);
@@ -127,11 +138,12 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.scope).toBe("private");
-    expect(tools.at(0)?.body).toBe("private-body");
+    const [shared] = tools;
+    expect(shared?.source === "installed" && shared.scope).toBe("private");
+    expect(shared?.body).toBe("private-body");
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
@@ -145,7 +157,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     const names = tools.map((tool) => tool.exposedName);
     expect(names).toHaveLength(2);
@@ -156,16 +168,139 @@ describe("MCP gateway skill tools", () => {
     );
   });
 
-  test("never exposes more skills than the gateway cap", async () => {
+  const builtInSlugs = (tools: readonly ResolvedSkillTool[]) =>
+    tools.filter(({ source }) => source === "built-in").map(({ slug }) => slug);
+
+  test("caps installed skills at the gateway cap and still serves every built-in", async () => {
     const rows = Array.from(
       { length: LIMITS.mcpGatewaySkillsMax + 5 },
       (_, i) => skillRow({ slug: `skill-${i}` }),
     );
     const context = createContext({ rows });
+    const logs = installRecordingLogger();
+
+    try {
+      const tools = await loadVisibleSkillTools({ context });
+
+      expect(installedOnly(tools)).toHaveLength(LIMITS.mcpGatewaySkillsMax);
+      expect(builtInSlugs(tools)).toEqual(
+        listBuiltInSkillTools().map(({ slug }) => slug),
+      );
+      expect(logs.at("WARN")).toMatchObject([
+        {
+          message: "mcp.gateway.skills_capped",
+          attributes: {
+            "organization.id": context.organizationId,
+            "skills.cap": LIMITS.mcpGatewaySkillsMax,
+            "skills.dropped": 5,
+          },
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("an installed skill within the cap still shadows the built-in with its slug", async () => {
+    const builtIn = BUILT_IN ?? panic("no built-in skill ships");
+    const rows = [
+      skillRow({ slug: builtIn.slug, body: "installed-body" }),
+      ...Array.from({ length: LIMITS.mcpGatewaySkillsMax + 4 }, (_, i) =>
+        skillRow({ slug: `skill-${i}` }),
+      ),
+    ];
+    const context = createContext({ rows });
+    const logs = installRecordingLogger();
+
+    try {
+      const tools = await loadVisibleSkillTools({ context });
+
+      const matching = tools.filter(({ slug }) => slug === builtIn.slug);
+      expect(matching).toHaveLength(1);
+      expect(matching.at(0)?.source).toBe("installed");
+      expect(installedOnly(tools)).toHaveLength(LIMITS.mcpGatewaySkillsMax);
+      expect(builtInSlugs(tools)).toEqual(
+        listBuiltInSkillTools()
+          .map(({ slug }) => slug)
+          .filter((slug) => slug !== builtIn.slug),
+      );
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("an installed skill the cap drops does not shadow the built-in with its slug", async () => {
+    const builtIn = BUILT_IN ?? panic("no built-in skill ships");
+    // Private rows sort first, so the team row with the built-in's slug is
+    // the one past the cap.
+    const rows = [
+      ...Array.from({ length: LIMITS.mcpGatewaySkillsMax }, (_, i) =>
+        skillRow({ slug: `skill-${i}` }),
+      ),
+      skillRow({
+        slug: builtIn.slug,
+        scope: "team",
+        userId: "user_other",
+        body: "installed-body",
+      }),
+    ];
+    const context = createContext({ rows });
+    const logs = installRecordingLogger();
+
+    try {
+      const tools = await loadVisibleSkillTools({ context });
+
+      const matching = tools.filter(({ slug }) => slug === builtIn.slug);
+      expect(matching).toHaveLength(1);
+      expect(matching.at(0)?.source).toBe("built-in");
+      expect(matching.at(0)?.body).toBe(builtIn.body);
+      expect(logs.at("WARN")).toMatchObject([
+        { attributes: { "skills.dropped": 1 } },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("serves the built-in skills with no agent_skills row", async () => {
+    const builtIn = BUILT_IN ?? panic("no built-in skill ships");
+    const context = createContext();
 
     const tools = await loadVisibleSkillTools({ context });
 
-    expect(tools).toHaveLength(LIMITS.mcpGatewaySkillsMax);
+    expect(tools.map(({ slug }) => slug)).toEqual(
+      listBuiltInSkillTools().map(({ slug }) => slug),
+    );
+    const resolved = tools.find(({ slug }) => slug === builtIn.slug);
+    expect(resolved?.source).toBe("built-in");
+    expect(resolved?.body).toBe(builtIn.body);
+    expect(
+      await resolveSkillTool({
+        context,
+        toolName: resolved?.exposedName ?? "",
+      }),
+    ).toEqual(resolved ?? null);
+  });
+
+  test("an installed skill shadows a built-in with the same slug", async () => {
+    const builtIn = BUILT_IN ?? panic("no built-in skill ships");
+    const context = createContext({
+      rows: [
+        skillRow({
+          slug: builtIn.slug,
+          scope: "team",
+          userId: "user_other",
+          body: "installed-body",
+        }),
+      ],
+    });
+
+    const tools = await loadVisibleSkillTools({ context });
+
+    const matching = tools.filter(({ slug }) => slug === builtIn.slug);
+    expect(matching).toHaveLength(1);
+    expect(matching.at(0)?.source).toBe("installed");
+    expect(matching.at(0)?.body).toBe("installed-body");
   });
 
   test("propagates a load fault (captured, not swallowed) instead of an empty list when the DB read fails", async () => {

@@ -51,6 +51,7 @@ import {
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { corpusStorageMode } from "@/api/env-base";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
@@ -60,21 +61,22 @@ import type {
   IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
-  IncomingActiveSkill,
   IncomingActiveStatute,
   IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
-import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import {
+  CHAT_CODE_MODE_SYSTEM_PROMPT,
+  chatCodeModeSystemPrompt,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
   getChatSkillMetadata,
   listAvailableChatSkillMetadata,
-  resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -273,7 +275,11 @@ const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
   legislationCountries: PUBLIC_LEGISLATION_COUNTRIES,
 });
 
-const SUBAGENT_DELEGATION_SECTION =
+/**
+ * Exported for the playbook-authoring eval, whose chat surface offers
+ * `spawn_subagents` under the same instruction a chat turn carries.
+ */
+export const SUBAGENT_DELEGATION_SECTION =
   "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
 
 const ASK_USER_BOUNDARY =
@@ -456,7 +462,8 @@ type BuildChatSystemPromptProps = {
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
-  activeSkill?: IncomingActiveSkill | undefined;
+  /** The turn's active skill, resolved and narrowed once by the sender. */
+  activeSkillContext: ActiveChatSkillContext | null;
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate?: IncomingActiveTemplate | undefined;
   /**
@@ -467,7 +474,6 @@ type BuildChatSystemPromptProps = {
    * also enforces the constraint at call time).
    */
   contextMatterIds: SafeId<"workspace">[];
-  memberRole?: { role: string } | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -629,11 +635,10 @@ export const buildChatSystemPromptParts = async ({
   activeDraft,
   activeExternal,
   activeFile,
-  activeSkill,
+  activeSkillContext,
   activeStatute,
   activeTemplate,
   contextMatterIds,
-  memberRole,
   organizationId,
   practiceJurisdictions,
   refRegistry,
@@ -656,18 +661,6 @@ export const buildChatSystemPromptParts = async ({
             }),
           )
         : getChatSkillMetadata();
-    const activeSkillContext =
-      organizationId && userId
-        ? yield* Result.await(
-            resolveActiveChatSkillContext({
-              activeSkill,
-              memberRole: memberRole ?? { role: "member" },
-              organizationId,
-              safeDb,
-              userId,
-            }),
-          )
-        : null;
     const promptSkillMetadata = mergeActiveSkillMetadata({
       activeSkillContext,
       skillMetadata,
@@ -680,9 +673,12 @@ export const buildChatSystemPromptParts = async ({
     // pinned matter labels) lands in `untrustedSuffix` so the
     // boundary anonymizes only the parts that actually carry
     // third-party PII.
+    const documentedChatReads =
+      activeSkillContext === null ? [] : activeSkillContext.documentedChatReads;
     const safeParts =
       workspaceId === null
         ? buildGlobalPromptParts({
+            documentedChatReads,
             practiceJurisdictions,
             skillMetadata: promptSkillMetadata,
             toolAvailability,
@@ -690,6 +686,7 @@ export const buildChatSystemPromptParts = async ({
           })
         : yield* Result.await(
             buildWorkspacePromptPartsFromDb({
+              documentedChatReads,
               practiceJurisdictions,
               refRegistry,
               safeDb,
@@ -930,6 +927,8 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 };
 
 type BuildGlobalPromptProps = {
+  /** The active skill's documented reads; none without a skill. */
+  documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   toolAvailability?: ChatToolAvailability | undefined;
@@ -937,12 +936,14 @@ type BuildGlobalPromptProps = {
 };
 
 export const buildGlobalPrompt = ({
+  documentedChatReads = [],
   practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps) =>
   buildGlobalPromptParts({
+    documentedChatReads,
     practiceJurisdictions,
     skillMetadata,
     toolAvailability,
@@ -950,12 +951,14 @@ export const buildGlobalPrompt = ({
   }).fullPrompt;
 
 export const buildGlobalPromptParts = ({
+  documentedChatReads = [],
   practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
+    documentedChatReads,
     practiceJurisdictions,
     requestContextSections: [],
     skillMetadata,
@@ -980,9 +983,11 @@ export type ChatContextPromptEstimate = {
  * Deliberately excluded (kept cheap and deterministic for the read path, and
  * documented so the meter's honesty is auditable): org-installed skill
  * metadata, the workspace "Connected to matter" section, the practice-
- * jurisdiction line, the user-context block, and the executable tool JSON
- * schemas passed separately to the provider. These are per-request/per-org and
- * would require extra DB reads the meter does not otherwise need.
+ * jurisdiction line, the user-context block, the stubs of the reads the active
+ * skill documents (they join the code-mode section on that skill's turns
+ * only), and the executable tool JSON schemas passed separately to the
+ * provider. These are per-request/per-org and would require extra DB reads
+ * the meter does not otherwise need.
  */
 export const estimateChatContextPromptTokens = ({
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
@@ -1005,6 +1010,7 @@ export const estimateChatContextPromptTokens = ({
 };
 
 type BuildWorkspacePromptProps = {
+  documentedChatReads: readonly RegistryReadToolName[];
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -1015,6 +1021,7 @@ type BuildWorkspacePromptProps = {
 };
 
 const buildWorkspacePromptPartsFromDb = async ({
+  documentedChatReads,
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
@@ -1033,6 +1040,7 @@ const buildWorkspacePromptPartsFromDb = async ({
 
     return Result.ok(
       buildWorkspacePromptParts({
+        documentedChatReads,
         entityCount: workspacePromptData.entityCount,
         extractedProperties: workspacePromptData.extractedProperties,
         practiceJurisdictions,
@@ -1167,6 +1175,8 @@ const buildWorkspaceContextSections = ({
 };
 
 type BuildWorkspacePromptTextProps = {
+  /** The active skill's documented reads; none without a skill. */
+  documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   entityCount: number;
   extractedProperties?: readonly ExtractedPropertySummary[] | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
@@ -1179,6 +1189,7 @@ type BuildWorkspacePromptTextProps = {
 };
 
 export const buildWorkspacePromptText = ({
+  documentedChatReads = [],
   entityCount,
   extractedProperties = [],
   practiceJurisdictions = [],
@@ -1190,6 +1201,7 @@ export const buildWorkspacePromptText = ({
   workspaceName,
 }: BuildWorkspacePromptTextProps) =>
   buildWorkspacePromptParts({
+    documentedChatReads,
     entityCount,
     extractedProperties,
     practiceJurisdictions,
@@ -1202,6 +1214,7 @@ export const buildWorkspacePromptText = ({
   }).fullPrompt;
 
 export const buildWorkspacePromptParts = ({
+  documentedChatReads = [],
   entityCount,
   extractedProperties = [],
   practiceJurisdictions = [],
@@ -1213,6 +1226,7 @@ export const buildWorkspacePromptParts = ({
   workspaceName,
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
+    documentedChatReads,
     practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
@@ -2584,6 +2598,7 @@ export const buildActiveFileSection = ({
     : "";
 
 type BuildPromptProps = {
+  documentedChatReads: readonly RegistryReadToolName[];
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
   skillMetadata: readonly PromptSkillMetadata[];
@@ -2592,6 +2607,7 @@ type BuildPromptProps = {
 };
 
 const buildPromptParts = ({
+  documentedChatReads,
   practiceJurisdictions,
   requestContextSections,
   skillMetadata,
@@ -2600,6 +2616,10 @@ const buildPromptParts = ({
 }: BuildPromptProps): ChatPromptParts => {
   const { safeSkillMetadata, untrustedSkillMetadata } =
     splitSkillMetadataForPrompt(skillMetadata);
+  // The code-mode section varies with the active skill's documented reads
+  // and stays in the cache-stable prefix: it is constant for a thread while
+  // the skill is active, and a different prefix must derive a different
+  // prompt-cache key.
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
       ...buildCoreRuleSections({
@@ -2607,7 +2627,7 @@ const buildPromptParts = ({
         toolAvailability,
       }),
       buildSkillCatalogSection(safeSkillMetadata),
-      CHAT_CODE_MODE_SYSTEM_PROMPT,
+      chatCodeModeSystemPrompt(documentedChatReads),
     ]),
   );
   // Safe half: scaffold + jurisdiction labels. Both are

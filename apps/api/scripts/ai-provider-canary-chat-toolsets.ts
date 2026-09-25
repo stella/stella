@@ -15,10 +15,10 @@ import {
 } from "@stll/api-contract/chat-docx-suggestions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -79,6 +79,8 @@ const activeSkillContext: ActiveChatSkillContext = {
   description: "Synthetic provider schema canary.",
   displayName: "Provider Schema Canary",
   editable: true,
+  documentedChatReads: [],
+  excludedChatTools: [],
   id: skillId,
   origin: "authored",
   resources: [{ kind: "knowledge", path: "knowledge/canary.md" }],

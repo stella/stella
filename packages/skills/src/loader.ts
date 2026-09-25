@@ -30,6 +30,16 @@ export type StellaSkill = SkillMetadata & {
   resources: SkillResource[];
 };
 
+/**
+ * Frontmatter `metadata` key under which a skill names the chat tools a turn
+ * must not offer while the skill is active. The Agent Skills spec reserves
+ * `metadata` for host extensions; the value follows the `allowed-tools`
+ * spelling: tool names separated by whitespace.
+ */
+export const CHAT_EXCLUDED_TOOLS_METADATA_KEY = "stella-chat-excluded-tools";
+export const CHAT_DOCUMENTED_READS_METADATA_KEY =
+  "stella-chat-documented-reads";
+
 const RESOURCE_EXTENSIONS = [
   ".csv",
   ".json",
@@ -231,6 +241,41 @@ const readMetadata = (value: unknown): Record<string, string> | undefined => {
   }
   return Object.fromEntries(entries);
 };
+
+/**
+ * A whitespace-separated name list under one `metadata` key. Built-in skills
+ * carry the mapping from `SKILL.md`; installed skills carry the same mapping
+ * in their stored row, so both sources are read here. Empty when the key is
+ * absent; deduplicated otherwise.
+ */
+const readMetadataNameList = (
+  metadata: Readonly<Record<string, string>> | undefined,
+  key: string,
+): readonly string[] => {
+  const value = metadata?.[key];
+  if (value === undefined) {
+    return [];
+  }
+  return [...new Set(value.split(/\s+/u).filter((name) => name.length > 0))];
+};
+
+/** Chat tool names a skill excludes from the turns it is active in. */
+export const readExcludedChatTools = (
+  metadata: Readonly<Record<string, string>> | undefined,
+): readonly string[] =>
+  readMetadataNameList(metadata, CHAT_EXCLUDED_TOOLS_METADATA_KEY);
+
+/**
+ * Registry read tools a skill documents up front on the chat surface: their
+ * full signatures join the code-mode prompt while the skill is active, so the
+ * model writes the call without `discover_tools`. Values are registry names
+ * (`list_documents`), not the sandbox's `external_` bindings. The chat side
+ * narrows them to the reads it can document.
+ */
+export const readDocumentedChatReads = (
+  metadata: Readonly<Record<string, string>> | undefined,
+): readonly string[] =>
+  readMetadataNameList(metadata, CHAT_DOCUMENTED_READS_METADATA_KEY);
 
 export const normalizeResourcePath = (resourcePath: string): string => {
   if (resourcePath.startsWith("/")) {

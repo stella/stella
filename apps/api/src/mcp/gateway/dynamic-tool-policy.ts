@@ -5,6 +5,7 @@ import {
   dynamicToolNamespaceOf,
   type DynamicToolNamespace,
 } from "@/api/lib/mcp-upstream/namespace";
+import { SKILL_TOOL_SOURCE } from "@/api/mcp/gateway/skills";
 import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
@@ -32,8 +33,10 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.strictObject({
   ),
   name: v.pipe(v.string(), v.description("Skill slug")),
   origin: v.pipe(
-    v.picklist(AGENT_SKILL_ORIGINS),
-    v.description("How the skill entered the workspace"),
+    v.picklist([...AGENT_SKILL_ORIGINS, SKILL_TOOL_SOURCE.builtIn]),
+    v.description(
+      "How the skill entered the workspace; built-in skills ship with stella",
+    ),
   ),
   version: v.pipe(
     v.nullable(v.string()),

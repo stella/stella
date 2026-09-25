@@ -39,6 +39,7 @@ import {
 import { parseSuggestChangesInput } from "@stll/folio-agents";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { BROWSER_CONTROL_TOOL_NAME } from "@/api/handlers/chat/tools/browser-control-tool";
@@ -69,10 +70,7 @@ import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-ada
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import {
-  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
-} from "@/api/lib/agent-skills/skills";
+import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -151,6 +149,8 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   description: "Review closing files.",
   displayName: "Closing Review",
   editable: true,
+  documentedChatReads: [],
+  excludedChatTools: [],
   id: skillId,
   origin: "authored",
   resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],

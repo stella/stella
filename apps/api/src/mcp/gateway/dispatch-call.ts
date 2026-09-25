@@ -15,7 +15,7 @@ import {
   recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
-import { resolveSkillTool } from "@/api/mcp/gateway/skills";
+import { resolveSkillTool, skillToolOrigin } from "@/api/mcp/gateway/skills";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult, toolDataResult } from "@/api/mcp/tool-utils";
 
@@ -97,7 +97,7 @@ export const dispatchGatewayToolCall = async ({
     context,
     durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
     outcome: "success",
-    skillId: skill.id,
+    skill,
     toolName,
   });
 
@@ -111,7 +111,7 @@ export const dispatchGatewayToolCall = async ({
       license: skill.license,
       metadata: skill.metadata,
       name: skill.slug,
-      origin: skill.origin,
+      origin: skillToolOrigin(skill),
       version: skill.version,
     } satisfies SkillToolOutput),
   };

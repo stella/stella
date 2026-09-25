@@ -2,6 +2,7 @@ import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
@@ -27,7 +28,6 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -75,6 +75,8 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   description: "Review closing files.",
   displayName: "Closing Review",
   editable: true,
+  documentedChatReads: [],
+  excludedChatTools: [],
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",
   resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
