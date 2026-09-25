@@ -29,7 +29,10 @@ import {
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
-import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type ResultRow = {
@@ -2328,5 +2331,52 @@ describe("czUsAdapter.reparseStoredRaw", () => {
     // its prose, and the row keeps whatever it already stored.
     expect(outcome.result.judges).toBeUndefined();
     expect(outcome.result.caseNumber).toBe("Pl.ÚS 9/26");
+  });
+
+  test("keeps the page text of a document the parser cannot read and reports it", async () => {
+    // A `\u` control past the last Unicode code point is not a character the
+    // RTF reader can print, so the structured parse of this page fails.
+    // Built from its parts so the source holds no escape sequence of its own:
+    // the RTF control word `\u` with 1179648, past U+10FFFF.
+    const backslash = String.fromCodePoint(0x5c);
+    const outOfRange = `${backslash}u1179648`;
+    const unreadable = textPage.replace(
+      "<table",
+      () =>
+        `<input id="docContentHidden" value="{${backslash}rtf1 ${outOfRange} Text}" /><table`,
+    );
+    expect(unreadable).not.toBe(textPage);
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const outcome = await czUsAdapter.reparseStoredRaw?.(
+        storedInput(unreadable, "text/html"),
+      );
+
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(outcome.result.fulltext).toContain("Lorem ipsum dolor sit amet.");
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.document_parse_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "cz-us",
+          documentId: "nalus-record:8001",
+          "error.type": "RangeError",
+        }),
+      ]);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
   });
 });

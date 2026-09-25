@@ -944,6 +944,12 @@ type ParseDecisionPageOptions = {
   nalusQuarantineIds: readonly string[];
 };
 
+/** A served page the structured parser could not read. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+
 const parseDecisionPage = ({
   html,
   recordCard,
@@ -1022,9 +1028,15 @@ const parseDecisionPage = ({
     });
     documentAst = parserResult.documentAst;
     resolvedFulltext = parserResult.fulltext;
-  } catch {
-    // Parser failed; fall back to empty AST and
-    // stripHtml-based fulltext extraction.
+  } catch (error) {
+    // The page text extracted above stands in for the document, and the raw
+    // page is kept for a later re-parse. Reported, so a parser that starts
+    // failing across the corpus is told apart from decisions that carry
+    // unstructured text.
+    observeFailure(error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_US, documentId: sourceDocumentId },
+    });
   }
 
   // Hash on identity fields only (not fulltext) for stability
