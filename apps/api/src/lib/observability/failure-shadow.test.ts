@@ -1,5 +1,5 @@
 import { UnhandledException } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -105,15 +105,8 @@ describe("the shadow aggregate", () => {
 
   test("the scheduled flush reports a logger failure instead of throwing", () => {
     const sink = failureSink({ event: "scheduled", expected: [] });
-    const scheduled: (() => void)[] = [];
-    const realSetTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = Object.assign(
-      (callback: () => void) => {
-        scheduled.push(callback);
-        return realSetTimeout(() => undefined, 0);
-      },
-      { __promisify__: realSetTimeout.__promisify__ },
-    );
+    const reported: string[] = [];
+    jest.useFakeTimers();
     try {
       countFailureObservation({
         sink,
@@ -121,21 +114,19 @@ describe("the shadow aggregate", () => {
         channel: "capture",
         degradation: undefined,
       });
+      setLogSinkForTesting((record) => {
+        if (record.message === "failure.observed") {
+          throw new TypeError("log sink down");
+        }
+        reported.push(String(record.attributes?.["observability.stage"]));
+      });
+
+      // A throw from the timer callback would surface here and fail the test.
+      jest.advanceTimersByTime(60_000);
     } finally {
-      globalThis.setTimeout = realSetTimeout;
+      jest.useRealTimers();
     }
-    const reported: string[] = [];
-    setLogSinkForTesting((record) => {
-      if (record.message === "failure.observed") {
-        throw new TypeError("log sink down");
-      }
-      reported.push(String(record.attributes?.["observability.stage"]));
-    });
 
-    // A throw here would fail the test: the callback is what the timer runs.
-    scheduled.at(0)?.();
-
-    expect(scheduled).toHaveLength(1);
     expect(reported).toEqual(["flush"]);
   });
 
