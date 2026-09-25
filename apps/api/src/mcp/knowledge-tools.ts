@@ -1688,9 +1688,10 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
   const loadOrgSettings = async () =>
-    await (
-      context.testDependencies?.loadOrgSettingsForAuth ?? loadOrgSettingsForAuth
-    )(organizationId);
+    await (context.testDependencies?.loadOrgSettingsForAuth?.(organizationId) ??
+      context.scopedDb(
+        async (tx) => await loadOrgSettingsForAuth(tx, organizationId),
+      ));
 
   // Create branch.
   if (input.playbook_id === undefined) {

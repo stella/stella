@@ -10,10 +10,7 @@ import {
   documentTranslationRuns,
   documentTranslationUnits,
 } from "@/api/db/schema";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -405,22 +402,27 @@ const loadPinnedSource = async (
 const createAIContext = async (
   actor: RunActor,
   run: ClaimedRun,
-): Promise<BilingualAIContext> => ({
-  organizationId: actor.organizationId,
-  workspaceId: actor.workspaceId,
-  orgAIConfig: await loadOrgAIConfig(actor.organizationId),
-  promptCachingEnabled: await loadPromptCachingPreference(actor.organizationId),
-  abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
-  scopeKey: run.entityVersionId,
-  usageMetering: {
-    actionType: "doc_review",
+): Promise<BilingualAIContext> => {
+  const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
+    async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+  );
+  return {
     organizationId: actor.organizationId,
-    safeDb: actor.safeDb,
-    serviceTier: "standard",
-    userId: actor.userId,
     workspaceId: actor.workspaceId,
-  },
-});
+    orgAIConfig,
+    promptCachingEnabled,
+    abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+    scopeKey: run.entityVersionId,
+    usageMetering: {
+      actionType: "doc_review",
+      organizationId: actor.organizationId,
+      safeDb: actor.safeDb,
+      serviceTier: "standard",
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+    },
+  };
+};
 
 const setTotal = async (actor: RunActor, total: number): Promise<void> => {
   await actor.scopedDb(async (tx) => {

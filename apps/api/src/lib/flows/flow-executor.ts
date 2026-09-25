@@ -417,7 +417,9 @@ const runAiStep = async ({
     documents,
   });
 
-  const orgAIConfig = await loadAIConfig(organizationId);
+  const orgAIConfig = await scopedDb(
+    async (tx) => await loadAIConfig(tx, organizationId),
+  );
   // Every step settles against the organization's usage as it runs; the
   // initiator pre-flighted the whole run's estimate under the same action
   // type before enqueueing it.

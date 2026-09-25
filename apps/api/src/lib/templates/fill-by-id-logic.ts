@@ -91,6 +91,7 @@ export const fillByIdLogic = async function* ({
       organizationId,
       userId,
       safeDb,
+      scopedDb,
       feature: "templates.fill",
       documentLanguages: source.documentLanguages,
     }),

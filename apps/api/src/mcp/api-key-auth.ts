@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
+import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import {
   isMachineApiKeyAudienceAllowed,
   MACHINE_API_KEY_CONFIG_ID,
@@ -57,13 +57,13 @@ export const resolveMachineApiKeySession = async (
   {
     mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
-    resolveAuthorization = resolveMemberAuthorization,
+    resolveAuthorization = resolveCredentialMemberAuthorization,
   }: {
     mode?: McpMode | undefined;
     verifyApiKey?: (
       ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
-    resolveAuthorization?: typeof resolveMemberAuthorization;
+    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
   } = {},
 ): Promise<McpSession> => {
   const verification = await verifyApiKey({

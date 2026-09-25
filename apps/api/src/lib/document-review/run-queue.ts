@@ -31,10 +31,7 @@ import {
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -709,7 +706,9 @@ const executeRun = async (
 
   const config = await Result.tryPromise({
     try: async () => {
-      const orgAIConfig = await loadOrgAIConfig(actor.organizationId);
+      const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
+        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+      );
       return {
         orgAIConfig,
         // Resolved here, where a role without a provider is already an
@@ -719,9 +718,7 @@ const executeRun = async (
           orgAIConfig,
           { organizationId: actor.organizationId },
         ),
-        promptCachingEnabled: await loadPromptCachingPreference(
-          actor.organizationId,
-        ),
+        promptCachingEnabled,
       };
     },
     catch: (cause) => cause,

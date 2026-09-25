@@ -211,7 +211,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 51,
+    "count": 49,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -219,7 +219,6 @@
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/agent-auth-idjag.ts": 1,
       "apps/api/src/lib/agent-auth.ts": 1,
-      "apps/api/src/lib/ai-config-loader.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
       "apps/api/src/lib/case-law/case-law-config-store.ts": 1,
@@ -260,7 +259,6 @@
       "apps/api/src/lib/selfhost-auth.ts": 1,
       "apps/api/src/lib/sharepoint-disable-purge.ts": 1,
       "apps/api/src/lib/smoke-session/store.ts": 1,
-      "apps/api/src/lib/web-search/load-org-keys.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
       "apps/api/src/scripts/document-processing-worker.ts": 1

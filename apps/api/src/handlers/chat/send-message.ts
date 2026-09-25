@@ -978,7 +978,9 @@ const prepareValidatedIncomingMessage = async ({
     // Resolve the org's web-search providers once (BYOK key first,
     // platform env key as fallback) and reuse for both the validation
     // and streaming tool sets.
-    const webSearchProviders = await loadWebSearchProviders(organizationId);
+    const webSearchProviders = await scopedDb(
+      async (tx) => await loadWebSearchProviders(tx, organizationId),
+    );
 
     if (isClientConnectionAborted()) {
       return Result.err(
