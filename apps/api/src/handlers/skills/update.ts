@@ -8,6 +8,8 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
+import { uniqueSlug } from "@/api/handlers/skills/slug";
+import type { SkillSlug } from "@/api/handlers/skills/slug";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
@@ -54,8 +56,8 @@ const config = {
     "description, instruction body, version, or slash command. Pass command " +
     "as null to clear it; at least one field is required. Enabling and " +
     "disabling works on any skill you may manage, but editing the content of " +
-    "a bundled skill is refused. A rename also moves the slug, and a name or " +
-    "command already taken in the organization is a 409.",
+    "a bundled skill is refused. A rename derives a new unique slug from the " +
+    "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: updateSkillParamsSchema,
@@ -68,7 +70,7 @@ type SkillUpdateFields = {
   description?: string;
   enabled?: boolean;
   name?: string;
-  slug?: string;
+  slug?: SkillSlug;
   version?: string | null;
   command?: string | null;
 };
@@ -147,10 +149,11 @@ const buildSkillUpdateDiff = (
     changes.enabled = { old: existing.enabled, new: body.enabled };
   }
   if (body.name !== undefined && body.name !== existing.name) {
+    const slug = uniqueSlug(body.name);
     updates.name = body.name;
-    updates.slug = body.name;
+    updates.slug = slug;
     changes.name = { old: existing.name, new: body.name };
-    changes.slug = { old: existing.slug, new: body.name };
+    changes.slug = { old: existing.slug, new: slug };
   }
   if (
     body.description !== undefined &&
