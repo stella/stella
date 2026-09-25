@@ -113,6 +113,7 @@
     "@stll/infosoud": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
+    "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",

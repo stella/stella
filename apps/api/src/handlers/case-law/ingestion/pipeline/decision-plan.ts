@@ -40,6 +40,10 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
+  TEXT_MISDECODED,
+  textMisdecodedFields,
+} from "@/api/lib/legal-search/parsers/text-encoding";
+import {
   AST_MARKUP_RESIDUE,
   storedDecisionSignal,
 } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -120,6 +124,23 @@ const reportStoredDocumentQuality = ({
       residueRule: storedResidue.rule,
       residueAnchorId: "fulltext",
       residueExcerpt: storedResidue.excerpt,
+    });
+  }
+
+  // Text read through the wrong character set, by the adapter or upstream.
+  // Checked on every stored text, parsed or not: the parser sees the text
+  // after decoding and cannot tell either.
+  const misdecoded =
+    preserveStoredDocument || pendingMirrorPayload !== null || !result.fulltext
+      ? undefined
+      : textMisdecodedFields(result.fulltext, result.language);
+  if (misdecoded) {
+    logger.error(TEXT_MISDECODED, {
+      sourceId,
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? result.documentUrl ?? "",
+      ...misdecoded,
     });
   }
 };
