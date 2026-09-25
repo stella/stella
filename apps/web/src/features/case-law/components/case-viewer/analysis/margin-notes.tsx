@@ -35,15 +35,27 @@ import { getCategoryVar } from "./types";
 const capitalize = (s: string): string =>
   s.charAt(0).toUpperCase() + s.slice(1);
 
-export type AnalysisMarginItem = {
-  kind: "card" | "annotation";
+type AnalysisMarginItemBase = {
   id: string;
   heading?: string | undefined;
-  text: string;
   category: string;
   depth: number;
   startAnchorId: string;
 };
+
+export type AnalysisMarginItem = AnalysisMarginItemBase &
+  (
+    | { kind: "card" | "annotation"; text: string }
+    | {
+        /**
+         * The shape a note takes, shown before any analysis exists: the
+         * category is real, the lines are placeholders. Never invented text
+         * beside a real decision.
+         */
+        kind: "example";
+        lines: readonly number[];
+      }
+  );
 
 export type CommentMarginItem = {
   kind: "comment";
@@ -388,7 +400,8 @@ const MarginNote = ({
       );
     }
     case "card":
-    case "annotation": {
+    case "annotation":
+    case "example": {
       return (
         <AnalysisNote
           item={item}
@@ -439,7 +452,11 @@ const AnalysisNote = ({
     if (presence === "dimmed") {
       return `color-mix(in srgb, var(${cssVar}) 22%, transparent)`;
     }
-    if (presence === "highlighted" || item.kind === "card") {
+    if (
+      presence === "highlighted" ||
+      item.kind === "card" ||
+      item.kind === "example"
+    ) {
       return `var(${cssVar})`;
     }
     return `color-mix(in srgb, var(${cssVar}) 60%, transparent)`;
@@ -460,10 +477,22 @@ const AnalysisNote = ({
           {capitalize(item.heading)}
         </span>
       )}
-      {item.text && (
-        <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
-          {item.text}
+      {item.kind === "example" ? (
+        <span aria-hidden className="mt-1 flex flex-col gap-1.5">
+          {item.lines.map((width) => (
+            <span
+              className="bg-muted block h-2 rounded-full"
+              key={width}
+              style={{ width: `${width * 100}%` }}
+            />
+          ))}
         </span>
+      ) : (
+        item.text && (
+          <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
+            {item.text}
+          </span>
+        )
       )}
     </>
   );

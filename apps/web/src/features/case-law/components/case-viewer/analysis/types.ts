@@ -34,7 +34,7 @@ const CORE_CATEGORY_VAR: Record<string, string> = {
   holding: "--option-emerald",
 };
 
-const hashString = (s: string): number => {
+export const hashString = (s: string): number => {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     // oxlint-disable-next-line no-bitwise, unicorn/prefer-math-trunc -- djb2 hash needs shift and `| 0` int coercion

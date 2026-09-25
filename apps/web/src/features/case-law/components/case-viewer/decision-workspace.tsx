@@ -27,6 +27,10 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
+import {
+  EXAMPLE_NOTES,
+  exampleNoteAnchors,
+} from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
@@ -344,8 +348,36 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
+  // A visitor sees the shape the notes would take, where they would sit,
+  // until there is an analysis to show instead.
+  const exampleMarginItems: AnalysisMarginItem[] =
+    props.aiMode === "gated" &&
+    props.onRequestAnalysis !== undefined &&
+    analysisState.status === "idle"
+      ? exampleNoteAnchors({
+          anchorIds: visibleDecisionBlocks(ast).map((block) => block.anchorId),
+          seed: decisionId,
+        }).flatMap((startAnchorId, index) => {
+          const note = EXAMPLE_NOTES.at(index);
+          return note === undefined
+            ? []
+            : [
+                {
+                  kind: "example",
+                  id: `example:${note.category}`,
+                  heading: t(`caseLaw.analysis.categories.${note.category}`),
+                  category: note.category,
+                  depth: 0,
+                  lines: note.lines,
+                  startAnchorId,
+                },
+              ];
+        })
+      : [];
+
   const visibleMarginItems = [
     ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...(showAiNotes ? exampleMarginItems : []),
     ...annotations.notes,
   ];
 
@@ -655,21 +687,10 @@ const AnalysisLoader = () => {
 };
 
 /**
- * The categories an analysis fills, in reading order, with the placeholder
- * line widths an example card draws for each.
- */
-const EXAMPLE_NOTES = [
-  { category: "procedural-history", lines: [0.9, 0.55] },
-  { category: "facts", lines: [0.85, 0.7, 0.4] },
-  { category: "reasoning", lines: [0.95, 0.8, 0.6] },
-  { category: "holding", lines: [0.9, 0.65] },
-] as const;
-
-/**
- * The analysis column before a run. A visitor sees the shape the notes take,
- * each real category with placeholder lines rather than invented text beside
- * a real decision, then what a free account unlocks. Without a handler the
- * column only names the layer, which is what a member's loading shell needs.
+ * The analysis column's offer before a run. A visitor also sees example
+ * notes in the margin beside the text (`exampleNoteAnchors`); this box says
+ * what a free account unlocks. Without a handler the column only names the
+ * layer, which is what a member's loading shell needs.
  */
 const GatedAnalysisInvitation = ({
   onRequest,
@@ -697,41 +718,17 @@ const GatedAnalysisInvitation = ({
   return (
     <div
       aria-label={t("caseLaw.notesFilter.ai")}
-      className="mx-2 mt-8 flex flex-col gap-4"
+      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
       data-slot="gated-analysis-invitation"
       role="region"
     >
-      <div aria-hidden className="flex flex-col gap-3 select-none">
-        {EXAMPLE_NOTES.map(({ category, lines }) => (
-          <div
-            className="border-s-[3px] py-1 ps-2.5"
-            key={category}
-            style={{ borderInlineStartColor: `var(${getCategoryVar(category)})` }}
-          >
-            <span className="text-foreground-strong-muted mb-1 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
-              {t(`caseLaw.analysis.categories.${category}`)}
-            </span>
-            <div className="flex flex-col gap-1.5">
-              {lines.map((width) => (
-                <div
-                  className="bg-muted h-2 rounded-full"
-                  key={width}
-                  style={{ width: `${width * 100}%` }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="bg-background/75 supports-[backdrop-filter]:bg-background/55 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl">
-        <p className="text-foreground-strong-muted text-xs leading-snug">
-          {t("caseLaw.analysis.invitation")}
-        </p>
-        <Button onClick={onRequest} size="sm" variant="muted">
-          <SparklesIcon className="size-3" />
-          {t("caseLaw.analysis.generate")}
-        </Button>
-      </div>
+      <p className="text-foreground-strong-muted text-xs leading-snug">
+        {t("caseLaw.analysis.invitation")}
+      </p>
+      <Button onClick={onRequest} size="sm" variant="muted">
+        <SparklesIcon className="size-3" />
+        {t("caseLaw.analysis.generate")}
+      </Button>
     </div>
   );
 };
