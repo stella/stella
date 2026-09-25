@@ -12,6 +12,11 @@ import { TaggedError } from "better-result";
  * the chat stream) as a failed deploy. It is a catch-all: it does not
  * care *why* a route 5xxes, only that one does.
  *
+ * The default smoke organization has no AI configured, so its chat send
+ * may answer with the explicit no-AI 403. A second smoke organization
+ * (see post-deploy-smoke-chat.ts) runs a real model turn; for it the same
+ * 403 is a failure.
+ *
  * Auth reuses the existing secret-guarded smoke-session mechanism
  * (`POST /smoke/session`, handlers/smoke + lib/smoke-session). That
  * route exists only where SMOKE_SESSION_SECRET is configured, which
@@ -34,6 +39,15 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  isProgressFrame,
+  isRunErrorFrame,
+  parseStreamDataFrames,
+  readWithDeadline,
+  runAIChatJourney,
+  type SmokeRequest,
+  streamFramesOf,
+} from "@/api/scripts/post-deploy-smoke-chat";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;
@@ -154,70 +168,18 @@ export const evaluateChatStreamContentType = (
 };
 
 /**
- * The chat handler streams an AI SDK UI-message stream. Errors thrown
- * inside the stream are emitted as `{"type":"error",...}` SSE frames
- * (stream-chat.ts) rather than an HTTP status, so a 200 alone does not
- * prove the turn started cleanly. Scan the buffered prefix for that
- * frame; its presence means the chat turn failed.
+ * The chat handler streams AG-UI events. A failure inside the stream is a
+ * `RUN_ERROR` frame rather than an HTTP status, so a 200 alone does not
+ * prove the turn started cleanly.
  */
 export const streamPrefixHasError = (prefix: string): boolean =>
-  prefix.includes('"type":"error"');
-
-const MEANINGFUL_CHAT_STREAM_FRAME_TYPES = new Set([
-  "finish",
-  "text-delta",
-  "tool-input-available",
-  "tool-output-available",
-]);
-
-const parseStreamDataFrames = (prefix: string): unknown[] => {
-  const frames: unknown[] = [];
-  for (const line of prefix.split(/\r?\n/u)) {
-    if (!line.startsWith("data:")) {
-      continue;
-    }
-
-    const data = line.slice("data:".length).trim();
-    if (data.length === 0) {
-      continue;
-    }
-
-    try {
-      frames.push(JSON.parse(data));
-    } catch {
-      // The prefix can end mid-frame; a later read will complete it.
-    }
-  }
-  return frames;
-};
-
-const getStringFrameProperty = (
-  frame: unknown,
-  property: string,
-): string | null => {
-  if (typeof frame !== "object" || frame === null || !(property in frame)) {
-    return null;
-  }
-
-  const value: unknown = Reflect.get(frame, property);
-  return typeof value === "string" ? value : null;
-};
-
-const getStreamFrameType = (frame: unknown): string | null =>
-  getStringFrameProperty(frame, "type");
+  streamFramesOf(prefix).some(isRunErrorFrame);
 
 const streamPrefixHasDataFrame = (prefix: string): boolean =>
   parseStreamDataFrames(prefix).length > 0;
 
 export const streamPrefixHasMeaningfulFrame = (prefix: string): boolean =>
-  parseStreamDataFrames(prefix).some((frame) => {
-    const type = getStreamFrameType(frame);
-    if (type === "text-delta") {
-      const delta = getStringFrameProperty(frame, "delta");
-      return delta !== null && delta.length > 0;
-    }
-    return type !== null && MEANINGFUL_CHAT_STREAM_FRAME_TYPES.has(type);
-  });
+  streamFramesOf(prefix).some(isProgressFrame);
 
 export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
   if (!streamPrefixHasDataFrame(prefix)) {
@@ -373,11 +335,15 @@ const smokeFetch = async (
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run smoke test against the deployment named by SMOKE_API_URL
   await fetchWithTimeout(`${baseUrl}${path}`, init);
 
+const SMOKE_PRINCIPAL_AI = "ai";
+
 const mintSmokeSession = async (
   baseUrl: string,
   secret: string,
+  principal?: typeof SMOKE_PRINCIPAL_AI,
 ): Promise<SmokeSession> => {
-  const response = await smokeFetch(baseUrl, "/smoke/session", {
+  const query = principal ? `?principal=${principal}` : "";
+  const response = await smokeFetch(baseUrl, `/smoke/session${query}`, {
     method: "POST",
     headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
     timeoutMs: SMOKE_SESSION_TIMEOUT_MS,
@@ -498,49 +464,6 @@ type ReadStreamPrefixOptions = {
   timeoutMs?: number;
 };
 
-type StreamReader = {
-  cancel: () => Promise<unknown>;
-  read: () => Promise<{
-    done: boolean;
-    value?: Uint8Array | undefined;
-  }>;
-};
-
-type StreamReadResult = Awaited<ReturnType<StreamReader["read"]>>;
-
-const readWithDeadline = async (
-  reader: StreamReader,
-  deadline: number,
-): Promise<StreamReadResult> => {
-  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
-  if (remainingMs <= 0) {
-    throw new PostDeploySmokeError({
-      message: "Chat stream did not produce a readable prefix before timeout",
-    });
-  }
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(
-        new PostDeploySmokeError({
-          message:
-            "Chat stream did not produce a readable prefix before timeout",
-        }),
-      );
-      reader.cancel().catch(() => undefined);
-    }, remainingMs);
-  });
-
-  try {
-    return await Promise.race([reader.read(), timeout]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-};
-
 export const readStreamPrefix = async (
   response: Response,
   {
@@ -557,7 +480,11 @@ export const readStreamPrefix = async (
   const reader = response.body.getReader();
   try {
     while (buffered.length < maxBytes) {
-      const { done, value } = await readWithDeadline(reader, deadline);
+      const { done, value } = await readWithDeadline(
+        reader,
+        deadline,
+        "Chat stream did not produce a readable prefix before timeout",
+      );
       if (done) {
         break;
       }
@@ -647,6 +574,70 @@ const resolveBaseUrl = (): string => {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/**
+ * `SMOKE_AI_JOURNEY` picks what runs: unset runs everything, `skip` only the
+ * deterministic checks, `only` only the real model turn. The deploy workflow
+ * runs the two halves as separate steps so the model turn can be report-only.
+ */
+const AI_JOURNEY_MODE = {
+  all: "all",
+  only: "only",
+  skip: "skip",
+} as const;
+
+type AIJourneyMode = (typeof AI_JOURNEY_MODE)[keyof typeof AI_JOURNEY_MODE];
+
+export const parseAIJourneyMode = (
+  value: string | undefined,
+): AIJourneyMode => {
+  if (value === undefined || value === "") {
+    return AI_JOURNEY_MODE.all;
+  }
+  if (value === AI_JOURNEY_MODE.only || value === AI_JOURNEY_MODE.skip) {
+    return value;
+  }
+  throw new PostDeploySmokeError({
+    message: `SMOKE_AI_JOURNEY must be unset, "skip" or "only", got "${value}"`,
+  });
+};
+
+/**
+ * The real model turn as the AI smoke organization. A missing provider key
+ * fails it rather than silently skipping the only check that reaches a model.
+ */
+const runAIJourney = async (
+  baseUrl: string,
+  secret: string,
+): Promise<EvaluatedCheck[]> => {
+  const apiKey = process.env["SMOKE_AI_OPENAI_API_KEY"];
+  if (!apiKey) {
+    return [
+      {
+        name: "AI chat journey",
+        ok: false,
+        detail:
+          "SMOKE_AI_OPENAI_API_KEY is not set; the deploy workflow passes it " +
+          "from the STAGING_SMOKE_OPENAI_API_KEY secret",
+      },
+    ];
+  }
+
+  const session = await mintSmokeSession(baseUrl, secret, SMOKE_PRINCIPAL_AI);
+  const cookie = sessionCookieHeader(session);
+  const request: SmokeRequest = async (path, { body, method, timeoutMs }) =>
+    await smokeFetch(baseUrl, path, {
+      method: method ?? "GET",
+      headers: {
+        cookie,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...EDGE_HEADERS,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      timeoutMs,
+    });
+  return await runAIChatJourney({ apiKey, request });
+};
+
 const main = async (): Promise<void> => {
   const baseUrl = resolveBaseUrl();
   const secret = process.env["SMOKE_SESSION_SECRET"];
@@ -657,15 +648,23 @@ const main = async (): Promise<void> => {
     });
   }
 
+  const mode = parseAIJourneyMode(process.env["SMOKE_AI_JOURNEY"]);
+
   await waitForApiRevision(baseUrl);
 
-  const session = await mintSmokeSession(baseUrl, secret);
-  const cookie = sessionCookieHeader(session);
-
   const checks: EvaluatedCheck[] = [];
-  checks.push(await readHealth(baseUrl));
-  checks.push(await readAuthenticated(baseUrl, "/v1/chat/threads", cookie));
-  checks.push(...(await sendChat(baseUrl, cookie)));
+  if (mode !== AI_JOURNEY_MODE.only) {
+    const session = await mintSmokeSession(baseUrl, secret);
+    const cookie = sessionCookieHeader(session);
+    checks.push(await readHealth(baseUrl));
+    checks.push(await readAuthenticated(baseUrl, "/v1/chat/threads", cookie));
+    checks.push(...(await sendChat(baseUrl, cookie)));
+  }
+  if (mode === AI_JOURNEY_MODE.skip) {
+    process.stdout.write("[skip] AI chat journey (SMOKE_AI_JOURNEY=skip)\n");
+  } else {
+    checks.push(...(await runAIJourney(baseUrl, secret)));
+  }
 
   for (const check of checks) {
     const marker = check.ok ? "ok  " : "FAIL";

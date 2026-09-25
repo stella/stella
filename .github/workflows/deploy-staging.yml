@@ -505,6 +505,31 @@ jobs:
           E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
           E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
           EXPECTED_COMMIT: ${{ github.sha }}
+          # The real model turn runs in the next step.
+          SMOKE_AI_JOURNEY: skip
+
+      # Report-only until reviewed on 2026-10-02: a failure is annotated and
+      # summarized but does not fail the promotion. To make it blocking,
+      # delete the `continue-on-error: true` line below.
+      - name: Run staging API model-turn smoke
+        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        continue-on-error: true
+        run: |
+          if bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"; then
+            echo "Staging model-turn smoke passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=Staging model-turn smoke failed (report-only)::See the step log for the failed checks."
+            echo "Staging model-turn smoke FAILED (report-only, promotion not blocked). See the step log." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+        env:
+          E2E_API_URL: https://api-staging.stll.app
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+          SMOKE_AI_JOURNEY: only
+          SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
 
       - name: Upload Playwright report
         if: ${{ steps.current.outputs.promoted == 'true' && failure() }}
