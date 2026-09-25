@@ -1,13 +1,10 @@
 import {
   chat,
-  convertMessagesToModelMessages,
   EventType,
   maxIterations,
-  modelMessagesToUIMessages,
   normalizeStreamChunk,
   StreamProcessor,
   toolDefinition,
-  uiMessagesToWire,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
@@ -70,6 +67,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -2632,19 +2630,6 @@ describe("interrupt snapshot assistant message identity", () => {
     },
   ];
 
-  /**
-   * The interrupt snapshot as the engine builds it (`buildMessagesSnapshotChunk`
-   * over the model messages it converted the request into): TanStack splits
-   * an assistant message at every tool result, and every copy keeps its id.
-   */
-  const engineSnapshot = (messages: readonly UIMessage[]): StreamChunk => ({
-    type: EventType.MESSAGES_SNAPSHOT,
-    messages: uiMessagesToWire(
-      modelMessagesToUIMessages(convertMessagesToModelMessages([...messages])),
-      { includeSnapshotStructuredOutput: true },
-    ),
-  });
-
   type RemapSnapshotOptions = {
     history: readonly ChatMessage[];
     mapMessageId: MessageIdMapper;
@@ -2657,7 +2642,7 @@ describe("interrupt snapshot assistant message identity", () => {
     mapMessageId,
     run,
   }: RemapSnapshotOptions) => {
-    const input = engineSnapshot([...history, ...run]);
+    const input = buildEngineSnapshot([...history, ...run]);
     const [output] = await collectChunks(
       remapOutgoingMessageIds({
         existingMessageIds: new Set(history.map(({ id }) => id)),
@@ -2665,16 +2650,14 @@ describe("interrupt snapshot assistant message identity", () => {
         source: streamChunks([input]),
       }),
     );
-    if (
-      input.type !== EventType.MESSAGES_SNAPSHOT ||
-      output?.type !== EventType.MESSAGES_SNAPSHOT
-    ) {
+    if (output?.type !== EventType.MESSAGES_SNAPSHOT) {
       throw new Error("Expected one messages snapshot");
     }
-    return { input: input.messages, output: output.messages };
+    return { input: input.messages, output: output.messages, snapshot: output };
   };
 
-  type SnapshotMessages = Awaited<ReturnType<typeof remapSnapshot>>["output"];
+  type RemappedSnapshot = Awaited<ReturnType<typeof remapSnapshot>>;
+  type SnapshotMessages = RemappedSnapshot["output"];
 
   const assistantToolCalls = (messages: SnapshotMessages) =>
     messages.flatMap((message) =>
@@ -2693,16 +2676,16 @@ describe("interrupt snapshot assistant message identity", () => {
       message.role === "tool" ? [message.toolCallId] : [],
     );
 
-  /** What the browser renders from the snapshot. */
+  /** What the browser renders from the remapped snapshot. */
   const clientMessages = ({
     history,
-    messages,
+    snapshot,
   }: {
     history: readonly ChatMessage[];
-    messages: SnapshotMessages;
+    snapshot: RemappedSnapshot["snapshot"];
   }) => {
     const processor = new StreamProcessor({ initialMessages: [...history] });
-    processor.processChunk({ type: EventType.MESSAGES_SNAPSHOT, messages });
+    processor.processChunk(snapshot);
     return processor.getMessages();
   };
 
@@ -2715,7 +2698,7 @@ describe("interrupt snapshot assistant message identity", () => {
         parts: [...answeredCall("load-skill"), ...answeredCall("ask-1")],
       } satisfies ChatMessage,
     ];
-    const { output } = await remapSnapshot({
+    const { output, snapshot } = await remapSnapshot({
       history,
       mapMessageId: createTurnMessageIdMapper(owningMessageId),
       run: [
@@ -2732,7 +2715,7 @@ describe("interrupt snapshot assistant message identity", () => {
     ]);
     expect(toolResultIds(output)).toEqual(["load-skill", "ask-1"]);
     expect(
-      clientMessages({ history, messages: output })
+      clientMessages({ history, snapshot })
         .filter(({ role }) => role === "assistant")
         .map(({ id, parts }) => ({
           id,
@@ -2805,7 +2788,7 @@ describe("interrupt snapshot assistant message identity", () => {
       } satisfies ChatMessage,
     ];
     const [askTwo, askTwoResult] = answeredCall("ask-2");
-    const { output } = await remapSnapshot({
+    const { snapshot } = await remapSnapshot({
       history,
       mapMessageId: createTurnMessageIdMapper(owningMessageId),
       run: [
@@ -2828,7 +2811,7 @@ describe("interrupt snapshot assistant message identity", () => {
     });
 
     expect(
-      clientMessages({ history, messages: output }).flatMap(({ parts }) =>
+      clientMessages({ history, snapshot }).flatMap(({ parts }) =>
         parts.flatMap((part) =>
           part.type === "tool-call"
             ? [{ id: part.id, metadata: part.metadata }]
@@ -2857,7 +2840,7 @@ describe("interrupt snapshot assistant message identity", () => {
         ],
       } satisfies ChatMessage,
     ];
-    const { output } = await remapSnapshot({
+    const { output, snapshot } = await remapSnapshot({
       history,
       mapMessageId: createTurnMessageIdMapper(owningMessageId),
       run: [],
@@ -2870,7 +2853,7 @@ describe("interrupt snapshot assistant message identity", () => {
       "assistant",
       "tool",
     ]);
-    const assistants = clientMessages({ history, messages: output }).filter(
+    const assistants = clientMessages({ history, snapshot }).filter(
       ({ role }) => role === "assistant",
     );
     expect(
