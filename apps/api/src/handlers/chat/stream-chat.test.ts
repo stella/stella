@@ -22,17 +22,23 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
+import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 
 import {
   createChatAttachmentPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
+import {
+  CHAT_RUN_MODE,
+  validateToolCallParts,
+} from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
+import { createSpawnSubagentsTool } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   applyChatToolPolicy,
@@ -221,21 +227,26 @@ describe("agent sandbox third-party boundary", () => {
  * hand-writing the sequence, so the persistence path is checked against what
  * the loop actually emits.
  */
-const createSingleToolCallAdapter = ({
-  arguments: argumentsText,
-  toolName,
-}: {
+type ScriptedToolCallTurn = {
   arguments: string;
+  /**
+   * What the adapter hands the engine on `TOOL_CALL_END` after undoing
+   * provider-side reshaping of `arguments` (OpenAI strict-mode null widening).
+   */
+  input?: Record<string, unknown> | undefined;
   toolName: string;
-}): AnyTextAdapter =>
-  createToolCallSequenceAdapter([{ arguments: argumentsText, toolName }]);
+};
+
+const createSingleToolCallAdapter = (
+  turn: ScriptedToolCallTurn,
+): AnyTextAdapter => createToolCallSequenceAdapter([turn]);
 
 /**
  * Answers the n-th model turn with the n-th tool call, so a run can execute a
  * server tool first and pause for a client tool on the next iteration.
  */
 const createToolCallSequenceAdapter = (
-  turns: readonly { arguments: string; toolName: string }[],
+  turns: readonly ScriptedToolCallTurn[],
 ): AnyTextAdapter => {
   let turnIndex = 0;
   return createScriptedAdapter(turns, () => {
@@ -246,7 +257,7 @@ const createToolCallSequenceAdapter = (
 };
 
 const createScriptedAdapter = (
-  turns: readonly { arguments: string; toolName: string }[],
+  turns: readonly ScriptedToolCallTurn[],
   nextTurnIndex: () => number,
 ): AnyTextAdapter => ({
   kind: "text",
@@ -266,7 +277,7 @@ const createScriptedAdapter = (
     if (turn === undefined) {
       throw new Error("The fixture adapter ran out of scripted turns");
     }
-    const { arguments: argumentsText, toolName } = turn;
+    const { arguments: argumentsText, input, toolName } = turn;
     const callId = `call-${String(turnIndex + 1)}`;
     const resolvedRunId = runId ?? "run-1";
     const resolvedThreadId = threadId ?? "thread-1";
@@ -308,6 +319,7 @@ const createScriptedAdapter = (
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: callId,
+      ...(input === undefined ? {} : { input }),
       timestamp,
     } satisfies StreamChunk;
     yield {
@@ -752,6 +764,84 @@ describe("native interrupt boundary persistence", () => {
         type: "tool-call",
       },
     ]);
+  });
+
+  // OpenAI strict mode makes every optional field required and nullable, so
+  // the model omits `context` by sending `null`. The adapter streams that
+  // wire string and hands the un-widened value on `TOOL_CALL_END`; the
+  // persisted part must carry that value, or the persistence validator fails
+  // the turn in `onFinish` before the approval card renders.
+  test("pauses for approval on spawn_subagents when the model nulls its optional fields", async () => {
+    const { safeDb } = createScopedDbMock({});
+    const tools = createSpawnSubagentsTool({
+      buildSubagentToolset: () => ({}),
+      organizationId: toSafeId<"organization">(
+        "22222222-2222-4222-8222-222222222222",
+      ),
+      orgAIConfig: null,
+      safeDb,
+      userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
+      workspaceId: null,
+      threadId: toSafeId<"chatThread">("44444444-4444-4444-8444-444444444444"),
+      delegationDepth: 0,
+      thirdPartyBoundary: { type: "raw" },
+    });
+    const spawnSubagents = applyChatToolPolicy(
+      tools[SPAWN_SUBAGENTS_TOOL_NAME],
+      BUILT_IN_CHAT_TOOL_POLICY_KINDS[SPAWN_SUBAGENTS_TOOL_NAME],
+    );
+    expect(spawnSubagents).toMatchObject({ needsApproval: true });
+
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      chat({
+        adapter: createSingleToolCallAdapter({
+          arguments: JSON.stringify({
+            subagents: [
+              {
+                task: "list matters",
+                context: null,
+                expectedOutput: null,
+                model: null,
+              },
+            ],
+          }),
+          input: { subagents: [{ task: "list matters" }] },
+          toolName: SPAWN_SUBAGENTS_TOOL_NAME,
+        }),
+        agentLoopStrategy: maxIterations(3),
+        messages: [
+          { role: "user", content: "Use subagents to list my matters." },
+        ],
+        threadId: "thread-1",
+        tools: [spawnSubagents],
+      }),
+    );
+
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toMatchObject({
+      type: "awaiting-user",
+      interaction: { type: "approval", toolCallId: "call-1" },
+    });
+    if (!finish) {
+      throw new Error("Expected the turn to finish");
+    }
+    expect(finish.responseMessage.parts).toMatchObject([
+      {
+        arguments: JSON.stringify({ subagents: [{ task: "list matters" }] }),
+        id: "call-1",
+        input: { subagents: [{ task: "list matters" }] },
+        name: SPAWN_SUBAGENTS_TOOL_NAME,
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    ]);
+    const validated = validateToolCallParts({
+      message: finish.responseMessage,
+      tools: { [SPAWN_SUBAGENTS_TOOL_NAME]: spawnSubagents },
+    });
+    expect(Result.isOk(validated)).toBe(true);
   });
 
   test("keeps a server tool's iteration in the same persisted turn as the client tool it precedes", async () => {

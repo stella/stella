@@ -1,9 +1,13 @@
 import { toolDefinition } from "@tanstack/ai";
+import type { AnyTextAdapter } from "@tanstack/ai";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createPipelineContext } from "@stll/anonymize";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   applyChatToolPolicy,
@@ -23,6 +27,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 
 import { runSubagent } from "./subagent-runner";
+import type { RunSubagentOptions } from "./subagent-runner";
 
 // Drives `runSubagent` through the real `chat()` loop with a scripted provider,
 // so every step boundary (one RUN_FINISHED per provider iteration) and every
@@ -68,7 +73,20 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const runScriptedSubagent = async (turns: readonly ScriptedTurn[]) => {
+type RunScriptedSubagentOverrides = Partial<
+  Pick<
+    RunSubagentOptions,
+    "systemSafe" | "systemUntrusted" | "thirdPartyBoundary"
+  >
+> & {
+  /** Wraps the scripted transport, e.g. to record what the provider receives. */
+  wrapAdapter?: ((adapter: AnyTextAdapter) => AnyTextAdapter) | undefined;
+};
+
+const runScriptedSubagent = async (
+  turns: readonly ScriptedTurn[],
+  overrides: RunScriptedSubagentOverrides = {},
+) => {
   const lookups: string[] = [];
   const lookupTool = applyChatToolPolicy(
     toolDefinition({
@@ -81,7 +99,10 @@ const runScriptedSubagent = async (turns: readonly ScriptedTurn[]) => {
     }),
     CHAT_TOOL_POLICY_KIND.internal,
   );
-  const adapter = createScriptedTextAdapter(turns);
+  const scriptedAdapter = createScriptedTextAdapter(turns);
+  const adapter = overrides.wrapAdapter
+    ? overrides.wrapAdapter(scriptedAdapter)
+    : scriptedAdapter;
   const result = await runSubagent(
     {
       abortSignal: new AbortController().signal,
@@ -106,9 +127,10 @@ const runScriptedSubagent = async (turns: readonly ScriptedTurn[]) => {
       organizationId: ids.orgA,
       orgAIConfig,
       role: "fast",
-      system: "Answer briefly.",
+      systemSafe: overrides.systemSafe ?? "Answer briefly.",
+      systemUntrusted: overrides.systemUntrusted ?? "",
       tenantWorkspaceIds: [ids.wsA1],
-      thirdPartyBoundary: { type: "raw" },
+      thirdPartyBoundary: overrides.thirdPartyBoundary ?? { type: "raw" },
       tools: { lookup: lookupTool },
     },
     {
@@ -129,6 +151,59 @@ const lookupStep = {
   type: "tool-call",
   usage: LOOKUP_STEP_USAGE,
 } as const satisfies ScriptedTurn;
+
+describe("a subagent run under an anonymizing boundary", () => {
+  // The safe half carries server constants such as the code-mode catalog's
+  // function signatures; anonymizing it would brief the subagent with names
+  // no tool answers to. Only the parent model's own text crosses the boundary.
+  test("sends the safe half verbatim and anonymizes only the untrusted half", async () => {
+    const systemSafe =
+      "declare function external_lookup(query: string): Jan Novak;";
+    const systemUntrusted = "Return output matching: Jan Novak";
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      anonymizationScopeId: "workspace-A",
+      anonymizeFields: async ({ fields }) => ({
+        entityCount: fields.filter((field) => field.includes("Jan Novak"))
+          .length,
+        fields: fields.map((field) =>
+          field.replaceAll("Jan Novak", "[PERSON_1]"),
+        ),
+        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+      }),
+      excludedCanonicals: Promise.resolve([]),
+      gazetteerEntries: Promise.resolve([]),
+      literalPlaceholderAliases: new Map<string, string>(),
+      organizationId: ids.orgA,
+      pipelineContext: createPipelineContext(),
+      placeholderOffsets: new Map<string, number>(),
+      redactionMap: new Map<string, string>(),
+      sourcePlaceholders: new Set<string>(),
+      type: "anonymized",
+    };
+    const receivedSystemPrompts: unknown[] = [];
+
+    const { result } = await runScriptedSubagent(
+      [{ finishReason: "stop", text: "done", type: "text" }],
+      {
+        systemSafe,
+        systemUntrusted,
+        thirdPartyBoundary: boundary,
+        wrapAdapter: (adapter) => ({
+          ...adapter,
+          chatStream: (options) => {
+            receivedSystemPrompts.push(options.systemPrompts);
+            return adapter.chatStream(options);
+          },
+        }),
+      },
+    );
+
+    expect(result.outcome).toBe("completed");
+    expect(receivedSystemPrompts).toEqual([
+      [`${systemSafe}\n\nReturn output matching: [PERSON_1]`],
+    ]);
+  });
+});
 
 describe("a subagent run across several model steps", () => {
   test("reports the usage of every step, not only the last", async () => {
