@@ -220,14 +220,69 @@ export const createStatuteIndexPath = (
 ): `/law/${string}/statutes` =>
   `/law/${toStatuteCountrySegment(country)}/statutes`;
 
+/** The segment that opens a consolidation's day in a statute path. */
+const VERSION_PATH_SEGMENT = "v";
+
 export const createStatutePath = ({
   country,
   slug,
   version,
 }: StatuteRouteParams): `/law/${string}/statutes/${string}` => {
   if (version) {
-    return `${createStatuteIndexPath(country)}/${slug}/v/${version}`;
+    return `${createStatuteIndexPath(country)}/${slug}/${VERSION_PATH_SEGMENT}/${version}`;
   }
 
   return `${createStatuteIndexPath(country)}/${slug}`;
+};
+
+const decodePathSegment = (segment: string): string | null =>
+  Result.try(() => decodeURIComponent(segment)).unwrapOr(null);
+
+/**
+ * The inverse of `createStatutePath`: the route params a statute page's path
+ * carries, null for any other path. Four segments address the canonical
+ * consolidation; six carry a `/v/` opening. Every segment must be one the
+ * builder could have produced: a country code, a stored slug or the id form,
+ * and a version only after a stored slug, since the id form already names
+ * one consolidation.
+ */
+export const parseStatutePath = (
+  pathname: string,
+): StatuteRouteParams | null => {
+  const [law, country, statutes, slug, versionMarker, version, ...rest] =
+    pathname
+      .split("/")
+      .filter((segment) => segment.length > 0)
+      .map(decodePathSegment);
+  if (
+    law !== "law" ||
+    statutes !== "statutes" ||
+    !country ||
+    !COUNTRY_SEGMENT_PATTERN.test(country) ||
+    !slug ||
+    slug.trim() !== slug ||
+    rest.length > 0
+  ) {
+    return null;
+  }
+
+  const isIdForm = extractStatuteDocumentIdFromRouteParam(slug) !== null;
+  if (!isIdForm && !isStatuteSlug(slug)) {
+    return null;
+  }
+
+  if (versionMarker === undefined) {
+    return { country, slug };
+  }
+
+  if (
+    versionMarker !== VERSION_PATH_SEGMENT ||
+    isIdForm ||
+    !version ||
+    normalizeStatuteVersionSegment(version) !== version
+  ) {
+    return null;
+  }
+
+  return { country, slug, version };
 };

@@ -10,20 +10,17 @@ import {
   extractCaseLawDecisionIdFromIdRouteParam,
   isCaseLawDecisionId,
 } from "@stll/api-contract/case-law-decision-route";
-import { stellaToast } from "@stll/ui/toast";
 
+import { openPublicLawLink } from "@/components/chat/public-law-open";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
-import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { getMessageLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
   decodeCaseLawDecisionRef,
   defaultCaseLawCountryForLocale,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -189,40 +186,16 @@ export const openCaseLawDecision = async (
   locator: CaseLawDecisionLocator,
   open: (target: DecisionTabTarget) => void,
   { anchorId }: OpenCaseLawDecisionOptions = {},
-) => {
-  try {
-    if (!isPublicLawPreviewEnabled()) {
-      const t = getTranslator();
-      stellaToast.add({
-        title: t("common.comingSoon"),
-        type: "neutral",
-      });
-      return;
-    }
-
-    const resolved = await resolveCaseLawDecision(locator);
-    if (!resolved) {
-      const t = getTranslator();
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      return;
-    }
-
-    const { decision } = resolved;
-    // Loaded on open: the document parser stays out of the chunks every
-    // page preloads.
-    const { anchorAfterResolution } =
-      await import("@/features/case-law/decision-resolution.logic");
-    const target = anchorAfterResolution({ ...resolved, anchorId });
-    open(target === undefined ? decision : { ...decision, anchorId: target });
-  } catch (error) {
-    getAnalytics().captureError(error);
-    const t = getTranslator();
-    stellaToast.add({
-      title: userErrorFromThrown(error, t("errors.actionFailed")),
-      type: "error",
-    });
-  }
-};
+) =>
+  await openPublicLawLink({
+    resolve: async () => await resolveCaseLawDecision(locator),
+    open: async (resolved) => {
+      const { decision } = resolved;
+      // Loaded on open: the document parser stays out of the chunks every
+      // page preloads.
+      const { anchorAfterResolution } =
+        await import("@/features/case-law/decision-resolution.logic");
+      const target = anchorAfterResolution({ ...resolved, anchorId });
+      open(target === undefined ? decision : { ...decision, anchorId: target });
+    },
+  });
