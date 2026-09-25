@@ -1,47 +1,11 @@
-import {
-  type APIRequestContext,
-  request as playwrightRequest,
-} from "@playwright/test";
+import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
-
-const signIn = async (api: APIRequestContext, email: string) => {
-  const sendResponse = await api.post(
-    `${API_BASE_URL}/api/auth/email-otp/send-verification-otp`,
-    { data: { email, type: "sign-in" } },
-  );
-  expect(sendResponse.ok(), await sendResponse.text()).toBe(true);
-
-  const otpResponse = await api.get(
-    `${API_BASE_URL}/dev-public/last-otp?email=${encodeURIComponent(email)}`,
-  );
-  expect(otpResponse.ok(), await otpResponse.text()).toBe(true);
-  const otpPayload: unknown = await otpResponse.json();
-  expect(
-    typeof otpPayload === "object" &&
-      otpPayload !== null &&
-      "otp" in otpPayload &&
-      typeof otpPayload.otp === "string",
-  ).toBe(true);
-  if (
-    typeof otpPayload !== "object" ||
-    otpPayload === null ||
-    !("otp" in otpPayload) ||
-    typeof otpPayload.otp !== "string"
-  ) {
-    throw new Error("The development OTP response had no OTP");
-  }
-
-  const signInResponse = await api.post(
-    `${API_BASE_URL}/api/auth/sign-in/email-otp`,
-    { data: { email, otp: otpPayload.otp } },
-  );
-  expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
-};
 
 const createOrganizationSelectionSession = async ({
   email,
@@ -57,7 +21,7 @@ const createOrganizationSelectionSession = async ({
   };
   const loginApi = await playwrightRequest.newContext(requestOptions);
   try {
-    await signIn(loginApi, email);
+    await signInWithEmailOtp(loginApi, email);
     // Creating an organization activates it and refreshes the cached session
     // cookie. Preserve the signed pre-create snapshot, then create two real
     // memberships so the route shows its picker instead of auto-selecting the
