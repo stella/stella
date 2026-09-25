@@ -12,6 +12,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 import { Temporal } from "@stll/time";
 
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
@@ -192,12 +193,16 @@ export const getOrCreateGithubTreeRequest = ({
   return request;
 };
 
+/**
+ * Parses an uploaded skill pack. Takes a `ScannedFile`, so every upload path
+ * runs the file scan before its bytes reach the parser.
+ */
 export const parseUploadedSkillPackage = async (
-  file: File,
+  file: ScannedFile,
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const buffer = await file.arrayBuffer();
+      const buffer = file.bytes;
       if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.skillPack) {
         throw new HandlerError({
           status: 400,
@@ -205,7 +210,7 @@ export const parseUploadedSkillPackage = async (
         });
       }
 
-      const parsed = isZipFile({ buffer, name: file.name })
+      const parsed = isZipFile({ buffer, name: file.fileName })
         ? await parseZipSkillPackage(buffer)
         : parseMarkdownSkillPackage(decodeUtf8(buffer));
       return { ...parsed, sourceUrl: null };

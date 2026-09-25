@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { LIMITS } from "@/api/lib/limits";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   createSkillPackageFetchContext,
@@ -18,9 +19,18 @@ import {
   verifySkillPackageIntegrity,
 } from "./skill-package";
 
+const parseUpload = async (file: File) =>
+  await parseUploadedSkillPackage(
+    testScannedFile({
+      bytes: await file.arrayBuffer(),
+      mimeType: file.type,
+      path: file.name,
+    }),
+  );
+
 describe("agent skill package imports", () => {
   test("parses a single SKILL.md upload", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -142,7 +152,7 @@ Use the references.`,
     zip.file("skill/private/ignore.md", "Ignored");
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "nda-review.zip", { type: "application/zip" }),
     );
 
@@ -196,12 +206,12 @@ Instructions.`;
       split.generateAsync({ type: "arraybuffer" }),
     ]);
     const [combinedResult, splitResult] = await Promise.all([
-      parseUploadedSkillPackage(
+      parseUpload(
         new File([combinedBuffer], "combined.zip", {
           type: "application/zip",
         }),
       ),
-      parseUploadedSkillPackage(
+      parseUpload(
         new File([splitBuffer], "split.zip", { type: "application/zip" }),
       ),
     ]);
@@ -217,7 +227,7 @@ Instructions.`;
   });
 
   test("rejects skill names that cannot be used as a load-skill id", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -236,7 +246,7 @@ Instructions.`,
   });
 
   test("rejects oversized frontmatter before chat metadata storage", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -259,7 +269,7 @@ Instructions.`,
       ["version", `1.0.0${String.fromCodePoint(8297)}override`],
       ["license", `MIT${String.fromCodePoint(8238)}override`],
     ] as const) {
-      const result = await parseUploadedSkillPackage(
+      const result = await parseUpload(
         new File(
           [
             `---
@@ -286,7 +296,7 @@ Instructions.`,
   });
 
   test("rejects oversized custom metadata before storage", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -322,7 +332,7 @@ Instructions.`,
     }
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "crowded-skill.zip", { type: "application/zip" }),
     );
 
@@ -346,7 +356,7 @@ Instructions.`,
     );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "huge-skill.zip", { type: "application/zip" }),
     );
 

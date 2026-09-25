@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {
   authorizeSkillInstallScope,
@@ -56,7 +57,14 @@ const uploadSkill = createSafeRootHandler(
       return Result.err(authorization.error);
     }
 
-    const parsed = yield* Result.await(parseUploadedSkillPackage(body.file));
+    const scanned = yield* Result.await(
+      scanUploadForHandler({
+        bytes: await body.file.arrayBuffer(),
+        declaredMimeType: body.file.type,
+        fileName: body.file.name,
+      }),
+    );
+    const parsed = yield* Result.await(parseUploadedSkillPackage(scanned));
 
     const installResult = await installSkill({
       memberRole,
