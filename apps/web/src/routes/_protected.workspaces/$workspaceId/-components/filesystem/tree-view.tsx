@@ -371,6 +371,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     fieldMode: "visible",
     fieldIds,
   } satisfies Parameters<typeof filesystemEntitiesOptions>[0]);
+  // False while the deferred input still trails a view switch, i.e. the
+  // rendered tree belongs to the previous view's filters or sorts.
+  const isTreeDataCurrent =
+    filesystemQueryInput.workspaceId === workspaceId &&
+    filesystemQueryInput.filters === filters &&
+    filesystemQueryInput.sorts === sorts &&
+    filesystemQueryInput.fieldIds === fieldIds;
   const { data: entityData } = useSuspenseQuery(
     filesystemEntitiesOptions(filesystemQueryInput),
   );
@@ -701,7 +708,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       handledRevealRef.current = null;
       return;
     }
-    if (handledRevealRef.current === revealEntityId) {
+    // A miss against a trailing tree is not final; wait for the current one.
+    if (handledRevealRef.current === revealEntityId || !isTreeDataCurrent) {
       return;
     }
     handledRevealRef.current = revealEntityId;
@@ -727,7 +735,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }),
       "tree-view.clear-reveal",
     );
-  }, [revealEntityId, getAncestorIds, expandedIds, visibleNodes, navigate]);
+  }, [
+    revealEntityId,
+    isTreeDataCurrent,
+    getAncestorIds,
+    expandedIds,
+    visibleNodes,
+    navigate,
+  ]);
   useExternalSyncEffect(() => {
     if (revealState.type !== "scrolling") {
       return;
