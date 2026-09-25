@@ -316,6 +316,13 @@ const transformTable = (
             return transformParagraph(block, context);
           case "table":
             return transformTable(block, context);
+          case "blockSdt":
+            return {
+              ...block,
+              content: block.content.map((child) =>
+                transformBlock(child, context),
+              ),
+            };
           // A bookmark marker is a position and a preserved block is opaque
           // markup: neither can hold a citation, and this switch rebuilds the
           // cell, so both are written back as they came.

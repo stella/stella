@@ -178,12 +178,22 @@ const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
   };
 };
 
+/**
+ * A cell's own paragraphs, read through the content controls that wrap them;
+ * a nested table is not part of the cell's text.
+ */
+const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
+  content.flatMap((item) => {
+    if (item.type === "paragraph") {
+      return [item];
+    }
+    return item.type === "blockSdt" ? cellParagraphsOf(item.content) : [];
+  });
+
 const tableOf = (table: FolioTable): DocTable => ({
   rows: table.rows.map((row) =>
     row.cells.map((cell) => {
-      const paragraphs = cell.content.filter(
-        (item): item is FolioParagraph => item.type === "paragraph",
-      );
+      const paragraphs = cellParagraphsOf(cell.content);
       const lines = paragraphs.map((item) => lineOf(item));
       const text = lines
         .map(({ text: cellText }) => cellText)
