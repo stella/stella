@@ -18,7 +18,7 @@
       "file": "apps/api/src/lib/docx/extract-text.ts",
       "symbol": "import @stll/folio-core/server",
       "count": 1,
-      "reason": "Template packages and filled template output are read from template storage, which has no scan boundary yet; this parser input moves to a ScannedFile once template storage gets one.",
+      "reason": "Template uploads are scanned at the route, but stored templates and filled template output are read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once template storage keys get a stored-file reader.",
       "evidence": "apps/api/src/lib/docx/extract-text.test.ts"
     },
     {
@@ -29,7 +29,7 @@
       "file": "apps/api/src/lib/style-set-editor.ts",
       "symbol": "readStyleSetEditorPreset",
       "count": 1,
-      "reason": "Style-set packages are server-built from extracted styles and read from style-set storage, which has no scan boundary yet; this parser input moves to a ScannedFile once that storage gets one.",
+      "reason": "Style-set packages are server-built from scanned uploads or presets and read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once style-set storage keys get a stored-file reader.",
       "evidence": "apps/api/src/lib/style-set-editor.test.ts"
     }
   ]
