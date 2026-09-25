@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
+import { recordRequestFailure } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
 /** The channel the emitting call actually used, not one inferred from nearby source. */
@@ -215,9 +216,25 @@ type ShadowObservation = {
   readonly requestState?: FailureRequestState | undefined;
 };
 
+const recordRequestObservation = (
+  request: Request,
+  sink: FailureSink,
+  grading: FailureGrading,
+): void => {
+  recordRequestFailure(request, {
+    grade: grading.grade,
+    reason: grading.reason,
+    sink: sink.event,
+  });
+  if (grading.grade === "transient") {
+    emitFailureMetric({ sink: sink.event, reason: grading.reason });
+  }
+};
+
 /**
  * Grade a failure an existing sink is about to emit, count it, and hand the
- * grade back for the sink's own record. A transient request-path one is
+ * grade back for the sink's own record. A request-path observation is also
+ * stored on the request, for the completion record, and a transient one is
  * counted in the failure metric. Returns undefined, and emits nothing extra,
  * if grading itself failed.
  */
@@ -240,8 +257,8 @@ export const observeShadow = ({
       channel,
       degradation: fingerprintDegradation(evidence),
     });
-    if (request !== undefined && grading.grade === "transient") {
-      emitFailureMetric({ sink: sink.event, reason: grading.reason });
+    if (request !== undefined) {
+      recordRequestObservation(request, sink, grading);
     }
     return grading;
   });

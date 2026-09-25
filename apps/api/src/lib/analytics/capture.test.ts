@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   enrichRequestContext,
+  getRequestFailure,
   initRequestContext,
 } from "@/api/lib/observability/request-context";
 import * as legacy from "@/api/tests/helpers/legacy-error-fields";
@@ -319,7 +320,7 @@ describe("captureError owned fields", () => {
     expect(properties["severity"]).toBeUndefined();
   });
 
-  test("a request capture is graded with its request's own evidence", () => {
+  test("a request capture records its grade on the request", () => {
     const request = new Request("https://api.test/v1/items");
     initRequestContext(request);
 
@@ -328,6 +329,11 @@ describe("captureError owned fields", () => {
       { request },
     );
 
+    expect(getRequestFailure(request)).toEqual({
+      grade: "transient",
+      reason: "network_reset",
+      sink: "exception.captured",
+    });
     expect(captured.at(0)?.properties).toMatchObject({
       "failure.grade": "transient",
       "failure.reason": "network_reset",
