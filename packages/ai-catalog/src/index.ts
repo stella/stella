@@ -28,6 +28,7 @@ import {
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 import type { ModelRate } from "./model-rate";
+import type { RETAINED_MODELS_DEV_RATE_ENTRIES } from "./model-rate-policy";
 import { MODEL_RATES } from "./model-rates.gen";
 
 export {
@@ -830,7 +831,8 @@ type OfferedAggregatorUnderlyingModelId =
 type RequiredModelRateId =
   | OfferedAggregatorUnderlyingModelId
   | OfferedFirstPartyModelId
-  | OfferedPlatformModelId;
+  | OfferedPlatformModelId
+  | keyof typeof RETAINED_MODELS_DEV_RATE_ENTRIES;
 
 /**
  * Per-provider model served when a user's included budget is exhausted
@@ -958,17 +960,25 @@ export const MODEL_STREAMING_TOOL_USE = {
 } as const satisfies Record<OfferedBYOKModelId, StreamingToolUseSupport>;
 
 /**
- * Models no longer offered that a deployment override or a dev model id can
- * still select. Their known limits stay in force, since an unlisted id would
- * otherwise resolve to supported.
+ * Streaming tool-use support for models no longer offered that a deployment
+ * override or a dev model id can still select. Total over
+ * `RETAINED_MODELS_DEV_RATE_ENTRIES`, so retaining a model forces a decision
+ * rather than falling through to the supported default for unlisted ids.
  */
-const RETIRED_MODEL_STREAMING_TOOL_USE = {
+const RETAINED_MODEL_STREAMING_TOOL_USE = {
+  "gemini-2.5-flash": "supported",
+  "gemini-2.5-pro": "supported",
+  "gpt-4o-mini": "supported",
+  "gpt-4o": "supported",
   "us.deepseek.r1-v1:0": "unsupported",
-} as const satisfies Record<string, StreamingToolUseSupport>;
+} as const satisfies Record<
+  keyof typeof RETAINED_MODELS_DEV_RATE_ENTRIES,
+  StreamingToolUseSupport
+>;
 
 const MODEL_STREAMING_TOOL_USE_BY_ID: Readonly<
   Record<string, StreamingToolUseSupport>
-> = { ...RETIRED_MODEL_STREAMING_TOOL_USE, ...MODEL_STREAMING_TOOL_USE };
+> = { ...RETAINED_MODEL_STREAMING_TOOL_USE, ...MODEL_STREAMING_TOOL_USE };
 
 /**
  * Whether stella may send tools (or a structured-output schema) to this
