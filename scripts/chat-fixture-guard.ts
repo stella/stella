@@ -94,8 +94,18 @@ const propertyNameText = (name: ts.PropertyName): string | undefined => {
 /** The initializer of the nearest `const`/`let`/`var` named `name` that
  *  encloses `from`, without a type checker. */
 const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  /** The initializer `name` is declared with directly in `scope`, if any. */
+  /** The initializer `name` is declared with directly in `scope`, as a
+   *  variable or a parameter default, if any. */
   const declaredIn = (scope: ts.Node): ts.Expression | undefined => {
+    if (ts.isFunctionLike(scope)) {
+      const parameter = scope.parameters.find(
+        (candidate) =>
+          ts.isIdentifier(candidate.name) && candidate.name.text === name,
+      );
+      if (parameter?.initializer !== undefined) {
+        return parameter.initializer;
+      }
+    }
     const statements =
       ts.isSourceFile(scope) || ts.isBlock(scope) || ts.isModuleBlock(scope)
         ? scope.statements
@@ -390,6 +400,16 @@ const selfTest = (): number => {
   expectCount(
     "a shorthand type bound in an enclosing function",
     "const build = () => { const type = EventType.MESSAGES_SNAPSHOT; return () => ({ type, messages: [] }); };",
+    1,
+  );
+  expectCount(
+    "a shorthand type bound by a parameter default",
+    "function make(type = EventType.MESSAGES_SNAPSHOT) { return { type, messages: [] }; }",
+    1,
+  );
+  expectCount(
+    "a shorthand type bound by an arrow parameter default",
+    'const make = (type = "MESSAGES_SNAPSHOT" as const) => ({ type, messages: [] });',
     1,
   );
   expectCount(
