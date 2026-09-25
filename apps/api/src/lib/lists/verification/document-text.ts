@@ -19,7 +19,7 @@ import { readS3ObjectBounded } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** Where a block sits in the source, which a claim's anchor extends. */
-export type VerificationBlockSource =
+type VerificationBlockSource =
   | { type: "docx-block"; blockId: string }
   | { type: "pdf-page"; pageNumber: number };
 

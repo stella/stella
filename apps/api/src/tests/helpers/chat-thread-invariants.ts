@@ -108,7 +108,7 @@ export const findUnownedPendingInteractions = async ({
  * production reports when a turn settles. A message no turn owns is held to
  * the completed-turn rule. Returns the violations; a sound thread returns [].
  */
-export const findUnsettledToolCalls = async ({
+const findUnsettledToolCalls = async ({
   db,
   threadId,
 }: {

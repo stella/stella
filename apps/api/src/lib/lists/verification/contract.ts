@@ -28,11 +28,11 @@ export const SCORED_CLAIM_STATES = [
   "tension",
   "contradicted",
 ] as const;
-export type ScoredClaimState = (typeof SCORED_CLAIM_STATES)[number];
+type ScoredClaimState = (typeof SCORED_CLAIM_STATES)[number];
 
 /** States with no score by definition: nothing to check against, not a
  *  checkable claim, or a verdict withheld until a human picks a record. */
-export const UNSCORED_CLAIM_STATES = [
+const UNSCORED_CLAIM_STATES = [
   "nocover",
   "notverifiable",
   "recordconflict",
@@ -69,7 +69,7 @@ export const CLAIM_FACT_RELATIONS = [
   "conflicts",
   "record",
 ] as const;
-export type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
+type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
 
 export type ClaimRef = {
   factEntityId: SafeId<"entity">;
@@ -181,7 +181,6 @@ export const CLAIM_REVIEW_EVENT_KINDS = [
   "reopen",
   "record-conflict",
 ] as const;
-export type ClaimReviewEventKind = (typeof CLAIM_REVIEW_EVENT_KINDS)[number];
 
 /** How a record conflict was resolved: a fact governs (the claim adopts its
  *  verdict), or it went to the evidence team without picking a side. */
@@ -190,7 +189,7 @@ export type RecordConflictResolution =
   | { kind: "escalated" };
 
 /** `bulk` marks a status set by accepting routine claims in one action. */
-export const CLAIM_REVIEW_ORIGINS = ["single", "bulk"] as const;
+const CLAIM_REVIEW_ORIGINS = ["single", "bulk"] as const;
 export type ClaimReviewOrigin = (typeof CLAIM_REVIEW_ORIGINS)[number];
 
 export type ClaimReviewEventPayload =
