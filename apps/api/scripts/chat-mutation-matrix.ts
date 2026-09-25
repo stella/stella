@@ -179,20 +179,22 @@ const withMutatedFile = async <T>(
   const restore = () => {
     writeFileSync(target, original);
   };
-  const abandon = (exitCode: number) => {
-    // The child first: a recorder still running could otherwise write its
-    // recordings after they were put back.
-    activeScenario?.kill("SIGKILL");
+  const abandon = async (exitCode: number) => {
+    // The child first, and only once it has exited: a recorder still running
+    // could otherwise write its recordings after they were put back.
+    const child = activeScenario;
+    child?.kill("SIGKILL");
+    await child?.exited;
     restore();
     restoreRecordings?.();
     process.exit(exitCode);
   };
   const onSignal = (signal: TerminationSignal) => {
-    abandon(TERMINATION_SIGNALS[signal]);
+    void abandon(TERMINATION_SIGNALS[signal]);
   };
   const onUncaught = (error: unknown) => {
     console.error(error);
-    abandon(1);
+    void abandon(1);
   };
   const signals = Object.keys(TERMINATION_SIGNALS).filter(
     (name): name is TerminationSignal => name in TERMINATION_SIGNALS,

@@ -29,6 +29,7 @@ import {
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
 import type { DeliveredInterrupt } from "@/api/tests/helpers/chat-live-reload-invariants";
+import { relayLiveResponse } from "@/api/tests/helpers/chat-live-response";
 import {
   deliveredInterrupts,
   loadReloadView,
@@ -504,85 +505,22 @@ export const createApprovalHarness = ({
     response: Response;
     signal: AbortSignal | undefined;
   }): { done: Promise<void>; response: Response } => {
-    const reader =
-      response.body?.getReader() ??
-      panic("A streamed chat response has no body");
-    const decoder = new TextDecoder();
-    const ended = Promise.withResolvers<RecordedExchange["ended"]>();
-    /** Closing the connection: the server's response is cancelled and the
-     *  page's errors. */
-    const connection = Promise.withResolvers<Error>();
-    let text = "";
-    let open = true;
-    let page: ReadableStreamDefaultController<Uint8Array> | undefined;
-    const disconnect = (error: Error) => {
-      if (!open) {
-        return;
-      }
-      open = false;
-      page?.error(error);
-      connection.resolve(error);
-    };
+    const live = relayLiveResponse(
+      response.body ?? panic("A streamed chat response has no body"),
+    );
     const onAbort = () => {
-      disconnect(new DOMException("The page aborted", "AbortError"));
+      live.disconnect(new DOMException("The page aborted", "AbortError"));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
     openConnections.set(raw.threadId, () => {
-      disconnect(new TypeError("The connection dropped"));
+      live.disconnect(new TypeError("The connection dropped"));
     });
-    /** Relays the server's response to the page until either side ends. */
-    const relay = async (
-      controller: ReadableStreamDefaultController<Uint8Array>,
-    ) => {
-      let closedBy: Error | undefined;
-      try {
-        for (;;) {
-          const next = await Promise.race([reader.read(), connection.promise]);
-          if (next instanceof Error) {
-            // A closed connection cancels the server's response, as a closed
-            // socket does.
-            await reader.cancel(next).catch(() => undefined);
-            closedBy = next;
-            break;
-          }
-          if (next.done) {
-            break;
-          }
-          const chunk: unknown = next.value;
-          if (!(chunk instanceof Uint8Array)) {
-            panic("The server wrote a chunk that is not bytes");
-          }
-          text += decoder.decode(chunk, { stream: true });
-          controller.enqueue(chunk);
-        }
-      } catch (error) {
-        await reader.cancel(error).catch(() => undefined);
-        throw error;
-      } finally {
-        reader.releaseLock();
-      }
-      if (closedBy === undefined) {
-        open = false;
-        controller.close();
-        ended.resolve("complete");
-      } else {
-        ended.resolve("disconnected");
-      }
-    };
-    const body = new ReadableStream<Uint8Array>({
-      start: (controller) => {
-        page = controller;
-        void relay(controller);
-      },
-      cancel: (reason) => {
-        disconnect(reason instanceof Error ? reason : new Error("Cancelled"));
-      },
-    });
+    const body = live.body;
     const settleResponse = async () => {
-      const how = await ended.promise;
+      const { ending, text } = await live.ended;
       signal?.removeEventListener("abort", onAbort);
       openConnections.delete(raw.threadId);
-      await afterResponse({ endRecord, ended: how, raw, text });
+      await afterResponse({ endRecord, ended: ending, raw, text });
     };
     const done = settleResponse();
     return {
