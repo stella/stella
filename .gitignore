@@ -48,6 +48,8 @@ dist-ssr
 out/
 build
 dist
+.output
+.wxt
 .react-email
 
 # Copied at dev server start by vite.config.ts (copyPdfjsWorker)

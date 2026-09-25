@@ -219,6 +219,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  "use-browser": "chat.tool.use-browser",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
   create_matter_document: "chat.tool.create_matter_document",
@@ -335,6 +336,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_search_legislation: true,
   fetch_url: true,
+  "use-browser": true,
   web_search: true,
 } as const satisfies Record<ExternalInputToolName, true>;
 
@@ -390,8 +392,10 @@ const CHAT_TOOL_GRANT_POLICY_KIND = {
   /** May only be approved once or denied per call — never a persistent grant. */
   approveOnce: "approve-once",
   /**
-   * May never be auto-approved by any mechanism, not just a stored grant —
-   * stronger than `approveOnce` (see {@link isNonPersistentGrantChatToolName}).
+   * May never be auto-approved by a stored grant or any shared auto-approve
+   * path — stronger than `approveOnce` (see
+   * {@link isNonPersistentGrantChatToolName}). The one exception is the
+   * opt-in browser page-read allowance for `use-browser`.
    */
   neverAuto: "never-auto",
 } as const;
@@ -424,6 +428,11 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  // Page reads (`snapshot`) alone may run unasked once the user opts in, and
+  // only after a successful browser command: `isBrowserCommandAutoApproved`
+  // in features/chat/browser-control/browser-approval-mode.ts is that single
+  // exception. Every action asks every time.
+  "use-browser": CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
 } as const satisfies Record<ManualGrantToolName, ChatToolGrantPolicy>;
 
@@ -453,11 +462,12 @@ export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
   getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
- * Chat tools that may never be auto-approved by any mechanism — not just a
- * stored grant, but also the public-official and DOCX-batch auto-approve
- * paths in `hasAutomaticApproval`. Delegation (`spawn_subagents`) kicks off
+ * Chat tools that no stored grant may cover and no shared auto-approve path
+ * may run — the public-official and DOCX-batch paths in
+ * `hasAutomaticApproval` included. Delegation (`spawn_subagents`) kicks off
  * a whole subagent write-loop per call, so unlike a single mutation it must
- * be reviewed every time.
+ * be reviewed every time. The browser tool's opt-in page-read allowance
+ * (`isBrowserCommandAutoApproved`) is the only tool-specific exception.
  */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
   getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
@@ -509,6 +519,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-resource": false,
   "update-entity-fields": false,
   update_reader_annotation: true,
+  "use-browser": false,
   web_search: false,
 } as const satisfies Record<
   Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,

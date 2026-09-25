@@ -872,6 +872,23 @@
       "allowInConversation": "Leisti šiame pokalbyje",
       "allowOnce": "Leisti vieną kartą",
       "alwaysAllow": "Visada leisti",
+      "browser": {
+        "actions": {
+          "click": "Spustelėti",
+          "fill": "Įvesti tekstą",
+          "open": "Atverti svetainę",
+          "pressKey": "Paspausti klavišą",
+          "select": "Pasirinkti parinktį",
+          "snapshot": "Perskaityti puslapį",
+          "snapshotContinue": "Tęsti puslapio skaitymą"
+        },
+        "askAgain": "Klausti dar kartą",
+        "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",
+        "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
+        "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
+        "question": "Leisti šį naršyklės veiksmą?",
+        "within": "Kur"
+      },
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
@@ -1208,6 +1225,7 @@
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
+      "use-browser": "Jūsų naršyklės naudojimas",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -1335,6 +1353,7 @@
   },
   "common": {
     "accept": "Priimti",
+    "action": "Veiksmas",
     "actions": "Veiksmai",
     "active": "Aktyvus",
     "add": "Pridėti",
@@ -1474,6 +1493,7 @@
       "event": "Įvykis",
       "requirement": "Reikalavimas"
     },
+    "key": "Klavišas",
     "kind": "Rūšis",
     "language": "Kalba",
     "languages": {
@@ -1595,6 +1615,7 @@
     "stepProgress": "{current} iš {total}",
     "suggested": "Pasiūlymas",
     "summarizeChanges": "Apibendrinti pakeitimus",
+    "target": "Taikinys",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
     "translate": "Versti",
@@ -1614,10 +1635,12 @@
     "urlIdentifier": "URL identifikatorius",
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
+    "value": "Reikšmė",
     "verify": "Patvirtinti",
     "version": "Versija",
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
+    "website": "Svetainė",
     "workflow": "Darbo eiga",
     "workflows": "Darbo eigos",
     "zoomIn": "Priartinti",
@@ -1707,8 +1730,7 @@
       "labelRequired": "Lauko pavadinimas privalomas.",
       "removeField": "Pašalinti lauką",
       "title": "Pasirinktiniai laukai",
-      "value": "Lauko reikšmė",
-      "valuePlaceholder": "Reikšmė"
+      "value": "Lauko reikšmė"
     },
     "deleteContact": "Ištrinti klientą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
@@ -3637,7 +3659,6 @@
       "chooseModelsSubtitle": "Kiekvienai rolei pasirinkite modelį. Kainos atnaujinamos dešinėje.",
       "chooseModelsTitle": "Pasirinkite modelius",
       "configure": "Konfigūruoti",
-      "credentialsPanel": "Raktas",
       "customModelBadge": "Pasirinktinis · {provider}",
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
@@ -4141,7 +4162,6 @@
         "title": "Anonimizavimas"
       },
       "auditLogs": "Veiklos žurnalas",
-      "auditLogsAction": "Veiksmas",
       "auditLogsActionAccess": "Prieiga",
       "auditLogsActionCreate": "Sukurti",
       "auditLogsActionDelete": "Ištrinti",
@@ -4603,7 +4623,6 @@
     "conditionOverrideHint": "Spustelėkite, kad reikšmę nustatytumėte patys; spustelėkite dar kartą, kad grąžintumėte ją DI",
     "conditionUseFieldInstead": "Vietoje to naudoti lauką",
     "conditionUseFormula": "ƒ Apskaičiuota reikšmė…",
-    "conditionValue": "Reikšmė",
     "conditionWhen": "Kai",
     "conditionsTitle": "Sąlygos",
     "configureFields": "Konfigūruoti laukus",
@@ -5042,7 +5061,6 @@
       "fieldValueLabel": "Lauko reikšmė",
       "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberLabel": "Reikšmė",
       "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
@@ -5313,7 +5331,6 @@
           "openTarget": "Atidaryti elementą",
           "runId": "Vykdymo ID",
           "system": "Sistemos veikla",
-          "target": "Objektas",
           "title": "Veiklos informacija",
           "trigger": "Inicijavo",
           "webhook": "Saityno jungtis"

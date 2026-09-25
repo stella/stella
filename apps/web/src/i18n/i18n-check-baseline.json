@@ -90,7 +90,6 @@
     "clauses.versionRestored",
     "consent.error",
     "contacts.customFields.value",
-    "contacts.customFields.valuePlaceholder",
     "contacts.emailTypes.other",
     "contacts.emailTypes.personal",
     "contacts.phoneTypes.other",
@@ -240,7 +239,6 @@
     "templates.conditionOpIs",
     "templates.conditionOpIsNot",
     "templates.conditionOpNotEquals",
-    "templates.conditionValue",
     "templates.createDocument",
     "templates.deleteFailed",
     "templates.fieldLabel",
@@ -254,7 +252,6 @@
     "translate.settings.tierFree",
     "workspaces.deleteWorkspace",
     "workspaces.fields.fieldValueLabel",
-    "workspaces.fields.numberLabel",
     "workspaces.filters.date.last30d",
     "workspaces.filters.date.last7d",
     "workspaces.filters.from",
@@ -784,9 +781,6 @@
     ],
     "settings.account.desktop": [
       "de"
-    ],
-    "settings.organization.auditLogsAction": [
-      "fr"
     ],
     "styleSets.stellaStyle": [
       "ar",

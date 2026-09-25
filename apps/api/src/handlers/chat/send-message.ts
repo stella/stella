@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
   resourceRef,
   RESOURCE_TYPE,
@@ -67,6 +68,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
+  resolveBrowserClientCapability,
   validateToolCallParts,
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
@@ -1042,6 +1044,12 @@ const prepareValidatedIncomingMessage = async ({
         accessibleWorkspaceIds,
       }),
       activeFile: activeFileForTools,
+      // Validation admits persisted browser calls from any client; the
+      // streaming set below registers the tool only when this request's
+      // client reports a live extension.
+      browserClient: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      },
       editApplyMode,
       docxEditRepresentation,
       webSearchEnabled: validationThreadState.webSearchEnabled,
@@ -1916,6 +1924,7 @@ export const createSendMessage = (
             body.activeTemplate !== undefined,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
+          browserClient: resolveBrowserClientCapability(body.browserClient),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,

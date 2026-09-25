@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "A webhely-hozzáférés ki van kapcsolva. Egyszeri engedéllyel stella használhatja azokat a webhelyeket, ahová bejelentkeztél."
+  },
+  "accessReady": {
+    "message": "Kész. stella külön lapot használhat, miközben bejelentkezve maradsz a webhelyeken."
+  },
+  "accessUpdateFailed": {
+    "message": "A Chrome nem tudta módosítani a webhely-hozzáférést."
+  },
+  "adoptTab": {
+    "message": "Ezt a lapot használja a stella"
+  },
+  "adoptUnsupported": {
+    "message": "A stellával csak nyilvános HTTPS-oldalak használhatók."
+  },
+  "adoptedTab": {
+    "message": "A stella mostantól olvashatja a(z) $ORIGIN$ oldalt ezen a lapon. Kérdezzen rá a csevegésben.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Webhely-hozzáférés ellenőrzése…"
+  },
+  "connectTab": {
+    "message": "Jelenlegi stella-lap csatlakoztatása"
+  },
+  "controllerReady": {
+    "message": "Csatlakoztatva: $ORIGIN$. Minden műveletet továbbra is jóvá kell hagyni a stellában.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Lap leválasztása"
+  },
+  "extensionDescription": {
+    "message": "Engedély után lehetővé teszi, hogy stella egy külön Chrome-lapot vezéreljen."
+  },
+  "extensionName": {
+    "message": "stella böngésző"
+  },
+  "grantAccess": {
+    "message": "Minden webhely engedélyezése"
+  },
+  "revokeAccess": {
+    "message": "Webhely-hozzáférés eltávolítása"
+  },
+  "unsupportedTab": {
+    "message": "Nyisson meg egy stella alkalmazáslapot, majd próbálja újra."
+  }
+}

@@ -263,6 +263,10 @@ export const DOC_SOURCES = {
     dependencies: ["ultracite"],
     url: "https://www.ultracite.ai/llms.txt",
   },
+  WXT: {
+    dependencies: ["wxt"],
+    url: "https://wxt.dev/llms.txt",
+  },
   Yjs: {
     dependencies: ["yjs"],
     url: "https://docs.yjs.dev/llms.txt",
@@ -317,6 +321,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@stricli/core",
   "@t3-oss/env-core",
   "@tailwindcss/vite",
+  "@types/chrome",
   "@types/hast",
   "@types/node",
   "@types/nodemailer",
@@ -376,6 +381,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
+  "web-ext",
 ]
   .map(noLlmsTxt)
   .concat(
