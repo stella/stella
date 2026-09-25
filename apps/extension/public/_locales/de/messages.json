@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Tab trennen"
   },
+  "downloadKept": {
+    "message": "Während stella einen Tab gesteuert hat, wurde ein Download abgeschlossen und behalten. Prüfen Sie vor dem Öffnen, woher er stammt."
+  },
   "downloadStopped": {
     "message": "stella hat einen Download gestoppt, während es einen Tab gesteuert hat."
   },

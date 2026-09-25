@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Desconectar guia"
   },
+  "downloadKept": {
+    "message": "Um download terminou enquanto o stella controlava uma aba e foi mantido. Verifique a origem antes de abri-lo."
+  },
   "downloadStopped": {
     "message": "O stella interrompeu um download enquanto controlava uma aba."
   },

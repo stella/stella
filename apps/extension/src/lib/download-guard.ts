@@ -60,13 +60,15 @@ export const downloadOwner = (
   return user ? "user" : "unknown";
 };
 
-type DownloadAction = "allow" | "cancel" | "cancel-and-delete";
+type DownloadAction = "allow" | "cancel" | "keep-and-flag";
 
 /**
- * What to do with a download while stella controls a tab. One only a
- * confined frame could have started is stopped, and its file deleted if it
- * finished first. One that may be the user's (`ambiguous`, `unknown`) is
- * stopped while it runs, but a finished file is never deleted.
+ * What to do with a download while stella controls a tab. Any download not
+ * traced to the user alone is stopped while it runs. A file is never
+ * deleted: tracing by origin samples the frames open at one moment and
+ * cannot prove who started a download, so a finished one stays on disk and
+ * the user is told about it. Chrome holds each download until it is judged,
+ * so a finished one means Chrome skipped that step.
  */
 export const downloadAction = (
   owner: DownloadOwner,
@@ -75,32 +77,35 @@ export const downloadAction = (
   switch (owner) {
     case "user":
       return "allow";
-    case "contained":
-      return "cancel-and-delete";
     case "ambiguous":
+    case "contained":
     case "unknown":
-      return state === "complete" ? "allow" : "cancel";
+      return state === "complete" ? "keep-and-flag" : "cancel";
     default:
       owner satisfies never;
       return panic("Unhandled download owner");
   }
 };
 
-/** Origins of every frame in the given tabs, and of the tabs themselves. */
+/**
+ * Origins of every frame in the given tabs; null when Chrome could not list
+ * a tab's frames, since a missing answer is not an empty one.
+ */
 const frameOrigins = async (
   tabIds: readonly number[],
-): Promise<Set<string>> => {
+): Promise<Set<string> | null> => {
   const frames = await Promise.all(
     tabIds.map(
       async (tabId) =>
-        (await chrome.webNavigation
-          .getAllFrames({ tabId })
-          .catch(() => null)) ?? [],
+        await chrome.webNavigation.getAllFrames({ tabId }).catch(() => null),
     ),
   );
+  if (frames.some((tabFrames) => tabFrames === null)) {
+    return null;
+  }
   return new Set(
     frames
-      .flat()
+      .flatMap((tabFrames) => tabFrames ?? [])
       .map(({ url }) => webOrigin(url))
       .filter((origin) => origin !== null),
   );
@@ -108,23 +113,30 @@ const frameOrigins = async (
 
 /**
  * The user's side is the tabs known to be theirs; every other tab is
- * confined by the network rules, and counts as confined here too.
+ * confined by the network rules, and counts as confined here too. Null when
+ * a lookup failed.
  */
 const readDownloadOrigins = async (
   userTabIds: readonly number[],
-): Promise<DownloadOrigins> => {
+): Promise<DownloadOrigins | null> => {
   const confinedTabIds = (await chrome.tabs.query({}))
     .map(({ id }) => id)
     .filter((tabId) => tabId !== undefined)
     .filter((tabId) => !userTabIds.includes(tabId));
-  return {
-    contained: await frameOrigins(confinedTabIds),
-    user: await frameOrigins(userTabIds),
-  };
+  const [contained, user] = await Promise.all([
+    frameOrigins(confinedTabIds),
+    frameOrigins(userTabIds),
+  ]);
+  return contained === null || user === null ? null : { contained, user };
 };
 
-/** Shows that a download was stopped on the toolbar icon until the popup opens. */
-const noteStoppedDownload = async (): Promise<void> => {
+/**
+ * Counts a download stella stopped, or one that finished before it could
+ * and was kept, on the toolbar icon until the popup opens.
+ */
+const noteDownload = async (
+  notice: "downloadKept" | "downloadStopped",
+): Promise<void> => {
   const stored = await chrome.storage.session.get(
     BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY,
   );
@@ -134,18 +146,16 @@ const noteStoppedDownload = async (): Promise<void> => {
     [BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY]: count,
   });
   await chrome.action.setBadgeText({ text: String(count) });
-  await chrome.action.setTitle({
-    title: chrome.i18n.getMessage("downloadStopped"),
-  });
+  await chrome.action.setTitle({ title: chrome.i18n.getMessage(notice) });
 };
 
 // Every judgement, pending or done, by download id: Chrome may report one
 // download through several events, and each waits for the same verdict.
 const judgements = new Map<number, Promise<void>>();
-// Downloads stopped, and of those the ones only a confined frame could have
-// started, whose file is deleted if it lands after the cancel.
+// Downloads stopped; one Chrome lets run on is stopped again. Downloads kept
+// after finishing unjudged are noted once.
 const stopped = new Set<number>();
-const toDelete = new Set<number>();
+const kept = new Set<number>();
 
 type DownloadScope = { contained: readonly number[]; user: readonly number[] };
 
@@ -166,13 +176,13 @@ export const refreshContainedDownloadScope = async (): Promise<void> => {
   scopeNow = await readScope();
 };
 
-/** Cancels a download, and deletes its file if only a confined frame could have started it. */
-const stopDownload = async (downloadId: number): Promise<void> => {
-  await chrome.downloads.cancel(downloadId).catch(() => undefined);
-  const [after] = await chrome.downloads.search({ id: downloadId });
-  if (after?.state === "complete" && toDelete.has(downloadId)) {
-    await chrome.downloads.removeFile(downloadId).catch(() => undefined);
+/** A download that finished before it could be stopped stays, and is noted. */
+const keepFinishedDownload = async (downloadId: number): Promise<void> => {
+  if (kept.has(downloadId)) {
+    return;
   }
+  kept.add(downloadId);
+  await noteDownload("downloadKept");
 };
 
 const runJudgement = async (
@@ -188,28 +198,30 @@ const runJudgement = async (
     stopped.add(download.id);
     const cancelled = chrome.downloads.cancel(download.id);
     await cancelled.catch(() => undefined);
-    await noteStoppedDownload();
+    await noteDownload("downloadStopped");
     return;
   }
   const scope = scopeNow ?? (await readScope());
   if (scope.contained.length === 0) {
     return;
   }
-  const owner =
+  const origins =
     downloadOrigins(download).length === 0
-      ? "unknown"
-      : downloadOwner(download, await readDownloadOrigins(scope.user));
+      ? null
+      : await readDownloadOrigins(scope.user);
+  const owner = origins === null ? "unknown" : downloadOwner(download, origins);
   const [current] = await chrome.downloads.search({ id: download.id });
   const action = downloadAction(owner, current?.state ?? download.state);
   if (action === "allow") {
     return;
   }
-  stopped.add(download.id);
-  if (action === "cancel-and-delete") {
-    toDelete.add(download.id);
+  if (action === "keep-and-flag") {
+    await keepFinishedDownload(download.id);
+    return;
   }
-  await stopDownload(download.id);
-  await noteStoppedDownload();
+  stopped.add(download.id);
+  await chrome.downloads.cancel(download.id).catch(() => undefined);
+  await noteDownload("downloadStopped");
 };
 
 /**
@@ -235,7 +247,7 @@ export const judgeDownload = async (
 /**
  * Called for every download change. Chrome may let a download that was
  * stopped while it waited for its file name run on; it is stopped again,
- * and a confined frame's file deleted once it lands.
+ * or, once finished, kept and noted.
  */
 export const enforceStoppedDownload = async (
   delta: chrome.downloads.DownloadDelta,
@@ -247,10 +259,11 @@ export const enforceStoppedDownload = async (
   if (current === undefined || current.state === "interrupted") {
     return;
   }
-  if (current.state === "complete" && !toDelete.has(delta.id)) {
+  if (current.state === "complete") {
+    await keepFinishedDownload(delta.id);
     return;
   }
-  await stopDownload(delta.id);
+  await chrome.downloads.cancel(delta.id).catch(() => undefined);
 };
 
 /**

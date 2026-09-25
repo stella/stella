@@ -17,13 +17,24 @@ export type SnapshotState = {
 };
 
 /**
- * The top document of the controlled tab: Chrome's document id (null when
- * the page cannot be scripted, such as an error page) and the tab URL (null
- * when Chrome does not show it).
+ * The top document chat last read: Chrome's document id and the page's URL,
+ * both from that one read.
  */
 export type TopDocument = {
   documentId: string | null;
   url: string | null;
+};
+
+/**
+ * The tab's top document now, as Chrome reports it. `errorPage` holds only
+ * when Chrome says the last navigation failed and the frame cannot be
+ * scripted, which is how Chrome's own error page behaves; a page the user
+ * or a script left behind is never taken for one.
+ */
+export type LiveTopDocument = {
+  documentId: string;
+  errorPage: boolean;
+  url: string;
 };
 
 type IdentityVerdict =
@@ -45,23 +56,21 @@ type CommandIdentity = {
     url: string | undefined;
   } | null;
   /**
-   * For `open` and `go-back`: the tab's top document now, and the one chat
-   * last saw in a successful read. Failed and stopped commands do not
-   * change what chat saw.
+   * For `open` and `go-back`: the tab's top document now (null when Chrome
+   * could not say), and the one chat last saw in a successful read. Failed
+   * and stopped commands do not change what chat saw.
    */
-  navigation?: { live: TopDocument; settled: TopDocument | null };
+  navigation?: { live: LiveTopDocument | null; settled: TopDocument | null };
   /** The tab and snapshot the web client last saw a result for. */
   observedTab: BrowserObservedTab | null;
   snapshot: SnapshotState | null;
 };
 
-const sameDocument = (left: TopDocument, right: TopDocument): boolean =>
-  left.documentId === right.documentId && left.url === right.url;
-
 /**
- * Whether the tab still shows the page chat last read. A page that cannot
- * be read (an error page, a blocked address) holds nothing to lose; chat
- * may navigate away from it.
+ * Whether chat may navigate the tab away from what it shows now: the page
+ * chat last read, or Chrome's error page, which holds nothing to lose. When
+ * Chrome cannot say what the tab shows, or chat has read nothing there, the
+ * answer is no.
  */
 const navigationMatchesSeenPage = (
   navigation: CommandIdentity["navigation"],
@@ -70,8 +79,16 @@ const navigationMatchesSeenPage = (
     return true;
   }
   const { live, settled } = navigation;
+  if (live === null) {
+    return false;
+  }
+  if (live.errorPage) {
+    return true;
+  }
   return (
-    live.documentId === null || settled === null || sameDocument(live, settled)
+    settled !== null &&
+    settled.documentId === live.documentId &&
+    settled.url === live.url
   );
 };
 

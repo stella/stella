@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "قطع اتصال علامة التبويب"
   },
+  "downloadKept": {
+    "message": "انتهى تنزيل أثناء تحكّم stella في علامة تبويب، فأبقاه. تحقّق من مصدره قبل فتحه."
+  },
   "downloadStopped": {
     "message": "أوقف stella تنزيلًا أثناء تحكّمه في علامة تبويب."
   },

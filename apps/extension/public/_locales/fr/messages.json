@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Déconnecter l’onglet"
   },
+  "downloadKept": {
+    "message": "Un téléchargement s’est terminé pendant que stella contrôlait un onglet et a été conservé. Vérifiez sa provenance avant de l’ouvrir."
+  },
   "downloadStopped": {
     "message": "stella a arrêté un téléchargement pendant qu’il contrôlait un onglet."
   },

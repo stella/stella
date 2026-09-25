@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Disconnect tab"
   },
+  "downloadKept": {
+    "message": "A download finished while stella controlled a tab and was kept. Check where it came from before opening it."
+  },
   "downloadStopped": {
     "message": "stella stopped a download while it controlled a tab."
   },

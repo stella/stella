@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Katkesta vahekaardi ühendus"
   },
+  "downloadKept": {
+    "message": "Allalaadimine lõppes, kui stella vahekaarti juhtis, ja see jäeti alles. Enne avamist kontrolli, kust see pärineb."
+  },
   "downloadStopped": {
     "message": "stella peatas allalaadimise, kui see vahekaarti juhtis."
   },
