@@ -74,7 +74,9 @@ describe("renaming a skill", () => {
   test("derives a valid slug from the new name", async () => {
     const skillId = await seedSkill();
 
-    const result = await update(skillId, { name: "Contract Review: Žluťoučký" });
+    const result = await update(skillId, {
+      name: "Contract Review: Žluťoučký",
+    });
 
     expect(handlerFailure(result)).toBeNull();
     const row = await readSkill(skillId);

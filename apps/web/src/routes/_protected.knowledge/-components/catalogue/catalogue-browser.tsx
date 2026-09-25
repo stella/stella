@@ -1,8 +1,8 @@
 import { useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -301,7 +301,10 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
-  const addActions = addCustomActions({ canManageCustomTools, canCreateSkills });
+  const addActions = addCustomActions({
+    canManageCustomTools,
+    canCreateSkills,
+  });
   const showAddCustomMenu = showAddCustom && addActions.length > 0;
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners

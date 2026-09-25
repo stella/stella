@@ -113,7 +113,9 @@ afterAll(async () => {
       .delete(chatThreads)
       .where(inArray(chatThreads.id, seededThreadIds));
   }
-  await testDb.delete(agentSkills).where(inArray(agentSkills.id, [pickedSkillId]));
+  await testDb
+    .delete(agentSkills)
+    .where(inArray(agentSkills.id, [pickedSkillId]));
   await releaseRlsFixture();
 });
 
@@ -158,8 +160,7 @@ const createContext = ({
       data: forwardedProps,
     },
     createAuditRecorder:
-      () =>
-      async (_tx: unknown, event: AuditEvent | AuditEvent[]) => {
+      () => async (_tx: unknown, event: AuditEvent | AuditEvent[]) => {
         auditEvents.push(...(Array.isArray(event) ? event : [event]));
       },
     getAccessibleWorkspaces: async () => [

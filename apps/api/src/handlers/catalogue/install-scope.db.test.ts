@@ -39,17 +39,17 @@ const UNKNOWN_SLUG = "no-such-catalogue-skill";
 
 const installAsMember = async (scope: "private" | "team") => {
   const result = await installBundledSkill.handler(
-    createTestHandlerContext<
-      Parameters<typeof installBundledSkill.handler>[0]
-    >({
-      memberRole: { role: "member" },
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: asTestRaw<SafeDb>(
-        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      ),
-      body: { slug: UNKNOWN_SLUG, scope },
-    }),
+    createTestHandlerContext<Parameters<typeof installBundledSkill.handler>[0]>(
+      {
+        memberRole: { role: "member" },
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        ),
+        body: { slug: UNKNOWN_SLUG, scope },
+      },
+    ),
   );
   if (!("code" in result)) {
     throw new TypeError("expected the unknown slug to be refused");

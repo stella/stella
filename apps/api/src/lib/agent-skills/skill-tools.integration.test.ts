@@ -75,8 +75,9 @@ const executeTool = async ({
   input: Record<string, string>;
   tool: unknown;
 }) => {
-  const execute = asTestRaw<{ execute?: ToolExecute } | undefined>(tool)
-    ?.execute;
+  const execute = asTestRaw<{ execute?: ToolExecute } | undefined>(
+    tool,
+  )?.execute;
   if (execute === undefined) {
     throw new TypeError("Expected an executable skill tool");
   }

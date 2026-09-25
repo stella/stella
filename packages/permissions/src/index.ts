@@ -176,7 +176,9 @@ type OrganizationManagementRole =
 export const isOrganizationManagementRole = (
   role: string,
 ): role is OrganizationManagementRole =>
-  ORGANIZATION_MANAGEMENT_ROLES.some((managementRole) => managementRole === role);
+  ORGANIZATION_MANAGEMENT_ROLES.some(
+    (managementRole) => managementRole === role,
+  );
 
 /**
  * Closing a task can decide the workflow review gate that raised it, so a

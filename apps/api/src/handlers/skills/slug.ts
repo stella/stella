@@ -34,4 +34,7 @@ export type SkillSlug = v.InferOutput<typeof skillSlugSchema>;
 
 // Compose a unique slug from a display name, clipped to the slug column width.
 export const uniqueSlug = (name: string): SkillSlug =>
-  v.parse(skillSlugSchema, `${slugify(name)}-${collisionSuffix()}`.slice(0, 64));
+  v.parse(
+    skillSlugSchema,
+    `${slugify(name)}-${collisionSuffix()}`.slice(0, 64),
+  );

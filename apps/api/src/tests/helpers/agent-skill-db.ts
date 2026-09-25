@@ -52,9 +52,7 @@ export const skillHandlerContext = <TContext>({
     memberRole: { role },
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
-    safeDb: asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], organizationId, userId),
-    ),
+    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });

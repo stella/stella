@@ -148,9 +148,9 @@ describe("maybeSkillTools", () => {
       throw result.error;
     }
 
-    expect(await loadSkillBody({ slug: enabledSlug, tools: result.value })).toBe(
-      "Enabled methodology",
-    );
+    expect(
+      await loadSkillBody({ slug: enabledSlug, tools: result.value }),
+    ).toBe("Enabled methodology");
     await expect(
       loadSkillBody({ slug: disabledSlug, tools: result.value }),
     ).rejects.toThrow(/No skill named/u);

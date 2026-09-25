@@ -135,7 +135,9 @@ describe("MCP gateway skill tools", () => {
     const tools = await loadVisibleSkillTools({ context });
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.id).toBe(toSafeId<"agentSkill">("skill_private_shared"));
+    expect(tools.at(0)?.id).toBe(
+      toSafeId<"agentSkill">("skill_private_shared"),
+    );
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
