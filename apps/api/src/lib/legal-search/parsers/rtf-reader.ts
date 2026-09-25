@@ -456,6 +456,35 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
   return { word, parameter, next };
 };
 
+/**
+ * Where reading resumes after the one replacement character a `\uN` escape is
+ * followed by. The writer states it either as the byte itself or as a `\'xx`
+ * escape, and either may sit on the next line: a line ending is the file's
+ * formatting, not a character, so it is passed over first. Anything else (a
+ * control word, a group) is not a replacement character and is left to the
+ * scanner.
+ */
+const afterFallbackCharacter = (source: Uint8Array, start: number): number => {
+  let cursor = start;
+  while (source[cursor] === 0x0d || source[cursor] === 0x0a) {
+    cursor += 1;
+  }
+  const byte = source[cursor];
+  if (byte === undefined || byte === 0x7b || byte === 0x7d) {
+    return start;
+  }
+  if (byte !== 0x5c) {
+    return cursor + 1;
+  }
+  const high = String.fromCodePoint(source[cursor + 2] ?? 0);
+  const low = String.fromCodePoint(source[cursor + 3] ?? 0);
+  return source[cursor + 1] === 0x27 &&
+    HEX_DIGITS.includes(high) &&
+    HEX_DIGITS.includes(low)
+    ? cursor + 4
+    : start;
+};
+
 type ReaderOutput = {
   blocks: BlockContent[];
   footnotes: Footnote[];
@@ -770,9 +799,7 @@ const readRtfInto = (
         appendText(String.fromCodePoint(codePoint));
         // `\uc1` (the only count this dialect states) follows the escape with
         // one replacement character for readers that cannot decode it.
-        if (source[cursor] === 0x3f) {
-          cursor += 1;
-        }
+        cursor = afterFallbackCharacter(source, cursor);
         break;
       }
       case "footnote": {

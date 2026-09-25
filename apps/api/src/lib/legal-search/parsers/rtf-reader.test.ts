@@ -113,6 +113,22 @@ describe("code pages", () => {
       paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a舑 ?b\par }`),
     ).toEqual(["a–b"]);
   });
+
+  test("a `\\'xx` replacement character after `\\uN` is not text", () => {
+    expect(
+      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1252\uc1 a\u8211\'96b\par }`),
+    ).toEqual(["a–b"]);
+  });
+
+  test("a surrogate pair written as two escapes reads as one character", () => {
+    // Each half carries its own replacement character, and the writer may
+    // break the line between them.
+    const [text] = paragraphsOf(
+      `{\\rtf1\\ansi\\ansicpg1252\\uc1 a\\u-10179\r\n\\'3f\\u-8704\\'3fb\\par }`,
+    );
+    expect(text).toBe("a\u{1F600}b");
+    expect(text?.isWellFormed()).toBe(true);
+  });
 });
 
 describe("paragraphs and alignment", () => {
