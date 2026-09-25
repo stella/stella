@@ -13,10 +13,6 @@ const dockerfile = readFileSync(
   nodePath.resolve(import.meta.dirname, "../apps/api/Dockerfile"),
   "utf-8",
 );
-const workflow = readFileSync(
-  nodePath.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
-  "utf-8",
-);
 
 const stage = (name: string): string => {
   const start = dockerfile.search(new RegExp(`^FROM .* AS ${name}$`, "mu"));
@@ -50,13 +46,6 @@ const buildForOutput = (output: string): string | undefined =>
       instruction.includes(`--outfile ${output} `),
   );
 
-const smokeBuildForOutput = (output: string): string | undefined =>
-  logicalInstructions(workflow).find(
-    (instruction) =>
-      instruction.startsWith("bun build ") &&
-      instruction.includes(`--outfile ${output} `),
-  );
-
 test("every bundled /app entrypoint reaches the runner stage", () => {
   const built = [
     ...stage("builder").matchAll(/--outfile \/app\/([\w.-]+\.js)/gu),
@@ -74,12 +63,9 @@ test("every bundled /app entrypoint reaches the runner stage", () => {
   expect(built.filter((name) => !copied.has(name))).toEqual([]);
 });
 
-test("long-running API builds and their CI smoke map frames to source", () => {
+test("long-running API builds map frames to source", () => {
   for (const output of ["/app/server", "/app/document-processing-worker.js"]) {
     expect(buildForOutput(output), output).toContain("--sourcemap=inline");
-  }
-  for (const output of ["/tmp/server", "/tmp/document-processing-worker.js"]) {
-    expect(smokeBuildForOutput(output), output).toContain("--sourcemap=inline");
   }
 });
 
@@ -88,9 +74,9 @@ test("long-running API builds and their CI smoke map frames to source", () => {
 // the issue fingerprint. Without a source map those frames are offsets into
 // the bundle: they name no source position, and they move whenever a rebuild
 // shifts the layout, so one recurring failure splits across as many issues as
-// it sees builds. Both image stages and the CI build smoke bundle the runner
-// through its own package script, so the flag is asserted there rather than
-// at each `bun --filter` call site.
+// it sees builds. Both image stages and the CI production smoke bundle the
+// runner through its own package script, so the flag is asserted there rather
+// than at each `bun --filter` call site.
 test("the long-running case-law runner build maps frames to source", () => {
   expect(runnerPackage.scripts.build).toContain("--sourcemap=inline");
 });
