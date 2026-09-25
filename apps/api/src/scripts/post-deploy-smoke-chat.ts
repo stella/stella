@@ -691,7 +691,7 @@ export const evaluateApprovedTurn = ({
     );
   }
   if (last.outcome?.type !== "completed") {
-    return fail(`turn outcome is ${last?.outcome?.type ?? "missing"}`);
+    return fail(`turn outcome is ${last.outcome?.type ?? "missing"}`);
   }
   if (last.texts.length === 0) {
     return fail("the model did not answer in text after the tool");
