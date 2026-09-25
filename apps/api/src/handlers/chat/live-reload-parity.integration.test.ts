@@ -878,6 +878,33 @@ describe("a conversation's live view", () => {
   );
 
   test(
+    "runs a server call at once when its model step also asks for an approval",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["plain", "approval"] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: one model step holds a server
+        // call and a call that waits on the user.
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ReloadPage().run(model, real);
+
+        await new ResolveCards(
+          ["approve", "approve", "approve", "approve"],
+          [[{ ...STEP, text: true }]],
+        ).run(model, real);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
     "accepts an approval whose model arguments spell absent fields as null",
     async () => {
       // Strict tool schemas make every optional field required and nullable,

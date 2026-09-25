@@ -49,3 +49,22 @@ index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b3
  					input,
  					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
  				});
+diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
+index 240c7373c037311973b4e304e59071a6b7660a56..d982a23b7ca8cf8c009f9db383c3f40e36d39b38 100644
+--- a/dist/esm/activities/chat/tools/tool-calls.js
++++ b/dist/esm/activities/chat/tools/tool-calls.js
+@@ -420,9 +420,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
+ 			continue;
+ 		}
+ 		if (hasPendingApprovals) {
++			// Only an already approved call waits for the rest of its step's
++			// approvals. A call that needs no approval runs now, like a client
++			// request, so no server call ends a run without its result.
+ 			const isPendingApproval = tool.needsApproval && approvalResolution(approvals, toolCall.id) === void 0;
+-			const isPlainClientRequest = !tool.needsApproval && !tool.execute;
+-			if (!isPendingApproval && !isPlainClientRequest) continue;
++			const isNoApprovalCall = !tool.needsApproval;
++			if (!isPendingApproval && !isNoApprovalCall) continue;
+ 		}
+ 		if (resumeState?.cancelledToolCallIds?.has(toolCall.id)) {
+ 			results.push({
