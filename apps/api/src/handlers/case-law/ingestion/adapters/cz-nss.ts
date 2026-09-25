@@ -644,6 +644,12 @@ const documentReadFailed = failureSink({
   expected: [],
 });
 
+/** The parser threw on a rich document the portal served. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+
 /**
  * Shortest plain-text payload this adapter reads as a document. Below it the
  * endpoint answered with a portal notice rather than a decision, and the crawl
@@ -708,18 +714,18 @@ const czNssSourceHash = ({
 };
 
 /**
- * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
- * it into a DocumentAst. Falls back to /Text/{id} for plain
- * fulltext if the rich endpoint fails.
+ * Read the rich HTML from /DokumentOriginal/Html/{id}, or `undefined` where
+ * the portal serves none for the document or the read fails.
+ *
+ * A failed read is reported and left to the plain-text fallback. A read the
+ * page's signal aborts goes back to the crawl, which disposes of the row
+ * together with the rest of its page and asks the text endpoint nothing.
  */
-const fetchDecisionContent = async (
+const fetchRichDocument = async (
   documentId: string,
-  row: ParsedRow,
-  detail: CzNssDetailMetadata,
   session: SessionState,
   signal: AbortSignal,
-): Promise<DecisionContent> => {
-  // Try rich HTML first
+): Promise<string | undefined> => {
   try {
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
@@ -733,11 +739,47 @@ const fetchDecisionContent = async (
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
     );
+    if (!response.ok) {
+      return undefined;
+    }
+    const html = await response.text();
+    return html.length > 200 && !html.includes("<body>\n    N/A\n</body>")
+      ? html
+      : undefined;
+  } catch (error) {
+    if (signal.aborted) {
+      throw error;
+    }
+    observeFailure(publisherReadFailure(error), {
+      sink: documentReadFailed,
+      ctx: {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        documentId,
+        phase: CZ_NSS_RAW_PART.DOCUMENT,
+      },
+    });
+    return undefined;
+  }
+};
 
-    if (response.ok) {
-      const html = await response.text();
-      if (html.length > 200 && !html.includes("<body>\n    N/A\n</body>")) {
-        const parsed = parseNssDecisionHtml({
+/**
+ * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
+ * it into a DocumentAst. Falls back to /Text/{id} for plain
+ * fulltext if the rich endpoint serves nothing, its read fails,
+ * or the parser cannot read what it served.
+ */
+const fetchDecisionContent = async (
+  documentId: string,
+  row: ParsedRow,
+  detail: CzNssDetailMetadata,
+  session: SessionState,
+  signal: AbortSignal,
+): Promise<DecisionContent> => {
+  const html = await fetchRichDocument(documentId, session, signal);
+  if (html !== undefined) {
+    const parsed = Result.try({
+      try: () =>
+        parseNssDecisionHtml({
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
           court: czNssCourt(detail.ecli, documentId),
@@ -756,18 +798,24 @@ const fetchDecisionContent = async (
           sourceUrl: row.documentUrl,
           html,
           detailMetadata: { ...detail },
-        });
-
-        return {
-          fulltext: parsed.fulltext,
-          documentAst: parsed.documentAst,
-          sourceRaw: html,
-          fallbackText: undefined,
-        };
-      }
+        }),
+      catch: (cause: unknown) => cause,
+    });
+    if (Result.isOk(parsed)) {
+      return {
+        fulltext: parsed.value.fulltext,
+        documentAst: parsed.value.documentAst,
+        sourceRaw: html,
+        fallbackText: undefined,
+      };
     }
-  } catch {
-    // Fall through to plain text
+    // Each parser failure is reported, which keeps it apart from decisions
+    // the portal serves as plain text. It is observed unclassified, as the
+    // parser's own failure.
+    observeFailure(parsed.error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    });
   }
 
   // Fallback: plain text from /Text/{id}

@@ -1838,8 +1838,8 @@ describe("cz-nss reads the portal did not answer", () => {
     pathPrefix: string,
     failure: () => Error,
     stub?: StubOptions,
-  ): void => {
-    installStub(stub ?? { search: [] });
+  ): { requests: RecordedRequest[] } => {
+    const recorded = installStub(stub ?? { search: [] });
     const served = globalThis.fetch;
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {
@@ -1852,6 +1852,7 @@ describe("cz-nss reads the portal did not answer", () => {
         return await served(input, init);
       },
     );
+    return recorded;
   };
 
   /** Abort `deadline` with a timeout, and reject with its reason as `fetch` does. */
@@ -2111,5 +2112,50 @@ describe("cz-nss reads the portal did not answer", () => {
     );
 
     expect(failure).toBe(deadline.signal.reason);
+  });
+
+  test("reports a rich-text read that fails and builds from the text", async () => {
+    failRequestsUnder(
+      "/DokumentOriginal/Html/",
+      () => new TypeError("fetch failed"),
+    );
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("built");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(
+      warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
+    ).toMatchObject({
+      documentId: MUNICIPAL_ROW.documentId,
+      phase: "document",
+      "failure.grade": "transient",
+    });
+  });
+
+  test("rethrows when the page deadline aborts a rich-text read", async () => {
+    const deadline = new AbortController();
+    const { requests } = failRequestsUnder(
+      "/DokumentOriginal/Html/",
+      deadlinePasses(deadline),
+    );
+
+    const failure = await rejectionOf(
+      buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: deadline.signal,
+      }),
+    );
+
+    expect(failure).toBe(deadline.signal.reason);
+    // Once the signal is aborted, the text endpoint is asked nothing.
+    expect(
+      requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+    ).toEqual([]);
   });
 });
