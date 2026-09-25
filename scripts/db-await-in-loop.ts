@@ -337,10 +337,7 @@ const isResultTryPromiseCallback = (fn: ts.Node): boolean => {
 // call is itself an argument of `Promise.all(...)`/`Promise.allSettled(...)`?
 const promiseFanOutOfCallback = (fn: ts.Node): ts.CallExpression | null => {
   const { parent: mapCall, child } = outerParent(fn);
-  if (
-    !isMapLikeCall(mapCall) ||
-    !mapCall.arguments.some((argument) => argument === child)
-  ) {
+  if (!isMapLikeCall(mapCall) || mapCall.arguments[0] !== child) {
     return null;
   }
   const { parent: fanOut, child: mapChild } = outerParent(mapCall);
@@ -1219,7 +1216,8 @@ export const scanDbAwaitInLoop = ({
     if (mapCall === null || !isMapLikeCall(mapCall)) {
       return null;
     }
-    const callback = mapCall.arguments.at(-1);
+    // The callback is the first argument; a second is the optional `thisArg`.
+    const [callback] = mapCall.arguments;
     if (callback === undefined) {
       return null;
     }
@@ -1294,14 +1292,17 @@ export const scanDbAwaitInLoop = ({
       if (loop === null && fanOut === null) {
         return;
       }
-      if (ts.isCallExpression(awaited) && isQueryCall(awaited, true)) {
-        if (loop !== null) {
-          report(site, QUERY_MATCH);
-        }
-        return;
-      }
-      if (!ts.isCallExpression(awaited) && isExecutableQuery(typeOf(awaited))) {
-        if (loop !== null) {
+      // The enclosing fan-out already reports on its own await; one fan-out
+      // must not cost two suppressions, whatever the inner site is.
+      const ownedByFanOut =
+        loop?.fanOut !== null &&
+        loop?.fanOut !== undefined &&
+        cachedFanOutMatch(loop.fanOut) !== null;
+      if (
+        (ts.isCallExpression(awaited) && isQueryCall(awaited, true)) ||
+        (!ts.isCallExpression(awaited) && isExecutableQuery(typeOf(awaited)))
+      ) {
+        if (loop !== null && !ownedByFanOut) {
           report(site, QUERY_MATCH);
         }
         return;
@@ -1338,9 +1339,7 @@ export const scanDbAwaitInLoop = ({
         }
         return;
       }
-      if (loop.fanOut !== null && cachedFanOutMatch(loop.fanOut) !== null) {
-        // The enclosing fan-out already reports on its own await; one fan-out
-        // must not cost two suppressions.
+      if (ownedByFanOut) {
         return;
       }
       report(site, match);

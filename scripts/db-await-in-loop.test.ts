@@ -242,6 +242,18 @@ export const fanOut = async (tx: Transaction) => {
   await Promise.allSettled(ids.map((id) => writeOne(tx, id))); // expect: handle
   await Promise.all(ids.map(async (id) => { await writeOne(tx, id); })); // expect: helper
   await Promise.all(ids.map(indexRow)); // expect: query
+  const context = { label: "rows" };
+  await Promise.all( // expect: query
+    ids.map(function (this: typeof context, id) {
+      return rootDb.select().from(items).where(inArray(items.id, [id]));
+    }, context),
+  );
+  await Promise.all( // expect: helper
+    ids.map(async (id) => {
+      await rootDb.select().from(items).where(inArray(items.id, [id]));
+      await saveOne(id);
+    }),
+  );
   await Promise.all([writeOne(tx, 1), writeOne(tx, 2)]);
   await Promise.all(ids.map(async (id) => id * 2));
   ids.forEach(async (id) => {
