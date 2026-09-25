@@ -255,32 +255,28 @@ describe("an approved server tool's result", () => {
     }
   });
 
-  // Becomes a plain test in a follow-up.
-  test.failing(
-    "leaves a later approval in the same thread answerable from the page",
-    async () => {
-      const thread = await openThread();
-      const { harness } = thread;
-      try {
-        await requestAndApprove({
-          ...thread,
-          continuation: [
-            { finishReason: "stop", text: "Deleted.", type: "text" },
-          ],
-          name: "NDA",
-        });
-        await requestAndApprove({
-          ...thread,
-          continuation: [
-            { finishReason: "stop", text: "Deleted too.", type: "text" },
-          ],
-          name: "Lease",
-        });
+  test("leaves a later approval in the same thread answerable from the page", async () => {
+    const thread = await openThread();
+    const { harness } = thread;
+    try {
+      await requestAndApprove({
+        ...thread,
+        continuation: [
+          { finishReason: "stop", text: "Deleted.", type: "text" },
+        ],
+        name: "NDA",
+      });
+      await requestAndApprove({
+        ...thread,
+        continuation: [
+          { finishReason: "stop", text: "Deleted too.", type: "text" },
+        ],
+        name: "Lease",
+      });
 
-        expect(harness.executions).toEqual(["NDA", "Lease"]);
-      } finally {
-        closeThread(thread);
-      }
-    },
-  );
+      expect(harness.executions).toEqual(["NDA", "Lease"]);
+    } finally {
+      closeThread(thread);
+    }
+  });
 });

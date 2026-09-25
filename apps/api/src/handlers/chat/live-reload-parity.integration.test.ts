@@ -723,8 +723,7 @@ const STEP: StepShape = {
 };
 
 describe("a conversation's live view", () => {
-  // Becomes a plain test in a follow-up.
-  test.failing(
+  test(
     "keeps every card after an approval on a message that already holds a tool result",
     async () => {
       const conversation = await openConversation();
@@ -847,10 +846,9 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  // Becomes a plain test in a follow-up. PR CI runs the seeded budget; the
-  // nightly sweep (`PROPERTY_TEST_NUM_RUNS_FACTOR`) runs it ten times over
-  // with fresh seeds.
-  test.failing(
+  // PR CI runs the seeded budget; the nightly sweep
+  // (`PROPERTY_TEST_NUM_RUNS_FACTOR`) runs it ten times over with fresh seeds.
+  test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
       await runConversations(
