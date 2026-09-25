@@ -24,6 +24,14 @@ export const computedHandle = (error: unknown): void => {
   observeFailure(error, { sink: SINKS.worker });
 };
 
+export const hiddenOptions = (error: unknown): void => {
+  const options = { sink: workerFailed };
+  // oxlint-disable-next-line failure-sink-handle/failure-sink-handle -- fixture proves hoisted options are rejected
+  observeFailure(error, options);
+  // oxlint-disable-next-line failure-sink-handle/failure-sink-handle -- fixture proves spread options are rejected
+  observeFailure(error, { ...options });
+};
+
 export const handleInFunction = (): FailureSink =>
   // oxlint-disable-next-line failure-sink-handle/failure-sink-handle -- fixture proves a handle is created at module scope only
   failureSink({ event: "per.call", expected: [] });

@@ -23,6 +23,8 @@ import type { AstNode } from "./utils.ts";
 //   observeFailure(error, { sink: failureSink({ event, expected: [] }) })
 //   observeFailure(error, { sink: pickSink(kind) })
 //   observeFailure(error, { sink: sinks[kind] })
+//   observeFailure(error, options)
+//   observeFailure(error, { ...defaults, ctx })
 //   const handler = () => { const s = failureSink({ ... }); ... }
 //
 // Accepted:
@@ -130,16 +132,31 @@ const handleNames = (program: unknown, declarators: readonly AstNode[]) => {
   return names;
 };
 
-const sinkArgument = (call: unknown): AstNode | null => {
+type SinkArgument =
+  | { kind: "inline"; sink: AstNode }
+  | { kind: "hidden"; node: AstNode }
+  | { kind: "absent" };
+
+// The `sink` of an `observeFailure` call. Options held in a variable or
+// assembled with a spread hide which handle the call runs under, so they are
+// reported as such rather than followed.
+const sinkArgument = (call: unknown): SinkArgument => {
   const args =
     isAstNode(call) && Array.isArray(call.arguments) ? call.arguments : [];
   const options = args.at(1);
+  if (!isAstNode(options)) {
+    return { kind: "absent" };
+  }
   if (
-    !isAstNode(options) ||
     options.type !== "ObjectExpression" ||
     !Array.isArray(options.properties)
   ) {
-    return null;
+    return { kind: "hidden", node: options };
+  }
+  for (const property of options.properties) {
+    if (isAstNode(property) && property.type === "SpreadElement") {
+      return { kind: "hidden", node: property };
+    }
   }
   for (const property of options.properties) {
     if (
@@ -148,10 +165,10 @@ const sinkArgument = (call: unknown): AstNode | null => {
       getPropertyName(property.key) === SINK_PROPERTY &&
       isAstNode(property.value)
     ) {
-      return property.value;
+      return { kind: "inline", sink: property.value };
     }
   }
-  return null;
+  return { kind: "absent" };
 };
 
 export default eslintCompatPlugin({
@@ -164,6 +181,9 @@ export default eslintCompatPlugin({
           sinkNotHandle:
             "Pass a failure sink handle by name: a module-level constant " +
             "created by failureSink(...), or one imported from its module.",
+          optionsNotInline:
+            "Pass observeFailure its options as an inline object without " +
+            "spreads, so the sink handle it runs under is visible at the call.",
           sinkOutsideModuleScope:
             "Create a failure sink handle once, at module scope, as a const " +
             "(or a property of a module-level const object).",
@@ -186,12 +206,22 @@ export default eslintCompatPlugin({
             if (!isCallTo(node, OBSERVE_FAILURE)) {
               return;
             }
-            const sink = sinkArgument(node);
-            if (sink === null) {
+            const argument = sinkArgument(node);
+            if (argument.kind === "hidden") {
+              context.report({
+                node: argument.node,
+                messageId: "optionsNotInline",
+              });
               return;
             }
-            if (!isIdentifier(sink) || !names.has(sink.name)) {
-              context.report({ node: sink, messageId: "sinkNotHandle" });
+            if (
+              argument.kind === "inline" &&
+              (!isIdentifier(argument.sink) || !names.has(argument.sink.name))
+            ) {
+              context.report({
+                node: argument.sink,
+                messageId: "sinkNotHandle",
+              });
             }
           },
         };
