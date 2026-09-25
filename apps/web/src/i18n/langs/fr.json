@@ -3126,6 +3126,11 @@
       "scopePrivate": "Moi uniquement",
       "scopeTeam": "Toute l’équipe",
       "selectionLimit": "Sélectionnez jusqu’à {count} compétences à la fois.",
+      "skippedFiles": "{count, plural, one {# fichier n’a pas été importé} other {# fichiers n’ont pas été importés}}",
+      "skippedReasonNotUtf8Text": "Pas du texte UTF-8",
+      "skippedReasonOutsideSkillFolder": "En dehors du dossier de la compétence",
+      "skippedReasonUnsupportedExtension": "Type de fichier non pris en charge",
+      "skippedReasonUnsupportedFolder": "Pas dans un dossier de ressources",
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"

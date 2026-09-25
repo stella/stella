@@ -3126,6 +3126,11 @@
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik meeskonnas",
       "selectionLimit": "Vali korraga kuni {count} oskust.",
+      "skippedFiles": "{count, plural, one {# faili ei imporditud} other {# faili ei imporditud}}",
+      "skippedReasonNotUtf8Text": "Pole UTF-8 tekst",
+      "skippedReasonOutsideSkillFolder": "Väljaspool oskuse kausta",
+      "skippedReasonUnsupportedExtension": "Failitüüpi ei toetata",
+      "skippedReasonUnsupportedFolder": "Pole ressursikaustas",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"

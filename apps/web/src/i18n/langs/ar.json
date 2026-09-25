@@ -3126,6 +3126,11 @@
       "scopePrivate": "أنا فقط",
       "scopeTeam": "الجميع في الفريق",
       "selectionLimit": "يمكنك تحديد ما يصل إلى {count} مهارة في المرة الواحدة.",
+      "skippedFiles": "{count, plural, zero {لم يُستبعد أي ملف من الاستيراد} one {لم يُستورد ملف واحد} two {لم يُستورد ملفان} few {لم تُستورد # ملفات} many {لم يُستورد # ملفًا} other {لم يُستورد # ملف}}",
+      "skippedReasonNotUtf8Text": "ليس نصًا بترميز UTF-8",
+      "skippedReasonOutsideSkillFolder": "خارج مجلد المهارة",
+      "skippedReasonUnsupportedExtension": "نوع الملف غير مدعوم",
+      "skippedReasonUnsupportedFolder": "ليس في مجلد موارد",
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"

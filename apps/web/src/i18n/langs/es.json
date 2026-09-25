@@ -3126,6 +3126,11 @@
       "scopePrivate": "Solo yo",
       "scopeTeam": "Todos en el equipo",
       "selectionLimit": "Selecciona hasta {count} habilidades a la vez.",
+      "skippedFiles": "{count, plural, one {# archivo no se importó} other {# archivos no se importaron}}",
+      "skippedReasonNotUtf8Text": "No es texto UTF-8",
+      "skippedReasonOutsideSkillFolder": "Fuera de la carpeta de la habilidad",
+      "skippedReasonUnsupportedExtension": "Tipo de archivo no admitido",
+      "skippedReasonUnsupportedFolder": "No está en una carpeta de recursos",
       "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"

@@ -118,7 +118,7 @@ export type ImportedSkillPackage = ParsedSkillPackage & {
 export type UrlReplayIdentity = "content-hash" | "source-url";
 
 /** A package fetched from a URL, carrying how a repeated import replays. */
-export type FetchedSkillPackage = ParsedSkillPackage & {
+export type FetchedSkillPackage = ImportedSkillPackage & {
   urlReplayIdentity: UrlReplayIdentity;
 };
 
@@ -290,7 +290,10 @@ export const fetchSkillPackageFromUrl = async (
         path: url.pathname,
       })
         ? await parseZipSkillPackage(response.body)
-        : parseMarkdownSkillPackage(decodeUtf8(response.body));
+        : {
+            ...parseMarkdownSkillPackage(decodeUtf8(response.body)),
+            skippedFiles: [],
+          };
       return {
         ...parsed,
         sourceUrl: redactSkillSourceUrlForStorage(rawUrl),
@@ -306,14 +309,16 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async ({
-  fetchFiles = async (skillTarget) =>
-    await fetchGithubSkillFiles(skillTarget, {
+  fetchFiles = async (skillTarget) => {
+    const { files } = await fetchGithubSkillFiles(skillTarget, {
       githubAccess: {
         source: "catalogue",
         ...(githubToken ? { githubToken } : {}),
       },
       githubTrees: new Map(),
-    }),
+    });
+    return files;
+  },
   githubToken,
   sourceUrl,
   target,
@@ -389,16 +394,17 @@ type ZipPackageEntry = {
   path: string;
 };
 
-type ZipPackagePathVerdict =
+type PackagePathVerdict =
   | { type: "entrypoint" }
   | { type: "resource" }
   | { type: "skipped"; reason: SkippedSkillFileReason };
 
 /**
- * Decides from the path alone whether an archive entry becomes part of the
- * skill, so entries the skill never keeps are not inflated or decoded.
+ * Decides from the path alone whether a package file becomes part of the
+ * skill, so files the skill never keeps are not downloaded, inflated or
+ * decoded. Zip uploads, zip URLs and GitHub folders all classify through it.
  */
-const classifyZipPackagePath = ({
+const classifyPackageFilePath = ({
   path,
   rootPrefix,
   skillFilePath,
@@ -406,7 +412,7 @@ const classifyZipPackagePath = ({
   path: string;
   rootPrefix: string;
   skillFilePath: string;
-}): ZipPackagePathVerdict => {
+}): PackagePathVerdict => {
   if (path === skillFilePath) {
     return { type: "entrypoint" };
   }
@@ -466,7 +472,11 @@ const parseZipSkillPackage = async (
   let totalUncompressedBytes = 0;
 
   for (const { file, path } of packageEntries) {
-    const verdict = classifyZipPackagePath({ path, rootPrefix, skillFilePath });
+    const verdict = classifyPackageFilePath({
+      path,
+      rootPrefix,
+      skillFilePath,
+    });
     if (verdict.type === "skipped") {
       skippedFiles.push({ path, reason: verdict.reason });
       continue;
@@ -749,17 +759,23 @@ const fetchGithubSkillPackage = async (
   target: GithubSkillPath,
   originalUrl: string,
   context: SkillPackageFetchContext,
-): Promise<ParsedSkillPackage> => {
-  const files = await fetchGithubSkillFiles(target, context);
+): Promise<ImportedSkillPackage> => {
+  const { files, skippedFiles } = await fetchGithubSkillFiles(target, context);
   const parsed = parseSkillFiles(files);
-  return { ...parsed, sourceUrl: originalUrl };
+  return { ...parsed, skippedFiles, sourceUrl: originalUrl };
+};
+
+type GithubSkillFiles = {
+  files: SkillFile[];
+  skippedFiles: SkippedSkillFile[];
 };
 
 const fetchGithubSkillFiles = async (
   target: GithubSkillPath,
   context: SkillPackageFetchContext,
-): Promise<SkillFile[]> => {
+): Promise<GithubSkillFiles> => {
   const files: SkillFile[] = [];
+  const skippedFiles: SkippedSkillFile[] = [];
   let totalFileBytes = 0;
   let resourceCount = 0;
   const resourcePaths = new Set<string>();
@@ -785,11 +801,16 @@ const fetchGithubSkillFiles = async (
       continue;
     }
     const normalizedPath = normalizePackageFilePath(relativePath);
-    if (
-      !normalizedPath ||
-      (normalizedPath !== SKILL_FILE_NAME &&
-        !isAllowedResourcePath(normalizedPath))
-    ) {
+    if (!normalizedPath) {
+      continue;
+    }
+    const verdict = classifyPackageFilePath({
+      path: normalizedPath,
+      rootPrefix: "",
+      skillFilePath: SKILL_FILE_NAME,
+    });
+    if (verdict.type === "skipped") {
+      skippedFiles.push({ path: normalizedPath, reason: verdict.reason });
       continue;
     }
 
@@ -829,14 +850,27 @@ const fetchGithubSkillFiles = async (
     totalFileBytes += raw.body.byteLength;
     assertGithubTotalFileBytes(totalFileBytes);
 
+    // SKILL.md must be text; a resource that is not is left out and
+    // reported, as a zip upload does.
+    const content =
+      verdict.type === "entrypoint"
+        ? decodeUtf8(raw.body)
+        : tryDecodeUtf8(raw.body);
+    if (content === null) {
+      skippedFiles.push({
+        path: normalizedPath,
+        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
+      });
+      continue;
+    }
     files.push({
-      content: decodeUtf8(raw.body),
+      content,
       path: normalizedPath,
       sizeBytes: raw.body.byteLength,
     });
   }
 
-  return files;
+  return { files, skippedFiles };
 };
 
 const fetchGithubTreeOnce = async ({
@@ -897,7 +931,18 @@ const fetchGithubTreeOnce = async ({
         });
       },
     });
-    return [{ path: selectedSkillPath, type: "blob" }, ...resourceTrees.flat()];
+    // Files beside SKILL.md are listed so the import can report them; the
+    // folders that hold no resources are never listed.
+    const siblingFiles = directoryTree.filter(
+      (item) =>
+        (item.type === "blob" || item.type === "file") &&
+        item.path !== selectedSkillPath,
+    );
+    return [
+      { path: selectedSkillPath, type: "blob" },
+      ...siblingFiles,
+      ...resourceTrees.flat(),
+    ];
   }
 
   return await fetchGithubScopedTree({

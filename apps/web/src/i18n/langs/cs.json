@@ -3126,6 +3126,11 @@
       "scopePrivate": "Jen já",
       "scopeTeam": "Všichni v týmu",
       "selectionLimit": "Najednou můžete vybrat nejvýše {count} dovedností.",
+      "skippedFiles": "{count, plural, one {# soubor nebyl importován} few {# soubory nebyly importovány} other {# souborů nebylo importováno}}",
+      "skippedReasonNotUtf8Text": "Není text v kódování UTF-8",
+      "skippedReasonOutsideSkillFolder": "Mimo složku dovednosti",
+      "skippedReasonUnsupportedExtension": "Nepodporovaný typ souboru",
+      "skippedReasonUnsupportedFolder": "Není ve složce s prostředky",
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"

@@ -17,6 +17,7 @@ import {
   fetchSkillPackageFromUrl,
   verifySkillPackageIntegrity,
 } from "@/api/lib/skills/skill-package";
+import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
 import {
   deduplicateSkillImportItems,
@@ -101,7 +102,9 @@ export const importSkillsBodySchema = t.Object({
 
 const config = {
   description:
-    "Import one or more discovered skills from source URLs into the selected scope.",
+    "Import one or more discovered skills from source URLs into the selected " +
+    "scope. Each installed skill lists the package files it does not keep " +
+    "(skippedFiles: path and reason).",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: importSkillsBodySchema,
@@ -125,7 +128,11 @@ const importSkillsFromUrls = createSafeRootHandler(
       return yield* Result.err(authorization.error);
     }
 
-    const installed: { id: string; sourceUrl: string }[] = [];
+    const installed: {
+      id: string;
+      skippedFiles: SkippedSkillFile[];
+      sourceUrl: string;
+    }[] = [];
     const deduplicated = deduplicateSkillImportItems(body.items);
     const failed = [...deduplicated.failed];
     const { items } = deduplicated;
@@ -179,7 +186,11 @@ const importSkillsFromUrls = createSafeRootHandler(
         });
         return importAt(index + 1);
       }
-      installed.push({ id: result.value.id, sourceUrl: reportedSourceUrl });
+      installed.push({
+        id: result.value.id,
+        skippedFiles: parsed.value.skippedFiles,
+        sourceUrl: reportedSourceUrl,
+      });
       return importAt(index + 1);
     };
 

@@ -3126,6 +3126,11 @@
       "scopePrivate": "Tylko ja",
       "scopeTeam": "Wszyscy w zespole",
       "selectionLimit": "Wybierz jednocześnie maksymalnie {count} umiejętności.",
+      "skippedFiles": "{count, plural, one {# plik nie został zaimportowany} few {# pliki nie zostały zaimportowane} many {# plików nie zostało zaimportowanych} other {# pliku nie zaimportowano}}",
+      "skippedReasonNotUtf8Text": "To nie jest tekst UTF-8",
+      "skippedReasonOutsideSkillFolder": "Poza folderem umiejętności",
+      "skippedReasonUnsupportedExtension": "Nieobsługiwany typ pliku",
+      "skippedReasonUnsupportedFolder": "Poza folderem zasobów",
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"

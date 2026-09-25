@@ -3126,6 +3126,11 @@
       "scopePrivate": "Só eu",
       "scopeTeam": "Todos na equipe",
       "selectionLimit": "Selecione até {count} habilidades por vez.",
+      "skippedFiles": "{count, plural, one {# arquivo não foi importado} other {# arquivos não foram importados}}",
+      "skippedReasonNotUtf8Text": "Não é texto UTF-8",
+      "skippedReasonOutsideSkillFolder": "Fora da pasta da habilidade",
+      "skippedReasonUnsupportedExtension": "Tipo de arquivo não compatível",
+      "skippedReasonUnsupportedFolder": "Não está em uma pasta de recursos",
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"

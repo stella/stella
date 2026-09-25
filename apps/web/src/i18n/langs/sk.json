@@ -3126,6 +3126,11 @@
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v tíme",
       "selectionLimit": "Naraz môžete vybrať najviac {count} zručností.",
+      "skippedFiles": "{count, plural, one {# súbor nebol importovaný} few {# súbory neboli importované} other {# súborov nebolo importovaných}}",
+      "skippedReasonNotUtf8Text": "Nie je text v kódovaní UTF-8",
+      "skippedReasonOutsideSkillFolder": "Mimo priečinka zručnosti",
+      "skippedReasonUnsupportedExtension": "Nepodporovaný typ súboru",
+      "skippedReasonUnsupportedFolder": "Nie je v priečinku so zdrojmi",
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"

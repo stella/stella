@@ -3126,6 +3126,11 @@
       "scopePrivate": "Tikai es",
       "scopeTeam": "Visi komandā",
       "selectionLimit": "Vienlaikus atlasiet ne vairāk kā {count} prasmes.",
+      "skippedFiles": "{count, plural, zero {# faili netika importēti} one {# fails netika importēts} other {# faili netika importēti}}",
+      "skippedReasonNotUtf8Text": "Nav UTF-8 teksts",
+      "skippedReasonOutsideSkillFolder": "Ārpus prasmes mapes",
+      "skippedReasonUnsupportedExtension": "Neatbalstīts faila tips",
+      "skippedReasonUnsupportedFolder": "Nav resursu mapē",
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"

@@ -3126,6 +3126,11 @@
       "scopePrivate": "Tik man",
       "scopeTeam": "Visiems komandoje",
       "selectionLimit": "Vienu metu pasirinkite iki {count} įgūdžių.",
+      "skippedFiles": "{count, plural, one {# failas nebuvo importuotas} few {# failai nebuvo importuoti} many {# failo nebuvo importuota} other {# failų nebuvo importuota}}",
+      "skippedReasonNotUtf8Text": "Ne UTF-8 tekstas",
+      "skippedReasonOutsideSkillFolder": "Už įgūdžio aplanko ribų",
+      "skippedReasonUnsupportedExtension": "Nepalaikomas failo tipas",
+      "skippedReasonUnsupportedFolder": "Ne išteklių aplanke",
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"

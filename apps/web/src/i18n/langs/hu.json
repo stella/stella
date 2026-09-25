@@ -3126,6 +3126,11 @@
       "scopePrivate": "Csak én",
       "scopeTeam": "Mindenki a csapatban",
       "selectionLimit": "Egyszerre legfeljebb {count} készséget válasszon ki.",
+      "skippedFiles": "{count, plural, one {# fájl importálása kimaradt} other {# fájl importálása kimaradt}}",
+      "skippedReasonNotUtf8Text": "Nem UTF-8 szöveg",
+      "skippedReasonOutsideSkillFolder": "A készség mappáján kívül",
+      "skippedReasonUnsupportedExtension": "Nem támogatott fájltípus",
+      "skippedReasonUnsupportedFolder": "Nem erőforrásmappában van",
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"

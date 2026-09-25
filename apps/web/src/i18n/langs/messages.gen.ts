@@ -3129,6 +3129,11 @@ type Messages = {
       "scopePrivate": "Only me";
       "scopeTeam": "Everyone in the team";
       "selectionLimit": "Select up to {count} skills at once.";
+      "skippedFiles": "{count, plural, one {# file was not imported} other {# files were not imported}}";
+      "skippedReasonNotUtf8Text": "Not UTF-8 text";
+      "skippedReasonOutsideSkillFolder": "Outside the skill folder";
+      "skippedReasonUnsupportedExtension": "File type not supported";
+      "skippedReasonUnsupportedFolder": "Not in a resource folder";
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
       "version": "Version: {version}";

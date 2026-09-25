@@ -38865,7 +38865,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "from-url-import"],
                 capabilityId: "skills.from-url.import",
                 description:
-                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Importing an unchanged package again returns the skill it installed. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
+                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Importing an unchanged package again returns the skill it installed. The result lists the package files the skill does not keep (skippedFiles: path and reason). Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
                 access: "write",
                 flags: [
                   {
@@ -38964,7 +38964,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "import"],
                 capabilityId: "skills.import",
                 description:
-                  "Import one or more discovered skills from source URLs into the selected scope.",
+                  "Import one or more discovered skills from source URLs into the selected scope. Each installed skill lists the package files it does not keep (skippedFiles: path and reason).",
                 access: "write",
                 flags: [
                   {
