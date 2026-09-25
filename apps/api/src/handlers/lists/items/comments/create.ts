@@ -12,7 +12,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  fanOutNotifications,
+  fanOutCrossUserNotifications,
   resolveMentionTargets,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
@@ -109,7 +109,10 @@ const createItemComment = createSafeHandler(
       // than awaited because the comment is already durable and its author
       // must not see the write fail over a colleague's badge — the rejection
       // still reaches error capture rather than being swallowed.
-      detached(fanOutNotifications(rows), "notifications.list-item-mention");
+      detached(
+        fanOutCrossUserNotifications(rows),
+        "notifications.list-item-mention",
+      );
     }
 
     return Result.ok({ id: result.id });
