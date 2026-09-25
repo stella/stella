@@ -1,7 +1,7 @@
-import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
+
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -9,15 +9,6 @@ const queryTimeoutMs = 500;
 
 type ProbeRow = {
   value: number;
-};
-
-const createMaxOnePool = (url: string) => {
-  const client = new SQL({ url, max: 1 });
-
-  return {
-    client,
-    db: drizzle({ client }),
-  };
 };
 
 if (!databaseUrl || !runPostgresTests) {
@@ -29,54 +20,64 @@ if (!databaseUrl || !runPostgresTests) {
 } else {
   describe("database pool isolation", () => {
     test("separate Bun SQL clients do not share a max=1 pool", async () => {
-      const heldPool = createMaxOnePool(databaseUrl);
-      const peerPool = createMaxOnePool(databaseUrl);
-      let releaseHeldTransaction: (() => void) | undefined;
-      let markTransactionReady: (() => void) | undefined;
-      const transactionReady = new Promise<void>((resolve) => {
-        markTransactionReady = resolve;
-      });
-
-      const heldTransaction = heldPool.db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT 1`);
-
-        await new Promise<void>((resolve) => {
-          releaseHeldTransaction = resolve;
-          markTransactionReady?.();
-        });
-      });
+      // Awaited again once both clients are closed: closing ends a held
+      // transaction that never reached its release point.
+      let heldTransactionSettled: Promise<unknown> = Promise.resolve();
 
       try {
-        const readyResult = await Promise.race([
-          transactionReady.then(() => "ready" as const),
-          heldTransaction,
-          Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
-        ]);
+        await withGatedTestClients(
+          databaseUrl,
+          async ({ openClient }) => {
+            const heldPool = openClient();
+            const peerPool = openClient();
+            let releaseHeldTransaction: (() => void) | undefined;
+            let markTransactionReady: (() => void) | undefined;
+            const transactionReady = new Promise<void>((resolve) => {
+              markTransactionReady = resolve;
+            });
 
-        if (readyResult === "timeout") {
-          throw new Error("timed out waiting for held transaction");
-        }
+            const heldTransaction = heldPool.db.transaction(async (tx) => {
+              await tx.execute(sql`SELECT 1`);
 
-        const queryResult = await Promise.race([
-          peerPool.db.execute(sql<ProbeRow>`SELECT 42::int AS value`),
-          Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
-        ]);
+              await new Promise<void>((resolve) => {
+                releaseHeldTransaction = resolve;
+                markTransactionReady?.();
+              });
+            });
+            heldTransactionSettled = heldTransaction.catch(() => undefined);
 
-        expect(queryResult).not.toBe("timeout");
+            try {
+              const readyResult = await Promise.race([
+                transactionReady.then(() => "ready" as const),
+                heldTransaction,
+                Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
+              ]);
 
-        if (queryResult !== "timeout") {
-          expect(queryResult.at(0)?.["value"]).toBe(42);
-        }
+              if (readyResult === "timeout") {
+                throw new Error("timed out waiting for held transaction");
+              }
+
+              const queryResult = await Promise.race([
+                peerPool.db.execute(sql<ProbeRow>`SELECT 42::int AS value`),
+                Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
+              ]);
+
+              expect(queryResult).not.toBe("timeout");
+
+              if (queryResult !== "timeout") {
+                expect(queryResult.at(0)?.["value"]).toBe(42);
+              }
+            } finally {
+              releaseHeldTransaction?.();
+
+              if (releaseHeldTransaction) {
+                await heldTransactionSettled;
+              }
+            }
+          },
+          { closeTimeout: 0 },
+        );
       } finally {
-        const heldTransactionSettled = heldTransaction.catch(() => undefined);
-        releaseHeldTransaction?.();
-
-        if (releaseHeldTransaction) {
-          await heldTransactionSettled;
-        }
-
-        await heldPool.client.close({ timeout: 0 });
-        await peerPool.client.close({ timeout: 0 });
         await heldTransactionSettled;
       }
     });

@@ -7,14 +7,13 @@
  *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 import { analysisSentinel, claimableAnalysisRow } from "./stored-analysis";
 
@@ -29,9 +28,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("analysis claim — compare-and-swap on the stored value", () => {
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
 
     const NOW = new Date("2026-09-01T12:00:00.000Z");
     const CURRENT = "c".repeat(64);
@@ -114,7 +111,7 @@ if (!databaseUrl || !runPostgresTests) {
       createdSourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (created.length > 0) {
         await db
           .delete(caseLawDecisions)
@@ -125,7 +122,6 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawSources)
           .where(eq(caseLawSources.id, createdSourceId));
       }
-      await db.$client.close();
     });
 
     test("an empty row is taken by observing null, and only once", async () => {

@@ -444,6 +444,7 @@ describe("isTransientPgConnectionError", () => {
         close: () => {},
       },
     });
+    // oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client -- dials the local stub server above, never the test database, and is ended below
     const sql = new SQL({
       url: `postgres://user:pass@127.0.0.1:${server.port}/db`,
       max: 1,

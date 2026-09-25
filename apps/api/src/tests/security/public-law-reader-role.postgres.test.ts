@@ -1,10 +1,7 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { databaseRelations } from "@/api/db/database-relations";
 import { stellaPublicLawReader } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
@@ -20,6 +17,8 @@ import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   cleanUpSearchCensus,
@@ -48,21 +47,15 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const READER_ROLE = stellaPublicLawReader.name;
 
-const openDatabase = (client: SQL) =>
-  drizzle({ client, relations: databaseRelations });
-
 /** A one-connection client, closed once `fn` settles. */
 const withClient = async <T>(
   url: string,
-  fn: (database: ReturnType<typeof openDatabase>) => Promise<T>,
-): Promise<T> => {
-  const client = new SQL({ url, max: 1 });
-  try {
-    return await fn(openDatabase(client));
-  } finally {
-    await client.close();
-  }
-};
+  fn: (database: GatedTestDb) => Promise<T>,
+): Promise<T> =>
+  await withGatedTestClients(
+    url,
+    async ({ openClient }) => await fn(openClient().db),
+  );
 
 /**
  * Run `fn` as the reader role in a transaction that always rolls back.
@@ -225,34 +218,34 @@ if (!databaseUrl || !runPostgresTests) {
     // one connection, a cold registry has to be read on that transaction.
     test("a cold court registry is read inside a one-connection reader", async () => {
       await withSearchCensus(databaseUrl, async (ids) => {
-        const client = new SQL({ url: databaseUrl, max: 1 });
-        const database = openDatabase(client);
-        const readerDb = asTestRaw<CaseLawPublicReadDb>(
-          async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
-            await database.transaction(async (tx) => {
-              await tx.execute(sql.raw(`SET LOCAL ROLE "${READER_ROLE}"`));
-              return await fn(tx);
-            }),
-        );
-        const { decisionId } = ids;
-        try {
-          resetPublicCaseLawConfigForTesting(readerDb);
-          const decision = await withRedistributableSubject(
-            readerDb,
-            { kind: "id", id: decisionId },
-            async (subject) => await readDecisionHandler({ subject }),
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: database } = openClient();
+          const readerDb = asTestRaw<CaseLawPublicReadDb>(
+            async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+              await database.transaction(async (tx) => {
+                await tx.execute(sql.raw(`SET LOCAL ROLE "${READER_ROLE}"`));
+                return await fn(tx);
+              }),
           );
-          expect(decision).toMatchObject({ courtTier: "supreme" });
+          const { decisionId } = ids;
+          try {
+            resetPublicCaseLawConfigForTesting(readerDb);
+            const decision = await withRedistributableSubject(
+              readerDb,
+              { kind: "id", id: decisionId },
+              async (subject) => await readDecisionHandler({ subject }),
+            );
+            expect(decision).toMatchObject({ courtTier: "supreme" });
 
-          resetPublicCaseLawConfigForTesting(readerDb);
-          const facts = await readerDb(
-            async (tx) => await readCitationGraphFacts({ decisionId, tx }),
-          );
-          expect(facts?.countsByCourtTier).toEqual([{ tier: 3, count: 1 }]);
-        } finally {
-          resetPublicCaseLawConfigForTesting();
-          await client.close();
-        }
+            resetPublicCaseLawConfigForTesting(readerDb);
+            const facts = await readerDb(
+              async (tx) => await readCitationGraphFacts({ decisionId, tx }),
+            );
+            expect(facts?.countsByCourtTier).toEqual([{ tier: 3, count: 1 }]);
+          } finally {
+            resetPublicCaseLawConfigForTesting();
+          }
+        });
       });
     });
   });

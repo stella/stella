@@ -23,13 +23,11 @@
  * `IngestionResult` would prove only that the pipeline works on the fields
  * this file chose to give it.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources, relations } from "@/api/db/schema";
+import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -41,6 +39,7 @@ import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -346,9 +345,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("publisher document identity migration", () => {
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(tx));
     const createdSourceIds: SafeId<"caseLawSource">[] = [];
@@ -358,12 +355,11 @@ if (!databaseUrl || !runPostgresTests) {
       restoreFetch = installPublisherStub();
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       restoreFetch?.();
       for (const sourceId of createdSourceIds) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
-      await db.$client.close();
     });
 
     const createSource = async (
