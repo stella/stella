@@ -270,6 +270,8 @@ type GroupState = {
   paragraph: ParagraphState;
   /** Where text written inside this group goes. */
   destination: Destination;
+  /** Replacement characters that follow each `\uN`, as `\ucN` last set it. */
+  unicodeFallbackCount: number;
 };
 
 /** A note being collected, and the paragraphs written into it so far. */
@@ -296,6 +298,7 @@ const copyGroupState = (state: GroupState): GroupState => ({
   character: { ...state.character },
   paragraph: { ...state.paragraph },
   destination: state.destination,
+  unicodeFallbackCount: state.unicodeFallbackCount,
 });
 
 /**
@@ -457,32 +460,44 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
 };
 
 /**
- * Where reading resumes after the one replacement character a `\uN` escape is
- * followed by. The writer states it either as the byte itself or as a `\'xx`
- * escape, and either may sit on the next line: a line ending is the file's
- * formatting, not a character, so it is passed over first. Anything else (a
- * control word, a group) is not a replacement character and is left to the
- * scanner.
+ * Where reading resumes after the replacement characters a `\uN` escape is
+ * followed by, `count` of them as `\ucN` states. The writer gives each either
+ * as the byte itself or as a `\'xx` escape, and either may sit on the next
+ * line: a line ending is the file's formatting, not a character, so it is
+ * passed over first. Anything else (a control word, a group) ends the
+ * replacement early and is left to the scanner.
  */
-const afterFallbackCharacter = (source: Uint8Array, start: number): number => {
-  let cursor = start;
-  while (source[cursor] === 0x0d || source[cursor] === 0x0a) {
-    cursor += 1;
+const afterFallbackCharacters = (
+  source: Uint8Array,
+  start: number,
+  count: number,
+): number => {
+  let resume = start;
+  for (let skipped = 0; skipped < count; skipped += 1) {
+    let cursor = resume;
+    while (source[cursor] === 0x0d || source[cursor] === 0x0a) {
+      cursor += 1;
+    }
+    const byte = source[cursor];
+    if (byte === undefined || byte === 0x7b || byte === 0x7d) {
+      return resume;
+    }
+    if (byte !== 0x5c) {
+      resume = cursor + 1;
+      continue;
+    }
+    const high = String.fromCodePoint(source[cursor + 2] ?? 0);
+    const low = String.fromCodePoint(source[cursor + 3] ?? 0);
+    if (
+      source[cursor + 1] !== 0x27 ||
+      !HEX_DIGITS.includes(high) ||
+      !HEX_DIGITS.includes(low)
+    ) {
+      return resume;
+    }
+    resume = cursor + 4;
   }
-  const byte = source[cursor];
-  if (byte === undefined || byte === 0x7b || byte === 0x7d) {
-    return start;
-  }
-  if (byte !== 0x5c) {
-    return cursor + 1;
-  }
-  const high = String.fromCodePoint(source[cursor + 2] ?? 0);
-  const low = String.fromCodePoint(source[cursor + 3] ?? 0);
-  return source[cursor + 1] === 0x27 &&
-    HEX_DIGITS.includes(high) &&
-    HEX_DIGITS.includes(low)
-    ? cursor + 4
-    : start;
+  return resume;
 };
 
 type ReaderOutput = {
@@ -510,6 +525,7 @@ const readRtfInto = (
     character: initialCharacterState(),
     paragraph: initialParagraphState(),
     destination: { type: "body" },
+    unicodeFallbackCount: 1,
   };
   /**
    * One frame per open group. `heldParagraph` is the body paragraph a
@@ -797,11 +813,18 @@ const readRtfInto = (
           break;
         }
         appendText(String.fromCodePoint(codePoint));
-        // `\uc1` (the only count this dialect states) follows the escape with
-        // one replacement character for readers that cannot decode it.
-        cursor = afterFallbackCharacter(source, cursor);
+        // The escape is followed by `\ucN` replacement characters for
+        // readers that cannot decode it.
+        cursor = afterFallbackCharacters(
+          source,
+          cursor,
+          state.unicodeFallbackCount,
+        );
         break;
       }
+      case "uc":
+        state.unicodeFallbackCount = Math.max(parameter ?? 1, 0);
+        break;
       case "footnote": {
         const note: OpenFootnote = {
           id: openFootnotes.length + 1,

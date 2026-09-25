@@ -129,6 +129,27 @@ describe("code pages", () => {
     expect(text).toBe("a\u{1F600}b");
     expect(text?.isWellFormed()).toBe(true);
   });
+
+  test("`\\ucN` skips exactly N replacement characters, in either form", () => {
+    for (const count of [0, 1, 2, 3]) {
+      for (const replacement of ["?", String.raw`\'3f`]) {
+        const fallback = replacement.repeat(count);
+        expect(
+          paragraphsOf(
+            String.raw`{\rtf1\ansi\ansicpg1252\uc${count} a\u8211${fallback}b\par }`,
+          ),
+        ).toEqual(["a–b"]);
+      }
+    }
+  });
+
+  test("`\\ucN` holds for its group and the outer count returns after it", () => {
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\uc1 {\uc0 a\u8211b}c\u8211?d\par }`,
+      ),
+    ).toEqual(["a–bc–d"]);
+  });
 });
 
 describe("paragraphs and alignment", () => {
