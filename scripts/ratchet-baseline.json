@@ -698,7 +698,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 387,
+    "count": 385,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -768,7 +768,7 @@
       "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts": 1,
       "apps/api/src/lib/entity-versions/validate-desktop-edit-file-buffer.ts": 3,
       "apps/api/src/lib/entity-versions/validate-docx-buffer.ts": 2,
-      "apps/api/src/lib/errors/utils.ts": 6,
+      "apps/api/src/lib/errors/utils.ts": 4,
       "apps/api/src/lib/file-scan/archive.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 3,
       "apps/api/src/lib/files/extract-office-evidence.ts": 1,
