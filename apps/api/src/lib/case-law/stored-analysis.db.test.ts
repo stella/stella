@@ -125,6 +125,7 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawSources)
           .where(eq(caseLawSources.id, createdSourceId));
       }
+      await db.$client.close();
     });
 
     test("an empty row is taken by observing null, and only once", async () => {
