@@ -777,7 +777,7 @@ export const causeChainAttributes = ({
 };
 
 /** The level-zero numeric status the request records have carried. */
-const requestErrorStatusFields = ({
+export const requestErrorStatusFields = ({
   nodes,
 }: FailureEvidence): Record<string, number> => {
   const root = nodes.at(0);

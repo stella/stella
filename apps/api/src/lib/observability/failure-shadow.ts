@@ -16,6 +16,8 @@
 
 import { panic, Result, UnhandledException } from "better-result";
 
+import { failureGradeOf } from "@stll/errors";
+
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
   FailureGrading,
@@ -68,6 +70,9 @@ export const legacyChannelOf = ({
 /** The sinks graded in shadow, one handle per existing emission site. */
 export const SHADOW_SINKS = {
   capture: failureSink({ event: "exception.captured", expected: [] }),
+  handler: failureSink({ event: "request.handler_failed", expected: [] }),
+  framework: failureSink({ event: "request.framework_failed", expected: [] }),
+  completion: failureSink({ event: "request.completed", expected: [] }),
 } as const satisfies Record<string, FailureSink>;
 
 // --- Emitter failure isolation ------------------------------------------------
@@ -267,6 +272,25 @@ export const observeShadow = ({
     return undefined;
   }
   return observed.value;
+};
+
+// A 5xx the request answered with no failure observed on the way there.
+const UNOBSERVED_5XX_GRADING: FailureGrading = {
+  grade: failureGradeOf("unobserved_5xx"),
+  reason: "unobserved_5xx",
+  rule: "unobserved",
+  evidenceDepth: 0,
+};
+
+/** Count a 5xx no failure observation accounts for, and grade it. */
+export const observeUnobserved5xx = (): FailureGrading => {
+  countFailureObservation({
+    sink: SHADOW_SINKS.completion,
+    grading: UNOBSERVED_5XX_GRADING,
+    channel: "log_error",
+    degradation: undefined,
+  });
+  return UNOBSERVED_5XX_GRADING;
 };
 
 /** The fields a shadow-graded record carries. */
