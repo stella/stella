@@ -219,18 +219,17 @@ const scopeDeclarations = function* (scope: ts.Node): Generator<ts.Identifier> {
 const resolveDeclaration = (
   reference: ts.Identifier,
 ): ts.Identifier | undefined => {
-  for (
-    let scope: ts.Node | undefined = reference.parent;
-    scope !== undefined;
-    scope = scope.parent
-  ) {
+  let found: ts.Identifier | undefined;
+  ts.findAncestor(reference.parent, (scope) => {
     for (const declared of scopeDeclarations(scope)) {
       if (declared.text === reference.text) {
-        return declared;
+        found = declared;
+        return true;
       }
     }
-  }
-  return undefined;
+    return false;
+  });
+  return found;
 };
 
 const isReferencePosition = (identifier: ts.Identifier): boolean => {
@@ -333,20 +332,10 @@ const FALLBACK_OPERATORS = new Set<ts.SyntaxKind>([
   ts.SyntaxKind.BarBarEqualsToken,
 ]);
 
-const isInsideFunction = (node: ts.Node): boolean => {
-  for (
-    let current: ts.Node | undefined = node.parent;
-    current !== undefined;
-    current = current.parent
-  ) {
-    // A class `static {}` block runs once, when the module evaluates, so it
-    // is module level; only a real function defers the call.
-    if (ts.isFunctionLike(current)) {
-      return true;
-    }
-  }
-  return false;
-};
+// A class `static {}` block runs once, when the module evaluates, so it is
+// module level; only a real function defers the call.
+const isInsideFunction = (node: ts.Node): boolean =>
+  ts.findAncestor(node.parent, ts.isFunctionLike) !== undefined;
 
 export const findRootConnectionShapesAs = (
   content: string,
