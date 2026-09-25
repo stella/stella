@@ -1,0 +1,1754 @@
+{
+  "initialPage": {
+    "messages": [],
+    "olderCursor": null,
+    "lastActivityAt": null
+  },
+  "scenario": "conversation-grant",
+  "steps": [
+    {
+      "action": {
+        "messageId": "00000000-0000-7000-8000-000000000001",
+        "text": "Delete the NDA",
+        "type": "send"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-1",
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:01.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "Delete the NDA"
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Delete the NDA"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:02.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Delete the NDA"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:03.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225621000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225622000}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"mcp__external__delete\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225623000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"timestamp\":1767225624000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225625000}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225626000,\"messages\":[{\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"content\":\"Delete the NDA\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:04.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\"}}]}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"approval_call-1\",\"reason\":\"tool_call\",\"message\":\"Approval required to run mcp__external__delete\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":true},\"editedArgs\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},\"required\":[\"name\"],\"additionalProperties\":false}},\"required\":[\"approved\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":false}},\"required\":[\"approved\"],\"additionalProperties\":false}]},\"metadata\":{\"kind\":\"approval\",\"toolName\":\"mcp__external__delete\",\"input\":{\"name\":\"call-1\"},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"tool-approval\",\"interruptId\":\"approval_call-1\",\"toolName\":\"mcp__external__delete\",\"toolCallId\":\"call-1\",\"originalArgs\":{\"name\":\"call-1\"},\"inputSchemaHash\":\"sha256:0dfd225d37d952b60e6e0583e22ce7c9fa1f9f4a9ed521723d6e7eb16131bf4b\",\"approvalSchemaHash\":\"sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e\",\"responseSchemaHash\":\"sha256:34a2aa381fe0de3042b7a9024c9e0286c074fc440cd075ca4fc91074914f7da5\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:05.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Delete the NDA"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:06.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 2,
+                    "promptTokens": 1,
+                    "completionTokens": 1
+                  },
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "awaiting-user",
+                    "interaction": {
+                      "type": "approval",
+                      "toolCallId": "call-1"
+                    }
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "approval": {
+                      "id": "approval_call-1",
+                      "needsApproval": true
+                    },
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "id": "call-1",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "name": "mcp__external__delete",
+                    "state": "approval-requested",
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:07.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "action": {
+        "toolCallId": "call-1",
+        "type": "auto-approve"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-2",
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "approval_call-1",
+                "payload": {
+                  "approved": true
+                },
+                "status": "resolved"
+              }
+            ],
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "content": "Delete the NDA"
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:08.000Z"
+                  }
+                },
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-1",
+                "toolCallId": "call-1",
+                "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "state": "approval-responded",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "approval": {
+                      "id": "approval_call-1",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:09.000Z"
+                  }
+                },
+                "createdAt": "2026-01-01T00:00:10.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-1",
+              "resume": [
+                {
+                  "interruptId": "approval_call-1",
+                  "payload": {
+                    "approved": true
+                  },
+                  "status": "resolved"
+                }
+              ]
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "state": "approval-responded",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "approval": {
+                      "id": "approval_call-1",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:11.000Z"
+                  }
+                },
+                "createdAt": "2026-01-01T00:00:12.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-1",
+              "resume": [
+                {
+                  "interruptId": "approval_call-1",
+                  "payload": {
+                    "approved": true
+                  },
+                  "status": "resolved"
+                }
+              ]
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225628000}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225629000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"deleted\\\":\\\"call-1\\\"}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225631000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"And the older copy\",\"timestamp\":1767225632000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225633000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"mcp__external__delete\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225634000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{\\\"name\\\":\\\"call-2\\\"}\",\"timestamp\":1767225635000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225636000}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225637000,\"messages\":[{\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"content\":\"Delete the NDA\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"content\":\"And the older copy\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\"}},{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-2\\\"}\"}}]},{\"role\":\"tool\",\"id\":\"snapshot_run-recorded-2_2\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"deleted\\\":\\\"call-1\\\"}\",\"metadata\":{\"tanstack\":{\"toolResult\":{\"id\":\"snapshot_run-recorded-2_2\"}}}}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225638000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"approval_call-2\",\"reason\":\"tool_call\",\"message\":\"Approval required to run mcp__external__delete\",\"toolCallId\":\"call-2\",\"responseSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":true},\"editedArgs\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},\"required\":[\"name\"],\"additionalProperties\":false}},\"required\":[\"approved\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":false}},\"required\":[\"approved\"],\"additionalProperties\":false}]},\"metadata\":{\"kind\":\"approval\",\"toolName\":\"mcp__external__delete\",\"input\":{\"name\":\"call-2\"},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"tool-approval\",\"interruptId\":\"approval_call-2\",\"toolName\":\"mcp__external__delete\",\"toolCallId\":\"call-2\",\"originalArgs\":{\"name\":\"call-2\"},\"inputSchemaHash\":\"sha256:0dfd225d37d952b60e6e0583e22ce7c9fa1f9f4a9ed521723d6e7eb16131bf4b\",\"approvalSchemaHash\":\"sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e\",\"responseSchemaHash\":\"sha256:34a2aa381fe0de3042b7a9024c9e0286c074fc440cd075ca4fc91074914f7da5\",\"interruptedRunId\":\"run-recorded-2\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:13.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Delete the NDA"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:14.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 4,
+                    "promptTokens": 2,
+                    "completionTokens": 2
+                  },
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "awaiting-user",
+                    "interaction": {
+                      "type": "approval",
+                      "toolCallId": "call-2"
+                    }
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "approval": {
+                      "id": "approval_call-1",
+                      "approved": true,
+                      "needsApproval": true
+                    },
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "id": "call-1",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "name": "mcp__external__delete",
+                    "output": {
+                      "deleted": "call-1"
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"deleted\":\"call-1\"}",
+                    "state": "complete",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "And the older copy"
+                  },
+                  {
+                    "approval": {
+                      "id": "approval_call-2",
+                      "needsApproval": true
+                    },
+                    "arguments": "{\"name\":\"call-2\"}",
+                    "id": "call-2",
+                    "input": {
+                      "name": "call-2"
+                    },
+                    "name": "mcp__external__delete",
+                    "state": "approval-requested",
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:15.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "action": {
+        "toolCallId": "call-2",
+        "type": "auto-approve"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-3",
+            "parentRunId": "run-recorded-2",
+            "resume": [
+              {
+                "interruptId": "approval_call-2",
+                "payload": {
+                  "approved": true
+                },
+                "status": "resolved"
+              }
+            ],
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "content": "Delete the NDA"
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "tanstack": {
+                    "model": "scripted"
+                  }
+                },
+                "role": "assistant",
+                "content": "And the older copy",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-2",
+                "toolCallId": "call-2",
+                "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
+              },
+              {
+                "role": "tool",
+                "id": "snapshot_run-recorded-2_2",
+                "toolCallId": "call-1",
+                "content": "{\"deleted\":\"call-1\"}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {
+                      "id": "snapshot_run-recorded-2_2"
+                    }
+                  }
+                }
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "And the older copy"
+                  },
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "state": "complete",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "output": {
+                      "deleted": "call-1"
+                    },
+                    "approval": {
+                      "id": "approval_call-1",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  },
+                  {
+                    "type": "tool-call",
+                    "id": "call-2",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-2\"}",
+                    "state": "approval-responded",
+                    "input": {
+                      "name": "call-2"
+                    },
+                    "approval": {
+                      "id": "approval_call-2",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  },
+                  {
+                    "type": "tool-result",
+                    "toolCallId": "call-1",
+                    "content": "{\"deleted\":\"call-1\"}",
+                    "state": "complete",
+                    "id": "snapshot_run-recorded-2_2"
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:16.000Z",
+                    "model": "scripted"
+                  }
+                }
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-3",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-2",
+              "resume": [
+                {
+                  "interruptId": "approval_call-2",
+                  "payload": {
+                    "approved": true
+                  },
+                  "status": "resolved"
+                }
+              ]
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "And the older copy"
+                  },
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "state": "complete",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "output": {
+                      "deleted": "call-1"
+                    },
+                    "approval": {
+                      "id": "approval_call-1",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  },
+                  {
+                    "type": "tool-call",
+                    "id": "call-2",
+                    "name": "mcp__external__delete",
+                    "arguments": "{\"name\":\"call-2\"}",
+                    "state": "approval-responded",
+                    "input": {
+                      "name": "call-2"
+                    },
+                    "approval": {
+                      "id": "approval_call-2",
+                      "needsApproval": true,
+                      "approved": true
+                    }
+                  },
+                  {
+                    "type": "tool-result",
+                    "toolCallId": "call-1",
+                    "content": "{\"deleted\":\"call-1\"}",
+                    "state": "complete",
+                    "id": "snapshot_run-recorded-2_2"
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:17.000Z",
+                    "model": "scripted"
+                  }
+                }
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-3",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-2",
+              "resume": [
+                {
+                  "interruptId": "approval_call-2",
+                  "payload": {
+                    "approved": true
+                  },
+                  "status": "resolved"
+                }
+              ]
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225639000}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225640000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"deleted\\\":\\\"call-2\\\"}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-3\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225642000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Both deleted\",\"timestamp\":1767225643000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225644000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-3\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225645000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:18.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Delete the NDA"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:19.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 6,
+                    "promptTokens": 3,
+                    "completionTokens": 3
+                  },
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "completed"
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "approval": {
+                      "id": "approval_call-1",
+                      "approved": true,
+                      "needsApproval": true
+                    },
+                    "arguments": "{\"name\":\"call-1\"}",
+                    "id": "call-1",
+                    "input": {
+                      "name": "call-1"
+                    },
+                    "name": "mcp__external__delete",
+                    "output": {
+                      "deleted": "call-1"
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"deleted\":\"call-1\"}",
+                    "state": "complete",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "And the older copy"
+                  },
+                  {
+                    "approval": {
+                      "id": "approval_call-2",
+                      "approved": true,
+                      "needsApproval": true
+                    },
+                    "arguments": "{\"name\":\"call-2\"}",
+                    "id": "call-2",
+                    "input": {
+                      "name": "call-2"
+                    },
+                    "name": "mcp__external__delete",
+                    "output": {
+                      "deleted": "call-2"
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"deleted\":\"call-2\"}",
+                    "state": "complete",
+                    "toolCallId": "call-2",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Both deleted"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:20.000Z"
+          }
+        }
+      ]
+    }
+  ],
+  "threadId": "00000000-0000-7000-8000-000000000002"
+}

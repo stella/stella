@@ -14,6 +14,12 @@
 // unique) fails until it is replaced, or retired with a reason. `pending`
 // entries describe a behaviour the tree does not have yet.
 //
+// Paths are relative to apps/api, so an entry can mutate the web app
+// (`../web/...`) and name a web scenario, which runs with the web app's test
+// runner. A `rerecord` entry mutates the server under a web scenario that
+// replays recorded conversations: the runner records them again from the
+// mutated tree first, and puts the committed recordings back afterwards.
+//
 // Modes:
 //   bun apps/api/scripts/chat-mutation-matrix.ts            run every active entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --only ID  run one entry
@@ -24,13 +30,29 @@
 // per PR: each entry runs its scenario twice.
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
+const WEB_ROOT = path.resolve(API_ROOT, "../web");
+/** A path relative to apps/api that lies in the web app. */
+const WEB_PREFIX = "../web/";
+/** The recorder of the conversations the web scenarios replay. */
+const RECORDER_FILE =
+  "src/handlers/chat/recorded-conversations.integration.test.ts";
+const RECORDINGS_DIR = path.join(
+  WEB_ROOT,
+  "src/components/chat/__fixtures__/recorded-conversations",
+);
 const MATRIX_PATH = path.join(import.meta.dir, "chat-mutation-matrix.json");
 const SCENARIO_TIMEOUT_MS = 10 * 60_000;
 const ORACLE_IDS = new Set<string>(Object.values(CHAT_ORACLE));
@@ -42,6 +64,9 @@ type Entry = {
   id: string;
   oracle: string;
   reason?: string;
+  /** The web scenario replays recorded conversations: record them again
+   *  from the mutated tree before it runs. */
+  rerecord?: boolean;
   replace: string;
   scenario: { file: string; test: string };
   search: string;
@@ -65,7 +90,8 @@ const isEntry = (value: unknown): value is Entry => {
       value["status"] === "retired") &&
     isRecord(scenario) &&
     typeof scenario["file"] === "string" &&
-    typeof scenario["test"] === "string"
+    typeof scenario["test"] === "string" &&
+    (value["rerecord"] === undefined || typeof value["rerecord"] === "boolean")
   );
 };
 
@@ -96,6 +122,12 @@ const validate = (entries: readonly Entry[]): string[] => {
     if (entry.status !== "active" && (entry.reason ?? "").trim() === "") {
       problems.push(`${entry.id}: a ${entry.status} entry needs a reason`);
     }
+    if (
+      entry.rerecord === true &&
+      !entry.scenario.file.startsWith(WEB_PREFIX)
+    ) {
+      problems.push(`${entry.id}: only a web scenario replays recordings`);
+    }
     if (entry.status === "active") {
       const source = readFileSync(path.join(API_ROOT, entry.file), "utf-8");
       const occurrences = source.split(entry.search).length - 1;
@@ -116,6 +148,9 @@ type ScenarioRun = { output: string; passed: boolean; timedOut: boolean };
 
 /** The scenario process running now, stopped if the runner is. */
 let activeScenario: Bun.Subprocess | undefined;
+/** Files to put back if the runner is stopped mid-entry, besides the
+ *  mutated one. */
+let restoreRecordings: (() => void) | undefined;
 
 type TerminationSignal = Extract<
   NodeJS.Signals,
@@ -144,17 +179,22 @@ const withMutatedFile = async <T>(
   const restore = () => {
     writeFileSync(target, original);
   };
-  const abandon = (exitCode: number) => {
+  const abandon = async (exitCode: number) => {
+    // The child first, and only once it has exited: a recorder still running
+    // could otherwise write its recordings after they were put back.
+    const child = activeScenario;
+    child?.kill("SIGKILL");
+    await child?.exited;
     restore();
-    activeScenario?.kill();
+    restoreRecordings?.();
     process.exit(exitCode);
   };
   const onSignal = (signal: TerminationSignal) => {
-    abandon(TERMINATION_SIGNALS[signal]);
+    void abandon(TERMINATION_SIGNALS[signal]);
   };
   const onUncaught = (error: unknown) => {
     console.error(error);
-    abandon(1);
+    void abandon(1);
   };
   const signals = Object.keys(TERMINATION_SIGNALS).filter(
     (name): name is TerminationSignal => name in TERMINATION_SIGNALS,
@@ -177,20 +217,42 @@ const withMutatedFile = async <T>(
   }
 };
 
-const runScenario = async (
+/**
+ * The command that runs one scenario test: the api package's runner, or the
+ * web app's for a web scenario.
+ */
+const scenarioCommand = (
   scenario: Entry["scenario"],
-): Promise<ScenarioRun> => {
-  const child = Bun.spawn(
-    [
-      "bun",
-      "run",
-      "test",
-      scenario.file,
-      "-t",
-      `^.* ${escapeRegExp(scenario.test)}$`,
-    ],
-    { cwd: API_ROOT, stderr: "pipe", stdout: "pipe" },
-  );
+): { command: string[]; cwd: string } => {
+  const pattern = `^.* ${escapeRegExp(scenario.test)}$`;
+  return scenario.file.startsWith(WEB_PREFIX)
+    ? {
+        command: [
+          "bun",
+          "test",
+          "--timeout",
+          String(SCENARIO_TIMEOUT_MS),
+          scenario.file.slice(WEB_PREFIX.length),
+          "-t",
+          pattern,
+        ],
+        cwd: WEB_ROOT,
+      }
+    : {
+        command: ["bun", "run", "test", scenario.file, "-t", pattern],
+        cwd: API_ROOT,
+      };
+};
+
+const runProcess = async (
+  command: string[],
+  options: { cwd: string; env?: Record<string, string | undefined> },
+) => {
+  const child = Bun.spawn(command, {
+    ...options,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   activeScenario = child;
   const timer = setTimeout(() => {
     child.kill();
@@ -202,11 +264,58 @@ const runScenario = async (
   ]);
   clearTimeout(timer);
   activeScenario = undefined;
-  const output = `${stdout}\n${stderr}`;
+  return {
+    exitCode,
+    output: `${stdout}\n${stderr}`,
+    timedOut: child.signalCode !== null,
+  };
+};
+
+/**
+ * Records the conversations again from the tree as it is now, with the
+ * committed recordings put back once `body` is done. A step the mutation
+ * breaks still leaves the steps before it recorded.
+ */
+const withRecordingsFromTree = async <T>(
+  body: () => Promise<T>,
+): Promise<T> => {
+  const committed = new Map(
+    readdirSync(RECORDINGS_DIR).map((name) => [
+      name,
+      readFileSync(path.join(RECORDINGS_DIR, name), "utf-8"),
+    ]),
+  );
+  restoreRecordings = () => {
+    for (const name of readdirSync(RECORDINGS_DIR)) {
+      if (!committed.has(name)) {
+        rmSync(path.join(RECORDINGS_DIR, name));
+      }
+    }
+    for (const [name, contents] of committed) {
+      writeFileSync(path.join(RECORDINGS_DIR, name), contents);
+    }
+  };
+  try {
+    await runProcess(["bun", "run", "test", RECORDER_FILE], {
+      cwd: API_ROOT,
+      env: { ...process.env, CHAT_TRANSCRIPTS_WRITE: "1" },
+    });
+    return await body();
+  } finally {
+    restoreRecordings();
+    restoreRecordings = undefined;
+  }
+};
+
+const runScenario = async (
+  scenario: Entry["scenario"],
+): Promise<ScenarioRun> => {
+  const { command, cwd } = scenarioCommand(scenario);
+  const { exitCode, output, timedOut } = await runProcess(command, { cwd });
   return {
     output,
     passed: exitCode === 0 && /\b[1-9]\d* pass\b/u.test(output),
-    timedOut: child.signalCode !== null,
+    timedOut,
   };
 };
 
@@ -232,7 +341,12 @@ const runEntry = async (
     () => entry.replace,
   );
   return await withMutatedFile(target, mutatedSource, async () => {
-    const mutated = await runScenario(entry.scenario);
+    const mutated =
+      entry.rerecord === true
+        ? await withRecordingsFromTree(
+            async () => await runScenario(entry.scenario),
+          )
+        : await runScenario(entry.scenario);
     if (mutated.timedOut) {
       return { detail: "timed out (not a kill)", entry, killed: false };
     }

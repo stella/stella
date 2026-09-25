@@ -189,6 +189,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },

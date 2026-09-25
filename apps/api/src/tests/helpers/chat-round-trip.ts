@@ -58,6 +58,13 @@ export type ScriptedTurn =
 type ScriptedStep = {
   finishReason?: "length" | "stop" | undefined;
   reasoning?: string | undefined;
+  /**
+   * Where the provider goes quiet and stays quiet until the run is aborted
+   * (a model call the user stops, or one whose connection drops): once the
+   * first tool call's arguments have streamed but before the call ends, or
+   * once every tool call has ended but before the step finishes.
+   */
+  quietUntilAborted?: "after-tool-end" | "before-tool-end" | undefined;
   text?: string | undefined;
   toolCalls: readonly {
     arguments: string;
@@ -86,8 +93,29 @@ type ScriptedTurnContext = {
   index: number;
   model: string;
   runId: string;
+  /** The run's abort signal, which a step gone quiet waits on. */
+  signal?: AbortSignal | undefined;
   threadId: string;
 };
+
+/** Resolves once `signal` aborts. */
+const untilAborted = async (signal: AbortSignal | undefined) =>
+  await new Promise<void>((resolve) => {
+    if (signal === undefined) {
+      panic("A scripted step gone quiet needs the run's abort signal");
+    }
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener(
+      "abort",
+      () => {
+        resolve();
+      },
+      { once: true },
+    );
+  });
 
 /**
  * The events a provider adapter emits for one step, in the order the
@@ -96,10 +124,11 @@ type ScriptedTurnContext = {
  *
  * @yields Each provider event of the step, ending with its `RUN_FINISHED`.
  */
-function* scriptedStepChunks({
+async function* scriptedStepChunks({
   messageId,
   model,
   runId,
+  signal,
   step,
   threadId,
   timestamp,
@@ -107,10 +136,11 @@ function* scriptedStepChunks({
   messageId: string;
   model: string;
   runId: string;
+  signal?: AbortSignal | undefined;
   step: ScriptedStep;
   threadId: string;
   timestamp: number;
-}): Generator<StreamChunk> {
+}): AsyncGenerator<StreamChunk> {
   if (step.reasoning !== undefined) {
     // A provider mints a fresh id for every thinking block; message ids here
     // repeat across requests, so these must not derive from them.
@@ -209,6 +239,10 @@ function* scriptedStepChunks({
       model,
       timestamp,
     };
+    if (step.quietUntilAborted === "before-tool-end") {
+      await untilAborted(signal);
+      return;
+    }
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: call.toolCallId,
@@ -221,6 +255,10 @@ function* scriptedStepChunks({
             toolName: call.toolName,
           }),
     };
+  }
+  if (step.quietUntilAborted === "after-tool-end") {
+    await untilAborted(signal);
+    return;
   }
   yield {
     type: EventType.RUN_FINISHED,
@@ -246,7 +284,7 @@ export class ScriptedProviderError extends TaggedError(
  */
 export async function* scriptedTurnChunks(
   turn: ScriptedTurn,
-  { index, model, runId, threadId }: ScriptedTurnContext,
+  { index, model, runId, signal, threadId }: ScriptedTurnContext,
 ): AsyncGenerator<StreamChunk> {
   // A provider answers asynchronously; so does the script.
   await Promise.resolve();
@@ -325,6 +363,7 @@ export async function* scriptedTurnChunks(
         messageId,
         model,
         runId,
+        signal,
         step: turn,
         threadId,
         timestamp,

@@ -71,7 +71,7 @@ const runs = new Map<string, { index: number; run: ScriptedRun }>();
 
 const adapter: AnyTextAdapter = {
   ...scriptedAdapterBase,
-  async *chatStream({ model, modelOptions, runId, threadId }) {
+  async *chatStream({ model, modelOptions, request, runId, threadId }) {
     const scripts = threadId === undefined ? undefined : threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
     if (
@@ -114,7 +114,14 @@ const adapter: AnyTextAdapter = {
     if (turn.type === "stall") {
       scripts.onStall();
     }
-    yield* scriptedTurnChunks(turn, { index, model, runId, threadId });
+    yield* scriptedTurnChunks(turn, {
+      index,
+      model,
+      runId,
+      // The engine hands the provider its run's signal on the request.
+      signal: request?.signal ?? undefined,
+      threadId,
+    });
   },
   structuredOutput: async ({ outputSchema }) => {
     await Promise.resolve();
