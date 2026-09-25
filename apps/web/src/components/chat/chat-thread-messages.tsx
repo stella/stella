@@ -1485,6 +1485,7 @@ const AssistantMessageParts = ({
   const reasoningTokenCount = getReasoningTokenCount(message);
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
+  const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
@@ -1614,7 +1615,13 @@ const AssistantMessageParts = ({
         (part.state === "approval-requested" ||
           part.state === "approval-responded")
       ) {
-        return <ToolApprovalCard key={part.id} part={part} />;
+        return (
+          <ToolApprovalCard
+            isTurnActive={isTurnActive}
+            key={part.id}
+            part={part}
+          />
+        );
       }
       return <SpawnSubagentsCard key={part.id} part={part} />;
     }
@@ -1624,6 +1631,7 @@ const AssistantMessageParts = ({
         return (
           <ToolApprovalCard
             activeFileName={activeFileName}
+            isTurnActive={isTurnActive}
             key={part.id}
             part={part}
           />

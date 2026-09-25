@@ -448,6 +448,18 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
     ]);
     await autoApprove(recorder, "call-2", [answers("Both deleted")]);
   },
+  // The process serving an approved call dies mid-run; the user reloads and
+  // the next message settles the turn it left behind.
+  "approval-connection-lost": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    recorder.harness.crashDuringNextRequest(recorder.threadId);
+    await approve(recorder, "call-1", "allow-once", [{ type: "stall" }]);
+    await step(recorder, { type: "reload" }, async () => {
+      recorder.client.dispose();
+      recorder.client = await recorder.harness.openWebClient(recorder.threadId);
+    });
+    await send(recorder, "Thanks", [answers("Anything else?")]);
+  },
   "conversation-grant": async (recorder) => {
     await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
     await autoApprove(recorder, "call-1", [

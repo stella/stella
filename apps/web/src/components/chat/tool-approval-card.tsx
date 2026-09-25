@@ -402,6 +402,8 @@ type ToolApprovalCardProps = {
   /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
+  /** Whether the turn this card belongs to is still running. */
+  isTurnActive: boolean;
   part: ApprovalToolPart;
 };
 
@@ -415,6 +417,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 
 export const ToolApprovalCard = ({
   activeFileName,
+  isTurnActive,
   part,
 }: ToolApprovalCardProps) => {
   const {
@@ -451,6 +454,7 @@ export const ToolApprovalCard = ({
     defaultLabel: t(getChatToolTitleKey(name)),
     name,
     part,
+    isTurnActive,
     responded,
   });
   const { data: mcpConnectorsData } = useQuery({
@@ -502,11 +506,11 @@ export const ToolApprovalCard = ({
           // A card the user already answered is not answered again.
           shouldRespond: !responded && (isBlocked || shouldAutoApprove),
         };
+  // Answered cards stop asking, even while the answer waits for the rest of
+  // a batch.
+  const asksForDecision = isApprovalRequested && !responded && !isProcessing;
   const isAwaitingDecision =
-    isApprovalRequested &&
-    !isProcessing &&
-    !isBlocked &&
-    !isPublicOfficialApproval;
+    asksForDecision && !isBlocked && !isPublicOfficialApproval;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;
@@ -521,7 +525,7 @@ export const ToolApprovalCard = ({
     <div
       className={cn(
         "my-1 rounded-lg border text-sm",
-        isApprovalRequested && !isProcessing
+        asksForDecision
           ? "border-border bg-muted/30"
           : "bg-muted/40 border-transparent",
       )}
@@ -577,7 +581,7 @@ export const ToolApprovalCard = ({
         )}
 
       {approvalId &&
-        !isProcessing &&
+        asksForDecision &&
         !isBlocked &&
         !isPublicOfficialApproval && (
           <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
@@ -790,6 +794,7 @@ const getToolApprovalState = ({
   blockedApprovalTools,
   defaultLabel,
   name,
+  isTurnActive,
   part,
   responded,
 }: {
@@ -800,6 +805,7 @@ const getToolApprovalState = ({
   name: ApprovalToolName;
   part: ApprovalToolPart;
   responded: boolean;
+  isTurnActive: boolean;
 }) => {
   const isApprovalRequested = part.state === "approval-requested";
   const isApprovalResponded = part.state === "approval-responded";
@@ -850,9 +856,12 @@ const getToolApprovalState = ({
     isBlocked,
     isDenied,
     isExternalMcpApproval,
-    // A denied call runs nothing, so it never shows as working.
+    // Working only while the turn runs: a denied call runs nothing, and an
+    // answer inside a batch waits, idle, for the rest of the batch.
     isProcessing:
-      !isDenied && (isApprovalResponded || (responded && isApprovalRequested)),
+      isTurnActive &&
+      !isDenied &&
+      (isApprovalResponded || (responded && isApprovalRequested)),
     isPublicOfficialApproval: isPublicOfficialChatToolName(name),
     isStructuredEditFailure,
     label: externalMcpProviderName ?? defaultLabel,

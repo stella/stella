@@ -160,6 +160,7 @@ const STEP_KINDS: readonly RecordedAction["type"][] = [
   "auto-approve",
   "client-tool",
   "drop-connection",
+  "reload",
   "send",
   "stop",
 ];
@@ -1036,10 +1037,15 @@ const replay = async (scenario: string) => {
     const cards = finding(RENDER_ORACLE.cardsMatchStored, where);
     if (exchanges.length === 0 && action.type === "approve") {
       // An answer inside a batch stays on the page until the batch is sent:
-      // that card no longer asks, the others still do.
+      // that card no longer asks, the others still do, and nothing runs yet.
       answeredLocally.push(action.toolCallId);
-      expect(shown.actionable, cards).toEqual(
-        stored.actionable.filter((id) => !answeredLocally.includes(id)),
+      expect({ actionable: shown.actionable, busy: shown.busy }, cards).toEqual(
+        {
+          actionable: stored.actionable.filter(
+            (id) => !answeredLocally.includes(id),
+          ),
+          busy: false,
+        },
       );
       continue;
     }
