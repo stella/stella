@@ -114,7 +114,12 @@ const messageView = (message: UIMessage): MessageView => {
         });
         break;
       }
-      default: {
+      case "audio":
+      case "document":
+      case "image":
+      case "structured-output":
+      case "ui-resource":
+      case "video": {
         // Attachments and rich parts round-trip as stored parts; the chat
         // flows these invariants drive do not produce them.
         break;

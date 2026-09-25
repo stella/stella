@@ -45,20 +45,23 @@ type Entry = {
   status: "active" | "pending" | "retired";
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const isEntry = (value: unknown): value is Entry => {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
-  const entry = value as Record<string, unknown>;
-  const scenario = entry["scenario"] as Record<string, unknown> | undefined;
+  const scenario = value["scenario"];
   return (
     ["behaviour", "file", "fix", "id", "oracle", "replace", "search"].every(
-      (key) => typeof entry[key] === "string",
+      (key) => typeof value[key] === "string",
     ) &&
-    (entry["status"] === "active" ||
-      entry["status"] === "pending" ||
-      entry["status"] === "retired") &&
-    typeof scenario?.["file"] === "string" &&
+    (value["status"] === "active" ||
+      value["status"] === "pending" ||
+      value["status"] === "retired") &&
+    isRecord(scenario) &&
+    typeof scenario["file"] === "string" &&
     typeof scenario["test"] === "string"
   );
 };

@@ -163,7 +163,7 @@ export const createApprovalHarness = ({
   /** The handler context the route builds around a validated body. */
   const contextFromBody = (
     body: SendBody,
-    signal?: AbortSignal | undefined,
+    signal?: AbortSignal,
   ): SendMessageCtx => {
     const ctx = asTestRaw<SendMessageCtx>({
       body,

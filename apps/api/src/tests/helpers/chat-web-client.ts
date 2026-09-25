@@ -2,6 +2,7 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The browser side of a chat thread is the web app's own code, loaded from
 // `apps/web`: `createChatRuntime` (TanStack's `ChatClient` over its SSE
@@ -73,8 +74,7 @@ const hasFunction = <TName extends string>(
 ): value is Record<TName, (...args: never[]) => unknown> =>
   typeof value === "object" &&
   value !== null &&
-  name in value &&
-  typeof (value as Record<TName, unknown>)[name] === "function";
+  typeof Reflect.get(value, name) === "function";
 
 let loadedWebChat: WebChatModules | undefined;
 
@@ -94,15 +94,14 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
   ) {
     return panic("The web chat modules no longer export the chat runtime");
   }
-  // SAFETY: the functions exist (checked above); their signatures are the web
-  // app's, which this file states once in `WebChatModules`.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  loadedWebChat = {
+  // The functions exist (checked above); their signatures are the web app's,
+  // which this file states once in `WebChatModules`.
+  loadedWebChat = asTestRaw<WebChatModules>({
     createChatRuntime: runtime.createChatRuntime,
     resetChatRequestStateForTests: runtime.resetChatRequestStateForTests,
     sanitizeRunningToolCalls: uiTools.sanitizeRunningToolCalls,
     sendThreadChatMessage: runtime.sendThreadChatMessage,
-  } as unknown as WebChatModules;
+  });
   return loadedWebChat;
 };
 
@@ -224,7 +223,7 @@ export const createWebChatClient = async ({
    */
   const act = async (action: () => Promise<void>) => {
     if (disposed) {
-      return panic("The page was closed");
+      panic("The page was closed");
     }
     void action().catch((error: unknown) => {
       errors.push(error instanceof Error ? error : new Error(String(error)));
@@ -241,18 +240,19 @@ export const createWebChatClient = async ({
   return {
     approve: async (toolCallId, approved) => {
       const card = requireCard(toolCallId);
-      if (card.kind !== "approval") {
-        return panic(`${toolCallId} is not an approval card`);
-      }
+      const approvalId =
+        card.kind === "approval"
+          ? card.approvalId
+          : panic(`${toolCallId} is not an approval card`);
       await act(
         async () =>
-          await runtime.resolveToolApproval({ approved, id: card.approvalId }),
+          await runtime.resolveToolApproval({ approved, id: approvalId }),
       );
     },
     answer: async (toolCallId, output) => {
       const card = requireCard(toolCallId);
       if (card.kind !== "answer") {
-        return panic(`${toolCallId} is not an answerable card`);
+        panic(`${toolCallId} is not an answerable card`);
       }
       await act(
         async () =>
