@@ -25,6 +25,9 @@
     "packages/agent-input": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/analytics-config": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },

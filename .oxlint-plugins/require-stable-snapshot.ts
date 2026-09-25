@@ -34,7 +34,12 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isIdentifier, unwrapExpression } from "./utils.ts";
+import {
+  getImportedName,
+  isIdentifier,
+  returnArguments,
+  unwrapExpression,
+} from "./utils.ts";
 
 const REACT_MODULE = "react";
 const HOOK_NAME = "useSyncExternalStore";
@@ -101,69 +106,12 @@ const isFreshReferenceExpression = (node) => {
   return isFreshReferenceCall(unwrapped);
 };
 
-// Collect the `argument` of every `return` reachable from `node` without
-// crossing into a nested function's body.
-const collectReturnArguments = (node, results) => {
-  if (!node || typeof node !== "object") {
-    return;
-  }
-
-  switch (node.type) {
-    case "BlockStatement": {
-      for (const statement of node.body) {
-        collectReturnArguments(statement, results);
-      }
-      return;
-    }
-    case "IfStatement": {
-      collectReturnArguments(node.consequent, results);
-      collectReturnArguments(node.alternate, results);
-      return;
-    }
-    case "SwitchStatement": {
-      for (const switchCase of node.cases) {
-        for (const statement of switchCase.consequent) {
-          collectReturnArguments(statement, results);
-        }
-      }
-      return;
-    }
-    case "TryStatement": {
-      collectReturnArguments(node.block, results);
-      if (node.handler) {
-        collectReturnArguments(node.handler.body, results);
-      }
-      collectReturnArguments(node.finalizer, results);
-      return;
-    }
-    case "ForStatement":
-    case "ForInStatement":
-    case "ForOfStatement":
-    case "WhileStatement":
-    case "DoWhileStatement":
-    case "LabeledStatement": {
-      collectReturnArguments(node.body, results);
-      return;
-    }
-    case "ReturnStatement": {
-      if (node.argument) {
-        results.push(node.argument);
-      }
-      return;
-    }
-    default:
-      return;
-  }
-};
-
 const snapshotReturnsFreshReference = (fn) => {
   if (fn.body.type !== "BlockStatement") {
     return isFreshReferenceExpression(fn.body);
   }
 
-  const returnArguments = [];
-  collectReturnArguments(fn.body, returnArguments);
-  return returnArguments.some((argument) =>
+  return returnArguments(fn.body).some((argument) =>
     isFreshReferenceExpression(argument),
   );
 };

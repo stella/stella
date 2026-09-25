@@ -109,8 +109,8 @@ import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import { captureRequestError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { captureRequestError, detached } from "@/api/lib/analytics/capture";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   getAuth,
   resolveUserRealtimeAuthorization,
@@ -128,7 +128,6 @@ import {
 } from "@/api/lib/db-query-counter";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
-import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { elysiaErrorAnswer } from "@/api/lib/errors/elysia-error";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -515,7 +514,7 @@ const api = new Elysia()
     }
 
     if (!env.isDev && shouldLogRequest(path)) {
-      const analytics = getAnalytics();
+      const analytics = getServerAnalytics();
       await analytics.flush().catch((error: unknown) => {
         logger.error("analytics.flush.failed", {
           "error.type": errorTag(error),

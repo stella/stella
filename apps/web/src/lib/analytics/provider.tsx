@@ -1,7 +1,8 @@
 import { createContext, use } from "react";
 
+import { shouldEnablePostHog } from "@stll/analytics-config";
+
 import { env } from "@/env";
-import { hasPostHogConfig } from "@/lib/analytics/config";
 import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
@@ -29,11 +30,10 @@ export const createAnalyticsValue = (): AnalyticsValue => {
   const posthogConfig = {
     host: env.VITE_POSTHOG_HOST,
     key: env.VITE_POSTHOG_KEY,
+    isDev: import.meta.env.DEV,
+    localDebug: env.VITE_POSTHOG_LOCAL_DEBUG,
   };
-  const shouldEnablePostHog =
-    hasPostHogConfig(posthogConfig) &&
-    (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
-  const value = shouldEnablePostHog
+  const value = shouldEnablePostHog(posthogConfig)
     ? createPostHogAnalytics({
         host: posthogConfig.host,
         key: posthogConfig.key,

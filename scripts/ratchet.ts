@@ -1702,11 +1702,17 @@ const countLibTopLevelEntries =
 // charged: the earlier copy is as deletable as the later one, and which one
 // survives is the author's call.
 //
+// A window with fewer than one distinct token in four is a table's shape, not
+// a copy: rows of one record literal (`{ name, reference, clientLabel }` again
+// and again once their values are blanked), a list of re-exports, a column
+// map. Such a window neither matches nor is indexed, however often it recurs.
+//
 // Known limits, in the spirit of the counters above: a window that spans a
 // literal matches on the code around it, and a clone shorter than 60 tokens is
 // below the floor on purpose — short repeated shapes are idiom, not debt.
 
 const CLONE_WINDOW_TOKENS = 60;
+const CLONE_MIN_DISTINCT_TOKENS = CLONE_WINDOW_TOKENS / 4;
 // Past this size a file is vendored, packed, or a data blob: tokenising it
 // costs more than the copies it could reveal.
 const MAX_CLONE_SCAN_BYTES = 300 * 1024;
@@ -1828,6 +1834,26 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
   const slotNext: number[] = [];
   const hitPositions = new Map<number, number[]>();
 
+  // How often each token id occurs in the current window, and how many ids
+  // occur at all. Every count is back at zero once a file's last window is
+  // released, so the next file starts from an empty window.
+  const windowTokenCounts = new Uint8Array(tokenCache.size + 1);
+  let windowDistinct = 0;
+  const enterWindow = (token: number): void => {
+    const occurrences = windowTokenCounts[token] ?? 0;
+    if (occurrences === 0) {
+      windowDistinct += 1;
+    }
+    windowTokenCounts[token] = occurrences + 1;
+  };
+  const leaveWindow = (token: number): void => {
+    const occurrences = windowTokenCounts[token] ?? 0;
+    if (occurrences === 1) {
+      windowDistinct -= 1;
+    }
+    windowTokenCounts[token] = occurrences - 1;
+  };
+
   const recordHit = (fileIndex: number, position: number): void => {
     const positions = hitPositions.get(fileIndex);
     if (positions === undefined) {
@@ -1850,6 +1876,7 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
       const token = tokens[start + index] ?? 0;
       primary = Math.imul(primary, CLONE_BASE_PRIMARY) + token;
       secondary = Math.imul(secondary, CLONE_BASE_SECONDARY) + token;
+      enterWindow(token);
     }
 
     const lastPosition = length - CLONE_WINDOW_TOKENS;
@@ -1868,6 +1895,11 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
             secondary - Math.imul(leaving, secondaryPower),
             CLONE_BASE_SECONDARY,
           ) + entering;
+        leaveWindow(leaving);
+        enterWindow(entering);
+      }
+      if (windowDistinct < CLONE_MIN_DISTINCT_TOKENS) {
+        continue;
       }
 
       const windowStart = start + position;
@@ -1905,6 +1937,9 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
       }
       recordHit(fileIndex, position);
       recordHit(firstFile, firstPosition);
+    }
+    for (let index = lastPosition; index < length; index += 1) {
+      leaveWindow(tokens[start + index] ?? 0);
     }
   }
 
@@ -3520,11 +3555,12 @@ const WEB_COMPONENT_PLACEMENT_FIXTURES = {
 const EXPECTED_SLICE_OWNED_WEB_COMPONENTS = 4;
 
 // Duplicate-token-block fixtures. Ten lines of seven tokens each: 70 tokens, so
-// the shared run clears the 60-token window with room to spare.
+// the shared run clears the 60-token window with room to spare. Two tokens per
+// line are the line's own, so every window clears the distinct-token floor.
 const CLONE_BLOCK_LINES = Array.from(
   { length: 10 },
   (_, index) =>
-    `const step${String(index)} = compute(alpha, beta, gamma, delta);`,
+    `const step${String(index)} = compute(alpha${String(index)}, beta, gamma, delta);`,
 );
 const SELF_TEST_CLONE_BLOCK = `${CLONE_BLOCK_LINES.join("\n")}\n`;
 // The same shape with a different vocabulary, so it shares no window with the
@@ -3532,7 +3568,7 @@ const SELF_TEST_CLONE_BLOCK = `${CLONE_BLOCK_LINES.join("\n")}\n`;
 const SELF_TEST_UNIQUE_BLOCK = `${Array.from(
   { length: 10 },
   (_, index) =>
-    `const only${String(index)} = derive(epsilon, zeta, eta, theta);`,
+    `const only${String(index)} = derive(epsilon${String(index)}, zeta, eta, theta);`,
 ).join("\n")}\n`;
 // The shared block as the CONTENTS of a template literal. Blanking runs before
 // tokenising, so nothing here is a token and the file cannot match anything.
@@ -3545,16 +3581,23 @@ const collidingBlock = (identifier: string) =>
   `${Array.from(
     { length: 10 },
     (_, index) =>
-      `const near${String(index)} = collide(${identifier}, iota, kappa);`,
+      `const near${String(index)} = collide(${identifier}, iota${String(index)}, kappa);`,
   ).join("\n")}\n`;
 const SELF_TEST_CLONE_HASH_COLLISION_LEFT = collidingBlock(
   "contributorLastActivityMs",
 );
 const SELF_TEST_CLONE_HASH_COLLISION_RIGHT =
   collidingBlock("inspectedManifest");
+// Rows of one record literal, as a seed file or a data table writes them: once
+// their values are blanked, every window repeats the same three keys.
+const SELF_TEST_CLONE_DATA_TABLE = `export const ROWS = [\n${Array.from(
+  { length: 30 },
+  (_, index) =>
+    `  { name: "row ${String(index)}", reference: "${String(index)}", clientLabel: "c" },`,
+).join("\n")}\n];\n`;
 // One block in each of the two files that share it. The unique block, the
-// literal-only copy, the test-file copy and the hash-colliding pair all add
-// nothing.
+// literal-only copy, the test-file copy, the hash-colliding pair and the two
+// data tables all add nothing.
 const EXPECTED_DUPLICATE_TOKEN_BLOCKS = 2;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
@@ -3751,6 +3794,8 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/clone-copy.test.ts",
         "apps/api/src/clone-collision-left.ts",
         "apps/web/src/clone-collision-right.ts",
+        "apps/api/src/clone-table-origin.ts",
+        "apps/web/src/clone-table-copy.ts",
       ],
     },
     {
@@ -4214,6 +4259,16 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/clone-collision-right.ts",
       SELF_TEST_CLONE_HASH_COLLISION_RIGHT,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/clone-table-origin.ts",
+      SELF_TEST_CLONE_DATA_TABLE,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/clone-table-copy.ts",
+      SELF_TEST_CLONE_DATA_TABLE,
     );
     // Excluded companions: these must NOT be counted.
     writeFixture(

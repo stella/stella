@@ -10,7 +10,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient, isTwoFactorRedirect } from "@/lib/auth";
+import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { toAuthClientError } from "@/lib/errors/auth";

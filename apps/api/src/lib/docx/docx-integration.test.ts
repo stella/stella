@@ -11,7 +11,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 
 import { discoverTemplate } from "./discover-template";
-import { extractText } from "./extract-text";
+import { extractDocxDocument } from "./extract-text";
 import { fillTemplate } from "./patch-template";
 
 setDefaultTimeout(15_000);
@@ -228,7 +228,7 @@ describe("fill then extract text", () => {
       amount: "1 000 000 CZK",
     });
 
-    const extracted = await extractText(result.buffer);
+    const extracted = await extractDocxDocument(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).toContain("Acme Corp");
@@ -241,7 +241,7 @@ describe("fill then extract text", () => {
     const buf = await makeDocx(xml);
 
     const result = await fillTemplate(buf, { name: "Alice" });
-    const extracted = await extractText(result.buffer);
+    const extracted = await extractDocxDocument(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).not.toContain("{{name}}");
@@ -250,7 +250,7 @@ describe("fill then extract text", () => {
 
   test("SPA fixture: filled values in extracted text", async () => {
     const result = await fillTemplate(SPA_FIXTURE, spaValues);
-    const extracted = await extractText(result.buffer);
+    const extracted = await extractDocxDocument(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).toContain("Stella Legal a.s.");
@@ -347,7 +347,7 @@ describe("a legacy custom XML manifest never leaves in a filled document", () =>
 
     const filledZip = await JSZip.loadAsync(result.buffer);
     expect(filledZip.file("customXml/item1.xml")).toBeNull();
-    const extracted = await extractText(result.buffer);
+    const extracted = await extractDocxDocument(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Bob");
     expect(allText).toContain("2026-06-01");
@@ -498,7 +498,7 @@ describe("split-run placeholders", () => {
       client_name: "Acme Corp",
     });
 
-    const extracted = await extractText(result.buffer);
+    const extracted = await extractDocxDocument(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Acme Corp");
     expect(allText).not.toContain("{{");

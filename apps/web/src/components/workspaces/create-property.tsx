@@ -57,7 +57,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
   WorkspaceProperty,
-  WorkspacePropertyOption,
+  SelectPropertyOption,
 } from "@/lib/types";
 import {
   useCreateProperty,
@@ -115,7 +115,7 @@ type CreatePropertyResult = {
 
 const buildContent = (
   contentType: CreatableContentType,
-  options: WorkspacePropertyOption[],
+  options: SelectPropertyOption[],
   fallback: string | null,
 ): WorkspaceProperty["content"] => {
   if (contentType === "single-select" || contentType === "multi-select") {
@@ -365,7 +365,7 @@ const PropertyComposerBody = ({
       : "text";
   const initialPromptHtml =
     editingTool?.type === "ai-model" ? editingTool.prompt : "";
-  const initialOptions: WorkspacePropertyOption[] =
+  const initialOptions: SelectPropertyOption[] =
     editingProperty &&
     (editingProperty.content.type === "single-select" ||
       editingProperty.content.type === "multi-select")
@@ -466,7 +466,7 @@ const PropertyComposerBody = ({
   const [selectedFileIds, setSelectedFileIds] =
     useState<string[]>(initialFileIds);
   const [options, setOptions] =
-    useState<WorkspacePropertyOption[]>(initialOptions);
+    useState<SelectPropertyOption[]>(initialOptions);
   const [fallback, setFallback] = useState<string | null>(initialFallback);
   const [scopeDocType, setScopeDocType] = useState<string | null>(
     initialScopeDocType,
@@ -685,11 +685,11 @@ const PropertyComposerBody = ({
     );
   };
 
-  const pushOptions = (added: WorkspacePropertyOption[]) =>
+  const pushOptions = (added: SelectPropertyOption[]) =>
     setOptions((prev) => [...prev, ...added]);
   const removeOptionAt = (index: number) =>
     setOptions((prev) => prev.filter((_, i) => i !== index));
-  const replaceOptionAt = (index: number, option: WorkspacePropertyOption) =>
+  const replaceOptionAt = (index: number, option: SelectPropertyOption) =>
     setOptions((prev) => prev.map((o, i) => (i === index ? option : o)));
 
   if (missingForEdit) {
@@ -873,7 +873,7 @@ const getEffectiveFallback = ({
 }: {
   fallback: string | null;
   needsOptions: boolean;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
 }) =>
   fallback !== null &&
   needsOptions &&
@@ -973,7 +973,7 @@ const SCOPE_ALL_VALUE = "__all__";
 
 type DocumentTypeScopeRowProps = {
   classifierName: string;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   value: string | null;
   onChange: (value: string | null) => void;
 };

@@ -66,6 +66,7 @@ import { apiUrl } from "@/lib/api-url";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { getExportBaseName, getExportFileName } from "@/lib/export-download";
@@ -603,116 +604,98 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
 
-  const handleAutoRun = async () => {
-    setIsAutoRunning(true);
-    const result = await Result.tryPromise(async () => {
-      const { data, error } = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .playbooks["auto-run"].post({});
-      return { data, error };
-    });
-    setIsAutoRunning(false);
+  // Sends one run request and reports its failure. `onSettled` runs as soon
+  // as the request does, before any toast; on success the menu closes and the
+  // workspace's properties refetch before the started run is returned.
+  const requestRun = async <Data,>(
+    request: () => Promise<{
+      data: Data | null;
+      error: ToAPIErrorProps | null;
+    }>,
+    onSettled: () => void,
+  ): Promise<Data | null> => {
+    const result = await Result.tryPromise(request);
+    onSettled();
 
-    if (Result.isError(result)) {
-      analytics.captureError(result.error);
+    const reportFailure = (description: string) => {
       stellaToast.add({
         type: "error",
         title: t("workspaces.playbooks.runFailed"),
-        description: t("common.unexpectedError"),
+        description,
       });
-      return;
+    };
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      reportFailure(t("common.unexpectedError"));
+      return null;
     }
 
     const response = result.value;
     if (response.error) {
       analytics.captureError(toAPIError(response.error));
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
+      reportFailure(
+        userErrorMessage(response.error, t("common.unexpectedError")),
+      );
+      return null;
     }
-    if (!response.data) {
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
-        description: t("common.unexpectedError"),
-      });
-      return;
+    if (response.data === null) {
+      reportFailure(t("common.unexpectedError"));
+      return null;
     }
 
     setOpen(false);
     await queryClient.invalidateQueries({
       queryKey: propertiesKeys.all(workspaceId),
     });
+    return response.data;
+  };
+
+  const handleAutoRun = async () => {
+    setIsAutoRunning(true);
+    const started = await requestRun(
+      async () => {
+        const { data, error } = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks["auto-run"].post({});
+        return { data, error };
+      },
+      () => setIsAutoRunning(false),
+    );
+    if (started === null) {
+      return;
+    }
     stellaToast.add({
       type: "success",
       title: t("workspaces.playbooks.autoRunStarted", {
-        count: response.data.playbooksRun,
+        count: started.playbooksRun,
       }),
     });
   };
 
   const handleRun = async (playbookId: string) => {
     setRunningPlaybookId(playbookId);
-    const result = await Result.tryPromise(async () => {
-      const { data, error } = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        .run.post({ projection });
-      return { data, error };
-    });
-    setRunningPlaybookId(null);
-
-    if (Result.isError(result)) {
-      analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
-        description: t("common.unexpectedError"),
-      });
+    const started = await requestRun(
+      async () => {
+        const { data, error } = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+          .run.post({ projection });
+        return { data, error };
+      },
+      () => setRunningPlaybookId(null),
+    );
+    if (started === null) {
       return;
     }
-
-    const response = result.value;
-    if (response.error) {
-      analytics.captureError(toAPIError(response.error));
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-    if (!response.data) {
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
-        description: t("common.unexpectedError"),
-      });
-      return;
-    }
-
-    setOpen(false);
-    await queryClient.invalidateQueries({
-      queryKey: propertiesKeys.all(workspaceId),
-    });
     stellaToast.add({
       type: "success",
       title:
         projection === "none"
           ? t("workspaces.playbooks.reviewStarted", {
-              count: response.data.documentRunCount,
+              count: started.documentRunCount,
             })
           : t("workspaces.playbooks.runStarted", {
-              count: response.data.runPropertyCount,
+              count: started.runPropertyCount,
             }),
     });
   };

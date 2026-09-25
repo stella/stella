@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
-import { detached } from "@/api/lib/detached";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {

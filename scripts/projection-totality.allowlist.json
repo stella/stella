@@ -348,10 +348,6 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/time-entries/list.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/summary/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

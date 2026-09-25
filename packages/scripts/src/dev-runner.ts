@@ -403,7 +403,8 @@ const probeHttpHealth = async (url: string): Promise<ProbeOutcome> => {
 
 const readJson = (bodyText: string): unknown => {
   try {
-    return JSON.parse(bodyText) as unknown;
+    const parsed: unknown = JSON.parse(bodyText);
+    return parsed;
   } catch {
     return null;
   }

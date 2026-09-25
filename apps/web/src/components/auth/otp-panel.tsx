@@ -26,7 +26,7 @@ import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
-} from "@/lib/auth";
+} from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

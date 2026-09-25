@@ -195,7 +195,7 @@ export type OrganizationGroupIdentifyParams = {
   properties: Partial<OrganizationGroupProperties>;
 };
 
-export type Analytics = {
+export type ServerAnalytics = {
   capture: (params: ServerAnalyticsCaptureParams) => void;
   /** Upsert the organization group profile in PostHog. */
   identifyOrganizationGroup: (params: OrganizationGroupIdentifyParams) => void;

@@ -53,7 +53,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { OptionColor } from "@/lib/api-contract";
+import type { PropertyOptionColor } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   EntityKind,
@@ -73,12 +73,12 @@ type KanbanColumnProps = {
   workspaceId: string;
   color?: string | undefined;
   colorBg?: string | undefined;
-  optionColor?: OptionColor | undefined;
+  optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
   onDrop: (entityId: string) => void;
   onFileUpload?: ((files: File[]) => void) | undefined;
-  onChangeColor?: ((color: OptionColor) => void) | undefined;
+  onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
   onRenameEntity?: ((entityId: string, newName: string) => void) | undefined;
   onHideColumn?: (() => void) | undefined;
@@ -447,10 +447,10 @@ export const KanbanColumn = ({
 type KanbanColumnActionsProps = {
   entityCount: number;
   title: string;
-  onChangeColor?: ((color: OptionColor) => void) | undefined;
+  onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onDeleteAll?: (() => void) | undefined;
   onHideColumn?: (() => void) | undefined;
-  optionColor?: OptionColor | undefined;
+  optionColor?: PropertyOptionColor | undefined;
 };
 
 /** The canonical column menu shared by flat and subgrouped boards. */
@@ -472,7 +472,7 @@ export const KanbanColumnActions = ({
   }
 
   const handleColorSelect = (value: string) => {
-    // SAFETY: DEFAULT_PRESETS values match OptionColor names.
+    // SAFETY: DEFAULT_PRESETS values match PropertyOptionColor names.
     onChangeColor?.(value);
   };
 
@@ -614,7 +614,7 @@ export const KanbanColumnTitle = ({
 
 type ColumnSwatchProps = {
   color?: string | undefined;
-  optionColor?: OptionColor | undefined;
+  optionColor?: PropertyOptionColor | undefined;
   showPicker: boolean;
   onSelect: (color: string) => void;
 };

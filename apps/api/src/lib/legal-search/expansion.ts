@@ -23,8 +23,8 @@ import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { detached } from "@/api/lib/analytics/capture";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
-import { detached } from "@/api/lib/detached";
 import {
   corpusFreeTextClause,
   type CorpusTermExpander,

@@ -21,7 +21,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { StellaMark } from "@/components/stella-mark";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";

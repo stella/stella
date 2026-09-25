@@ -13,7 +13,7 @@ import {
 } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
-import type { OptionColor, PropertyContent } from "@/lib/api-contract";
+import type { PropertyOptionColor, PropertyContent } from "@/lib/api-contract";
 import type { WorkspaceProperty } from "@/lib/types";
 
 const isPropertyValid = (property: WorkspaceProperty) => {
@@ -90,7 +90,7 @@ export const PropertyPopoverType = ({ type }: PropertyPopoverTypeProps) => {
 };
 
 type SelectColorIconProps = {
-  color: OptionColor | undefined;
+  color: PropertyOptionColor | undefined;
   className?: string;
 };
 

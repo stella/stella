@@ -33,4 +33,5 @@ export const generateCodeChallenge = (codeVerifier: string): string =>
   createHash("sha256").update(codeVerifier).digest("base64url");
 
 /** Generates a random `state` parameter used to bind the callback to this login attempt. */
-export const createOAuthState = (): string => randomBase64Url(STATE_BYTES);
+export const createAuthorizationState = (): string =>
+  randomBase64Url(STATE_BYTES);

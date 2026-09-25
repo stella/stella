@@ -8,7 +8,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
   WorkspaceProperty,
-  WorkspacePropertyOption,
+  SelectPropertyOption,
 } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 
@@ -23,7 +23,7 @@ type CreatePropertyVars = {
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
-  options?: WorkspacePropertyOption[];
+  options?: SelectPropertyOption[];
   fallback?: string | null;
 };
 
@@ -84,7 +84,7 @@ export type CreatePropertySpec = {
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
-  options?: WorkspacePropertyOption[];
+  options?: SelectPropertyOption[];
   fallback?: string | null;
 };
 
@@ -199,7 +199,7 @@ type PreviewPropertyVars = {
   prompt: string;
   contentType: "text" | "single-select" | "multi-select" | "date" | "int";
   entityId: string;
-  options?: WorkspacePropertyOption[];
+  options?: SelectPropertyOption[];
   dependencies?: { dependsOnPropertyId: string }[];
 };
 

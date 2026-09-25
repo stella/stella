@@ -44,8 +44,8 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
-import type { Role } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
+import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";

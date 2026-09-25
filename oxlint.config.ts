@@ -2139,8 +2139,8 @@ export default defineConfig({
       // thing identifying a captured rejection, so it must be a dotted
       // `feature.action` literal rather than the enclosing component or
       // handler name. Scoped to the two apps that can import the helper
-      // (`apps/web/src/lib/detached.ts`, `apps/api/src/lib/detached.ts`);
-      // no package ships one. Tests are in scope: a detached label there is
+      // (`apps/web/src/lib/detached.ts`, `apps/api/src/lib/analytics/capture.ts`);
+      // `@stll/errors` ships only the factory. Tests are in scope: a label there is
       // a telemetry tag like any other, and no test detaches today.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
@@ -3087,7 +3087,7 @@ export default defineConfig({
                   "Public SEO endpoints must not import authenticated query options.",
               },
               {
-                name: "@/lib/auth",
+                name: "@/lib/auth-client",
                 message: "Public SEO endpoints must not import auth clients.",
               },
             ],
@@ -3285,7 +3285,7 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
-              "apps/api/src/lib/analytics/posthog.ts",
+              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading

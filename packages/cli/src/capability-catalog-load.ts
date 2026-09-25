@@ -10,7 +10,7 @@ import * as v from "valibot";
 
 import type {
   CapabilityCatalogEntry,
-  CapabilityTransport,
+  CatalogTransport,
 } from "./generate-capability-tree.js";
 import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
 
@@ -66,7 +66,7 @@ const catalogEntrySchema = v.object({
  */
 const projectTransport = (
   transport: v.InferOutput<typeof transportSchema>,
-): CapabilityTransport => {
+): CatalogTransport => {
   switch (transport.type) {
     case "json":
       return { type: "json" };

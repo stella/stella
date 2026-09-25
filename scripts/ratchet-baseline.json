@@ -4,22 +4,14 @@
     "files": {}
   },
   "package-as-casts": {
-    "count": 23,
+    "count": 11,
     "files": {
       "packages/boe/src/query.ts": 2,
       "packages/business-registries/src/shared/canonical-id.ts": 1,
-      "packages/business-registries/src/shared/errors.ts": 1,
-      "packages/business-registries/src/shared/status.ts": 1,
       "packages/cli/src/build-cli-tree.ts": 3,
       "packages/cli/src/cli.ts": 1,
-      "packages/money/src/cents.ts": 2,
-      "packages/money/src/index.ts": 4,
-      "packages/scripts/src/auth-md-spec-drift.ts": 1,
-      "packages/scripts/src/dev-runner.ts": 1,
-      "packages/scripts/src/i18n-check.ts": 2,
-      "packages/scripts/src/i18n-lint.ts": 2,
-      "packages/template-conditions/src/compute.ts": 1,
-      "packages/ui/src/lib/week.ts": 1
+      "packages/money/src/cents.ts": 1,
+      "packages/money/src/index.ts": 3
     }
   },
   "legacy-paint-transitions": {
@@ -1140,7 +1132,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 301,
+    "count": 293,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1199,7 +1191,7 @@
       "apps/api/src/handlers/views/table/export.ts": 1,
       "apps/api/src/handlers/workspaces/delete.ts": 1,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
-      "apps/api/src/lib/analytics/posthog.ts": 1,
+      "apps/api/src/lib/analytics/posthog-node.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
       "apps/api/src/lib/document-reference.ts": 2,
@@ -1325,13 +1317,10 @@
       "packages/cli/src/generated/route-map.ts": 1,
       "packages/cli/src/generated/tool-annotations.ts": 1,
       "packages/errors/src/dev-error.ts": 1,
-      "packages/money/src/cents.ts": 2,
-      "packages/money/src/index.ts": 2,
-      "packages/scripts/src/auth-md-spec-drift.ts": 1,
-      "packages/scripts/src/i18n-check.ts": 2,
-      "packages/scripts/src/i18n-lint.ts": 2,
+      "packages/money/src/cents.ts": 1,
+      "packages/money/src/index.ts": 1,
       "packages/scripts/src/model-catalog-discovery.ts": 1,
-      "packages/template-conditions/src/compute.ts": 2,
+      "packages/template-conditions/src/compute.ts": 1,
       "packages/ui/src/components/combobox.tsx": 1,
       "packages/ui/src/components/hex-color-picker.tsx": 3,
       "packages/ui/src/components/input-group.tsx": 1,
@@ -1401,93 +1390,23 @@
     "files": {}
   },
   "cross-app-lib-path-copies": {
-    "count": 16,
-    "files": {
-      "apps/api/src/lib/analytics/config.ts": 1,
-      "apps/api/src/lib/analytics/noop.ts": 1,
-      "apps/api/src/lib/analytics/posthog.ts": 1,
-      "apps/api/src/lib/analytics/types.ts": 1,
-      "apps/api/src/lib/auth.ts": 1,
-      "apps/api/src/lib/detached.ts": 1,
-      "apps/api/src/lib/errors/utils.ts": 1,
-      "apps/api/src/lib/sse.ts": 1,
-      "apps/web/src/lib/analytics/config.ts": 1,
-      "apps/web/src/lib/analytics/noop.ts": 1,
-      "apps/web/src/lib/analytics/posthog.ts": 1,
-      "apps/web/src/lib/analytics/types.ts": 1,
-      "apps/web/src/lib/auth.ts": 1,
-      "apps/web/src/lib/detached.ts": 1,
-      "apps/web/src/lib/errors/utils.ts": 1,
-      "apps/web/src/lib/sse.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 30,
+    "count": 6,
     "files": {
-      "apps/web/src/lib/analytics/noop.ts": 1,
-      "apps/web/src/lib/analytics/posthog.ts": 1,
-      "apps/web/src/lib/analytics/provider.tsx": 1,
-      "apps/web/src/lib/analytics/types.ts": 1,
-      "apps/web/src/lib/citations.ts": 2,
       "apps/web/src/lib/detached.ts": 1,
-      "apps/web/src/lib/errors/utils.ts": 1,
-      "apps/web/src/lib/knowledge/playbook-types.ts": 1,
       "apps/web/src/lib/safe-id.ts": 1,
-      "apps/web/src/lib/types.ts": 1,
       "packages/api-contract/src/safe-id.ts": 2,
       "packages/business-registries/src/shared/guards.ts": 1,
-      "packages/chat/src/runtime.ts": 2,
-      "packages/cli/src/auth/cli-config.ts": 1,
-      "packages/cli/src/auth/oauth-metadata.ts": 1,
-      "packages/cli/src/auth/pkce.ts": 1,
-      "packages/cli/src/auth/token-exchange.ts": 2,
-      "packages/cli/src/generate-capability-tree.ts": 2,
-      "packages/cli/src/json-schema-validate.ts": 1,
-      "packages/docx-utils/src/zip.ts": 1,
-      "packages/template-conditions/src/field-values.ts": 1,
-      "packages/template-conditions/src/index.ts": 1,
-      "packages/template-conditions/src/path.ts": 1,
-      "packages/ui/src/lib/option-color.ts": 1,
-      "packages/workspace-model/src/properties.ts": 1
+      "packages/template-conditions/src/index.ts": 1
     }
   },
   "duplicate-token-blocks": {
-    "count": 56,
+    "count": 2,
     "files": {
-      ".oxlint-plugins/no-object-url-leak.ts": 1,
-      ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
-      ".oxlint-plugins/require-custom-jsonb-column.ts": 1,
-      ".oxlint-plugins/require-stable-snapshot.ts": 1,
-      ".oxlint-plugins/require-stream-reader-disposal.ts": 1,
-      ".oxlint-plugins/require-timestamptz-column.ts": 1,
-      ".oxlint-plugins/require-use-shallow.ts": 1,
-      "apps/api/scripts/seed-dev.ts": 2,
-      "apps/api/scripts/seed-templates.ts": 2,
-      "apps/api/src/db/schema.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 2,
-      "apps/api/src/handlers/case-law/polarity/seed-rules.ts": 2,
-      "apps/api/src/handlers/chat/chat-turn-state.ts": 2,
-      "apps/api/src/handlers/expenses/list.ts": 1,
-      "apps/api/src/handlers/playbooks/starters.ts": 3,
-      "apps/api/src/handlers/time-entries/get.ts": 1,
-      "apps/api/src/handlers/time-entries/list.ts": 2,
-      "apps/api/src/lib/bilingual/run-queue.ts": 1,
-      "apps/api/src/lib/document-review/run-queue.ts": 1,
-      "apps/api/src/lib/entities/query-entities.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 2,
-      "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 2,
-      "apps/api/src/lib/tasks/create-task-entity.ts": 2,
-      "apps/api/src/lib/tasks/update-task.ts": 2,
-      "apps/api/src/scripts/cz-regional-repair.ts": 1,
-      "apps/api/src/scripts/eu-ecj-refetch.ts": 1,
-      "apps/web/src/components/auth/sign-in-panel.tsx": 2,
-      "apps/web/src/lib/types.ts": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 2,
-      "packages/locales/src/languages.ts": 7,
-      "packages/ui/src/index.ts": 1,
-      "scripts/result-boundary-globs.ts": 2
+      "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 2
     }
   },
   "slice-owned-web-components": {
@@ -1532,7 +1451,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 288,
+    "count": 287,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1620,7 +1539,6 @@
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 1,
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
       "apps/api/src/lib/destructive-effect-chunks.ts": 1,
-      "apps/api/src/lib/detached.ts": 1,
       "apps/api/src/lib/detected-country.ts": 1,
       "apps/api/src/lib/dev-origins.ts": 1,
       "apps/api/src/lib/dev-otp-store.ts": 1,
@@ -1837,9 +1755,9 @@
       "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/arrays.ts": 1,
       "apps/web/src/lib/auth-capabilities.ts": 1,
+      "apps/web/src/lib/auth-client.ts": 1,
       "apps/web/src/lib/auth-queries.ts": 1,
       "apps/web/src/lib/auth-session.ts": 1,
-      "apps/web/src/lib/auth.ts": 1,
       "apps/web/src/lib/authenticated-user-context.tsx": 1,
       "apps/web/src/lib/beta-features.logic.ts": 1,
       "apps/web/src/lib/beta-features.ts": 1,
@@ -1944,7 +1862,6 @@
       "apps/web/src/lib/shortcut-overrides.ts": 1,
       "apps/web/src/lib/spdx-license.ts": 1,
       "apps/web/src/lib/sse-events.ts": 1,
-      "apps/web/src/lib/sse.ts": 1,
       "apps/web/src/lib/statute-route.ts": 1,
       "apps/web/src/lib/stored-json.ts": 1,
       "apps/web/src/lib/task-option-telemetry.ts": 1,
@@ -1964,6 +1881,7 @@
       "apps/web/src/lib/web-search": 1,
       "apps/web/src/lib/workspace-realtime.ts": 1,
       "apps/web/src/lib/workspace-sse-connection.logic.ts": 1,
+      "apps/web/src/lib/workspace-sse.ts": 1,
       "apps/web/src/lib/workspaces": 1
     }
   }

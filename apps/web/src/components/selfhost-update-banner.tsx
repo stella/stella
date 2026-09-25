@@ -11,7 +11,7 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
-import { logDevError } from "@/lib/errors/utils";
+import { logDevError } from "@/lib/errors/telemetry";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
 

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 
 /**

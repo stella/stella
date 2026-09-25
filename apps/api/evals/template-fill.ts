@@ -54,7 +54,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import {
@@ -350,7 +350,7 @@ const createFixtureTools = ({
       fillCalls.push({ templateId, values, result });
       return result;
     }
-    const { paragraphs } = await extractText(filled.buffer);
+    const { paragraphs } = await extractDocxDocument(filled.buffer);
     const result = {
       text: paragraphs
         .map((paragraph) => paragraph.text)

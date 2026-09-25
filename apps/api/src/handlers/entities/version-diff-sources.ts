@@ -14,7 +14,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -153,7 +153,7 @@ export const loadEntityVersionDiffSources = async function* ({
               mimeType: DOCX_MIME_TYPE,
             }),
           );
-          const extracted = await extractText(new Uint8Array(buffer));
+          const extracted = await extractDocxDocument(new Uint8Array(buffer));
           return extracted.paragraphs.map((p) => p.text).join("\n");
         };
         const [currentText, prevText] = await Promise.all([
@@ -242,7 +242,7 @@ export const loadEntityVersionDocxText = async function* ({
             mimeType: DOCX_MIME_TYPE,
           }),
         );
-        const extracted = await extractText(new Uint8Array(buffer));
+        const extracted = await extractDocxDocument(new Uint8Array(buffer));
         return extracted.paragraphs.map((p) => p.text).join("\n");
       },
       catch: (cause) =>

@@ -40,8 +40,8 @@ import {
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { captureError, detached } from "@/api/lib/analytics/capture";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
@@ -68,7 +68,6 @@ import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -851,7 +850,7 @@ const createAuth = () => {
   ) satisfies BetterAuthPlugin;
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
-    analytics: getAnalytics(),
+    analytics: getServerAnalytics(),
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.

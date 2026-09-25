@@ -26,7 +26,7 @@ import {
   isAstNode,
   isFileIn,
   isIdentifier,
-  isStringLiteral,
+  staticStringValue,
 } from "./utils.ts";
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
@@ -34,36 +34,6 @@ const PG_CORE_MODULE = "drizzle-orm/pg-core";
 // The file that legitimately defines the custom JSONB type and may reference
 // pg-core's customType. Matched by suffix so it works from any cwd.
 const ALLOWLISTED_FILE = "apps/api/src/db/columns.ts";
-
-// The static text of a string literal or a zero-expression template
-// literal: `` `jsonb` `` and `"jsonb"` name the same SQL type, so a backtick
-// literal is matched too.
-const staticStringValue = (node: unknown): string | null => {
-  if (isStringLiteral(node)) {
-    return node.value;
-  }
-  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
-    return null;
-  }
-  const expressions = node.expressions;
-  const quasis = node.quasis;
-  if (!Array.isArray(expressions) || expressions.length !== 0) {
-    return null;
-  }
-  if (!Array.isArray(quasis) || quasis.length !== 1) {
-    return null;
-  }
-  const quasi = quasis[0];
-  if (!isAstNode(quasi)) {
-    return null;
-  }
-  const value = quasi.value;
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  const cooked = (value as { cooked?: unknown }).cooked;
-  return typeof cooked === "string" ? cooked : null;
-};
 
 const isJsonbLiteral = (node: unknown): boolean =>
   staticStringValue(node) === "jsonb";

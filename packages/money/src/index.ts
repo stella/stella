@@ -21,7 +21,7 @@
 
 import { panic } from "better-result";
 
-import { type CentsAmount, cents } from "./cents";
+import { type CentsAmount, cents, isMinorUnitAmount } from "./cents";
 
 export { type CentsAmount, cents, unsafeCents } from "./cents";
 
@@ -79,6 +79,14 @@ export type CurrencyCents<C extends string = string> = CentsAmount & {
   readonly [__currency]: C;
 };
 
+// The currency brand is nominal and carried only at the type level: a valid
+// minor-unit amount paired with a non-empty currency code is a
+// `CurrencyCents` of that code.
+const isCurrencyCents = <C extends string>(
+  amount: CentsAmount,
+  currency: C,
+): amount is CurrencyCents<C> => currency !== "" && isMinorUnitAmount(amount);
+
 /**
  * Construct a `CurrencyCents<C>` from a currency code and a minor-unit
  * amount. The only producer of `CurrencyCents`; downstream code narrows `C`
@@ -92,10 +100,10 @@ export const currencyCents = <C extends string>(
   if (!currency) {
     return panic("currencyCents(): currency must be a non-empty code");
   }
-  // SAFETY: cents() validates the minor-unit integer; the currency brand
-  // is nominal and carried only at the type level.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return cents(amount) as CurrencyCents<C>;
+  const minorUnits = cents(amount);
+  return isCurrencyCents(minorUnits, currency)
+    ? minorUnits
+    : panic("currencyCents(): currency must be a non-empty code");
 };
 
 // Standard "distribute over the union, then intersect" trick: for a union

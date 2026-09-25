@@ -12,7 +12,7 @@
  * (`parties.1.name`), and rejecting arrays would silently resolve those to
  * `undefined`.
  */
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
+export const isNonNullObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
 /** Resolve a dotted path like `company.name` against data. */
@@ -30,7 +30,7 @@ export const resolvePath = (
   const parts = path.split(".");
   let current: unknown = data;
   for (const part of parts) {
-    if (!isRecord(current)) {
+    if (!isNonNullObject(current)) {
       return undefined;
     }
     current = current[part];

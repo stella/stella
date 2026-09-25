@@ -26,7 +26,7 @@ import {
 } from "@stll/api-contract/email-mime-types";
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
-import { extractText as extractDocxText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument as extractDocxText } from "@/api/lib/docx/extract-text";
 import {
   parseEmail,
   parsedEmailToText,

@@ -8,7 +8,7 @@ import { fillHandler } from "@/api/handlers/templates/fill";
 import { toSafeId } from "@/api/lib/branded-types";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
@@ -301,7 +301,7 @@ describe("template discover", () => {
 
 // ── Extract text (headers/footers) ───────────────────────
 
-describe("extractText with headers and footers", () => {
+describe("extractDocxDocument with headers and footers", () => {
   test("extracts paragraphs from header, body, footer", async () => {
     const buf = await makeDocxWithParts({
       documentXml: WRAP(P("Body text")),
@@ -313,7 +313,7 @@ describe("extractText with headers and footers", () => {
       },
     });
 
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs.length).toBe(3);
 
     const header = result.paragraphs.find((p) => p.source === "header");
@@ -336,7 +336,7 @@ describe("extractText with headers and footers", () => {
       },
     });
 
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     const sources = result.paragraphs.map((p) => p.source);
     expect(sources).toEqual(["header", "body", "footer"]);
   });
@@ -349,7 +349,7 @@ describe("extractText with headers and footers", () => {
       },
     });
 
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     const indices = result.paragraphs.map((p) => p.index);
     expect(indices).toEqual([0, 1, 2]);
   });

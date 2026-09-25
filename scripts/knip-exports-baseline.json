@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 729,
+    "count": 728,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 8,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -41,7 +41,7 @@
       "apps/api/src/handlers/chat/chat-prompt.ts": 1,
       "apps/api/src/handlers/chat/chat-schema.ts": 1,
       "apps/api/src/handlers/chat/chat-scope.ts": 1,
-      "apps/api/src/handlers/chat/chat-turn-state.ts": 3,
+      "apps/api/src/handlers/chat/chat-turn-state.ts": 2,
       "apps/api/src/handlers/chat/export/citation-footnotes.ts": 3,
       "apps/api/src/handlers/chat/export/export-shared.ts": 1,
       "apps/api/src/handlers/chat/file-thread-shared.ts": 1,
@@ -125,7 +125,7 @@
       "apps/api/src/lib/ai-error.ts": 1,
       "apps/api/src/lib/ai-provider-probe.ts": 1,
       "apps/api/src/lib/analytics/client.ts": 1,
-      "apps/api/src/lib/analytics/types.ts": 7,
+      "apps/api/src/lib/analytics/server-analytics.ts": 7,
       "apps/api/src/lib/api-handlers.ts": 4,
       "apps/api/src/lib/audit-log.ts": 3,
       "apps/api/src/lib/auth-paths.ts": 1,
@@ -298,7 +298,7 @@
       "apps/api/src/lib/workflow/parse-justifications.ts": 1,
       "apps/api/src/lib/workflow/playbook-position-facets.ts": 2,
       "apps/api/src/lib/workflow/playbook-positions.ts": 15,
-      "apps/api/src/lib/workflow/position-runtime.ts": 2,
+      "apps/api/src/lib/workflow/position-runtime.ts": 1,
       "apps/api/src/lib/workflow/run-logic.ts": 4,
       "apps/api/src/lib/workflow/run-state-store.ts": 1,
       "apps/api/src/lib/workflow/utils.ts": 1,
@@ -323,6 +323,7 @@
       "apps/api/src/mcp/upload-purpose-gate.ts": 1,
       "apps/api/src/tests/api-module-graph.ts": 1,
       "apps/api/src/tests/fixture-provenance.ts": 3,
+      "apps/api/src/tests/helpers/chat-thread-invariants.ts": 1,
       "apps/api/src/tests/helpers/mock-root-db.ts": 5,
       "apps/api/src/tests/helpers/recording-telemetry.ts": 1,
       "apps/api/src/tests/helpers/test-tool-set.ts": 1,
@@ -365,7 +366,7 @@
     }
   },
   "apps/web": {
-    "count": 394,
+    "count": 390,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -489,10 +490,9 @@
       "apps/web/src/lib/anonymize/pdf-bbox.ts": 1,
       "apps/web/src/lib/anonymize/ui-constants.ts": 2,
       "apps/web/src/lib/api-url.ts": 2,
-      "apps/web/src/lib/auth.ts": 1,
+      "apps/web/src/lib/auth-client.ts": 1,
       "apps/web/src/lib/chat-draft-store.ts": 2,
       "apps/web/src/lib/chat-thread-ref.ts": 2,
-      "apps/web/src/lib/citations.ts": 2,
       "apps/web/src/lib/deepl/languages.ts": 1,
       "apps/web/src/lib/dev-store.ts": 1,
       "apps/web/src/lib/document-search.ts": 1,
@@ -519,7 +519,7 @@
       "apps/web/src/lib/render-storm-canary.ts": 4,
       "apps/web/src/lib/search.logic.ts": 1,
       "apps/web/src/lib/shortcut-overrides.ts": 2,
-      "apps/web/src/lib/types.ts": 10,
+      "apps/web/src/lib/types.ts": 8,
       "apps/web/src/lib/usage-queries.ts": 4,
       "apps/web/src/lib/use-shortcut-echo.ts": 2,
       "apps/web/src/lib/use-shortcut-rebinding.ts": 1,

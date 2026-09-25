@@ -72,7 +72,7 @@ export type ProtectedResourceMetadata = v.InferOutput<
   typeof protectedResourceMetadataSchema
 >;
 
-export type AuthorizationServerMetadata = v.InferOutput<
+export type UpstreamAuthorizationServerMetadata = v.InferOutput<
   typeof authorizationServerMetadataSchema
 >;
 
@@ -148,7 +148,7 @@ export const discoverOAuthMetadata = async (
 ): Promise<
   Result<
     {
-      authorizationServer: AuthorizationServerMetadata;
+      authorizationServer: UpstreamAuthorizationServerMetadata;
       protectedResource: ProtectedResourceMetadata;
     },
     HandlerError<400 | 502>
@@ -190,7 +190,7 @@ export const discoverOAuthMetadata = async (
   const authorizationServerUrl = new URL(
     protectedResource.authorization_servers.at(0) ?? "",
   );
-  let authorizationServer: AuthorizationServerMetadata | null = null;
+  let authorizationServer: UpstreamAuthorizationServerMetadata | null = null;
   for (const metadataUrl of authorizationServerMetadataUrls(
     authorizationServerUrl,
   )) {
@@ -250,7 +250,7 @@ export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 // mechanism; Dynamic Client Registration is retained for authorization
 // servers that have not adopted CIMD yet.
 export const clientRegistrationMode = (
-  authorizationServer: AuthorizationServerMetadata,
+  authorizationServer: UpstreamAuthorizationServerMetadata,
 ): McpClientRegistrationMode => {
   if (authorizationServer.client_id_metadata_document_supported === true) {
     return "cimd";
@@ -302,7 +302,7 @@ export const buildAuthorizeUrl = ({
   requestedScopes,
   state,
 }: {
-  authorizationServer: AuthorizationServerMetadata;
+  authorizationServer: UpstreamAuthorizationServerMetadata;
   clientId: string;
   codeChallenge: string;
   connectorSlug: string;
@@ -378,7 +378,7 @@ export const registerOAuthClient = async ({
   redirectUri,
   requestedScopes,
 }: {
-  authorizationServer: AuthorizationServerMetadata;
+  authorizationServer: UpstreamAuthorizationServerMetadata;
   connectorSlug: string;
   redirectUri: string;
   requestedScopes: string[];
@@ -543,7 +543,7 @@ export const refreshOAuthToken = async ({
 
 const discoverAuthorizationServer = async (
   authorizationServerUrl: string,
-): Promise<Result<AuthorizationServerMetadata, HandlerError<502>>> => {
+): Promise<Result<UpstreamAuthorizationServerMetadata, HandlerError<502>>> => {
   for (const metadataUrl of authorizationServerMetadataUrls(
     new URL(authorizationServerUrl),
   )) {
@@ -571,7 +571,7 @@ const discoverAuthorizationServer = async (
 };
 
 const validateAuthorizationServerMetadata = async (
-  metadata: AuthorizationServerMetadata,
+  metadata: UpstreamAuthorizationServerMetadata,
 ): Promise<Result<void, HandlerError<502>>> => {
   const urls = [
     metadata.issuer,

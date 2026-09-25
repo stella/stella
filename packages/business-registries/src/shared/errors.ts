@@ -48,10 +48,11 @@ export const isEntityNotFound = (error: unknown): error is EntityNotFound => {
   if (!(error instanceof RegistryError)) {
     return false;
   }
-  const maybe = error as Partial<EntityNotFound>;
   return (
-    typeof maybe.canonicalId === "string" &&
-    typeof maybe.registrySlug === "string"
+    "canonicalId" in error &&
+    typeof error.canonicalId === "string" &&
+    "registrySlug" in error &&
+    typeof error.registrySlug === "string"
   );
 };
 
