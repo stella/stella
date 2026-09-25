@@ -941,6 +941,101 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
+  test(
+    "runs an approved call once when the process serving it dies",
+    async () => {
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [
+          {
+            type: "step",
+            toolCalls: [
+              {
+                arguments: approvalToolArguments("NDA"),
+                toolCallId: "call-nda",
+                toolName: APPROVAL_TOOL_NAME,
+              },
+            ],
+          },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
+        harness.script(threadId, [{ type: "stall" }]);
+        harness.crashDuringNextRequest(threadId);
+        await real.client.approve("call-nda", true);
+        real.client.dispose();
+        // The fixture must reach the fault: the call ran before the process
+        // died, so no result was stored.
+        expect(harness.executions).toEqual(["NDA"]);
+
+        real.client = await harness.openWebClient(threadId);
+        harness.script(threadId, [
+          { toolCalls: [], text: "Anything else?", type: "step" },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks");
+        // This page loaded before the next turn settled the dead one, so only
+        // a fresh load shows the settled call.
+        real.client.dispose();
+        real.client = await harness.openWebClient(threadId);
+        await harness.expectSoundWebClient({ client: real.client, threadId });
+
+        expect(harness.executions).toEqual(["NDA"]);
+      } finally {
+        closeConversation({ real });
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "asks again for an approval whose call id an interrupted turn used",
+    async () => {
+      // Some providers number tool calls per response, so a later turn can
+      // reuse an earlier turn's call id.
+      const reusedId = "call_0";
+      const deleteCall = (name: string) => ({
+        type: "step" as const,
+        toolCalls: [
+          {
+            arguments: approvalToolArguments(name),
+            toolCallId: reusedId,
+            toolName: APPROVAL_TOOL_NAME,
+          },
+        ],
+      });
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [deleteCall("first")]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete one");
+        harness.script(threadId, [{ type: "stall" }]);
+        harness.crashDuringNextRequest(threadId);
+        await real.client.approve(reusedId, true);
+        real.client.dispose();
+        // The fixture must reach the fault: the first call ran before the
+        // process died.
+        expect(harness.executions).toEqual(["first"]);
+
+        real.client = await harness.openWebClient(threadId);
+        harness.script(threadId, [deleteCall("second")]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete another");
+
+        expect({
+          card: real.client
+            .cards()
+            .some(
+              ({ kind, toolCallId }) =>
+                kind === "approval" && toolCallId === reusedId,
+            ),
+          secondRan: harness.executions.includes("second"),
+        }).toEqual({ card: true, secondRan: false });
+      } finally {
+        closeConversation({ real });
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
   // PR CI runs the seeded budget; the nightly sweep
   // (`PROPERTY_TEST_NUM_RUNS_FACTOR`) runs it ten times over with fresh seeds.
   test(

@@ -30,6 +30,7 @@ import {
   ChatTurnUnsettledToolCallError,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
+  settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
@@ -343,6 +344,25 @@ const toTerminalAssistantMessage = ({
   return attachTerminalTurnOutcome({ message, turnOutcome: outcome });
 };
 
+/**
+ * The terminal message as stored: approved calls the run left without a
+ * result are closed as unfinished once the turn stops for good.
+ */
+const settleTerminalAssistantMessage = (
+  message: PersistableTerminalAssistantMessage,
+  outcome: ChatTurnOutcome,
+): PersistableTerminalAssistantMessage =>
+  attachTerminalTurnOutcome({
+    message: toPersistableChatMessage({
+      ...message,
+      parts: settleOpenToolCallsForOutcome({
+        outcome: outcome.type,
+        parts: message.parts,
+      }),
+    }),
+    turnOutcome: outcome,
+  });
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -413,11 +433,15 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
-  const assistantMessage = toTerminalAssistantMessage({
+  const producedMessage = toTerminalAssistantMessage({
     outcome,
     owningAssistantMessage,
     responseMessage,
   });
+  const assistantMessage = settleTerminalAssistantMessage(
+    producedMessage,
+    outcome,
+  );
   const persistencePlan = planAssistantFinishPersistence({
     existingIds,
     finishOutcome: outcome,
@@ -453,14 +477,14 @@ export const finalizeAssistantTurn = async ({
   reportStoredTurnDefects({
     continued: owningAssistantMessage,
     outcome: outcome.type,
-    stored: assistantMessage,
+    stored: producedMessage,
   });
   return Result.ok({ persistencePlan });
 };
 
 /**
- * Reports a stored turn message that breaks the settlement rules, once the
- * write committed: the reports say a stored thread holds the defect, which a
+ * Reports what a run left that breaks the settlement rules, once the write
+ * committed: the reports say a stored thread holds the defect, which a
  * failed write never made true. The turn itself still settles; its answer is
  * already streamed and belongs in the thread.
  */
@@ -535,11 +559,14 @@ const persistTerminalAssistantTurn = async ({
   userId,
   workspaceId,
 }: PersistTerminalAssistantTurnProps) => {
-  const assistantMessage = toTerminalAssistantMessage({
+  const assistantMessage = settleTerminalAssistantMessage(
+    toTerminalAssistantMessage({
+      outcome,
+      owningAssistantMessage,
+      responseMessage: undefined,
+    }),
     outcome,
-    owningAssistantMessage,
-    responseMessage: undefined,
-  });
+  );
   return await persistMessage({
     persistencePlan:
       owningAssistantMessage === undefined

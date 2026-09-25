@@ -80,6 +80,7 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import {
@@ -1743,7 +1744,10 @@ export const createSendMessage = (
         }
 
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: latestMessagePlan.messages,
+          messages: settleHistoryForRun({
+            messages: latestMessagePlan.messages,
+            resumedMessageId: owningAssistantMessage?.id,
+          }),
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,

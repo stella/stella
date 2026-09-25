@@ -42,6 +42,11 @@ export type ScriptedTurn =
       message: string;
       type: "fail-before-output";
     }
+  | {
+      /** The provider call never answers, as when the process serving the
+       *  run dies while it waits. */
+      type: "stall";
+    }
   | ScriptedStep;
 
 /**
@@ -247,6 +252,10 @@ export async function* scriptedTurnChunks(
   await Promise.resolve();
   if (turn.type === "fail-before-output") {
     throw new ScriptedProviderError({ message: turn.message });
+  }
+  if (turn.type === "stall") {
+    await Promise.withResolvers<never>().promise;
+    return;
   }
   const messageId = `provider-message-${String(index + 1)}`;
   const timestamp = Date.now();
