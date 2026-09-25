@@ -10,7 +10,9 @@ import {
   buildEntityMentionOption,
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  claimPendingMentionSearch,
   getMentionViewScope,
+  settleLatestMentionSearch,
 } from "@/components/chat-mention-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -83,27 +85,21 @@ export const useWorkspaceChatMentionRegistration = (
   const debouncedSearchEntities = useDebouncedCallback(
     async ({
       query,
+      reject,
       resolve,
     }: {
       query: string;
+      reject: (error: unknown) => void;
       resolve: (items: ChatMentionOption[]) => void;
     }) => {
-      try {
-        const items = await searchEntities(query);
-        if (pendingSearchRef.current?.resolve !== resolve) {
-          return;
-        }
-
-        pendingSearchRef.current = null;
-        resolve(items);
-      } catch {
-        if (pendingSearchRef.current?.resolve !== resolve) {
-          return;
-        }
-
-        pendingSearchRef.current = null;
-        resolve([]);
-      }
+      // A failed search rejects; the composer's mention search reports each
+      // rejected source and keeps the results of the others.
+      await settleLatestMentionSearch({
+        search: async () => await searchEntities(query),
+        claim: () => claimPendingMentionSearch(pendingSearchRef, resolve),
+        resolve,
+        reject,
+      });
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
@@ -127,10 +123,10 @@ export const useWorkspaceChatMentionRegistration = (
         return toEntityMentionOptions({ data: cachedData, workspaceId });
       }
 
-      return await new Promise<ChatMentionOption[]>((resolve) => {
+      return await new Promise<ChatMentionOption[]>((resolve, reject) => {
         pendingSearchRef.current = { queryKey: null, resolve };
         detached(
-          debouncedSearchEntities({ query, resolve }),
+          debouncedSearchEntities({ query, reject, resolve }),
           "use-workspace-chat-mention-registration.debounced-search-entities",
         );
       });

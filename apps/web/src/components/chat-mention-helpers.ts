@@ -103,6 +103,22 @@ export const settleLatestMentionSearch = async <T>({
   resolve(result.value);
 };
 
+/**
+ * The `claim` for {@link settleLatestMentionSearch} when the pending search
+ * lives in a ref: the search whose `resolve` still sits in the slot owns it
+ * and frees it; any other search has been replaced.
+ */
+export const claimPendingMentionSearch = <T>(
+  slot: { current: { resolve: (items: T) => void } | null },
+  resolve: (items: T) => void,
+): boolean => {
+  if (slot.current?.resolve !== resolve) {
+    return false;
+  }
+  slot.current = null;
+  return true;
+};
+
 export const buildEntityMentionOption = ({
   entity,
   sourceWorkspaceId,

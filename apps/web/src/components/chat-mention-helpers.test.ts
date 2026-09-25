@@ -5,6 +5,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
   buildEntityMentionOption,
   buildWorkspaceMentionOptions,
+  claimPendingMentionSearch,
   getMentionViewScope,
   settleLatestMentionSearch,
 } from "@/components/chat-mention-helpers";
@@ -250,5 +251,45 @@ describe("settleLatestMentionSearch", () => {
     });
 
     expect(settled).toEqual({ resolved: [], rejected: [] });
+  });
+
+  test("rejects the pending search held in a ref and frees its slot", async () => {
+    const { settled, resolve, reject } = recordSettlement();
+    const failure = new TypeError("Failed to fetch");
+    const slot: { current: { resolve: typeof resolve } | null } = {
+      current: { resolve },
+    };
+
+    await settleLatestMentionSearch({
+      search: async () => {
+        throw failure;
+      },
+      claim: () => claimPendingMentionSearch(slot, resolve),
+      resolve,
+      reject,
+    });
+
+    expect(settled).toEqual({ resolved: [], rejected: [failure] });
+    expect(slot.current).toBeNull();
+  });
+
+  test("keeps the slot of a newer search held in a ref", async () => {
+    const { settled, resolve, reject } = recordSettlement();
+    const newer = { resolve: (_items: string[]) => {} };
+    const slot: { current: { resolve: typeof resolve } | null } = {
+      current: newer,
+    };
+
+    await settleLatestMentionSearch({
+      search: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      claim: () => claimPendingMentionSearch(slot, resolve),
+      resolve,
+      reject,
+    });
+
+    expect(settled).toEqual({ resolved: [], rejected: [] });
+    expect(slot.current).toBe(newer);
   });
 });

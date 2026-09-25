@@ -59,6 +59,7 @@ import {
   buildEntityMentionOption,
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  claimPendingMentionSearch,
   getMentionViewScope,
   insertChatMention,
   settleLatestMentionSearch,
@@ -738,13 +739,8 @@ export const useChatEditor = ({
       // A failed search rejects, so the mention list shows its load-error row.
       await settleLatestMentionSearch({
         search: async () => await fetchWorkspaceEntities(workspace, query),
-        claim: () => {
-          if (pendingWorkspaceEntitySearchRef.current?.resolve !== resolve) {
-            return false;
-          }
-          pendingWorkspaceEntitySearchRef.current = null;
-          return true;
-        },
+        claim: () =>
+          claimPendingMentionSearch(pendingWorkspaceEntitySearchRef, resolve),
         resolve,
         reject: (error) => {
           getAnalytics().captureError(error);
