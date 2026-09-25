@@ -68,7 +68,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           continue;
         }
 
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case, after its own throttled court lookup; a failed import rolls back only that case
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case, after its own throttled court lookup; a thrown error rolls back only that case, and a refused import returns before writing anything
         const importResult = await db.transaction(async (tx) => {
           const workspace = await tx.query.workspaces.findFirst({
             where: { id: { eq: trackedCase.workspaceId } },
