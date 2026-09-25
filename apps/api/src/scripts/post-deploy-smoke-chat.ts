@@ -251,8 +251,9 @@ export const evaluateTurnStream = (name: string, text: string): SmokeCheck => {
       ok: false,
       detail:
         `stream carried corrupt frames: ${String(scanned.malformedLines)} ` +
-        `not JSON, ${String(untyped)} without a type${ 
-        scanned.partialTail ? ", and ended mid-frame" : ""}`,
+        `not JSON, ${String(untyped)} without a type${
+          scanned.partialTail ? ", and ended mid-frame" : ""
+        }`,
     };
   }
   const runError = frames.find(({ type }) => type === AG_UI_EVENT.runError);
