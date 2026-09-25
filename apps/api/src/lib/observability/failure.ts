@@ -372,7 +372,8 @@ const TRANSPARENT_ERROR_CLASSES: ReadonlySet<string> = new Set([
 /**
  * A wrapper that says nothing of its own: a transport wrapper, or an
  * unclassified generic `Error` / `DrizzleQueryError` that only carries a
- * cause. A wrapper of any other class may declare a new meaning.
+ * cause. One that carries a code of its own says something, and a wrapper of
+ * any other class may declare a new meaning.
  */
 const isTransparent = (
   node: EvidenceNode,
@@ -387,6 +388,7 @@ const isTransparent = (
   return (
     node.kind === "error" &&
     node.brand === undefined &&
+    node.code === undefined &&
     node.className !== undefined &&
     TRANSPARENT_ERROR_CLASSES.has(node.className)
   );

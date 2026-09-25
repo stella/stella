@@ -811,6 +811,26 @@ describe("sink expectations", () => {
     );
   });
 
+  test("a generic wrapper with a code of its own is the failure node", () => {
+    const sink = failureSink({
+      event: "expecting",
+      expected: [{ match: { code: "ENOENT" }, reason: "optional_file_absent" }],
+    });
+    const coded = Object.assign(
+      new Error("read failed", { cause: new Error("inner") }),
+      { code: "ENOENT" },
+    );
+    const bare = new Error("read failed", { cause: codedError("ENOENT") });
+
+    expect(gradeFailure(readEvidence(coded), sink).reason).toBe(
+      "optional_file_absent",
+    );
+    // A bare wrapper stays transparent, so its cause is what the sink sees.
+    expect(gradeFailure(readEvidence(bare), sink).reason).toBe(
+      "optional_file_absent",
+    );
+  });
+
   test("an owned constructor matches one level below the failure node only when asked", () => {
     class OptionalReadError extends Error {
       constructor(message: string) {
