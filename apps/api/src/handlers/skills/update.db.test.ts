@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { agentSkills } from "@/api/db/schema";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   handlerFailure,
@@ -99,5 +100,55 @@ describe("renaming a skill", () => {
     expect(firstRow?.slug).toMatch(SKILL_SLUG_PATTERN);
     expect(secondRow?.slug).toMatch(SKILL_SLUG_PATTERN);
     expect(firstRow?.slug).not.toBe(secondRow?.slug);
+  });
+});
+
+describe("concurrent skill edits", () => {
+  test("each edit reads the row it writes, so the content hash matches the final row", async () => {
+    const skillId = await seedSkill();
+
+    const results = await Promise.all([
+      update(skillId, { body: "Concurrently edited instructions." }),
+      update(skillId, { description: "Concurrently edited description." }),
+    ]);
+
+    expect(results.map(handlerFailure)).toEqual([null, null]);
+    const [row] = await testDb
+      .select({
+        body: agentSkills.body,
+        contentHash: agentSkills.contentHash,
+        description: agentSkills.description,
+        name: agentSkills.name,
+        version: agentSkills.version,
+      })
+      .from(agentSkills)
+      .where(eq(agentSkills.id, skillId));
+    expect(row?.body).toBe("Concurrently edited instructions.");
+    expect(row?.description).toBe("Concurrently edited description.");
+    expect(row?.contentHash).toBe(
+      row ? hashAuthoredSkillContent(row) : undefined,
+    );
+  });
+
+  test("a member who may not manage the skill is refused before anything is written", async () => {
+    const skillId = await seedSkill();
+
+    const result = await updateSkill.handler(
+      skillHandlerContext<UpdateContext>({
+        testDb,
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        role: "member",
+        body: { description: "Unauthorised edit." },
+        params: { skillId },
+      }),
+    );
+
+    expect(handlerFailure(result)?.code).toBe(403);
+    const [row] = await testDb
+      .select({ description: agentSkills.description })
+      .from(agentSkills)
+      .where(eq(agentSkills.id, skillId));
+    expect(row?.description).toBe("Agent skill test fixture");
   });
 });
