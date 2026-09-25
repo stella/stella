@@ -31,6 +31,7 @@ import type {
   CzRegionalApiItem,
   CzRegionalBuildResult,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
@@ -38,7 +39,10 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -319,6 +323,83 @@ describe("what the publisher states reaches the row", () => {
 
     const flattened = JSON.stringify(decision.documentAst);
     expect(flattened).toContain('"anonymized":true');
+  });
+});
+
+describe("a document the parser cannot read", () => {
+  // A text run carrying markup nested deeper than the validator's recursive
+  // text walk reaches: the structured parse fails while the publisher's own
+  // plain-text rendering is still there.
+  const NESTING = 20_000;
+  const unreadableText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
+
+  test("keeps the publisher's plain text and reports the parse", async () => {
+    const verdict = [
+      {
+        texts: [{ text: unreadableText, anonStyle: "NONE" }],
+        styleLocalId: 1,
+        tableCellInfo: null,
+      },
+    ];
+    expect(() =>
+      parseRegionalDecision({
+        caseNumber: "18 C 130/2024",
+        ecli: undefined,
+        court: "Okresní soud",
+        decisionDate: undefined,
+        decisionType: "rozsudek",
+        sourceUrl: undefined,
+        header: [],
+        verdict,
+        justification: [],
+        information: [],
+        styles: [],
+        verdictText: "Soud rozhodl",
+        justificationText: "",
+      }),
+    ).toThrow(RangeError);
+
+    const payload: unknown = JSON.parse(await readFixture(DISTRICT_DOCUMENT));
+    const document = readCzRegionalDocument(
+      JSON.stringify({ ...(isRecord(payload) ? payload : {}), verdict }),
+    );
+    expect(document.parsed).not.toBeNull();
+    const verdictText = document.parsed?.verdictText ?? "";
+    expect(verdictText.length).toBeGreaterThan(0);
+
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const built = assembleCzRegionalDecision({
+        item: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        document,
+        chain: null,
+      });
+
+      expect(built.type).toBe("built");
+      expect(built.type === "built" ? built.decision.fulltext : "").toContain(
+        verdictText.trim(),
+      );
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.document_parse_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "cz-regional",
+          documentId: "18 C 130/2024",
+          "error.type": "RangeError",
+        }),
+      ]);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
   });
 });
 

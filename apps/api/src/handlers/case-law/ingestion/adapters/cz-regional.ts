@@ -784,6 +784,12 @@ const documentTextOf = (doc: CzRegionalFinaldoc | null): DocumentText => {
   };
 };
 
+/** A document payload the structured parser could not read. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+
 type ParseDocumentPayloadOptions = {
   doc: CzRegionalFinaldoc;
   caseNumber: string;
@@ -835,7 +841,13 @@ const parseDocumentPayload = ({
       documentAst: parsed.documentAst,
       fulltext: parsed.fulltext || text.plain,
     };
-  } catch {
+  } catch (error) {
+    // Reported, so a parser that starts failing across the source is told
+    // apart from decisions that carry only the plain-text rendering.
+    observeFailure(error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+    });
     return { documentAst: EMPTY_AST, fulltext: text.plain };
   }
 };
