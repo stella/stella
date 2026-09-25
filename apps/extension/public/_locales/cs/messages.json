@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Odpojit kartu"
   },
+  "downloadKept": {
+    "message": "Během ovládání karty stellou se dokončilo stahování a zůstalo uložené. Před otevřením ověřte, odkud pochází."
+  },
   "downloadStopped": {
     "message": "stella zastavila stahování, zatímco ovládala kartu."
   },

@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Desconectar pestaña"
   },
+  "downloadKept": {
+    "message": "Una descarga terminó mientras stella controlaba una pestaña y se conservó. Comprueba su origen antes de abrirla."
+  },
   "downloadStopped": {
     "message": "stella detuvo una descarga mientras controlaba una pestaña."
   },

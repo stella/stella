@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Atjungti kortelę"
   },
+  "downloadKept": {
+    "message": "Atsisiuntimas baigėsi, kol stella valdė skirtuką, ir buvo paliktas. Prieš atidarydami patikrinkite, iš kur jis."
+  },
   "downloadStopped": {
     "message": "stella sustabdė atsisiuntimą, kol valdė skirtuką."
   },

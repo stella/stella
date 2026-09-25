@@ -37,6 +37,7 @@ const createFakeChrome = () => {
     browserControlledTab: {
       adopted: false,
       controllerId: CONTROLLER_ID,
+      settled: { documentId: "document-top", url: PAGE_URL },
       snapshot: {
         documents: { "0": "document-top", "3": "document-frame" },
         revision: "revision-1",
@@ -86,7 +87,27 @@ const createFakeChrome = () => {
     }
   };
 
+  // What Chrome's navigation records say each tab's top frame shows.
+  const probe = {
+    failing: false,
+    frames: new Map<number, { documentId: string; errorOccurred: boolean }>([
+      [CONTROLLED_TAB_ID, { documentId: "document-top", errorOccurred: false }],
+    ]),
+  };
+
   const chrome = {
+    webNavigation: {
+      getFrame: async ({ tabId }: { frameId: number; tabId: number }) => {
+        if (probe.failing) {
+          throw new TypeError("No frame with id 0.");
+        }
+        const frame = probe.frames.get(tabId);
+        const tab = tabs.get(tabId);
+        return frame === undefined || tab === undefined
+          ? null
+          : { ...frame, frameId: 0, url: tab.url };
+      },
+    },
     declarativeNetRequest: {
       updateSessionRules: async (options: {
         addRules?: { condition: { excludedTabIds?: number[] } }[];
@@ -162,7 +183,7 @@ const createFakeChrome = () => {
     },
   };
 
-  return { chrome, emit, handlers, log, session, tabs };
+  return { chrome, emit, handlers, log, probe, session, tabs };
 };
 
 let fake = createFakeChrome();
@@ -604,7 +625,11 @@ describe("action budget", () => {
 
 describe("navigation after the user moved the page", () => {
   test("going back is refused once the page is no longer the one chat saw", async () => {
-    const { emit, handlers, log, session } = installFakeChrome();
+    const { emit, handlers, log, probe, session } = installFakeChrome();
+    probe.frames.set(CONTROLLED_TAB_ID, {
+      documentId: "document-home",
+      errorOccurred: false,
+    });
     handlers["snapshot"] = () => [
       {
         documentId: "document-home",
@@ -633,16 +658,10 @@ describe("navigation after the user moved the page", () => {
 
     // The user follows a link in the controlled tab by hand.
     emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
-    handlers["locate"] = () => [
-      {
-        documentId: "document-elsewhere",
-        frameId: 0,
-        result: {
-          origin: "https://example.com",
-          url: "https://example.com/elsewhere",
-        },
-      },
-    ];
+    probe.frames.set(CONTROLLED_TAB_ID, {
+      documentId: "document-elsewhere",
+      errorOccurred: false,
+    });
 
     for (const command of [
       { action: "go-back" },
@@ -661,16 +680,9 @@ describe("what chat last saw", () => {
   const home = (documentId: string) => [
     { documentId, frameId: 0, result: frameSnapshot("Home") },
   ];
-  const liveDocument = (documentId: string, url: string) => () => [
-    {
-      documentId,
-      frameId: 0,
-      result: { origin: "https://example.com", url },
-    },
-  ];
 
   test("a stopped read after the user moved on does not count as seeing the new page", async () => {
-    const { emit, handlers } = installFakeChrome();
+    const { emit, handlers, probe } = installFakeChrome();
     handlers["snapshot"] = () => home("document-home");
     const read = await run({ action: "snapshot" });
     if (read.status !== "success") {
@@ -681,10 +693,10 @@ describe("what chat last saw", () => {
       tabId: CONTROLLED_TAB_ID,
     };
     emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
-    handlers["locate"] = liveDocument(
-      "document-elsewhere",
-      "https://example.com/elsewhere",
-    );
+    probe.frames.set(CONTROLLED_TAB_ID, {
+      documentId: "document-elsewhere",
+      errorOccurred: false,
+    });
     const stop = new AbortController();
     stop.abort();
     expect(
@@ -697,14 +709,14 @@ describe("what chat last saw", () => {
   });
 
   test("a read records the document it read, not one that replaced it meanwhile", async () => {
-    const { emit, handlers, log } = installFakeChrome();
+    const { emit, handlers, log, probe } = installFakeChrome();
     handlers["snapshot"] = () => {
       // The user navigates while the read is being stored.
       emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
-      handlers["locate"] = liveDocument(
-        "document-elsewhere",
-        "https://example.com/elsewhere",
-      );
+      probe.frames.set(CONTROLLED_TAB_ID, {
+        documentId: "document-elsewhere",
+        errorOccurred: false,
+      });
       return home("document-home");
     };
     const read = await run({ action: "snapshot" });
@@ -722,6 +734,62 @@ describe("what chat last saw", () => {
           },
         },
       ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+  });
+});
+
+describe("navigating when the page's identity is unclear", () => {
+  const observedTab = { revision: "revision-1", tabId: CONTROLLED_TAB_ID };
+
+  test("a failed probe while the user moved on refuses the old command", async () => {
+    const { emit, log, probe } = installFakeChrome();
+    emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+    probe.failing = true;
+
+    for (const command of [
+      { action: "go-back" },
+      { action: "open", url: PAGE_URL },
+    ] satisfies BrowserControlCommand[]) {
+      expect(await run(command, { observedTab })).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+      });
+    }
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+  });
+
+  test("chat may open a page from Chrome's error page", async () => {
+    const { emit, handlers, probe } = installFakeChrome();
+    emit(CONTROLLED_TAB_ID, { url: "https://printer.local/admin" });
+    probe.frames.set(CONTROLLED_TAB_ID, {
+      documentId: "document-error",
+      errorOccurred: true,
+    });
+    // Error pages refuse scripts.
+    handlers["locate"] = () => {
+      throw new TypeError("Frame with ID 0 is showing error page");
+    };
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Home") },
+    ];
+
+    expect(
+      await run({ action: "open", url: PAGE_URL }, { observedTab }),
+    ).toMatchObject({ status: "success" });
+  });
+
+  test("a failed navigation that left a readable page is no error page", async () => {
+    const { emit, log, probe } = installFakeChrome();
+    // The user moved on, and a later navigation of theirs was aborted; the
+    // page they moved to still shows and runs scripts.
+    emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+    probe.frames.set(CONTROLLED_TAB_ID, {
+      documentId: "document-elsewhere",
+      errorOccurred: true,
+    });
+
+    expect(
+      await run({ action: "open", url: PAGE_URL }, { observedTab }),
     ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
     expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
   });

@@ -68,16 +68,13 @@ describe("download owner", () => {
 });
 
 describe("download action", () => {
-  test("only a download a confined frame alone could start is ever deleted", () => {
-    expect(downloadAction("contained", "complete")).toBe("cancel-and-delete");
-    expect(downloadAction("contained", "in_progress")).toBe(
-      "cancel-and-delete",
-    );
-    for (const owner of ["ambiguous", "unknown"] as const) {
+  test("stops what may not be the user's, and never deletes a file", () => {
+    for (const owner of ["ambiguous", "contained", "unknown"] as const) {
       expect(downloadAction(owner, "in_progress")).toBe("cancel");
-      expect(downloadAction(owner, "complete")).toBe("allow");
+      expect(downloadAction(owner, "complete")).toBe("keep-and-flag");
     }
     expect(downloadAction("user", "in_progress")).toBe("allow");
+    expect(downloadAction("user", "complete")).toBe("allow");
   });
 });
 
@@ -96,9 +93,10 @@ afterEach(() => {
  * frame lookup waits for `releaseFrames`, as a slow one would.
  */
 const installFakeChrome = ({
+  failingTab,
   state = "in_progress",
   userSite = "https://files.example.org/",
-}: { state?: string; userSite?: string } = {}) => {
+}: { failingTab?: number; state?: string; userSite?: string | null } = {}) => {
   const events: string[] = [];
   let releaseFrames = (): void => undefined;
   const framesReady = new Promise<void>((resolve) => {
@@ -115,8 +113,12 @@ const installFakeChrome = ({
     configurable: true,
     value: {
       action: {
-        setBadgeText: async () => undefined,
-        setTitle: async () => undefined,
+        setBadgeText: async ({ text }: { text: string }) => {
+          events.push(`badge:${text}`);
+        },
+        setTitle: async ({ title }: { title: string }) => {
+          events.push(`title:${title}`);
+        },
       },
       downloads: {
         cancel: async (id: number) => {
@@ -127,7 +129,7 @@ const installFakeChrome = ({
         },
         search: async ({ id }: { id: number }) => [{ id, state }],
       },
-      i18n: { getMessage: () => "stopped" },
+      i18n: { getMessage: (name: string) => name },
       storage: {
         session: {
           get: async (key: string) => ({ [key]: session[key] }),
@@ -140,6 +142,14 @@ const installFakeChrome = ({
       webNavigation: {
         getAllFrames: async ({ tabId }: { tabId: number }) => {
           await framesReady;
+          if (tabId === failingTab) {
+            throw new TypeError(`No tab with id: ${tabId}.`);
+          }
+          if (tabId !== 3 && userSite === null) {
+            // The user's tab closed, or moved on to a page with no frames of
+            // that site, before the lookup ran.
+            return [];
+          }
           return [
             {
               frameId: 0,
@@ -203,36 +213,77 @@ describe("holding a download for its judgement", () => {
 
       releaseFrames();
       await suggested;
-      expect(events).toEqual([`cancel:${id}`, "suggest"]);
+      expect(events).toEqual([
+        `cancel:${id}`,
+        "badge:1",
+        "title:downloadStopped",
+        "suggest",
+      ]);
     });
   }
 });
 
-describe("a finished download the user may have started", () => {
-  test("is kept when the user has the same site open", async () => {
-    const { events, releaseFrames } = installFakeChrome({
-      state: "complete",
-      userSite: "https://portal.example.com/",
-    });
-    await refreshContainedDownloadScope();
-    releaseFrames();
+describe("a download of uncertain origin", () => {
+  test("the user's source tab closed before the lookup: stopped while running, never deleted", async () => {
+    // The user saved it from their tab on the controlled page's site, then
+    // closed that tab; only the controlled page's frame still matches.
+    for (const [state, id] of [
+      ["in_progress", 45],
+      ["complete", 46],
+    ] as const) {
+      const { events, releaseFrames } = installFakeChrome({
+        state,
+        userSite: null,
+      });
+      await refreshContainedDownloadScope();
+      releaseFrames();
+      await judgeDownload({ ...savedByControlledPage(id), state });
 
-    await judgeDownload({
-      ...savedByControlledPage(43),
-      state: "complete",
-    });
-    expect(events).toEqual([]);
+      expect(events.filter((event) => event.startsWith("remove"))).toEqual([]);
+      expect(events.at(0)).toBe(
+        state === "complete" ? "badge:1" : `cancel:${id}`,
+      );
+      expect(events).toContain(
+        state === "complete" ? "title:downloadKept" : "title:downloadStopped",
+      );
+    }
   });
 
-  test("is deleted when only the controlled page could have started it", async () => {
-    const { events, releaseFrames } = installFakeChrome({ state: "complete" });
+  test("a failed frame lookup is no evidence: stopped while running, never deleted", async () => {
+    for (const [state, id] of [
+      ["in_progress", 47],
+      ["complete", 48],
+    ] as const) {
+      const { events, releaseFrames } = installFakeChrome({
+        failingTab: 1,
+        state,
+      });
+      await refreshContainedDownloadScope();
+      releaseFrames();
+      await judgeDownload({
+        ...savedByControlledPage(id),
+        finalUrl: "blob:https://files.example.org/1a2b",
+        state,
+        url: "blob:https://files.example.org/1a2b",
+      });
+
+      expect(events.filter((event) => event.startsWith("remove"))).toEqual([]);
+      expect(events.at(0)).toBe(
+        state === "complete" ? "badge:1" : `cancel:${id}`,
+      );
+    }
+  });
+
+  test("the user's own download from their own site goes through", async () => {
+    const { events, releaseFrames } = installFakeChrome();
     await refreshContainedDownloadScope();
     releaseFrames();
-
     await judgeDownload({
-      ...savedByControlledPage(44),
-      state: "complete",
+      ...savedByControlledPage(49),
+      finalUrl: "blob:https://files.example.org/1a2b",
+      url: "blob:https://files.example.org/1a2b",
     });
-    expect(events).toEqual(["cancel:44", "remove:44"]);
+
+    expect(events).toEqual([]);
   });
 });

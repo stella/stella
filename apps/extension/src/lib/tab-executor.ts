@@ -23,6 +23,7 @@ import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 import {
   checkCommandIdentity,
+  type LiveTopDocument,
   type SnapshotState,
   type TopDocument,
 } from "./snapshot-guard";
@@ -1515,28 +1516,33 @@ type ExecuteBrowserCommandOptions = {
 
 /** The tab's top document now; see `TopDocument`. */
 /**
- * The tab's top document now, read the way a snapshot reads it: Chrome's
- * document id and the page's own URL from one injection. Both are null
- * when the page cannot be read, such as an error page.
+ * The tab's top document now, as Chrome's navigation records have it; null
+ * when Chrome cannot say. A failed last navigation counts as Chrome's error
+ * page only when the frame also refuses scripts, as error pages do.
  */
-const readTopDocument = async (tabId: number): Promise<TopDocument> => {
-  const location = await runPageOperation(
-    { frameIds: [TOP_FRAME_ID], tabId },
-    { kind: "locate" },
-  ).then(
-    (results) => {
-      const result = results.at(0);
-      const parsed = v.safeParse(frameLocationSchema, result?.result);
-      return result === undefined || !parsed.success
-        ? null
-        : {
-            documentId: result.documentId,
-            url: parsed.output.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
-          };
-    },
-    () => null,
-  );
-  return location ?? { documentId: null, url: null };
+const readTopDocument = async (
+  tabId: number,
+): Promise<LiveTopDocument | null> => {
+  const frame = await chrome.webNavigation
+    .getFrame({ frameId: TOP_FRAME_ID, tabId })
+    .catch(() => null);
+  if (frame === null) {
+    return null;
+  }
+  const scriptable = frame.errorOccurred
+    ? await runPageOperation(
+        { frameIds: [TOP_FRAME_ID], tabId },
+        { kind: "locate" },
+      ).then(
+        (results) => results.at(0)?.result !== undefined,
+        () => false,
+      )
+    : true;
+  return {
+    documentId: frame.documentId,
+    errorPage: frame.errorOccurred && !scriptable,
+    url: frame.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+  };
 };
 
 const budgetExceeded = (message: string): BrowserControlResult =>
