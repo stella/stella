@@ -61,10 +61,11 @@ or close tabs.
 
 Every command names the tab and page snapshot chat last saw. Element actions
 run only in the exact document their snapshot read, and `open` and `go-back`
-only while the tab still shows the document chat last read successfully (a
-stopped or failed read does not count; a page that cannot be read at all,
-such as an error page, may be left); after a navigation, a reload or a tab
-the user handed over, they are refused until chat reads the page again. Each chat turn may run 40 actions including 15
+only while Chrome reports the tab still shows the document chat last read
+successfully (a stopped or failed read does not count), or Chrome's own error
+page. When Chrome cannot say what the tab shows, or chat has read nothing in
+it, they are refused; after a navigation, a reload or a tab the user handed
+over, they are refused until chat reads the page again. Each chat turn may run 40 actions including 15
 navigations, and each pairing 400 actions including 150 navigations; page
 reads, and commands refused before they act, are not counted. Reconnecting
 from the popup starts a new pairing.
@@ -111,20 +112,20 @@ cancelled. Chrome does not say which tab started a download, so while a tab is
 controlled every download is traced by origin to the frames open at that
 moment:
 
-- one only a confined tab's frame could have started is cancelled, and its
-  file deleted if it finished first;
 - one only the user's tabs account for goes through;
-- one that either side could have started (the user has the same site open)
-  or nothing accounts for (a `data:` download without a referring page, or a
-  frame already gone) is cancelled while it runs, but a finished file is never
-  deleted.
+- any other is cancelled: one a confined tab's frame could have started, one
+  either side could have started (the user has the same site open), and one
+  nothing accounts for (a `data:` download without a referring page, a frame
+  already gone, or frames Chrome could not list).
 
 Chrome holds each download until the extension has judged it, so a stopped
-download writes no file; the deletion covers a download Chrome let finish
-anyway.
+download writes no file. The extension never deletes a file: tracing by
+origin samples the frames open at one moment and cannot prove who started a
+download. A download that finished before it could be judged, which happens
+only when Chrome skips that step, stays on disk and is flagged instead.
 
-The toolbar icon shows a count when a download was stopped, and the popup
-says so once.
+The toolbar icon counts downloads stopped or flagged, and its tooltip says
+which happened last; the popup shows the notice once.
 
 ## Limits
 
