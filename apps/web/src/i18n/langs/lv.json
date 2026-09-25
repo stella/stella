@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Bināru failu priekšskatījums netiek atbalstīts. Rediģējiet šo failu, atkārtoti augšupielādējot prasmes pakotni.",
       "builtInSection": "Iebūvētās prasmes",
       "chooseFile": "Izvēlieties failu vai ievelciet to šeit",
-      "coaching": {
-        "publish": "Publicēt prasmi"
-      },
       "deleteConfirmDescription": "„{name}“ tiks noņemta no šīs darbvietas.",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",

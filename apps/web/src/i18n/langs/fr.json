@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "L'aperçu des fichiers binaires n'est pas pris en charge. Modifiez ce fichier en téléversant à nouveau le paquet de compétence.",
       "builtInSection": "Compétences intégrées",
       "chooseFile": "Choisissez un fichier ou déposez-le ici",
-      "coaching": {
-        "publish": "Publier la compétence"
-      },
       "deleteConfirmDescription": "« {name} » sera supprimée de cet espace de travail.",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",

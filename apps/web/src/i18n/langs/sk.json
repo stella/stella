@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Náhľad binárneho súboru nie je podporovaný. Tento súbor upravíte opätovným nahraním balíka zručnosti.",
       "builtInSection": "Vstavané zručnosti",
       "chooseFile": "Vyberte súbor alebo ho sem presuňte",
-      "coaching": {
-        "publish": "Publikovať zručnosť"
-      },
       "deleteConfirmDescription": "Zručnosť „{name}“ bude odstránená z tohto pracovného priestoru.",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",

@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Die Vorschau von Binärdateien wird nicht unterstützt. Bearbeiten Sie diese Datei, indem Sie das Skill-Paket erneut hochladen.",
       "builtInSection": "Integrierte Skills",
       "chooseFile": "Datei auswählen oder hierher ziehen",
-      "coaching": {
-        "publish": "Skill veröffentlichen"
-      },
       "deleteConfirmDescription": "„{name}“ wird aus diesem Arbeitsbereich entfernt.",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",

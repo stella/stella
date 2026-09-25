@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Podgląd plików binarnych nie jest obsługiwany. Aby edytować ten plik, prześlij ponownie pakiet umiejętności.",
       "builtInSection": "Wbudowane umiejętności",
       "chooseFile": "Wybierz plik lub przeciągnij go tutaj",
-      "coaching": {
-        "publish": "Opublikuj umiejętność"
-      },
       "deleteConfirmDescription": "„{name}” zostanie usunięta z tego obszaru roboczego.",
       "deleteFile": "Usuń plik",
       "deleteFileConfirm": "Usunąć plik? Tej operacji nie można cofnąć.",

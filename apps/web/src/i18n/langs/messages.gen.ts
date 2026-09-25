@@ -3103,9 +3103,6 @@ type Messages = {
       "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.";
       "builtInSection": "Built-in skills";
       "chooseFile": "Choose a file or drag it here";
-      "coaching": {
-        "publish": "Publish skill";
-      };
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";

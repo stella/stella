@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "La vista previa binaria no es compatible. Edita este archivo volviendo a subir el paquete de la habilidad.",
       "builtInSection": "Habilidades integradas",
       "chooseFile": "Elige un archivo o arrástralo aquí",
-      "coaching": {
-        "publish": "Publicar habilidad"
-      },
       "deleteConfirmDescription": "“{name}” se eliminará de este espacio de trabajo.",
       "deleteFile": "Eliminar archivo",
       "deleteFileConfirm": "¿Eliminar el archivo? No se puede deshacer.",

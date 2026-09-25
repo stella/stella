@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Dvejetainių failų peržiūra nepalaikoma. Šį failą redaguokite iš naujo įkeldami įgūdžio paketą.",
       "builtInSection": "Integruoti įgūdžiai",
       "chooseFile": "Pasirinkite failą arba vilkite jį čia",
-      "coaching": {
-        "publish": "Paskelbti įgūdį"
-      },
       "deleteConfirmDescription": "„{name}“ bus pašalintas iš šios darbo srities.",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",

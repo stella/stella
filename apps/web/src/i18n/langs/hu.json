@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "A bináris előnézet nem támogatott. A fájlt a készségcsomag újbóli feltöltésével szerkesztheti.",
       "builtInSection": "Beépített készségek",
       "chooseFile": "Válasszon fájlt, vagy húzza ide",
-      "coaching": {
-        "publish": "Készség közzététele"
-      },
       "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",

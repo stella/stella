@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "Binaarfaili eelvaade ei ole toetatud. Muuda seda faili, laadides oskusepaketi uuesti üles.",
       "builtInSection": "Sisseehitatud oskused",
       "chooseFile": "Vali fail või lohista see siia",
-      "coaching": {
-        "publish": "Avalda oskus"
-      },
       "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",

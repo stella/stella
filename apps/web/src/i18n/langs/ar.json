@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "معاينة الملفات الثنائية غير مدعومة. عدّل هذا الملف بإعادة رفع حزمة المهارة.",
       "builtInSection": "المهارات المُدمَجة",
       "chooseFile": "اختر ملفاً أو اسحبه إلى هنا",
-      "coaching": {
-        "publish": "نشر المهارة"
-      },
       "deleteConfirmDescription": "ستتم إزالة «{name}» من مساحة العمل هذه.",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",

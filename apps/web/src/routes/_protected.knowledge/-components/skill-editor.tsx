@@ -351,7 +351,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }
       toastError(error, t("common.unexpectedError"));
       // The power toggle flips `enabled` optimistically; snap it back so the
-      // UI doesn't show an enable/publish the server rejected. Text fields
+      // UI doesn't show an enable the server rejected. Text fields
       // commit on blur and keep the user's draft for another attempt.
       if (detail.data) {
         setEnabled(detail.data.enabled);
@@ -492,14 +492,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   );
   const toggleAllFolders = () => {
     setCollapsedFolders(allFoldersExpanded ? new Set(allFolderIds) : new Set());
-  };
-
-  const onPublish = () => {
-    if (enabled) {
-      return;
-    }
-    setEnabled(true);
-    patchMetadata.mutate({ enabled: true });
   };
 
   // Metadata commit-on-blur helpers
@@ -695,31 +687,34 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   : tSkills("scopePrivate")}
               </span>
             )}
-            {access !== "none" && (
-              <Button
-                aria-label={
-                  enabled ? tSkills("disableSkill") : tSkills("enableSkill")
-                }
-                onClick={toggleEnabled}
-                size="icon-sm"
-                variant={enabled ? "secondary" : "ghost"}
-              >
-                <PowerIcon className="size-4" />
-              </Button>
-            )}
-            {detail.data && access !== "none" && !enabled && (
-              <Button
-                disabled={patchMetadata.isPending}
-                onClick={onPublish}
-                size="sm"
-              >
-                {tSkills("coaching.publish")}
-              </Button>
-            )}
+            {/* One enable control. A disabled skill (a fresh draft lands
+                disabled) spells out the action; once enabled it shrinks to
+                the power toggle. */}
+            {access !== "none" &&
+              (enabled ? (
+                <Button
+                  aria-label={tSkills("disableSkill")}
+                  disabled={patchMetadata.isPending}
+                  onClick={toggleEnabled}
+                  size="icon-sm"
+                  variant="secondary"
+                >
+                  <PowerIcon className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  disabled={patchMetadata.isPending}
+                  onClick={toggleEnabled}
+                  size="sm"
+                >
+                  <PowerIcon className="size-4" />
+                  {tSkills("enableSkill")}
+                </Button>
+              ))}
           </div>
         </div>
-        {/* How the skill runs: an optional slash command and/or an auto-invoke
-            hint. Full-width divider; fields stay a readable width. */}
+        {/* How the skill runs: its optional slash command. Full-width divider;
+            fields stay a readable width. */}
         <div className="mt-3 border-t pt-3">
           <p className="text-muted-foreground mb-2.5 text-xs font-semibold tracking-wider uppercase">
             {tSkills("howItRuns")}

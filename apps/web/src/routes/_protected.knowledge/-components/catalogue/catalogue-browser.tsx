@@ -270,7 +270,7 @@ export const CatalogueBrowser = ({
   };
 
   // A blueprint instantiates a disabled draft; drop the user straight into the
-  // full-screen editor route to customise and publish it.
+  // full-screen editor route to customise and enable it.
   const onBlueprintCreated = (skill: BlueprintCreatedSkill) => {
     onSkillSheetChanged();
     detached(

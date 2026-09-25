@@ -3100,9 +3100,6 @@
       "binaryPreviewUnsupported": "A pré-visualização de arquivos binários não é suportada. Edite este arquivo reenviando o pacote da habilidade.",
       "builtInSection": "Habilidades integradas",
       "chooseFile": "Escolha um arquivo ou arraste-o aqui",
-      "coaching": {
-        "publish": "Publicar habilidade"
-      },
       "deleteConfirmDescription": "“{name}” será removida deste espaço de trabalho.",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
