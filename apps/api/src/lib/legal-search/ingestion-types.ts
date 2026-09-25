@@ -969,13 +969,13 @@ export type SourceSliceWalk = {
 };
 
 /** See `SourceReconciliation.heldWithoutDocument`. */
-export type HeldWithoutDocument = {
+type HeldWithoutDocument = {
   readonly metadataKey: string;
   readonly reasons: readonly [string, ...string[]];
 };
 
 /** See `SourceReconciliation.recheckHeld`. */
-export type HeldRecheck = {
+type HeldRecheck = {
   readonly metadataKey: string;
   readonly values: readonly [string, ...string[]];
 };
