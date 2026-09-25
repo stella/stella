@@ -961,10 +961,8 @@
     "files": {}
   },
   "mcp-security-no-direct-oauth-client-join-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/lib/mcp-upstream/connections.ts": 2
-    }
+    "count": 0,
+    "files": {}
   },
   "mcp-security-redact-oauth-registration-response-suppressions": {
     "count": 0,

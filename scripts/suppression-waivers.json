@@ -1,26 +1,6 @@
 {
   "waivers": [
     {
-      "id": "SW-0003",
-      "kind": "permanent",
-      "rule": "mcp-security/no-direct-oauth-client-join",
-      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
-      "symbol": "loadActiveMcpConnectionsForUser",
-      "count": 1,
-      "reason": "this module is the shared typed MCP connection loader.",
-      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
-    },
-    {
-      "id": "SW-0004",
-      "kind": "permanent",
-      "rule": "mcp-security/no-direct-oauth-client-join",
-      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
-      "symbol": "loadMcpConnectionById",
-      "count": 1,
-      "reason": "this module is the shared typed MCP connection loader.",
-      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
-    },
-    {
       "id": "SW-0007",
       "kind": "permanent",
       "rule": "require-search-scope/require-search-scope",
