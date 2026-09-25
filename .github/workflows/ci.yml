@@ -34,13 +34,16 @@ jobs:
       actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
-      # `fast` runs guards, lint, typecheck, unit tests, and builds. `full`
-      # adds the heavy suites (browsers, services, release images, other
-      # platforms). Every heavy job gates on `suite_depth == 'full'`.
+      # `fast` runs guards, lint, typecheck, unit tests, builds, and the
+      # path-scoped image smokes. `full` adds the heavy suites (browsers,
+      # services, other platforms). Every heavy job gates on
+      # `suite_depth == 'full'`.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
+      # JSON matrix `include` list for api-image-smoke.
+      api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
@@ -156,11 +159,13 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
+              echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
@@ -189,6 +194,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
+              echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
@@ -245,13 +251,18 @@ jobs:
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
+          version_changed=false
           for file in "${changed_files[@]}"; do
             if [[ "$file" == "VERSION" ]]; then
               release_typecheck_required=true
+              version_changed=true
             fi
-            # Rehearse the final release artifact before a version can merge.
+            # Build and smoke the final API image whenever something it is
+            # built from changes: the sources it bundles, the dependency
+            # inputs, the files the Dockerfile and the smoke read from the
+            # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/Dockerfile|scripts/smoke-api-image.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/init.sql|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -334,6 +345,14 @@ jobs:
             esac
           done
 
+          # A pull request builds the API image for arm64, the production
+          # architecture. Full depth and a version change build every
+          # architecture release.yml publishes.
+          api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
+          if [[ "$SUITE_DEPTH" == "full" || "$version_changed" == "true" ]]; then
+            api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
+          fi
+
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" ]]; then
@@ -345,6 +364,7 @@ jobs:
           {
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
+            echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
@@ -1032,8 +1052,8 @@ jobs:
 
       - name: Knip production dependency checks
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Static gate paired with the image compile/boot smokes
-        # (api-image-deps): knip --strict verifies production code imports
+        # Static gate paired with the image boot smokes (api-image-smoke,
+        # api-image-deps): knip --strict verifies production code imports
         # only `dependencies` (never a devDependency) and flags transitively
         # resolved (phantom) packages a `turbo prune` would drop. Scoped to
         # the apps that ship a pruned runtime; each declares its real
@@ -2083,13 +2103,14 @@ jobs:
   # image: the Dockerfile stages the runtime workspace closure and proves the
   # full server module graph resolves (`dist/runtime.js --smoke`) against
   # the exact tree that ships, then boot the container across that boundary.
+  # Runs at every depth: its scope is the image's staging inputs only, and
+  # ci-result requires it whenever that scope is planned.
   web-image-smoke:
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -2777,6 +2798,11 @@ jobs:
             echo "Browser checks were cancelled; a newer run is authoritative."
           fi
 
+  # Build the final API image and rehearse it at every depth. The image build
+  # runs the runtime-asset stage on the runner filesystem; the smoke then
+  # migrates, boots and runs the packaged entrypoints. ci-plan picks the
+  # platforms: arm64 on a pull request, every released architecture at full
+  # depth or on a version change.
   api-image-smoke:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
@@ -2784,15 +2810,10 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: ubuntu-latest
-            platform: linux/amd64
-          - runner: ubuntu-24.04-arm
-            platform: linux/arm64
+        include: ${{ fromJSON(needs.ci-plan.outputs.api_image_platforms) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
@@ -2806,13 +2827,63 @@ jobs:
 
       - name: Build final API release image
         run: |
-          docker build --file apps/api/Dockerfile \
+          set -euo pipefail
+          docker build --progress=plain --file apps/api/Dockerfile \
             --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
             --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
-            --tag stella-api-release:ci .
+            --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Rehearse migrations and boot packaged entrypoints
-        run: bash scripts/smoke-api-image.sh stella-api-release:ci
+        run: |
+          set -euo pipefail
+          bash scripts/smoke-api-image.sh stella-api-release:ci 2>&1 | tee "$RUNNER_TEMP/api-image-smoke.log"
+
+      - name: Annotate image failure
+        if: failure()
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          # Lift the failing lines out of the logs above into annotations.
+          # Values are bounded and escaped so a log line cannot end the
+          # workflow command or start another one.
+          escape() {
+            local value=${1:0:500}
+            value=${value//'%'/%25}
+            value=${value//$'\r'/%0D}
+            value=${value//$'\n'/%0A}
+            printf '%s' "$value"
+          }
+          annotate() {
+            printf '::error title=%s::%s\n' "$(escape "$1 ($PLATFORM)" | sed 's/:/%3A/g; s/,/%2C/g')" "$(escape "$2")"
+          }
+          build_log="$RUNNER_TEMP/api-image-build.log"
+          smoke_log="$RUNNER_TEMP/api-image-smoke.log"
+          if [[ -f "$smoke_log" ]]; then
+            failures=$(grep -E '^FAIL' "$smoke_log" | head -n 5 || true)
+            if [[ -n "$failures" ]]; then
+              while IFS= read -r line; do
+                annotate "API image smoke" "$line"
+              done <<< "$failures"
+            else
+              last_pass=$(grep -E '^PASS' "$smoke_log" | tail -n 1 || true)
+              annotate "API image smoke" "Failed after: ${last_pass:-no check passed}"
+            fi
+          elif [[ -f "$build_log" ]]; then
+            # BuildKit prefixes each line with its step number; keep the
+            # output of the step that failed.
+            step=$(grep -oE '^#[0-9]+ ERROR' "$build_log" | head -n 1 | grep -oE '[0-9]+' || true)
+            if [[ -n "$step" ]]; then
+              lines=$(grep -E "^#$step [0-9.]+ " "$build_log" \
+                | sed -E 's/^#[0-9]+ [0-9.]+ //' \
+                | grep -E 'FAIL|[Ee]rror|Panic' | tail -n 5 || true)
+              lines+=${lines:+$'\n'}$(grep -E "^#$step ERROR" "$build_log" | head -n 1 | sed -E 's/^#[0-9]+ //')
+            else
+              lines=$(grep -E '^ERROR' "$build_log" | tail -n 1 || true)
+            fi
+            while IFS= read -r line; do
+              [[ -z "$line" ]] || annotate "API image build" "$line"
+            done <<< "${lines:-docker build failed}"
+          fi
 
   # Image dependency guard. The API image and legal-atlas-runner Dockerfile use
   # Turbo only for pruned source overlays; dependency installs come from the
@@ -2820,8 +2891,9 @@ jobs:
   # the lockfile source of truth. Mirror that install path here so deploy-time
   # lockfile drift fails the PR instead of the deploy.
   #
-  # The job then compiles the API and collaboration entrypoints and runs the
-  # legal atlas runner production smoke against those dependency trees.
+  # The job then runs the legal atlas runner production smoke against a
+  # production-only dependency tree; api-image-smoke builds the API image
+  # itself.
   api-image-deps:
     needs: ci-plan
     if: >-
@@ -2860,9 +2932,6 @@ jobs:
             -not -path '*/node_modules/*' \
             -exec cp --parents -t install-json/ {} +
 
-      - name: Prune monorepo for API image source
-        run: turbo prune @stll/api @stll/collab @stll/legal-atlas-runner --docker
-
       - name: Install API image deps with frozen root lockfile
         run: |
           set -euo pipefail
@@ -2870,76 +2939,6 @@ jobs:
           cp -a install-json api-install
           cd api-install
           bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: API image compile smoke
-        # Overlay pruned source the same way apps/api/Dockerfile copies
-        # /app/out/full/ onto the dependency layer, then compile the API
-        # binary, migration bundle, and runtime workers.
-        run: |
-          set -euo pipefail
-          cd api-install
-          cp -a ../out/full/. .
-          export NODE_ENV=production
-          bun build \
-            --compile \
-            --no-compile-autoload-dotenv \
-            --minify-whitespace \
-            --minify-syntax \
-            --sourcemap=inline \
-            --target bun \
-            --outfile /tmp/server \
-            apps/api/src/server.ts
-          bun build \
-            --compile \
-            --no-compile-autoload-dotenv \
-            --target bun \
-            --outfile /tmp/collab \
-            apps/collab/src/index.ts
-          test -x /tmp/collab
-          bun build \
-            --target bun \
-            --outfile apps/api/src/db/migrate.js \
-            apps/api/src/db/migrate.ts
-          test -s apps/api/src/db/migrate.js
-          bun build \
-            --target bun \
-            --outfile /tmp/better-auth-migration-audit.js \
-            apps/api/src/scripts/better-auth-migration-audit.ts
-          test -s /tmp/better-auth-migration-audit.js
-          bun build \
-            --target bun \
-            --sourcemap=inline \
-            --outfile /tmp/document-processing-worker.js \
-            apps/api/src/scripts/document-processing-worker.ts
-          test -s /tmp/document-processing-worker.js
-          mkdir -p /tmp/runtime-workers
-          bun build \
-            --target bun \
-            --outfile /tmp/runtime-workers/pdf-worker.js \
-            apps/api/src/lib/files/pdf-worker.ts
-          # `--outdir`, matching apps/api/Dockerfile: the worker pulls in a
-          # native addon that the bundler emits as a sidecar `.node` asset,
-          # and `--outfile` refuses to write more than one output.
-          bun build \
-            --target bun \
-            --outdir /tmp/runtime-workers \
-            apps/api/src/lib/search/extraction-worker.ts
-          test -s /tmp/runtime-workers/extraction-worker.js
-          bun build \
-            --target bun \
-            --outfile /tmp/runtime-workers/ocr-local-worker.js \
-            apps/api/src/lib/ocr-local/ocr-local-worker.ts
-          test -s /tmp/runtime-workers/ocr-local-worker.js
-          # Compile (not run) the runtime-asset smoke probe: it executes
-          # inside the image build, where the hand-copied assets exist.
-          bun build \
-            --compile \
-            --no-compile-autoload-dotenv \
-            --target bun \
-            --outfile /tmp/image-smoke \
-            apps/api/src/scripts/image-smoke.ts
         env:
           NPM_TOKEN: ""
 
@@ -3211,6 +3210,10 @@ jobs:
             "web-image-smoke": "web_image_smoke_required",
             "windows-scripts": "windows_scripts_required"
             }
+          # Jobs a fast-depth run must also see succeed once their scope is
+          # planned; any other job may skip there.
+          FAST_REQUIRED: >-
+            ["api-image-smoke", "web-image-smoke"]
         run: |
           # When the CI plan was skipped (draft PR), all downstream
           # jobs are also skipped. This is expected and should not
@@ -3267,6 +3270,16 @@ jobs:
               failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
                 echo "::error::CI checks failed: $failed"
+                exit 1
+              fi
+              # A planned fast-required job that skipped checked nothing.
+              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --argjson required "$FAST_REQUIRED" '
+                [to_entries[] | .key as $job | select($required | index($job))
+                  | select($plan[$scopes[$job]] == "true" and .value.result == "skipped")
+                  | "\($job) (planned, skipped)"]
+                | join(", ")' <<< "$NEEDS")
+              if [[ -n "$skipped" ]]; then
+                echo "::error::CI checks did not run: $skipped"
                 exit 1
               fi
               cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
