@@ -36,9 +36,9 @@ together with two optional permissions, and browser commands refuse to run
 without all three:
 
 - `downloads` cancels downloads a controlled page starts (see below);
-- `webNavigation` tells which page opened a new tab and which frames a
-  controlled tab holds, so a page-opened tab stays confined and a download is
-  traced to the frame that started it.
+- `webNavigation` tells which page opened a new tab, which navigations only
+  the browser's interface starts, and which frames each tab holds, so a
+  page-opened tab stays confined and a download is traced to its frame.
 
 `activeTab` lets the popup read the URL of the stella tab it was opened on
 when pairing.
@@ -61,9 +61,10 @@ or close tabs.
 
 Every command names the tab and page snapshot chat last saw. Element actions
 run only in the exact document their snapshot read, and `open` and `go-back`
-only while the tab still shows the document the last command ended on; after
-a navigation, a reload or a tab the user handed over, they are refused until
-chat reads the page again. Each chat turn may run 40 actions including 15
+only while the tab still shows the document chat last read successfully (a
+stopped or failed read does not count; a page that cannot be read at all,
+such as an error page, may be left); after a navigation, a reload or a tab
+the user handed over, they are refused until chat reads the page again. Each chat turn may run 40 actions including 15
 navigations, and each pairing 400 actions including 150 navigations; page
 reads, and commands refused before they act, are not counted. Reconnecting
 from the popup starts a new pairing.
@@ -84,14 +85,24 @@ script. Snapshots skip frames outside this policy, and actions refuse them.
 The rules are lifted when control ends.
 
 While any tab is controlled, the rules cover every tab except those known to
-be the user's: the tabs open when control started, and new tabs no controlled
-page opened. A tab a controlled page opens (`window.open`, `target=_blank`,
-from any frame) is therefore confined from its first request; it stays
-confined and open for the user, chat never operates it, and one whose first
-address is a non-public HTTPS host is closed. A tab the user opens while a tab
-is controlled is released once Chrome reports that no controlled page opened
-it, within about a second; a request it makes before that to a blocked
-address is blocked, and reloading it then works.
+be the user's, so a new tab is confined from its first request until there is
+evidence of who opened it. A tab is the user's when it was open before control
+started, when Chrome reports that one of the user's pages opened it, or when
+it shows a page only the browser's own interface can open: an address typed
+into the address bar, a bookmark, a keyword search or the New Tab page. Time
+alone is never evidence. A tab a controlled page opens (`window.open`,
+`target=_blank`, from any frame), or a tab still unsorted opens, stays
+confined and open for the user even if that report arrives late or the user
+types into it; chat never operates it, and one a controlled page opened whose
+first address is a non-public HTTPS host is closed. A tab chat operated before
+the user handed it another stays confined until control ends or it closes.
+
+So while a tab is controlled, open stella or an intranet page from a new tab
+or an existing tab of your own. A link one of your pages opens in a new tab
+can be blocked on its first load, before Chrome reports its source; reloading
+it works. A tab opened another way (a link from another app, a bookmark
+opened into a new tab) that goes straight to a blocked address stays blocked;
+open that address from a new tab instead.
 
 Downloads are blocked: attachment responses and responses Chrome would save
 instead of display are blocked in the network, and downloads a controlled page
@@ -100,12 +111,17 @@ cancelled. Chrome does not say which tab started a download, so while a tab is
 controlled every download is traced by origin to the frames open at that
 moment:
 
-- one a controlled tab's frame could have started is cancelled, and its file
-  deleted if it finished first, even when the user has the same site open;
+- one only a confined tab's frame could have started is cancelled, and its
+  file deleted if it finished first;
 - one only the user's tabs account for goes through;
-- one nothing accounts for (a `data:` download without a referring page, or a
+- one that either side could have started (the user has the same site open)
+  or nothing accounts for (a `data:` download without a referring page, or a
   frame already gone) is cancelled while it runs, but a finished file is never
   deleted.
+
+Chrome holds each download until the extension has judged it, so a stopped
+download writes no file; the deletion covers a download Chrome let finish
+anyway.
 
 The toolbar icon shows a count when a download was stopped, and the popup
 says so once.
@@ -119,16 +135,19 @@ says so once.
   missing header would also block redirects and cache revalidations. Chrome
   treats such a response as a download when it cannot display it, and the
   download is then cancelled as above.
-- Requests that belong to no tab, such as a site's service worker, are not
-  covered by the rules.
+- Requests that belong to no tab are not covered by the rules. A controlled
+  page's service worker makes its requests outside any tab, so it can reach
+  an address the page itself cannot; confining those would break the user's
+  own sites' workers as well.
 - The tab uses the user's real Chrome profile and signed-in sessions. An
   approved click can use anything those sessions allow, including payment
   methods a site has saved.
 - Scripts on an allowed site see what is typed into that site, including values
   chat fills in, and can show a password anywhere: the extension withholds a
   secret field's value wherever the same page shows it again (see below), but
-  not one it never saw, one shorter than 4 characters, one shown encoded or
-  split up, or one shown after the page navigates.
+  not one shorter than 4 characters, one shown encoded or split up, one shown
+  after the page navigates, or one typed into a field inside a shadow root
+  and then moved without an edit event.
 
 ## Snapshots
 
@@ -137,9 +156,11 @@ fields, or of text masked with `-webkit-text-security`, and chat cannot fill or
 choose them. A field stays in that group for the life of its page once it has
 been one, so a "show password" toggle does not make its value readable, and
 fields whose name or id has a word such as `password`, `otp` or `cvc` count as
-well. The values of those fields are remembered for the life of the page: a
-field or text that holds one, such as a new field a "show password" button put
-in the old one's place, is withheld or shown as `[hidden]`.
+well. The values of those fields are remembered for the life of the page,
+from the first time chat reads it: as the user or the page types, when a
+field stops being a password field, and when one is removed. A field or text
+that holds one, such as a new field a "show password" button put in the old
+one's place, is withheld or shown as `[hidden]`.
 
 Snapshots leave out text and controls a reader of the page cannot see: hidden
 from assistive technology (`aria-hidden`), transparent, invisible, clipped
