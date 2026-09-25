@@ -20,7 +20,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "^3.5.19",
+    "@formatjs/icu-messageformat-parser": "^3.5.20",
     "@stll/ai-catalog": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/time": "workspace:*",
