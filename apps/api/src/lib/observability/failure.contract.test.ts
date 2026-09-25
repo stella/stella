@@ -785,10 +785,11 @@ describe("sink expectations", () => {
     (reason, { expectation, positive, negative }) => {
       const sink = failureSink({ event: "expecting", expected: [expectation] });
 
+      expect(reason).toBe(expectation.reason);
       expect(
         gradeFailure(readEvidence(positive.error()), sink, positive.request)
           .reason,
-      ).toBe(reason);
+      ).toBe(expectation.reason);
       expect(
         gradeFailure(readEvidence(negative.error()), sink, negative.request)
           .reason,
