@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
@@ -63,12 +64,20 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
 } as const;
+
+/** One entry's detail read ran out of time. */
+const detailReadTimedOut = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
 
 /**
  * Czech Supreme Court adapter.
@@ -1443,7 +1452,14 @@ export const czNsAdapter = defineSourceAdapter({
                   sourceUrl: listUrl,
                 };
               }
-              // Per-entry timeout: skip this entry
+              // Per-entry timeout: disposed of as a detail page that did not
+              // come back. Nothing is stored, so the identity is not held and
+              // the reconciliation's walk of its day builds the entry.
+              // The publisher did not answer in time, which is transient.
+              observeFailure(classifyFailure(error, "upstream_unavailable"), {
+                sink: detailReadTimedOut,
+                ctx: { adapterKey: ADAPTER_KEYS.CZ_NS, documentId: unid },
+              });
               continue;
             }
             throw error;

@@ -12,9 +12,11 @@
  * nothing new costs one listing, and a cycle with new entries costs one listing
  * plus the two detail pages each entry is built from.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -177,5 +179,58 @@ describe("the cz-ns steady-state frontier", () => {
     expect(quiet.details).toHaveLength(0);
     expect(second.decisions).toHaveLength(0);
     expect(second.nextCursor).toBe(first.nextCursor);
+  });
+});
+
+describe("the cz-ns crawl over an entry whose detail read times out", () => {
+  const originalFetch = globalThis.fetch;
+  let recording: RecordingLogger;
+
+  beforeEach(() => {
+    recording = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    recording.restore();
+  });
+
+  test("records an entry whose detail read times out", async () => {
+    stubPublisher(2);
+    const served = globalThis.fetch;
+    const timedOut = viewEntry(0)["@unid"];
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.endsWith(`/WebSearch/${timedOut}`)) {
+          return await Promise.reject(
+            new DOMException("request timed out", "TimeoutError"),
+          );
+        }
+        return await served(input, init);
+      },
+    );
+
+    const page = await fetchPageAt(String(PARKED_START));
+
+    // The entry is not stored, so its identity is not held and the
+    // reconciliation's walk of its day builds it; the failed read is on record.
+    expect(page.decisions).toHaveLength(1);
+    expect(
+      recording
+        .at("WARN")
+        .filter(
+          (record) =>
+            record.message === "case_law.ingestion.detail_fetch_failed",
+        )
+        .map((record) => record.attributes),
+    ).toEqual([
+      expect.objectContaining({
+        documentId: timedOut,
+        "failure.grade": "transient",
+      }),
+    ]);
   });
 });
