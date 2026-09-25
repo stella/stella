@@ -1627,6 +1627,8 @@ const writeContactProjections = async (
       currency: true,
       updatedAt: true,
     },
+    // Id order is the order the batch locks projection rows in.
+    orderBy: { id: "asc" },
     limit: contactIds.length,
   });
   if (sources.length === 0) {
@@ -1772,6 +1774,8 @@ const writeWorkspaceProjections = async (
         },
       },
     },
+    // Id order is the order the batch locks projection rows in.
+    orderBy: { id: "asc" },
     limit: workspaceIds.length,
   });
   if (sources.length === 0) {
@@ -1885,26 +1889,6 @@ const writeWorkspaceProjections = async (
   });
 };
 
-/**
- * Write a list of any length as consecutive bounded batches. Recursion keeps
- * each batch a real `await` without a loop around the batch: the batches run
- * one after another, and the list's length decides only how many there are.
- */
-const writeInBatches = async <Id extends string>(
-  ids: readonly Id[],
-  writeBatch: (batch: readonly Id[]) => Promise<void>,
-): Promise<void> => {
-  const pending = [...new Set(ids)];
-  const writeFrom = async (start: number): Promise<void> => {
-    if (start >= pending.length) {
-      return;
-    }
-    await writeBatch(pending.slice(start, start + REINDEX_BATCH_SIZE));
-    await writeFrom(start + REINDEX_BATCH_SIZE);
-  };
-  await writeFrom(0);
-};
-
 export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
   database: SearchDocumentDatabase,
@@ -1916,10 +1900,17 @@ export const upsertWorkspaceSearchDocuments = async (
   workspaceIds: readonly SafeId<"workspace">[],
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeInBatches(
-    workspaceIds,
-    async (batch) => await writeWorkspaceProjections(batch, database),
-  );
+  // Sorted, so every writer locks projection rows in one order (the keyset
+  // order) and two overlapping cascades wait on each other instead of
+  // deadlocking.
+  const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
+  for (let start = 0; start < pending.length; start += REINDEX_BATCH_SIZE) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batch of at most REINDEX_BATCH_SIZE matters per iteration: one read and one four-statement transaction per batch, never per matter
+    await writeWorkspaceProjections(
+      pending.slice(start, start + REINDEX_BATCH_SIZE),
+      database,
+    );
+  }
 };
 
 export const upsertWorkspaceSearchDocument = async (
