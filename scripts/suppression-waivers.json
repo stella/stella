@@ -27,18 +27,8 @@
       "file": "apps/api/src/lib/search/index-chat.ts",
       "symbol": "backfillChatThreadSearchIndex",
       "count": 1,
-      "reason": "system backfill repairs derived search documents across all threads; it does not return request data",
+      "reason": "tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller",
       "evidence": "apps/api/src/lib/search/index-chat.test.ts"
-    },
-    {
-      "id": "SW-0008",
-      "kind": "permanent",
-      "rule": "require-search-scope/require-search-scope",
-      "file": "apps/api/src/lib/search/index-entity.ts",
-      "symbol": "upsertSearchDocument",
-      "count": 1,
-      "reason": "atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance",
-      "evidence": "apps/api/src/lib/search/index-entity.test.ts"
     },
     {
       "id": "SW-0013",

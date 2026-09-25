@@ -931,10 +931,9 @@
     "files": {}
   },
   "require-search-scope-suppressions": {
-    "count": 2,
+    "count": 1,
     "files": {
-      "apps/api/src/lib/search/index-chat.ts": 1,
-      "apps/api/src/lib/search/index-entity.ts": 1
+      "apps/api/src/lib/search/index-chat.ts": 1
     }
   },
   "require-safe-route-handlers-no-direct-handler-config-suppressions": {

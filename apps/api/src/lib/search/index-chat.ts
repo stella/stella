@@ -442,7 +442,7 @@ export const backfillChatThreadSearchIndex = async ({
     if (signal?.aborted) {
       return total;
     }
-    // oxlint-disable-next-line require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
+    // oxlint-disable-next-line require-search-scope/require-search-scope -- tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller
     const batch = await database.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t

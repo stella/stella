@@ -574,6 +574,11 @@ const hasUnsupportedUnicodeRelationIdentifier = (
 const leadingProjectionAlias = (text: string): string | null =>
   normalizeProjectionAlias(SQL_LEADING_PROJECTION_ALIAS.exec(text)?.at(1));
 
+// `IS [NOT] DISTINCT FROM <value>` compares two values, parenthesised or not;
+// the `FROM` in it never introduces a relation.
+const SQL_DISTINCT_FROM_COMPARISON =
+  /\bis\s+(?:not\s+)?distinct\s+from\s*(?:\(\s*)*$/iu;
+
 const hasProjectionReadIntroducer = (
   tokens: readonly SqlTemplateToken[],
   expressionIndex: number,
@@ -585,6 +590,9 @@ const hasProjectionReadIntroducer = (
       break;
     }
     precedingText = token.value + precedingText;
+  }
+  if (SQL_DISTINCT_FROM_COMPARISON.test(precedingText)) {
+    return false;
   }
   if (
     /\b(?:from|join|table|using)\s+(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu.test(
