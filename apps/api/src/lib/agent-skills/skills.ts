@@ -16,6 +16,7 @@ import {
   agentSkills,
   type AgentSkillOrigin,
 } from "@/api/db/schema";
+import { canManageSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -235,10 +236,13 @@ export const canEditActiveSkill = ({
     return false;
   }
 
-  if (scope === "team" && !["admin", "owner"].includes(memberRole.role)) {
-    return false;
-  }
-  if (scope === "private" && skillUserId !== userId) {
+  if (
+    !canManageSkill({
+      memberRole,
+      skill: { scope, userId: skillUserId },
+      userId,
+    })
+  ) {
     return false;
   }
 

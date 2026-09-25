@@ -160,6 +160,25 @@ const managementStellaGrants = {
 } satisfies StellaPermissionMap;
 
 /**
+ * The roles that hold `managementStellaGrants`: they administer the firm's
+ * shared configuration and content (team skills, rates, firm memory). Code
+ * that gates on "admin or owner" reads this list, and so does row-level
+ * security, so the role set lives in one place.
+ */
+export const ORGANIZATION_MANAGEMENT_ROLES = [
+  "owner",
+  "admin",
+] as const satisfies readonly OrganizationRoleName[];
+
+type OrganizationManagementRole =
+  (typeof ORGANIZATION_MANAGEMENT_ROLES)[number];
+
+export const isOrganizationManagementRole = (
+  role: string,
+): role is OrganizationManagementRole =>
+  ORGANIZATION_MANAGEMENT_ROLES.some((managementRole) => managementRole === role);
+
+/**
  * Closing a task can decide the workflow review gate that raised it, so a
  * role that edits tasks must also hold the review permission. The task paths
  * rely on this binding rather than checking twice.

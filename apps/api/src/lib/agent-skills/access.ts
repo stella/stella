@@ -1,14 +1,13 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { roles } from "@stll/permissions";
+import { isOrganizationManagementRole } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { includes } from "@/api/lib/type-guards";
 
 type LoadVisibleSkillOptions = {
   skillId: SafeId<"agentSkill">;
@@ -73,11 +72,9 @@ export const loadVisibleSkill = async (
   return skill;
 };
 
-const SKILL_MANAGER_ROLES = ["admin", "owner"] as const;
-
 type CanManageSkillOptions = {
   skill: Pick<VisibleSkill, "scope" | "userId">;
-  memberRole: { role: keyof typeof roles };
+  memberRole: { role: string };
   userId: SafeId<"user">;
 };
 
@@ -94,7 +91,7 @@ export const canManageSkill = ({
 }: CanManageSkillOptions): boolean => {
   switch (skill.scope) {
     case "team":
-      return includes(SKILL_MANAGER_ROLES, memberRole.role);
+      return isOrganizationManagementRole(memberRole.role);
     case "private":
       return skill.userId === userId;
     default: {

@@ -9,6 +9,7 @@ import {
   type CatalogueSetup,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
+import { isOrganizationManagementRole } from "@stll/permissions";
 
 import {
   agentSkills,
@@ -320,8 +321,7 @@ const listCatalogue = createSafeRootHandler(
     // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
     //   org-owned rows, so globally-curated connectors (organizationId
     //   = null) never produce a usable slug.
-    const canDeleteTeamSkills =
-      memberRole.role === "admin" || memberRole.role === "owner";
+    const canDeleteTeamSkills = isOrganizationManagementRole(memberRole.role);
     const skillHandles = resolveCatalogueSkillHandleMaps({
       canManageTeamSkills: canDeleteTeamSkills,
       rows: visibleSkillRows,

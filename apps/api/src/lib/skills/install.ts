@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { isOrganizationManagementRole } from "@stll/permissions";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
@@ -476,7 +478,7 @@ export const authorizeSkillInstallScope = ({
   memberRole: { role: string };
   scope: AgentSkillScope;
 }): Result<void, HandlerError> => {
-  if (scope !== "team" || ["admin", "owner"].includes(memberRole.role)) {
+  if (scope !== "team" || isOrganizationManagementRole(memberRole.role)) {
     return Result.ok(undefined);
   }
 

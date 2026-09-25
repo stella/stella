@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { isOrganizationManagementRole } from "@stll/permissions";
 import { listSkillMetadata, listSkillResources } from "@stll/skills";
 
 import {
@@ -178,7 +179,7 @@ const listSkills = createSafeRootHandler(
     });
 
     return Result.ok({
-      canManageTeam: ["admin", "owner"].includes(memberRole.role),
+      canManageTeam: isOrganizationManagementRole(memberRole.role),
       builtIn: listSkillMetadata().map((skill) => ({
         id: skill.name,
         scope: "built-in" as const,
