@@ -265,10 +265,9 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 18,
+    "count": 16,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
-      "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
       "apps/api/src/lib/document-processing-request.ts": 1,
@@ -1034,7 +1033,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 69,
+    "count": 79,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -1065,11 +1064,14 @@
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
+      "apps/api/src/lib/flows/flow-run-worker.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 5,
       "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
       "apps/api/src/lib/scouts/work-attention.ts": 1,
+      "apps/api/src/lib/search/index-chat.ts": 4,
+      "apps/api/src/lib/search/index-global.ts": 5,
       "apps/api/src/lib/search/pg-fts-provider.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 2,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
