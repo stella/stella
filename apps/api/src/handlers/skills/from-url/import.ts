@@ -19,7 +19,8 @@ const config = {
   description:
     "Fetch and install one agent skill from a URL pointing at a SKILL.md " +
     "file or a skill package. It is stored with a url origin, so it stays " +
-    "editable afterwards. Team scope requires admin or owner. To pull " +
+    "editable afterwards. Importing an unchanged package again returns the " +
+    "skill it installed. Team scope requires admin or owner. To pull " +
     "several skills out of a repository, use skills.discover and then " +
     "skills.import instead.",
   permissions: { agentSkill: ["create"] },

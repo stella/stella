@@ -171,8 +171,6 @@ const importSkillsFromUrls = createSafeRootHandler(
         scope: body.scope,
         session,
         user,
-        urlReplayIdentity:
-          integrity.type === "content-hash" ? "content-hash" : "source-url",
       });
       if (result.isErr()) {
         failed.push({

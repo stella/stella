@@ -17,14 +17,24 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
+import type {
+  FetchedSkillPackage,
+  ParsedSkillPackage,
+  UrlReplayIdentity,
+} from "@/api/lib/skills/skill-package";
 
 // Advisory-lock namespaces are process-global. Dedicated first keys keep the
 // install caps independent from unrelated org/user locks elsewhere in the API.
 const SKILL_TEAM_CAP_LOCK_NAMESPACE = 0x53_4b_54_4d;
 const SKILL_USER_CAP_LOCK_NAMESPACE = 0x53_4b_55_53;
 
-type InstallSkillProps = {
+// A URL install must come from a fetched package, which carries how a repeated
+// import of it replays; every other origin installs whatever it parsed.
+type InstallSkillSource =
+  | { origin: "url"; parsed: FetchedSkillPackage }
+  | { origin: Exclude<AgentSkillOrigin, "url">; parsed: ParsedSkillPackage };
+
+type InstallSkillProps = InstallSkillSource & {
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
@@ -33,8 +43,6 @@ type InstallSkillProps = {
     tx: Transaction,
     skill: { id: SafeId<"agentSkill"> },
   ) => Promise<void>;
-  origin: AgentSkillOrigin;
-  parsed: ParsedSkillPackage;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scope: AgentSkillScope;
@@ -44,7 +52,6 @@ type InstallSkillProps = {
   // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
   slug?: string;
   user: { id: SafeId<"user"> };
-  urlReplayIdentity?: "content-hash" | "source-url";
 };
 
 export const SKILL_INSTALL_ERROR_CODE = {
@@ -187,20 +194,26 @@ export const preflightSkillInstall = async ({
   }
 };
 
-export const installSkill = async ({
-  enabled = true,
-  memberRole,
-  onInstalled,
-  origin,
-  parsed,
-  recordAuditEvent,
-  safeDb,
-  scope,
-  session,
-  slug,
-  user,
-  urlReplayIdentity,
-}: InstallSkillProps) => {
+const urlReplayIdentityOf = (
+  source: InstallSkillSource,
+): UrlReplayIdentity | undefined =>
+  source.origin === "url" ? source.parsed.urlReplayIdentity : undefined;
+
+export const installSkill = async (props: InstallSkillProps) => {
+  const {
+    enabled = true,
+    memberRole,
+    onInstalled,
+    origin,
+    parsed,
+    recordAuditEvent,
+    safeDb,
+    scope,
+    session,
+    slug,
+    user,
+  } = props;
+  const urlReplayIdentity = urlReplayIdentityOf(props);
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
@@ -450,7 +463,7 @@ export const isUnchangedUrlSkill = ({
   >;
   origin: AgentSkillOrigin;
   parsed: Pick<ParsedSkillPackage, "contentHash" | "sourceUrl">;
-  replayIdentity: "content-hash" | "source-url";
+  replayIdentity: UrlReplayIdentity;
 }): boolean => {
   if (
     origin !== "url" ||

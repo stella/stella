@@ -110,6 +110,18 @@ export type ImportedSkillPackage = ParsedSkillPackage & {
   skippedFiles: SkippedSkillFile[];
 };
 
+/**
+ * What makes a repeated URL import the same install. A commit-pinned GitHub
+ * source is identified by its pinned URL; any other source by its content, so
+ * a mirror serving identical content replays onto the installed skill.
+ */
+export type UrlReplayIdentity = "content-hash" | "source-url";
+
+/** A package fetched from a URL, carrying how a repeated import replays. */
+export type FetchedSkillPackage = ParsedSkillPackage & {
+  urlReplayIdentity: UrlReplayIdentity;
+};
+
 export type SkillSourceIntegrity =
   | { type: "content-hash"; value: string }
   | {
@@ -249,19 +261,20 @@ export const parseUploadedSkillPackage = async (
 export const fetchSkillPackageFromUrl = async (
   rawUrl: string,
   context = createSkillPackageFetchContext(),
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+): Promise<Result<FetchedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
-    try: async () => {
+    try: async (): Promise<FetchedSkillPackage> => {
       const githubPath = await parseGithubSkillPath(
         rawUrl,
         context.requestBudget,
       );
       if (githubPath) {
-        return await fetchGithubSkillPackage(
+        const parsed = await fetchGithubSkillPackage(
           githubPath,
           redactSkillSourceUrlForStorage(rawUrl),
           context,
         );
+        return { ...parsed, urlReplayIdentity: "source-url" };
       }
 
       const url = new URL(rawUrl);
@@ -278,7 +291,11 @@ export const fetchSkillPackageFromUrl = async (
       })
         ? await parseZipSkillPackage(response.body)
         : parseMarkdownSkillPackage(decodeUtf8(response.body));
-      return { ...parsed, sourceUrl: redactSkillSourceUrlForStorage(rawUrl) };
+      return {
+        ...parsed,
+        sourceUrl: redactSkillSourceUrlForStorage(rawUrl),
+        urlReplayIdentity: "content-hash",
+      };
     },
     catch: toHandlerError,
   });
