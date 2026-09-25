@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getPropertyName, isAstNode, isIdentifier } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 // Reject log attribute keys the logger would redact.
 //
@@ -96,34 +97,31 @@ const staticPropertyKey = (property: unknown): string | null =>
     ? getPropertyName(property.key)
     : null;
 
-const checkFailureContext = (
-  context: {
-    report: (report: {
-      node: unknown;
-      messageId: string;
-      data: { key: string };
-    }) => void;
-  },
-  node: { arguments: unknown[] },
-): void => {
+type UnreviewedContextKey = { node: AstNode; key: string };
+
+// The `ctx` keys of an `observeFailure` call outside the reviewed list.
+const unreviewedContextKeys = (node: {
+  arguments: unknown[];
+}): UnreviewedContextKey[] => {
   const options = node.arguments.at(1);
   const ctx = objectProperties(options).find(
     (property) => staticPropertyKey(property) === CONTEXT_PROPERTY,
   );
   if (!isAstNode(ctx) || ctx.type !== "Property") {
-    return;
+    return [];
   }
+  const unreviewed: UnreviewedContextKey[] = [];
   for (const property of objectProperties(ctx.value)) {
     const key = staticPropertyKey(property);
-    if (key === null || FAILURE_CONTEXT_KEY_SET.has(key)) {
-      continue;
+    if (
+      key !== null &&
+      isAstNode(property) &&
+      !FAILURE_CONTEXT_KEY_SET.has(key)
+    ) {
+      unreviewed.push({ node: property, key });
     }
-    context.report({
-      node: property,
-      messageId: "unreviewedContextKey",
-      data: { key },
-    });
   }
+  return unreviewed;
 };
 
 export default eslintCompatPlugin({
@@ -148,7 +146,15 @@ export default eslintCompatPlugin({
         return {
           CallExpression(node) {
             if (isObserveFailureCall(node)) {
-              checkFailureContext(context, node);
+              for (const { node: property, key } of unreviewedContextKeys(
+                node,
+              )) {
+                context.report({
+                  node: property,
+                  messageId: "unreviewedContextKey",
+                  data: { key },
+                });
+              }
               return;
             }
             if (!isLoggerCall(node)) {

@@ -42,9 +42,10 @@ const EXPORT_WRAPPERS = new Set([
 ]);
 
 // Module-level `const` declarators, unwrapping `export`.
-const moduleConstDeclarators = (program: AstNode): AstNode[] => {
+const moduleConstDeclarators = (program: unknown): AstNode[] => {
   const declarators: AstNode[] = [];
-  const body = Array.isArray(program.body) ? program.body : [];
+  const body =
+    isAstNode(program) && Array.isArray(program.body) ? program.body : [];
   for (const statement of body) {
     const declaration =
       isAstNode(statement) && EXPORT_WRAPPERS.has(statement.type)
@@ -98,7 +99,7 @@ const sanctionedSinkCalls = (declarators: readonly AstNode[]): Set<unknown> => {
   return calls;
 };
 
-const handleNames = (program: AstNode, declarators: readonly AstNode[]) => {
+const handleNames = (program: unknown, declarators: readonly AstNode[]) => {
   const names = new Set<string>();
   for (const declarator of declarators) {
     const id = declarator.id;
@@ -109,7 +110,8 @@ const handleNames = (program: AstNode, declarators: readonly AstNode[]) => {
       names.add(id.name);
     }
   }
-  const body = Array.isArray(program.body) ? program.body : [];
+  const body =
+    isAstNode(program) && Array.isArray(program.body) ? program.body : [];
   for (const statement of body) {
     if (
       !isAstNode(statement) ||
@@ -128,8 +130,9 @@ const handleNames = (program: AstNode, declarators: readonly AstNode[]) => {
   return names;
 };
 
-const sinkArgument = (call: AstNode): AstNode | null => {
-  const args = Array.isArray(call.arguments) ? call.arguments : [];
+const sinkArgument = (call: unknown): AstNode | null => {
+  const args =
+    isAstNode(call) && Array.isArray(call.arguments) ? call.arguments : [];
   const options = args.at(1);
   if (
     !isAstNode(options) ||
