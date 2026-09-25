@@ -184,7 +184,8 @@ export const LIMITS = {
   templatePacksPageSizeMax: 100,
   /** Templates one install request may copy from a pack. */
   templatePackInstallTemplatesMax: 50,
-  /** Flat skill catalogue injected into the chat system prompt: team skills
+  /** Flat skill catalogue every agent surface serves (the chat system prompt,
+   *  template field generators, and the MCP skill tools): team skills
    *  (org-wide) plus the caller's private skills. Kept >=
    *  agentSkillsTeamPerOrganization + agentSkillsPerUser so the catalogue never
    *  truncates and silently hides a skill from the model. */
@@ -207,6 +208,7 @@ export const LIMITS = {
     SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
   agentSkillGithubDirectoriesMax: SKILL_PACKAGE_LIMITS.githubDirectoriesMax,
   agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
+  agentSkillResourcePathMaxChars: SKILL_PACKAGE_LIMITS.resourcePathMaxChars,
   agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
   /** Prose a proposal author writes to explain the change. */
   agentSkillProposalSummaryMaxChars: 2000,
@@ -252,7 +254,6 @@ export const LIMITS = {
    */
   mcpCompatDecisionPageSizeDefault: 5,
   mcpCompatStatutePageSizeDefault: 3,
-  mcpGatewaySkillsMax: 100,
   mcpGatewayToolsPerConnectorMax: 100,
   mcpGatewayToolNameMaxChars: 128,
   mcpGatewayToolDescriptionMaxChars: 2000,

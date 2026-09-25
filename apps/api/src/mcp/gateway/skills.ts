@@ -1,15 +1,19 @@
 import { Result } from "better-result";
 
+import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   listAvailableChatSkillMetadata,
   loadAvailableChatSkill,
+  readAvailableChatSkillResource,
+  SKILL_RESOURCE_READ_STATUS,
 } from "@/api/lib/agent-skills/skills";
 import type {
   AvailableChatSkill,
   LoadedChatSkill,
 } from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
-import { LIMITS } from "@/api/lib/limits";
 import {
   collisionSafeToolName,
   namespaceSkillToolName,
@@ -66,34 +70,92 @@ export const resolveSkillTool = async ({
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
+export const SKILL_TOOL_READ_TYPE = {
+  resource: "resource",
+  resourceNotFound: "resource-not-found",
+  skill: "skill",
+} as const;
+
+export type SkillToolRead =
+  | { type: typeof SKILL_TOOL_READ_TYPE.skill; skill: LoadedChatSkill }
+  | {
+      type: typeof SKILL_TOOL_READ_TYPE.resource;
+      content: string;
+      kind: SkillResourceKind;
+      path: string;
+      skill: ResolvedSkillTool;
+    }
+  | {
+      type: typeof SKILL_TOOL_READ_TYPE.resourceNotFound;
+      path: string;
+      skill: ResolvedSkillTool;
+    };
+
 /**
- * Reads the instructions and resource list of the one skill a call resolved
- * to. `null` means the skill stopped being available between resolution and
- * this read (deleted or disabled).
+ * Reads what one skill call asks for: the instructions and resource list of
+ * the skill it resolved to, or one of its resource files. `null` means the
+ * skill stopped being available between resolution and this read (deleted or
+ * disabled).
  */
-export const loadSkillToolContent = async ({
+export const readSkillTool = async ({
   context,
+  resourcePath,
   skill,
 }: {
   context: McpRequestContext;
+  resourcePath: string | undefined;
   skill: ResolvedSkillTool;
-}): Promise<LoadedChatSkill | null> => {
-  const loaded = await loadAvailableChatSkill({
+}): Promise<SkillToolRead | null> => {
+  const scope = {
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     skillName: skill.name,
     userId: context.userId,
-  });
+  };
 
-  if (Result.isError(loaded)) {
-    captureError(loaded.error, { source: "mcp-gateway-skills" });
-    throw new McpGatewayLoadError({
-      message: "Failed to load agent skill",
-      cause: loaded.error,
-    });
+  if (resourcePath === undefined) {
+    const loaded = throwOnLoadFault(await loadAvailableChatSkill(scope));
+    return loaded === null
+      ? null
+      : { type: SKILL_TOOL_READ_TYPE.skill, skill: loaded };
   }
 
-  return loaded.value;
+  const read = throwOnLoadFault(
+    await readAvailableChatSkillResource({ ...scope, path: resourcePath }),
+  );
+  switch (read.status) {
+    case SKILL_RESOURCE_READ_STATUS.skillNotFound:
+      return null;
+    case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
+      return {
+        type: SKILL_TOOL_READ_TYPE.resourceNotFound,
+        path: resourcePath,
+        skill,
+      };
+    case SKILL_RESOURCE_READ_STATUS.found:
+      return {
+        type: SKILL_TOOL_READ_TYPE.resource,
+        content: read.content,
+        kind: read.kind,
+        path: resourcePath,
+        skill,
+      };
+    default:
+      return read satisfies never;
+  }
+};
+
+const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
+  if (Result.isError(result)) {
+    captureError(result.error, { source: "mcp-gateway-skills" });
+    // A load fault means the skill may still exist: dispatch answers a
+    // retryable error rather than `unknown_tool`.
+    throw new McpGatewayLoadError({
+      message: "Failed to load agent skill",
+      cause: result.error,
+    });
+  }
+  return result.value;
 };
 
 /**
@@ -106,7 +168,7 @@ export const exposeSkillTools = (
 ): ResolvedSkillTool[] => {
   const seenToolNames = new Set<string>();
 
-  return skills.slice(0, LIMITS.mcpGatewaySkillsMax).map((skill) => ({
+  return skills.map((skill) => ({
     ...skill,
     exposedName: collisionSafeToolName({
       baseName: namespaceSkillToolName(skill.name),

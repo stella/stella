@@ -13,8 +13,9 @@
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 
 /**
- * Enabled installed skills the chat backend exposes to `load-skill`. The
- * composer's slash menu must not offer a skill the model cannot load.
+ * Enabled skills an agent surface exposes: chat `load-skill`, template field
+ * generators, and the MCP skill tools. The composer's slash menu must not
+ * offer a skill the model cannot load.
  */
 export const AGENT_SKILLS_CHAT_METADATA_MAX = 200;
 

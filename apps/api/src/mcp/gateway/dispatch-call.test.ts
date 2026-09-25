@@ -15,14 +15,14 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // `isExternalMcpToolName`) and internal result builders stay real.
 const callGatewayExternalMcpToolMock = mock();
 const gatewayLoadErrorResultMock = mock();
-const loadSkillToolContentMock = mock();
+const readSkillToolMock = mock();
 const recordSkillGatewayToolAuditMock = mock(async () => undefined);
 const resolveSkillToolMock = mock();
 
 const dependencies = {
   callGatewayExternalMcpTool: callGatewayExternalMcpToolMock,
   gatewayLoadErrorResult: gatewayLoadErrorResultMock,
-  loadSkillToolContent: loadSkillToolContentMock,
+  readSkillTool: readSkillToolMock,
   recordSkillGatewayToolAudit: recordSkillGatewayToolAuditMock,
   resolveSkillTool: resolveSkillToolMock,
 };
@@ -59,7 +59,7 @@ describe("dispatchGatewayToolCall", () => {
     recordSkillGatewayToolAuditMock.mockReset();
     recordSkillGatewayToolAuditMock.mockResolvedValue(undefined);
     resolveSkillToolMock.mockReset();
-    loadSkillToolContentMock.mockReset();
+    readSkillToolMock.mockReset();
   });
 
   test("never dispatches in anonymized mode", async () => {
@@ -143,7 +143,7 @@ describe("dispatchGatewayToolCall", () => {
 
   test("dispatches a resolved skill body and records a success audit event", async () => {
     resolveSkillToolMock.mockResolvedValue(resolvedSkill);
-    loadSkillToolContentMock.mockResolvedValue(loadedSkill);
+    readSkillToolMock.mockResolvedValue({ type: "skill", skill: loadedSkill });
 
     const result = await dispatchGatewayToolCall({
       args: {},
@@ -160,12 +160,15 @@ describe("dispatchGatewayToolCall", () => {
     expect(result.result).toEqual({
       status: "success",
       data: {
+        type: "skill",
         body: "# Alpha skill body",
         compatibility: "stella>=1",
+        id: loadedSkill.id,
         license: "MIT",
         metadata: { key: "value" },
         name: "alpha",
         origin: "authored",
+        resources: [],
         version: "1.2.3",
       },
     });

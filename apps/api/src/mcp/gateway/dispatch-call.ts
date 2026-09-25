@@ -1,14 +1,18 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  SKILL_TOOL_INPUT,
+  SKILL_TOOL_OUTPUT_TYPE,
+} from "@/api/mcp/gateway/dynamic-tool-policy";
 import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
@@ -16,16 +20,22 @@ import {
   recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
 import {
-  loadSkillToolContent,
+  readSkillTool,
   resolveSkillTool,
+  SKILL_TOOL_READ_TYPE,
 } from "@/api/mcp/gateway/skills";
+import type { SkillToolRead } from "@/api/mcp/gateway/skills";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
-import { structuredErrorResult, toolDataResult } from "@/api/mcp/tool-utils";
+import {
+  structuredErrorResult,
+  toolDataResult,
+  validationErrorResult,
+} from "@/api/mcp/tool-utils";
 
 export type GatewayDispatchDependencies = {
   callGatewayExternalMcpTool: typeof callGatewayExternalMcpTool;
   gatewayLoadErrorResult: typeof gatewayLoadErrorResult;
-  loadSkillToolContent: typeof loadSkillToolContent;
+  readSkillTool: typeof readSkillTool;
   recordSkillGatewayToolAudit: typeof recordSkillGatewayToolAudit;
   resolveSkillTool: typeof resolveSkillTool;
 };
@@ -33,7 +43,7 @@ export type GatewayDispatchDependencies = {
 const defaultDependencies: GatewayDispatchDependencies = {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
-  loadSkillToolContent,
+  readSkillTool,
   recordSkillGatewayToolAudit,
   resolveSkillTool,
 };
@@ -81,18 +91,24 @@ export const dispatchGatewayToolCall = async ({
     return null;
   }
 
+  const input = v.safeParse(SKILL_TOOL_INPUT.inputSchemaSource, args);
+  if (!input.success) {
+    return { type: "internal", result: validationErrorResult(input.issues) };
+  }
+
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  let skill: LoadedChatSkill | null;
+  let read: SkillToolRead | null;
   try {
     const resolved = await dependencies.resolveSkillTool({
       context,
       toolName,
     });
-    skill =
+    read =
       resolved === null
         ? null
-        : await dependencies.loadSkillToolContent({
+        : await dependencies.readSkillTool({
             context,
+            resourcePath: input.output.resource,
             skill: resolved,
           });
   } catch (error) {
@@ -104,30 +120,65 @@ export const dispatchGatewayToolCall = async ({
     }
     throw error;
   }
-  if (!skill) {
+  if (read === null) {
     return { type: "internal", result: unknownToolResult(toolName) };
   }
 
-  await dependencies.recordSkillGatewayToolAudit({
-    context,
-    durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
-    outcome: "success",
-    skillId: skill.id,
-    toolName,
-  });
-
-  // Bound to the family's shared output contract at compile time; dispatch
-  // validates the served value against the same Valibot source at runtime.
-  return {
-    type: "internal",
-    result: toolDataResult({
-      body: skill.body,
-      compatibility: skill.compatibility,
-      license: skill.license,
-      metadata: skill.metadata,
-      name: skill.name,
-      origin: skill.origin,
-      version: skill.version,
-    } satisfies SkillToolOutput),
-  };
+  switch (read.type) {
+    case SKILL_TOOL_READ_TYPE.resourceNotFound:
+      return {
+        type: "internal",
+        result: structuredErrorResult({
+          code: "not_found",
+          message: `This skill has no resource file at ${read.path}.`,
+          hint: `Call ${toolName} without \`resource\` to list the skill's resource paths.`,
+        }),
+      };
+    case SKILL_TOOL_READ_TYPE.skill:
+      await dependencies.recordSkillGatewayToolAudit({
+        context,
+        durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
+        outcome: "success",
+        skillId: read.skill.id,
+        toolName,
+      });
+      // Bound to the family's shared output contract at compile time; dispatch
+      // validates the served value against the same Valibot source at runtime.
+      return {
+        type: "internal",
+        result: toolDataResult({
+          type: SKILL_TOOL_OUTPUT_TYPE.skill,
+          body: read.skill.body,
+          compatibility: read.skill.compatibility,
+          id: read.skill.id,
+          license: read.skill.license,
+          metadata: read.skill.metadata,
+          name: read.skill.name,
+          origin: read.skill.origin,
+          resources: read.skill.resources,
+          version: read.skill.version,
+        } satisfies SkillToolOutput),
+      };
+    case SKILL_TOOL_READ_TYPE.resource:
+      await dependencies.recordSkillGatewayToolAudit({
+        context,
+        durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
+        outcome: "success",
+        skillId: read.skill.id,
+        toolName,
+      });
+      return {
+        type: "internal",
+        result: toolDataResult({
+          type: SKILL_TOOL_OUTPUT_TYPE.resource,
+          content: read.content,
+          id: read.skill.id,
+          kind: read.kind,
+          name: read.skill.name,
+          path: read.path,
+        } satisfies SkillToolOutput),
+      };
+    default:
+      return read satisfies never;
+  }
 };

@@ -240,6 +240,7 @@ describe("available active chat skills", () => {
     });
     await insertResource({
       content: "team resource",
+      kind: "knowledge",
       path: "knowledge/shared.md",
       skillId: activeTeamSkillId,
     });
@@ -286,6 +287,7 @@ describe("available active chat skills", () => {
     expect(activeReadResult.value).toEqual({
       status: "found",
       content: "team resource",
+      kind: "knowledge",
       origin: "authored",
       skillId: activeTeamSkillId,
     });

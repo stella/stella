@@ -3,6 +3,7 @@ import { and, asc, eq, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
+import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -287,7 +288,7 @@ export type LoadedChatSkill = {
   /** The skill slug: the name the catalog and the skill tools use. */
   name: string;
   origin: AgentSkillOrigin;
-  resources: SkillResource[];
+  resources: { kind: SkillResourceKind; path: string }[];
   version: string | null;
 };
 
@@ -361,6 +362,7 @@ export type AvailableChatSkillResourceRead =
   | {
       status: typeof SKILL_RESOURCE_READ_STATUS.found;
       content: string;
+      kind: SkillResourceKind;
       origin: AgentSkillOrigin;
       skillId: SafeId<"agentSkill">;
     }
@@ -399,6 +401,7 @@ export const readAvailableChatSkillResource = async ({
     tx
       .select({
         content: agentSkillResources.content,
+        kind: agentSkillResources.kind,
       })
       .from(agentSkillResources)
       .where(
@@ -421,6 +424,7 @@ export const readAvailableChatSkillResource = async ({
   return Result.ok({
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
+    kind: resource.kind,
     origin: row.origin,
     skillId: row.id,
   });
