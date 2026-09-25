@@ -517,7 +517,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -610,7 +610,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.8.3",
+      "version": "0.8.4",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -652,7 +652,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -686,7 +686,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -842,7 +842,7 @@
     },
     "packages/money": {
       "name": "@stll/money",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -956,7 +956,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
@@ -1026,7 +1026,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.34.4",
+      "version": "0.34.5",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",

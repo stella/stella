@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.3.0
+
+### Minor Changes
+
+- [#3872](https://github.com/stella/stella/pull/3872) [`e8decd2`](https://github.com/stella/stella/commit/e8decd2bb45f30bbb00f63b5e522f0951f8c5bf6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `MODEL_OUTPUT_TOKEN_LIMITS` and `getOutputTokenLimit`: the most output tokens one response of each offered model may carry. An id the catalog does not list has no limit.
+
 ## 0.2.2
 
 ### Patch Changes
