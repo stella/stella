@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
- * per-model document-input, reasoning-effort, and temperature policy maps
+ * per-model document-input, reasoning-effort, temperature policy and
+ * output-limit maps
  * from models.dev plus reviewed provider corrections and policy cutovers.
  *
  * Rules enforced here (each one turns a class of catalog mistakes
@@ -92,6 +93,8 @@ export type CapabilityRow = {
   modelId: string;
   provider: BYOKProvider;
   efforts: readonly ReasoningEffort[] | null;
+  /** The most output tokens one response may carry. */
+  outputTokens: number;
   temperaturePolicy: TemperaturePolicy;
   overrideReason: string | null;
 };
@@ -147,6 +150,7 @@ export const buildCapabilityRows = ({
           modelId,
           provider,
           efforts: override.reasoningEfforts,
+          outputTokens: override.outputTokens,
           temperaturePolicy: override.temperatureSupported ? "emit" : "omit",
           overrideReason: override.reason,
         });
@@ -177,6 +181,12 @@ export const buildCapabilityRows = ({
         return panic(
           `${provider}/${modelId}: models.dev reports no tool calling; no ` +
             "model role can use it, so drop it from BYOK_MODEL_OPTIONS",
+        );
+      }
+      if (record.outputTokens === null) {
+        return panic(
+          `${provider}/${modelId}: models.dev record lacks limit.output; ` +
+            "investigate upstream before regenerating",
         );
       }
       if (record.temperature === null) {
@@ -244,6 +254,7 @@ export const buildCapabilityRows = ({
         modelId,
         provider,
         efforts,
+        outputTokens: record.outputTokens,
         temperaturePolicy: resolveTemperaturePolicy({
           modelId,
           provider,
@@ -277,6 +288,9 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
   const temperaturePolicyLines = rows.map(
     (row) => `  "${row.modelId}": "${row.temperaturePolicy}",`,
   );
+  const outputTokenLines = rows.map(
+    (row) => `  "${row.modelId}": ${String(row.outputTokens)},`,
+  );
   const defaultEffortLines = rows.map(
     (row) =>
       `  "${row.modelId}": ${renderDefaultEffort(row.defaultReasoningEffort)},`,
@@ -301,8 +315,8 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
 // \`bun --filter @stll/ai-catalog gen:capabilities\`.
 //
 // Sources: models.dev per-model \`reasoning_options\`, \`temperature\`,
-// \`modalities.input\`, and release dates (first-party, openrouter, and
-// amazon-bedrock catalogs);
+// \`modalities.input\`, \`limit.output\`, and release dates (first-party,
+// openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model \`default_effort\`; plus reviewed provider
 // policies and dated entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
@@ -358,6 +372,15 @@ ${defaultEffortLines.join("\n")}
 export const MODEL_TEMPERATURE_POLICIES = {
 ${temperaturePolicyLines.join("\n")}
 } as const satisfies Record<OfferedBYOKModelId, TemperaturePolicy>;
+
+/**
+ * The most output tokens one response of each offered model may carry
+ * (models.dev \`limit.output\`). Consumers must go through
+ * \`getOutputTokenLimit\`.
+ */
+export const MODEL_OUTPUT_TOKEN_LIMITS = {
+${outputTokenLines.join("\n")}
+} as const satisfies Record<OfferedBYOKModelId, number>;
 `;
 };
 

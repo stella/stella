@@ -17,14 +17,27 @@ const CHECKABLE = {
 const upstreamOf = (
   entries: Record<
     string,
-    Omit<UpstreamCapabilities, "inputModalities" | "toolCall"> &
-      Partial<Pick<UpstreamCapabilities, "inputModalities" | "toolCall">>
+    Omit<
+      UpstreamCapabilities,
+      "inputModalities" | "outputTokens" | "toolCall"
+    > &
+      Partial<
+        Pick<
+          UpstreamCapabilities,
+          "inputModalities" | "outputTokens" | "toolCall"
+        >
+      >
   >,
 ): ReadonlyMap<string, UpstreamCapabilities> =>
   new Map(
     Object.entries(entries).map(([key, value]) => [
       key,
-      { inputModalities: ["text"], toolCall: true, ...value },
+      {
+        inputModalities: ["text"],
+        outputTokens: null,
+        toolCall: true,
+        ...value,
+      },
     ]),
   );
 
@@ -89,6 +102,7 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["minimal", "low", "medium", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: false,
       toolCall: null,
     });
@@ -105,6 +119,7 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
       toolCall: null,
     });
@@ -115,8 +130,26 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: false,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: true,
       toolCall: null,
+    });
+  });
+
+  test("extracts a positive integer output limit and nothing else", () => {
+    expect(
+      parseUpstreamCapabilities({
+        reasoning: false,
+        limit: { output: 64_000 },
+      }),
+    ).toMatchObject({ outputTokens: 64_000 });
+    for (const output of [0, -1, 1.5, "64000", null]) {
+      expect(
+        parseUpstreamCapabilities({ reasoning: false, limit: { output } }),
+      ).toMatchObject({ outputTokens: null });
+    }
+    expect(parseUpstreamCapabilities({ reasoning: false })).toMatchObject({
+      outputTokens: null,
     });
   });
 
@@ -160,6 +193,7 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["none", "low", "medium", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
       toolCall: null,
     });
@@ -174,6 +208,7 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
       toolCall: null,
     });
@@ -191,6 +226,7 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["none", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
       toolCall: null,
     });

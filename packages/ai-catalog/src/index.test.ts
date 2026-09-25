@@ -11,6 +11,7 @@ import {
   CONTEXT_WINDOW_TOKENS,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   getContextWindowTokens,
+  getOutputTokenLimit,
   getModelDisplayMetadata,
   getModelRate,
   getModelReasoningEfforts,
@@ -18,6 +19,7 @@ import {
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
   MODEL_DEFAULT_REASONING_EFFORTS,
+  MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
@@ -51,6 +53,30 @@ const OPENROUTER_GPT_56_MODEL_IDS = [
   "openai/gpt-5.6-terra",
   "openai/gpt-5.6-luna",
 ] as const;
+
+describe("output token limits", () => {
+  test("covers every offered model with a positive limit", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        expect(getOutputTokenLimit(modelId)).toBe(
+          MODEL_OUTPUT_TOKEN_LIMITS[modelId],
+        );
+        expect(MODEL_OUTPUT_TOKEN_LIMITS[modelId]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test("resolves an alias to its target", () => {
+    expect(getOutputTokenLimit("gpt-5.6-sol")).toBe(
+      getOutputTokenLimit("gpt-5.6"),
+    );
+    expect(getOutputTokenLimit("gpt-5.6")).toBeGreaterThan(0);
+  });
+
+  test("knows no limit for an id the catalog does not list", () => {
+    expect(getOutputTokenLimit("a-model-no-catalog-lists")).toBeUndefined();
+  });
+});
 
 describe("direct OpenAI GPT-5.6 family", () => {
   test("exposes every tier with complete catalog metadata", () => {
