@@ -1713,6 +1713,19 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF"
           fi
 
+      - name: Database awaits in loops
+        # Type-aware N+1 guard over the API source and scripts: an awaited
+        # database call, a call handed a database handle, or a helper that
+        # reaches the database, once per loop iteration or per
+        # Promise.all(items.map(...)) item. Handles are recognized by type, so
+        # renaming one does not hide it. The whole program is checked on every
+        # run because an imported helper or handle type can change a site in an
+        # untouched file. Fixture programs run first so a broken guard cannot
+        # pass silently. Suppress with `// db-await-in-loop: <reason>`.
+        run: |
+          bun test scripts/db-await-in-loop.test.ts
+          bun run check:db-await-in-loop
+
   collab-redis:
     needs: ci-plan
     if: >-

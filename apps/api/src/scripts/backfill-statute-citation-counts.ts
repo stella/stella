@@ -13,6 +13,7 @@ const repairBatch = createStatuteCitationCountRepair(rootDb);
 let repairedDecisions = 0;
 
 while (true) {
+  // db-await-in-loop: one bounded repair batch per iteration until the repair reports ready
   const batch = await repairBatch();
   repairedDecisions += batch.decisions;
   if (batch.status === "ready") {

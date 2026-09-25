@@ -47,7 +47,8 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
       // filled this row, in which case we leave its slug untouched.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, arrow-body-style -- retry loop must observe this write before retrying; block body carries the audit-skip directive the require-audit-on-mutation rule scans for
+      // db-await-in-loop: retry loop must observe this write before retrying
+      // oxlint-disable-next-line arrow-body-style -- block body carries the audit-skip directive the require-audit-on-mutation rule scans for
       const updated = await db((tx) => {
         // audit: skip — backfills a derived public slug, not user-facing state
         return tx
@@ -101,7 +102,7 @@ export const backfillCaseLawSlugs = async (
       ? and(isNull(caseLawDecisions.slug), idFilter)
       : isNull(caseLawDecisions.slug);
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
+    // db-await-in-loop: sequential keyset pagination: next page cursor (lastId) depends on this query
     const rows: BackfillRow[] = await db((tx) =>
       tx
         .select({
@@ -120,7 +121,7 @@ export const backfillCaseLawSlugs = async (
 
     for (const row of rows) {
       try {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-row unique-index compare-and-set; one collision must not abort the batch
+        // db-await-in-loop: per-row unique-index compare-and-set; one collision must not abort the batch
         const wrote = await assignSlug(db, row);
         if (wrote) {
           written += 1;

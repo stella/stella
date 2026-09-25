@@ -160,6 +160,7 @@ const insertNotifications = async (
 
   const inserted: NotificationInsertRow[] = [];
   for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
+    // db-await-in-loop: one multi-row insert per chunk; the chunk caps bind parameters and the inserted rows are read back
     const batchRows = await writeBatch(
       async (tx) =>
         await tx

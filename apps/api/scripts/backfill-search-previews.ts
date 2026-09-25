@@ -29,7 +29,7 @@ const main = async (): Promise<void> => {
 
   for (;;) {
     const organizationRows: Iterable<OrganizationRow> =
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
+      // db-await-in-loop: keyset page per iteration; the page is the batch
       await db.execute<OrganizationRow>(sql`
         SELECT id
         FROM organization
@@ -43,6 +43,7 @@ const main = async (): Promise<void> => {
     }
 
     for (const { id } of organizations) {
+      // db-await-in-loop: one organization at a time; each rebuild runs its own scoped pass over that organization's documents
       await rebuildSupplementalSearchIndex(toSafeId<"organization">(id));
       processedOrganizations += 1;
       console.log(

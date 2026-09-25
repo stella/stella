@@ -925,7 +925,7 @@ export const reconcileOrphanedWorkflows = async (
   });
 
   for (const workspaceId of recoverableOrphans) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each orphan is recovered only after its own run-lock re-check, and its recovery ends in that workspace's run-state clear and broadcast; the steps are ordered per workspace and cannot share one statement
+    // db-await-in-loop: each orphan is recovered only after its own run-lock re-check, and its recovery ends in that workspace's run-state clear and broadcast; the steps are ordered per workspace and cannot share one statement
     await recoverOrphanedWorkflow({
       database,
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
@@ -1341,7 +1341,7 @@ const processEntityJob = async (
 
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
+    // db-await-in-loop: levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
     await Promise.all(
       batches.map(
         async (batch) =>

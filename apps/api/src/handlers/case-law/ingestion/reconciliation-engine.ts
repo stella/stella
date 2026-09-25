@@ -1275,7 +1275,7 @@ const walkSlice = async ({
       summary.deferred += fillable.length - index;
       break;
     }
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- paced publisher fetch per item, under a lease and a wall-clock budget
+    // db-await-in-loop: paced publisher fetch per item, under a lease and a wall-clock budget
     await ingestListedItem({
       adapterKey,
       item,
@@ -1402,7 +1402,7 @@ const retryParkedItems = async ({
       break;
     }
     fetched += 1;
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- paced publisher fetch per due item, under a lease and a clock budget
+    // db-await-in-loop: paced publisher fetch per due item, under a lease and a clock budget
     await ingestListedItem({
       adapterKey,
       item,

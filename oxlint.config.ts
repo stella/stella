@@ -703,7 +703,7 @@ export default defineConfig({
     // The generic rule fires on every sequential await, including the ones a
     // stream, a cursor, a rate limit, or an ordered write requires; it was
     // waived far more often than it was obeyed. The cost it exists to catch
-    // is per-iteration I/O, which `no-db-await-in-loop` and
+    // is per-iteration I/O, which `scripts/db-await-in-loop.ts` and
     // `no-network-await-in-loop` flag with the owner in hand.
     "no-await-in-loop": "off",
     "no-console": "error",
@@ -1256,7 +1256,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
-    "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
@@ -2933,12 +2932,6 @@ export default defineConfig({
       },
     },
     {
-      files: [".oxlint-plugins/__fixtures__/no-db-await-in-loop.fixture.ts"],
-      rules: {
-        "no-db-await-in-loop/no-db-await-in-loop": "error",
-      },
-    },
-    {
       files: [
         ".oxlint-plugins/__fixtures__/no-network-await-in-loop.fixture.ts",
       ],
@@ -3475,33 +3468,6 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-unowned-file-version-write/no-unowned-file-version-write": "error",
-      },
-    },
-    {
-      // no-db-await-in-loop flags an `await db...` / `await tx...` /
-      // `await safeDb(...)` or `yield* Result.await(safeDb(...))` lexically
-      // inside a loop position that re-runs per iteration, plus a
-      // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
-      // to backend source and the workspace scripts, where `db`/`tx`/`safeDb`
-      // are Drizzle handles; test files intentionally exercise unbatched
-      // loops in fixtures/mocks and are excluded.
-      files: [
-        "apps/api/src/**/*.ts",
-        "apps/*/scripts/**/*.ts",
-        "packages/*/scripts/**/*.ts",
-      ],
-      excludeFiles: [
-        "apps/api/src/**/*.test.ts",
-        "apps/api/src/tests/**/*.ts",
-        "**/*.test.{ts,tsx}",
-        "**/*.spec.{ts,tsx}",
-        // Development seeds write fixture data once into a local database;
-        // their loop lengths are the fixture's, not a tenant's, so the query
-        // count is not a scaling property there.
-        "apps/api/scripts/seed-*.ts",
-      ],
-      rules: {
-        "no-db-await-in-loop/no-db-await-in-loop": "error",
       },
     },
     {

@@ -155,6 +155,7 @@ const selectCensusPage = async (
 const rows: CensusRow[] = [];
 let after: SafeId<"caseLawDecision"> | null = null;
 for (;;) {
+  // db-await-in-loop: keyset page per iteration; the page is the batch
   const page = await selectCensusPage(after);
   rows.push(...page);
   const last = page.at(-1);

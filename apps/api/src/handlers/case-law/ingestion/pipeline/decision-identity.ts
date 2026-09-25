@@ -361,7 +361,7 @@ export const resolveDecisionIdentityTx = async (
   for (const identity of sourceIdentityCandidates) {
     // SAFETY: candidates are hard-capped at eight above; sorted sequential
     // acquisition prevents deadlocks between overlapping identity sets.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded identity lock set must be sequential
+    // db-await-in-loop: bounded identity lock set must be sequential
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
     );

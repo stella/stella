@@ -326,6 +326,7 @@ const heldIdentitiesChunked = async (
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
   for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
+    // db-await-in-loop: one bounded lookup per chunk; HELD_LOOKUP_CHUNK caps how many items one lookup may name
     const held = await heldIdentities(
       items.slice(index, index + HELD_LOOKUP_CHUNK),
     );
@@ -544,6 +545,7 @@ try {
           dayComplete = false;
           break;
         }
+        // db-await-in-loop: one held-identity lookup per listed page, after that page's paced publisher listing
         const held = await heldIdentities(listed.items);
         const diff = diffCzRegionalListing({ items: listed.items, held });
         day.listed += listed.items.length;
@@ -563,6 +565,7 @@ try {
               dayComplete = false;
               break;
             }
+            // db-await-in-loop: paced publisher fetch and write per missing item, under the source lease
             recordOutcome(item, await ingestItem(item, sourceLease));
             await Bun.sleep(delayMs);
           }
@@ -607,6 +610,7 @@ try {
       if (halt !== null) {
         break;
       }
+      // db-await-in-loop: paced publisher fetch and write per missing item, under the source lease
       recordOutcome(item, await ingestItem(item, sourceLease));
       await Bun.sleep(delayMs);
     }
