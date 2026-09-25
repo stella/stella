@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -11,6 +11,8 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import {
   rollbackUnpersistedChatSideEffects,
@@ -92,6 +94,26 @@ type InterruptResume = {
 
 export type ApprovalCall = Extract<ChatPart, { type: "tool-call" }> & {
   approval: { id: string; needsApproval: boolean };
+};
+
+/** A thread's first message page, as the messages endpoint serves it. */
+export type RecordedPage = Pick<
+  ChatMessagePage,
+  "lastActivityAt" | "olderCursor"
+> & { messages: unknown[] };
+
+/** One request a page sent on a recorded thread, as the route answered it. */
+export type RecordedExchange = {
+  /** Whether the page read the response to its end, the connection closed
+   *  first (the page stopped, or the connection dropped), or no response
+   *  came at all (the process serving it died). */
+  ended: "complete" | "connection-lost" | "disconnected";
+  /** The thread's first message page once the request had settled. */
+  page: RecordedPage;
+  /** The JSON body the page posted. */
+  request: unknown;
+  /** The SSE body the page read, or the route's refusal. */
+  response: { body: string; status: number };
 };
 
 const CHAT_ROUTE_PATH = "/v1/chat";
@@ -362,6 +384,12 @@ export const createApprovalHarness = ({
   const clientFindings: OracleViolation[] = [];
   /** Per thread: the interrupts its page received with the latest response. */
   const delivered = new Map<string, DeliveredInterrupt[]>();
+  /** Per recorded thread: every request its pages sent, as answered. */
+  const recordings = new Map<string, RecordedExchange[]>();
+  /** Threads whose responses reach the page as the server writes them. */
+  const liveThreads = new Set<string>();
+  /** Per thread: drops the connection of the response still streaming. */
+  const openConnections = new Map<string, () => void>();
   let inFlight = 0;
 
   /** Threads whose next web request is served by a process that then dies. */
@@ -396,15 +424,176 @@ export const createApprovalHarness = ({
     throw new ChatConnectionLostError({ message: "Failed to fetch" });
   };
 
+  const readPage = async (
+    threadId: SafeId<"chatThread">,
+  ): Promise<RecordedPage> => {
+    const page = await loadChatMessagePage({
+      safeDb,
+      threadId,
+      userId: ids.userA1,
+    });
+    if (Result.isError(page)) {
+      return panic("The thread's message page failed to load", page.error);
+    }
+    // The page as the browser receives it: a JSON body.
+    return asTestRaw<RecordedPage>(await Response.json(page.value).json());
+  };
+
+  type RecordEnd = (
+    exchange: Pick<RecordedExchange, "ended" | "response">,
+  ) => Promise<void>;
+
+  /**
+   * Starts recording a request of a recorded thread, in the order the page
+   * sent it; the returned call completes the entry once the request settles.
+   */
+  const beginRecord = (raw: SendBody): RecordEnd => {
+    const recording = recordings.get(raw.threadId);
+    if (recording === undefined) {
+      return async () => {
+        await Promise.resolve();
+      };
+    }
+    const entry = asTestRaw<RecordedExchange>({ request: raw });
+    recording.push(entry);
+    return async (exchange) => {
+      Object.assign(entry, exchange, { page: await readPage(raw.threadId) });
+    };
+  };
+
+  /** Checks a response the page has read to wherever it ended. */
+  const afterResponse = async ({
+    ended,
+    endRecord,
+    raw,
+    text,
+  }: {
+    endRecord: RecordEnd;
+    ended: RecordedExchange["ended"];
+    raw: SendBody;
+    text: string;
+  }) => {
+    const chunks = await readClientStreamChunks({
+      response: new Response(text),
+      runId: raw.runId,
+      threadId: raw.threadId,
+    });
+    clientFindings.push(
+      ...(await awaitSettledTurns(raw.threadId)),
+      ...findWireIdentityViolations(chunks),
+      ...(await findPersistedViolations(raw.threadId)),
+    );
+    delivered.set(raw.threadId, deliveredInterrupts(chunks));
+    await endRecord({ ended, response: { body: text, status: 200 } });
+  };
+
+  /**
+   * A response handed to the page while the server is still writing it. It
+   * ends when the server ends it, or when the page aborts its request or the
+   * connection drops, which cancels the server's response the way a closed
+   * socket does.
+   */
+  const streamLive = ({
+    endRecord,
+    raw,
+    response,
+    signal,
+  }: {
+    endRecord: RecordEnd;
+    raw: SendBody;
+    response: Response;
+    signal: AbortSignal | undefined;
+  }): { done: Promise<void>; response: Response } => {
+    const reader: ReadableStreamDefaultReader<Uint8Array> =
+      response.body?.getReader() ??
+      panic("A streamed chat response has no body");
+    const decoder = new TextDecoder();
+    const ended = Promise.withResolvers<RecordedExchange["ended"]>();
+    let text = "";
+    let open = true;
+    let page: ReadableStreamDefaultController<Uint8Array> | undefined;
+    /** The server's side of a closed connection: its response cancelled. */
+    let serverCancelled: Promise<void> = Promise.resolve();
+    const disconnect = (error: Error) => {
+      if (!open) {
+        return;
+      }
+      open = false;
+      page?.error(error);
+      serverCancelled = reader.cancel(error);
+      ended.resolve("disconnected");
+    };
+    const onAbort = () => {
+      disconnect(new DOMException("The page aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    openConnections.set(raw.threadId, () => {
+      disconnect(new TypeError("The connection dropped"));
+    });
+    const body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        page = controller;
+      },
+      pull: async (controller) => {
+        const read = await reader.read();
+        if (!open) {
+          return;
+        }
+        if (read.done) {
+          open = false;
+          controller.close();
+          ended.resolve("complete");
+          return;
+        }
+        text += decoder.decode(read.value, { stream: true });
+        controller.enqueue(read.value);
+      },
+      cancel: (reason) => {
+        disconnect(reason instanceof Error ? reason : new Error("Cancelled"));
+      },
+    });
+    const settleResponse = async () => {
+      const how = await ended.promise;
+      await serverCancelled;
+      signal?.removeEventListener("abort", onAbort);
+      openConnections.delete(raw.threadId);
+      await afterResponse({ endRecord, ended: how, raw, text });
+    };
+    const done = settleResponse();
+    return {
+      done,
+      response: new Response(body, { headers: response.headers }),
+    };
+  };
+
+  /** The route's refusal, reported and recorded. */
+  const refuse = async (endRecord: RecordEnd, rejection: unknown) => {
+    clientFindings.push(
+      ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+        { refused: Bun.inspect(rejection) },
+      ]),
+    );
+    const response = refusalResponse(rejection);
+    await endRecord({
+      ended: "complete",
+      response: {
+        body: await response.clone().text(),
+        status: response.status,
+      },
+    });
+    return response;
+  };
+
   /**
    * The route for the web client: the posted JSON is validated against the
    * route's body schema, sent to the real handler, checked, and its SSE body
-   * (or the route's refusal) handed back.
+   * (or the route's refusal) handed back. `done` settles once the response
+   * has ended and been checked.
    */
   const postChatBody = async (
     raw: unknown,
     signal: AbortSignal | undefined,
-  ): Promise<Response> => {
+  ): Promise<{ done: Promise<void>; response: Response }> => {
     if (!Value.Check(agUiSendMessageBodySchema, raw)) {
       const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
         .slice(0, 3)
@@ -414,25 +603,61 @@ export const createApprovalHarness = ({
           { invalidBody: errors },
         ]),
       );
-      return new Response(JSON.stringify({ message: "Invalid body" }), {
-        status: 422,
-      });
+      return {
+        done: Promise.resolve(),
+        response: new Response(JSON.stringify({ message: "Invalid body" }), {
+          status: 422,
+        }),
+      };
     }
+    const endRecord = beginRecord(raw);
     if (crashingThreads.delete(raw.threadId)) {
-      return await crashDuring(raw);
+      try {
+        const refused = await crashDuring(raw);
+        await endRecord({
+          ended: "complete",
+          response: {
+            body: await refused.clone().text(),
+            status: refused.status,
+          },
+        });
+        return { done: Promise.resolve(), response: refused };
+      } catch (error) {
+        // The page reads no response: its request fails as a lost connection.
+        await endRecord({
+          ended: "connection-lost",
+          response: { body: "", status: 0 },
+        });
+        throw error;
+      }
+    }
+    if (liveThreads.has(raw.threadId)) {
+      const result = await sendMessage.handler(contextFromBody(raw, signal));
+      if (result instanceof Response && result.ok) {
+        return streamLive({ endRecord, raw, response: result, signal });
+      }
+      return {
+        done: Promise.resolve(),
+        response: await refuse(endRecord, result),
+      };
     }
     const outcome = await sendAndCheck(contextFromBody(raw, signal));
     if (outcome.status === "rejected") {
-      clientFindings.push(
-        ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-          { refused: Bun.inspect(outcome.rejection) },
-        ]),
-      );
-      return refusalResponse(outcome.rejection);
+      return {
+        done: Promise.resolve(),
+        response: await refuse(endRecord, outcome.rejection),
+      };
     }
     clientFindings.push(...outcome.violations);
     delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
-    return new Response(outcome.text, { headers: outcome.headers });
+    await endRecord({
+      ended: "complete",
+      response: { body: outcome.text, status: 200 },
+    });
+    return {
+      done: Promise.resolve(),
+      response: new Response(outcome.text, { headers: outcome.headers }),
+    };
   };
 
   const originalFetch = globalThis.fetch;
@@ -449,11 +674,16 @@ export const createApprovalHarness = ({
       return panic("The web chat client posted a non-JSON body");
     }
     inFlight += 1;
+    let done: Promise<void> = Promise.resolve();
     try {
       const parsed: unknown = JSON.parse(raw);
-      return await postChatBody(parsed, init.signal ?? undefined);
+      const posted = await postChatBody(parsed, init.signal ?? undefined);
+      done = posted.done;
+      return posted.response;
     } finally {
-      inFlight -= 1;
+      void done.finally(() => {
+        inFlight -= 1;
+      });
     }
   };
   globalThis.fetch = Object.assign(routedFetch, {
@@ -634,12 +864,32 @@ export const createApprovalHarness = ({
       globalThis.fetch = originalFetch;
       provider.restore();
     },
+    /** Drops the connection of `threadId`'s response still streaming. */
+    dropConnection: (threadId: SafeId<"chatThread">) => {
+      (
+        openConnections.get(threadId) ??
+        panic("No response of this thread is streaming")
+      )();
+    },
     executions,
     expectSoundWebClient,
     lastAssistant,
     openWebClient,
+    readPage,
     readThreadMessages,
+    /** From now on, every request of `threadId` is recorded; the returned
+     *  list fills as they settle. */
+    recordThread: (threadId: SafeId<"chatThread">): RecordedExchange[] => {
+      const recording: RecordedExchange[] = [];
+      recordings.set(threadId, recording);
+      return recording;
+    },
     reloadView,
+    /** From now on, `threadId`'s responses reach the page as the server
+     *  writes them, so the page can stop one or lose its connection. */
+    streamLive: (threadId: SafeId<"chatThread">) => {
+      liveThreads.add(threadId);
+    },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),

@@ -1,0 +1,1085 @@
+{
+  "initialPage": {
+    "messages": [],
+    "olderCursor": null,
+    "lastActivityAt": null
+  },
+  "scenario": "client-tool",
+  "steps": [
+    {
+      "action": {
+        "messageId": "00000000-0000-7000-8000-000000000001",
+        "text": "Draft it as a document",
+        "type": "send"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-1",
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:01.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "Draft it as a document"
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft it as a document"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:02.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft it as a document"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:03.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225616000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225617000}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"create-document\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225618000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"name\\\":\\\"Mutual NDA\\\",\\\"source\\\":\\\"@title Mutual NDA\\\\n\\\\nThe parties agree to keep each other's information confidential.\\\"}\",\"timestamp\":1767225619000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225620000}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225621000,\"messages\":[{\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"content\":\"Draft it as a document\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:04.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"create-document\",\"arguments\":\"{\\\"name\\\":\\\"Mutual NDA\\\",\\\"source\\\":\\\"@title Mutual NDA\\\\n\\\\nThe parties agree to keep each other's information confidential.\\\"}\"}}]}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225622000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"client_tool_call-1\",\"reason\":\"tanstack:client_tool_execution\",\"message\":\"Client tool create-document is ready to run\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"success\":{\"type\":\"boolean\"},\"fileName\":{\"type\":\"string\"},\"entityId\":{\"type\":\"string\"},\"fieldId\":{\"type\":\"string\"},\"workspaceId\":{\"type\":\"string\"},\"entityRef\":{\"type\":\"string\"},\"matterRef\":{\"type\":\"string\"},\"href\":{\"type\":\"string\"},\"mention\":{\"type\":\"string\"}},\"required\":[\"success\",\"fileName\",\"entityId\",\"fieldId\",\"workspaceId\",\"entityRef\",\"matterRef\",\"href\",\"mention\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"success\":{\"type\":\"boolean\"},\"destination\":{\"type\":\"string\",\"enum\":[\"draft\"]},\"fileName\":{\"type\":\"string\"},\"fixes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"code\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"line\":{\"type\":\"number\"}},\"required\":[\"code\",\"message\"],\"additionalProperties\":false},\"description\":\"Normalizations the compiler applied to your source (for example a stripped manual clause number or a signatures block moved to the end). Reissue the full source if one of them changed your intent.\"},\"warnings\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"code\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"severity\":{\"enum\":[\"warning\",\"error\"],\"type\":\"string\"},\"line\":{\"type\":\"number\"}},\"required\":[\"code\",\"message\",\"severity\"],\"additionalProperties\":false},\"description\":\"Constructs the compiler kept but flags as suspect.\"}},\"required\":[\"success\",\"destination\",\"fileName\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"success\":{\"type\":\"boolean\"},\"destination\":{\"type\":\"string\",\"enum\":[\"download\"]},\"fileName\":{\"type\":\"string\"}},\"required\":[\"success\",\"destination\",\"fileName\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"success\":{\"type\":\"boolean\"},\"message\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"code\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"severity\":{\"enum\":[\"warning\",\"error\"],\"type\":\"string\"},\"line\":{\"type\":\"number\"}},\"required\":[\"code\",\"message\",\"severity\"],\"additionalProperties\":false},\"description\":\"What stopped the compile, with the source line where known. Fix the source and call the tool again.\"}},\"required\":[\"success\",\"message\"],\"additionalProperties\":false}]},\"metadata\":{\"kind\":\"client_tool\",\"toolName\":\"create-document\",\"input\":{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"client-tool-execution\",\"interruptId\":\"client_tool_call-1\",\"toolName\":\"create-document\",\"toolCallId\":\"call-1\",\"outputSchemaHash\":\"sha256:c3601de790064c4831aa68b01b96ca4a114b4467ab1003295b8f37dacb333bec\",\"responseSchemaHash\":\"sha256:c3601de790064c4831aa68b01b96ca4a114b4467ab1003295b8f37dacb333bec\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:05.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft it as a document"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:06.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 2,
+                    "promptTokens": 1,
+                    "completionTokens": 1
+                  },
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "awaiting-user",
+                    "interaction": {
+                      "type": "client-tool",
+                      "toolCallId": "call-1"
+                    }
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}",
+                    "id": "call-1",
+                    "input": {
+                      "name": "Mutual NDA",
+                      "source": "@title Mutual NDA\n\nThe parties agree to keep each other's information confidential."
+                    },
+                    "name": "create-document",
+                    "state": "input-complete",
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:07.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "action": {
+        "tool": "create-document",
+        "toolCallId": "call-1",
+        "type": "client-tool"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-2",
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "client_tool_call-1",
+                "payload": {
+                  "destination": "draft",
+                  "fileName": "Mutual NDA.docx",
+                  "fixes": [],
+                  "success": true,
+                  "warnings": []
+                },
+                "status": "resolved"
+              }
+            ],
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "content": "Draft it as a document"
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:08.000Z"
+                  }
+                },
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "create-document",
+                      "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-1",
+                "toolCallId": "call-1",
+                "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "create-document",
+                    "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}",
+                    "state": "complete",
+                    "input": {
+                      "name": "Mutual NDA",
+                      "source": "@title Mutual NDA\n\nThe parties agree to keep each other's information confidential."
+                    },
+                    "output": {
+                      "success": true,
+                      "destination": "draft",
+                      "fileName": "Mutual NDA.docx",
+                      "fixes": [],
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "type": "tool-result",
+                    "toolCallId": "call-1",
+                    "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                    "state": "complete"
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:09.000Z"
+                  }
+                },
+                "createdAt": "2026-01-01T00:00:10.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-1",
+              "resume": [
+                {
+                  "interruptId": "client_tool_call-1",
+                  "payload": {
+                    "destination": "draft",
+                    "fileName": "Mutual NDA.docx",
+                    "fixes": [],
+                    "success": true,
+                    "warnings": []
+                  },
+                  "status": "resolved"
+                }
+              ]
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "tool-call",
+                    "id": "call-1",
+                    "name": "create-document",
+                    "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}",
+                    "state": "complete",
+                    "input": {
+                      "name": "Mutual NDA",
+                      "source": "@title Mutual NDA\n\nThe parties agree to keep each other's information confidential."
+                    },
+                    "output": {
+                      "success": true,
+                      "destination": "draft",
+                      "fileName": "Mutual NDA.docx",
+                      "fixes": [],
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "type": "tool-result",
+                    "toolCallId": "call-1",
+                    "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                    "state": "complete"
+                  }
+                ],
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:11.000Z"
+                  }
+                },
+                "createdAt": "2026-01-01T00:00:12.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "parentRunId": "run-recorded-1",
+              "resume": [
+                {
+                  "interruptId": "client_tool_call-1",
+                  "payload": {
+                    "destination": "draft",
+                    "fileName": "Mutual NDA.docx",
+                    "fixes": [],
+                    "success": true,
+                    "warnings": []
+                  },
+                  "status": "resolved"
+                }
+              ]
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225623000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225624000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"The draft is open in the panel\",\"timestamp\":1767225625000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225626000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:13.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft it as a document"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:14.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 4,
+                    "promptTokens": 2,
+                    "completionTokens": 2
+                  },
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "completed"
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}",
+                    "id": "call-1",
+                    "input": {
+                      "name": "Mutual NDA",
+                      "source": "@title Mutual NDA\n\nThe parties agree to keep each other's information confidential."
+                    },
+                    "name": "create-document",
+                    "output": {
+                      "fixes": [],
+                      "success": true,
+                      "fileName": "Mutual NDA.docx",
+                      "warnings": [],
+                      "destination": "draft"
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"fixes\":[],\"success\":true,\"fileName\":\"Mutual NDA.docx\",\"warnings\":[],\"destination\":\"draft\"}",
+                    "state": "complete",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "The draft is open in the panel"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:15.000Z"
+          }
+        }
+      ]
+    }
+  ],
+  "threadId": "00000000-0000-7000-8000-000000000002"
+}

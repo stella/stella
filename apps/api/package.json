@@ -9,6 +9,7 @@
   "scripts": {
     "build": "bun run build:mcp-apps",
     "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
+    "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
     "gen:web-api-types": "bun scripts/generate-web-api-types.ts",
     "build:analyze": "bun build --target bun --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
     "test": "bun scripts/run-tests.ts",

@@ -199,6 +199,24 @@ export type WebChatClient = {
   /** Retry on the latest answer (the web app's resend). */
   resend: () => Promise<void>;
   sendUserMessage: (id: string, text: string) => Promise<void>;
+  /** Sends a message and returns once the live view satisfies `until`,
+   *  without waiting for the turn to end. */
+  startUserMessage: (
+    id: string,
+    text: string,
+    until: (messages: readonly UIMessage[]) => boolean,
+  ) => Promise<void>;
+  /** The page posts a client-executed tool's result on its own, with no
+   *  card to answer (a drafted document). */
+  runClientTool: (
+    toolCallId: string,
+    tool: string,
+    output: unknown,
+  ) => Promise<void>;
+  /** The composer's Stop. */
+  stop: () => Promise<void>;
+  /** Waits until no request is open and the runtime is idle. */
+  settle: () => Promise<void>;
   /** Errors the runtime reported since the last call, cleared on read. */
   takeErrors: () => Error[];
 };
@@ -311,6 +329,32 @@ export const createWebChatClient = async ({
         async () =>
           await web.sendThreadChatMessage(runtime, { content: text, id }),
       );
+    },
+    runClientTool: async (toolCallId, tool, output) => {
+      await act(
+        async () => await runtime.addToolResult({ output, tool, toolCallId }),
+      );
+    },
+    settle,
+    startUserMessage: async (id, text, until) => {
+      void web
+        .sendThreadChatMessage(runtime, { content: text, id })
+        .catch((error: unknown) => {
+          errors.push(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        });
+      for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
+        await nextTick();
+        if (until(messages())) {
+          return;
+        }
+      }
+      panic("The live view never reached the awaited state");
+    },
+    stop: async () => {
+      runtime.stop();
+      await settle();
     },
     takeErrors: () => errors.splice(0),
   };
