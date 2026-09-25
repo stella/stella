@@ -28,6 +28,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
+import { auditedSkillBody } from "./audited-body";
 import { hashAuthoredSkillContent } from "./authored-content-hash";
 
 type AvailableSkillMetadata = SkillMetadata & {
@@ -456,8 +457,8 @@ const updateCurrentSkillBody = async ({
           resourceId: activeSkillContext.id,
           changes: {
             body: {
-              old: activeSkillContext.body,
-              new: content,
+              old: auditedSkillBody(activeSkillContext.body),
+              new: auditedSkillBody(content),
             },
           },
           metadata: { slug: activeSkillContext.toolName },

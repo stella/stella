@@ -8,6 +8,7 @@ import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
+import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
@@ -207,7 +208,12 @@ const reviewSkillProposal = createSafeRootHandler(
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
             resourceId: params.skillId,
-            changes: { body: { old: skill.body, new: proposal.body } },
+            changes: {
+              body: {
+                old: auditedSkillBody(skill.body),
+                new: auditedSkillBody(proposal.body),
+              },
+            },
             metadata: {
               proposalId: proposal.id,
               resultRevisionId: resultRevision.id,

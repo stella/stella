@@ -8,6 +8,8 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
+import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
+import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -74,7 +76,7 @@ type SkillUpdateFields = {
 type SkillUpdateChange<T> = { old: T; new: T };
 
 type SkillUpdateChanges = {
-  body?: SkillUpdateChange<string>;
+  body?: SkillUpdateChange<AuditedSkillBody>;
   description?: SkillUpdateChange<string>;
   enabled?: SkillUpdateChange<boolean>;
   name?: SkillUpdateChange<string>;
@@ -162,7 +164,10 @@ const buildSkillUpdateDiff = (
   }
   if (body.body !== undefined && body.body !== existing.body) {
     updates.body = body.body;
-    changes.body = { old: existing.body, new: body.body };
+    changes.body = {
+      old: auditedSkillBody(existing.body),
+      new: auditedSkillBody(body.body),
+    };
   }
   if (body.version !== undefined && body.version !== existing.version) {
     updates.version = body.version;
