@@ -55,19 +55,23 @@ const LOOPBACK_HOST = "127.0.0.1";
 const isLoopbackPublish = (port: unknown): boolean =>
   typeof port === "string"
     ? port.startsWith(`${LOOPBACK_HOST}:`)
-    : isRecord(port) && port.host_ip === LOOPBACK_HOST;
+    : isRecord(port) && port["host_ip"] === LOOPBACK_HOST;
 
 describe("local compose services", () => {
   test("publish host ports on loopback only", async () => {
     const services = await readComposeServices();
     const exposed = Object.entries(services).flatMap(([name, service]) => {
-      if (!isRecord(service) || service.ports === undefined) {
+      if (!isRecord(service)) {
+        throw new TypeError(`${name} must be an object`);
+      }
+      const ports = service["ports"];
+      if (ports === undefined) {
         return [];
       }
-      if (!Array.isArray(service.ports)) {
+      if (!Array.isArray(ports)) {
         throw new TypeError(`${name}.ports must be an array`);
       }
-      return service.ports
+      return ports
         .filter((port) => !isLoopbackPublish(port))
         .map((port) => `${name}: ${JSON.stringify(port)}`);
     });
