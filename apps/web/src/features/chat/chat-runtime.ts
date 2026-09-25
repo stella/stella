@@ -461,7 +461,7 @@ export const createChatRuntime = ({
    * Each approval's answer, by approval id. An approval is answered once: a
    * second answer to it (a click racing its card's automatic answer) joins
    * the first instead of resolving the interrupt again. A failed answer is
-   * forgotten, so the user can answer again.
+   * not kept, so it does not stand in for a later answer to the same id.
    */
   const approvalAnswers = new Map<string, Promise<void>>();
 
@@ -526,8 +526,9 @@ export const createChatRuntime = ({
       const outcome = await answer;
       if (Result.isError(outcome)) {
         approvalAnswers.delete(response.id);
-        // The failed continuation is the turn's error, shown like any other;
-        // the approval can be answered again.
+        // The failed continuation is the turn's error, shown like any other.
+        // Its card stays answered; the thread reloads from the server, and
+        // the next message settles the turn.
         captureRuntimeError(outcome.error.cause);
       }
     },
