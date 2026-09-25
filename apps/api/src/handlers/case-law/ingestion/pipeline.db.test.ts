@@ -110,6 +110,7 @@ if (!databaseUrl || !runPostgresTests) {
       }
 
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await db.$client.close();
     });
 
     test("stores adapter documentAst output as a jsonb object", async () => {

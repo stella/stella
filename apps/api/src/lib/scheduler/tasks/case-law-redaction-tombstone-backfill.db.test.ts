@@ -68,6 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
         .delete(schedulerJobs)
         .where(eq(schedulerJobs.id, schedulerJobId));
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await db.$client.close();
     });
 
     test("replays v1 rows, fences projection restoration, and reaches a fixed point", async () => {

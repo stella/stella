@@ -24,6 +24,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
+import { loadPublicFtsSearchConfigs } from "@/api/lib/case-law/public-case-law-config";
 import {
   blendedRankSql,
   noCourtTierSql,
@@ -44,7 +45,7 @@ import {
   DEFAULT_SEARCH_SORT,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
-import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
+import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -66,8 +67,13 @@ import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
+  type LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -93,11 +99,11 @@ type LegislationHit = {
 type RawRow = Record<string, unknown>;
 
 type SearchLegislationDependencies = {
-  loadSearchConfigs: typeof loadFtsSearchConfigs;
+  loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
 };
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
-  loadSearchConfigs: loadFtsSearchConfigs,
+  loadSearchConfigs: loadPublicFtsSearchConfigs,
 };
 
 const toNullableString = (x: unknown): string | null => {
@@ -122,24 +128,35 @@ const toNullableString = (x: unknown): string | null => {
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
-const pgSearch = async (
-  body: SearchLegislationBody,
-  parsedCursor: SearchCursor | null,
-  legislationDb: LegislationReadDb,
-  dependencies: SearchLegislationDependencies,
-): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const ftsSearch = buildPgFtsSearchSql({
-    configs: await dependencies.loadSearchConfigs(),
-    query: body.query,
-    refs: {
-      language: sql`sd.language`,
-      regconfig: sql`sd.regconfig`,
-      vector: sql`sd.tsv`,
-    },
-  });
+type LegislationSearchHitsOptions = {
+  body: SearchLegislationBody;
+  configs: readonly FtsSearchConfig[];
+  limit: number;
+  parsedCursor: SearchCursor | null;
+};
 
-  const filters = sql`
+/**
+ * The Postgres search's one statement: a page of hits plus one row that says
+ * whether another page follows. Exported so the reader-role suite executes
+ * this exact statement under SET ROLE.
+ */
+export const readLegislationSearchHits = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.legislationSearchHits,
+  async (
+    tx: LegislationReadTransaction,
+    { body, configs, limit, parsedCursor }: LegislationSearchHitsOptions,
+  ): Promise<RawRow[]> => {
+    const ftsSearch = buildPgFtsSearchSql({
+      configs,
+      query: body.query,
+      refs: {
+        language: sql`sd.language`,
+        regconfig: sql`sd.regconfig`,
+        vector: sql`sd.tsv`,
+      },
+    });
+
+    const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
     ${body.documentType ? sql`AND d.document_type = ${body.documentType}` : sql``}
     ${body.status ? sql`AND d.status = ${body.status}` : sql``}
@@ -149,19 +166,18 @@ const pgSearch = async (
     ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
   `;
 
-  // One fragment for the ORDER BY and the cursor predicate alike: keyset
-  // pagination is only stable while the two are the same expression.
-  const scoreExpr = blendedRankSql({
-    authority: sql`d.citation_authority`,
-    courtTier: noCourtTierSql(),
-    lexicalRank: ftsSearch.rank,
-  });
-  const cursorFilter = parsedCursor
-    ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
-    : sql``;
+    // One fragment for the ORDER BY and the cursor predicate alike: keyset
+    // pagination is only stable while the two are the same expression.
+    const scoreExpr = blendedRankSql({
+      authority: sql`d.citation_authority`,
+      courtTier: noCourtTierSql(),
+      lexicalRank: ftsSearch.rank,
+    });
+    const cursorFilter = parsedCursor
+      ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
+      : sql``;
 
-  const rows = await legislationDb((tx) =>
-    tx.execute(sql`
+    const rows: RawRow[] = await tx.execute(sql`
     SELECT
       sd.document_id,
       d.eli,
@@ -195,10 +211,28 @@ const pgSearch = async (
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC
     LIMIT ${limit + 1}
-  `),
-  );
+  `);
+    return rows;
+  },
+);
 
-  const result: RawRow[] = rows;
+const pgSearch = async (
+  body: SearchLegislationBody,
+  parsedCursor: SearchCursor | null,
+  legislationDb: LegislationReadDb,
+  dependencies: SearchLegislationDependencies,
+): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const configs = await dependencies.loadSearchConfigs();
+  const result = await legislationDb(
+    async (tx) =>
+      await readLegislationSearchHits(tx, {
+        body,
+        configs,
+        limit,
+        parsedCursor,
+      }),
+  );
   const hasMore = result.length > limit;
   const pageRows = hasMore ? result.slice(0, limit) : result;
   const lastRow = pageRows.at(-1);

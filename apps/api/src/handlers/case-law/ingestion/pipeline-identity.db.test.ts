@@ -111,6 +111,7 @@ if (!databaseUrl || !runPostgresTests) {
       if (sourceId) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
+      await db.$client.close();
     });
 
     test("keeps decisions that share a docket across courts", async () => {

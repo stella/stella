@@ -22,11 +22,11 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
@@ -55,12 +55,12 @@ const sectionsToPlainText = (
 
 type LegislationSearchIndexDependencies = {
   readText: typeof readCorpusText;
-  resolveConfig: typeof resolveFtsConfig;
+  resolveConfig: typeof resolveLocalFtsConfig;
 };
 
 const DEFAULT_DEPENDENCIES: LegislationSearchIndexDependencies = {
   readText: readCorpusText,
-  resolveConfig: resolveFtsConfig,
+  resolveConfig: resolveLocalFtsConfig,
 };
 
 export const indexLegislationDocument = async (

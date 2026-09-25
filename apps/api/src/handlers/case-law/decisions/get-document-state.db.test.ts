@@ -109,6 +109,7 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      await db.$client.close();
     });
 
     test("a decision nobody has fetched is pending", async () => {

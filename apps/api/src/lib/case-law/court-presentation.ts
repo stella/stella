@@ -63,12 +63,11 @@ export const courtPresentation = (
 /**
  * How long a public read waits for the registry before drawing no chip.
  *
- * The registry lives on the root pool, which a public read otherwise never
- * touches, and the loader's own bound is five seconds — half the reader's
- * critical-query budget, spent inside the transaction that holds a reader
- * connection. A badge is presentation, so it gets a fraction of that and the
- * read carries on without it. The loader caches for a minute and the call it
- * raced keeps running, so the next read is warm either way.
+ * The loader's own bound is five seconds — half the reader's critical-query
+ * budget, spent while the read holds a reader connection. A badge is
+ * presentation, so it gets a fraction of that and the read carries on without
+ * it. The loader caches for a minute and the call it raced keeps running, so
+ * the next read is warm either way.
  */
 const REGISTRY_READ_TIMEOUT_MS = 1000;
 

@@ -13,12 +13,12 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
@@ -45,7 +45,7 @@ const sectionsToPlainText = (
 export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-  resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
+  resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
 ): Promise<Result<void, unknown>> => {
   const [decision] = await scopedDb((tx) =>
     tx
@@ -221,7 +221,7 @@ type SearchIndexBackfillResult = { found: number; indexed: number };
 export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
-  resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
+  resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
 ): Promise<SearchIndexBackfillResult> => {
   // Find decisions that need (re)indexing. ASC order so the backlog
   // clears in insertion order, avoiding a "poison pill" where a

@@ -4165,10 +4165,11 @@ export default defineConfig({
       },
     },
     {
-      // The rule applies itself to every file that imports
-      // `@/api/lib/case-law-public-read-db` (and to that module). The excluded
-      // modules read the public connection and tenant data side by side, so
-      // they sit outside the public-only boundary; this list may only shrink.
+      // The rule applies itself to every file that imports an owner of a
+      // public-law read (the case-law and legislation handles, the connection,
+      // the shared-query registry) and to those modules. The excluded modules
+      // read the public connection and tenant data side by side, so they sit
+      // outside the public-only boundary; this list may only shrink.
       files: ["apps/api/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",

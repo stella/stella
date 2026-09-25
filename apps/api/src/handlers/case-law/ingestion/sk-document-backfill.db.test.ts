@@ -208,6 +208,7 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      await db.$client.close();
     });
 
     test("queues only decisions that are still waiting on a document", async () => {

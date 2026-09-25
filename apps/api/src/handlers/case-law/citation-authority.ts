@@ -51,11 +51,9 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
-import {
-  flattenCourtWeightEntries,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
+import { loadLocalCourtWeights } from "@/api/lib/case-law/local-case-law-config";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
@@ -97,7 +95,7 @@ const firstNumber = (result: unknown, key: string): number => {
  */
 export const loadCitationCourtWeightEntries = async (): Promise<
   CourtWeightEntry[]
-> => flattenCourtWeightEntries(await loadCourtWeights());
+> => flattenCourtWeightEntries(await loadLocalCourtWeights());
 
 /** The SQL aliases a contribution expression may read. */
 export type CitationContributionAliases = {
