@@ -5,7 +5,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
-import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 import { getCollator } from "@stll/collation";
 
 import {
@@ -27,13 +26,8 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import {
-  CASE_LAW_SEARCH_FACETS,
-  caseLawSearchPlan,
   findDecisionIdsByIdentity,
   readCaseLawPageDecisionRows,
-  readCaseLawSearchFacet,
-  readCaseLawSearchHits,
-  readCaseLawSearchTotal,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
 import {
@@ -45,19 +39,12 @@ import {
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
-import {
-  readLegislationSearchHits,
-  rehydrateLegislationCandidates,
-} from "@/api/handlers/legislation/search";
+import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import {
-  readCourtWeightRowsQuery,
-  readFtsConfigRowsQuery,
-} from "@/api/lib/case-law/case-law-config-read";
 import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import {
   readPublicDecisionLanguageAlternatesByGroup,
@@ -71,16 +58,8 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
-import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
-import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
-import {
-  PROVIDER_SEARCH_FACETS,
-  providerSearchPlan,
-  readProviderSearchFacet,
-  readProviderSearchHits,
-} from "@/api/lib/legal-search/pg-fts-legal-provider";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -102,6 +81,17 @@ import type {
   PublicLawColumnGrantsByRelation,
 } from "@/api/lib/public-law-relations";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
+import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  cleanUpSearchCensus,
+  expectedSearchCensus,
+  newSearchCensusIds,
+  runSearchCensus,
+  SEARCH_CENSUS_RELATIONS,
+  seedSearchCensus,
+} from "@/api/tests/security/public-law-search-census";
+import type { SearchCensusObservation } from "@/api/tests/security/public-law-search-census";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
   TestDatabase,
@@ -214,14 +204,6 @@ const caseLawReaderDb = (): CaseLawPublicReadDb => {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only branded read handle
   return readDb as unknown as CaseLawPublicReadDb;
 };
-
-/** A search that sets the filters the statements branch on. */
-const SEARCH_CENSUS_BODY = {
-  country: PUBLIC_COUNTRY,
-  court: "Reader role census",
-  language: "cs",
-  query: "reader role census",
-} satisfies Parameters<typeof caseLawSearchPlan>[0]["body"];
 
 /**
  * The configuration search headlines are cut with. Migrations create it; the
@@ -873,7 +855,7 @@ describe("public-law reader role", () => {
     const caseLawDb = caseLawReaderDb();
     const decisionId = createSafeId<"caseLawDecision">();
     const sourceId = createSafeId<"caseLawSource">();
-    const exercised = new Set<string>();
+    const exercised = new Set<PublicLawSharedQuery>();
 
     await testDb.insert(caseLawSources).values({
       id: sourceId,
@@ -962,69 +944,19 @@ describe("public-law reader role", () => {
         );
       });
 
+      // Every search and configuration statement, asserted on the rows it
+      // returns: a hidden row reads as an empty result, not an error.
       await ensureHeadlineConfiguration();
-      await caseLawDb(async (tx) => {
-        // The search configuration, read the way the public caches read it.
-        const ftsRows = await readFtsConfigRowsQuery(tx);
-        exercised.add(readFtsConfigRowsQuery.publicLawSharedQuery);
-        await readCourtWeightRowsQuery(tx);
-        exercised.add(readCourtWeightRowsQuery.publicLawSharedQuery);
-
-        const configs = await createFtsConfigCache(
-          async () => ftsRows,
-        ).loadFtsSearchConfigs();
-        // The seeded registry, so the rank CASE the statements carry is the
-        // one production renders.
-        const courtWeights = courtWeightMapFromSeed();
-
-        // Both Postgres case-law searches: every statement, every facet.
-        const plan = caseLawSearchPlan({
-          body: SEARCH_CENSUS_BODY,
-          configs,
-          courtWeights,
-          excerpt: DEFAULT_SEARCH_EXCERPT,
-          limit: 10,
-          parsedCursor: null,
-          queryUsed: SEARCH_CENSUS_BODY.query,
-          sort: DEFAULT_SEARCH_SORT,
-        });
-        await readCaseLawSearchHits(tx, plan);
-        exercised.add(readCaseLawSearchHits.publicLawSharedQuery);
-        await readCaseLawSearchTotal(tx, plan);
-        exercised.add(readCaseLawSearchTotal.publicLawSharedQuery);
-        for (const facet of CASE_LAW_SEARCH_FACETS) {
-          await readCaseLawSearchFacet(tx, plan, facet);
-        }
-        exercised.add(readCaseLawSearchFacet.publicLawSharedQuery);
-
-        const providerPlan = providerSearchPlan({
-          configs,
-          courtWeights,
-          parsedCursor: null,
-          query: {
-            court: SEARCH_CENSUS_BODY.court,
-            jurisdiction: SEARCH_CENSUS_BODY.country,
-            language: SEARCH_CENSUS_BODY.language,
-            limit: 10,
-            query: SEARCH_CENSUS_BODY.query,
-          },
-        });
-        await readProviderSearchHits(tx, providerPlan);
-        exercised.add(readProviderSearchHits.publicLawSharedQuery);
-        for (const facet of PROVIDER_SEARCH_FACETS) {
-          await readProviderSearchFacet(tx, providerPlan, facet);
-        }
-        exercised.add(readProviderSearchFacet.publicLawSharedQuery);
-
-        // The legislation search, filters and eligibility included.
-        await readLegislationSearchHits(tx, {
-          body: { query: SEARCH_CENSUS_BODY.query, language: "cs" },
-          configs,
-          limit: 10,
-          parsedCursor: null,
-        });
-        exercised.add(readLegislationSearchHits.publicLawSharedQuery);
-      });
+      const censusIds = newSearchCensusIds();
+      await seedSearchCensus(testDb, censusIds);
+      try {
+        const observed = await caseLawDb(
+          async (tx) => await runSearchCensus(tx, exercised),
+        );
+        expect(observed).toEqual(expectedSearchCensus(censusIds));
+      } finally {
+        await cleanUpSearchCensus(testDb, censusIds);
+      }
 
       expect([...exercised].toSorted()).toEqual(
         Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted(),
@@ -1037,6 +969,46 @@ describe("public-law reader role", () => {
         .delete(caseLawSources)
         .where(eq(caseLawSources.id, sourceId));
     }
+  });
+
+  // The census's assertions hold because the policies let the rows through:
+  // without them the same statements succeed and return nothing.
+  test("the search census sees no rows once the reader policies are gone", async () => {
+    await ensureHeadlineConfiguration();
+    const censusIds = newSearchCensusIds();
+    await seedSearchCensus(testDb, censusIds);
+    let observed: SearchCensusObservation | undefined;
+    try {
+      await testDb.transaction(async (tx) => {
+        for (const relation of SEARCH_CENSUS_RELATIONS) {
+          await tx.execute(
+            sql.raw(
+              `DROP POLICY "public_law_reader_access" ON ${quoted(relation)}`,
+            ),
+          );
+        }
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+        observed = await runSearchCensus(
+          asTestRaw<CaseLawPublicReadTransaction>(tx),
+        );
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    } finally {
+      await cleanUpSearchCensus(testDb, censusIds);
+    }
+
+    expect(observed).toMatchObject({
+      ftsConfig: undefined,
+      courtWeight: undefined,
+      caseLawHitIds: [],
+      caseLawTotal: 0,
+      providerHitIds: [],
+      legislationHitIds: [],
+    });
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {
