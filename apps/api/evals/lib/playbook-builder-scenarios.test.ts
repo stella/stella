@@ -141,11 +141,13 @@ const score = (
   id: string,
   events: BuilderEvent[],
   stored = playbook(undefined),
+  replies: readonly string[] = [],
 ) =>
   scoreScenario(scenario(id), {
     surface: "mcp",
     documentedReads: new Set(),
     events,
+    replies,
     playbooks: [stored],
   });
 
@@ -158,6 +160,7 @@ const scoreOnChat = (
     surface: "chat",
     documentedReads: new Set(documentedReads),
     events,
+    replies: [],
     playbooks: [playbook(undefined)],
   });
 
@@ -237,6 +240,7 @@ describe("scripted answers", () => {
     expect(
       scenario("discovery").answer(
         question ?? panic("the helper builds one question"),
+        [],
       ),
     ).toBe(`The "${matters.at(0)?.name ?? ""}" matter.`);
   });
@@ -303,8 +307,162 @@ describe("perspective scoring", () => {
         surface: "mcp",
         documentedReads: new Set(),
         events,
+        replies: [],
         playbooks: [playbook("neutral")],
       }),
     ).toContain("saved scope.perspective neutral; the side maps to undefined");
+  });
+});
+
+/** The run the `grounding-later` scenario describes, on the MCP surface. */
+const GROUNDING_QUESTION =
+  "Should I ground these positions in your executed contracts?";
+const GROUNDING_OPTIONS = [
+  "Look in my matters",
+  "Attach them",
+  "Finish without",
+];
+const groundingLaterRun = (): BuilderEvent[] => [
+  ask(
+    1,
+    "Do you have past executed agreements to ground the playbook in?",
+    "Which side is your organization on?",
+    "Which governing law should the playbook assume?",
+  ),
+  event(1, "save_playbook"),
+  event(1, "save_playbook"),
+  askWith(1, GROUNDING_QUESTION, GROUNDING_OPTIONS),
+  event(1, "list_matters"),
+  askWith(1, WHICH_MATTERS, MATTER_OPTIONS),
+  event(1, "list_documents", { matter_id: supplyMatterId }),
+  ask(1, "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)"),
+  read(1, keller),
+  read(1, brandt),
+  event(1, "save_playbook"),
+];
+
+describe("grounding-later scoring", () => {
+  test("the described run has no defects", () => {
+    expect(score("grounding-later", groundingLaterRun())).toEqual([]);
+  });
+
+  test("the script says yes only to the grounding question after a save", () => {
+    const grounding = scenario("grounding-later");
+    const [question] = askWith(
+      1,
+      GROUNDING_QUESTION,
+      GROUNDING_OPTIONS,
+    ).questions;
+    const asked = question ?? panic("the helper builds one question");
+    expect(grounding.answer(asked, [])).toBe("Start without them for now.");
+    expect(grounding.answer(asked, [event(1, "save_playbook")])).toBe(
+      "Yes, look in my matters.",
+    );
+  });
+
+  test("a grounding question that names no contracts still gets the yes", () => {
+    const [question] = askWith(
+      1,
+      "How should I finish grounding the playbook?",
+      GROUNDING_OPTIONS,
+    ).questions;
+    expect(
+      scenario("grounding-later").answer(
+        question ?? panic("the helper builds one question"),
+        [event(1, "save_playbook")],
+      ),
+    ).toBe("Yes, look in my matters.");
+  });
+
+  test("offering to ground in prose instead of asking is a defect", () => {
+    const events = groundingLaterRun().slice(0, 3);
+    expect(
+      score("grounding-later", events, playbook(undefined), [
+        "The positions are saved. If you want, I can ground them in your contracts.",
+      ]),
+    ).toEqual([
+      "ended turn 1 with an offer: If you want, I can ground them in your contracts.",
+      "did not ask with ask-user whether to ground the saved positions in contracts",
+    ]);
+  });
+
+  test("asking which matters without listing them first is a defect", () => {
+    const events = groundingLaterRun().filter(
+      ({ name }) => name !== "list_matters",
+    );
+    expect(score("grounding-later", events)).toEqual([
+      "asked which matters before listing them",
+    ]);
+  });
+
+  test("offering candidates before listing the matter is a defect", () => {
+    const events = groundingLaterRun();
+    const [listing] = events.splice(6, 1);
+    events.splice(7, 0, listing ?? panic("the run lists the documents"));
+    expect(score("grounding-later", events)).toEqual([
+      "offered candidates before listing the chosen matter's documents",
+    ]);
+  });
+});
+
+describe("shared scoring", () => {
+  test("a side option that merges role pairs is a defect", () => {
+    const events = contractsLaterRun();
+    events[0] = askWith(1, "Which side is your organization on?", [
+      "Customer / recipient / buyer",
+      "Supplier",
+    ]);
+    expect(score("contracts-later", events)).toContain(
+      "offered a side option that merges role pairs: Customer / recipient / buyer",
+    );
+  });
+
+  test("a role described in plain words is not a merged option", () => {
+    const events = contractsLaterRun();
+    events[0] = askWith(1, "Which side is your organization on?", [
+      "Customer (receiving IT services)",
+      "Supplier (providing IT services)",
+    ]);
+    expect(
+      score("contracts-later", events).filter((defect) =>
+        defect.includes("merges role pairs"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("looking for starter playbooks is a defect", () => {
+    const events = contractsLaterRun();
+    events.splice(1, 0, event(1, "list_templates"));
+    expect(score("contracts-later", events)).toEqual([
+      "looked for starter playbooks with list_templates",
+    ]);
+  });
+
+  test("a turn that saves nothing after the opening answers is a stall", () => {
+    const events = contractsLaterRun().filter(
+      ({ name, turn }) => turn !== 1 || name !== "save_playbook",
+    );
+    expect(score("contracts-later", events)).toEqual([
+      "saved nothing in the turn that received the opening answers",
+    ]);
+  });
+
+  test("a reply that ends on a statement or a pointer is not an offer", () => {
+    expect(
+      score("contracts-later", contractsLaterRun(), playbook(undefined), [
+        "Saved the first positions.",
+        "If you prefer a starter instead, an MSA starter is available on the playbooks page.",
+      ]),
+    ).toEqual([]);
+  });
+
+  test("a reply that ends on a first-person offer is a stall", () => {
+    expect(
+      score("contracts-later", contractsLaterRun(), playbook(undefined), [
+        "Next, I can keep building the playbook with the main supplier terms.",
+      ]),
+    ).toEqual([
+      "ended turn 1 with an offer: Next, I can keep building the playbook with the main supplier terms.",
+    ]);
   });
 });

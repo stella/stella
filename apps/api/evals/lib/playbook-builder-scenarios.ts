@@ -4,7 +4,8 @@
  * scenario checks in the run's evidence.
  *
  * The oracle is the stored playbook, the questions asked, and the shape and
- * order of the calls, never the model's prose.
+ * order of the calls. Of the model's prose, only how a reply ends is read:
+ * an offer there means the model stopped instead of acting or asking.
  */
 
 import type { RegistryReadToolDataByName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
@@ -81,6 +82,8 @@ type BuilderEvidence = {
   /** Reads the active skill documents up front on the chat surface. */
   documentedReads: ReadonlySet<string>;
   events: readonly BuilderEvent[];
+  /** The model's text of each turn, in turn order. */
+  replies: readonly string[];
   playbooks: readonly StoredPlaybook[];
 };
 
@@ -95,7 +98,8 @@ export type BuilderScenario = {
   /** The `scope.perspective` values the user's side maps to; `undefined`
    *  is the omission the skill asks for when the side maps to none. */
   perspectives: readonly (PlaybookPerspective | undefined)[];
-  answer: (question: AskedQuestion) => string;
+  /** The script's answer, given the calls the run made before asking. */
+  answer: (question: AskedQuestion, history: readonly BuilderEvent[]) => string;
   check: (evidence: BuilderEvidence) => string[];
 };
 
@@ -470,9 +474,80 @@ const tierTexts = (position: Position): string[] => {
   ];
 };
 
+/** The role pairs a side question draws on, each role with its synonyms. */
+const ROLE_PAIRS = [
+  { customer: /\bcustomers?\b/iu, supplier: /\b(suppliers?|vendors?)\b/iu },
+  {
+    // Only the party names: "Customer (receiving IT services)" is one role.
+    discloser: /\b(disclosers?|disclosing part(?:y|ies))\b/iu,
+    recipient: /\b(recipients?|receiving part(?:y|ies))\b/iu,
+  },
+  { controller: /\bcontrollers?\b/iu, processor: /\bprocessors?\b/iu },
+  { buyer: /\b(buyers?|purchasers?)\b/iu, seller: /\bsellers?\b/iu },
+] as const;
+
+const isSideQuestion = ({ question }: AskedQuestion) =>
+  classifyQuestion(question) === "side";
+
+/**
+ * Each side option is one role from the pair the contract type uses. An
+ * option that merges pairs ("Customer / recipient / buyer") hands the user a
+ * word, such as "buyer", that they never chose.
+ */
+const sideOptionDefects = (events: readonly BuilderEvent[]): string[] =>
+  askedQuestions(events)
+    .filter(isSideQuestion)
+    .flatMap(({ options }) => options)
+    .filter(
+      (option) =>
+        ROLE_PAIRS.filter((pair) =>
+          Object.values(pair).some((role) => role.test(option)),
+        ).length > 1,
+    )
+    .map((option) => `offered a side option that merges role pairs: ${option}`);
+
+/**
+ * An offer puts the next step on the model, in the first person: "If you
+ * want, I can proceed." A pointer the user acts on ("If you prefer, a
+ * starter is on the playbooks page") is not one.
+ */
+const OFFER =
+  /\b(i can|i could|i'll|i will|shall i|should i|want me to|would you like me to)\b/iu;
+
+const lastSentence = (text: string): string =>
+  text
+    .trim()
+    .split(/(?<=[.!?])\s+/u)
+    .at(-1) ?? "";
+
+/**
+ * A run that starts without contracts builds on in the turn that received
+ * the opening answers, and no turn ends with an offer: the skill has the
+ * model either act or ask with `ask-user`.
+ */
+const stallDefects = ({
+  events,
+  replies,
+}: Pick<BuilderEvidence, "events" | "replies">): string[] => {
+  const defects: string[] = [];
+  if (!eventsOfTurn(events, 1).some(isSave)) {
+    defects.push("saved nothing in the turn that received the opening answers");
+  }
+  for (const [index, reply] of replies.entries()) {
+    const ending = lastSentence(reply);
+    if (OFFER.test(ending)) {
+      defects.push(
+        `ended turn ${String(index + 1)} with an offer: ${ending.slice(0, 120)}`,
+      );
+    }
+  }
+  return defects;
+};
+
 /**
  * Defects every scenario shares: one playbook, enough positions, no resends,
- * no matter read or script refused, no work handed to subagents, and on the
+ * no matter read or script refused, no work handed to subagents, no search
+ * for starter playbooks, side options that each name one role, and on the
  * chat surface no read written before its signature was discovered.
  */
 const commonDefects = ({
@@ -499,6 +574,11 @@ const commonDefects = ({
   if (spawned > 0) {
     defects.push(`handed work to subagents ${String(spawned)} time(s)`);
   }
+  // Starter playbooks live on the playbooks page; chat cannot reach them.
+  if (events.some(({ name }) => name === "list_templates")) {
+    defects.push("looked for starter playbooks with list_templates");
+  }
+  defects.push(...sideOptionDefects(events));
   if (playbooks.length !== 1) {
     defects.push(`${String(playbooks.length)} playbooks stored; expected one`);
   }
@@ -561,12 +641,15 @@ const noDocuments: BuilderScenario = {
     type: "Mutual and one-way NDAs we receive from business partners.",
   }),
   check: (evidence) => {
-    const defects = missingTopics(evidence.events, [
-      "contracts",
-      "side",
-      "law",
-      "language",
-    ]);
+    const defects = [
+      ...missingTopics(evidence.events, [
+        "contracts",
+        "side",
+        "law",
+        "language",
+      ]),
+      ...stallDefects(evidence),
+    ];
     const searched = matterCalls(evidence.events);
     if (searched.length > 0) {
       defects.push(
@@ -723,14 +806,14 @@ const contractsLater: BuilderScenario = {
     isCandidatesQuestion(question)
       ? pickConfirmedCandidates(question)
       : answerContractsLaterTopic(question),
-  check: ({ events, playbooks }) => {
-    const defects = missingTopics(events, ["contracts", "side", "law"]);
+  check: ({ events, playbooks, replies }) => {
+    const defects = [
+      ...missingTopics(events, ["contracts", "side", "law"]),
+      ...stallDefects({ events, replies }),
+    ];
     const opening = eventsOfTurn(events, 1);
     if (matterCalls(opening).length > 0) {
       defects.push("looked for contracts after the user declined them");
-    }
-    if (!opening.some(isSave)) {
-      defects.push("saved nothing before the user asked for contracts");
     }
     const later = eventsOfTurn(events, 2);
     const firstMattersQuestion = indexOfFirst(later, ({ questions }) =>
@@ -750,6 +833,101 @@ const contractsLater: BuilderScenario = {
     }
     defects.push(
       ...mattersQuestionDefects(later),
+      ...namedMatterDefects(later),
+      ...confirmedReadDefects(later),
+      ...liabilityGroundingDefects(playbooks),
+    );
+    return defects;
+  },
+};
+
+/**
+ * The candidates offered are the chosen matter's documents, so they were
+ * listed before the question.
+ */
+const candidatesQuestionDefects = (
+  events: readonly BuilderEvent[],
+): string[] => {
+  const asked = indexOfFirst(events, ({ questions }) =>
+    questions.some(isCandidatesQuestion),
+  );
+  const listed = indexOfFirst(events, ({ name }) => name === "list_documents");
+  return asked !== Number.POSITIVE_INFINITY && listed > asked
+    ? ["offered candidates before listing the chosen matter's documents"]
+    : [];
+};
+
+/**
+ * The end-of-build question the skill asks when the user started without
+ * contracts: whether to look in the matters, attach them, or finish without.
+ */
+const isGroundingQuestion = (question: AskedQuestion) => {
+  const text = questionText(question);
+  return (
+    !isMattersQuestion(question) &&
+    !isCandidatesQuestion(question) &&
+    (classifyQuestion(question.question) === "contracts" ||
+      /\bground/iu.test(text) ||
+      (/\bmatters?\b/iu.test(text) && /\battach/iu.test(text)))
+  );
+};
+
+const answerGroundingLaterTopic = answerByTopic({
+  contracts: "Start without them for now.",
+  language: "English.",
+  law: "German law.",
+  matters: `The "${SUPPLY_MATTER.name}" matter.`,
+  side: "We are the customer.",
+  type: "IT services agreements with software suppliers.",
+});
+
+/**
+ * The user starts without contracts and says yes only when the model offers
+ * to ground the settled positions. The grounding question is asked with
+ * `ask-user`, and the yes re-enters "Look for them" at its first step:
+ * list the matters and offer them, list the chosen one, offer the
+ * candidates, read only the picks.
+ */
+const groundingLater: BuilderScenario = {
+  id: "grounding-later",
+  brief:
+    "Help me build a playbook for the IT services agreements our software suppliers send us.",
+  followUps: [],
+  perspectives: [undefined],
+  answer: (question, history) => {
+    if (isCandidatesQuestion(question)) {
+      return pickConfirmedCandidates(question);
+    }
+    return history.some(isSave) && isGroundingQuestion(question)
+      ? "Yes, look in my matters."
+      : answerGroundingLaterTopic(question);
+  },
+  check: ({ events, playbooks, replies }) => {
+    const defects = [
+      ...missingTopics(events, ["contracts", "side", "law"]),
+      ...stallDefects({ events, replies }),
+    ];
+    const firstSave = indexOfFirst(events, isSave);
+    const grounding = events.findIndex(
+      ({ questions }, index) =>
+        index > firstSave && questions.some(isGroundingQuestion),
+    );
+    if (grounding === -1) {
+      defects.push(
+        "did not ask with ask-user whether to ground the saved positions in contracts",
+      );
+      return defects;
+    }
+    if (matterCalls(events.slice(0, grounding)).length > 0) {
+      defects.push("looked for contracts before the user asked for them");
+    }
+    const later = events.slice(grounding + 1);
+    if (!later.some(({ questions }) => questions.some(isMattersQuestion))) {
+      defects.push("did not ask which matters to search");
+    }
+    defects.push(
+      ...mattersQuestionDefects(later),
+      ...candidatesQuestionDefects(later),
       ...namedMatterDefects(later),
       ...confirmedReadDefects(later),
       ...liabilityGroundingDefects(playbooks),
@@ -860,5 +1038,6 @@ export const BUILDER_SCENARIOS: readonly BuilderScenario[] = [
   noDocuments,
   discovery,
   contractsLater,
+  groundingLater,
   withDocuments,
 ];
