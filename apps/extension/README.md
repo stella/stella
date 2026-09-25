@@ -62,10 +62,13 @@ or close tabs.
 Every command names the tab and page snapshot chat last saw. Element actions
 run only in the exact document their snapshot read, and `open` and `go-back`
 only while Chrome reports the tab still shows the document chat last read
-successfully (a stopped or failed read does not count), or Chrome's own error
-page. When Chrome cannot say what the tab shows, or chat has read nothing in
-it, they are refused; after a navigation, a reload or a tab the user handed
-over, they are refused until chat reads the page again. Each chat turn may run 40 actions including 15
+successfully (a stopped or failed read does not count). When Chrome cannot say
+what the tab shows, or chat has read nothing in it, they are refused; after a
+navigation, a reload or a tab the user handed over, they are refused until
+chat reads the page again. There is no exception for error pages: Chrome
+offers no documented signal that tells its error page apart from a page chat
+never saw. When the tab shows a page chat cannot read, chat asks the user to
+open a page in it, or to hand over another tab from the popup. Each chat turn may run 40 actions including 15
 navigations, and each pairing 400 actions including 150 navigations; page
 reads, and commands refused before they act, are not counted. Reconnecting
 from the popup starts a new pairing.
@@ -124,8 +127,9 @@ origin samples the frames open at one moment and cannot prove who started a
 download. A download that finished before it could be judged, which happens
 only when Chrome skips that step, stays on disk and is flagged instead.
 
-The toolbar icon counts downloads stopped or flagged, and its tooltip says
-which happened last; the popup shows the notice once.
+The toolbar icon counts downloads stopped and finished files kept, and the
+popup names both counts once, warning about kept files to check before
+opening them.
 
 ## Limits
 
