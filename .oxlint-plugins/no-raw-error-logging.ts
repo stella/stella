@@ -1,11 +1,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow raw error values in production log sinks.
 // Stella logs privileged legal workflows. Production logs should carry
-// structural error information (`errorTag(error)`, `"error.type"`) and
+// structural error information, read once by the failure owner, and
 // correlation IDs, not raw messages, stacks, causes, or stringified errors.
 //
 // Safe patterns:
-//   logger.error("worker.failed", { "error.type": errorTag(error) })
+//   observeFailure(error, { sink: workerFailed })
 //   logger.warn("sse.failed", { "message.bytes": message.length })
 //   process.stderr.write(`worker error: ${type}\n`)
 //
@@ -14,12 +14,16 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   logger.warn("worker.failed", { error })
 //   logger.error("request.failed", { "error.message": error.message })
 //   process.stderr.write(`worker error: ${error.message}\n`)
+//   void Bun.write(Bun.stderr, `worker error: ${error.message}\n`)
+//   fields["error.msg"] = message   // outside the legacy field helpers
 
 import {
   getPropertyName,
   isCallTo,
   isIdentifier,
   isMemberAccess,
+  isTestFile,
+  repoRelativeFilename,
 } from "./utils.ts";
 
 const LOGGER_METHODS = new Set(["debug", "error", "info", "warn"]);
@@ -57,6 +61,31 @@ const isStderrWriteCall = (node) => {
 
   return isMemberAccess(callee.object, "process", "stderr");
 };
+
+// `Bun.write(Bun.stderr, …)` and `Bun.write(Bun.stdout, …)` are process
+// streams like `process.stderr.write`.
+const BUN_STREAMS = new Set(["stderr", "stdout"]);
+
+const isBunStreamWriteCall = (node) => {
+  const callee = node.callee;
+  if (!isMemberAccess(callee, "Bun", "write")) {
+    return false;
+  }
+  const target = node.arguments.at(0);
+  return (
+    target?.type === "MemberExpression" &&
+    !target.computed &&
+    isIdentifier(target.object, "Bun") &&
+    isIdentifier(target.property) &&
+    BUN_STREAMS.has(target.property.name)
+  );
+};
+
+// A raw message under a key the sanitizer does not redact. Only the legacy
+// field helpers may still write it; everywhere else the structured codes the
+// failure owner reads replace it.
+const RAW_MESSAGE_KEY = "error.msg";
+const RAW_MESSAGE_KEY_OWNERS = new Set(["apps/api/src/lib/errors/utils.ts"]);
 
 const isStringErrorCall = (node) =>
   isCallTo(node, "String") && node.arguments.some(isRawErrorExpression);
@@ -193,9 +222,11 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawErrorAttribute:
-            "Do not log raw '{{name}}' values. Log a structural error tag with errorTag(error) as 'error.type' instead.",
+            "Do not log raw '{{name}}' values. Use observeFailure(error, { sink }); for a record that is not a failure, spread errorFields(readEvidence(error)).",
           rawErrorStderr:
-            "Do not write raw error messages, stacks, causes, or String(error) to stderr. Use the error class/tag instead.",
+            "Do not write raw error messages, stacks, causes, or String(error) to a process stream. Use observeFailure(error, { sink }) instead.",
+          rawMessageKey:
+            "Do not ship '{{name}}': it carries the raw message. Log the structured codes errorFields(readEvidence(error)) reads instead.",
         },
       },
       createOnce(context) {
@@ -204,6 +235,13 @@ export default eslintCompatPlugin({
             if (isLoggerCall(node)) {
               for (const arg of node.arguments) {
                 checkLoggerAttributeNode(context, arg);
+              }
+              return;
+            }
+
+            if (isBunStreamWriteCall(node)) {
+              if (node.arguments.slice(1).some(isRawErrorExpression)) {
+                context.report({ node, messageId: "rawErrorStderr" });
               }
               return;
             }
@@ -218,6 +256,20 @@ export default eslintCompatPlugin({
                 messageId: "rawErrorStderr",
               });
             }
+          },
+          Literal(node) {
+            if (node.value !== RAW_MESSAGE_KEY) {
+              return;
+            }
+            const filename = repoRelativeFilename(context);
+            if (isTestFile(filename) || RAW_MESSAGE_KEY_OWNERS.has(filename)) {
+              return;
+            }
+            context.report({
+              node,
+              messageId: "rawMessageKey",
+              data: { name: RAW_MESSAGE_KEY },
+            });
           },
         };
       },

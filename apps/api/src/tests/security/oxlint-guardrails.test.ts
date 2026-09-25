@@ -303,6 +303,21 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("the redacted-log-key rule pins the reviewed failure context keys", async () => {
+    // Same copy, same reason: the rule rejects a context key the failure
+    // owner would drop, so its list must be the owner's list.
+    const { FAILURE_CONTEXT_KEYS } =
+      await import("@/api/lib/observability/observe-failure");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-redacted-log-attribute-key.ts",
+    );
+    const listed = FAILURE_CONTEXT_KEYS.map((key) => `  "${key}",`).join("\n");
+
+    expect(pluginSource).toContain(
+      `export const FAILURE_CONTEXT_KEYS = [\n${listed}\n];`,
+    );
+  });
+
   test("module mocks do not start dropping more of the real module's exports", () => {
     // A PARTIAL module mock (one export overridden, the rest dropped) removes
     // the other exports for every file sharing the process, so a file that

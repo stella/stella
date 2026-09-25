@@ -203,6 +203,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("failure-sink-handle.fixture.ts", [
+    "failure-sink-handle/failure-sink-handle",
+  ]),
   fixtureRuleOverride("no-redacted-log-attribute-key.fixture.ts", [
     "no-redacted-log-attribute-key/no-redacted-log-attribute-key",
   ]),
@@ -1129,6 +1132,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -3573,6 +3577,18 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "security-guards/require-secure-document-response": "error",
+      },
+    },
+    {
+      // A failure sink handle is a reviewed module-level declaration. Tests
+      // build handles as fixtures, so they are excluded.
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "failure-sink-handle/failure-sink-handle": "error",
       },
     },
     {
