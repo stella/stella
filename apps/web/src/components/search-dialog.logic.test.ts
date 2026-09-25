@@ -435,35 +435,38 @@ describe("document routes", () => {
 
     expect(getEntityLocation({ ...documentHit, parentId: "folder-1" })).toEqual(
       {
+        type: "tree",
         workspaceId: "workspace-1",
         entityId: "entity-1",
         fallbackFolderId: "folder-1",
       },
     );
     // Matter-root entities carry no folder scope.
-    expect(getEntityLocation(documentHit)?.fallbackFolderId).toBeNull();
+    expect(getEntityLocation(documentHit)).toEqual({
+      type: "tree",
+      workspaceId: "workspace-1",
+      entityId: "entity-1",
+      fallbackFolderId: null,
+    });
     // Hits without a containing matter location keep their normal open.
     expect(
       getEntityLocation(chatHit({ threadId: "thread-1", workspaceId: null })),
     ).toBeNull();
   });
 
-  test("reveals a task's folder, since the file tree does not list tasks", () => {
+  test("opens a task's matter, since the file tree lists no tasks", () => {
     const entityHit = getRecentFilePreviewHit({
-      entityId: "task-1",
+      entityId: "subtask-1",
       openedAt: "2026-07-31T05:00:00.000Z",
       title: "File the reply",
       workspaceId: "workspace-1",
       workspaceName: "Disclosure review",
     });
 
+    // A subtask's parent is another task, equally absent from the tree.
     expect(
-      getEntityLocation({
-        ...entityHit,
-        type: "task",
-        parentId: "folder-1",
-      })?.entityId,
-    ).toBe("folder-1");
+      getEntityLocation({ ...entityHit, type: "task", parentId: "task-1" }),
+    ).toEqual({ type: "matter", workspaceId: "workspace-1" });
   });
 
   test("opens a recent file directly when its field id was persisted", () => {
@@ -487,6 +490,7 @@ describe("document routes", () => {
         workspaceId: "workspace-1",
       }),
     ).toEqual({
+      type: "tree",
       workspaceId: "workspace-1",
       entityId: "entity-1",
       fallbackFolderId: null,

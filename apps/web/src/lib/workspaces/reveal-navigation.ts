@@ -23,8 +23,8 @@ export const getCurrentWorkspaceViewId = (
 };
 
 type RevealTargetInput = {
-  /** Row to reveal in the tree; null opens the tree at its root. */
-  entityId: string | null;
+  /** Row to reveal in the tree. */
+  entityId: string;
   /** Folder to scope the current view into when the matter has no tree. */
   fallbackFolderId: string | null;
   pathname: string;
@@ -62,7 +62,7 @@ export const getWorkspaceRevealTarget = ({
     return {
       to: "/workspaces/$workspaceId/$viewId" as const,
       params: { viewId: filesystemView.id, workspaceId: targetWorkspaceId },
-      search: entityId === null ? {} : { reveal: entityId },
+      search: { reveal: entityId },
     };
   }
 

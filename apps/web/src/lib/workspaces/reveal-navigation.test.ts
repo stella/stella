@@ -50,16 +50,6 @@ describe("reveal navigation", () => {
     });
   });
 
-  test("opens the tree at its root when there is nothing to reveal", () => {
-    expect(
-      getWorkspaceRevealTarget({
-        ...folderReveal,
-        entityId: null,
-        views: [view("files", "filesystem")],
-      }).search,
-    ).toEqual({});
-  });
-
   test("leaves an overview view for the file tree", () => {
     expect(
       getWorkspaceRevealTarget({

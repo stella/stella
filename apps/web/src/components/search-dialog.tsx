@@ -1148,8 +1148,16 @@ export const SearchDialog = ({
     setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
   };
 
-  // Opens the matter's file tree with the entity's row revealed.
+  // Opens the matter's file tree with the entity's row revealed, or the
+  // matter itself for entities the tree does not list.
   const openEntityLocation = async (location: EntityLocation) => {
+    if (location.type === "matter") {
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: location.workspaceId },
+      });
+      return;
+    }
     await navigateToWorkspaceReveal({
       entityId: location.entityId,
       fallbackFolderId: location.fallbackFolderId,
