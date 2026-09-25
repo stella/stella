@@ -78,6 +78,7 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { addTokenUsage } from "@/api/lib/tanstack-ai-usage";
 import { isRecord } from "@/api/lib/type-guards";
 import { playbookPositionsSchema } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
@@ -1199,6 +1200,8 @@ type BehaviorRun = {
   /** Summed over the scenario's turns. */
   latencyMs: number;
   tokens: number;
+  /** The split behind `tokens` (cached input, output) that prices a run. */
+  usage: TokenUsage | null;
 };
 
 const runScenario = async ({
@@ -1239,6 +1242,7 @@ const runScenario = async ({
   const replies: string[] = [];
   let latencyMs = 0;
   let tokens = 0;
+  let usage: TokenUsage | undefined;
   for (const message of [scenario.brief, ...scenario.followUps]) {
     turnNumber += 1;
     conversation.addUserMessage(message);
@@ -1256,6 +1260,7 @@ const runScenario = async ({
     replies.push(turn.finalText);
     latencyMs += turn.latencyMs;
     tokens += turn.usage?.totalTokens ?? 0;
+    usage = addTokenUsage(usage, turn.usage ?? undefined);
     if (turn.error !== null) {
       error = turn.error;
       break;
@@ -1294,6 +1299,7 @@ const runScenario = async ({
     finalText,
     latencyMs,
     tokens,
+    usage: usage ?? null,
   };
 };
 
