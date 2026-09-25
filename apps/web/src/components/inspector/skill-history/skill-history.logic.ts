@@ -99,6 +99,27 @@ export const canManageSkill = ({
   }
 };
 
+/**
+ * What the signed-in user may change on a skill: its content and settings, only
+ * whether it is enabled (a bundled skill they manage), or nothing. Mirrors the
+ * API, which pairs the manager check with a refusal to edit bundled content.
+ */
+export type SkillEditAccess = "content" | "enablement" | "none";
+
+type SkillEditAccessOptions = CanManageSkillOptions & {
+  origin: SkillResourceOrigin;
+};
+
+export const skillEditAccess = ({
+  origin,
+  ...manageOptions
+}: SkillEditAccessOptions): SkillEditAccess => {
+  if (!canManageSkill(manageOptions)) {
+    return "none";
+  }
+  return isProposableOrigin(origin) ? "content" : "enablement";
+};
+
 type OrganizationMember = {
   userId: string;
   user: { name?: string | null | undefined; email: string };

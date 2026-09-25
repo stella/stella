@@ -26,6 +26,7 @@ import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
 import { useInspectorTabsStore } from "./inspector-tabs-store";
 import { SkillBodyWorkspace } from "./skill-history/skill-body-workspace";
+import { useSkillEditAccess } from "./skill-history/use-skill-edit-access";
 
 type RenderMode = "markdown" | "text" | "pdf";
 
@@ -63,7 +64,14 @@ export const SkillResourcePanel = ({
   );
 
   const renderMode = detectRenderMode(tab.mimeType, tab.resourcePath);
-  const isEditable = renderMode !== "pdf" && tab.origin !== "bundled";
+  const access = useSkillEditAccess(tab.skillId);
+  // The SKILL.md body workspace gates itself: non-managers still get it,
+  // read-only, to comment and propose. Companion files have no proposal flow,
+  // so only a manager gets an editor for them.
+  const isEditable =
+    renderMode !== "pdf" &&
+    tab.origin !== "bundled" &&
+    (tab.target === "body" || access === "content");
   // Markdown edits in the shared hybrid editor (auto-saving), so the ICP
   // never leaves the formatted view; syntax only shows on the block being edited.
   // Other text files keep the raw editor below.

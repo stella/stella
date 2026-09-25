@@ -42,6 +42,8 @@ import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import type { SkillEditAccess } from "@/components/inspector/skill-history/skill-history.logic";
+import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
@@ -123,6 +125,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const openChat = useInspectorTabsStore((s) => s.openChat);
 
   const detail = useQuery(skillDetailOptions(activeOrganizationId, skillId));
+  // Everyone who can see a skill opens this page; only its managers get the
+  // controls the server would accept from them.
+  const access = useSkillEditAccess(skillId);
+  const canEditContent = access === "content";
 
   // Editing happens in the right-side inspector; the editor just invalidates so
   // the catalogue + coaching reflect saves the inspector makes.
@@ -651,6 +657,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={t("common.name")}
+              readOnly={!canEditContent}
               value={name}
             />
             <textarea
@@ -660,6 +667,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={t("common.description")}
+              readOnly={!canEditContent}
               rows={2}
               value={description}
             />
@@ -687,17 +695,19 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   : tSkills("scopePrivate")}
               </span>
             )}
-            <Button
-              aria-label={
-                enabled ? tSkills("disableSkill") : tSkills("enableSkill")
-              }
-              onClick={toggleEnabled}
-              size="icon-sm"
-              variant={enabled ? "secondary" : "ghost"}
-            >
-              <PowerIcon className="size-4" />
-            </Button>
-            {detail.data && !enabled && (
+            {access !== "none" && (
+              <Button
+                aria-label={
+                  enabled ? tSkills("disableSkill") : tSkills("enableSkill")
+                }
+                onClick={toggleEnabled}
+                size="icon-sm"
+                variant={enabled ? "secondary" : "ghost"}
+              >
+                <PowerIcon className="size-4" />
+              </Button>
+            )}
+            {detail.data && access !== "none" && !enabled && (
               <Button
                 disabled={patchMetadata.isPending}
                 onClick={onPublish}
@@ -736,6 +746,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}
                   placeholder={t("knowledge.skills.commandPlaceholder")}
+                  readOnly={!canEditContent}
                   value={command}
                 />
               </div>
@@ -755,6 +766,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       <FileDropZone
         className="p-3"
         coverage="content"
+        enabled={canEditContent}
         label={t("workspaces.dropToUploadFiles")}
         onDrop={(files) => {
           handleUploadFiles(files);
@@ -785,6 +797,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         {detail.data && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <SkillFileTree
+              access={access}
               collapsedFolders={collapsedFolders}
               createPending={createResource.isPending}
               deletePending={deleteResource.isPending}
@@ -828,7 +841,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           </div>
         )}
-        {detail.data && (
+        {detail.data && canEditContent && (
           <div className="mt-2 shrink-0 px-1">
             <RootAddMenu
               createPending={createResource.isPending}
@@ -846,6 +859,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 }
 
 type SkillFileTreeProps = {
+  access: SkillEditAccess;
   collapsedFolders: Set<string>;
   createPending: boolean;
   deletePending: boolean;
@@ -877,6 +891,7 @@ type SkillFileTreeProps = {
 const BODY_NODE_ID = "__body__";
 
 function SkillFileTree({
+  access,
   collapsedFolders,
   createPending,
   deletePending,
@@ -948,6 +963,9 @@ function SkillFileTree({
       }}
       onToggle={onToggleCollapsed}
       renderActions={(node) => {
+        if (access !== "content") {
+          return null;
+        }
         if (node.kind === "folder") {
           const isPending = pendingFolders.includes(node.id);
           return (
