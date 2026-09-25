@@ -66,6 +66,7 @@ import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
+  keepDeniedApprovalsOnScreen,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "@/api/handlers/chat/stream-message-identity";
@@ -555,6 +556,7 @@ export const streamChat = async ({
     source: persistenceVisibleStream,
   });
   const output = transformClientVisibleStream({
+    deniedApprovals: findDeniedApprovals(preparedMessageList),
     resolveAssistantTextRefs,
     resolveAssistantToolInputRefs,
     resolveAssistantToolOutputRefs,
@@ -1398,8 +1400,6 @@ type ProcessServerChatStreamProps = {
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
   deadlineSignal: AbortSignal;
-  /** Calls the history denied (see `findDeniedApprovals`). */
-  deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
   existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
@@ -1569,7 +1569,6 @@ const restoreInterruptedToolCallInputs = (
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
-  deniedApprovals,
   existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
@@ -1657,7 +1656,6 @@ export const processServerChatStream = async function* ({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
-        deniedApprovals,
         existingMessageIds,
         mapMessageId,
         source,
@@ -1866,11 +1864,7 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  | "deniedApprovals"
-  | "existingMessageIds"
-  | "getResponseMessage"
-  | "mapMessageId"
-  | "processor"
+  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
 > & {
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
@@ -1907,7 +1901,6 @@ const processTurnForPersistence = ({
   });
   return processServerChatStream({
     ...stream,
-    deniedApprovals: findDeniedApprovals(initialMessages),
     existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
@@ -2049,25 +2042,36 @@ type TransformClientVisibleStreamProps = Pick<
   | "resolveAssistantToolOutputRefs"
   | "resolveAssistantValueRefs"
   | "source"
->;
+> & {
+  /** Calls the history denied (see `findDeniedApprovals`). */
+  deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
+};
 
-/** Resolve refs only after the server-side processor has consumed its copy. */
+/**
+ * Resolve refs only after the server-side processor has consumed its copy,
+ * then present the calls the history denied as denied, built from the
+ * resolved snapshot.
+ */
 export const transformClientVisibleStream = ({
+  deniedApprovals = new Map(),
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   source,
 }: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  transformOutgoingStream({
-    boundary: { type: "raw" },
-    initialRestorationPlaceholders: new Set(),
-    resolveAssistantTextRefs,
-    resolveAssistantToolInputRefs,
-    resolveAssistantToolOutputRefs,
-    resolveAssistantValueRefs,
-    restorationPairs: [],
-    source,
+  keepDeniedApprovalsOnScreen({
+    deniedApprovals,
+    source: transformOutgoingStream({
+      boundary: { type: "raw" },
+      initialRestorationPlaceholders: new Set(),
+      resolveAssistantTextRefs,
+      resolveAssistantToolInputRefs,
+      resolveAssistantToolOutputRefs,
+      resolveAssistantValueRefs,
+      restorationPairs: [],
+      source,
+    }),
   });
 
 type OutgoingChunkTransformerOptions = {

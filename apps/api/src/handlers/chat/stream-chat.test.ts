@@ -93,6 +93,7 @@ import {
   createChatMessageIdMapper,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
+  findDeniedApprovals,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
@@ -3612,6 +3613,60 @@ describe("chat stream refs", () => {
       (chunk) => chunk.type === EventType.TOOL_CALL_END,
     );
     expect(toolCallEnd).toMatchObject({ input: { matter_id: workspaceId } });
+  });
+
+  test("resolves the refs of a denied call's message in the snapshot the client reads", async () => {
+    const ref = "#stella-entity-ref=ent_1";
+    const resolved = "#stella-entity=workspace_1:entity_1";
+    const history: ChatMessage[] = [
+      {
+        id: "user-1",
+        parts: [{ content: "Delete the NDA", type: "text" }],
+        role: "user",
+      },
+      {
+        id: "assistant-1",
+        parts: [
+          { content: `Deleting [NDA](${ref}).`, type: "text" },
+          {
+            approval: {
+              approved: false,
+              id: "approval-1",
+              needsApproval: true,
+            },
+            arguments: JSON.stringify({ name: `[NDA](${ref})` }),
+            id: "call-1",
+            input: { name: `[NDA](${ref})` },
+            name: "mcp__external__delete",
+            state: "approval-responded",
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+    const deniedApprovals = findDeniedApprovals(history);
+    // The fixture must reach the fault: the history holds a denied call.
+    expect([...deniedApprovals.keys()]).toEqual(["call-1"]);
+
+    const [snapshot] = await collectChunks(
+      transformClientVisibleStream({
+        deniedApprovals,
+        resolveAssistantValueRefs: (value) =>
+          JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
+        source: streamChunks([buildEngineSnapshot(history)]),
+      }),
+    );
+    if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected one messages snapshot");
+    }
+    const assistant = snapshot.messages.find(({ id }) => id === "assistant-1");
+
+    // The denied call's message travels with `parts`, which the client takes
+    // as is: they must show what the rest of the stream shows.
+    expect(assistant).toHaveProperty("parts");
+    expect(JSON.stringify(assistant)).not.toContain(ref);
+    expect(JSON.stringify(assistant)).toContain(resolved);
   });
 
   test("resolves assistant text refs across streamed chunk boundaries", async () => {

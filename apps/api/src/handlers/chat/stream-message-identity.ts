@@ -1,5 +1,5 @@
 import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
-import type { ToolCall } from "@tanstack/ai";
+import type { StreamChunk, ToolCall } from "@tanstack/ai";
 
 import { Temporal } from "@stll/time";
 
@@ -80,15 +80,12 @@ export const findDeniedApprovals = (
   );
 
 type RemapOutgoingMessageIdsProps = {
-  /** Calls the history denied, which a snapshot must keep denied. */
-  deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
   existingMessageIds?: ReadonlySet<string> | undefined;
   mapMessageId: MessageIdMapper;
   source: AsyncIterable<PublicStreamChunk>;
 };
 
 export const remapOutgoingMessageIds = async function* ({
-  deniedApprovals = new Map(),
   existingMessageIds = new Set(),
   mapMessageId,
   source,
@@ -97,11 +94,38 @@ export const remapOutgoingMessageIds = async function* ({
   for await (const chunk of source) {
     yield remapChunkMessageId({
       chunk,
-      deniedApprovals,
       existingMessageIds,
       mapMessageId,
       snapshotMessageIds,
     });
+  }
+};
+
+/**
+ * Presents every call the history denied as denied in the snapshots the
+ * client reads (see `keepDeniedApprovals`). It runs on the client-visible
+ * stream, after its refs are resolved, so the parts it builds carry what the
+ * rest of the stream shows rather than the model-facing tokens.
+ *
+ * @yields Each chunk of `source`, a snapshot with its denied calls as stored.
+ */
+export const keepDeniedApprovalsOnScreen = async function* ({
+  deniedApprovals,
+  source,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  source: AsyncIterable<StreamChunk>;
+}): AsyncIterable<StreamChunk> {
+  for await (const chunk of source) {
+    yield chunk.type === EventType.MESSAGES_SNAPSHOT
+      ? {
+          ...chunk,
+          messages: keepDeniedApprovals({
+            deniedApprovals,
+            messages: chunk.messages,
+          }),
+        }
+      : chunk;
   }
 };
 
@@ -426,13 +450,11 @@ const asStoredDenial = (
 
 const remapChunkMessageId = ({
   chunk,
-  deniedApprovals,
   existingMessageIds,
   mapMessageId,
   snapshotMessageIds,
 }: {
   chunk: PublicStreamChunk;
-  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
   snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
@@ -440,14 +462,11 @@ const remapChunkMessageId = ({
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
     return {
       ...chunk,
-      messages: keepDeniedApprovals({
-        deniedApprovals,
-        messages: mergeSnapshotAssistantMessages({
-          existingMessageIds,
-          mapMessageId,
-          messages: chunk.messages,
-          snapshotMessageIds,
-        }),
+      messages: mergeSnapshotAssistantMessages({
+        existingMessageIds,
+        mapMessageId,
+        messages: chunk.messages,
+        snapshotMessageIds,
       }),
     };
   }
