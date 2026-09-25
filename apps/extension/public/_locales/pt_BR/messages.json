@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Desconectar guia"
   },
+  "downloadStopped": {
+    "message": "O stella interrompeu um download enquanto controlava uma aba."
+  },
   "extensionDescription": {
     "message": "Permite que a stella controle uma guia dedicada do Chrome após sua autorização."
   },

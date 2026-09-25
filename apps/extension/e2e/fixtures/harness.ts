@@ -6,7 +6,7 @@ import {
   type Worker,
 } from "@playwright/test";
 import { panic } from "better-result";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -84,6 +84,7 @@ export const prepareGrantedExtension = async (): Promise<string> => {
           (permission): permission is string => typeof permission === "string",
         ),
         "downloads",
+        "webNavigation",
       ],
     }),
   );
@@ -138,6 +139,15 @@ export const launchExtensionHarness = async ({
   const downloadPath = await mkdtemp(
     path.join(tmpdir(), "stella-extension-downloads-"),
   );
+  // Downloads go through Chrome's own path, the one the extension's
+  // download listeners see in a real browser, into a temporary folder.
+  await mkdir(path.join(profilePath, "Default"));
+  await writeFile(
+    path.join(profilePath, "Default", "Preferences"),
+    JSON.stringify({
+      download: { default_directory: downloadPath, prompt_for_download: false },
+    }),
+  );
   const context = await chromium.launchPersistentContext(profilePath, {
     args: [
       `--disable-extensions-except=${extensionPath}`,
@@ -155,6 +165,10 @@ export const launchExtensionHarness = async ({
   };
 
   const stella = await context.newPage();
+  // Playwright otherwise saves downloads itself, around the extension.
+  await (
+    await context.newCDPSession(stella)
+  ).send("Browser.setDownloadBehavior", { behavior: "default" });
   await stella.goto(`${stellaOrigin}/chat`);
   await stella.waitForFunction(() => {
     const responses: unknown = Reflect.get(window, "__responses");
@@ -275,7 +289,7 @@ export const createCommandSender = (stella: Page, controllerId: string) => {
   };
 
   return {
-    async cancel(): Promise<void> {
+    async cancel(turnId = "turn-1"): Promise<void> {
       sequence += 1;
       await stella.evaluate(
         (request) => {
@@ -286,6 +300,7 @@ export const createCommandSender = (stella: Page, controllerId: string) => {
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
           requestId: `cancel-${sequence}`,
           source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+          turnId,
           type: "cancel",
         },
       );

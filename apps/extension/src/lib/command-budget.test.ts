@@ -8,6 +8,7 @@ import {
 import {
   chargeCommandBudget,
   type CommandBudgetLedger,
+  refundCommandBudget,
 } from "./command-budget";
 
 const click = {
@@ -94,6 +95,28 @@ describe("browser command budget", () => {
         turnId: "turn-new",
       }).status,
     ).toBe("charged");
+  });
+
+  test("a refund gives back one charge, never below zero", () => {
+    const request = {
+      command: open,
+      controllerId: "controller-1",
+      turnId: "turn-1",
+    };
+    const { ledger } = chargeRepeatedly(open, 2, () => "turn-1");
+    const refunded = refundCommandBudget(ledger, request);
+    expect(refunded?.session).toEqual({ actions: 1, navigations: 1 });
+    expect(refunded?.turns).toEqual([
+      { turnId: "turn-1", usage: { actions: 1, navigations: 1 } },
+    ]);
+    const empty = refundCommandBudget(
+      refundCommandBudget(refunded, request),
+      request,
+    );
+    expect(empty?.session).toEqual({ actions: 0, navigations: 0 });
+    expect(
+      refundCommandBudget(ledger, { ...request, controllerId: "controller-2" }),
+    ).toBe(ledger);
   });
 
   test("page reads are never refused or charged", () => {

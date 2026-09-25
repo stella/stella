@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Katkesta vahekaardi ühendus"
   },
+  "downloadStopped": {
+    "message": "stella peatas allalaadimise, kui see vahekaarti juhtis."
+  },
   "extensionDescription": {
     "message": "Lubab stellal pärast sinu nõusolekut juhtida eraldi Chrome’i vahekaarti."
   },

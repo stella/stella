@@ -236,7 +236,11 @@ describe("stopping browser commands from chat", () => {
       BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     );
     expect(postedCancels()).toEqual([
-      expect.objectContaining({ controllerId: "controller-1", type: "cancel" }),
+      expect.objectContaining({
+        controllerId: "controller-1",
+        turnId: "turn-1",
+        type: "cancel",
+      }),
     ]);
   });
 

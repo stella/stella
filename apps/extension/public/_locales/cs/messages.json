@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Odpojit kartu"
   },
+  "downloadStopped": {
+    "message": "stella zastavila stahování, zatímco ovládala kartu."
+  },
   "extensionDescription": {
     "message": "Po udělení přístupu umožní stelle ovládat vyhrazenou kartu Chromu."
   },

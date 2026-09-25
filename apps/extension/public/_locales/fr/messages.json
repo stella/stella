@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Déconnecter l’onglet"
   },
+  "downloadStopped": {
+    "message": "stella a arrêté un téléchargement pendant qu’il contrôlait un onglet."
+  },
   "extensionDescription": {
     "message": "Permet à stella de contrôler un onglet Chrome dédié après votre autorisation."
   },

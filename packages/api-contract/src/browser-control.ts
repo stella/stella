@@ -365,12 +365,16 @@ const browserExtensionCommandRequestSchema = v.strictObject({
   type: v.literal("command"),
 });
 
-/** Stops the controller's queued and running commands; nothing is answered. */
+/**
+ * Stops the controller's queued or running command of one chat turn; a
+ * command of a later turn is never touched. Nothing is answered.
+ */
 const browserExtensionCancelRequestSchema = v.strictObject({
   controllerId: controllerIdSchema,
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   requestId: requestIdSchema,
   source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
+  turnId: boundedIdSchema,
   type: v.literal("cancel"),
 });
 

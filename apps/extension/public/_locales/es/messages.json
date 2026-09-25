@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Desconectar pestaña"
   },
+  "downloadStopped": {
+    "message": "stella detuvo una descarga mientras controlaba una pestaña."
+  },
   "extensionDescription": {
     "message": "Permite a stella controlar una pestaña dedicada de Chrome después de que concedas acceso."
   },

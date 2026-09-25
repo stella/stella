@@ -10,11 +10,13 @@ import {
   targetOf,
 } from "./fixtures/harness";
 import {
+  ELSEWHERE_ORIGIN,
   FIXTURE_ORIGIN,
   FIXTURE_PAGES,
   HIDDEN_TEXT_MARKER,
   INTRANET_ORIGIN,
   INTRANET_PAGE,
+  REPLACED_SECRET,
   TOGGLED_SECRET,
 } from "./fixtures/pages";
 
@@ -41,8 +43,7 @@ const routeFixtures = async ({ context }: Harness) => {
     }
     if (pathname === "/file.bin") {
       await route.fulfill({
-        // Large enough that writing it outlasts the cancel.
-        body: "binary payload ".repeat(400_000),
+        body: "binary payload",
         contentType: "application/octet-stream",
       });
       return;
@@ -56,6 +57,7 @@ const routeFixtures = async ({ context }: Harness) => {
         }));
   };
   await context.route(`${FIXTURE_ORIGIN}/**`, serve);
+  await context.route(`${ELSEWHERE_ORIGIN}/**`, serve);
   await context.route(`${INTRANET_ORIGIN}/**`, async (route) => {
     intranetRequests.push(route.request().url());
     await route.fulfill({
@@ -95,19 +97,14 @@ const tabIdOf = async ({ worker }: Harness, urlPrefix: string) =>
     return tabs.find((tab) => tab.url?.startsWith(prefix))?.id ?? null;
   }, urlPrefix);
 
-/**
- * What a page script does to save a file without any network request. The
- * files are large enough that writing them outlasts the cancel.
- */
+/** What a page script does to save a small file without any network request. */
 const saveFromScript = async (page: Page, href: "blob" | "data") => {
   await page.evaluate((kind) => {
-    // A data: URL stays under Chrome's 2 MB URL limit.
-    const notes = "case-notes".repeat(kind === "blob" ? 1_000_000 : 120_000);
     const link = document.createElement("a");
     link.href =
       kind === "blob"
-        ? URL.createObjectURL(new Blob([notes], { type: "text/plain" }))
-        : `data:text/plain,${encodeURIComponent(notes)}`;
+        ? URL.createObjectURL(new Blob(["case notes"], { type: "text/plain" }))
+        : "data:text/plain,case%20notes";
     link.download = "notes.txt";
     link.click();
   }, href);
@@ -118,19 +115,25 @@ const saveFromScript = async (page: Page, href: "blob" | "data") => {
  * of a `data:` URL, or the URL) and whether it finished.
  */
 const downloads = async ({ worker }: Harness) =>
-  await worker.evaluate(async () =>
-    (await chrome.downloads.search({}))
-      .map(({ state, url }) => {
+  await worker.evaluate(async () => {
+    const items = await chrome.downloads.search({});
+    // Only settled downloads are compared: one still running could yet
+    // finish and leave its file.
+    if (items.some(({ state }) => state === "in_progress")) {
+      return null;
+    }
+    return items
+      .map(({ exists, state, url }) => {
         let source = url;
         if (url.startsWith("blob:")) {
           source = new URL(url.slice(5)).origin;
         } else if (url.startsWith("data:")) {
           source = "data:";
         }
-        return { saved: state === "complete", source };
+        return { saved: state === "complete" && exists, source };
       })
-      .toSorted((left, right) => left.source.localeCompare(right.source)),
-  );
+      .toSorted((left, right) => left.source.localeCompare(right.source));
+  });
 
 const latestPong = async (stella: Page): Promise<unknown> =>
   await stella.evaluate(() => {
@@ -174,6 +177,28 @@ test("stop and popup changes end a running command at once", async () => {
       throw new TypeError("Pairing did not notify the stella tab");
     }
     const sender = createCommandSender(harness.stella, pong.controllerId);
+    await openContainmentPage(sender.send);
+
+    // The user moves the controlled tab on by hand after chat last saw it:
+    // a navigation chat asked for earlier no longer applies to this page.
+    const controlledPage = harness.context
+      .pages()
+      .find((candidate) => candidate.url().endsWith("/containment.html"));
+    if (!controlledPage) {
+      throw new TypeError("Controlled tab not found");
+    }
+    await controlledPage.goto(`${FIXTURE_ORIGIN}/page2.html`);
+    for (const command of [
+      { action: "go-back" },
+      { action: "open", url: `${FIXTURE_ORIGIN}/index.html` },
+    ] as const) {
+      expect(await sender.send(command)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+      });
+    }
+    expect(controlledPage.url()).toBe(`${FIXTURE_ORIGIN}/page2.html`);
+    // Once chat reads the page again, it may navigate.
+    successful(await sender.send({ action: "snapshot" }));
     await openContainmentPage(sender.send);
 
     // Chat Stop: the extension answers right away instead of waiting out
@@ -263,6 +288,31 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
       }),
     ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.sensitiveField });
 
+    // A reveal that swaps the field for a new element, and prints the value,
+    // does not make it readable either.
+    snapshot = successful(
+      await send({
+        action: "click",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Show vault key")),
+      }),
+    );
+    expect(snapshot.text).toContain("Your vault key is [hidden]");
+    expect(elementNamed(snapshot.elements, "Vault key").value).toBe(undefined);
+    expect(JSON.stringify(snapshot)).not.toContain(REPLACED_SECRET);
+
+    // Fields named like secrets, by whole words only.
+    expect(elementNamed(snapshot.elements, "Hotplate").value).toBe(
+      "warm plate",
+    );
+    expect(elementNamed(snapshot.elements, "Photo print").value).toBe(
+      "glossy finish",
+    );
+    for (const name of ["Camel password", "Snake code"]) {
+      expect(elementNamed(snapshot.elements, name).value).toBe(undefined);
+    }
+    expect(JSON.stringify(snapshot)).not.toContain("camel-secret-81");
+
     // Subresources to a private host are blocked like documents.
     snapshot = successful(
       await send({
@@ -274,27 +324,50 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await harness.stella.waitForTimeout(500);
     expect(intranetRequests).toEqual([]);
 
-    // A page-opened window to a private host is closed.
-    const intranetWindow = harness.context.waitForEvent("page");
+    // Tabs a page opens are confined from their very first request, whether
+    // the page keeps a handle on them or not and whichever frame opens them:
+    // none reaches the intranet host, and each is closed.
+    const popupOpeners = [
+      "Open intranet window",
+      "Open intranet window without opener",
+      "Open intranet tab",
+      "Frame opens intranet",
+    ];
+    for (const name of popupOpeners) {
+      const popup = harness.context.waitForEvent("page");
+      snapshot = successful(
+        await send({
+          action: "click",
+          page: page(),
+          target: targetOf(elementNamed(snapshot.elements, name)),
+        }),
+      );
+      const opened = await popup;
+      await expect.poll(() => opened.isClosed()).toBe(true);
+    }
+    // A public page opened without an opener stays confined too: neither its
+    // script nor its own navigation reaches the intranet host.
+    const beacon = harness.context.waitForEvent("page");
     snapshot = successful(
       await send({
         action: "click",
         page: page(),
-        target: targetOf(
-          elementNamed(snapshot.elements, "Open intranet window"),
-        ),
+        target: targetOf(elementNamed(snapshot.elements, "Open beacon page")),
       }),
     );
-    const closedWindow = await intranetWindow;
-    await expect.poll(() => closedWindow.isClosed()).toBe(true);
-    // Chrome reports a page-opened tab only once it exists, so the rules can
-    // land after its first request: at most that one request, the documented
-    // gap, gets out.
-    expect(intranetRequests.length).toBeLessThanOrEqual(1);
-    expect(
-      intranetRequests.filter((url) => url !== `${INTRANET_ORIGIN}/popup`),
-    ).toEqual([]);
+    const beaconPage = await beacon;
+    await harness.stella.waitForTimeout(1500);
+    expect(intranetRequests).toEqual([]);
+    await beaconPage.close();
+
+    // A tab no page opened is the user's once Chrome has had the moment it
+    // takes to name an opener: it reaches the intranet host.
+    const userTab = await harness.context.newPage();
+    await harness.stella.waitForTimeout(1500);
+    await userTab.goto(`${INTRANET_ORIGIN}/user-tab`);
+    expect(intranetRequests).toEqual([`${INTRANET_ORIGIN}/user-tab`]);
     intranetRequests.length = 0;
+    await userTab.close();
 
     // A page-opened public tab stays open for the user, under the same
     // network rules, and chat keeps operating its own tab.
@@ -331,13 +404,38 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     }
     await saveFromScript(controlledPage, "blob");
     await saveFromScript(controlledPage, "data");
+    // A small file a cross-origin frame inside the controlled tab saves is
+    // traced to that frame, and gone even when it finished first, although
+    // the user has that frame's site open in a tab of their own.
+    const userSiteTab = await harness.context.newPage();
+    await harness.stella.waitForTimeout(1500);
+    await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
+    await controlledPage
+      .frameLocator("iframe[title='Tools frame']")
+      .locator("body")
+      .evaluate(() => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(
+          new Blob(["frame notes"], { type: "text/plain" }),
+        );
+        link.download = "frame-notes.txt";
+        document.body.append(link);
+        link.click();
+      });
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
         { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
+        { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
+    // The toolbar icon counts the stopped downloads.
+    expect(
+      await harness.worker.evaluate(
+        async () => await chrome.action.getBadgeText({}),
+      ),
+    ).toBe("3");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block
@@ -348,12 +446,12 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
       page: page(),
       target: targetOf(elementNamed(snapshot.elements, "Download binary")),
     });
-    await harness.stella.waitForTimeout(1000);
-    expect(
-      (await downloads(harness)).filter(
-        ({ saved, source }) => saved && source.endsWith("/file.bin"),
-      ),
-    ).toEqual([]);
+    await expect
+      .poll(async () => {
+        const settled = await downloads(harness);
+        return settled?.filter(({ source }) => source.endsWith("/file.bin"));
+      })
+      .toEqual([{ saved: false, source: `${FIXTURE_ORIGIN}/file.bin` }]);
   } finally {
     await harness.close();
   }
