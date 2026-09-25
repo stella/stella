@@ -1,5 +1,13 @@
 # @stll/ai-catalog
 
+## 0.2.2
+
+### Patch Changes
+
+- [#3839](https://github.com/stella/stella/pull/3839) [`a3543ce`](https://github.com/stella/stella/commit/a3543ce976a3875d8862b5c71d7d100d038c8033) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep the rate and the streaming tool-use limit of `us.deepseek.r1-v1:0` for deployment overrides that still select it.
+
+- [#3837](https://github.com/stella/stella/pull/3837) [`e7afff6`](https://github.com/stella/stella/commit/e7afff6e5e5333555f39373b2c392827ae5ceaca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Stop offering `us.deepseek.r1-v1:0` on Bedrock. The model accepts no tool definitions, and every model role sends tools or structured output.
+
 ## 0.2.1
 
 ### Patch Changes
