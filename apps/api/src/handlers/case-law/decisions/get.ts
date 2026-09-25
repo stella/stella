@@ -30,16 +30,14 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import {
-  type CourtWeightMap,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   readDecisionTextMetadata,
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
@@ -300,7 +298,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
-    readCourtWeights = loadCourtWeights,
+    readCourtWeights = loadPublicCourtWeights,
     subject: { id: decisionId, resolution, tx },
   }: ReadDecisionOptions) => {
     const citationCursors = decodeDecisionCitationCursor(citationsCursor);

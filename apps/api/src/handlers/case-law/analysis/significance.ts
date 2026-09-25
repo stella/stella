@@ -34,10 +34,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
-import {
-  courtWeightFromMap,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import { courtWeightFromMap } from "@/api/lib/case-law/court-weights";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 
 /**
  * Which revision of the significance prompt wrote a stored text. Bump it
@@ -144,7 +142,7 @@ export const readCitationGraphFacts = async ({
     )
     .limit(1);
 
-  const weights = await loadCourtWeights();
+  const weights = await loadPublicCourtWeights();
   const subjectDate = subject.decisionDate;
 
   const facts: CitingDecisionFact[] = rows.map((row) => ({

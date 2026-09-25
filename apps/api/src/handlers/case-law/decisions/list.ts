@@ -18,13 +18,11 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import {
-  type CourtWeightMap,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import {
   publishedCaseLawDecision,
   publishedCaseLawDecisionFor,
@@ -169,7 +167,7 @@ export const listDecisionsHandler = async (
    * on the root pool rather than the public reader's, so a harness holding
    * only the reader supplies its own; the route takes the default.
    */
-  readCourtWeights: () => Promise<CourtWeightMap> = loadCourtWeights,
+  readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,

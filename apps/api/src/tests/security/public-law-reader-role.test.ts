@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 import { getCollator } from "@stll/collation";
 
 import {
@@ -26,8 +27,13 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import {
+  CASE_LAW_SEARCH_FACETS,
+  caseLawSearchPlan,
   findDecisionIdsByIdentity,
   readCaseLawPageDecisionRows,
+  readCaseLawSearchFacet,
+  readCaseLawSearchHits,
+  readCaseLawSearchTotal,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
 import {
@@ -39,12 +45,19 @@ import {
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
-import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import {
+  readLegislationSearchHits,
+  rehydrateLegislationCandidates,
+} from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  readCourtWeightRowsQuery,
+  readFtsConfigRowsQuery,
+} from "@/api/lib/case-law/case-law-config-read";
 import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import {
   readPublicDecisionLanguageAlternatesByGroup,
@@ -58,8 +71,16 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
+import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
+import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
+import {
+  PROVIDER_SEARCH_FACETS,
+  providerSearchPlan,
+  readProviderSearchFacet,
+  readProviderSearchHits,
+} from "@/api/lib/legal-search/pg-fts-legal-provider";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -107,21 +128,25 @@ const errorMessageChain = (error: unknown): string => {
   return messages.join(" | ");
 };
 
-const forbiddenColumnRead = async (
-  relation: string,
-  column: string,
-): Promise<unknown> =>
+/** What running `statement` as the reader role fails with, or null. */
+const readerStatementFailure = async (statement: string): Promise<unknown> =>
   await testDb
     .transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
-      await tx.execute(
-        sql.raw(`SELECT ${quoted(column)} FROM ${quoted(relation)}`),
-      );
+      await tx.execute(sql.raw(statement));
     })
     .then(
       () => null,
       (error: unknown) => error,
     );
+
+const forbiddenColumnRead = async (
+  relation: string,
+  column: string,
+): Promise<unknown> =>
+  await readerStatementFailure(
+    `SELECT ${quoted(column)} FROM ${quoted(relation)}`,
+  );
 
 const expectedQualifiedColumns = publicLawColumnPairs(
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -188,6 +213,34 @@ const caseLawReaderDb = (): CaseLawPublicReadDb => {
   // the role-scoped implementation above.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only branded read handle
   return readDb as unknown as CaseLawPublicReadDb;
+};
+
+/** A search that sets the filters the statements branch on. */
+const SEARCH_CENSUS_BODY = {
+  country: PUBLIC_COUNTRY,
+  court: "Reader role census",
+  language: "cs",
+  query: "reader role census",
+} satisfies Parameters<typeof caseLawSearchPlan>[0]["body"];
+
+/**
+ * The configuration search headlines are cut with. Migrations create it; the
+ * PGlite schema push does not, so the census adds it once.
+ */
+const ensureHeadlineConfiguration = async (): Promise<void> => {
+  const result = await testDb.execute<{ present: boolean }>(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_ts_config
+      WHERE cfgname = 'stella_unaccent'
+        AND cfgnamespace = 'public'::regnamespace
+    ) AS present
+  `);
+  if (result.rows.at(0)?.present !== true) {
+    await testDb.execute(
+      sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+    );
+  }
 };
 
 // A column the reader role is never granted, used to stage one grant against
@@ -396,6 +449,35 @@ describe("public-law reader role", () => {
     });
   });
 
+  // A release attests against its own map, and cannot know a relation a later
+  // map adds. Holding the later release's grants, it reads them as
+  // over-privilege: the migration that grants a relation and the release that
+  // declares it are one cutover.
+  test("startup attestation under an older map refuses a later release's grants", async () => {
+    const accepted: string[] = [];
+    for (const relation of Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)) {
+      const olderMap = Object.fromEntries(
+        Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
+          ([name]) => name !== relation,
+        ),
+      );
+      const permissions = await rolePermissionsAfter(
+        withoutExtraGrants,
+        olderMap,
+      );
+      if (permissions?.canReadOtherData !== true) {
+        accepted.push(relation);
+      }
+    }
+
+    expect(accepted).toEqual([]);
+    // The map the grants were made for accepts them.
+    expect(await rolePermissionsAfter(withoutExtraGrants)).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+  });
+
   test("startup attestation holds when the map requires nothing", async () => {
     expect(
       await rolePermissionsAfter(withoutExtraGrants, wholeMapPermitted()),
@@ -590,6 +672,47 @@ describe("public-law reader role", () => {
     );
   });
 
+  test("rejects the search relations' indexer columns", async () => {
+    const readable: string[] = [];
+    for (const [relation, column] of [
+      ["case_law_search_documents", "title"],
+      ["case_law_search_documents", "preview_generation"],
+      ["case_law_search_documents", "updated_at"],
+      ["case_law_court_weights", "id"],
+      ["case_law_court_weights", "created_at"],
+      ["legislation_search_documents", "title"],
+      ["legislation_search_documents", "updated_at"],
+    ] as const) {
+      const failure = await forbiddenColumnRead(relation, column);
+      if (!errorMessageChain(failure).includes("permission denied")) {
+        readable.push(`${relation}.${column}`);
+      }
+    }
+
+    expect(readable).toEqual([]);
+  });
+
+  test("cannot write any relation it reads", async () => {
+    const written: string[] = [];
+    for (const [relation, columns] of Object.entries(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+    )) {
+      const column = quoted(Object.keys(columns).at(0) ?? "");
+      for (const statement of [
+        `UPDATE ${quoted(relation)} SET ${column} = ${column}`,
+        `DELETE FROM ${quoted(relation)}`,
+        `INSERT INTO ${quoted(relation)} DEFAULT VALUES`,
+      ]) {
+        const failure = await readerStatementFailure(statement);
+        if (!errorMessageChain(failure).includes("permission denied")) {
+          written.push(statement);
+        }
+      }
+    }
+
+    expect(written).toEqual([]);
+  });
+
   test("resolves both serving generations as the public-law reader role", async () => {
     try {
       await testDb.transaction(async (tx) => {
@@ -662,7 +785,8 @@ describe("public-law reader role", () => {
       { country: PUBLIC_COUNTRY },
       caseLawDb,
       // The registry as the seed migration writes it: this census holds the
-      // reader role alone, and the loader reads the root pool.
+      // reader role alone, and the loader opens a read of its own. The
+      // registry read itself is in the shared-query census below.
       readCourtWeights,
     );
     expect(list).toMatchObject({ items: [] });
@@ -838,6 +962,70 @@ describe("public-law reader role", () => {
         );
       });
 
+      await ensureHeadlineConfiguration();
+      await caseLawDb(async (tx) => {
+        // The search configuration, read the way the public caches read it.
+        const ftsRows = await readFtsConfigRowsQuery(tx);
+        exercised.add(readFtsConfigRowsQuery.publicLawSharedQuery);
+        await readCourtWeightRowsQuery(tx);
+        exercised.add(readCourtWeightRowsQuery.publicLawSharedQuery);
+
+        const configs = await createFtsConfigCache(
+          async () => ftsRows,
+        ).loadFtsSearchConfigs();
+        // The seeded registry, so the rank CASE the statements carry is the
+        // one production renders.
+        const courtWeights = courtWeightMapFromSeed();
+
+        // Both Postgres case-law searches: every statement, every facet.
+        const plan = caseLawSearchPlan({
+          body: SEARCH_CENSUS_BODY,
+          configs,
+          courtWeights,
+          excerpt: DEFAULT_SEARCH_EXCERPT,
+          limit: 10,
+          parsedCursor: null,
+          queryUsed: SEARCH_CENSUS_BODY.query,
+          sort: DEFAULT_SEARCH_SORT,
+        });
+        await readCaseLawSearchHits(tx, plan);
+        exercised.add(readCaseLawSearchHits.publicLawSharedQuery);
+        await readCaseLawSearchTotal(tx, plan);
+        exercised.add(readCaseLawSearchTotal.publicLawSharedQuery);
+        for (const facet of CASE_LAW_SEARCH_FACETS) {
+          await readCaseLawSearchFacet(tx, plan, facet);
+        }
+        exercised.add(readCaseLawSearchFacet.publicLawSharedQuery);
+
+        const providerPlan = providerSearchPlan({
+          configs,
+          courtWeights,
+          parsedCursor: null,
+          query: {
+            court: SEARCH_CENSUS_BODY.court,
+            jurisdiction: SEARCH_CENSUS_BODY.country,
+            language: SEARCH_CENSUS_BODY.language,
+            limit: 10,
+            query: SEARCH_CENSUS_BODY.query,
+          },
+        });
+        await readProviderSearchHits(tx, providerPlan);
+        exercised.add(readProviderSearchHits.publicLawSharedQuery);
+        for (const facet of PROVIDER_SEARCH_FACETS) {
+          await readProviderSearchFacet(tx, providerPlan, facet);
+        }
+        exercised.add(readProviderSearchFacet.publicLawSharedQuery);
+
+        // The legislation search, filters and eligibility included.
+        await readLegislationSearchHits(tx, {
+          body: { query: SEARCH_CENSUS_BODY.query, language: "cs" },
+          configs,
+          limit: 10,
+          parsedCursor: null,
+        });
+        exercised.add(readLegislationSearchHits.publicLawSharedQuery);
+      });
+
       expect([...exercised].toSorted()).toEqual(
         Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted(),
       );
@@ -1002,10 +1190,11 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
-  // Migrations grant required plus permitted: a column staged ahead of its
-  // read is already granted, and one whose read has gone away is not revoked
-  // until a later release.
-  test("effective grants equal every column the map declares", () => {
+  // The attestation's bounds, held against what the migrations grant: every
+  // required column, nothing beyond required plus permitted, and no table-wide
+  // grant. A permitted column may be granted or not; one whose read has gone
+  // away stays granted until a later release revokes it.
+  test("effective grants lie between the required and the declared columns", () => {
     const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>
@@ -1016,14 +1205,22 @@ describe("public-law reader migrations", () => {
       .map((path) => readFileSync(path, "utf-8"));
 
     const grants = foldReaderSelectGrants(sources, READER_ROLE);
-    const expected = Object.fromEntries(
-      Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-        ([relation, columns]) => [relation, Object.keys(columns).toSorted()],
+    const granted = new Set(
+      [...grants.columns.entries()].flatMap(([relation, columns]) =>
+        [...columns].map((column) => `${relation}.${column}`),
       ),
     );
+    const pairs = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    const declared = new Set(
+      pairs.map(({ relation, column }) => `${relation}.${column}`),
+    );
+    const required = pairs
+      .filter(({ grant }) => grant === "required")
+      .map(({ relation, column }) => `${relation}.${column}`);
 
     expect([...grants.tables]).toEqual([]);
-    expect(sortedColumns(grants)).toEqual(expected);
+    expect(required.filter((column) => !granted.has(column))).toEqual([]);
+    expect([...granted].filter((column) => !declared.has(column))).toEqual([]);
   });
 
   test("keeps the previous reader grants unchanged during rollout", () => {

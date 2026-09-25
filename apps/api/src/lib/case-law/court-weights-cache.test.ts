@@ -1,13 +1,15 @@
+import { panic } from "better-result";
 import { beforeEach, expect, test } from "bun:test";
 
-import { createSafeId } from "@/api/lib/branded-types";
 import {
   courtTierSqlFromMap,
   courtWeightFromMap,
-  invalidateCourtWeightsCache,
-  loadCourtWeights,
+  createCourtWeightCache,
 } from "@/api/lib/case-law/court-weights";
-import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
+import type {
+  CourtWeightCache,
+  CourtWeightMap,
+} from "@/api/lib/case-law/court-weights";
 
 /**
  * The registry is cached for a minute, and a request that times its Postgres
@@ -18,17 +20,16 @@ import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 
 const ROWS = [
   {
-    id: createSafeId<"caseLawCourtWeight">(),
     country: "CZE",
     courtPattern: "nejvyšší",
     tier: 3,
     tierLabel: "supreme",
     weight: 8,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
   },
 ];
 
 let reads: number;
+let cache: CourtWeightCache;
 
 /** Stands in for the production read; never calls the one it is handed. */
 const countedRead = async () => {
@@ -37,13 +38,17 @@ const countedRead = async () => {
 };
 
 beforeEach(() => {
-  invalidateCourtWeightsCache();
+  // Every read below goes through a hook that supplies its own rows, so the
+  // source itself is never reached.
+  cache = createCourtWeightCache(async () =>
+    panic("the court-weight source is not read by these tests"),
+  );
   reads = 0;
 });
 
 test("two requests inside the TTL read once, not once each", async () => {
-  const first = await loadCourtWeights({ onRead: countedRead });
-  const second = await loadCourtWeights({ onRead: countedRead });
+  const first = await cache.load({ onRead: countedRead });
+  const second = await cache.load({ onRead: countedRead });
 
   expect(reads).toBe(1);
   // And both requests rank against the same registry.
@@ -52,18 +57,18 @@ test("two requests inside the TTL read once, not once each", async () => {
 });
 
 test("the read runs again once the cache is dropped", async () => {
-  await loadCourtWeights({ onRead: countedRead });
-  invalidateCourtWeightsCache();
-  await loadCourtWeights({ onRead: countedRead });
+  await cache.load({ onRead: countedRead });
+  cache.invalidate();
+  await cache.load({ onRead: countedRead });
 
   expect(reads).toBe(2);
 });
 
 test("a hit serves a caller that passes no hook at all", async () => {
-  await loadCourtWeights({ onRead: countedRead });
+  await cache.load({ onRead: countedRead });
   // No hook, and no read either: the cache answers, which is why an untimed
   // caller never reaches the production query here.
-  const map = await loadCourtWeights();
+  const map = await cache.load();
 
   expect(reads).toBe(1);
   expect(map.get("CZE")).toHaveLength(1);
@@ -75,29 +80,25 @@ test("a hit serves a caller that passes no hook at all", async () => {
  */
 const OVERLAPPING_ROWS = [
   {
-    id: createSafeId<"caseLawCourtWeight">(),
     country: "XAA",
     courtPattern: "shared court",
     tier: 3,
     tierLabel: "supreme",
     weight: 8,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
   },
   {
-    id: createSafeId<"caseLawCourtWeight">(),
     country: "XBB",
     courtPattern: "shared court",
     tier: 3,
     tierLabel: "supreme",
     weight: 5,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
   },
 ];
 
 test("a cache reload ranks an overlapping court the same, whatever order the rows arrive in", async () => {
   const registryFrom = async (rows: typeof OVERLAPPING_ROWS) => {
-    invalidateCourtWeightsCache();
-    return await loadCourtWeights({ onRead: async () => rows });
+    cache.invalidate();
+    return await cache.load({ onRead: async () => rows });
   };
   const rank = (map: CourtWeightMap) => ({
     lookup: courtWeightFromMap(map, "Shared Court"),

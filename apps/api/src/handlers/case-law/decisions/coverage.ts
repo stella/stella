@@ -34,8 +34,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { loadCourtWeights } from "@/api/lib/case-law/court-weights";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -537,7 +537,7 @@ export const readCaseLawCoverageHandler = async (
       }),
     readCourts: async ({ buckets, country, total }) => {
       const [courtWeights, activity] = await Promise.all([
-        loadCourtWeights(),
+        loadPublicCourtWeights(),
         caseLawDb(
           async (tx) =>
             await readCaseLawCourtActivityQuery(tx, {
