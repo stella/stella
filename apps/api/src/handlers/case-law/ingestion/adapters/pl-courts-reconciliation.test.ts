@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   PL_COURTS_FIRST_SLICE,
@@ -37,6 +38,8 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const reconciliation = requireReconciliation(plCourtsAdapter);
 
@@ -635,16 +638,17 @@ describe("pl-courts buildDecision", () => {
     expect(built.decision.decisionDate).toBeUndefined();
   });
 
-  test("a detail nothing came back for is unavailable, never built empty", async () => {
+  test("a detail the publisher does not hold settles the item as absent", async () => {
     mockFetchWithBodies([
       { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
     ]);
 
-    // The listing item alone carries a docket and a court, so the build path
-    // could have produced a decision from it. Doing so would make the identity
-    // held with the document still unread.
-    expect(await reconciliation.buildDecision(COMMON_COURT_ITEM)).toEqual({
-      type: "detail-unavailable",
+    // The 404 is SAOS's own answer: the item is built from its listing and
+    // states the answer, which settles it.
+    const built = await reconciliation.buildDecision(COMMON_COURT_ITEM);
+    expect(built).toMatchObject({
+      type: "built",
+      decision: { metadata: { detailReadState: "absent" } },
     });
   });
 
@@ -674,5 +678,244 @@ describe("pl-courts buildDecision", () => {
         type: "unkeyable",
       },
     );
+  });
+});
+
+describe("pl-courts crawl detail reads", () => {
+  const DUMP_TEXT = "<p>Sąd Rejonowy postanawia oddalić wniosek.</p>";
+  /** The dump rows as the crawl reads them, each carrying its text. */
+  const COMMON_DUMP_ROW = { ...COMMON_COURT_ITEM, textContent: DUMP_TEXT };
+  const SUPREME_DUMP_ROW = { ...SUPREME_COURT_ITEM, textContent: DUMP_TEXT };
+
+  type DetailAnswer = (() => Response) | "throws";
+
+  /** A dump page listing both records, each detail answered as given. */
+  const serveDetails = (answers: {
+    common: DetailAnswer;
+    supreme?: DetailAnswer;
+  }) => {
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/api/dump/judgments")) {
+          return Response.json({
+            items:
+              answers.supreme === undefined
+                ? [COMMON_DUMP_ROW]
+                : [COMMON_DUMP_ROW, SUPREME_DUMP_ROW],
+          });
+        }
+        const answer = [
+          { id: COMMON_COURT_ITEM.id, answer: answers.common },
+          { id: SUPREME_COURT_ITEM.id, answer: answers.supreme },
+        ].find(({ id }) => url.endsWith(`/api/judgments/${id}`))?.answer;
+        if (answer === "throws") {
+          throw new TypeError("fetch failed");
+        }
+        return answer === undefined
+          ? new Response("Not found", { status: 404 })
+          : answer();
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    );
+  };
+
+  const detailReadFailures = (logs: RecordingLogger) =>
+    logs
+      .at("WARN")
+      .filter(
+        (record) => record.message === "case_law.ingestion.detail_fetch_failed",
+      )
+      .map((record) => record.attributes);
+
+  const tiersOf = (decisions: readonly IngestionResult[]) =>
+    decisions
+      .map((decision) => ({
+        sourceDocumentId: decision.sourceDocumentId,
+        isListingOnly: decision.isListingOnly,
+        sourceTier: getCaseLawIngestionMetadata(decision.metadata)?.sourceTier,
+        detailReadState: decision.metadata["detailReadState"],
+      }))
+      .toSorted(
+        (left, right) =>
+          Number(left.sourceDocumentId) - Number(right.sourceDocumentId),
+      );
+
+  test("keeps a row whose detail read fails public at the dump tier and reports the read", async () => {
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        controller.error(new TypeError("terminated"));
+      },
+    });
+    serveDetails({
+      common: "throws",
+      supreme: () =>
+        new Response(failingBody, {
+          headers: { "Content-Type": "application/json" },
+        }),
+    });
+    const logs = installRecordingLogger();
+    try {
+      const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+      expect(tiersOf(page.decisions)).toEqual([
+        {
+          sourceDocumentId: String(COMMON_COURT_ITEM.id),
+          isListingOnly: undefined,
+          sourceTier: "dump",
+          detailReadState: "failed",
+        },
+        {
+          sourceDocumentId: String(SUPREME_COURT_ITEM.id),
+          isListingOnly: undefined,
+          sourceTier: "dump",
+          detailReadState: "failed",
+        },
+      ]);
+      expect(page.decisions.map(({ fulltext }) => fulltext)).toEqual([
+        expect.stringContaining("oddalić wniosek"),
+        expect.stringContaining("oddalić wniosek"),
+      ]);
+      expect(
+        detailReadFailures(logs)
+          .map((attributes) => String(attributes?.["documentId"]))
+          .toSorted((left, right) => Number(left) - Number(right)),
+      ).toEqual([String(COMMON_COURT_ITEM.id), String(SUPREME_COURT_ITEM.id)]);
+      expect(
+        detailReadFailures(logs).map((attributes) => [
+          attributes?.["error.type"],
+          attributes?.["failure.grade"],
+        ]),
+      ).toEqual([
+        ["TypeError", "transient"],
+        ["TypeError", "transient"],
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("reports a detail the publisher answers with a server error", async () => {
+    serveDetails({
+      common: () => new Response("upstream failure", { status: 500 }),
+    });
+    const logs = installRecordingLogger();
+    try {
+      const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+      expect(tiersOf(page.decisions)).toEqual([
+        {
+          sourceDocumentId: String(COMMON_COURT_ITEM.id),
+          isListingOnly: undefined,
+          sourceTier: "dump",
+          detailReadState: "failed",
+        },
+      ]);
+      expect(detailReadFailures(logs)).toEqual([
+        expect.objectContaining({
+          documentId: String(COMMON_COURT_ITEM.id),
+          "failure.grade": "transient",
+        }),
+      ]);
+      expect(await reconciliation.buildDecision(COMMON_DUMP_ROW)).toEqual({
+        type: "detail-unavailable",
+      });
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("reports a detail body that is not JSON", async () => {
+    serveDetails({
+      common: () =>
+        new Response("<html>maintenance</html>", {
+          headers: { "Content-Type": "application/json" },
+        }),
+    });
+    const logs = installRecordingLogger();
+    try {
+      await plCourtsAdapter.fetchPage(null, {});
+
+      expect(detailReadFailures(logs)).toEqual([
+        expect.objectContaining({
+          documentId: String(COMMON_COURT_ITEM.id),
+          "error.type": "SyntaxError",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("leaves an item whose detail the publisher refuses to the reconciliation", async () => {
+    serveDetails({
+      common: () => new Response("Too Many Requests", { status: 429 }),
+    });
+    const logs = installRecordingLogger();
+    try {
+      const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+      // No row is stored under the refused identity on this pass; the
+      // reconciliation walk of its judgment date builds it once SAOS answers.
+      expect(page.decisions).toEqual([]);
+      expect(await reconciliation.buildDecision(COMMON_DUMP_ROW)).toEqual({
+        type: "detail-unavailable",
+      });
+      expect(
+        detailReadFailures(logs).map((attributes) => [
+          attributes?.["documentId"],
+          attributes?.["error.type"],
+          attributes?.["failure.grade"],
+        ]),
+      ).toEqual([
+        [String(COMMON_COURT_ITEM.id), "AdapterFetchError", "transient"],
+        [String(COMMON_COURT_ITEM.id), "AdapterFetchError", "transient"],
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("leaves an item to the reconciliation on a refusal whose body cannot be read", async () => {
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        controller.error(new TypeError("terminated"));
+      },
+    });
+    serveDetails({
+      common: () => new Response(failingBody, { status: 429 }),
+    });
+
+    const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+    // The status answers the request; the body is not needed to read it.
+    expect(page.decisions).toEqual([]);
+  });
+
+  test("keeps a row whose detail the publisher answered without a record", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/api/dump/judgments",
+        body: JSON.stringify({ items: [COMMON_DUMP_ROW] }),
+      },
+      { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
+    ]);
+    const logs = installRecordingLogger();
+    try {
+      const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+      expect(tiersOf(page.decisions)).toEqual([
+        {
+          sourceDocumentId: String(COMMON_COURT_ITEM.id),
+          isListingOnly: undefined,
+          sourceTier: "dump",
+          detailReadState: "absent",
+        },
+      ]);
+      expect(detailReadFailures(logs)).toEqual([]);
+    } finally {
+      logs.restore();
+    }
   });
 });
