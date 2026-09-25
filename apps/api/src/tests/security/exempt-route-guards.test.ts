@@ -71,7 +71,6 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // whole route group sits behind the standard auth macro at mount time.
   "dev/routes.ts": [
     "POST /seed",
-    "POST /seed-skills",
     "POST /seed-firm-knowledge",
     "POST /clean",
     "POST /rebuild-search",
