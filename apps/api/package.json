@@ -160,7 +160,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1101.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1136.0",
     "@electric-sql/pglite": "^0.5.8",
     "@faker-js/faker": "^10.6.0",
     "@modelcontextprotocol/client": "2.0.0",
