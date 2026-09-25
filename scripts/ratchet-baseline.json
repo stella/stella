@@ -1018,7 +1018,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 77,
+    "count": 71,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -1032,7 +1032,6 @@
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,
-      "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts": 1,
       "apps/api/src/handlers/chat/upload-files.ts": 1,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
@@ -1040,8 +1039,6 @@
       "apps/api/src/handlers/fields/column-flag/update.ts": 2,
       "apps/api/src/handlers/fields/kanban-placement/update.ts": 1,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
-      "apps/api/src/handlers/legislation/search-index.ts": 1,
-      "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
       "apps/api/src/handlers/playbooks/applicable/run.ts": 1,
       "apps/api/src/handlers/reports/build-report-data.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 2,
@@ -1052,8 +1049,6 @@
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
-      "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
-      "apps/api/src/lib/mcp-upstream/connections.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 5,
@@ -1068,7 +1063,7 @@
       "apps/api/src/scripts/backfill-citation-authority.ts": 1,
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
-      "apps/api/src/scripts/corpus-column-trim.ts": 2,
+      "apps/api/src/scripts/corpus-column-trim.ts": 1,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
       "apps/api/src/scripts/normalize-case-numbers.ts": 1
     }
