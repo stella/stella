@@ -413,6 +413,53 @@ describe("styleDocumentCitations", () => {
     ]);
   });
 
+  test("citations inside a table cell's content control are styled", () => {
+    const document = markdownToStellaDocument(
+      [
+        "| kind | link |",
+        "| --- | --- |",
+        "| citation | [cell citation](https://example.com/cell) |",
+      ].join("\n"),
+    );
+    const content = document.package.document.content.map(
+      (block): BlockContent =>
+        block.type === "table"
+          ? {
+              ...block,
+              rows: block.rows.map((row) => ({
+                ...row,
+                cells: row.cells.map((cell) => ({
+                  ...cell,
+                  content: [
+                    {
+                      type: "blockSdt",
+                      properties: { sdtType: "richText" },
+                      content: cell.content,
+                    },
+                  ],
+                })),
+              })),
+            }
+          : block,
+    );
+    const wrapped = {
+      ...document,
+      package: {
+        ...document.package,
+        document: { ...document.package.document, content },
+      },
+    };
+
+    const styled = styleDocumentCitations(wrapped, "none", options);
+
+    expect(collectHyperlinkTargets(styled.package.document.content)).toEqual(
+      [],
+    );
+    expect(collectText(styled.package.document.content)).toContain(
+      "cell citation",
+    );
+  });
+
   test("the transformation reaches a fixed point", () => {
     const once = styleDocumentCitations(
       markdownToStellaDocument(markdown),
