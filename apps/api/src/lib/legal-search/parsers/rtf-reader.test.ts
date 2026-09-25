@@ -110,7 +110,7 @@ describe("code pages", () => {
     // they name is not a byte, so an RTF holding it directly is not a document
     // this reader is ever handed.
     expect(
-      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a舑 ?b\par }`),
+      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a\u8211 ?b\par }`),
     ).toEqual(["a–b"]);
   });
 
@@ -151,7 +151,7 @@ describe("code pages", () => {
     ]) {
       expect(
         paragraphsOf(
-          String.raw`{\rtf1\ansi\ansicpg1252\uc2 a舑${replacement}?b\par }`,
+          String.raw`{\rtf1\ansi\ansicpg1252\uc2 a\u8211${replacement}?b\par }`,
         ),
       ).toEqual(["a–b"]);
     }
