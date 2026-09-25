@@ -480,7 +480,7 @@ export const backfillChatThreadSearchIndex = async ({
         return total;
       }
       try {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one projection transaction per thread; the keyset page bounds each batch and a failed thread is logged and skipped
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-thread rebuild so one failing thread is logged and skipped without failing its page; each rebuild reads the thread's messages in bounded pages, and the repair page bounds the threads per pass
         await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
         captureError(error, {
