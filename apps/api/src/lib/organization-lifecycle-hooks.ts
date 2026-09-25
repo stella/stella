@@ -20,7 +20,7 @@ type PersistedMember = {
   userId: string;
 };
 
-type NewMembership = {
+export type NewMembership = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };

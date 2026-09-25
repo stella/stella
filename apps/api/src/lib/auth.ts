@@ -96,6 +96,7 @@ import {
   getRequestContext,
 } from "@/api/lib/observability/request-context";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
+import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
@@ -859,9 +860,9 @@ const createAuth = () => {
       await ensureDefaultDocumentTypes(organizationId, rootDb),
     // Once per membership, on the owner connection that wrote the membership
     // row; the defaults are then the member's own private skills to delete.
-    seedMemberDefaults: async ({ organizationId, userId }) =>
+    seedMemberDefaults: async (membership: NewMembership) =>
       await rootDb.transaction(
-        async (tx) => await seedDefaultSkills({ organizationId, tx, userId }),
+        async (tx) => await seedDefaultSkills({ ...membership, tx }),
       ),
   });
 

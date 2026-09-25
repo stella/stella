@@ -41,11 +41,8 @@ export const skillHandlerContext = <TContext>({
   ...fields
 }: SkillHandlerContextOptions): TContext => {
   const recordAuditEvent: AuditRecorder = async (_tx, events) => {
-    if (Array.isArray(events)) {
-      auditEvents.push(...events);
-      return;
-    }
-    auditEvents.push(events);
+    auditEvents.push(...(Array.isArray(events) ? events : [events]));
+    await Promise.resolve();
   };
   return createTestHandlerContext<TContext>({
     ...fields,

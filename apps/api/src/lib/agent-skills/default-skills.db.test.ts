@@ -90,8 +90,9 @@ const createOrganization = async (owner: HumanBrowser) => {
 
 const expectDefaults = async (membership: Membership) => {
   const skills = await memberSkills(membership);
-  expect(skills.map(({ command }) => command).toSorted()).toEqual(
-    DEFAULT_COMMANDS,
+  expect(skills).toHaveLength(DEFAULT_COMMANDS.length);
+  expect(new Set(skills.map(({ command }) => command))).toEqual(
+    new Set(DEFAULT_COMMANDS),
   );
   expect(new Set(skills.map(({ scope }) => scope))).toEqual(
     new Set(["private"]),

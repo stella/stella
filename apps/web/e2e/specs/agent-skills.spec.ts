@@ -145,11 +145,12 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
   try {
     // 1. The owner starts a team skill from a blueprint, describes it, and
     //    enables it with the editor's one enable control.
-    teamSkillId = await createSkillFromBlueprint({
+    const createdTeamSkillId = await createSkillFromBlueprint({
       blueprint: "Check against rules",
       page,
       scope: "team",
     });
+    teamSkillId = createdTeamSkillId;
     const name = page.getByRole("textbox", { name: "Name", exact: true });
     const description = page.getByRole("textbox", {
       name: "Description",
@@ -336,7 +337,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     await confirmation.getByRole("button", { name: "Remove" }).click();
     await expect(teamSkillRow).toHaveCount(0);
     await expect
-      .poll(async () => await apiStatus(request, `/skills/${teamSkillId}`))
+      .poll(
+        async () => await apiStatus(request, `/skills/${createdTeamSkillId}`),
+      )
       .toBe(404);
     teamSkillId = null;
   } finally {

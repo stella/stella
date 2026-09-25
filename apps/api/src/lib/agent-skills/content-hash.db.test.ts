@@ -107,7 +107,10 @@ const expectFreshHash = async (skillId: SafeId<"agentSkill">) => {
   );
 };
 
-const context = <TContext>(fields: { body?: unknown; params?: unknown }) =>
+const context = <TContext>(
+  _handler: (handlerContext: TContext) => unknown,
+  fields: { body?: unknown; params?: unknown },
+) =>
   skillHandlerContext<TContext>({
     testDb,
     organizationId: ids.orgA,
@@ -138,7 +141,7 @@ const seedSkillWithResource = async () => {
   });
   expectOk(
     await createSkillResource.handler(
-      context<Parameters<typeof createSkillResource.handler>[0]>({
+      context(createSkillResource.handler, {
         body: { path: "references/checklist.md", content: "Check one." },
         params: { skillId },
       }),
@@ -181,7 +184,7 @@ const runSkillEditTool = async ({
     tools[toolName],
   );
   if (tool?.execute === undefined) {
-    return panic(`Expected an executable ${toolName} tool`);
+    panic(`Expected an executable ${toolName} tool`);
   }
   await tool.execute(input);
 };
@@ -192,7 +195,7 @@ const MUTATION_PATHS = {
   "skills.create": async () =>
     resultId(
       await createSkill.handler(
-        context<Parameters<typeof createSkill.handler>[0]>({
+        context(createSkill.handler, {
           body: {
             scope: "private",
             name: "Created skill",
@@ -205,7 +208,7 @@ const MUTATION_PATHS = {
   "skills.from-blueprint.create": async () =>
     resultId(
       await createSkillFromBlueprint.handler(
-        context<Parameters<typeof createSkillFromBlueprint.handler>[0]>({
+        context(createSkillFromBlueprint.handler, {
           body: { blueprintId: "check-against-rules", scope: "private" },
         }),
       ),
@@ -233,7 +236,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await updateSkill.handler(
-        context<Parameters<typeof updateSkill.handler>[0]>({
+        context(updateSkill.handler, {
           body: { body: "Edited instructions." },
           params: { skillId },
         }),
@@ -245,7 +248,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await updateSkill.handler(
-        context<Parameters<typeof updateSkill.handler>[0]>({
+        context(updateSkill.handler, {
           body: {
             name: "Renamed skill",
             description: "Edited description.",
@@ -271,7 +274,7 @@ const MUTATION_PATHS = {
     });
     expectOk(
       await reviewSkillProposal.handler(
-        context<Parameters<typeof reviewSkillProposal.handler>[0]>({
+        context(reviewSkillProposal.handler, {
           body: { decision: "accepted" },
           params: { skillId, proposalId },
         }),
@@ -284,7 +287,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await updateSkillResource.handler(
-        context<Parameters<typeof updateSkillResource.handler>[0]>({
+        context(updateSkillResource.handler, {
           body: { path: "references/checklist.md", content: "Check two." },
           params: { skillId },
         }),
@@ -296,7 +299,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await renameSkillResource.handler(
-        context<Parameters<typeof renameSkillResource.handler>[0]>({
+        context(renameSkillResource.handler, {
           body: {
             oldPath: "references/checklist.md",
             newPath: "references/renamed.md",
@@ -311,7 +314,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await deleteSkillResource.handler(
-        context<Parameters<typeof deleteSkillResource.handler>[0]>({
+        context(deleteSkillResource.handler, {
           body: { path: "references/checklist.md" },
           params: { skillId },
         }),
@@ -323,7 +326,7 @@ const MUTATION_PATHS = {
     const skillId = await seedSkillWithResource();
     expectOk(
       await uploadSkillResource.handler(
-        context<Parameters<typeof uploadSkillResource.handler>[0]>({
+        context(uploadSkillResource.handler, {
           body: {
             path: "knowledge/uploaded.md",
             file: new File(["Uploaded knowledge."], "uploaded.md", {
@@ -418,7 +421,7 @@ describe("skill content hash", () => {
     await expectFreshHash(skillId);
     expectOk(
       await createSkillResource.handler(
-        context<Parameters<typeof createSkillResource.handler>[0]>({
+        context(createSkillResource.handler, {
           body: { path: "references/local.md", content: "Local addition." },
           params: { skillId },
         }),

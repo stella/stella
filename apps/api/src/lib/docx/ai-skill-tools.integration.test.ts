@@ -151,9 +151,15 @@ describe("maybeSkillTools", () => {
     expect(
       await loadSkillBody({ slug: enabledSlug, tools: result.value }),
     ).toBe("Enabled methodology");
-    await expect(
-      loadSkillBody({ slug: disabledSlug, tools: result.value }),
-    ).rejects.toThrow(/No skill named/u);
+    const disabledLoad: unknown = await loadSkillBody({
+      slug: disabledSlug,
+      tools: result.value,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(disabledLoad).toBeInstanceOf(Error);
+    expect(String(disabledLoad)).toMatch(/No skill named/u);
   });
 
   test("offers no tools for a prompt without a skill reference", async () => {

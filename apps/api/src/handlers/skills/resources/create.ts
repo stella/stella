@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
-
 import { agentSkillResources } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
 import {
@@ -27,10 +25,18 @@ const createSkillResourceParamsSchema = t.Object({
 const createSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: 512 }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
-  // A literal union, not `t.UnionEnum`: Elysia fills an absent optional
-  // UnionEnum with its first member, so the path inference below never runs.
+  // A literal tuple, not `t.UnionEnum`: Elysia fills an absent optional
+  // UnionEnum with its first member, so the path inference below would never
+  // run. create.test.ts holds the list to SKILL_RESOURCE_KINDS.
   kind: t.Optional(
-    t.Union(SKILL_RESOURCE_KINDS.map((kind) => t.Literal(kind))),
+    t.Union([
+      t.Literal("asset"),
+      t.Literal("knowledge"),
+      t.Literal("prompt"),
+      t.Literal("reference"),
+      t.Literal("script"),
+      t.Literal("template"),
+    ]),
   ),
 });
 
