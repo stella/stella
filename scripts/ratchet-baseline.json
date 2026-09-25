@@ -1090,7 +1090,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 79,
+    "count": 76,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -1128,7 +1128,7 @@
       "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
       "apps/api/src/lib/scouts/work-attention.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 4,
-      "apps/api/src/lib/search/index-global.ts": 5,
+      "apps/api/src/lib/search/index-global.ts": 2,
       "apps/api/src/lib/search/pg-fts-provider.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 2,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
