@@ -110,8 +110,59 @@ describe("code pages", () => {
     // they name is not a byte, so an RTF holding it directly is not a document
     // this reader is ever handed.
     expect(
-      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a舑 ?b\par }`),
+      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a\u8211 ?b\par }`),
     ).toEqual(["a–b"]);
+  });
+
+  test("a `\\'xx` replacement character after `\\uN` is not text", () => {
+    expect(
+      paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1252\uc1 a\u8211\'96b\par }`),
+    ).toEqual(["a–b"]);
+  });
+
+  test("a surrogate pair written as two escapes reads as one character", () => {
+    // Each half carries its own replacement character, and the writer may
+    // break the line between them.
+    const [text] = paragraphsOf(
+      `{\\rtf1\\ansi\\ansicpg1252\\uc1 a\\u-10179\r\n\\'3f\\u-8704\\'3fb\\par }`,
+    );
+    expect(text).toBe("a\u{1F600}b");
+    expect(text?.isWellFormed()).toBe(true);
+  });
+
+  test("`\\ucN` skips exactly N replacement characters, in either form", () => {
+    for (const count of [0, 1, 2, 3]) {
+      for (const replacement of ["?", String.raw`\'3f`]) {
+        const fallback = replacement.repeat(count);
+        expect(
+          paragraphsOf(
+            String.raw`{\rtf1\ansi\ansicpg1252\uc${count} a\u8211${fallback}b\par }`,
+          ),
+        ).toEqual(["a–b"]);
+      }
+    }
+  });
+
+  test("an escaped brace or backslash replacement character is not text", () => {
+    for (const replacement of [
+      String.raw`\{`,
+      String.raw`\}`,
+      String.raw`\\`,
+    ]) {
+      expect(
+        paragraphsOf(
+          String.raw`{\rtf1\ansi\ansicpg1252\uc2 a\u8211${replacement}?b\par }`,
+        ),
+      ).toEqual(["a–b"]);
+    }
+  });
+
+  test("`\\ucN` holds for its group and the outer count returns after it", () => {
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\uc1 {\uc0 a\u8211b}c\u8211?d\par }`,
+      ),
+    ).toEqual(["a–bc–d"]);
   });
 });
 

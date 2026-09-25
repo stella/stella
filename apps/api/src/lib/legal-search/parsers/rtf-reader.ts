@@ -270,6 +270,8 @@ type GroupState = {
   paragraph: ParagraphState;
   /** Where text written inside this group goes. */
   destination: Destination;
+  /** Replacement characters that follow each `\uN`, as `\ucN` last set it. */
+  unicodeFallbackCount: number;
 };
 
 /** A note being collected, and the paragraphs written into it so far. */
@@ -296,6 +298,7 @@ const copyGroupState = (state: GroupState): GroupState => ({
   character: { ...state.character },
   paragraph: { ...state.paragraph },
   destination: state.destination,
+  unicodeFallbackCount: state.unicodeFallbackCount,
 });
 
 /**
@@ -456,6 +459,52 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
   return { word, parameter, next };
 };
 
+/**
+ * Where reading resumes after the replacement characters a `\uN` escape is
+ * followed by, `count` of them as `\ucN` states. The writer gives each either
+ * as the byte itself, as a `\'xx` escape, or as an escaped `\{`, `\}` or `\\`,
+ * and each may sit on the next line: a line ending is the file's formatting,
+ * not a character, so it is passed over first. Anything else (a control word,
+ * a group) ends the replacement early and is left to the scanner.
+ */
+const afterFallbackCharacters = (
+  source: Uint8Array,
+  start: number,
+  count: number,
+): number => {
+  let resume = start;
+  for (let skipped = 0; skipped < count; skipped += 1) {
+    let cursor = resume;
+    while (source[cursor] === 0x0d || source[cursor] === 0x0a) {
+      cursor += 1;
+    }
+    const byte = source[cursor];
+    if (byte === undefined || byte === 0x7b || byte === 0x7d) {
+      return resume;
+    }
+    if (byte !== 0x5c) {
+      resume = cursor + 1;
+      continue;
+    }
+    const escaped = source[cursor + 1];
+    if (escaped === 0x7b || escaped === 0x7d || escaped === 0x5c) {
+      resume = cursor + 2;
+      continue;
+    }
+    const high = String.fromCodePoint(source[cursor + 2] ?? 0);
+    const low = String.fromCodePoint(source[cursor + 3] ?? 0);
+    if (
+      source[cursor + 1] !== 0x27 ||
+      !HEX_DIGITS.includes(high) ||
+      !HEX_DIGITS.includes(low)
+    ) {
+      return resume;
+    }
+    resume = cursor + 4;
+  }
+  return resume;
+};
+
 type ReaderOutput = {
   blocks: BlockContent[];
   footnotes: Footnote[];
@@ -481,6 +530,7 @@ const readRtfInto = (
     character: initialCharacterState(),
     paragraph: initialParagraphState(),
     destination: { type: "body" },
+    unicodeFallbackCount: 1,
   };
   /**
    * One frame per open group. `heldParagraph` is the body paragraph a
@@ -768,13 +818,18 @@ const readRtfInto = (
           break;
         }
         appendText(String.fromCodePoint(codePoint));
-        // `\uc1` (the only count this dialect states) follows the escape with
-        // one replacement character for readers that cannot decode it.
-        if (source[cursor] === 0x3f) {
-          cursor += 1;
-        }
+        // The escape is followed by `\ucN` replacement characters for
+        // readers that cannot decode it.
+        cursor = afterFallbackCharacters(
+          source,
+          cursor,
+          state.unicodeFallbackCount,
+        );
         break;
       }
+      case "uc":
+        state.unicodeFallbackCount = Math.max(parameter ?? 1, 0);
+        break;
       case "footnote": {
         const note: OpenFootnote = {
           id: openFootnotes.length + 1,
