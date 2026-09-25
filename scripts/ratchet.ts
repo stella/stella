@@ -1476,6 +1476,436 @@ const countWorkspaceOnlyRlsOnOrgTables = (content: string): number => {
   return count;
 };
 
+// --- Failure sinks ------------------------------------------------------------
+//
+// Terminal failure emissions that bypass the failure owner, counted on
+// resolved bindings rather than spellings: `captureError as captureTelemetry`
+// is still a capture, a logger reached through destructuring or a computed key
+// is still the logger, and an attribute object held in a local is still the
+// attribute object. The metric is gated per file, so removing a bypass in one
+// file cannot fund a new one in another.
+
+const FAILURE_SINK_MODULES = {
+  capture: "apps/api/src/lib/analytics/capture",
+  errorTag: "apps/api/src/lib/errors/error-tag",
+  errorUtils: "apps/api/src/lib/errors/utils",
+  logger: "apps/api/src/lib/observability/logger",
+  pgError: "apps/api/src/lib/pg-error",
+  aiError: "apps/api/src/lib/ai-error",
+} as const;
+
+const TERMINAL_CAPTURE_EXPORTS: ReadonlySet<string> = new Set([
+  "captureError",
+  "captureObservedError",
+  "captureRequestError",
+]);
+
+// The legacy field helpers: a logger call spreading or calling one of these
+// is reporting a failure on its own.
+const FOLDED_HELPER_EXPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  [FAILURE_SINK_MODULES.errorUtils]: new Set([
+    "connectionErrorFields",
+    "errorClassName",
+    "errorFingerprint",
+    "errorSystemFields",
+    "errorTag",
+    "safeErrorTelemetryFields",
+    "unredactedErrorFields",
+  ]),
+  [FAILURE_SINK_MODULES.errorTag]: new Set(["errorClassName", "errorTag"]),
+  [FAILURE_SINK_MODULES.pgError]: new Set(["pgErrorFields"]),
+  [FAILURE_SINK_MODULES.aiError]: new Set(["providerStatusFields"]),
+};
+
+const FAILURE_LOGGER_METHODS: ReadonlySet<string> = new Set([
+  "error",
+  "request",
+  "warn",
+]);
+const ERROR_ATTRIBUTE_PREFIX = "error.";
+const RUNNER_ERROR_WRITER = "logError";
+const RUNNER_SOURCE_PREFIX = "apps/legal-atlas-runner/src/";
+const PROCESS_STREAMS: ReadonlySet<string> = new Set(["stderr", "stdout"]);
+
+// A module specifier as a repo-relative path without extension, so an alias
+// and a relative import of the same module compare equal.
+const resolvedModulePath = (file: string, specifier: string): string => {
+  if (specifier.startsWith(API_ALIAS_PREFIX)) {
+    return `${API_ALIAS_ROOT}/${specifier.slice(API_ALIAS_PREFIX.length)}`;
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix.join(path.posix.dirname(file), specifier);
+  }
+  return specifier;
+};
+
+type FailureSinkBindings = {
+  readonly captures: ReadonlySet<string>;
+  readonly helpers: ReadonlySet<string>;
+  readonly loggers: ReadonlySet<string>;
+  /** Local names destructured off the logger, e.g. `const { warn } = logger`. */
+  readonly loggerMethods: ReadonlySet<string>;
+};
+
+const importedFailureBindings = (
+  sourceFile: ts.SourceFile,
+  file: string,
+): { captures: Set<string>; helpers: Set<string>; loggers: Set<string> } => {
+  const captures = new Set<string>();
+  const helpers = new Set<string>();
+  const loggers = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    const modulePath = resolvedModulePath(file, statement.moduleSpecifier.text);
+    for (const specifier of bindings.elements) {
+      if (specifier.isTypeOnly) {
+        continue;
+      }
+      const imported = (specifier.propertyName ?? specifier.name).text;
+      const local = specifier.name.text;
+      if (
+        modulePath === FAILURE_SINK_MODULES.capture &&
+        TERMINAL_CAPTURE_EXPORTS.has(imported)
+      ) {
+        captures.add(local);
+      }
+      if (FOLDED_HELPER_EXPORTS[modulePath]?.has(imported) === true) {
+        helpers.add(local);
+      }
+      if (modulePath === FAILURE_SINK_MODULES.logger && imported === "logger") {
+        loggers.add(local);
+      }
+    }
+  }
+  return { captures, helpers, loggers };
+};
+
+const propertyNameText = (name: ts.PropertyName): string | null =>
+  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
+
+// Initializers of `const x = …` in the file, for following a name to the
+// value it was bound to.
+const constInitializers = (
+  sourceFile: ts.SourceFile,
+): Map<string, ts.Expression> => {
+  const initializers = new Map<string, ts.Expression>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      initializers.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return initializers;
+};
+
+const loggerMethodAliases = (
+  sourceFile: ts.SourceFile,
+  loggers: ReadonlySet<string>,
+): Set<string> => {
+  const aliases = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined &&
+      ts.isIdentifier(node.initializer) &&
+      loggers.has(node.initializer.text)
+    ) {
+      for (const element of node.name.elements) {
+        const method = element.propertyName ?? element.name;
+        if (
+          ts.isIdentifier(method) &&
+          FAILURE_LOGGER_METHODS.has(method.text) &&
+          ts.isIdentifier(element.name)
+        ) {
+          aliases.add(element.name.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return aliases;
+};
+
+const MAX_ATTRIBUTE_FOLLOW_DEPTH = 3;
+
+// A key or member name, not a value reference that could be followed.
+const isNameOfParent = (node: ts.Identifier): boolean => {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node)
+  );
+};
+
+// Whether an attribute expression carries error fields: an `error.*` key, or
+// a folded helper called or spread anywhere inside it. A name is followed to
+// its initializer, so a record assembled in a local still counts.
+const carriesErrorFields = (
+  expression: ts.Node,
+  bindings: FailureSinkBindings,
+  initializers: ReadonlyMap<string, ts.Expression>,
+  depth = 0,
+): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) {
+      return;
+    }
+    if (
+      (ts.isPropertyAssignment(node) ||
+        ts.isShorthandPropertyAssignment(node)) &&
+      propertyNameText(node.name)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
+    ) {
+      found = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      bindings.helpers.has(node.expression.text)
+    ) {
+      found = true;
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      depth < MAX_ATTRIBUTE_FOLLOW_DEPTH &&
+      !isNameOfParent(node)
+    ) {
+      const initializer = initializers.get(node.text);
+      if (
+        initializer !== undefined &&
+        initializer !== expression &&
+        carriesErrorFields(initializer, bindings, initializers, depth + 1)
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+};
+
+// `logger.warn(…)`, `logger["warn"](…)`, or a destructured `warn(…)`: the
+// method called, or null for any other call.
+const failureLoggerMethod = (
+  call: ts.CallExpression,
+  bindings: FailureSinkBindings,
+): string | null => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return bindings.loggerMethods.has(callee.text) ? callee.text : null;
+  }
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.loggers.has(callee.expression.text)
+  ) {
+    return FAILURE_LOGGER_METHODS.has(callee.name.text)
+      ? callee.name.text
+      : null;
+  }
+  if (
+    ts.isElementAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.loggers.has(callee.expression.text) &&
+    ts.isStringLiteral(callee.argumentExpression) &&
+    FAILURE_LOGGER_METHODS.has(callee.argumentExpression.text)
+  ) {
+    return callee.argumentExpression.text;
+  }
+  return null;
+};
+
+const isProcessStreamWrite = (call: ts.CallExpression): boolean => {
+  const callee = call.expression;
+  const target = call.arguments.at(0);
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === "Bun" &&
+    callee.name.text === "write" &&
+    target !== undefined &&
+    ts.isPropertyAccessExpression(target) &&
+    ts.isIdentifier(target.expression) &&
+    target.expression.text === "Bun" &&
+    PROCESS_STREAMS.has(target.name.text)
+  );
+};
+
+const isTerminalCapture = (
+  call: ts.CallExpression,
+  bindings: FailureSinkBindings,
+): boolean => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return bindings.captures.has(callee.text);
+  }
+  // A capture reached as a member (`telemetry.captureRequestError(…)`) is the
+  // same terminal call; the adapter seams' `captureError` members are counted
+  // by their own inventory metric instead.
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === "captureRequestError"
+  );
+};
+
+const countDirectFailureSinksAs = (
+  content: string,
+  file: string,
+  scriptKind: ts.ScriptKind,
+): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
+  const imported = importedFailureBindings(sourceFile, file);
+  const bindings: FailureSinkBindings = {
+    ...imported,
+    loggerMethods: loggerMethodAliases(sourceFile, imported.loggers),
+  };
+  const initializers = constInitializers(sourceFile);
+  const isRunner = file.startsWith(RUNNER_SOURCE_PREFIX);
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const method = failureLoggerMethod(node, bindings);
+      const attributes =
+        method === "request" ? node.arguments.at(0) : node.arguments.at(1);
+      if (
+        isTerminalCapture(node, bindings) ||
+        isProcessStreamWrite(node) ||
+        (isRunner &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === RUNNER_ERROR_WRITER) ||
+        (method !== null &&
+          attributes !== undefined &&
+          carriesErrorFields(attributes, bindings, initializers))
+      ) {
+        count += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
+const countDirectFailureSinks: FileCounter = (content, file) =>
+  Math.max(
+    countDirectFailureSinksAs(content, file, ts.ScriptKind.TS),
+    countDirectFailureSinksAs(content, file, ts.ScriptKind.TSX),
+  );
+
+// `callbacks.captureError(…)`-shaped seams: adapters that also do generation
+// bookkeeping, inventoried apart from the terminal sinks above.
+const countAnalyticsCallbackSeams = (content: string): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "captureError"
+    ) {
+      count += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
+const FAILURE_SINK_FACTORY = "failureSink";
+
+// The `failureSink({ … })` spec objects in a file.
+const failureSinkSpecs = (content: string): ts.ObjectLiteralExpression[] => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const specs: ts.ObjectLiteralExpression[] = [];
+  const visit = (node: ts.Node): void => {
+    const spec = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === FAILURE_SINK_FACTORY &&
+      spec !== undefined &&
+      ts.isObjectLiteralExpression(spec)
+    ) {
+      specs.push(spec);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specs;
+};
+
+const specProperty = (
+  spec: ts.ObjectLiteralExpression,
+  name: string,
+): ts.PropertyAssignment | undefined =>
+  spec.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      propertyNameText(property.name) === name,
+  );
+
+// One per local expectation a sink handle declares.
+const countFailureSinkExpectations = (content: string): number => {
+  let total = 0;
+  for (const spec of failureSinkSpecs(content)) {
+    const expected = specProperty(spec, "expected")?.initializer;
+    if (expected !== undefined && ts.isArrayLiteralExpression(expected)) {
+      total += expected.elements.length;
+    }
+  }
+  return total;
+};
+
+// One per sink handle whose output is pinned to its pre-migration channel.
+const countFailureLegacyOutputPins = (content: string): number =>
+  failureSinkSpecs(content).filter(
+    (spec) => specProperty(spec, "legacy") !== undefined,
+  ).length;
+
+const FAILURE_SINK_SOURCE_GLOBS = [
+  "apps/api/src/**/*.{ts,tsx}",
+  "apps/legal-atlas-runner/src/**/*.ts",
+] as const;
+
 type FileCounter = (content: string, file: string) => number;
 
 // A repo metric answers a question no single file can — the same helper copied
@@ -1498,6 +1928,12 @@ type RatchetMetric =
       readonly include: readonly string[];
       readonly exclude: (file: string) => boolean;
       readonly count: FileCounter;
+      /**
+       * Gate every file, not only the total: a file rising above its own
+       * baseline fails even when another file fell by as much, so removing
+       * one occurrence cannot fund a new one elsewhere.
+       */
+      readonly perFile?: true;
     }
   | {
       readonly scope: "repo";
@@ -2330,6 +2766,43 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countInternalModuleMockLedgerEntries,
   },
   {
+    scope: "file",
+    id: "direct-failure-sinks",
+    description:
+      "failure emissions that bypass observeFailure, on resolved bindings: captureError/captureRequestError/captureObservedError calls (aliases and member captureRequestError included), logger.error/warn/request calls whose attributes (literal, spread, or a local holding them) carry an error.* key or a legacy field helper, runner logError calls, and Bun.write to Bun.stderr/Bun.stdout; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countDirectFailureSinks,
+    perFile: true,
+  },
+  {
+    scope: "file",
+    id: "ai-analytics-callback-seams",
+    description:
+      "member captureError(...) calls: AI analytics callback seams that also do generation bookkeeping, so they migrate apart from the terminal sinks",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countAnalyticsCallbackSeams,
+  },
+  {
+    scope: "file",
+    id: "failure-sink-expectations",
+    description:
+      "local expectations declared on failureSink(...) handles; each one takes a failure out of the defect grade at one sink, so each must be justified where it is added",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countFailureSinkExpectations,
+  },
+  {
+    scope: "file",
+    id: "failure-legacy-output-pins",
+    description:
+      "failureSink(...) handles whose output is pinned to the channel the site used before it migrated; the ledger only shrinks as sites move to their grade's policy",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countFailureLegacyOutputPins,
+  },
+  {
     scope: "repo",
     id: "cross-app-lib-path-copies",
     description:
@@ -2372,6 +2845,12 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countLibTopLevelEntries(WEB_LIB_DIR),
   },
 ];
+
+const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
+  RATCHET_METRICS.filter(
+    (metric) => metric.scope === "file" && metric.perFile === true,
+  ).map(({ id }) => id),
+);
 
 // --- Scanning ---------------------------------------------------------------
 
@@ -2618,10 +3097,13 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
   return "ok";
 };
 
+type DiffOptions = { perFile?: true | undefined };
+
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
+  { perFile }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
@@ -2632,7 +3114,9 @@ const diffMetric = (
   }
   regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
 
-  const status = metricStatus(current.count, baseline.count);
+  const totalStatus = metricStatus(current.count, baseline.count);
+  const status =
+    perFile === true && regressedFiles.length > 0 ? "regressed" : totalStatus;
 
   return {
     id,
@@ -2704,6 +3188,7 @@ const runCheck = (): number => {
       metric.id,
       requireSnapshot(current, metric.id),
       base,
+      { perFile: metric.scope === "file" ? metric.perFile : undefined },
     );
     if (diff.status === "regressed") {
       regressions.push(diff);
@@ -2734,6 +3219,12 @@ const runCheck = (): number => {
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
     }
+  }
+  if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
+    console.error(
+      "\nA per-file metric fails on any file above its own baseline, even when\n" +
+        "the total did not rise: move the new occurrence behind the owner instead.",
+    );
   }
   console.error(
     "\nThese metrics may only decrease. Remove the new occurrence(s) above, or,\n" +
@@ -3600,6 +4091,107 @@ const SELF_TEST_CLONE_DATA_TABLE = `export const ROWS = [\n${Array.from(
 // data tables all add nothing.
 const EXPECTED_DUPLICATE_TOKEN_BLOCKS = 2;
 
+const FAILURE_SINK_FIXTURE_LINES = [
+  "import {",
+  "  captureError as captureTelemetryError,",
+  "  captureRequestError,",
+  '} from "@/api/lib/analytics/capture";',
+  'import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";',
+  'import { failureSink } from "@/api/lib/observability/failure";',
+  'import { logger } from "@/api/lib/observability/logger";',
+  'import { observeFailure } from "@/api/lib/observability/observe-failure";',
+  "const { warn: warnLog } = logger;",
+  "const pinned = failureSink({",
+  '  event: "pinned.failed",',
+  '  expected: [{ match: { code: "ENOENT" }, reason: "optional_file_absent" }],',
+  '  legacy: { severity: "ERROR", capture: true },',
+  "});",
+  'const quiet = failureSink({ event: "quiet.failed", expected: [] });',
+  "export const sinks = async (error: unknown, request: Request) => {",
+  // An aliased import is still the capture.
+  "  captureTelemetryError(error);",
+  "  captureRequestError(error, { request });",
+  "  telemetry.captureRequestError(error, { request });",
+  // The attribute object held in a local.
+  '  const attributes = { "error.type": errorTag(error), phase: "x" };',
+  '  logger.error("worker.failed", attributes);',
+  // A spread helper, a literal error key, and the request record.
+  '  logger.warn("worker.retry", { ...errorSystemFields(error) });',
+  '  logger.error("worker.failed", { "error.code": "X" });',
+  '  logger.request({ message: "request.failed", errorType: errorTag(error) });',
+  // Computed and destructured logger access.
+  '  logger["warn"]("computed", { "error.type": "x" });',
+  '  warnLog("destructured", { "error.type": "x" });',
+  // Direct process-stream writes.
+  '  await Bun.write(Bun.stderr, "failed\\n");',
+  '  await Bun.write(Bun.stdout, "failed\\n");',
+  // Not direct sinks: no error fields, the owner, a file write, INFO, the
+  // analytics seams.
+  '  logger.error("worker.failed", { phase: "x" });',
+  "  observeFailure(error, { sink: quiet });",
+  "  observeFailure(error, { sink: pinned });",
+  '  await Bun.write("file.log", "x");',
+  '  logger.info("worker.done", { "error.type": "x" });',
+  "  callbacks.captureError(error);",
+  '  aiAnalytics.captureError(error, { kind: "unknown" });',
+  "};",
+];
+const SELF_TEST_FAILURE_SINKS = `${FAILURE_SINK_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_RUNNER_FAILURE_SINKS = [
+  "const logError = (message: string): void => {",
+  "  Bun.write(Bun.stderr, message);",
+  "};",
+  'logError("[daemon] failed");',
+  'logError("[daemon] retrying");',
+  "",
+].join("\n");
+const EXPECTED_DIRECT_FAILURE_SINKS = 14;
+const EXPECTED_ANALYTICS_CALLBACK_SEAMS = 2;
+const EXPECTED_FAILURE_SINK_EXPECTATIONS = 1;
+const EXPECTED_FAILURE_LEGACY_OUTPUT_PINS = 1;
+
+const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  for (const [id, expected] of [
+    ["direct-failure-sinks", EXPECTED_DIRECT_FAILURE_SINKS],
+    ["ai-analytics-callback-seams", EXPECTED_ANALYTICS_CALLBACK_SEAMS],
+    ["failure-sink-expectations", EXPECTED_FAILURE_SINK_EXPECTATIONS],
+    ["failure-legacy-output-pins", EXPECTED_FAILURE_LEGACY_OUTPUT_PINS],
+  ] as const) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+    }
+  }
+  const direct = requireSnapshot(snapshot, "direct-failure-sinks");
+  if (direct.files["apps/legal-atlas-runner/src/runner-log.ts"] !== 3) {
+    failures.push(
+      "direct-failure-sinks did not count the runner's stderr writer",
+    );
+  }
+  if ("apps/api/src/failure-sinks.test.ts" in direct.files) {
+    failures.push("direct-failure-sinks scanned a test file");
+  }
+
+  // A file rising while another falls by as much keeps the total level: a
+  // per-file metric still fails, a total-gated one does not.
+  const baseline = { count: 2, files: { "a.ts": 1, "b.ts": 1 } };
+  const moved = { count: 2, files: { "a.ts": 2 } };
+  if (
+    diffMetric("direct-failure-sinks", moved, baseline, { perFile: true })
+      .status !== "regressed"
+  ) {
+    failures.push("a per-file metric let one file fund another");
+  }
+  if (diffMetric("as-casts", moved, baseline).status !== "ok") {
+    failures.push("a total-gated metric failed on a level total");
+  }
+  if (!PER_FILE_METRIC_IDS.has("direct-failure-sinks")) {
+    failures.push("direct-failure-sinks is not gated per file");
+  }
+  return failures;
+};
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -4270,6 +4862,21 @@ const runSelfTest = (): number => {
       "apps/web/src/clone-table-copy.ts",
       SELF_TEST_CLONE_DATA_TABLE,
     );
+    writeFixture(
+      root,
+      "apps/api/src/failure-sinks.ts",
+      SELF_TEST_FAILURE_SINKS,
+    );
+    writeFixture(
+      root,
+      "apps/legal-atlas-runner/src/runner-log.ts",
+      SELF_TEST_RUNNER_FAILURE_SINKS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/failure-sinks.test.ts",
+      SELF_TEST_FAILURE_SINKS,
+    );
     // Excluded companions: these must NOT be counted.
     writeFixture(
       root,
@@ -4291,6 +4898,7 @@ const runSelfTest = (): number => {
     const snapshot = scanAll(root);
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...failureSinkSelfTestFailures(snapshot));
 
     const mockLedgerMetric = requireSnapshot(
       snapshot,
