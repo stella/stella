@@ -6,6 +6,10 @@ import path from "node:path";
 import repositoryPackage from "../../../package.json";
 import { validateWorkspaceRoot } from "./workspace-hygiene";
 
+// The temporary roots have no Git history; a pinned local environment keeps
+// the app-boundary baseline out of these checks wherever the tests run.
+const LOCAL = { env: {} };
+
 let tempRoots: string[] = [];
 
 afterEach(() => {
@@ -40,7 +44,7 @@ describe("workspace hygiene", () => {
       "run: bun install -g turbo@2.9.18\n",
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "turbo install version must derive from root package.json; found mirrored pin 2.10.3",
@@ -72,7 +76,7 @@ describe("workspace hygiene", () => {
       'RUN bun install -g "turbo@$(bun -p \'require("./package.json").devDependencies.turbo\')"\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("requires an exact root turbo version", () => {
@@ -88,7 +92,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "root package.json must define devDependencies.turbo as an exact semver version",
@@ -115,7 +119,7 @@ describe("workspace hygiene", () => {
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "CSS import @fontsource-variable/source-serif-4 resolves to package @fontsource-variable/source-serif-4, but @fontsource-variable/source-serif-4 is not declared in this workspace package.json",
@@ -144,7 +148,7 @@ describe("workspace hygiene", () => {
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("requires workspaces to own the Bun types named by their tsconfig", () => {
@@ -165,7 +169,7 @@ describe("workspace hygiene", () => {
       JSON.stringify({ compilerOptions: { types: ["bun-types"] } }),
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "bun-types is named by this TypeScript project but is not declared in the workspace package.json",
       path: "apps/web/tsconfig.json",
@@ -202,7 +206,7 @@ describe("workspace hygiene", () => {
       JSON.stringify({ name: "@stll/folio-core", version: "0.15.12" }),
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "@stll/folio-core resolves to 0.15.12, but catalog: requires 0.15.13; remove the stale nested install and reinstall",
       path: "apps/web/package.json",
@@ -230,7 +234,7 @@ describe("workspace hygiene", () => {
       JSON.stringify({ name: "@stll/folio-core", version: "0.15.13" }),
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("ignores package imports inside CSS comments", () => {
@@ -251,7 +255,7 @@ describe("workspace hygiene", () => {
       '/*\n@import "@fontsource-variable/source-serif-4";\n*/\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("accepts Babel 7 in the native mobile toolchain", () => {
@@ -270,7 +274,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("rejects Babel major drift in a runtime workspace", () => {
@@ -289,7 +293,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "@babel/core must declare major 7 for this runtime; found ^8.0.1",
       path: "apps/mobile/package.json",
@@ -314,7 +318,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
   test("rejects a stale centralized lint configuration", () => {
@@ -332,7 +336,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message: "devDependencies.@stll/oxlint-config must be 0.7.0; found 0.6.0",
       path: "package.json",
     });
@@ -354,7 +358,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir)).toEqual(
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:

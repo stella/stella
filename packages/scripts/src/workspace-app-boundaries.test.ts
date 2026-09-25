@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -8,6 +14,15 @@ import {
   collectAppBoundaryEdges,
   validateWorkspaceAppBoundaries,
 } from "./workspace-app-boundaries";
+import type { GitRunner } from "./workspace-app-boundaries";
+
+// Every call pins its environment, so the result does not depend on whether
+// the test itself runs in CI or a pull request.
+const LOCAL = { env: {} };
+const PULL_REQUEST = {
+  env: { CI: "true", GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" },
+};
+const LEDGER_PATH = "scripts/app-boundary-exceptions.json";
 
 let tempRoots: string[] = [];
 
@@ -64,7 +79,7 @@ describe("workspace app boundaries", () => {
       '---\nimport type { API } from "@stll/api/types";\n---\n',
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual(
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:
@@ -141,7 +156,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify({ extends: "./tsconfig.base.json" }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual(
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:
@@ -164,7 +179,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify({ extends: "./missing.json" }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: expect.stringContaining("invalid TypeScript configuration"),
         path: "apps/web/tsconfig.json",
@@ -219,10 +234,10 @@ describe("workspace app boundaries", () => {
     );
     initializeGitRoot(rootDir);
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([]);
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
 
     writeFileSync(sourcePath, "export {};\n");
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message:
           "stale app-boundary exception; remove it now that the dependency no longer exists",
@@ -256,11 +271,109 @@ describe("workspace app boundaries", () => {
       `${JSON.stringify(grownLedger, null, 2)}\n`,
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message:
           "new app-boundary exceptions are forbidden; the ledger may only shrink",
         path: "scripts/app-boundary-exceptions.json:packages/shared/src/new-debt.ts -> @stll/api/new-debt",
+      },
+    ]);
+  });
+
+  test("fails closed when Git cannot read the repository", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+    initializeGitRoot(rootDir);
+    writeFileSync(path.join(rootDir, ".git/config"), "[core\n");
+
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+      {
+        message: "app-boundary ledger baseline could not be read from Git",
+        path: LEDGER_PATH,
+      },
+    ]);
+  });
+
+  test("skips the baseline comparison outside a Git repository locally", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
+  });
+
+  test("requires a Git checkout in CI", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+
+    expect(
+      validateWorkspaceAppBoundaries(rootDir, { env: { CI: "true" } }),
+    ).toEqual([
+      {
+        message: "app-boundary ledger baseline requires a Git checkout in CI",
+        path: LEDGER_PATH,
+      },
+    ]);
+  });
+
+  test("skips the baseline comparison without a Git binary locally, and requires one in CI", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+    const missingBinary: GitRunner = () => ({ kind: "missing-binary" });
+
+    expect(
+      validateWorkspaceAppBoundaries(rootDir, { ...LOCAL, git: missingBinary }),
+    ).toEqual([]);
+    expect(
+      validateWorkspaceAppBoundaries(rootDir, {
+        ...PULL_REQUEST,
+        git: missingBinary,
+      }),
+    ).toEqual([
+      {
+        message: "app-boundary ledger baseline requires a Git checkout in CI",
+        path: LEDGER_PATH,
+      },
+    ]);
+  });
+
+  test("fails closed when the base tree cannot be read", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+    initializeGitRoot(rootDir);
+    const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      cwd: rootDir,
+      encoding: "utf-8",
+    }).trim();
+    unlinkSync(
+      path.join(rootDir, ".git/objects", tree.slice(0, 2), tree.slice(2)),
+    );
+
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+      {
+        message: "base app-boundary ledger could not be read",
+        path: LEDGER_PATH,
+      },
+    ]);
+  });
+
+  test("compares against no baseline when the base has no ledger yet", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, "scripts/.keep"), "");
+    initializeGitRoot(rootDir);
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+
+    expect(validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual([]);
+  });
+
+  test("fails closed in a pull request whose base branch cannot be resolved", () => {
+    const rootDir = createRoot();
+    writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
+    initializeGitRoot(rootDir, "feature");
+
+    expect(validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual([
+      {
+        message: "app-boundary ledger baseline branch is unavailable",
+        path: LEDGER_PATH,
       },
     ]);
   });
@@ -272,7 +385,7 @@ describe("workspace app boundaries", () => {
       "not json\n",
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "app-boundary ledger must contain valid JSON",
         path: "scripts/app-boundary-exceptions.json",
@@ -297,7 +410,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify([observed, observed, { ...observed, reason: "extra" }]),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir)).toEqual([
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "app-boundary exception must not be duplicated",
         path: "scripts/app-boundary-exceptions.json:2",
@@ -333,8 +446,8 @@ const writePackage = (
   );
 };
 
-const initializeGitRoot = (rootDir: string) => {
-  execFileSync("git", ["init", "--quiet", "--initial-branch=main"], {
+const initializeGitRoot = (rootDir: string, branch = "main") => {
+  execFileSync("git", ["init", "--quiet", `--initial-branch=${branch}`], {
     cwd: rootDir,
   });
   execFileSync("git", ["config", "user.email", "test@example.invalid"], {

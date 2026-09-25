@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
+import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
 const DEPENDENCY_FIELDS = [
@@ -669,9 +670,12 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
   return issues;
 };
 
-export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
+export const validateWorkspaceRoot = (
+  rootDir: string,
+  appBoundaryOptions: AppBoundaryOptions = {},
+): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
-    ...validateWorkspaceAppBoundaries(rootDir),
+    ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),
