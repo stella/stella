@@ -34,12 +34,7 @@
  */
 
 import { Value } from "@sinclair/typebox/value";
-import {
-  EventType,
-  maxIterations,
-  StreamProcessor,
-  toolDefinition,
-} from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
@@ -66,6 +61,7 @@ import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-to
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   streamChatChunks,
   toolCallEndInputOf,
@@ -1191,7 +1187,10 @@ const runScenario = async ({
   // The SDK's own processor keeps the conversation, so a follow-up turn
   // carries the assistant's text, tool calls, and tool results the way a
   // chat client sends them back.
-  const conversation = new StreamProcessor();
+  const { processor: conversation } = createStreamMessageCapture({
+    initialMessages: [],
+    capture: () => null,
+  });
   let turnNumber = 0;
   const tools = createBehaviorTools({
     store,
