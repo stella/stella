@@ -109,14 +109,13 @@ export type NewNotification = {
 export const NOTIFICATION_INSERT_BATCH_SIZE = 200;
 
 /**
- * Structural handle the owner-connection paths read and write through.
- * Declared structurally rather than as `typeof rootDb` so the fan-out and the
- * announcement audience can be exercised against the embedded test database;
- * production call sites always take the default.
+ * Structural handle the cross-user fan-out writes through. Declared
+ * structurally rather than as `typeof rootDb` so the fan-out can be exercised
+ * against the embedded test database; request paths reach it only through
+ * {@link fanOutCrossUserNotifications}.
  */
 export type NotificationFanOutDb = {
   transaction: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
-  select: (typeof rootDb)["select"];
 };
 
 /**
@@ -214,19 +213,20 @@ export const createNotificationsInTransaction = async (
 
 /**
  * File notifications addressed to OTHER people (a mentioned colleague, every
- * member of a firm) and ping them.
+ * member of a firm) through `database`, and ping them.
  *
- * No caller's RLS scope can admit a row addressed to somebody else, so this
- * writes through the owner connection; the recipient and organization it names
- * are always server-derived. Its own transaction has committed by the time
- * this returns, so the pings go out here and no caller has to remember them.
+ * No caller's RLS scope can admit a row addressed to somebody else, so the
+ * handle is one that can write for any recipient; the recipient and
+ * organization each row names are always server-derived. Its own transaction
+ * has committed by the time this returns, so the pings go out here and no
+ * caller has to remember them.
  *
  * Rejections propagate — the caller decides whether to fail the request or
  * hand it to `detached`, which captures. Nothing is swallowed here.
  */
 export const fanOutNotifications = async (
   rows: readonly NewNotification[],
-  database: NotificationFanOutDb = rootDb,
+  database: NotificationFanOutDb,
 ): Promise<void> => {
   pingNotificationRecipients(
     await insertNotifications(
@@ -234,6 +234,16 @@ export const fanOutNotifications = async (
       async (insert) => await database.transaction(insert),
     ),
   );
+};
+
+/**
+ * {@link fanOutNotifications} for request handlers: files rows addressed to
+ * other people through the owner connection, the one handle that admits them.
+ */
+export const fanOutCrossUserNotifications = async (
+  rows: readonly NewNotification[],
+): Promise<void> => {
+  await fanOutNotifications(rows, rootDb);
 };
 
 /**
@@ -350,17 +360,18 @@ export const resolveMentionTargets = async (
 };
 
 /**
- * Recipients are read through the owner connection: an announcement's audience
- * is every member of the organization, which no single caller's RLS scope
- * reveals. Callers pass their cap plus one so an oversized audience is
+ * An announcement's audience: every current member of the organization, read
+ * in the caller's scoped transaction. The member policy admits every member of
+ * the caller's active organization, whether or not they share a matter with
+ * the caller. Callers pass their cap plus one so an oversized audience is
  * detected and refused rather than silently truncated.
  */
 export const listAnnouncementRecipients = async (
+  tx: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
   limit: number,
-  database: NotificationFanOutDb = rootDb,
 ): Promise<{ userId: string }[]> =>
-  await database
+  await tx
     .select({ userId: organizationMember.userId })
     .from(organizationMember)
     .where(eq(organizationMember.organizationId, organizationId))

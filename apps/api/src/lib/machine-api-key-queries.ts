@@ -98,7 +98,6 @@ export type MachineApiKeyRow = {
 };
 
 type ListOptions = {
-  db?: Pick<typeof rootDb, "select">;
   cursor: MachineApiKeyCursor | null;
   limit: number;
   organizationId: SafeId<"organization">;
@@ -120,12 +119,10 @@ export type MachineApiKeyPageRow = MachineApiKeyRow & {
  * page edges. `limit + 1` rows are fetched so the caller can tell whether a
  * further page exists without a second count query.
  */
-export const listOrganizationMachineApiKeys = async ({
-  cursor,
-  limit,
-  organizationId,
-  db = rootDb,
-}: ListOptions): Promise<MachineApiKeyPageRow[]> => {
+export const readOrganizationMachineApiKeyPage = async (
+  db: Pick<typeof rootDb, "select">,
+  { cursor, limit, organizationId }: ListOptions,
+): Promise<MachineApiKeyPageRow[]> => {
   let exactCursor = cursor;
   if (cursor?.timestamp.precision === "milliseconds") {
     const [boundary] = await db
@@ -168,6 +165,12 @@ export const listOrganizationMachineApiKeys = async ({
     .orderBy(desc(apikey.createdAt), desc(apikey.id))
     .limit(limit + 1);
 };
+
+/** {@link readOrganizationMachineApiKeyPage} through the owner connection. */
+export const listOrganizationMachineApiKeys = async (
+  options: ListOptions,
+): Promise<MachineApiKeyPageRow[]> =>
+  await readOrganizationMachineApiKeyPage(rootDb, options);
 
 /**
  * A single machine key, scoped to the organization in the same query.

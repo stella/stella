@@ -8,7 +8,7 @@
  * endpoint-module-to-endpoint-module import.
  */
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -68,6 +68,7 @@ type TemplateFillAiWiringArgs = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   safeDb: SafeDb;
+  scopedDb: ScopedDb;
   /** Analytics feature label: the download/upload fill routes bill as
    *  `templates.fill`, the live preview as `templates.fill_preview`. */
   feature: "templates.fill" | "templates.fill_preview";
@@ -95,12 +96,15 @@ export const buildTemplateFillAiWiring = ({
   organizationId,
   userId,
   safeDb,
+  scopedDb,
   feature,
   documentLanguages,
 }: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
   let configPromise: Promise<OrgAIConfig | null> | undefined;
   const orgAIConfig = async (): Promise<OrgAIConfig | null> => {
-    configPromise ??= loadOrgAIConfig(organizationId);
+    configPromise ??= scopedDb(
+      async (tx) => await loadOrgAIConfig(tx, organizationId),
+    );
     return await configPromise;
   };
 

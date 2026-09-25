@@ -83,10 +83,6 @@ export const synthesizeCapabilityContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<SynthesizedCapabilityContext> => {
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = await (
-    context.testDependencies?.loadOrgSettingsForAuth ?? loadOrgSettingsForAuth
-  )(context.organizationId);
-
   const recordAuditEvent =
     workspaceId === undefined
       ? context.recordAuditEvent
@@ -107,6 +103,13 @@ export const synthesizeCapabilityContext = async ({
   ) {
     panic("Capability workspace was not present in the MCP access map");
   }
+
+  const organizationId = context.organizationId;
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
+    await (context.testDependencies?.loadOrgSettingsForAuth?.(organizationId) ??
+      operationDatabaseScope.scopedDb(
+        async (tx) => await loadOrgSettingsForAuth(tx, organizationId),
+      ));
 
   return {
     body: input.body,

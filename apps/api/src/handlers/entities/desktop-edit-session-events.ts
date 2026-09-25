@@ -165,8 +165,13 @@ export const desktopEditSessionEventsHandler = async (
     });
   }
 
-  const eventState =
-    await dependencies.readDesktopEditSessionEventState(sessionId);
+  // Each read and renewal opens its own short transaction in the session's
+  // scope; the stream never holds one open.
+  const { scopedDb } = authorized.value;
+  const eventState = await scopedDb(
+    async (tx) =>
+      await dependencies.readDesktopEditSessionEventState(tx, sessionId),
+  );
 
   if (!eventState) {
     return status(404, {
@@ -189,11 +194,14 @@ export const desktopEditSessionEventsHandler = async (
   };
 
   const refreshLiveness = async (): Promise<boolean> =>
-    await dependencies.refreshDesktopEditSessionLiveness({
-      sessionId,
-      sessionToken,
-      userId,
-    });
+    await scopedDb(
+      async (tx) =>
+        await dependencies.refreshDesktopEditSessionLiveness(tx, {
+          sessionId,
+          sessionToken,
+          userId,
+        }),
+    );
 
   const refreshed = await refreshLiveness();
   if (!refreshed) {

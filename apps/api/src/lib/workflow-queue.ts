@@ -18,10 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1576,10 +1573,9 @@ const processOneBatch = async ({
     // Broadcast so the frontend shows pending state.
     broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
 
-    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
-      loadOrgAIConfig(organizationId),
-      loadPromptCachingPreference(organizationId),
-    ]);
+    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
+      async (tx) => await loadOrgAISettings(tx, organizationId),
+    );
     const generateFn = getBatchGenerator();
 
     // Dispatch on tool type: ai-model columns run the LLM extraction; verdict

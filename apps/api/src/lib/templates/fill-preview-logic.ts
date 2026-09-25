@@ -102,6 +102,7 @@ export const fillPreviewLogic = async ({
       organizationId,
       userId,
       safeDb,
+      scopedDb,
       feature: "templates.fill_preview",
       documentLanguages: source.documentLanguages,
     }),

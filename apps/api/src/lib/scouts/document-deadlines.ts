@@ -259,7 +259,7 @@ export const runDocumentDeadlineScout = async ({
             return [];
           }
 
-          const orgAIConfig = await loadOrgAIConfig(run.organizationId);
+          const orgAIConfig = await loadOrgAIConfig(db, run.organizationId);
           const analytics = createTanStackAIAnalyticsCallbacks({
             feature: "inbox.deadline-scout",
             modelRole: "chat",

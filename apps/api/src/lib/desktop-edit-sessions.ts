@@ -5,6 +5,7 @@ import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
@@ -24,6 +25,11 @@ type AuthorizedDesktopEditSession = {
   fileName: string;
   fileType: DesktopEditFileType;
   organizationId: SafeId<"organization">;
+  /**
+   * Request scope for the session's creator, pinned to the session's
+   * workspace. Open one short transaction per read or renewal; a stream must
+   * not hold one for its lifetime.
+   */
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -67,18 +73,27 @@ export const hashDesktopEditSessionToken = (sessionToken: string) =>
 export const DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS =
   SESSION_TOKEN_TTL_MS / 4;
 
-export const refreshDesktopEditSessionLiveness = async ({
-  sessionId,
-  sessionToken,
-  userId,
-}: {
-  sessionId: SafeId<"desktopEditSession">;
-  sessionToken: string;
-  userId: SafeId<"user">;
-}): Promise<boolean> => {
+/**
+ * Extend a live session's token, in the session's own scoped transaction (see
+ * {@link authorizeDesktopEditSession}). The creator, token and liveness
+ * predicates still decide which row moves; the scope only bounds where it can
+ * be.
+ */
+export const refreshDesktopEditSessionLiveness = async (
+  tx: Pick<Transaction, "update">,
+  {
+    sessionId,
+    sessionToken,
+    userId,
+  }: {
+    sessionId: SafeId<"desktopEditSession">;
+    sessionToken: string;
+    userId: SafeId<"user">;
+  },
+): Promise<boolean> => {
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
 
-  const updatedSessions = await rootDb
+  const updatedSessions = await tx
     .update(desktopEditSessions)
     .set({ tokenExpiresAt: computeTokenExpiresAt() })
     .where(
@@ -235,10 +250,20 @@ export const authorizeDesktopEditSession = async ({
   };
 };
 
+/**
+ * The session creator's current access and any pending takeover request, read
+ * in the session's own scoped transaction (see
+ * {@link authorizeDesktopEditSession}). That scope pins the session's
+ * workspace, so row visibility alone would not notice a revoked membership:
+ * the joined membership rows decide it here. The requester's name is joined
+ * through their membership of the same organization, so a requester who has
+ * since left reads as no name.
+ */
 export const readDesktopEditSessionEventState = async (
+  tx: Pick<Transaction, "select">,
   sessionId: SafeId<"desktopEditSession">,
 ) => {
-  const sessions = await rootDb
+  const sessions = await tx
     .select({
       organizationRole: member.role,
       workspaceMemberId: workspaceMembers.id,
@@ -278,7 +303,7 @@ export const readDesktopEditSessionEventState = async (
     return null;
   }
 
-  const pendingRequests = await rootDb
+  const pendingRequests = await tx
     .select({
       requestedByName: user.name,
       requestedAt: desktopEditSessions.takeoverRequestedAt,

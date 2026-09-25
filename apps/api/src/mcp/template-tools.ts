@@ -1211,9 +1211,10 @@ const previewList = (items: readonly string[]): string => {
 const deferOrgAIConfig = (context: McpRequestContext) => {
   let pending: Promise<OrgAIConfig | null> | undefined;
   return async (): Promise<OrgAIConfig | null> => {
-    pending ??= (context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig)(
-      context.organizationId,
-    );
+    const organizationId = context.organizationId;
+    pending ??=
+      context.testDependencies?.loadOrgAIConfig?.(organizationId) ??
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, organizationId));
     return await pending;
   };
 };

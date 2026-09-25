@@ -140,6 +140,7 @@ export const fillHandler = async ({
       organizationId,
       userId,
       safeDb,
+      scopedDb,
       feature: "templates.fill",
     }),
   });

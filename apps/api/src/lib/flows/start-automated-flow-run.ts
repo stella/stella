@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -64,7 +65,7 @@ type StartAutomatedFlowRunDependencies = {
       }
     | undefined
   >;
-  resolveAuthorization: typeof resolveMemberAuthorization;
+  resolveAuthorization: typeof resolveCredentialMemberAuthorization;
   insertWithinCap: (
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
@@ -77,7 +78,7 @@ type StartAutomatedFlowRunDependencies = {
  * for a file upload.
  */
 export const automatedFlowRunDependencies = (
-  database: Pick<typeof rootDb, "query" | "transaction">,
+  database: Pick<typeof rootDb, "query" | "select" | "transaction">,
 ): StartAutomatedFlowRunDependencies => ({
   findDefinition: async ({
     definitionId,
@@ -90,7 +91,8 @@ export const automatedFlowRunDependencies = (
       },
       columns: { id: true, name: true, steps: true, enabled: true },
     }),
-  resolveAuthorization: resolveMemberAuthorization,
+  resolveAuthorization: async (lookup) =>
+    await resolveMemberAuthorization(lookup, database),
   insertWithinCap: async (input) =>
     await insertAutomatedFlowRunWithinCap({ ...input, database }),
   enqueueStep: enqueueFlowStep,

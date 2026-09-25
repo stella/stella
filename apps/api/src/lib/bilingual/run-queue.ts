@@ -22,10 +22,7 @@ import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
 } from "@/api/db/schema";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
@@ -447,12 +444,10 @@ const executeRun = async (
   }
 
   const config = await Result.tryPromise({
-    try: async () => ({
-      orgAIConfig: await loadOrgAIConfig(actor.organizationId),
-      promptCachingEnabled: await loadPromptCachingPreference(
-        actor.organizationId,
+    try: async () =>
+      await actor.scopedDb(
+        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
       ),
-    }),
     catch: (cause) => cause,
   });
   if (Result.isError(config)) {
