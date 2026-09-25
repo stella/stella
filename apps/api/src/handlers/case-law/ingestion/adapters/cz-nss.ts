@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -63,7 +64,9 @@ import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -610,6 +613,30 @@ const CZ_NSS_RAW_PART = {
   DETAIL: "detail",
   TEXT: "text",
 } as const;
+
+/**
+ * A read of the portal that failed: it did not answer, or not in time. Graded
+ * as the publisher being unavailable, since the document is read again on a
+ * later pass.
+ */
+const publisherReadFailure = (error: unknown): object =>
+  classifyFailure(
+    typeof error === "object" && error !== null
+      ? error
+      : new Error("NSS publisher read failed", { cause: error }),
+    "upstream_unavailable",
+  );
+
+/** The detail-page parser threw on a page the portal served. */
+const detailParseFailed = failureSink({
+  event: "case_law.ingestion.detail_parse_failed",
+  expected: [],
+});
+
+const detailReadFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
 
 /**
  * Shortest plain-text payload this adapter reads as a document. Below it the
@@ -1234,21 +1261,33 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
  * The detail page, or the fact that it could not be read.
  *
  * A portal that answers 404 has no metadata for the document, and the row is
- * built without it. A timeout or a server error is not that: the metadata
- * exists and was not read, and a row built from it would carry the fallback
- * court and no ECLI for good, since the refresh hashes only listing fields.
- * Such a row is reported as unavailable, which the reconciliation treats as
- * a document not yet read and comes back for.
+ * built without it. A timeout, a failed request or a server error is not
+ * that: the metadata exists and was not read. Such a document is reported as
+ * unavailable; the crawl stores it as a listing-only row, which the
+ * reconciliation does not count as held and so reads again, and the
+ * reconciliation itself parks it for a later attempt. A page the parser
+ * throws on is reported as the parser's failure and held the same way.
+ *
+ * A read the page's signal aborts is rethrown to the crawl. When the page's
+ * own read budget ran out, the crawl stores this row and the rest of the page
+ * listing-only and moves on; when the caller's signal aborted, it fails the
+ * page.
  */
 type DetailFetch =
   | { type: "fetched"; detail: CzNssDetailMetadata; html: string | null }
   | { type: "unavailable" };
 
-const fetchDetailMetadata = async (
+/** The detail page as served: absent (404), unreadable, or its HTML. */
+type DetailRead =
+  | { type: "absent" }
+  | { type: "unavailable" }
+  | { type: "read"; html: string };
+
+const readDetailPage = async (
   documentId: string,
   session: SessionState,
   signal: AbortSignal,
-): Promise<DetailFetch> => {
+): Promise<DetailRead> => {
   try {
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
@@ -1263,18 +1302,52 @@ const fetchDetailMetadata = async (
       },
     );
     if (response.status === 404) {
-      return { type: "fetched", detail: EMPTY_DETAIL, html: null };
+      return { type: "absent" };
     }
     if (!response.ok) {
       return { type: "unavailable" };
     }
 
-    const html = await response.text();
-
-    return { type: "fetched", detail: parseCzNssDetailMetadata(html), html };
-  } catch {
+    return { type: "read", html: await response.text() };
+  } catch (error) {
+    if (signal.aborted) {
+      throw error;
+    }
+    observeFailure(publisherReadFailure(error), {
+      sink: detailReadFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    });
     return { type: "unavailable" };
   }
+};
+
+const fetchDetailMetadata = async (
+  documentId: string,
+  session: SessionState,
+  signal: AbortSignal,
+): Promise<DetailFetch> => {
+  const read = await readDetailPage(documentId, session, signal);
+  if (read.type === "absent") {
+    return { type: "fetched", detail: EMPTY_DETAIL, html: null };
+  }
+  if (read.type === "unavailable") {
+    return { type: "unavailable" };
+  }
+  const { html } = read;
+  const parsed = Result.try({
+    try: () => parseCzNssDetailMetadata(html),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(parsed)) {
+    // Observed unclassified, as the parser's own failure, and the row is held
+    // like an unread one.
+    observeFailure(parsed.error, {
+      sink: detailParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    });
+    return { type: "unavailable" };
+  }
+  return { type: "fetched", detail: parsed.value, html };
 };
 
 type RowToResultOptions = {
@@ -1958,11 +2031,11 @@ const EMPTY_CONTENT: DecisionContent = {
  * What building one listed row produced.
  *
  * `detail-unavailable` still carries the decision the listing alone describes,
- * because the two callers dispose of it differently: the crawl's cursor moves
- * past this document either way, so a listing-only row is worth more to it
- * than nothing, while the reconciliation must refuse it — a detail-less row
- * would make the identity held and take the document out of every later
- * reconciliation.
+ * marked `isListingOnly`, because the two callers dispose of it differently:
+ * the crawl's cursor moves past this document, so it stores the listing-only
+ * row, which the reconciliation does not count as held (`heldRequiresDetail`)
+ * and reads again; the reconciliation itself parks the document for a later
+ * attempt and writes nothing for it.
  */
 export type CzNssBuildResult =
   | { type: "built"; decision: IngestionResult }
@@ -1973,6 +2046,31 @@ type BuildCzNssDecisionOptions = {
   session: SessionState;
   signal: AbortSignal;
 };
+
+/**
+ * The row the listing alone describes, for a document that was not read.
+ *
+ * Marked `isListingOnly`, which keeps it off every public surface and out of
+ * what the reconciliation counts as held. Its hash is its own, distinct from
+ * the one the same document hashes to once read, so the full row replaces it
+ * when the document is read.
+ */
+const listingOnlyDecision = (decision: IngestionResult): IngestionResult => ({
+  ...decision,
+  isListingOnly: true,
+  rawHash: hashContent(`${decision.rawHash}|listing-only`),
+});
+
+/** The listing-only row for a listed document nothing was read for. */
+const unreadRowDecision = (row: ParsedRow): IngestionResult =>
+  listingOnlyDecision(
+    rowToResult({
+      row,
+      content: EMPTY_CONTENT,
+      detail: EMPTY_DETAIL,
+      detailHtml: null,
+    }),
+  );
 
 /**
  * Build one decision from a result row, reading the court's detail page and
@@ -1991,12 +2089,7 @@ export const buildCzNssDecision = async ({
     // the legacy row, now or later, so it remains a listing-only observation.
     return {
       type: "detail-unavailable",
-      decision: rowToResult({
-        row,
-        content: EMPTY_CONTENT,
-        detail: EMPTY_DETAIL,
-        detailHtml: null,
-      }),
+      decision: unreadRowDecision(row),
     };
   }
 
@@ -2004,12 +2097,7 @@ export const buildCzNssDecision = async ({
   if (detailFetch.type === "unavailable") {
     return {
       type: "detail-unavailable",
-      decision: rowToResult({
-        row,
-        content: EMPTY_CONTENT,
-        detail: EMPTY_DETAIL,
-        detailHtml: null,
-      }),
+      decision: unreadRowDecision(row),
     };
   }
   const { detail, html: detailHtml } = detailFetch;
@@ -2069,6 +2157,16 @@ const CZ_NSS_TIP_WINDOW_DAYS = 14;
  * always does; this only keeps a direct caller from hanging on the court.
  */
 const CZ_NSS_LISTING_TIMEOUT_MS = 60_000;
+
+/** The pipeline's deadline for one crawl page. */
+const CZ_NSS_PAGE_TIMEOUT_MS = 120_000;
+
+/**
+ * How long one crawl page spends reading its rows' documents. Shorter than the
+ * page deadline, so the page returns every listed row, read or listing-only,
+ * before the pipeline's own page timer fires.
+ */
+const CZ_NSS_PAGE_READ_BUDGET_MS = 90_000;
 
 /**
  * The identity the ingest would store for this listing row.
@@ -2276,8 +2374,8 @@ const buildCzNssFromPayload = async (
     case "built":
       return { type: "built", decision: built.decision };
     case "detail-unavailable":
-      // The decision the listing describes is deliberately dropped: storing it
-      // would make the identity held while its document stayed unread.
+      // The decision the listing describes is not written here: the walk
+      // parks the document and asks for it again on its own schedule.
       return { type: "detail-unavailable" };
     default: {
       built satisfies never;
@@ -2370,8 +2468,7 @@ export const czNssAdapter = defineSourceAdapter({
   language: "cs",
   minRequestIntervalMs: 500,
   // Each page = 1 day = session + search + fulltext per decision.
-  // With ~20 decisions/day and fulltext fetches, ~30s/page.
-  pageTimeoutMs: 120_000,
+  pageTimeoutMs: CZ_NSS_PAGE_TIMEOUT_MS,
   maxSyncPages: 20,
   // One stored NSS HTML payload is exactly one decision, so parser upgrades
   // can replay it locally without re-contacting or rate-limiting the court.
@@ -2446,6 +2543,8 @@ export const czNssAdapter = defineSourceAdapter({
     firstSlice: CZ_NSS_FIRST_SLICE,
     ...czNssDaySlices.walk,
     tipWindowDays: CZ_NSS_TIP_WINDOW_DAYS,
+    // The reconciliation reads rows the crawl stored listing-only again.
+    heldRequiresDetail: true,
     listSlicePage: listCzNssSlicePage,
     buildDecision: buildCzNssFromPayload,
   },
@@ -2453,13 +2552,14 @@ export const czNssAdapter = defineSourceAdapter({
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        // Use the full page timeout (matches pageTimeoutMs)
-        // because each fetchPage makes session + search +
-        // fulltext fetches per decision.
-        const timeoutSignal = AbortSignal.timeout(120_000);
+        const readBudget = AbortSignal.timeout(CZ_NSS_PAGE_READ_BUDGET_MS);
         const effectiveSignal = signal
-          ? AbortSignal.any([signal, timeoutSignal])
-          : timeoutSignal;
+          ? AbortSignal.any([signal, readBudget])
+          : readBudget;
+        // The page's own budget ran out, as opposed to the caller's signal
+        // (the cycle deadline or a cancellation), which fails the page.
+        const readBudgetSpent = (): boolean =>
+          readBudget.aborted && signal?.aborted !== true;
 
         const { date, page } = parseCursor(cursor);
         const today = todayIso();
@@ -2518,16 +2618,34 @@ export const czNssAdapter = defineSourceAdapter({
         );
         const decisions: IngestionResult[] = [];
 
+        // Every listed row is stored, and the cursor moves past the page. A
+        // document that was not read, including every row left once the
+        // page's read budget is spent, is stored listing-only, and the
+        // reconciliation reads it again.
         for (const row of rows) {
-          const built = await buildCzNssDecision({
-            row,
-            session,
-            signal: effectiveSignal,
+          if (readBudgetSpent()) {
+            decisions.push(unreadRowDecision(row));
+            continue;
+          }
+          const built = await Result.tryPromise({
+            try: async () =>
+              await buildCzNssDecision({
+                row,
+                session,
+                signal: effectiveSignal,
+              }),
+            catch: (cause: unknown) => cause,
           });
-          // The cursor moves past this document either way, so the crawl keeps
-          // the listing-only row an unreadable document still describes; only
-          // the reconciliation refuses it.
-          decisions.push(built.decision);
+          if (Result.isOk(built)) {
+            decisions.push(built.value.decision);
+            continue;
+          }
+          if (readBudgetSpent()) {
+            decisions.push(unreadRowDecision(row));
+            continue;
+          }
+          const { error } = built;
+          throw error;
         }
 
         // Determine next cursor. Against the size this page can hold, not the
