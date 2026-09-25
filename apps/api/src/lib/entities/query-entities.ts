@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/entities/signal-window-rows";
 import {
   ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
+  readGeneratedCursorValues,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
 } from "@/api/lib/entities/window-cursor";
@@ -717,32 +718,6 @@ const buildCursorCondition = ({
   return Result.ok(or(...branches) ?? null);
 };
 
-const normalizeCursorValues = (
-  rawValues: unknown,
-): EntitiesWindowCursorValues => {
-  if (Array.isArray(rawValues)) {
-    return rawValues.filter(isGeneratedCursorValue);
-  }
-
-  if (typeof rawValues !== "string") {
-    return [];
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawValues);
-  } catch {
-    return [];
-  }
-
-  return Array.isArray(parsed) ? parsed.filter(isGeneratedCursorValue) : [];
-};
-
-const isGeneratedCursorValue = (
-  value: unknown,
-): value is EntitiesWindowCursorValue =>
-  value === null || typeof value === "string" || typeof value === "number";
-
 type SelectWindowRowsOptions = {
   safeDb: SafeDb;
   source: EntityWindowSource;
@@ -786,7 +761,7 @@ const selectWindowRows = async ({
             rows.value.map((row) => ({
               kind: ENTITY_VIEW_ROW_KIND.ENTITY,
               id: row.id,
-              cursorValues: normalizeCursorValues(row.cursorValues),
+              cursorValues: readGeneratedCursorValues(row.cursorValues),
             })),
           );
     }
@@ -822,13 +797,13 @@ const selectWindowRows = async ({
               return {
                 kind: ENTITY_VIEW_ROW_KIND.ENTITY,
                 id: brandPersistedEntityId(id),
-                cursorValues: normalizeCursorValues(cursorValues),
+                cursorValues: readGeneratedCursorValues(cursorValues),
               };
             case ENTITY_VIEW_ROW_KIND.SIGNAL:
               return {
                 kind: ENTITY_VIEW_ROW_KIND.SIGNAL,
                 id: brandPersistedSignalId(id),
-                cursorValues: normalizeCursorValues(cursorValues),
+                cursorValues: readGeneratedCursorValues(cursorValues),
                 projection,
               };
             default:

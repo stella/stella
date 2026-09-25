@@ -26,6 +26,7 @@ import {
   type AuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 type InsertWebhookEventInput = {
   eventId: string;
@@ -55,6 +56,61 @@ type WebhookInsertOutcome = FreshInsert | DuplicateInsert;
  * mutations. Splitting them would leak the dedupe row on dispatch
  * failure and then silently drop the next provider retry.
  */
+const NUL = "\u0000";
+/** U+2400 SYMBOL FOR NULL: marks, in the stored text, where a NUL stood. */
+const NUL_SYMBOL = "\u2400";
+
+const markNul = (value: string): string =>
+  value.replaceAll(NUL, () => NUL_SYMBOL);
+
+/**
+ * Keys without a NUL keep their names. A key with one takes its marked name,
+ * and when an original key already holds that name, the first free
+ * `<marked>~<n>` from 2 upward, in payload order. Every value is kept.
+ */
+const storableRecord = (
+  record: Record<string, unknown>,
+): Record<string, unknown> => {
+  const entries = Object.entries(record);
+  const taken = new Set(
+    entries.map(([key]) => key).filter((key) => !key.includes(NUL)),
+  );
+  const storedKey = (key: string): string => {
+    if (!key.includes(NUL)) {
+      return key;
+    }
+    const marked = markNul(key);
+    let candidate = marked;
+    for (let suffix = 2; taken.has(candidate); suffix++) {
+      candidate = `${marked}~${suffix}`;
+    }
+    taken.add(candidate);
+    return candidate;
+  };
+  return Object.fromEntries(
+    entries.map(([key, entry]): [string, unknown] => [
+      storedKey(key),
+      storableJson(entry),
+    ]),
+  );
+};
+
+/**
+ * The payload as a jsonb column stores it. Postgres text and jsonb values
+ * carry no NUL character, so each one in a key or string is stored as the
+ * NUL symbol (U+2400), and distinct keys stay distinct (see
+ * `storableRecord`).
+ */
+const storableJson = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    return markNul(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(storableJson);
+  }
+  return isRecord(value) ? storableRecord(value) : value;
+};
+
 export const insertWebhookEventInTx = async ({
   tx,
   eventId,
@@ -68,8 +124,8 @@ export const insertWebhookEventInTx = async ({
     .insert(hostedUsageWebhookEvents)
     .values({
       eventId,
-      eventType,
-      payload,
+      eventType: markNul(eventType),
+      payload: storableRecord(payload),
       result: initialResult,
     })
     .onConflictDoNothing({ target: hostedUsageWebhookEvents.eventId })
@@ -112,6 +168,8 @@ export const updateWebhookEventResultInTx = async ({
 export const runWebhookTransaction = async <T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> => await rootDb.transaction(fn);
+
+export type WebhookTransactionRunner = typeof runWebhookTransaction;
 
 /**
  * Special userId stamped on audit_log rows emitted from the

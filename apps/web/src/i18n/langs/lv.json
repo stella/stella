@@ -1531,6 +1531,7 @@
     "key": "Taustiņš",
     "kind": "Veids",
     "language": "Valoda",
+    "languageLoadFailed": "Neizdevās nomainīt valodu. Mēģiniet vēlreiz.",
     "languages": {
       "AR": "Arābu",
       "BG": "Bulgāru",

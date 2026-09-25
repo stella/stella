@@ -644,8 +644,8 @@ describe("review resolution → persist gating", () => {
     expect(reviewResolutionStatus(true, false)).toBe("resolved");
   });
 
-  // `settleReviewPersist` only runs `persist` and swallows an unexpected
-  // exception; it never reports "resolved" itself. Reporting success is the
+  // `settleReviewPersist` only runs `persist` and hands an unexpected
+  // exception to `reportFailure`; it never reports "resolved" itself. Reporting success is the
   // `persist` callback's own job (mirroring `ClauseBodyEditor.saveBody`,
   // which calls `onReviewStatusChange("resolved")` only once its POST
   // actually succeeds) — this is the load-bearing part of the fix: a naive
@@ -673,7 +673,7 @@ describe("review resolution → persist gating", () => {
     );
     expect(reported).toBe("persisting");
 
-    const settled = settleReviewPersist(persist);
+    const settled = settleReviewPersist(persist, () => {});
 
     // ...and version-save actions (gated on reported !== "resolved") stay
     // blocked while the persist is still in flight.
@@ -693,12 +693,12 @@ describe("review resolution → persist gating", () => {
     // The real persist call (saveBody) only touches `reported` on success;
     // a failure surfaces its own toast and never reaches that line, so
     // `reported` must stay at "persisting" even once `settleReviewPersist`
-    // has swallowed the rejection and settled.
+    // has reported the rejection and settled.
     const reported: "resolved" | "persisting" = reviewResolutionStatus(
       true,
       true,
     );
-    await settleReviewPersist(persist);
+    await settleReviewPersist(persist, () => {});
 
     expect(reported).toBe("persisting");
   });
@@ -712,18 +712,55 @@ describe("review resolution → persist gating", () => {
 
     // First attempt fails (e.g. the initial accept-all flush) — the toast
     // fires elsewhere; the gate stays blocked.
-    await settleReviewPersist(async () => {
-      throw new Error("save failed");
-    });
+    await settleReviewPersist(
+      async () => {
+        throw new Error("save failed");
+      },
+      () => {},
+    );
     expect(reported).toBe("persisting");
 
     // The user keeps editing; the body editor's normal debounced/blur
     // autosave retries the same persist call (same shape as saveBody) and
     // succeeds this time, reporting "resolved" itself.
-    await settleReviewPersist(async () => {
-      reported = "resolved";
-    });
+    await settleReviewPersist(
+      async () => {
+        reported = "resolved";
+      },
+      () => {},
+    );
     expect(reported).toBe("resolved");
+  });
+
+  test("reports a persist that throws a network error", async () => {
+    const networkError = new TypeError("Failed to fetch");
+    const failures: unknown[] = [];
+
+    await settleReviewPersist(
+      async () => {
+        throw networkError;
+      },
+      (error) => {
+        failures.push(error);
+      },
+    );
+
+    expect(failures).toEqual([networkError]);
+  });
+
+  test("does not report a persist aborted by a newer save", async () => {
+    const failures: unknown[] = [];
+
+    await settleReviewPersist(
+      async () => {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      },
+      (error) => {
+        failures.push(error);
+      },
+    );
+
+    expect(failures).toEqual([]);
   });
 });
 

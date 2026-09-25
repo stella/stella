@@ -1,15 +1,19 @@
-import { beforeEach, expect, test } from "bun:test";
+import { beforeEach, expect, spyOn, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   buildFormattingLocale,
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
+  messageLoaders,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
 import en from "@/i18n/langs/en.json";
+import { getAnalytics } from "@/lib/analytics/provider";
 
 type PrepaintOptions = {
   languages?: readonly string[];
@@ -271,4 +275,33 @@ test("loadedLang and messages advance together", async () => {
   expect(afterEn.loadedLang).toBe("en");
   expect(afterEn.messages).not.toBe(csMessages);
   expect(afterEn.hasLoadedOnce).toBe(true);
+});
+
+test("reports a language bundle that fails to load and keeps the previous language", async () => {
+  const bundleError = new TypeError(
+    "Failed to fetch dynamically imported module",
+  );
+  const loaderSpy = spyOn(messageLoaders, "cs").mockRejectedValue(bundleError);
+  const toastSpy = spyOn(stellaToast, "add").mockReturnValue("toast-1");
+  const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
+    () => undefined,
+  );
+
+  try {
+    await useI18nStore.getState().setLang("cs");
+
+    const state = useI18nStore.getState();
+    expect(state.lang).toBe("en");
+    expect(state.loadedLang).toBe("en");
+    expect(state.isLoaded).toBe(true);
+    expect(captureSpy).toHaveBeenCalledWith(bundleError);
+    expect(toastSpy).toHaveBeenCalledWith({
+      type: "error",
+      title: en.common.languageLoadFailed,
+    });
+  } finally {
+    loaderSpy.mockRestore();
+    toastSpy.mockRestore();
+    captureSpy.mockRestore();
+  }
 });

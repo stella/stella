@@ -28,6 +28,7 @@ import {
   SIGNUP_RATE_LIMIT_IP_SOURCE,
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * The header stella sets on every request after resolving the client address,
@@ -61,6 +62,11 @@ export const parseTrustedProxies = (
     return { blockList };
   }
 
+  // A malformed entry is skipped rather than crashing boot. The skipped
+  // entries are logged together: a peer they were meant to cover is
+  // untrusted, so its requests record the socket peer instead of the
+  // forwarded client.
+  const rejected: string[] = [];
   for (const entry of value
     .split(",")
     .map((part) => part.trim())
@@ -70,25 +76,31 @@ export const parseTrustedProxies = (
     const prefixText =
       slashIndex === -1 ? null : entry.slice(slashIndex + 1).trim();
     if (ip.length === 0 || prefixText === "") {
+      rejected.push(entry);
       continue;
     }
     const ipVersion = isIP(ip);
     if (ipVersion === 0) {
+      rejected.push(entry);
       continue;
     }
     const family: "ipv4" | "ipv6" = ipVersion === 6 ? "ipv6" : "ipv4";
     const defaultPrefix = family === "ipv6" ? 128 : 32;
     const prefix = prefixText === null ? defaultPrefix : Number(prefixText);
     if (!Number.isInteger(prefix) || prefix < 0 || prefix > defaultPrefix) {
+      rejected.push(entry);
       continue;
     }
     try {
       blockList.addSubnet(ip, prefix, family);
     } catch {
-      // Malformed entry — skip rather than crash boot. Operators get
-      // visibility via the audit log: a misconfigured trusted set
-      // simply records the socket peer instead of forwarded headers.
+      rejected.push(entry);
     }
+  }
+  if (rejected.length > 0) {
+    logger.warn("client_ip.trusted_proxy_entries_rejected", {
+      "trustedProxy.rejectedEntries": rejected.join(","),
+    });
   }
 
   return { blockList };

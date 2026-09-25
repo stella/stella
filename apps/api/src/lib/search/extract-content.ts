@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import {
   resolveRuntimeWorkerPath,
   RUNTIME_WORKER_FILES,
@@ -29,6 +30,10 @@ import {
   canExtractMimeType,
   normalizeMimeType,
 } from "@/api/lib/search/extractable-mime-types";
+import {
+  ATTACHMENT_EXTRACTION_OUTCOME,
+  parseAttachmentIssues,
+} from "@/api/lib/search/extraction-worker-attachments";
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
@@ -114,6 +119,28 @@ export const resolveExtractionMimeType = ({
   return EXTENSION_MIME_TYPES[extension] ?? normalized;
 };
 
+/**
+ * Record the email attachments the worker could not read. The email itself
+ * still extracts; these lines are how its missing attachment text stays
+ * visible. An attachment in a form the parsers do not read is expected and
+ * logged at info; a parser failing on one it should read is a warning.
+ */
+const reportAttachmentIssues = (stderr: string, mimeType: string): void => {
+  for (const issue of parseAttachmentIssues(stderr)) {
+    const attributes = {
+      mimeType,
+      "attachment.mimeType": issue.mimeType,
+      "attachment.errorType": issue.errorType,
+      "attachment.errorCode": issue.errorCode ?? "",
+    };
+    if (issue.outcome === ATTACHMENT_EXTRACTION_OUTCOME.skipped) {
+      logger.info("search.extraction.attachment_skipped", attributes);
+    } else {
+      logger.warn("search.extraction.attachment_failed", attributes);
+    }
+  }
+};
+
 type ExtractFileTextResultOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -137,6 +164,9 @@ export const extractFileTextResult = async (
     ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,
+    onStderr: (stderr) => {
+      reportAttachmentIssues(stderr, normalizedMimeType);
+    },
   });
 
   if (Result.isError(result)) {

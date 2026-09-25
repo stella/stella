@@ -1531,6 +1531,7 @@
     "key": "Klávesa",
     "kind": "Druh",
     "language": "Jazyk",
+    "languageLoadFailed": "Jazyk se nepodařilo přepnout. Zkuste to znovu.",
     "languages": {
       "AR": "arabština",
       "BG": "bulharština",

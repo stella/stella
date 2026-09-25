@@ -14,11 +14,12 @@ import {
   startAutocompleteSuggestion,
 } from "@stll/folio-react";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { readSSEEvents } from "@/lib/sse-events";
 
-import { requestAutocompleteStream } from "./use-autocomplete-stream.logic";
+import { runAutocompleteRequest } from "./use-autocomplete-stream.logic";
 
 export type UseAutocompleteStreamOptions = {
   enabled: boolean;
@@ -183,56 +184,51 @@ export const useAutocompleteStream = (
       inflight = controller;
       const requestId = crypto.randomUUID();
 
-      try {
-        const response = await requestAutocompleteStream({
-          controller,
-          dispatchStart: () =>
-            dispatchSafe(
-              startAutocompleteSuggestion(view.state.tr, anchor, requestId),
-            ),
-          fetchResponse: async () =>
-            await fetchWithTimeout(apiUrl("/ai-autocomplete/stream"), {
-              method: "POST",
-              credentials: "include",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                prefix,
-                suffix: suffix.length > 0 ? suffix : undefined,
-                language,
-              }),
-              signal: controller.signal,
-              timeoutMs: 15_000,
+      // Settles every outcome itself (it never rejects), so the in-flight
+      // slot is released right after it.
+      await runAutocompleteRequest({
+        controller,
+        dispatchStart: () =>
+          dispatchSafe(
+            startAutocompleteSuggestion(view.state.tr, anchor, requestId),
+          ),
+        fetchResponse: async () =>
+          await fetchWithTimeout(apiUrl("/ai-autocomplete/stream"), {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              prefix,
+              suffix: suffix.length > 0 ? suffix : undefined,
+              language,
             }),
-        });
-        if (response === null) {
-          return;
-        }
-        if (!response.ok || response.body === null) {
+            signal: controller.signal,
+            timeoutMs: 15_000,
+          }),
+        consume: async (body) =>
+          await consumeAutocompleteStream(body, {
+            onToken: (text) =>
+              dispatchSafe(
+                appendAutocompleteToken(view.state.tr, requestId, text),
+              ),
+            onError: () => {
+              dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
+            },
+            onDone: () => {
+              dispatchSafe(
+                finishAutocompleteSuggestion(view.state.tr, requestId),
+              );
+            },
+          }),
+        clear: () => {
           dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
-          return;
-        }
-        await consumeAutocompleteStream(response.body, {
-          onToken: (text) =>
-            dispatchSafe(
-              appendAutocompleteToken(view.state.tr, requestId, text),
-            ),
-          onError: () => {
-            dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
-          },
-          onDone: () => {
-            dispatchSafe(
-              finishAutocompleteSuggestion(view.state.tr, requestId),
-            );
-          },
-        });
-      } catch {
-        if (!controller.signal.aborted) {
-          dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
-        }
-      } finally {
-        if (inflight === controller) {
-          inflight = null;
-        }
+        },
+        reportError: (error) => {
+          getAnalytics().captureError(error);
+        },
+      });
+      if (inflight === controller) {
+        inflight = null;
       }
     };
 

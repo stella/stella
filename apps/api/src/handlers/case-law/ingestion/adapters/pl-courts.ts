@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -73,7 +74,9 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -881,24 +884,82 @@ const normalizeDecisionDate = ({
 };
 
 /**
+ * What SAOS answered about a row's per-judgment detail, stated on the row.
+ *
+ * `read` and `absent` (404, 410 or an empty record) are the publisher's own
+ * answers and settle the row. `failed` says nothing about the record: the
+ * reconciliation walk asks for it again (`recheckHeld`) while the row keeps
+ * the dump's text in public, and a successful read restates it as `read`.
+ */
+export const PL_COURTS_DETAIL_READ_METADATA_KEY = "detailReadState";
+
+export const PL_COURTS_DETAIL_READ_STATE = {
+  READ: "read",
+  ABSENT: "absent",
+  FAILED: "failed",
+} as const;
+
+export type PlCourtsDetailReadState =
+  (typeof PL_COURTS_DETAIL_READ_STATE)[keyof typeof PL_COURTS_DETAIL_READ_STATE];
+
+/** A per-judgment read that failed: the request, its status or its body. */
+const detailReadFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
+
+/** The publisher's rate-limit refusal. */
+const RATE_LIMITED_STATUS = 429;
+
+/**
  * A per-judgment record, and the response it was read from.
  *
  * The payload travels with the parsed record because the envelope keeps the
  * response the publisher served, not this adapter's reading of it: a field
  * nothing here has a name for yet is then still in the stored row.
+ *
+ * `empty` is the publisher's own answer that it holds no record: a 404 or
+ * 410, or a well-formed answer whose `data` is empty. `refused` is its
+ * rate-limit refusal (429). `failed` is every other outcome (a request or
+ * body read that failed, another status, a body that is not the detail
+ * payload). Neither of the last two says anything about the record, and both
+ * are reported.
  */
-type SaosDetailFetch = {
-  item: SaosItem;
-  payload: string;
+type SaosDetailFetch =
+  | { type: "read"; item: SaosItem; payload: string }
+  | { type: "empty" }
+  | { type: "refused" }
+  | { type: "failed" };
+
+/** Report a failed detail read, graded as the upstream being unavailable. */
+const reportDetailRead = (id: number, error: unknown): void => {
+  observeFailure(
+    classifyFailure(
+      typeof error === "object" && error !== null
+        ? error
+        : new Error("SAOS detail read failed", { cause: error }),
+      "upstream_unavailable",
+    ),
+    {
+      sink: detailReadFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.PL_COURTS, documentId: String(id) },
+    },
+  );
+};
+
+const detailFailed = (id: number, error: unknown): SaosDetailFetch => {
+  reportDetailRead(id, error);
+  return { type: "failed" };
 };
 
 const fetchDetail = async (
   id: number,
   signal?: AbortSignal,
-): Promise<SaosDetailFetch | null> => {
+): Promise<SaosDetailFetch> => {
+  const url = `${DETAIL_URL}/${id}`;
   let response: Response;
   try {
-    response = await fetchPublisher(`${DETAIL_URL}/${id}`, {
+    response = await fetchPublisher(url, {
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -911,29 +972,79 @@ const fetchDetail = async (
     if (signal?.aborted) {
       throw error;
     }
-    return null;
+    return detailFailed(id, error);
   }
 
+  // The status answers these on its own, whatever the body holds.
+  if (response.status === 404 || response.status === 410) {
+    return { type: "empty" };
+  }
+  if (response.status === RATE_LIMITED_STATUS) {
+    reportDetailRead(
+      id,
+      new AdapterFetchError({
+        message: `SAOS detail ${id} refused: HTTP ${RATE_LIMITED_STATUS}`,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        cursor: null,
+        httpStatus: RATE_LIMITED_STATUS,
+      }),
+    );
+    return { type: "refused" };
+  }
   if (!response.ok) {
-    return null;
+    return detailFailed(
+      id,
+      new AdapterFetchError({
+        message: `SAOS detail ${id} answered HTTP ${response.status}`,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
   }
 
-  let payload: string;
-  try {
-    payload = await response.text();
-  } catch (error) {
-    if (signal?.aborted) {
-      throw error;
-    }
-    return null;
+  const body = await Result.tryPromise({
+    try: async () => await response.text(),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(body)) {
+    // The caller's cancellation ends the read.
+    signal?.throwIfAborted();
+    return detailFailed(id, body.error);
   }
-  const json = Result.try((): unknown => JSON.parse(payload)).unwrapOr(null);
-  if (!isSaosDetailResponse(json)) {
-    return null;
+  const payload = body.value;
+  const json = Result.try({
+    try: (): unknown => JSON.parse(payload),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(json)) {
+    return detailFailed(id, json.error);
+  }
+  if (!isSaosDetailResponse(json.value)) {
+    return detailFailed(
+      id,
+      new AdapterFetchError({
+        message: `SAOS detail ${id} answered a payload that is not a judgment`,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        cursor: null,
+      }),
+    );
   }
 
-  const item = json.data;
-  return item === undefined || item === null ? null : { item, payload };
+  // `data: null` is the publisher stating an empty record; an answer without
+  // `data` at all is not the detail payload.
+  const item = json.value.data;
+  if (item === undefined) {
+    return detailFailed(
+      id,
+      new AdapterFetchError({
+        message: `SAOS detail ${id} answered without a record field`,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        cursor: null,
+      }),
+    );
+  }
+  return item === null ? { type: "empty" } : { type: "read", item, payload };
 };
 
 const publicSourceUrl = (id: number | null | undefined): string | undefined =>
@@ -1148,8 +1259,45 @@ type PlCourtsDetailFetch =
   | { type: "detail"; detail: SaosItem; payload: string }
   /** The item carries no id, so there is no detail record to ask for. */
   | { type: "listing-only" }
-  /** An id was asked about and nothing came back. */
-  | { type: "unavailable" };
+  /** An id was asked about and the publisher answered with no record. */
+  | { type: "unavailable" }
+  /** An id was asked about and the publisher refused the request (429). */
+  | { type: "refused" }
+  /** An id was asked about and the read failed; it is reported. */
+  | { type: "failed" };
+
+/** The row's detail state for a fetch, or none where no id was asked about. */
+const detailReadStateOf = (
+  fetched: PlCourtsDetailFetch,
+): PlCourtsDetailReadState | undefined => {
+  switch (fetched.type) {
+    case "detail":
+      return PL_COURTS_DETAIL_READ_STATE.READ;
+    case "unavailable":
+      return PL_COURTS_DETAIL_READ_STATE.ABSENT;
+    case "refused":
+    case "failed":
+      return PL_COURTS_DETAIL_READ_STATE.FAILED;
+    case "listing-only":
+      return undefined;
+    default: {
+      fetched satisfies never;
+      return panic(
+        `Unhandled pl-courts detail fetch: ${JSON.stringify(fetched)}`,
+      );
+    }
+  }
+};
+
+/** The detail state a stored row states, where it states a known one. */
+const storedDetailReadState = (
+  metadata: Record<string, unknown>,
+): PlCourtsDetailReadState | undefined => {
+  const stated = metadata[PL_COURTS_DETAIL_READ_METADATA_KEY];
+  return Object.values(PL_COURTS_DETAIL_READ_STATE).find(
+    (state) => state === stated,
+  );
+};
 
 const fetchDetailForItem = async (
   item: SaosItem,
@@ -1160,10 +1308,27 @@ const fetchDetailForItem = async (
     return { type: "listing-only" };
   }
   const fetched = await fetchDetail(id, signal);
-  return fetched === null
-    ? { type: "unavailable" }
-    : { type: "detail", detail: fetched.item, payload: fetched.payload };
+  switch (fetched.type) {
+    case "read":
+      return { type: "detail", detail: fetched.item, payload: fetched.payload };
+    case "empty":
+      return { type: "unavailable" };
+    case "refused":
+      return { type: "refused" };
+    case "failed":
+      return { type: "failed" };
+    default: {
+      fetched satisfies never;
+      return panic(`Unhandled SAOS detail read: ${JSON.stringify(fetched)}`);
+    }
+  }
 };
+
+/** A judgment text the structured parser could not read. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
 
 type BuildPlDecisionOptions = {
   /** The item exactly as the publisher listed it. */
@@ -1178,6 +1343,11 @@ type BuildPlDecisionOptions = {
    * would store the allowlist instead of the response.
    */
   rawParts: SourceRawParts;
+  /**
+   * What SAOS answered where no detail record is passed. A passed `detail`
+   * is `read`; left out, the row states no detail state.
+   */
+  detailReadState?: PlCourtsDetailReadState | undefined;
 };
 
 /**
@@ -1190,6 +1360,7 @@ export const buildPlDecision = ({
   listingItem,
   detail,
   rawParts,
+  detailReadState,
 }: BuildPlDecisionOptions): IngestionResult | null => {
   // SAFETY: All SaosItem fields are optional/nullable. The function
   // accesses them with optional chaining and null checks throughout.
@@ -1274,8 +1445,18 @@ export const buildPlDecision = ({
 
       documentAst = parserResult.documentAst;
       fulltext = parserResult.fulltext;
-    } catch {
-      // Parser failure must not block ingestion.
+    } catch (error) {
+      // A parse failure does not block ingestion: the stripped text stands
+      // in for the document and the raw payload is kept for a re-parse.
+      // Reported, so a parser that starts failing across the source is told
+      // apart from decisions that carry unstructured text.
+      observeFailure(error, {
+        sink: documentParseFailed,
+        ctx: {
+          adapterKey: ADAPTER_KEYS.PL_COURTS,
+          documentId: String(saosId ?? caseNumber),
+        },
+      });
     }
   }
 
@@ -1402,6 +1583,9 @@ export const buildPlDecision = ({
         sourceTier: detail ? "detail" : "dump",
         ...(detailHash === undefined ? {} : { detailHash }),
       },
+      [PL_COURTS_DETAIL_READ_METADATA_KEY]: detail
+        ? PL_COURTS_DETAIL_READ_STATE.READ
+        : detailReadState,
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,
       }),
@@ -1483,10 +1667,20 @@ const parseItemWithDetail = async (
 
   const listingItem = normalizeSaosDumpItem(raw);
   const fetched = await fetchDetailForItem(listingItem, signal);
+  // An item whose detail request the publisher refused is not stored on this
+  // pass: its identity stays unheld, and the reconciliation walk of its
+  // judgment date builds it once SAOS answers.
+  if (fetched.type === "refused") {
+    return null;
+  }
+  // Without a detail record the decision is built from the dump row at the
+  // `dump` source tier, public wherever the dump carries its text; a later
+  // read of the detail upgrades the row (see refresh-policy.ts).
   return buildPlItem({
     listingItem,
     detail: fetched.type === "detail" ? fetched.detail : null,
     rawParts: rawPartsOf(RAW_PART.LISTING_DUMP, raw, fetched),
+    detailReadState: detailReadStateOf(fetched),
   });
 };
 
@@ -1673,14 +1867,19 @@ const buildPlCourtsFromPayload = async (
   const listingItem = normalizeSaosDumpItem(payload);
   const fetched = await fetchDetailForItem(listingItem, signal);
   switch (fetched.type) {
-    case "unavailable":
+    // A read that says nothing about the record is retried on the item's own
+    // schedule; the publisher's own answers, record or none, settle it.
+    case "refused":
+    case "failed":
       return { type: "detail-unavailable" };
+    case "unavailable":
     case "listing-only":
     case "detail": {
       const built = buildPlItem({
         listingItem,
         detail: fetched.type === "detail" ? fetched.detail : null,
         rawParts: rawPartsOf(RAW_PART.LISTING_SEARCH, payload, fetched),
+        detailReadState: detailReadStateOf(fetched),
       });
       if (built === null) {
         return { type: "unkeyable" };
@@ -1816,6 +2015,8 @@ const reparseStoredRaw = (
     listingItem: normalizeSaosDumpItem(listingRecord),
     detail: detailRecord === null ? null : normalizeSaosDumpItem(detailRecord),
     rawParts: parts,
+    // A re-parse asks nobody, so the row keeps the answer it already holds.
+    detailReadState: storedDetailReadState(stored.metadata),
   });
   if (built === null) {
     return {
@@ -2274,6 +2475,12 @@ export const plCourtsAdapter = defineSourceAdapter({
     firstSlice: PL_COURTS_FIRST_SLICE,
     ...plCourtsDaySlices.walk,
     tipWindowDays: PL_COURTS_TIP_WINDOW_DAYS,
+    // A row whose detail read failed keeps the dump's text in public and is
+    // read again on each walk of its judgment date until SAOS answers.
+    recheckHeld: {
+      metadataKey: PL_COURTS_DETAIL_READ_METADATA_KEY,
+      values: [PL_COURTS_DETAIL_READ_STATE.FAILED],
+    },
     listSlicePage: listPlCourtsSlicePage,
     buildDecision: buildPlCourtsFromPayload,
   },

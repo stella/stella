@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
   OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { extractFileText, resolveExtractionMimeType } from "./extract-content";
@@ -55,6 +57,13 @@ const extractFixtureText = async (bytes: ArrayBuffer, mimeType: string) =>
   await extractFileText(testScannedFile({ bytes, mimeType }));
 
 describe("extractFileText", () => {
+  let logs: RecordingLogger | null = null;
+
+  afterEach(() => {
+    logs?.restore();
+    logs = null;
+  });
+
   test("extracts direct text files", async () => {
     const text = await extractFixtureText(
       toArrayBuffer("hello\nworld"),
@@ -159,6 +168,60 @@ describe("extractFileText", () => {
     expect(text).toContain("Subject: Contract draft");
     expect(text).toContain("Email body survives.");
     expect(text).not.toContain("Attachment: broken.pdf");
+  });
+
+  test("records an attachment that fails to extract and one it cannot read", async () => {
+    const email = [
+      "From: Jane Lawyer <jane@example.com>",
+      "To: client@example.org",
+      "Subject: Contract draft",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="BND"',
+      "",
+      "--BND",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Email body survives.",
+      "--BND",
+      "Content-Type: application/pdf",
+      'Content-Disposition: attachment; filename="damaged.pdf"',
+      "",
+      "%PDF-1.4",
+      "not a pdf body",
+      "--BND",
+      "Content-Type: application/pdf",
+      'Content-Disposition: attachment; filename="unknown.pdf"',
+      "",
+      "not a pdf",
+      "--BND--",
+      "",
+    ].join("\r\n");
+
+    logs = installRecordingLogger();
+    const text = await extractFixtureText(
+      toArrayBuffer(email),
+      "message/rfc822",
+    );
+
+    expect(text).toContain("Email body survives.");
+    // A damaged document is an unexpected parser failure; content that is
+    // not a readable format is an expected skip. Both leave a record.
+    expect(
+      logs
+        .at("WARN")
+        .filter(
+          ({ message }) => message === "search.extraction.attachment_failed",
+        )
+        .map(({ attributes }) => attributes?.["attachment.errorCode"]),
+    ).toEqual(["malformed"]);
+    expect(
+      logs
+        .at("INFO")
+        .filter(
+          ({ message }) => message === "search.extraction.attachment_skipped",
+        )
+        .map(({ attributes }) => attributes?.["attachment.errorCode"]),
+    ).toEqual(["unsupported"]);
   });
 
   test("extracts spreadsheet cells from every sheet", async () => {

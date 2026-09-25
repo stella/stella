@@ -286,6 +286,8 @@ const isDocxArchive = async (archive: DocxArchive): Promise<boolean> => {
  *
  * Only called when the user explicitly requests the reference.
  * Idempotent: an existing stella reference is updated, not duplicated.
+ * Rejects with `DocxArchiveError` when the buffer is not a readable DOCX
+ * archive.
  */
 export const injectStamp = async (
   docxBuffer: ArrayBuffer,
@@ -293,13 +295,7 @@ export const injectStamp = async (
   verificationCode: string,
   frontendUrl: string,
 ): Promise<ArrayBuffer> => {
-  let archive: DocxArchive;
-  try {
-    archive = await loadDocxArchive(docxBuffer);
-  } catch {
-    // Corrupt or non-DOCX buffer; return original unchanged
-    return docxBuffer;
-  }
+  const archive = await loadDocxArchive(docxBuffer);
 
   await injectCustomProperties(archive, stamp, verificationCode);
   const footerResult = await injectFooter(

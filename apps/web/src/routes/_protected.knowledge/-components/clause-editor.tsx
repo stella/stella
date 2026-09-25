@@ -57,7 +57,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 
 import {
   bodyKey,
@@ -288,11 +288,17 @@ export const ClauseEditor = ({
               await emitReviewResolved(resolvedBody);
             };
             detached(
-              settleReviewPersist(persistReviewedBody).catch(
-                (error: unknown) => {
-                  getAnalytics().captureError(error);
-                },
-              ),
+              settleReviewPersist(persistReviewedBody, (error) => {
+                getAnalytics().captureError(error);
+                stellaToast.add({
+                  type: "error",
+                  title: t("clauses.saveFailed"),
+                  description: userErrorFromThrown(
+                    error,
+                    t("common.unexpectedError"),
+                  ),
+                });
+              }),
               "clause-editor.settle-review-persist",
             );
           }

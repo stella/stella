@@ -25,8 +25,13 @@ import {
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -269,6 +274,62 @@ describe("pl-courts decision dates", () => {
     // The document's prose recites dates of its own; none of them is the
     // judgment's, so the row states nothing rather than one of them.
     expect(decision.decisionDate).toBeUndefined();
+  });
+});
+
+describe("pl-courts document the parser cannot read", () => {
+  // Inline markup nested deeper than the parser's recursive walk reaches:
+  // the structured parse fails while the tag-stripped text is still readable.
+  const NESTING = 20_000;
+  const unreadableContent = `<p>${"<span>".repeat(NESTING)}Uzasadnienie wyroku${"</span>".repeat(NESTING)}</p>`;
+
+  test("keeps the stripped text and reports the parse", async () => {
+    expect(() =>
+      parsePlDecisionContent({
+        caseNumber: "II Ca 236/18",
+        ecli: undefined,
+        court: "Sąd Okręgowy",
+        decisionDate: "2018-03-22",
+        decisionType: "wyrok",
+        sourceUrl: undefined,
+        documentUrl: undefined,
+        content: unreadableContent,
+        keywords: [],
+        statutes: [],
+        documentId: "332735",
+      }),
+    ).toThrow(RangeError);
+
+    const row = await rowById(DUMP_PAGE, 332_735);
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const decision = decisionFrom({
+        listingRow: { ...row, textContent: unreadableContent },
+        detail: null,
+      });
+
+      expect(decision.fulltext).toBe("Uzasadnienie wyroku");
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.document_parse_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "pl-courts",
+          documentId: "332735",
+          "error.type": "RangeError",
+        }),
+      ]);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
   });
 });
 

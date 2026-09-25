@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -511,122 +511,161 @@ const readExceptions = (rootDir: string): ExceptionsReadResult => {
   return parseExceptions(value, APP_BOUNDARY_LEDGER_PATH);
 };
 
-const gitOutput = (rootDir: string, arguments_: readonly string[]): string =>
-  execFileSync("git", arguments_, {
+/** One Git invocation: its output, its failure, or no Git binary at all. */
+type GitRun =
+  | { readonly kind: "ok"; readonly stdout: string }
+  | {
+      readonly kind: "failed";
+      readonly exitCode: number | null;
+      readonly stderr: string;
+    }
+  | { readonly kind: "missing-binary" };
+
+export type GitRunner = (
+  rootDir: string,
+  arguments_: readonly string[],
+) => GitRun;
+
+export type AppBoundaryOptions = {
+  /** Variables that mark a CI or pull-request run; defaults to `process.env`. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly git?: GitRunner;
+};
+
+const runGit: GitRunner = (rootDir, arguments_) => {
+  const result = spawnSync("git", arguments_, {
     cwd: rootDir,
     encoding: "utf-8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
+    // Untranslated diagnostics, so a failure can be told apart by its stderr.
+    env: { ...process.env, LC_ALL: "C" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error !== undefined) {
+    return "code" in result.error && result.error.code === "ENOENT"
+      ? { kind: "missing-binary" }
+      : { kind: "failed", exitCode: null, stderr: result.error.message };
+  }
+  return result.status === 0
+    ? { kind: "ok", stdout: result.stdout.trim() }
+    : { kind: "failed", exitCode: result.status, stderr: result.stderr };
+};
 
+const CI_MARKERS = ["CI", "GITHUB_ACTIONS", "GITHUB_BASE_REF"] as const;
+
+const isCiContext = (env: Readonly<Record<string, string | undefined>>) =>
+  CI_MARKERS.some((name) => {
+    const value = env[name];
+    return value !== undefined && value !== "" && value !== "false";
+  });
+
+const baselineIssue = (message: string): ExceptionsReadResult => ({
+  exceptions: [],
+  issues: [{ message, path: APP_BOUNDARY_LEDGER_PATH }],
+});
+
+/** `rev-parse --verify --quiet` exits 1 without output for a ref that does not exist. */
+const isAbsentRef = (run: GitRun): boolean =>
+  run.kind === "failed" && run.exitCode === 1 && run.stderr.trim() === "";
+
+/**
+ * The ledger at the merge base with the main branch, or null when there is no
+ * baseline to compare against. A CI or pull-request run always has a
+ * checkout, so there every Git failure is an issue. A local run without Git
+ * history (a source archive, or a machine without Git) has no baseline; the
+ * ledger's absolute rules still apply through the filesystem scan.
+ */
 const readBaselineExceptions = (
   rootDir: string,
+  { env = process.env, git = runGit }: AppBoundaryOptions,
 ): ExceptionsReadResult | null => {
-  try {
-    if (gitOutput(rootDir, ["rev-parse", "--is-inside-work-tree"]) !== "true") {
-      return null;
-    }
-  } catch {
-    // Source archives have no Git history. Scanning still works through the
-    // filesystem fallback; the ratchet is enforced in repository checkouts.
-    return null;
+  const ci = isCiContext(env);
+  const probe = git(rootDir, ["rev-parse", "--is-inside-work-tree"]);
+  const withoutHistory =
+    probe.kind === "missing-binary" ||
+    (probe.kind === "failed" &&
+      probe.stderr.includes("not a git repository")) ||
+    (probe.kind === "ok" && probe.stdout !== "true");
+  if (withoutHistory) {
+    return ci
+      ? baselineIssue(
+          "app-boundary ledger baseline requires a Git checkout in CI",
+        )
+      : null;
+  }
+  if (probe.kind !== "ok") {
+    return baselineIssue(
+      "app-boundary ledger baseline could not be read from Git",
+    );
   }
 
   // Actions defines GITHUB_BASE_REF as an empty string outside pull
-  // requests; only a non-empty value marks a pull-request context.
-  const configuredBase = process.env["GITHUB_BASE_REF"] || undefined;
+  // requests; only a non-empty value names a pull request's base.
+  const configuredBase = env["GITHUB_BASE_REF"] || undefined;
   const baseCandidates = [
     configuredBase === undefined ? null : `origin/${configuredBase}`,
     "origin/main",
     "main",
   ].filter((candidate): candidate is string => candidate !== null);
-  const baseRevision = baseCandidates.find((candidate) => {
-    try {
-      gitOutput(rootDir, ["rev-parse", "--verify", candidate]);
-      return true;
-    } catch {
-      return false;
+  let baseRevision: string | undefined;
+  for (const candidate of baseCandidates) {
+    const resolved = git(rootDir, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `${candidate}^{commit}`,
+    ]);
+    if (resolved.kind === "ok") {
+      baseRevision = resolved.stdout;
+      break;
     }
-  });
+    if (!isAbsentRef(resolved)) {
+      return baselineIssue(
+        "app-boundary ledger baseline branch could not be resolved",
+      );
+    }
+  }
   if (baseRevision === undefined) {
-    if (configuredBase !== undefined) {
-      // A pull-request context names its base; a checkout that cannot
-      // resolve it is misconfigured, and skipping would let an exception
-      // land without the ratchet comparison.
-      return {
-        exceptions: [],
-        issues: [
-          {
-            message: "app-boundary ledger baseline branch is unavailable",
-            path: APP_BOUNDARY_LEDGER_PATH,
-          },
-        ],
-      };
-    }
-    // Outside pull requests, a checkout without a main ref (single-commit
-    // deploy clones, tag checkouts) has the same information as a source
-    // archive: no baseline to ratchet against. The ledger's absolute rules
-    // still apply through the filesystem path.
+    // Outside CI, a checkout without a main ref (single-commit deploy clones,
+    // tag checkouts) has no baseline to ratchet against.
+    return ci
+      ? baselineIssue("app-boundary ledger baseline branch is unavailable")
+      : null;
+  }
+
+  const mergeBase = git(rootDir, ["merge-base", "HEAD", baseRevision]);
+  if (mergeBase.kind !== "ok") {
+    return baselineIssue("app-boundary ledger merge base is unavailable");
+  }
+
+  // A tree that reads successfully and lists no ledger is the first rollout:
+  // it establishes the reviewed debt baseline for every later branch.
+  const listed = git(rootDir, [
+    "ls-tree",
+    "--full-tree",
+    mergeBase.stdout,
+    "--",
+    APP_BOUNDARY_LEDGER_PATH,
+  ]);
+  if (listed.kind !== "ok") {
+    return baselineIssue("base app-boundary ledger could not be read");
+  }
+  if (listed.stdout === "") {
     return null;
   }
 
-  let mergeBase: string;
-  try {
-    mergeBase = gitOutput(rootDir, ["merge-base", "HEAD", baseRevision]);
-  } catch {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "app-boundary ledger merge base is unavailable",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
-  }
-
-  try {
-    gitOutput(rootDir, [
-      "cat-file",
-      "-e",
-      `${mergeBase}:${APP_BOUNDARY_LEDGER_PATH}`,
-    ]);
-  } catch {
-    // The first rollout establishes the reviewed debt baseline. Once the
-    // ledger exists on main, every later branch is compared to it.
-    return null;
-  }
-
-  let baselineText: string;
-  try {
-    baselineText = gitOutput(rootDir, [
-      "show",
-      `${mergeBase}:${APP_BOUNDARY_LEDGER_PATH}`,
-    ]);
-  } catch {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "base app-boundary ledger could not be read",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
+  const baselineText = git(rootDir, [
+    "show",
+    `${mergeBase.stdout}:${APP_BOUNDARY_LEDGER_PATH}`,
+  ]);
+  if (baselineText.kind !== "ok") {
+    return baselineIssue("base app-boundary ledger could not be read");
   }
 
   let baselineValue: unknown;
   try {
-    baselineValue = JSON.parse(baselineText);
+    baselineValue = JSON.parse(baselineText.stdout);
   } catch {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "base app-boundary ledger must contain valid JSON",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
+    return baselineIssue("base app-boundary ledger must contain valid JSON");
   }
   return parseExceptions(baselineValue, APP_BOUNDARY_LEDGER_PATH);
 };
@@ -654,11 +693,12 @@ const violationMessage = (edge: AppBoundaryEdge): string => {
  */
 export const validateWorkspaceAppBoundaries = (
   rootDir: string,
+  options: AppBoundaryOptions = {},
 ): AppBoundaryIssue[] => {
   const { edges: observed, issues: collectionIssues } =
     collectAppBoundaryResult(rootDir);
   const { exceptions, issues: exceptionIssues } = readExceptions(rootDir);
-  const baseline = readBaselineExceptions(rootDir);
+  const baseline = readBaselineExceptions(rootDir, options);
   const issues = [
     ...collectionIssues,
     ...exceptionIssues,

@@ -47,6 +47,8 @@ import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(czNssAdapter);
@@ -406,7 +408,7 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([120_000, 60_000, 60_000]);
+    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
     timeouts.length = 0;
 
     installStub({
@@ -423,7 +425,7 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([120_000, 60_000, 60_000, 60_000]);
+    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
   } finally {
     timeoutSpy.mockRestore();
   }
@@ -1795,8 +1797,365 @@ describe("cz-nss buildDecision", () => {
     });
 
     // Same call, one outcome, two dispositions: the crawl stores the decision
-    // this carries, the reconciliation drops it.
+    // this carries as listing-only, the reconciliation parks it.
     expect(built.type).toBe("detail-unavailable");
     expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.isListingOnly).toBe(true);
+  });
+});
+
+// ── Reads the portal did not answer ──────────────────────
+
+describe("cz-nss reads the portal did not answer", () => {
+  const originalFetch = globalThis.fetch;
+  let recording: RecordingLogger;
+
+  beforeEach(() => {
+    setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
+    recording = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    recording.restore();
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
+
+  const SESSION = {
+    cookies: "",
+    token: "token-for-tests",
+    formFields: new Map<string, string>(),
+  };
+
+  /**
+   * Serve the portal as `installStub` does, except that a request under
+   * `pathPrefix` rejects with what `failure` returns, the way `fetch` rejects.
+   */
+  const failRequestsUnder = (
+    pathPrefix: string,
+    failure: () => Error,
+    stub?: StubOptions,
+  ): { requests: RecordedRequest[] } => {
+    const recorded = installStub(stub ?? { search: [] });
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith(pathPrefix)) {
+          return await Promise.reject(failure());
+        }
+        return await served(input, init);
+      },
+    );
+    return recorded;
+  };
+
+  /** Abort `deadline` with a timeout, and reject with its reason as `fetch` does. */
+  const deadlinePasses = (deadline: AbortController) => (): Error => {
+    const reason = new DOMException("page deadline", "TimeoutError");
+    deadline.abort(reason);
+    return reason;
+  };
+
+  const listedMunicipalRow = (): ParsedRow => {
+    const row = parseResultRows(rowBlock(MUNICIPAL_ROW)).at(0);
+    if (row === undefined) {
+      throw new TypeError("Expected the fixture row to parse");
+    }
+    return row;
+  };
+
+  const warnings = (message: string) =>
+    recording.at("WARN").filter((record) => record.message === message);
+
+  test("holds a row whose detail read fails", async () => {
+    failRequestsUnder(
+      "/DokumentDetail/Index/",
+      () => new TypeError("fetch failed"),
+    );
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    // Stored, but as the listing alone: the reconciliation does not count it
+    // as held and asks the portal for it again.
+    expect(built.type).toBe("detail-unavailable");
+    expect(built.decision.isListingOnly).toBe(true);
+    expect(reconciliation.heldRequiresDetail).toBe(true);
+    expect(
+      warnings("case_law.ingestion.detail_fetch_failed").at(0)?.attributes,
+    ).toMatchObject({
+      documentId: MUNICIPAL_ROW.documentId,
+      "failure.grade": "transient",
+    });
+  });
+
+  test("a held row does not share the hash of the row a later read builds", async () => {
+    // The source hash names the listing; a held row carries a hash of its
+    // own, so the full row a later read builds is written over it.
+    failRequestsUnder(
+      "/DokumentDetail/Index/",
+      () => new TypeError("fetch failed"),
+    );
+    const held = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+    installStub({ search: [] });
+    const read = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(read.type).toBe("built");
+    expect(read.decision.isListingOnly).toBeUndefined();
+    expect(held.decision.rawHash).not.toBe(read.decision.rawHash);
+  });
+
+  /**
+   * Run `crawl` with the page's own read budget under the test's control:
+   * `spend()` passes it, as its timer would. The budget is the one timer the
+   * page starts that is longer than a listing request's.
+   */
+  const withPageBudget = async (
+    crawl: (spend: () => Error) => Promise<void>,
+  ): Promise<void> => {
+    let budget = new AbortController();
+    const originalTimeout = AbortSignal.timeout;
+    const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+      (milliseconds) => {
+        if (milliseconds <= 60_000) {
+          return originalTimeout(milliseconds);
+        }
+        budget = new AbortController();
+        return budget.signal;
+      },
+    );
+    try {
+      await crawl(() => {
+        const reason = new DOMException("page budget", "TimeoutError");
+        budget.abort(reason);
+        return reason;
+      });
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  };
+
+  /**
+   * Serve the portal, reading detail pages until the `spendAt`-th of the
+   * page (1-based), whose read passes the page budget. Counts detail reads.
+   */
+  const spendBudgetAtDetailRead = (
+    spendAt: number,
+    spend: () => Error,
+    stub: StubOptions,
+  ): { detailReads: () => number } => {
+    installStub(stub);
+    const served = globalThis.fetch;
+    let detailReads = 0;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith("/DokumentDetail/Index/")) {
+          detailReads += 1;
+          if (detailReads === spendAt) {
+            return await Promise.reject(spend());
+          }
+        }
+        return await served(input, init);
+      },
+    );
+    return { detailReads: () => detailReads };
+  };
+
+  test("keeps the rows a page read before its budget ran out and holds the rest", async () => {
+    await withPageBudget(async (spend) => {
+      const { detailReads } = spendBudgetAtDetailRead(2, spend, {
+        search: [
+          htmlResponse(
+            searchPage({
+              statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+              rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+            }),
+          ),
+        ],
+      });
+
+      const page = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+
+      expect(Result.isOk(page)).toBe(true);
+      if (!Result.isOk(page)) {
+        return;
+      }
+      const [read, ...held] = page.value.decisions;
+      expect(read?.isListingOnly).toBeUndefined();
+      expect(held).toHaveLength(CZ_NSS_FIRST_PAGE_ROWS - 1);
+      expect(held.every((decision) => decision.isListingOnly === true)).toBe(
+        true,
+      );
+      // Once the budget is spent, the rest of the page asks the portal nothing.
+      expect(detailReads()).toBe(2);
+      expect(page.value.nextCursor).toBe(`${SLICE}:1`);
+    });
+  }, 30_000);
+
+  test("moves on across pages whose budget runs out on every read", async () => {
+    const cursors: (string | null)[] = [];
+    await withPageBudget(async (spend) => {
+      // A day of one full page and one row past it.
+      const search = (): Response[] => [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ];
+      spendBudgetAtDetailRead(1, spend, { search: search() });
+      const first = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+      expect(Result.isOk(first)).toBe(true);
+      if (!Result.isOk(first)) {
+        return;
+      }
+      expect(
+        first.value.decisions.every(
+          (decision) => decision.isListingOnly === true,
+        ),
+      ).toBe(true);
+      cursors.push(first.value.nextCursor);
+
+      spendBudgetAtDetailRead(1, spend, {
+        search: search(),
+        continuation: [htmlResponse(rowBlock(REGIONAL_ROW))],
+      });
+      const second = await czNssAdapter.fetchPage(first.value.nextCursor, {});
+      expect(Result.isOk(second)).toBe(true);
+      if (!Result.isOk(second)) {
+        return;
+      }
+      expect(second.value.decisions.map((d) => d.isListingOnly)).toEqual([
+        true,
+      ]);
+      cursors.push(second.value.nextCursor);
+    });
+
+    expect(cursors).toEqual([`${SLICE}:1`, "2026-06-11:0"]);
+  }, 30_000);
+
+  test("fails the page when the caller's signal aborts a detail read", async () => {
+    const caller = new AbortController();
+    spendBudgetAtDetailRead(1, deadlinePasses(caller), {
+      search: [
+        htmlResponse(searchPage({ statedCount: 1, rows: [MUNICIPAL_ROW] })),
+      ],
+    });
+
+    const page = await czNssAdapter.fetchPage(`${SLICE}:0`, {}, caller.signal);
+
+    // The cycle deadline or a cancellation is the pipeline's to handle: the
+    // cursor stays on the page.
+    expect(Result.isError(page)).toBe(true);
+  }, 30_000);
+
+  test("holds a row whose text read fails", async () => {
+    failRequestsUnder(
+      "/DokumentOriginal/Text/",
+      () => new TypeError("fetch failed"),
+      { search: [], htmlDocumentStatus: 404 },
+    );
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("detail-unavailable");
+    expect(built.decision.isListingOnly).toBe(true);
+    // The detail page was read and stays on the row.
+    expect(built.decision.ecli).toBe("ECLI:CZ:MSPH:2026:1.Az.4.2026.79");
+    expect(
+      warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
+    ).toMatchObject({
+      documentId: MUNICIPAL_ROW.documentId,
+      phase: "text",
+      "failure.grade": "transient",
+    });
+  });
+
+  test("rethrows when the page deadline aborts a text read", async () => {
+    const deadline = new AbortController();
+    failRequestsUnder("/DokumentOriginal/Text/", deadlinePasses(deadline), {
+      search: [],
+      htmlDocumentStatus: 404,
+    });
+
+    const failure = await rejectionOf(
+      buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: deadline.signal,
+      }),
+    );
+
+    expect(failure).toBe(deadline.signal.reason);
+  });
+
+  test("reports a rich-text read that fails and builds from the text", async () => {
+    failRequestsUnder(
+      "/DokumentOriginal/Html/",
+      () => new TypeError("fetch failed"),
+    );
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("built");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(
+      warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
+    ).toMatchObject({
+      documentId: MUNICIPAL_ROW.documentId,
+      phase: "document",
+      "failure.grade": "transient",
+    });
+  });
+
+  test("rethrows when the page deadline aborts a rich-text read", async () => {
+    const deadline = new AbortController();
+    const { requests } = failRequestsUnder(
+      "/DokumentOriginal/Html/",
+      deadlinePasses(deadline),
+    );
+
+    const failure = await rejectionOf(
+      buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: deadline.signal,
+      }),
+    );
+
+    expect(failure).toBe(deadline.signal.reason);
+    // Once the signal is aborted, the text endpoint is asked nothing.
+    expect(
+      requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+    ).toEqual([]);
   });
 });

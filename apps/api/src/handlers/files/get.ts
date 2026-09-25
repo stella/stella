@@ -3,6 +3,7 @@ import { status } from "elysia";
 
 import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -11,6 +12,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
@@ -22,6 +24,8 @@ import {
   fileFieldQuery,
 } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -104,6 +108,11 @@ export const readEmailHtmlPreviewHandler = async ({
 };
 
 // ── Stamped download (separate endpoint) ────────────────
+
+const stampedDownloadUnreadable = failureSink({
+  event: "files.stamped_download_unreadable",
+  expected: [],
+});
 
 type StampedDownloadHandlerProps = {
   scopedDb: ScopedDb;
@@ -330,12 +339,39 @@ export const stampedDownloadHandler = async ({
   }
 
   const buffer = await response.arrayBuffer();
-  const stamped = await injectStamp(
-    buffer,
-    row.versionStamp,
-    row.verificationCode,
-    env.FRONTEND_URL,
-  );
+  const versionStamp = row.versionStamp;
+  const verificationCode = row.verificationCode;
+  const stampResult = await Result.tryPromise({
+    try: async () =>
+      await injectStamp(
+        buffer,
+        versionStamp,
+        verificationCode,
+        env.FRONTEND_URL,
+      ),
+    catch: (cause): Error =>
+      cause instanceof Error
+        ? cause
+        : new Error("Stamp injection failed", { cause }),
+  });
+  if (Result.isError(stampResult)) {
+    if (stampResult.error instanceof DocxArchiveError) {
+      // The stored bytes are not a DOCX archive this path can read, so no
+      // stamped rendition exists; answer as the metadata scrub below does.
+      // The archive is the user's own upload, so this boundary classifies the
+      // failure as a request the stored document cannot serve.
+      observeFailure(classifyFailure(stampResult.error, "request_invalid"), {
+        sink: stampedDownloadUnreadable,
+        ctx: {
+          phase: stampResult.error.reason,
+          step: "stampedDownloadHandler.injectStamp",
+        },
+      });
+      return status(422);
+    }
+    return await Promise.reject(stampResult.error);
+  }
+  const stamped = stampResult.value;
   const scrubbed =
     metadata === "strip"
       ? await scrubDocumentProperties({

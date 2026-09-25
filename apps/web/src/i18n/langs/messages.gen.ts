@@ -1534,6 +1534,7 @@ type Messages = {
     "key": "Key";
     "kind": "Kind";
     "language": "Language";
+    "languageLoadFailed": "Couldn't switch the language. Try again.";
     "languages": {
       "AR": "Arabic";
       "BG": "Bulgarian";

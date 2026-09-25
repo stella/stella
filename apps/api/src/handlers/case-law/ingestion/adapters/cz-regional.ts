@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -75,7 +76,9 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
@@ -117,6 +120,17 @@ const CZ_REGIONAL_TIP_WINDOW_DAYS = 14;
  * so we can safely push higher concurrency and self-correct.
  */
 const FINALDOC_CONCURRENCY = 15;
+
+/**
+ * The page's own read budget, started when the page is entered.
+ *
+ * It ends 15 s before the pipeline's page signal (`pageTimeoutMs`, 100 s).
+ * When it passes, the listing request, a publisher-slot wait and every
+ * document read in flight are aborted; the rows not yet read are assembled
+ * listing-only without a request, which takes a fraction of the margin, and
+ * the page returns with the cursor past them.
+ */
+const CZ_REGIONAL_PAGE_READ_BUDGET_MS = 85_000;
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   if (value === undefined || value === null) {
@@ -442,6 +456,12 @@ export const readCzRegionalChain = (
     : null;
 };
 
+/** A document request or JSON read that failed. */
+const documentReadFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
+
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.
  *
@@ -497,7 +517,26 @@ const fetchFinaldoc = async (
       });
     }
     return payload;
-  } catch {
+  } catch (error) {
+    // The caller's cancellation ends the page.
+    if (signal?.aborted) {
+      throw error;
+    }
+    // The row is held listing-only for a later read, and the failed read is
+    // reported, graded as the upstream being unavailable: a request that
+    // failed or a body that is not the JSON the publisher serves.
+    observeFailure(
+      classifyFailure(
+        typeof error === "object" && error !== null
+          ? error
+          : new Error("Document read failed", { cause: error }),
+        "upstream_unavailable",
+      ),
+      {
+        sink: documentReadFailed,
+        ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+      },
+    );
     return null;
   }
 };
@@ -745,6 +784,12 @@ const documentTextOf = (doc: CzRegionalFinaldoc | null): DocumentText => {
   };
 };
 
+/** A document payload the structured parser could not read. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+
 type ParseDocumentPayloadOptions = {
   doc: CzRegionalFinaldoc;
   caseNumber: string;
@@ -796,7 +841,13 @@ const parseDocumentPayload = ({
       documentAst: parsed.documentAst,
       fulltext: parsed.fulltext || text.plain,
     };
-  } catch {
+  } catch (error) {
+    // Reported, so a parser that starts failing across the source is told
+    // apart from decisions that carry only the plain-text rendering.
+    observeFailure(error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+    });
     return { documentAst: EMPTY_AST, fulltext: text.plain };
   }
 };
@@ -1861,15 +1912,26 @@ export const czRegionalAdapter = defineSourceAdapter({
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
+        const readBudget = AbortSignal.timeout(CZ_REGIONAL_PAGE_READ_BUDGET_MS);
+        const effectiveSignal = signal
+          ? AbortSignal.any([signal, readBudget])
+          : readBudget;
+        // The page's own budget passed, as opposed to the caller's signal
+        // (the cycle deadline or a cancellation), which fails the page.
+        const readBudgetSpent = (): boolean =>
+          readBudget.aborted && signal?.aborted !== true;
+
         const state: CursorState = cursor
           ? parseCursor(cursor)
           : { date: defaultDate(), page: 0, emptyDays: 0 };
 
         const fetchT0 = performance.now();
 
+        // A listing the budget cuts short fails the page: nothing was read,
+        // so the cursor holds.
         const responseResult = await fetchListPage({
           cursor,
-          signal,
+          signal: effectiveSignal,
           state,
         });
         if (Result.isError(responseResult)) {
@@ -1927,25 +1989,65 @@ export const czRegionalAdapter = defineSourceAdapter({
         // FINALDOC_CONCURRENCY, then the row and its document are assembled
         // together: the envelope has to hold both, so the listing row cannot
         // be turned into a decision before its document is in hand.
+        //
+        // Once the page's read budget passes, every row not yet read (the
+        // rows of the batch it interrupts and of every batch after it) is
+        // stored listing-only with no request, the reconciliation asks for
+        // their documents, and the cursor moves on.
         const decisions: IngestionResult[] = [];
         let refused = 0;
+        let deferred = 0;
+        const pushListingRow = (item: CzRegionalApiItem): void => {
+          const listed = assembleCzRegionalDecision({
+            item,
+            document: null,
+            chain: null,
+          });
+          if (listed.type !== "unkeyable") {
+            decisions.push(listed.decision);
+          }
+        };
         for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
+          const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
+          if (readBudgetSpent()) {
+            deferred += batch.length;
+            for (const item of batch) {
+              pushListingRow(item);
+            }
+            continue;
+          }
           const built = await Promise.all(
-            items.slice(i, i + FINALDOC_CONCURRENCY).map(async (item) => ({
+            batch.map(async (item) => ({
               item,
               attempt: await Result.tryPromise({
-                try: async () => await buildCzRegionalDecision(item, signal),
-                // Only the adapter's own refusal is recovered from below; any
-                // other failure is a defect and halts the page rather than
-                // turning a fetched document into a listing-only row.
-                catch: (cause) =>
-                  cause instanceof UnpersistableDecisionFieldError
-                    ? cause
-                    : panic("CZ regional decision assembly failed", cause),
+                try: async () =>
+                  await buildCzRegionalDecision(item, effectiveSignal),
+                // The adapter's own refusal and a read the budget cut short
+                // are recovered from below. The caller's cancellation ends
+                // the page as a cancelled listing request does, and any other
+                // failure halts the page.
+                catch: (cause) => {
+                  if (cause instanceof UnpersistableDecisionFieldError) {
+                    return cause;
+                  }
+                  if (effectiveSignal.aborted) {
+                    return new DOMException("Page read ended", "AbortError");
+                  }
+                  return panic("CZ regional decision assembly failed", cause);
+                },
               }),
             })),
           );
+          signal?.throwIfAborted();
           for (const { item, attempt } of built) {
+            if (
+              Result.isError(attempt) &&
+              attempt.error instanceof DOMException
+            ) {
+              deferred += 1;
+              pushListingRow(item);
+              continue;
+            }
             if (Result.isError(attempt)) {
               // One row the adapter refuses must not fail the page and pin the
               // cursor on it. The listing is stored as a listing-only row, so
@@ -1957,14 +2059,7 @@ export const czRegionalAdapter = defineSourceAdapter({
                 ...(item.jednaciCislo ? { caseNumber: item.jednaciCislo } : {}),
                 "error.type": errorTag(attempt.error),
               });
-              const listed = assembleCzRegionalDecision({
-                item,
-                document: null,
-                chain: null,
-              });
-              if (listed.type !== "unkeyable") {
-                decisions.push(listed.decision);
-              }
+              pushListingRow(item);
               continue;
             }
             const outcome = attempt.value;
@@ -1975,6 +2070,15 @@ export const czRegionalAdapter = defineSourceAdapter({
               decisions.push(outcome.decision);
             }
           }
+        }
+        if (deferred > 0) {
+          logger.warn("case_law.ingestion.document_budget_exhausted", {
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            page: state.page,
+            date: state.date,
+            deferred,
+            items: items.length,
+          });
         }
 
         const fetchMs = Math.round(performance.now() - fetchT0);

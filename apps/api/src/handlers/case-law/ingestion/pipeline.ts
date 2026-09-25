@@ -42,7 +42,10 @@ import {
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
 type DbSlot = {
@@ -101,6 +104,11 @@ type PipelineResult = {
 export const CYCLE_HALT_REASON = {
   TIMEOUT: "Cycle timeout exceeded",
 } as const;
+
+const failureRecordsNotWritten = failureSink({
+  event: "case_law.ingestion.failure_records_not_written",
+  expected: [],
+});
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -262,8 +270,9 @@ export const runIngestionPipeline = async ({
    * Write a page's decision failures in one insert. The handle is bound here,
    * outside the page loop, so the loop hands the whole set to a batched write
    * instead of reaching for the database once per page. Returns a halt reason
-   * when the write times out: these rows are diagnostic, but a database that
-   * cannot take them must not see the cursor advance.
+   * when the write meets a timeout or a transient database condition: the
+   * cursor holds and the page is read again. Any other rejection repeats on
+   * a replay of the same rows, so it is reported and the page moves on.
    */
   const flushIngestionFailures = async (
     failures: readonly (typeof caseLawIngestionFailures.$inferInsert)[],
@@ -272,13 +281,22 @@ export const runIngestionPipeline = async ({
       await logIngestionFailures(scopedDb, failures);
       return null;
     } catch (error) {
-      captureError(error, {
-        sourceId: source.id,
-        step: "runIngestionPipeline.logIngestionFailures",
-        failureCount: String(failures.length),
+      observeFailure(error, {
+        sink: failureRecordsNotWritten,
+        ctx: {
+          adapterKey: adapter.key,
+          step: "runIngestionPipeline.logIngestionFailures",
+        },
       });
-      return error instanceof TimeoutError
-        ? databaseTimeoutHaltReason(error)
+      if (error instanceof TimeoutError) {
+        return databaseTimeoutHaltReason(error);
+      }
+      const { grade } = gradeFailure(
+        readEvidence(error),
+        failureRecordsNotWritten,
+      );
+      return grade === "transient"
+        ? `${failures.length} failure record(s) not written; cursor held for retry`
         : null;
     }
   };
@@ -694,9 +712,49 @@ export const runIngestionPipeline = async ({
   };
 };
 
+type IngestionFailureRow = typeof caseLawIngestionFailures.$inferInsert;
+
+/** Column bounds of `case_law_ingestion_failures` (schema/case-law.ts). */
+const INGESTION_FAILURE_LIMITS = {
+  caseNumber: 256,
+  language: 8,
+  errorType: 128,
+  errorMessage: 2048,
+} as const;
+
+/** Postgres text and jsonb columns do not store NUL characters. */
+const storableText = (value: string, maxLength?: number): string => {
+  const text = value.replaceAll("\u0000", "");
+  return maxLength === undefined ? text : text.slice(0, maxLength);
+};
+
+/**
+ * A failure row as the table accepts it: values copied from the decision
+ * that failed are held to the column bounds and carry no NUL characters.
+ */
+const storableIngestionFailure = (
+  row: IngestionFailureRow,
+): IngestionFailureRow => ({
+  ...row,
+  caseNumber: storableText(row.caseNumber, INGESTION_FAILURE_LIMITS.caseNumber),
+  errorType: storableText(row.errorType, INGESTION_FAILURE_LIMITS.errorType),
+  errorMessage: storableText(
+    row.errorMessage,
+    INGESTION_FAILURE_LIMITS.errorMessage,
+  ),
+  ...(typeof row.language === "string"
+    ? {
+        language: storableText(row.language, INGESTION_FAILURE_LIMITS.language),
+      }
+    : {}),
+  ...(typeof row.cursor === "string"
+    ? { cursor: storableText(row.cursor) }
+    : {}),
+});
+
 const logIngestionFailures = async (
   scopedDb: ScopedDb,
-  failures: readonly (typeof caseLawIngestionFailures.$inferInsert)[],
+  failures: readonly IngestionFailureRow[],
 ) => {
   if (failures.length === 0) {
     return;
@@ -705,6 +763,8 @@ const logIngestionFailures = async (
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   await scopedDb((tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    return tx.insert(caseLawIngestionFailures).values([...failures]);
+    return tx
+      .insert(caseLawIngestionFailures)
+      .values(failures.map(storableIngestionFailure));
   });
 };

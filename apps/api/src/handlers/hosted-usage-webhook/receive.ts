@@ -51,6 +51,10 @@ import {
   runWebhookTransaction,
   updateWebhookEventResultInTx,
 } from "@/api/lib/hosted-usage-provider/webhook-store";
+import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const HOSTED_USAGE_WEBHOOK_HEADERS = {
@@ -62,6 +66,8 @@ export const HOSTED_USAGE_WEBHOOK_HEADERS = {
 type ReceiveCtx = {
   request: Request;
   body: string;
+  /** The transaction the event record and its dispatch run in; the root connection by default. */
+  runTransaction?: WebhookTransactionRunner;
 };
 
 const respond = (statusCode: number, message: string): Response =>
@@ -73,6 +79,7 @@ const respond = (statusCode: number, message: string): Response =>
 export const receiveHostedUsageWebhook = async (
   ctx: ReceiveCtx,
 ): Promise<Response> => {
+  const runTransaction = ctx.runTransaction ?? runWebhookTransaction;
   const webhookConfig = getWebhookSecret();
   if (!webhookConfig) {
     // Hosted usage management is not configured on this deployment. We must
@@ -137,7 +144,9 @@ export const receiveHostedUsageWebhook = async (
   //
   // Validation happens BEFORE opening a transaction. Unknown event types
   // are recorded in their own tiny transaction (insert with
-  // result="ignored") and acknowledged so the provider stops retrying.
+  // result="ignored") and acknowledged once recorded, so the provider stops
+  // retrying. A record Postgres rejects as invalid data is reported and
+  // acknowledged; any other write failure answers 500 for a retry.
   const normalized = normalizeProviderEvent(
     parsedJson,
     envelope.type,
@@ -151,11 +160,18 @@ export const receiveHostedUsageWebhook = async (
     if (normalized.handled) {
       return respond(400, "Malformed payload for handled event type");
     }
-    await persistUnknownEventType({
+    const recorded = await persistUnknownEventType({
+      runTransaction,
       eventId,
       eventType: envelope.type,
       payload,
     });
+    if (recorded === UNKNOWN_EVENT_RECORD.retry) {
+      // Nothing committed: the record's insert and result update share one
+      // transaction, and the insert is keyed on the event id, so the
+      // provider's retry of this 500 records it once.
+      return respond(500, "Event record failed");
+    }
     return respond(200, "Event type ignored");
   }
   const event = strict.output;
@@ -167,7 +183,7 @@ export const receiveHostedUsageWebhook = async (
     | { kind: "duplicate" }
     | { kind: "applied" | "ignored"; inner: DispatchOutcome };
   try {
-    outcome = await runWebhookTransaction(async (tx) => {
+    outcome = await runTransaction(async (tx) => {
       const inserted = await insertWebhookEventInTx({
         tx,
         eventId,
@@ -221,17 +237,35 @@ export const receiveHostedUsageWebhook = async (
   return respond(200, "Applied");
 };
 
+const UNKNOWN_EVENT_RECORD = {
+  written: "written",
+  /** Postgres refused the data itself, which a redelivery carries unchanged. */
+  rejected: "rejected",
+  /** Anything else: the provider redelivers and the write runs again. */
+  retry: "retry",
+} as const;
+
+type UnknownEventRecord =
+  (typeof UNKNOWN_EVENT_RECORD)[keyof typeof UNKNOWN_EVENT_RECORD];
+
+const unknownEventRecordRejected = failureSink({
+  event: "usage_provider.webhook.unknown_event_persist",
+  expected: [],
+});
+
 const persistUnknownEventType = async ({
+  runTransaction,
   eventId,
   eventType,
   payload,
 }: {
+  runTransaction: WebhookTransactionRunner;
   eventId: string;
   eventType: string;
   payload: Record<string, unknown>;
-}): Promise<void> => {
+}): Promise<UnknownEventRecord> => {
   try {
-    await runWebhookTransaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const inserted = await insertWebhookEventInTx({
         tx,
         eventId,
@@ -248,14 +282,33 @@ const persistUnknownEventType = async ({
         });
       }
     });
+    return UNKNOWN_EVENT_RECORD.written;
   } catch (error) {
+    if (isPgDataException(error)) {
+      // A redelivery carries the same data, so the rejection is reported
+      // (graded unclassified: logged as an error and captured) and the
+      // event acknowledged.
+      observeFailure(error, {
+        sink: unknownEventRecordRejected,
+        ctx: {
+          source: "usage_provider.webhook",
+          step: "persistUnknownEventType",
+        },
+      });
+      return UNKNOWN_EVENT_RECORD.rejected;
+    }
     captureError(error, {
       source: "usage_provider.webhook.unknown_event_persist",
       eventId,
       eventType,
     });
+    return UNKNOWN_EVENT_RECORD.retry;
   }
 };
+
+/** SQLSTATE class 22: Postgres rejected a value, not the connection or the transaction. */
+const isPgDataException = (error: unknown): boolean =>
+  getPgErrorCode(error)?.startsWith("22") === true;
 
 const dispatchEvent = async (
   tx: Parameters<typeof handleHostedEntitlementUpsert>[0]["tx"],

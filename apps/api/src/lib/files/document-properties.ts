@@ -9,7 +9,7 @@
  * the stored version: the file in the matter keeps its metadata, only the
  * bytes that leave do not.
  */
-import { PDF } from "@libpdf/core";
+import { PDF, SecurityError } from "@libpdf/core";
 import { panic, TaggedError } from "better-result";
 
 import {
@@ -25,11 +25,53 @@ import type {
   DocumentPropertyValue,
 } from "@stll/api-contract";
 
-import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 class DocumentPropertiesParseError extends TaggedError(
   "DocumentPropertiesParseError",
-)<{ message: string }> {}
+)<{ message: string; cause?: unknown }> {}
+
+/** libpdf's error names for a file it could not parse, even after recovery. */
+const PDF_PARSE_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "UnrecoverableParseError",
+  "RecoverableParseError",
+  "XRefParseError",
+  "ObjectParseError",
+  "StructureError",
+]);
+
+/** Whether `error` is how a malformed or hostile file is rejected. */
+const isMalformedDocumentError = (error: unknown): boolean =>
+  DocxArchiveError.is(error) ||
+  DocumentPropertiesParseError.is(error) ||
+  error instanceof SecurityError ||
+  (error instanceof Error && PDF_PARSE_ERROR_NAMES.has(error.name));
+
+const DOCUMENT_PROPERTIES_FAILURE = failureSink({
+  event: "document_properties.failed",
+  expected: [],
+});
+
+/**
+ * The `unreadable` answer for a document that could not be read, written or
+ * scrubbed. A malformed file is an expected outcome; any other failure (a
+ * panic, a fault in this module or a dependency) is also reported, and still
+ * answers `unreadable` so the caller never proceeds with the file.
+ */
+const unreadableDocument = (
+  error: unknown,
+  operation: "read" | "write" | "scrub",
+): { status: "unreadable" } => {
+  if (!isMalformedDocumentError(error)) {
+    observeFailure(error, {
+      sink: DOCUMENT_PROPERTIES_FAILURE,
+      ctx: { operation: `document_properties_${operation}` },
+    });
+  }
+  return { status: "unreadable" };
+};
 
 /** Property XML is a few kilobytes; a hostile archive declaring more is not read. */
 const PROPERTY_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
@@ -63,7 +105,14 @@ const readPropertyEntry = async (
       chunks.push(chunk);
     });
     stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", reject);
+    stream.on("error", (cause) => {
+      reject(
+        new DocumentPropertiesParseError({
+          message: `Property entry ${path} could not be decompressed`,
+          cause,
+        }),
+      );
+    });
   });
   return bytes.toString("utf-8");
 };
@@ -395,8 +444,8 @@ export const extractDocumentProperties = async ({
         format satisfies never;
         return panic(`Unhandled format: ${String(format)}`);
     }
-  } catch {
-    return { status: "unreadable" };
+  } catch (error) {
+    return unreadableDocument(error, "read");
   }
 };
 
@@ -1165,8 +1214,8 @@ export const writeDocumentProperties = async ({
       status: "written",
       bytes: await archive.zip.generateAsync({ type: "uint8array" }),
     };
-  } catch {
-    return { status: "unreadable" };
+  } catch (error) {
+    return unreadableDocument(error, "write");
   }
 };
 
@@ -1192,7 +1241,7 @@ export const scrubDocumentProperties = async ({
         format satisfies never;
         return panic(`Unhandled format: ${String(format)}`);
     }
-  } catch {
-    return { status: "unreadable" };
+  } catch (error) {
+    return unreadableDocument(error, "scrub");
   }
 };

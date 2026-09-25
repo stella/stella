@@ -31,6 +31,7 @@ import type {
   CzRegionalApiItem,
   CzRegionalBuildResult,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
@@ -38,6 +39,10 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -321,6 +326,83 @@ describe("what the publisher states reaches the row", () => {
   });
 });
 
+describe("a document the parser cannot read", () => {
+  // A text run carrying markup nested deeper than the validator's recursive
+  // text walk reaches: the structured parse fails while the publisher's own
+  // plain-text rendering is still there.
+  const NESTING = 20_000;
+  const unreadableText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
+
+  test("keeps the publisher's plain text and reports the parse", async () => {
+    const verdict = [
+      {
+        texts: [{ text: unreadableText, anonStyle: "NONE" }],
+        styleLocalId: 1,
+        tableCellInfo: null,
+      },
+    ];
+    expect(() =>
+      parseRegionalDecision({
+        caseNumber: "18 C 130/2024",
+        ecli: undefined,
+        court: "Okresní soud",
+        decisionDate: undefined,
+        decisionType: "rozsudek",
+        sourceUrl: undefined,
+        header: [],
+        verdict,
+        justification: [],
+        information: [],
+        styles: [],
+        verdictText: "Soud rozhodl",
+        justificationText: "",
+      }),
+    ).toThrow(RangeError);
+
+    const payload: unknown = JSON.parse(await readFixture(DISTRICT_DOCUMENT));
+    const document = readCzRegionalDocument(
+      JSON.stringify({ ...(isRecord(payload) ? payload : {}), verdict }),
+    );
+    expect(document.parsed).not.toBeNull();
+    const verdictText = document.parsed?.verdictText ?? "";
+    expect(verdictText.length).toBeGreaterThan(0);
+
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const built = assembleCzRegionalDecision({
+        item: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        document,
+        chain: null,
+      });
+
+      expect(built.type).toBe("built");
+      expect(built.type === "built" ? built.decision.fulltext : "").toContain(
+        verdictText.trim(),
+      );
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.document_parse_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "cz-regional",
+          documentId: "18 C 130/2024",
+          "error.type": "RangeError",
+        }),
+      ]);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
+  });
+});
+
 describe("records no court decided are refused at the boundary", () => {
   test("the listing row is neither keyed nor built", async () => {
     const item = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
@@ -584,6 +666,262 @@ describe("the crawl keeps a refused row as its listing", () => {
       Object.keys(decodeSourceRawEnvelope(decisions[0]?.sourceRaw ?? "") ?? {}),
     ).toEqual(["listing"]);
   });
+
+  test("holds a row whose document read fails and reports the read", async () => {
+    const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
+    const listing = JSON.stringify({
+      items: [district, appellate],
+      totalPages: 1,
+      pageNumber: 0,
+    });
+    globalThis.fetch = asFetchMock(async (input: string) => {
+      // The district document never answers; the appellate one answers with
+      // a body that is not JSON.
+      if (input === district.odkaz) {
+        throw new TypeError("fetch failed");
+      }
+      return await Promise.resolve(
+        new Response(
+          input === appellate.odkaz ? "<html>maintenance</html>" : listing,
+          { headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    });
+    const logs = installRecordingLogger();
+    try {
+      const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+
+      expect(
+        page.unwrap().decisions.map(({ caseNumber, isListingOnly }) => ({
+          caseNumber,
+          isListingOnly,
+        })),
+      ).toEqual([
+        { caseNumber: "18 C 130/2024", isListingOnly: true },
+        { caseNumber: "26 Co 43/2025", isListingOnly: true },
+      ]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => ({
+            caseNumber: record.attributes?.["documentId"],
+            errorType: record.attributes?.["error.type"],
+            grade: record.attributes?.["failure.grade"],
+          }))
+          .toSorted((left, right) =>
+            String(left.caseNumber) < String(right.caseNumber) ? -1 : 1,
+          ),
+      ).toEqual([
+        {
+          caseNumber: "18 C 130/2024",
+          errorType: "TypeError",
+          grade: "transient",
+        },
+        {
+          caseNumber: "26 Co 43/2025",
+          errorType: "SyntaxError",
+          grade: "transient",
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("a caller's abort during a document read ends the page as a cancellation", async () => {
+    const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listing = JSON.stringify({
+      items: [district],
+      totalPages: 1,
+      pageNumber: 0,
+    });
+    const controller = new AbortController();
+    globalThis.fetch = asFetchMock(async (input: string) => {
+      if (input === district.odkaz) {
+        controller.abort();
+        throw new DOMException("Aborted", "AbortError");
+      }
+      return await Promise.resolve(
+        new Response(listing, {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    });
+
+    const outcome = await czRegionalAdapter
+      .fetchPage("2025-06-11:0", {}, controller.signal)
+      .then(
+        (result) =>
+          result.isErr() && result.error.cause instanceof DOMException
+            ? result.error.cause.name
+            : "completed",
+        () => "rejected",
+      );
+
+    // The page reports the caller's cancellation, as a cancelled listing
+    // request does, and stores no row.
+    expect(outcome).toBe("AbortError");
+  });
+
+  test("a page whose read budget passes mid-batch keeps what it read and advances, page after page", async () => {
+    const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
+    const others = (await listingItems(LISTING)).filter(
+      ({ jednaciCislo }) =>
+        jednaciCislo !== DISTRICT_DOCKET && jednaciCislo !== APPELLATE_DOCKET,
+    );
+    // The two rows whose documents the publisher serves open the page, so
+    // the first batch reads them.
+    const items = [district, appellate, ...others];
+    expect(items.length).toBeGreaterThan(2 * 15);
+    const listing = JSON.stringify({ items, totalPages: 2, pageNumber: 0 });
+    const documents = new Map([
+      [district.odkaz, await readFixture(DISTRICT_DOCUMENT)],
+      [appellate.odkaz, await readFixture(APPELLATE_DOCUMENT)],
+    ]);
+
+    // The pipeline's page signal: started before the page, firing after the
+    // page's own budget would.
+    const pageSignal = AbortSignal.timeout(100_000);
+    // The page's own budget, passed by the test where its timer would pass.
+    let budget = new AbortController();
+    const originalTimeout = AbortSignal.timeout;
+    const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+      (milliseconds) => {
+        if (milliseconds <= 60_000) {
+          return originalTimeout(milliseconds);
+        }
+        budget = new AbortController();
+        return budget.signal;
+      },
+    );
+
+    let listingRequests = 0;
+    let documentRequests = 0;
+    let budgetPassesAt = 0;
+    globalThis.fetch = asFetchMock(async (input: string) => {
+      if (input.includes("/api/finaldoc/")) {
+        documentRequests += 1;
+        if (documentRequests === budgetPassesAt) {
+          const reason = new DOMException("page budget", "TimeoutError");
+          budget.abort(reason);
+          throw reason;
+        }
+        const body = documents.get(input);
+        return await Promise.resolve(
+          body === undefined
+            ? new Response("gone", { status: 404 })
+            : new Response(body, {
+                headers: { "Content-Type": "application/json" },
+              }),
+        );
+      }
+      listingRequests += 1;
+      // The first listing request fails and is retried, spending listing time.
+      return await Promise.resolve(
+        listingRequests === 1
+          ? new Response("unavailable", { status: 503 })
+          : new Response(listing, {
+              headers: { "Content-Type": "application/json" },
+            }),
+      );
+    });
+    try {
+      // The budget passes on the fifth read of the second batch.
+      budgetPassesAt = 15 + 5;
+      const first = (
+        await czRegionalAdapter.fetchPage("2025-06-11:0", {}, pageSignal)
+      ).unwrap();
+      const firstRequests = documentRequests;
+
+      expect(listingRequests).toBe(2);
+      // No batch starts after the one the budget interrupted.
+      expect(firstRequests).toBe(2 * 15);
+      expect(first.nextCursor).toBe("2025-06-11:1");
+      const [readDistrict, readAppellate, ...rest] = first.decisions;
+      expect([
+        readDistrict?.isListingOnly,
+        readAppellate?.isListingOnly,
+      ]).toEqual([undefined, undefined]);
+      expect(rest.length).toBeGreaterThan(2 * 15);
+      expect(rest.every(({ isListingOnly }) => isListingOnly === true)).toBe(
+        true,
+      );
+
+      // The next page's budget passes on its very first read.
+      budgetPassesAt = firstRequests + 1;
+      const second = (
+        await czRegionalAdapter.fetchPage(first.nextCursor, {}, pageSignal)
+      ).unwrap();
+
+      expect(documentRequests - firstRequests).toBeLessThanOrEqual(15);
+      expect(second.nextCursor).toBe("2025-06-12:0");
+      expect(second.decisions).toHaveLength(first.decisions.length);
+      expect(
+        second.decisions
+          .slice(15)
+          .every(({ isListingOnly }) => isListingOnly === true),
+      ).toBe(true);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  }, 60_000);
+
+  test("a page whose read budget passes before its listing arrives holds the cursor", async () => {
+    const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listing = JSON.stringify({
+      items: [district],
+      totalPages: 1,
+      pageNumber: 0,
+    });
+    const pageSignal = AbortSignal.timeout(100_000);
+    let budget = new AbortController();
+    const originalTimeout = AbortSignal.timeout;
+    const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+      (milliseconds) => {
+        if (milliseconds <= 60_000) {
+          return originalTimeout(milliseconds);
+        }
+        budget = new AbortController();
+        return budget.signal;
+      },
+    );
+    let listingRequests = 0;
+    globalThis.fetch = asFetchMock(async (input: string) => {
+      if (input.includes("/api/finaldoc/")) {
+        return await Promise.resolve(new Response("gone", { status: 404 }));
+      }
+      listingRequests += 1;
+      if (listingRequests === 1) {
+        const reason = new DOMException("page budget", "TimeoutError");
+        budget.abort(reason);
+        throw reason;
+      }
+      return await Promise.resolve(
+        new Response(listing, {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    });
+    try {
+      const page = await czRegionalAdapter.fetchPage(
+        "2025-06-11:0",
+        {},
+        pageSignal,
+      );
+
+      // Nothing was listed, so there is nothing to move past.
+      expect(page.isErr()).toBe(true);
+      expect(listingRequests).toBe(1);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  }, 30_000);
 
   test("a day of refused rows is not an empty day to gap-skip past", async () => {
     // Thirty empty days in a row would make an empty day skip a week ahead.

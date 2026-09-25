@@ -1531,6 +1531,7 @@
     "key": "Touche",
     "kind": "Type",
     "language": "Langue",
+    "languageLoadFailed": "Impossible de changer de langue. Réessayez.",
     "languages": {
       "AR": "Arabe",
       "BG": "Bulgare",

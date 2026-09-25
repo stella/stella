@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic, TaggedError } from "better-result";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -359,16 +359,6 @@ export const nullAsAbsent = <TSchema extends ToolObjectInputSchema>(
     ),
     { advertisedSchema },
   );
-};
-
-type LocalToolExecutionOptions = {
-  messages: [];
-  toolCallId: string;
-};
-
-export const MCP_TOOL_EXECUTION_OPTIONS: LocalToolExecutionOptions = {
-  messages: [],
-  toolCallId: "mcp",
 };
 
 export const enumProp = (description: string, values: readonly string[]) =>
@@ -783,39 +773,6 @@ const levenshtein = (a: string, b: string): number => {
   return cell(previous, b.length);
 };
 
-export const hasErrorMessage = (value: unknown): value is { error: string } => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  if (!("error" in value)) {
-    return false;
-  }
-
-  return typeof value.error === "string" && value.error.length > 0;
-};
-
-/**
- * Map errors thrown from chat tool `execute` into MCP tool results. Only the
- * dynamic-gateway `invokeAiTool` path funnels through here today, and no tagged
- * error it can raise carries a not-found semantic, so every tagged error maps
- * conservatively to `internal_error`. Tagged errors are curated, surfaceable
- * messages (not raw internals), so the message is preserved; a not-found branch
- * can be added here if a not-found-tagged error is ever routed through this path.
- */
-export const toolThrownErrorToMcpResult = (
-  err: unknown,
-): InternalToolErrorResult | null => {
-  if (TaggedError.is(err)) {
-    return structuredErrorResult({
-      code: "internal_error",
-      message: err.message,
-      hint: MCP_INTERNAL_ERROR_HINT,
-    });
-  }
-  return null;
-};
-
 /**
  * `validation_error` envelope for a bad argument, hinting at the fix. `path` is
  * the offending property name, surfaced as the single structured issue so this
@@ -1108,34 +1065,6 @@ export const buildLegislationDocumentAppUrl = ({
         }),
       )}`
     : null;
-
-export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
-  args,
-  tool,
-}: {
-  args: TArgs;
-  tool: {
-    execute?: (args: TArgs, options: LocalToolExecutionOptions) => unknown;
-  };
-}): Promise<InternalToolResult> => {
-  if (!tool.execute) {
-    return errorResult("Tool is not executable");
-  }
-
-  try {
-    const result = await tool.execute(args, MCP_TOOL_EXECUTION_OPTIONS);
-    if (hasErrorMessage(result)) {
-      return errorResult(result.error);
-    }
-    return toolDataResult(result);
-  } catch (error) {
-    const mapped = toolThrownErrorToMcpResult(error);
-    if (mapped) {
-      return mapped;
-    }
-    throw error;
-  }
-};
 
 /**
  * Plain text for a search snippet built for the web UI. A snippet is

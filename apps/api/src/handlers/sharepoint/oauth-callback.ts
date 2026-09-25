@@ -18,11 +18,10 @@ import {
   getSharepointOAuthConfig,
   tokenExpiresAt,
 } from "@/api/handlers/sharepoint/graph-oauth";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -80,6 +79,7 @@ export const createSharepointOAuthCallback = (
     config,
     async function* ({
       query: input,
+      request,
       safeDb,
       session,
       user,
@@ -117,17 +117,15 @@ export const createSharepointOAuthCallback = (
         // below (only `finally` would run). Await and branch explicitly instead
         // of `yield*` so every failure — DB or thrown — still redirects rather
         // than leaking a raw error body.
-        const redirectForFailure = (error: unknown) => {
-          if (HandlerError.is(error)) {
-            return redirect({ status: "error", reason: "invalid-secret" });
-          }
-          captureError(error, {
-            operation: "sharepoint_oauth_callback",
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
+        const redirectForFailure = (error: unknown) =>
+          redirect({
+            status: "error",
+            reason: oauthCallbackFailureReason(error, {
+              operation: "sharepoint_oauth_callback",
+              organizationId: session.activeOrganizationId,
+              request,
+            }),
           });
-          return redirect({ status: "error", reason: "unexpected" });
-        };
 
         try {
           const stateRowsResult = await safeDb((tx) =>

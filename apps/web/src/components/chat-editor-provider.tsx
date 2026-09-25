@@ -59,8 +59,10 @@ import {
   buildEntityMentionOption,
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  claimPendingMentionSearch,
   getMentionViewScope,
   insertChatMention,
+  settleLatestMentionSearch,
 } from "@/components/chat-mention-helpers";
 import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
@@ -725,29 +727,26 @@ export const useChatEditor = ({
   const debouncedFetchWorkspaceEntities = useDebouncedCallback(
     async ({
       query,
+      reject,
       resolve,
       workspace,
     }: {
       query: string;
+      reject: (error: unknown) => void;
       resolve: (items: ChatMentionOption[]) => void;
       workspace: ChatWorkspaceMentionOption;
     }) => {
-      try {
-        const items = await fetchWorkspaceEntities(workspace, query);
-        if (pendingWorkspaceEntitySearchRef.current?.resolve !== resolve) {
-          return;
-        }
-
-        pendingWorkspaceEntitySearchRef.current = null;
-        resolve(items);
-      } catch {
-        if (pendingWorkspaceEntitySearchRef.current?.resolve !== resolve) {
-          return;
-        }
-
-        pendingWorkspaceEntitySearchRef.current = null;
-        resolve([]);
-      }
+      // A failed search rejects, so the mention list shows its load-error row.
+      await settleLatestMentionSearch({
+        search: async () => await fetchWorkspaceEntities(workspace, query),
+        claim: () =>
+          claimPendingMentionSearch(pendingWorkspaceEntitySearchRef, resolve),
+        resolve,
+        reject: (error) => {
+          getAnalytics().captureError(error);
+          reject(error);
+        },
+      });
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
@@ -802,10 +801,15 @@ export const useChatEditor = ({
         );
       }
 
-      return await new Promise<ChatMentionOption[]>((resolve) => {
+      return await new Promise<ChatMentionOption[]>((resolve, reject) => {
         pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
         detached(
-          debouncedFetchWorkspaceEntities({ query, resolve, workspace }),
+          debouncedFetchWorkspaceEntities({
+            query,
+            reject,
+            resolve,
+            workspace,
+          }),
           "chat-editor-provider.debounced-fetch-workspace-entities",
         );
       });

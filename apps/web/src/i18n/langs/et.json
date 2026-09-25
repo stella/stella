@@ -1531,6 +1531,7 @@
     "key": "Klahv",
     "kind": "Liik",
     "language": "Keel",
+    "languageLoadFailed": "Keelt ei õnnestunud vahetada. Proovige uuesti.",
     "languages": {
       "AR": "Araabia",
       "BG": "Bulgaaria",

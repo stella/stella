@@ -6,11 +6,10 @@ import { Temporal } from "@stll/time";
 
 import { mcpOAuthState, mcpUserConnections } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import {
   decryptMcpSecret,
@@ -67,7 +66,14 @@ const redirect = (input: CallbackRedirectInput) =>
 
 const mcpOAuthCallback = createSafeRootHandler(
   config,
-  async function* ({ query: input, safeDb, session, user, recordAuditEvent }) {
+  async function* ({
+    query: input,
+    request,
+    safeDb,
+    session,
+    user,
+    recordAuditEvent,
+  }) {
     const run = async (): Promise<Result<Response, never>> => {
       if (!input.code || !input.state) {
         return Result.ok(redirect({ status: "error", reason: "missing-code" }));
@@ -83,17 +89,15 @@ const mcpOAuthCallback = createSafeRootHandler(
       // an Err closes this generator via `.return()`, which skips `catch`
       // below (only `finally` would run). Await and branch explicitly instead
       // of `yield*` so every failure — DB or thrown — still redirects.
-      const redirectForFailure = (error: unknown) => {
-        if (HandlerError.is(error)) {
-          return redirect({ status: "error", reason: "invalid-secret" });
-        }
-        captureError(error, {
-          operation: "mcp_oauth_callback",
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
+      const redirectForFailure = (error: unknown) =>
+        redirect({
+          status: "error",
+          reason: oauthCallbackFailureReason(error, {
+            operation: "mcp_oauth_callback",
+            organizationId: session.activeOrganizationId,
+            request,
+          }),
         });
-        return redirect({ status: "error", reason: "unexpected" });
-      };
 
       try {
         const rowResult = await safeDb((tx) =>

@@ -12,6 +12,7 @@ import {
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const fakeServer = (peer: string | null) => ({
   requestIP: () => (peer === null ? null : { address: peer }),
@@ -52,6 +53,38 @@ describe("parseTrustedProxies", () => {
     expect(isTrustedProxy("192.168.1.1", trusted)).toBe(true);
     expect(isTrustedProxy("0.0.0.0", trusted)).toBe(false);
     expect(isTrustedProxy("8.8.8.8", trusted)).toBe(false);
+  });
+
+  test("logs the entries it rejects in one warning", () => {
+    const logs = installRecordingLogger();
+    try {
+      parseTrustedProxies("not-an-ip, 10.0.0.0/8, 1.2.3.4/40, /24");
+
+      expect(
+        logs.at("WARN").map(({ message, attributes }) => ({
+          message,
+          entries: attributes?.["trustedProxy.rejectedEntries"],
+        })),
+      ).toEqual([
+        {
+          message: "client_ip.trusted_proxy_entries_rejected",
+          entries: "not-an-ip,1.2.3.4/40,/24",
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("logs nothing when every entry is accepted", () => {
+    const logs = installRecordingLogger();
+    try {
+      parseTrustedProxies("10.0.0.0/8, ::1");
+
+      expect(logs.records).toEqual([]);
+    } finally {
+      logs.restore();
+    }
   });
 });
 

@@ -16,17 +16,23 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czUsAdapter,
   parseNalusDetail,
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type ResultRow = {
@@ -198,6 +204,21 @@ const requestMethod = (
   init?: RequestInit,
 ): string => init?.method ?? (input instanceof Request ? input.method : "GET");
 
+/**
+ * Whether the reconciliation walk reads this held row again: its row states
+ * a value the adapter's `recheckHeld` rule names.
+ */
+const readAgainByReconciliation = (
+  decision: IngestionResult | undefined,
+): boolean => {
+  const recheck = requireReconciliation(czUsAdapter).recheckHeld;
+  if (recheck === undefined || decision === undefined) {
+    return false;
+  }
+  const stated = decision.metadata[recheck.metadataKey];
+  return recheck.values.some((value) => value === stated);
+};
+
 const unwrap = <T>(result: Result<T, unknown>): T => {
   expect(Result.isOk(result)).toBe(true);
   if (!Result.isOk(result)) {
@@ -214,6 +235,8 @@ type MockSearchOptions = {
   abstract?: string;
   legalSentence?: string;
   abstractStatus?: number;
+  /** Reject every abstract request with this error. */
+  abstractFailure?: Error;
   detailStatus?: number;
   /** The rapporteur every record card in this run names. */
   rapporteur?: string;
@@ -267,6 +290,7 @@ const installSearchMock = ({
   abstract = "",
   legalSentence = "",
   abstractStatus = 200,
+  abstractFailure,
   detailStatus = 200,
   rapporteur = "Nováková Jana",
   dissenters = [],
@@ -375,6 +399,9 @@ const installSearchMock = ({
         );
       }
       if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
+        if (abstractFailure !== undefined) {
+          return Promise.reject(abstractFailure);
+        }
         return Promise.resolve(
           new Response(makeAbstractPage(abstract, legalSentence), {
             status: abstractStatus,
@@ -996,35 +1023,132 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   test("abstract failure does not drop a listed decision", async () => {
+    const logs = installRecordingLogger();
+    try {
+      installSearchMock({
+        rows: [
+          {
+            id: "4001",
+            sz: "1-1-24_1",
+            caseNumber: "I.ÚS 1/24",
+            date: "1. 1. 2024",
+          },
+        ],
+        abstractStatus: 500,
+      });
+
+      const page = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      );
+      expect(page.decisions).toHaveLength(1);
+      expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
+      expect(page.decisions[0]?.isListingOnly).toBeUndefined();
+      expect(page.decisions[0]?.fulltext).toContain("Lorem ipsum");
+      expect(page.decisions[0]?.sourceRawContentType).toBe(
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
+      expect(
+        decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+      ).toMatchObject({
+        listing: expect.stringContaining("ResultDetail.aspx?id=4001"),
+        document: expect.stringContaining("lblRegistrySign"),
+      });
+      expect(
+        decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+      ).not.toHaveProperty("abstract");
+      // A server error says nothing about the abstract: the row states the
+      // recoverable gap, which the reconciliation reads again.
+      expect(page.decisions[0]?.metadata["abstractState"]).toBe("unavailable");
+      expect(readAgainByReconciliation(page.decisions[0])).toBe(true);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          documentId: "nalus-record:4001",
+          operation: "abstract",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("records an abstract read that fails as unavailable and reports the read", async () => {
+    const logs = installRecordingLogger();
+    try {
+      installSearchMock({
+        rows: [
+          {
+            id: "4002",
+            sz: "1-2-24_1",
+            caseNumber: "I.ÚS 2/24",
+            date: "1. 1. 2024",
+          },
+        ],
+        abstractFailure: new TypeError("fetch failed"),
+      });
+
+      const page = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      );
+      expect(page.decisions[0]).toMatchObject({
+        caseNumber: "I.ÚS 2/24",
+        sourceDocumentId: "nalus-record:4002",
+        metadata: { abstractState: "unavailable" },
+      });
+      expect(readAgainByReconciliation(page.decisions[0])).toBe(true);
+      expect(page.decisions[0]?.isListingOnly).toBeUndefined();
+      expect(page.decisions[0]?.fulltext).toContain("Lorem ipsum");
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          documentId: "nalus-record:4002",
+          operation: "abstract",
+          "error.type": "TypeError",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("records an abstract the court does not hold as absent", async () => {
     installSearchMock({
       rows: [
         {
-          id: "4001",
-          sz: "1-1-24_1",
-          caseNumber: "I.ÚS 1/24",
+          id: "4003",
+          sz: "1-3-24_1",
+          caseNumber: "I.ÚS 3/24",
           date: "1. 1. 2024",
         },
       ],
-      abstractStatus: 500,
+      abstractStatus: 404,
     });
 
     const page = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(page.decisions).toHaveLength(1);
-    expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
-    expect(page.decisions[0]?.sourceRawContentType).toBe(
-      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    expect(page.decisions[0]?.isListingOnly).toBeUndefined();
+    expect(page.decisions[0]?.metadata["abstractState"]).toBe("absent");
+    expect(readAgainByReconciliation(page.decisions[0])).toBe(false);
+    expect(page.decisions[0]?.textFields.abstract).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.PARSE_FAILED).abstract,
     );
-    expect(
-      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
-    ).toMatchObject({
-      listing: expect.stringContaining("ResultDetail.aspx?id=4001"),
-      document: expect.stringContaining("lblRegistrySign"),
-    });
-    expect(
-      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
-    ).not.toHaveProperty("abstract");
   });
 
   test("enriches listed decisions with abstracts and legal sentences", async () => {
@@ -1062,6 +1186,8 @@ describe("czUsAdapter.fetchPage", () => {
       document: expect.stringContaining("lblRegistrySign"),
       abstract: expect.stringContaining(abstract),
     });
+    expect(decision?.metadata["abstractState"]).toBe("read");
+    expect(readAgainByReconciliation(decision)).toBe(false);
   });
 
   test("moves the source hash when publisher text changes", async () => {
@@ -2205,5 +2331,52 @@ describe("czUsAdapter.reparseStoredRaw", () => {
     // its prose, and the row keeps whatever it already stored.
     expect(outcome.result.judges).toBeUndefined();
     expect(outcome.result.caseNumber).toBe("Pl.ÚS 9/26");
+  });
+
+  test("keeps the page text of a document the parser cannot read and reports it", async () => {
+    // A `\u` control past the last Unicode code point is not a character the
+    // RTF reader can print, so the structured parse of this page fails.
+    // Built from its parts so the source holds no escape sequence of its own:
+    // the RTF control word `\u` with 1179648, past U+10FFFF.
+    const backslash = String.fromCodePoint(0x5c);
+    const outOfRange = `${backslash}u1179648`;
+    const unreadable = textPage.replace(
+      "<table",
+      () =>
+        `<input id="docContentHidden" value="{${backslash}rtf1 ${outOfRange} Text}" /><table`,
+    );
+    expect(unreadable).not.toBe(textPage);
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const outcome = await czUsAdapter.reparseStoredRaw?.(
+        storedInput(unreadable, "text/html"),
+      );
+
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(outcome.result.fulltext).toContain("Lorem ipsum dolor sit amet.");
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.document_parse_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "cz-us",
+          documentId: "nalus-record:8001",
+          "error.type": "RangeError",
+        }),
+      ]);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
   });
 });

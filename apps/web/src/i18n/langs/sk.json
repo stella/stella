@@ -1531,6 +1531,7 @@
     "key": "Kláves",
     "kind": "Druh",
     "language": "Jazyk",
+    "languageLoadFailed": "Jazyk sa nepodarilo prepnúť. Skúste to znova.",
     "languages": {
       "AR": "arabčina",
       "BG": "bulharčina",

@@ -279,11 +279,14 @@ describe("the crawl and the reconciliation hand reasons over as supplements", ()
     }
   });
 
-  test("a listed reasons row whose detail is unavailable is not written", async () => {
+  test("a listed reasons row whose detail SAOS does not hold is built from its listing", async () => {
     serve([]);
     const built = await requireReconciliation(plCourtsAdapter).buildDecision(
       await rowById(REASONS_ID),
     );
-    expect(built.type).toBe("detail-unavailable");
+    expect(built).toMatchObject({
+      type: "built-supplement",
+      supplement: { document: { metadata: { detailReadState: "absent" } } },
+    });
   });
 });

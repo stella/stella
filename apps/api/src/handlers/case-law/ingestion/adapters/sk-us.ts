@@ -33,6 +33,7 @@ import { Result, panic } from "better-result";
  * at the bottom of this file.
  */
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import {
@@ -92,7 +93,9 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
@@ -318,6 +321,12 @@ const PDF_SIGNATURE = "%PDF-";
 
 const PDF_SIGNATURE_BYTES = new TextEncoder().encode(PDF_SIGNATURE);
 
+/** A decision PDF download that failed. */
+const pdfReadFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
+
 const isPdf = (bytes: Uint8Array): boolean =>
   bytes.length >= PDF_SIGNATURE_BYTES.length &&
   PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
@@ -349,7 +358,27 @@ const fetchPdfBytes = async (
     }
     const bytes = new Uint8Array(await response.arrayBuffer());
     return isPdf(bytes) ? bytes : undefined;
-  } catch {
+  } catch (error) {
+    // The caller's cancellation ends the build.
+    if (signal?.aborted) {
+      throw error;
+    }
+    // The row is held listing-only, which the reconciliation asks about
+    // again. The failed download is reported, graded as the upstream being
+    // unavailable, so an unreachable portal is told apart from documents it
+    // does not serve.
+    observeFailure(
+      classifyFailure(
+        typeof error === "object" && error !== null
+          ? error
+          : new Error("PDF download failed", { cause: error }),
+        "upstream_unavailable",
+      ),
+      {
+        sink: pdfReadFailed,
+        ctx: { adapterKey: ADAPTER_KEYS.SK_US, documentId },
+      },
+    );
     return undefined;
   }
 };
