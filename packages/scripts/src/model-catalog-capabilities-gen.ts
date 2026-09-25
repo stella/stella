@@ -55,6 +55,7 @@ import type {
   OpenRouterReasoningDefaults,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
+import { formatInteger } from "./model-catalog-rates-gen";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
@@ -289,7 +290,7 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
     (row) => `  "${row.modelId}": "${row.temperaturePolicy}",`,
   );
   const outputTokenLines = rows.map(
-    (row) => `  "${row.modelId}": ${String(row.outputTokens)},`,
+    (row) => `  "${row.modelId}": ${formatInteger(row.outputTokens)},`,
   );
   const defaultEffortLines = rows.map(
     (row) =>
