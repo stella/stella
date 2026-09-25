@@ -1,6 +1,8 @@
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -26,8 +28,9 @@ import type {
   FacetBucket,
   RemoveEntityOptions,
   SearchHit,
-  SearchProvider,
+  SearchMaintenance,
   SearchQuery,
+  SearchReader,
   SearchResult,
 } from "@/api/lib/search/types";
 
@@ -43,7 +46,7 @@ const currentVersionProjectionFilter = sql`
 `;
 
 type RawRow = Record<string, unknown>;
-type SearchDatabase = Pick<typeof rootDb, "execute">;
+type SearchDatabase = Pick<Transaction, "execute">;
 
 export const mapHitRow = (row: RawRow): SearchHit => ({
   entityId: String(row["entity_id"]),
@@ -63,7 +66,7 @@ export const mapHitRow = (row: RawRow): SearchHit => ({
 
 const search = async (
   query: SearchQuery,
-  database: SearchDatabase = rootDb,
+  database: SearchDatabase,
 ): Promise<SearchResult> => {
   assertAuthorizedSearchScope(query);
 
@@ -228,7 +231,7 @@ const CONTENT_HEADLINE_CONFIG =
 
 const searchContent = async (
   query: ContentSearchQuery,
-  database: SearchDatabase = rootDb,
+  database: SearchDatabase,
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
@@ -342,18 +345,20 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
   }
 };
 
-export const pgFtsProvider: SearchProvider = {
-  search,
-  searchContent,
+/**
+ * Reads run in one transaction per call on the caller's scoped handle. The
+ * reader carries no index maintenance, so an injected handle never travels
+ * with owner-level writes.
+ */
+export const createPgFtsSearchReader = (scopedDb: ScopedDb): SearchReader => ({
+  search: async (query) =>
+    await scopedDb(async (tx) => await search(query, tx)),
+  searchContent: async (query) =>
+    await scopedDb(async (tx) => await searchContent(query, tx)),
+});
+
+export const pgFtsSearchMaintenance: SearchMaintenance = {
   indexEntity,
   removeEntity,
   rebuildIndex,
 };
-
-export const createPgFtsProvider = (
-  database: SearchDatabase,
-): SearchProvider => ({
-  ...pgFtsProvider,
-  search: async (query) => await search(query, database),
-  searchContent: async (query) => await searchContent(query, database),
-});

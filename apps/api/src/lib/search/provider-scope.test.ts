@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { createPgFtsProvider } from "@/api/lib/search/pg-fts-provider";
+import { createPgFtsSearchReader } from "@/api/lib/search/pg-fts-provider";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
   rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const pgFtsProvider = createPgFtsProvider(rootDbTestDouble);
+const pgFtsProvider = createPgFtsSearchReader(
+  createScopedDbMock(rootDbTestDouble).scopedDb,
+);
 
 const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("ws_1");
@@ -30,11 +33,10 @@ describe("search provider workspace scoping", () => {
     clearRootDbMocks();
   });
 
-  // Class guard: `pgFtsProvider.search` runs on the RLS-bypassing root pool, so
-  // tenant isolation depends entirely on every statement carrying the org +
-  // workspace predicate by hand. This test fails if any current or future
-  // query over `search_documents` drops either, catching a cross-tenant leak
-  // at CI time instead of in production.
+  // Class guard: every statement carries the org + workspace predicate by
+  // hand as well as running under the request's policies, so the plan narrows
+  // on the caller's scope. This test fails if any current or future query
+  // over `search_documents` drops either.
   test("every FTS read query carries the org and workspace-scope predicate (single workspace)", async () => {
     await pgFtsProvider.search({
       query: "closing memo",

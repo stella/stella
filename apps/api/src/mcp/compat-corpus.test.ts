@@ -131,7 +131,7 @@ const createContext = ({
     scopedDb,
     testDependencies: {
       anonymizeTextFields: asTestRaw(anonymizeTextFieldsMock),
-      getSearchProvider: asTestRaw(searchProvider),
+      getSearchReader: asTestRaw(searchProvider),
       loadAnonymizationAllowlistCanonicalsByWorkspace: asTestRaw(
         emptyCatalogsByWorkspace,
       ),

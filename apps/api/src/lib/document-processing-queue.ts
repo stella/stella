@@ -120,7 +120,7 @@ import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -1014,7 +1014,7 @@ export const processDocumentProcessingRun = async (
           }
           await indexDocumentProjectionAtJobBoundary({
             indexEntity: async () =>
-              await getSearchProvider().indexEntity(run.entityId),
+              await getSearchMaintenance().indexEntity(run.entityId),
           });
           lifecycleSignal.throwIfAborted();
           await completeDocumentProcessingRun({ claimToken, database, run });
@@ -1102,7 +1102,7 @@ export const processDocumentProcessingRun = async (
 
       await indexDocumentProjectionAtJobBoundary({
         indexEntity: async () =>
-          await getSearchProvider().indexEntity(run.entityId),
+          await getSearchMaintenance().indexEntity(run.entityId),
       });
       lifecycleSignal.throwIfAborted();
 
@@ -2671,7 +2671,7 @@ const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
-    await getSearchProvider().indexEntity(entityId),
+    await getSearchMaintenance().indexEntity(entityId),
   readRepairScanCursor: async () => await readRepairScanCursor(),
   readyRepairCursor: async () => await reconciliationRedis.ready(),
   writeRepairScanCursor: async (input: {

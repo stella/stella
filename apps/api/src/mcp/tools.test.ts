@@ -46,7 +46,6 @@ import { createFileKey } from "@/api/lib/file-key";
 import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -855,9 +854,9 @@ const createContext = ({
   testDependencies: {
     ...testDependencies,
     anonymizeTextFields: anonymizeTextFieldsMock,
-    getSearchProvider: () => ({
-      ...pgFtsProvider,
+    getSearchReader: () => ({
       search: searchProviderSearchMock,
+      searchContent: mock(async () => ({ hits: [], totalCount: 0 })),
     }),
     loadAnonymizationAllowlistCanonicalsByWorkspace:
       loadAllowlistByWorkspaceMock,

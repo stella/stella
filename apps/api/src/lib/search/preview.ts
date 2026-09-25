@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -538,13 +538,15 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
   "useUnaccent" in value &&
   typeof value.useUnaccent === "boolean";
 
+/** Preview of one search hit, read on the request's scoped handle. */
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
-  database: Pick<typeof rootDb, "execute"> = rootDb,
+  scopedDb: ScopedDb,
 ): Promise<SearchPreview | null> => {
   if (input.type === "chat") {
-    const rows = await database.execute<SearchPreviewChatRow>(
-      buildSearchPreviewQuery(input),
+    const rows = await scopedDb(
+      async (tx) =>
+        await tx.execute<SearchPreviewChatRow>(buildSearchPreviewQuery(input)),
     );
     const row = rows.at(0);
     if (!row || !Array.isArray(row.messages)) {
@@ -634,7 +636,9 @@ export const readSearchPreview = async (
     };
   }
 
-  const rows = await database.execute(buildSearchPreviewQuery(input));
+  const rows = await scopedDb(
+    async (tx) => await tx.execute(buildSearchPreviewQuery(input)),
+  );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
     return null;

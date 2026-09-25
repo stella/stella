@@ -83,18 +83,21 @@ export const searchFacetsHandler = async ({
   const fallbackTypes = arrayOrEmpty(body.kinds);
   const types = body.types.length > 0 ? body.types : fallbackTypes;
 
-  return await searchGlobalFacet({
-    facet: body.facet,
-    search: body.search,
-    query: body.query,
-    organizationId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds: resolved.ids,
-    types,
-    editedByUserIds: body.editedByUserIds,
-    mimeTypes: body.mimeTypes,
-    updatedFrom: body.updatedFrom,
-    updatedTo: body.updatedTo,
-    limit: body.limit ?? FACET_BUCKET_LIMIT_DEFAULT,
-  });
+  return await searchGlobalFacet(
+    {
+      facet: body.facet,
+      search: body.search,
+      query: body.query,
+      organizationId,
+      accessibleWorkspaceIds,
+      selectedWorkspaceIds: resolved.ids,
+      types,
+      editedByUserIds: body.editedByUserIds,
+      mimeTypes: body.mimeTypes,
+      updatedFrom: body.updatedFrom,
+      updatedTo: body.updatedTo,
+      limit: body.limit ?? FACET_BUCKET_LIMIT_DEFAULT,
+    },
+    scopedDb,
+  );
 };
