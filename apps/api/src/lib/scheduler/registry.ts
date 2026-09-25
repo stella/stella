@@ -68,6 +68,10 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+  reconcileListVerificationRuns,
+} from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
+import {
   MEMORY_CURATOR_TASK,
   curateAiMemories,
 } from "@/api/lib/scheduler/tasks/memory-curator";
@@ -145,6 +149,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
+  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,

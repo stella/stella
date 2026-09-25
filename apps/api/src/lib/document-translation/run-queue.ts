@@ -5,7 +5,6 @@ import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   documentTranslationRuns,
   documentTranslationUnits,
@@ -109,11 +108,11 @@ import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval"
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedDocumentTranslationRunId,
   brandPersistedUserId,
-  brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -205,35 +204,10 @@ const enqueueDocumentTranslationRuns = async (
   return handedOff;
 };
 
-type RunActor = {
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
-  runId: SafeId<"documentTranslationRun">;
-};
+type RunActor = RootRunActor<"documentTranslationRun">;
 
-const brandActor = (data: DocumentTranslationRunJobData): RunActor => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
-  const userId = brandPersistedUserId(data.userId);
-  const tenant = {
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  };
-  return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
-    userId,
-    runId: brandPersistedDocumentTranslationRunId(data.runId),
-    scopedDb: createRootScopedDb(tenant),
-    safeDb: createRootSafeDb(tenant),
-  };
-};
+const brandActor = (data: DocumentTranslationRunJobData): RunActor =>
+  createRootRunActor(data, brandPersistedDocumentTranslationRunId);
 
 type ClaimedRun = {
   entityId: SafeId<"entity">;

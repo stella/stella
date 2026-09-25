@@ -26829,6 +26829,229 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "items-fact-details-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "items-fact-details-update",
+                ],
+                capabilityId: "lists.items.fact-details.update",
+                description:
+                  "Set the evidential detail of one fact item, replacing what it had: when it happened (a date with day, month or year precision; a partial date is stored as its first day), what kind of evidence and medium carry it, how unambiguous its meaning is (confidence), a note where that meaning is contested, and whether verifications may rely on it (`held` keeps it out until confirmed). Only `fact` items carry detail.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--evidence-kind",
+                    prop: "evidenceKind",
+                    required: true,
+                    part: "body",
+                    partPath: "evidenceKind",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--medium",
+                    prop: "medium",
+                    required: true,
+                    part: "body",
+                    partPath: "medium",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--interpretation-note",
+                    prop: "interpretationNote",
+                    required: true,
+                    part: "body",
+                    partPath: "interpretationNote",
+                  },
+                ],
+                inputOnly: [
+                  "body.occurredOn",
+                  "body.confidence",
+                  "body.scoring",
+                ],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: [
+                        "listId",
+                        "itemEntityId",
+                        "occurredOn",
+                        "evidenceKind",
+                        "medium",
+                        "confidence",
+                        "interpretationNote",
+                        "scoring",
+                      ],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        occurredOn: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              type: "object",
+                              required: ["date", "precision"],
+                              properties: {
+                                date: {
+                                  format: "date",
+                                  type: "string",
+                                },
+                                precision: {
+                                  anyOf: [
+                                    {
+                                      const: "day",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "year",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        evidenceKind: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        medium: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        confidence: {
+                          anyOf: [
+                            {
+                              const: "high",
+                              type: "string",
+                            },
+                            {
+                              const: "medium",
+                              type: "string",
+                            },
+                            {
+                              const: "low",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        interpretationNote: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 4000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        scoring: {
+                          anyOf: [
+                            {
+                              const: "included",
+                              type: "string",
+                            },
+                            {
+                              const: "held",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             "items-list": {
               kind: "capability-leaf",
               spec: {
@@ -27811,6 +28034,500 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-claim-reviews-bulk-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "verifications-claim-reviews-bulk-create",
+                ],
+                capabilityId: "lists.verifications.claim-reviews.bulk.create",
+                description:
+                  "Mark the routine claims among `claimIds` reviewed in one action. A claim is routine when its verdict is not a conflict and no fact it rests on has a contested meaning; those need an individual decision and are refused. Claims that already have a status are left as they are. Returns the review of every claim that was marked.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--claim-ids",
+                    prop: "claimIds",
+                    required: true,
+                    part: "body",
+                    partPath: "claimIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["runId", "claimIds"],
+                      properties: {
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        claimIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-claim-reviews-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "verifications-claim-reviews-create",
+                ],
+                capabilityId: "lists.verifications.claim-reviews.create",
+                description:
+                  "Record one reviewer action on a claim of a list verification and return the claim's review after it. `status` marks the claim reviewed or disputed (null clears it); `override` annotates the verdict with the reviewer's own state, beside the tool's, never replacing it; `note` sets the review note; `reopen` reclassifies a set-aside claim as checkable; `record-conflict` resolves a claim withheld between two records by naming the governing fact or escalating it. Reopening and resolving a conflict withdraw an earlier status and override.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--claim-id",
+                    prop: "claimId",
+                    required: true,
+                    part: "body",
+                    partPath: "claimId",
+                  },
+                ],
+                inputOnly: ["body.event"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["runId", "claimId", "event"],
+                      properties: {
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        claimId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        event: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["kind", "status"],
+                              properties: {
+                                kind: {
+                                  const: "status",
+                                  type: "string",
+                                },
+                                status: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      anyOf: [
+                                        {
+                                          const: "reviewed",
+                                          type: "string",
+                                        },
+                                        {
+                                          const: "disputed",
+                                          type: "string",
+                                        },
+                                      ],
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["kind", "state"],
+                              properties: {
+                                kind: {
+                                  const: "override",
+                                  type: "string",
+                                },
+                                state: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      anyOf: [
+                                        {
+                                          const: "supported",
+                                          type: "string",
+                                        },
+                                        {
+                                          const: "tension",
+                                          type: "string",
+                                        },
+                                        {
+                                          const: "contradicted",
+                                          type: "string",
+                                        },
+                                        {
+                                          const: "nocover",
+                                          type: "string",
+                                        },
+                                        {
+                                          const: "notverifiable",
+                                          type: "string",
+                                        },
+                                      ],
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["kind", "note"],
+                              properties: {
+                                kind: {
+                                  const: "note",
+                                  type: "string",
+                                },
+                                note: {
+                                  maxLength: 10000,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["kind"],
+                              properties: {
+                                kind: {
+                                  const: "reopen",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["kind", "resolution"],
+                              properties: {
+                                kind: {
+                                  const: "record-conflict",
+                                  type: "string",
+                                },
+                                resolution: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      anyOf: [
+                                        {
+                                          additionalProperties: false,
+                                          type: "object",
+                                          required: ["kind", "factEntityId"],
+                                          properties: {
+                                            kind: {
+                                              const: "governed",
+                                              type: "string",
+                                            },
+                                            factEntityId: {
+                                              minLength: 36,
+                                              maxLength: 36,
+                                              pattern:
+                                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                              type: "string",
+                                            },
+                                          },
+                                        },
+                                        {
+                                          additionalProperties: false,
+                                          type: "object",
+                                          required: ["kind"],
+                                          properties: {
+                                            kind: {
+                                              const: "escalated",
+                                              type: "string",
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "verifications-create"],
+                capabilityId: "lists.verifications.create",
+                description:
+                  "Start checking one document (DOCX, PDF, or a file with a PDF rendition) against the facts of one list. Every claim the document makes is found and, when factual, graded against the list's facts (held facts are left out). Returns a run id; read the result with lists.verifications.get. A document holds one unfinished verification at a time.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-field-id",
+                    prop: "fileFieldId",
+                    required: true,
+                    part: "body",
+                    partPath: "fileFieldId",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--confirmed-units",
+                    prop: "confirmedUnits",
+                    required: false,
+                    part: "body",
+                    partPath: "confirmedUnits",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "entityId", "fileFieldId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fileFieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        confirmedUnits: {
+                          minimum: 0,
+                          type: "integer",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "verifications-get"],
+                capabilityId: "lists.verifications.get",
+                description:
+                  "Read one list verification: the document version it checked, the list facts it checked against as they stood then, and every claim found in the document with its verdict (state, and a 0-100 support score for supported, tension and contradicted), the facts it rests on, and the claim's current review (null while nobody has acted on it).",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "params",
+                    partPath: "runId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "runId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
                     },
                   },
                 },

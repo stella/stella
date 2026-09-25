@@ -283,7 +283,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 256,
+    "count": 261,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -397,6 +397,7 @@
       "apps/api/src/lib/legal-search/corpus-tombstones.ts": 1,
       "apps/api/src/lib/legal-search/reconciliation-store.ts": 6,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 4,
+      "apps/api/src/lib/lists/verification/run-queue.ts": 5,
       "apps/api/src/lib/mcp-upstream/connections.ts": 3,
       "apps/api/src/lib/organization-storage-teardown.ts": 4,
       "apps/api/src/lib/pending-upload-keys.ts": 1,
@@ -1680,7 +1681,7 @@
     }
   },
   "ai-analytics-callback-seams": {
-    "count": 44,
+    "count": 47,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/analysis/significance-run.ts": 1,
@@ -1714,6 +1715,9 @@
       "apps/api/src/lib/document-review/reference-grade.ts": 1,
       "apps/api/src/lib/docx/ai-field-generator.ts": 3,
       "apps/api/src/lib/entity-versions/version-change-summary.ts": 1,
+      "apps/api/src/lib/lists/verification/claim-extract.ts": 1,
+      "apps/api/src/lib/lists/verification/claim-grade.ts": 1,
+      "apps/api/src/lib/lists/verification/model-call.ts": 1,
       "apps/api/src/lib/properties/column-prompt-suggestion.ts": 1,
       "apps/api/src/lib/scheduler/tasks/memory-extractor.ts": 1,
       "apps/api/src/lib/templates/suggest-template-fields.ts": 1,

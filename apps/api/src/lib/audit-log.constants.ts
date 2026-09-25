@@ -54,6 +54,7 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST: "legal_list",
   LEGAL_LIST_GENERATION: "legal_list_generation",
   LEGAL_LIST_ITEM: "legal_list_item",
+  LEGAL_LIST_VERIFICATION: "legal_list_verification",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
   PLAYBOOK: "playbook",

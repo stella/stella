@@ -14,6 +14,7 @@ import readGenerations from "@/api/handlers/lists/generations/list";
 import readListById from "@/api/handlers/lists/get";
 import readItemActivity from "@/api/handlers/lists/items/activity/list";
 import createItemComment from "@/api/handlers/lists/items/comments/create";
+import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import readListItems from "@/api/handlers/lists/items/list";
 import reviewItem from "@/api/handlers/lists/items/reviews/update";
 import createItemSource from "@/api/handlers/lists/items/sources/create";
@@ -23,6 +24,10 @@ import updateItem from "@/api/handlers/lists/items/update";
 import readLists from "@/api/handlers/lists/list";
 import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
+import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
+import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
+import createVerification from "@/api/handlers/lists/verifications/create";
+import readVerification from "@/api/handlers/lists/verifications/get";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
@@ -108,6 +113,27 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
     body: updateItem.config.body,
     resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateItem.config.permissions,
+  })
+  .put("/item-fact-details", updateFactDetails.handler, {
+    body: updateFactDetails.config.body,
+    resourceSetUpdated: legalListRealtimeUpdates,
+    permissions: updateFactDetails.config.permissions,
+  })
+  .post("/claim-reviews", createClaimReview.handler, {
+    body: createClaimReview.config.body,
+    permissions: createClaimReview.config.permissions,
+  })
+  .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
+    body: createBulkClaimReviews.config.body,
+    permissions: createBulkClaimReviews.config.permissions,
+  })
+  .post("/verifications", createVerification.handler, {
+    body: createVerification.config.body,
+    permissions: createVerification.config.permissions,
+  })
+  .get("/verifications/:runId", readVerification.handler, {
+    params: readVerification.config.params,
+    permissions: readVerification.config.permissions,
   })
   .get(
     "/:listId/generations/:runId/candidates",

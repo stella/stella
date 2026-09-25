@@ -3,6 +3,12 @@ import { panic } from "better-result";
 import { timestamptz } from "@/api/db/columns";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 
+import {
+  FACT_CONFIDENCES,
+  FACT_DATE_PRECISIONS,
+  FACT_DETAIL_LIMITS,
+  FACT_SCORING,
+} from "../../lib/lists/fact-details";
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
   LIST_ITEM_TYPES,
@@ -107,6 +113,18 @@ const LEGAL_LIST_REVIEW_DECISION_SQL_VALUES = LEGAL_LIST_REVIEW_DECISIONS.map(
 
 const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
   sql.raw(`'${itemType}'`),
+);
+
+const FACT_CONFIDENCE_SQL_VALUES = FACT_CONFIDENCES.map((confidence) =>
+  sql.raw(`'${confidence}'`),
+);
+
+const FACT_SCORING_SQL_VALUES = FACT_SCORING.map((scoring) =>
+  sql.raw(`'${scoring}'`),
+);
+
+const FACT_DATE_PRECISION_SQL_VALUES = FACT_DATE_PRECISIONS.map((precision) =>
+  sql.raw(`'${precision}'`),
 );
 
 const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((status) =>
@@ -277,6 +295,81 @@ export const legalListItems = p.pgTable(
     p.check(
       "legal_list_items_review_status_check",
       sql`${table.reviewStatus} in (${sql.join(LEGAL_LIST_ITEM_REVIEW_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    ...wsPolicies(),
+  ],
+);
+
+/**
+ * Evidential detail of a fact item, one row per fact. The fact's wording is
+ * the item entity's name and its provenance is `legal_list_item_sources`;
+ * this row says when it happened, what carries it, and how far its meaning
+ * can be relied on. Only `fact` items carry one (checked by the handler: the
+ * item type lives on `entities`).
+ */
+export const legalListFactDetails = p.pgTable(
+  "legal_list_fact_details",
+  {
+    itemEntityId: safeUuid<"entity">("item_entity_id").primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    listId: safeUuid<"legalList">("list_id").notNull(),
+    occurredOn: p.date("occurred_on", { mode: "string" }),
+    occurredOnPrecision: p.text("occurred_on_precision", {
+      enum: FACT_DATE_PRECISIONS,
+    }),
+    evidenceKind: p.varchar("evidence_kind", {
+      length: FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX,
+    }),
+    medium: p.varchar({ length: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
+    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }).notNull(),
+    // Set only where the meaning is genuinely contested; its presence is what
+    // makes a claim citing this fact need a human.
+    interpretationNote: p.varchar("interpretation_note", {
+      length: FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX,
+    }),
+    scoring: p
+      .text("scoring", { enum: FACT_SCORING })
+      .notNull()
+      .default("included"),
+    updatedBy: p.text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        name: "legal_list_fact_details_item_fk",
+        columns: [table.itemEntityId, table.listId, table.workspaceId],
+        foreignColumns: [
+          legalListItems.entityId,
+          legalListItems.listId,
+          legalListItems.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legal_list_fact_details_list_idx")
+      .on(table.workspaceId, table.listId, table.itemEntityId),
+    p.check(
+      "legal_list_fact_details_confidence_check",
+      sql`${table.confidence} in (${sql.join(FACT_CONFIDENCE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_fact_details_scoring_check",
+      sql`${table.scoring} in (${sql.join(FACT_SCORING_SQL_VALUES, sql`, `)})`,
+    ),
+    // A partial date is stored as its first day, so July 2021 has exactly
+    // one spelling and two facts about the same month compare equal.
+    p.check(
+      "legal_list_fact_details_occurred_on_canonical_check",
+      sql`${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} = 'day' or (extract(day from ${table.occurredOn}) = 1 and (${table.occurredOnPrecision} = 'month' or extract(month from ${table.occurredOn}) = 1))`,
+    ),
+    // A date and its precision are one value stated in two columns.
+    p.check(
+      "legal_list_fact_details_occurred_on_check",
+      sql`(${table.occurredOn} is null) = (${table.occurredOnPrecision} is null) and (${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} in (${sql.join(FACT_DATE_PRECISION_SQL_VALUES, sql`, `)}))`,
     ),
     ...wsPolicies(),
   ],
