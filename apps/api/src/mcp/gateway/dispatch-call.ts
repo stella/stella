@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -189,8 +190,10 @@ export const dispatchGatewayToolCall = async ({
           path: read.path,
         } satisfies SkillToolOutput),
       };
-    default:
-      return read satisfies never;
+    default: {
+      read satisfies never;
+      return panic("skill tool read returned an unknown type");
+    }
   }
 };
 

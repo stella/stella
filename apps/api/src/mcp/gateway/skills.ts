@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
@@ -95,7 +95,9 @@ export type SkillToolRead =
  * Reads what one skill call asks for: the instructions and resource list of
  * the skill it resolved to, or one of its resource files. `null` means the
  * skill stopped being available between resolution and this read (deleted or
- * disabled).
+ * disabled). The read re-resolves by slug, so a row other than the resolved
+ * one (a team skill behind a private one disabled since) also counts as gone:
+ * the caller audits the resolved row, and what it serves must come from it.
  */
 export const readSkillTool = async ({
   context,
@@ -115,7 +117,7 @@ export const readSkillTool = async ({
 
   if (resourcePath === undefined) {
     const loaded = throwOnLoadFault(await loadAvailableChatSkill(scope));
-    return loaded === null
+    return loaded === null || loaded.id !== skill.id
       ? null
       : { type: SKILL_TOOL_READ_TYPE.skill, skill: loaded };
   }
@@ -127,21 +129,27 @@ export const readSkillTool = async ({
     case SKILL_RESOURCE_READ_STATUS.skillNotFound:
       return null;
     case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
-      return {
-        type: SKILL_TOOL_READ_TYPE.resourceNotFound,
-        path: resourcePath,
-        skill,
-      };
+      return read.skillId === skill.id
+        ? {
+            type: SKILL_TOOL_READ_TYPE.resourceNotFound,
+            path: resourcePath,
+            skill,
+          }
+        : null;
     case SKILL_RESOURCE_READ_STATUS.found:
-      return {
-        type: SKILL_TOOL_READ_TYPE.resource,
-        content: read.content,
-        kind: read.kind,
-        path: resourcePath,
-        skill,
-      };
-    default:
-      return read satisfies never;
+      return read.skillId === skill.id
+        ? {
+            type: SKILL_TOOL_READ_TYPE.resource,
+            content: read.content,
+            kind: read.kind,
+            path: resourcePath,
+            skill,
+          }
+        : null;
+    default: {
+      read satisfies never;
+      return panic("skill resource read returned an unknown status");
+    }
   }
 };
 

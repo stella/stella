@@ -10,7 +10,11 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
-import { loadVisibleSkillTools } from "@/api/mcp/gateway/skills";
+import {
+  loadVisibleSkillTools,
+  readSkillTool,
+  resolveSkillTool,
+} from "@/api/mcp/gateway/skills";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -243,5 +247,66 @@ describe("MCP skill tools against the database", () => {
       ]),
     );
     expect(rows).toHaveLength(2);
+  });
+
+  test("a read never serves another row behind the resolved skill's slug", async () => {
+    const slug = `shadowed-${Bun.randomUUIDv7()}`;
+    const privateSkillId = await insertSkill({
+      body: "Private instructions.",
+      slug,
+      userId: ids.userA1,
+    });
+    const teamSkillId = testId<"agentSkill">();
+    await testDb.insert(agentSkills).values({
+      id: teamSkillId,
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+      scope: "team",
+      origin: "authored",
+      slug,
+      name: slug,
+      description: `Instructions for ${slug}`,
+      metadata: {},
+      contentHash: "0".repeat(64),
+      body: "Team instructions.",
+      enabled: true,
+    });
+    await testDb.insert(agentSkillResources).values({
+      id: testId(),
+      organizationId: ids.orgA,
+      skillId: teamSkillId,
+      path: "knowledge/team.md",
+      kind: "knowledge",
+      content: "team only",
+      sizeBytes: 9,
+    });
+    const { context } = createRecordingContext(ids.userA1);
+    const resolved = await resolveSkillTool({
+      context,
+      toolName: `skill__${slug}`,
+    });
+    if (resolved?.id !== privateSkillId) {
+      throw new TypeError("expected the private skill to shadow the team one");
+    }
+
+    await testDb
+      .update(agentSkills)
+      .set({ enabled: false })
+      .where(eq(agentSkills.id, privateSkillId));
+
+    expect(
+      await readSkillTool({
+        context,
+        resourcePath: undefined,
+        skill: resolved,
+      }),
+    ).toBeNull();
+    expect(
+      await readSkillTool({
+        context,
+        resourcePath: "knowledge/team.md",
+        skill: resolved,
+      }),
+    ).toBeNull();
   });
 });
