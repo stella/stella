@@ -1,11 +1,5 @@
 # @stll/business-registries
 
-## 0.8.4
-
-### Patch Changes
-
-- [#3733](https://github.com/stella/stella/pull/3733) [`baf3942`](https://github.com/stella/stella/commit/baf3942ca885c16b7b9542f3cc2fb8b1e8a15f84) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invalid input now raises a tagged error (`ChatAnonInputLimitError` in anonymize-chat) or a `Panic` (resource calendar) instead of a native `RangeError` or `TypeError`.
-
 ## 0.8.3
 
 ### Patch Changes
