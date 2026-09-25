@@ -216,7 +216,14 @@ const removeExtendedCase = (chars: string[], length: number): number | null => {
   // more character: `rozhodnutím` -> `rozhodnu`, a letter short of
   // `rozhodnutí`. Passing the `í`, as `-om` passes its `o`, strips the
   // ending alone.
-  if (length > 4 && endsWith(chars, length, "ím")) {
+  // `-es` and `-ém` take the same route: upstream strips three characters
+  // there too, leaving a two-character stem of a five-character word.
+  if (
+    length > 4 &&
+    (endsWith(chars, length, "ím") ||
+      endsWith(chars, length, "es") ||
+      endsWith(chars, length, "ém"))
+  ) {
     return palatalize(chars, length - 1);
   }
   return null;
