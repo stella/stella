@@ -92,7 +92,7 @@ export const reportEmitFailure = (stage: EmitStage, error: unknown): void => {
       "observability.stage": stage,
       "error.type": errorTag(error),
     });
-  });
+  }).unwrapOr(undefined);
   reportingEmitFailure = false;
 };
 
