@@ -213,7 +213,25 @@ const docketOf = (line: string): string | undefined => {
 
 type CourtRead = { court: string; divisionAsPrinted: string | undefined };
 
-const EDGE_PUNCTUATION = /^[\s,:–-]+|[\s,:–-]+$/gu;
+/** What a division's name is printed between: spacing and separators. */
+const EDGE_CHARACTERS: ReadonlySet<string> = new Set([",", ":", "–", "-"]);
+
+const isEdge = (character: string | undefined): boolean =>
+  character !== undefined &&
+  (EDGE_CHARACTERS.has(character) || character.trim().length === 0);
+
+/** The text without the spacing and separators at either end. */
+const trimEdges = (text: string): string => {
+  let start = 0;
+  let end = text.length;
+  while (start < end && isEdge(text[start])) {
+    start += 1;
+  }
+  while (end > start && isEdge(text[end - 1])) {
+    end -= 1;
+  }
+  return text.slice(start, end);
+};
 
 /** The first court the text names, where its name is one the index knows. */
 const courtOf = (text: string): CourtRead | undefined => {
@@ -232,9 +250,9 @@ const courtOf = (text: string): CourtRead | undefined => {
   }
   const rest = region.slice(start + court.length);
   const seated = rest.search(/\bw\s+składzie/u);
-  const division = collapse(
-    rest.slice(0, seated === -1 ? rest.length : seated),
-  ).replaceAll(EDGE_PUNCTUATION, "");
+  const division = trimEdges(
+    collapse(rest.slice(0, seated === -1 ? rest.length : seated)),
+  );
   return {
     court,
     divisionAsPrinted: division.length === 0 ? undefined : division,

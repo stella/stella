@@ -695,8 +695,10 @@ const fieldText = (
 const fieldFiles = (
   detail: PlUokikDetail | undefined,
   label: string,
-): PlUokikFile[] =>
-  detail?.fields.find((field) => field.label === label)?.files ?? [];
+): PlUokikFile[] => {
+  const field = detail?.fields.find((candidate) => candidate.label === label);
+  return field === undefined ? [] : field.files;
+};
 
 /** `10/12/2009` (month first, as the page prints it) as `2009-10-12`. */
 const US_DATE = /^(?<month>\d{2})\/(?<day>\d{2})\/(?<year>\d{4})$/u;
@@ -1172,7 +1174,9 @@ const pageMetadataOf = ({
   const practices = listOf(
     fieldText(detail, PL_UOKIK_LABEL.PRACTICE)?.replaceAll("\n", ";"),
   );
-  const otherFields = (detail?.fields ?? []).flatMap((field) =>
+  // A row stored without its page states no fields of it.
+  const fields = detail === undefined ? [] : detail.fields;
+  const otherFields = fields.flatMap((field) =>
     field.label !== undefined && !KNOWN_LABELS.has(field.label)
       ? [{ label: field.label, text: field.text, files: field.files }]
       : [],
@@ -1183,7 +1187,7 @@ const pageMetadataOf = ({
       fields: otherFields.map(({ label }) => label).join(", "),
     });
   }
-  const unlabelled = (detail?.fields ?? []).flatMap((field) =>
+  const unlabelled = fields.flatMap((field) =>
     field.label === undefined ? [{ text: field.text, files: field.files }] : [],
   );
   return {
