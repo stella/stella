@@ -215,36 +215,25 @@ const updateSkill = createSafeRootHandler(
 
     // Read, decide, and write under one row lock: the diff, the audit's old
     // values, and the content hash all derive from the row being replaced.
-    const updateResult = await abortableTx(safeDb, async (tx) => {
-      const existingRows = await tx
-        .select({
-          id: agentSkills.id,
-          scope: agentSkills.scope,
-          userId: agentSkills.userId,
-          enabled: agentSkills.enabled,
-          slug: agentSkills.slug,
-          name: agentSkills.name,
-          description: agentSkills.description,
-          body: agentSkills.body,
-          version: agentSkills.version,
-          origin: agentSkills.origin,
-          command: agentSkills.command,
-        })
-        .from(agentSkills)
-        .where(
-          and(
-            eq(agentSkills.id, params.skillId),
-            eq(agentSkills.organizationId, session.activeOrganizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
-      if (!existing) {
-        // The row lock follows the write policy, so a skill the caller can
-        // read but not manage is missing here; refuse it as the handler would.
-        const visibleRows = await tx
-          .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+    // Every refusal is decided before the first write, so returning it
+    // commits nothing.
+    const updateResult = await abortableTx(
+      safeDb,
+      async (tx): Promise<Result<void, HandlerError>> => {
+        const existingRows = await tx
+          .select({
+            id: agentSkills.id,
+            scope: agentSkills.scope,
+            userId: agentSkills.userId,
+            enabled: agentSkills.enabled,
+            slug: agentSkills.slug,
+            name: agentSkills.name,
+            description: agentSkills.description,
+            body: agentSkills.body,
+            version: agentSkills.version,
+            origin: agentSkills.origin,
+            command: agentSkills.command,
+          })
           .from(agentSkills)
           .where(
             and(
@@ -252,69 +241,90 @@ const updateSkill = createSafeRootHandler(
               eq(agentSkills.organizationId, session.activeOrganizationId),
             ),
           )
-          .limit(1);
-        const visible = visibleRows.at(0);
-        if (!visible) {
-          throw new HandlerError({ status: 404, message: "Skill not found" });
+          .limit(1)
+          .for("update");
+        const existing = existingRows.at(0);
+        if (!existing) {
+          // The row lock follows the write policy, so a skill the caller can
+          // read but not manage is missing here; refuse it as the handler would.
+          const visibleRows = await tx
+            .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+            .from(agentSkills)
+            .where(
+              and(
+                eq(agentSkills.id, params.skillId),
+                eq(agentSkills.organizationId, session.activeOrganizationId),
+              ),
+            )
+            .limit(1);
+          const visible = visibleRows.at(0);
+          if (!visible) {
+            return Result.err(
+              new HandlerError({ status: 404, message: "Skill not found" }),
+            );
+          }
+          const refused = requireSkillManager({
+            skill: visible,
+            memberRole,
+            userId: user.id,
+            action: "edit",
+          });
+          if (Result.isError(refused)) {
+            return refused;
+          }
+          panic(
+            "skills.update: the write policy hid a skill the caller manages",
+          );
         }
-        const refused = requireSkillManager({
-          skill: visible,
+
+        const manager = requireSkillManager({
+          skill: existing,
           memberRole,
           userId: user.id,
           action: "edit",
         });
-        if (Result.isError(refused)) {
-          throw refused.error;
+        if (Result.isError(manager)) {
+          return manager;
         }
-        panic("skills.update: the write policy hid a skill the caller manages");
-      }
-
-      const manager = requireSkillManager({
-        skill: existing,
-        memberRole,
-        userId: user.id,
-        action: "edit",
-      });
-      if (Result.isError(manager)) {
-        throw manager.error;
-      }
-      if (hasMetadataEdit) {
-        const editable = requireEditableSkillOrigin(existing.origin);
-        if (Result.isError(editable)) {
-          throw editable.error;
+        if (hasMetadataEdit) {
+          const editable = requireEditableSkillOrigin(existing.origin);
+          if (Result.isError(editable)) {
+            return editable;
+          }
         }
-      }
 
-      const { updates, changes } = buildSkillUpdateDiff(body, existing);
-      if (Object.keys(updates).length === 0) {
-        return;
-      }
+        const { updates, changes } = buildSkillUpdateDiff(body, existing);
+        if (Object.keys(updates).length === 0) {
+          return Result.ok(undefined);
+        }
 
-      if (
-        updates.body !== undefined ||
-        updates.description !== undefined ||
-        updates.name !== undefined ||
-        updates.version !== undefined
-      ) {
-        updates.contentHash = await skillContentHashAfter(tx, {
-          skillId: params.skillId,
-          patch: updates,
+        if (
+          updates.body !== undefined ||
+          updates.description !== undefined ||
+          updates.name !== undefined ||
+          updates.version !== undefined
+        ) {
+          updates.contentHash = await skillContentHashAfter(tx, {
+            skillId: params.skillId,
+            patch: updates,
+          });
+        }
+
+        await tx
+          .update(agentSkills)
+          .set(updates)
+          .where(eq(agentSkills.id, params.skillId));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+          resourceId: params.skillId,
+          changes,
+          metadata: { slug: updates.slug ?? existing.slug },
         });
-      }
-
-      await tx
-        .update(agentSkills)
-        .set(updates)
-        .where(eq(agentSkills.id, params.skillId));
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-        resourceId: params.skillId,
-        changes,
-        metadata: { slug: updates.slug ?? existing.slug },
-      });
-    });
+        return Result.ok(undefined);
+      },
+    );
     if (Result.isError(updateResult)) {
       if (
         DatabaseError.is(updateResult.error) &&
@@ -337,6 +347,7 @@ const updateSkill = createSafeRootHandler(
       }
       return Result.err(updateResult.error);
     }
+    yield* updateResult.value;
 
     return Result.ok({ id: params.skillId });
   },
