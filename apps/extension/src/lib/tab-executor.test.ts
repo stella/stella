@@ -495,12 +495,9 @@ describe("command identity", () => {
     ];
 
     expect(await run(click("e:3:0.1"))).toMatchObject({ status: "success" });
-    // The locate and the action; the top frame is located again afterwards
-    // to record the page the click left behind.
     expect(targets).toEqual([
       { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
       { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
-      { frameIds: [0], tabId: CONTROLLED_TAB_ID },
     ]);
   });
 
@@ -656,6 +653,76 @@ describe("navigation after the user moved the page", () => {
       });
     }
     expect(log).not.toContain("inject:back");
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+  });
+});
+
+describe("what chat last saw", () => {
+  const home = (documentId: string) => [
+    { documentId, frameId: 0, result: frameSnapshot("Home") },
+  ];
+  const liveDocument = (documentId: string, url: string) => () => [
+    {
+      documentId,
+      frameId: 0,
+      result: { origin: "https://example.com", url },
+    },
+  ];
+
+  test("a stopped read after the user moved on does not count as seeing the new page", async () => {
+    const { emit, handlers } = installFakeChrome();
+    handlers["snapshot"] = () => home("document-home");
+    const read = await run({ action: "snapshot" });
+    if (read.status !== "success") {
+      throw new TypeError("The fake snapshot failed");
+    }
+    const observedTab = {
+      revision: read.snapshot.revision,
+      tabId: CONTROLLED_TAB_ID,
+    };
+    emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+    handlers["locate"] = liveDocument(
+      "document-elsewhere",
+      "https://example.com/elsewhere",
+    );
+    const stop = new AbortController();
+    stop.abort();
+    expect(
+      await run({ action: "snapshot" }, { observedTab, signal: stop.signal }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+
+    expect(
+      await run({ action: "open", url: PAGE_URL }, { observedTab }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
+  });
+
+  test("a read records the document it read, not one that replaced it meanwhile", async () => {
+    const { emit, handlers, log } = installFakeChrome();
+    handlers["snapshot"] = () => {
+      // The user navigates while the read is being stored.
+      emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+      handlers["locate"] = liveDocument(
+        "document-elsewhere",
+        "https://example.com/elsewhere",
+      );
+      return home("document-home");
+    };
+    const read = await run({ action: "snapshot" });
+    if (read.status !== "success") {
+      throw new TypeError("The fake snapshot failed");
+    }
+
+    expect(
+      await run(
+        { action: "open", url: PAGE_URL },
+        {
+          observedTab: {
+            revision: read.snapshot.revision,
+            tabId: CONTROLLED_TAB_ID,
+          },
+        },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
     expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
   });
 });

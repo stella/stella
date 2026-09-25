@@ -32,8 +32,8 @@ import {
 import { executeAtMostOnce } from "../lib/execution-ledger";
 import {
   forgetOpenedTab,
-  holdCreatedTab,
   judgeOpenedTab,
+  sortCommittedNavigation,
   sortNavigationTarget,
 } from "../lib/opened-tabs";
 import {
@@ -45,7 +45,7 @@ import {
 import {
   forgetContainedTab,
   onContainedTabsChanged,
-  replaceUserTab,
+  replaceTab,
 } from "../lib/tab-containment";
 import {
   adoptControlledTab,
@@ -145,6 +145,9 @@ const registerOptionalListeners = (): void => {
     navigationTargetsRegistered = true;
     chrome.webNavigation.onCreatedNavigationTarget.addListener((details) => {
       sortNavigationTarget(details).catch(() => undefined);
+    });
+    chrome.webNavigation.onCommitted.addListener((details) => {
+      sortCommittedNavigation(details).catch(() => undefined);
     });
   }
 };
@@ -331,11 +334,8 @@ export default defineBackground(() => {
   chrome.tabs.onRemoved.addListener((tabId) => {
     handleTabRemoved(tabId).catch(() => undefined);
   });
-  chrome.tabs.onCreated.addListener((tab) => {
-    holdCreatedTab(tab).catch(() => undefined);
-  });
   chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
-    replaceUserTab(addedTabId, removedTabId).catch(() => undefined);
+    replaceTab(addedTabId, removedTabId).catch(() => undefined);
   });
   chrome.tabs.onUpdated.addListener((_tabId, _change, tab) => {
     judgeOpenedTab(tab).catch(() => undefined);
