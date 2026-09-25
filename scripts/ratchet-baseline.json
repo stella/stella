@@ -218,13 +218,6 @@
     "count": 0,
     "files": {}
   },
-  "stream-processor-constructions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/handlers/chat/stream-chat.ts": 1,
-      "apps/api/src/handlers/chat/subagent-runner.ts": 1
-    }
-  },
   "direct-root-connection-imports": {
     "count": 51,
     "files": {
