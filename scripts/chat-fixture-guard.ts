@@ -9,6 +9,12 @@
 // input and exhaustive state matrices. Hand-built UI state matrices are not
 // in scope.
 //
+// A literal counts however its discriminant is spelled: a quoted or computed
+// `type` key, a shorthand `type` or an identifier bound to the snapshot type
+// in an enclosing scope, `EventType.MESSAGES_SNAPSHOT` under any import alias
+// or element access, and any of these behind `as const`, `satisfies`, a type
+// assertion, parentheses or `!`.
+//
 // Test files that predate the builders are listed in
 // scripts/chat-fixture-guard-ledger.json with how many snapshots each builds
 // by hand. The ledger only shrinks: a file with more literals than its entry
@@ -31,17 +37,124 @@ const OWNER_REL = "apps/api/src/tests/helpers/chat-fixtures.ts";
 const SCAN_GLOBS = [
   "apps/api/src/**/*.test.ts",
   "apps/api/src/tests/**/*.ts",
-  "apps/web/src/**/*.test.ts",
-  "apps/web/src/**/*.test.tsx",
+  "apps/web/src/**/*.test.{ts,tsx}",
+  // Web test helpers: shared test directories, `test-*` and `*-test-*`
+  // modules such as `test-setup.ts` or `chat-thread-test-router.tsx`, and the
+  // e2e helpers, fixtures and specs.
+  "apps/web/src/**/__tests__/**/*.{ts,tsx}",
+  "apps/web/src/**/test-utils/**/*.{ts,tsx}",
+  "apps/web/src/**/test-*.{ts,tsx}",
+  "apps/web/src/**/*-test-*.{ts,tsx}",
+  "apps/web/e2e/**/*.{ts,tsx}",
 ] as const;
 const SNAPSHOT_TYPE = "MESSAGES_SNAPSHOT";
 const ESCAPE_CALL = "unsafeFixture";
 
 export type SnapshotLiteral = { line: number; path: string };
 
-const isSnapshotType = (node: ts.Expression): boolean =>
-  (ts.isStringLiteral(node) && node.text === SNAPSHOT_TYPE) ||
-  (ts.isPropertyAccessExpression(node) && node.name.text === SNAPSHOT_TYPE);
+/** How many bindings `isSnapshotType` follows before giving up. */
+const MAX_BINDING_HOPS = 8;
+
+/** `node` without the wrappers that leave its value unchanged. */
+const unwrap = (node: ts.Expression): ts.Expression => {
+  let current = node;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isParenthesizedExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+};
+
+/** A property name's text, however it is quoted, or undefined if computed
+ *  from anything but a literal. */
+const propertyNameText = (name: ts.PropertyName): string | undefined => {
+  if (
+    ts.isIdentifier(name) ||
+    ts.isStringLiteral(name) ||
+    ts.isNoSubstitutionTemplateLiteral(name) ||
+    ts.isNumericLiteral(name)
+  ) {
+    return name.text;
+  }
+  if (ts.isComputedPropertyName(name)) {
+    const expression = unwrap(name.expression);
+    return ts.isStringLiteral(expression) ||
+      ts.isNoSubstitutionTemplateLiteral(expression)
+      ? expression.text
+      : undefined;
+  }
+  return undefined;
+};
+
+/** The initializer of the nearest `const`/`let`/`var` named `name` that
+ *  encloses `from`, without a type checker. */
+const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
+  let scope: ts.Node | undefined = from.parent;
+  while (scope !== undefined) {
+    const statements =
+      ts.isSourceFile(scope) || ts.isBlock(scope) || ts.isModuleBlock(scope)
+        ? scope.statements
+        : undefined;
+    for (const statement of statements ?? []) {
+      if (!ts.isVariableStatement(statement)) {
+        continue;
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.name.text === name &&
+          declaration.initializer !== undefined
+        ) {
+          return declaration.initializer;
+        }
+      }
+    }
+    scope = scope.parent;
+  }
+  return undefined;
+};
+
+const isSnapshotType = (node: ts.Expression, hops = 0): boolean => {
+  const value = unwrap(node);
+  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
+    return value.text === SNAPSHOT_TYPE;
+  }
+  if (ts.isPropertyAccessExpression(value)) {
+    return value.name.text === SNAPSHOT_TYPE;
+  }
+  if (ts.isElementAccessExpression(value)) {
+    const key = unwrap(value.argumentExpression);
+    return (
+      (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) &&
+      key.text === SNAPSHOT_TYPE
+    );
+  }
+  if (ts.isIdentifier(value) && hops < MAX_BINDING_HOPS) {
+    const bound = bindingOf(value, value.text);
+    return bound !== undefined && isSnapshotType(bound, hops + 1);
+  }
+  return false;
+};
+
+/** Whether `property` sets the object's `type` to the snapshot type. */
+const isSnapshotDiscriminant = (property: ts.ObjectLiteralElementLike) => {
+  if (ts.isPropertyAssignment(property)) {
+    return (
+      propertyNameText(property.name) === "type" &&
+      isSnapshotType(property.initializer)
+    );
+  }
+  return (
+    ts.isShorthandPropertyAssignment(property) &&
+    property.name.text === "type" &&
+    isSnapshotType(property.name)
+  );
+};
 
 const isEscapeCall = (node: ts.Node): boolean =>
   ts.isCallExpression(node) &&
@@ -67,12 +180,7 @@ export const findSnapshotLiterals = (
   const visit = (node: ts.Node) => {
     if (
       ts.isObjectLiteralExpression(node) &&
-      node.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText(file) === "type" &&
-          isSnapshotType(property.initializer),
-      ) &&
+      node.properties.some(isSnapshotDiscriminant) &&
       !isInsideEscape(node)
     ) {
       found.push({
@@ -223,6 +331,67 @@ const selfTest = (): number => {
     "a string-typed snapshot literal",
     'const s = { messages: [], type: "MESSAGES_SNAPSHOT" };',
     1,
+  );
+  const snapshotForms: readonly [string, string][] = [
+    ["a double-quoted key", '{ "type": "MESSAGES_SNAPSHOT", messages: [] }'],
+    [
+      "a single-quoted key",
+      "{ 'type': EventType.MESSAGES_SNAPSHOT, messages: [] }",
+    ],
+    ["a computed key", '{ ["type"]: "MESSAGES_SNAPSHOT", messages: [] }'],
+    [
+      "an as-const discriminant",
+      '{ type: "MESSAGES_SNAPSHOT" as const, messages: [] }',
+    ],
+    [
+      "a satisfies discriminant",
+      "{ type: EventType.MESSAGES_SNAPSHOT satisfies EventType, messages: [] }",
+    ],
+    [
+      "a type-asserted discriminant",
+      '{ type: <const>"MESSAGES_SNAPSHOT", messages: [] }',
+    ],
+    [
+      "a parenthesised discriminant",
+      "{ type: (EventType.MESSAGES_SNAPSHOT), messages: [] }",
+    ],
+    [
+      "an element access",
+      '{ type: EventType["MESSAGES_SNAPSHOT"], messages: [] }',
+    ],
+    ["an import alias", "{ type: E.MESSAGES_SNAPSHOT, messages: [] }"],
+    ["a template literal", "{ type: `MESSAGES_SNAPSHOT`, messages: [] }"],
+    [
+      "an as-const object",
+      '({ type: "MESSAGES_SNAPSHOT", messages: [] }) as const',
+    ],
+    [
+      "a satisfies object",
+      "{ type: EventType.MESSAGES_SNAPSHOT, messages: [] } satisfies StreamChunk",
+    ],
+  ];
+  for (const [label, literal] of snapshotForms) {
+    expectCount(label, `const s = ${literal};`, 1);
+  }
+  expectCount(
+    "a shorthand type bound to the snapshot type",
+    "const type = EventType.MESSAGES_SNAPSHOT; const s = { type, messages: [] };",
+    1,
+  );
+  expectCount(
+    "an alias constant two bindings away",
+    'const SNAPSHOT = "MESSAGES_SNAPSHOT" as const; const kind = SNAPSHOT; const s = { type: kind, messages: [] };',
+    1,
+  );
+  expectCount(
+    "a shorthand type bound in an enclosing function",
+    "const build = () => { const type = EventType.MESSAGES_SNAPSHOT; return () => ({ type, messages: [] }); };",
+    1,
+  );
+  expectCount(
+    "a shorthand type bound to another chunk type",
+    "const type = EventType.RUN_FINISHED; const s = { type, runId: 'r' }; const n = EventType.MESSAGES_SNAPSHOT;",
+    0,
   );
   expectCount(
     "a snapshot inside the escape",
