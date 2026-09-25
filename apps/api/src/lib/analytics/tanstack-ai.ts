@@ -16,7 +16,7 @@ import type {
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
+  classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
   providerStatusFields,
 } from "@/api/lib/ai-error";
@@ -437,7 +437,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // carries the provider's own status for the same reason, and separates a
     // status this code does not map from a failure that carried none at all;
     // without it an `unknown` kind is indistinguishable between the two.
-    const kind = classifyAIError(error);
+    // The AI boundary: naming the failure also classifies it for the shadow
+    // grade the record carries.
+    const kind = classifyAIBoundaryFailure(error);
     const finishReason = context?.run?.finishReason;
     const attributes = {
       "error.type": errorTag(error),

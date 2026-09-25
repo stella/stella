@@ -1382,4 +1382,38 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       errorSpy.mockRestore();
     }
   });
+
+  test("grades an anticipated provider failure by the kind it was named", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const error = Object.assign(new Error("rate limited"), {
+      statusCode: 429,
+    });
+
+    const warnSpy = spyOn(logger, "warn");
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "search.refine",
+        traceId: "trace_shadow_grade",
+      }).captureError(error);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.error_kind": "quota_exhausted",
+          "failure.shadow_grade": "transient",
+          "failure.shadow_reason": "quota_exhausted",
+        }),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });
