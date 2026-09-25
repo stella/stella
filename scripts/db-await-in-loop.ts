@@ -1131,11 +1131,15 @@ export const scanDbAwaitInLoop = ({
           }
         }
       } else if (
-        viaResolution &&
-        ts.isAwaitExpression(current) &&
-        !ts.isCallExpression(unwrap(current.expression)) &&
-        isExecutableQuery(typeOf(current.expression))
+        (ts.isIdentifier(current) ||
+          ts.isPropertyAccessExpression(current) ||
+          ts.isElementAccessExpression(current)) &&
+        (viaResolution || !isDirectAwaitOperand(current)) &&
+        isExecutedPosition(current) &&
+        isExecutableQuery(typeOf(current))
       ) {
+        // A query held in a variable and then awaited or returned: an async
+        // function adopts the returned thenable, so returning it runs it.
         found = QUERY_MATCH;
         return;
       }

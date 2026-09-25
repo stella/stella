@@ -65,6 +65,14 @@ export const saveFar = async (id: number) => {
   await saveVia(id);
 };
 export const pure = async (id: number) => id * 2;
+export const readReturned = async (id: number) => {
+  const query = rootDb.select().from(items).where(inArray(items.id, [id]));
+  return query;
+};
+export const describeQuery = async (id: number) => {
+  const query = rootDb.select().from(items).where(inArray(items.id, [id]));
+  return query.toSQL();
+};
 export class Store {
   async save(id: number) {
     await rootDb.update(items).set({ name: "store" }).where(inArray(items.id, [id]));
@@ -77,7 +85,7 @@ import { inArray, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { items, rootDb, rootDb as primary, type Transaction } from "./db/root";
 import { scopedDb, type ScopedDb, type TransactionBase } from "./db/scoped";
-import { countWith, pure, readOne, saveFar, saveOne, saveVia, Store, writeOne, writeWith } from "./helpers";
+import { countWith, describeQuery, pure, readOne, readReturned, saveFar, saveOne, saveVia, Store, writeOne, writeWith } from "./helpers";
 import { Result } from "./result";
 
 declare const ids: number[];
@@ -137,6 +145,8 @@ export const captured = async (store: Store) => {
     await saveVia(id); // expect: helper
     await saveFar(id);
     await store.save(id); // expect: helper
+    await readReturned(id); // expect: helper
+    await describeQuery(id);
   }
 };
 
