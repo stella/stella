@@ -1741,7 +1741,7 @@ export const resolveUserRealtimeAuthorization = async (
     organizationId,
     userId,
   }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
-  db: MemberAuthorizationDb = rootDb,
+  db: MemberAuthorizationDb,
 ): Promise<boolean> =>
   (await resolveMemberAuthorization({ organizationId, userId }, db)) !== null;
 
@@ -1759,7 +1759,7 @@ type WorkspaceRealtimeAudienceLookup = {
  */
 export const resolveWorkspaceRealtimeAudience = async (
   { userIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
-  db: MemberAuthorizationDb = rootDb,
+  db: MemberAuthorizationDb,
 ) => {
   const uniqueUserIds = [...new Set(userIds)];
   if (uniqueUserIds.length === 0) {
@@ -1799,6 +1799,18 @@ export const resolveWorkspaceRealtimeAudience = async (
     .limit(LIMITS.organizationMembersCount);
 
   return new Set(rows.map((row) => brandPersistedUserId(row.userId)));
+};
+
+/**
+ * The event stream's connection authorizers, both on the owner connection for
+ * the reasons given on each resolver.
+ */
+export const realtimeAuthorizers = {
+  user: async (
+    lookup: Parameters<typeof resolveUserRealtimeAuthorization>[0],
+  ) => await resolveUserRealtimeAuthorization(lookup, rootDb),
+  workspace: async (lookup: WorkspaceRealtimeAudienceLookup) =>
+    await resolveWorkspaceRealtimeAudience(lookup, rootDb),
 };
 
 /**
