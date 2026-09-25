@@ -930,6 +930,19 @@ jobs:
           bun scripts/crawl-posture.ts --self-test
           bun scripts/crawl-posture.ts --check
 
+      - name: Chat fixture guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Valid chat stream fixtures (messages snapshots) come from the
+        # builders in apps/api/src/tests/helpers/chat-fixtures.ts, which run
+        # TanStack's own converters; a hand-written snapshot only agrees with
+        # the engine until it changes. The guard rejects a snapshot literal in
+        # a chat test outside that owner and outside `unsafeFixture(reason,
+        # ...)`, with a shrink-only ledger of the files that predate the
+        # builders. The --self-test run first proves the detector still fires.
+        run: |
+          bun scripts/chat-fixture-guard.ts --self-test
+          bun scripts/chat-fixture-guard.ts
+
       - name: CLI registry snapshot guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The CLI and shared chat-policy projections must match the live MCP

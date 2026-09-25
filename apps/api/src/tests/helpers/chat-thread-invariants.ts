@@ -1,7 +1,10 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { chatMessages, chatTurns } from "@/api/db/schema";
-import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
+import {
+  chatMessageFromPersisted,
+  getAwaitingUserInteractions,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   CLIENT_ANSWERABLE_TOOL_CALL_STATE,
   findUnsettledToolCallsForOutcome,
@@ -151,6 +154,69 @@ const findUnsettledToolCalls = async ({
       toolCallId,
     }));
   });
+};
+
+/** An interaction the stored thread offers: a tool call the client answers,
+ *  on a message an `awaiting-user` turn owns. */
+export type OfferedInteraction = {
+  kind: ReturnType<typeof getAwaitingUserInteractions>[number]["type"];
+  messageId: SafeId<"chatMessage">;
+  state: ToolCallState;
+  toolCallId: string;
+};
+
+/**
+ * The interactions the stored thread offers the user: what each message an
+ * `awaiting-user` turn owns awaits.
+ */
+export const findOfferedInteractions = async ({
+  db,
+  threadId,
+}: {
+  db: TestDatabase;
+  threadId: SafeId<"chatThread">;
+}): Promise<OfferedInteraction[]> => {
+  const [rows, owners] = await Promise.all([
+    db
+      .select({
+        content: chatMessages.content,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
+    db
+      .select({ assistantMessageId: chatTurns.assistantMessageId })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.status, "awaiting-user"),
+        ),
+      ),
+  ]);
+  const ownedMessageIds = new Set(
+    owners.map(({ assistantMessageId }) => assistantMessageId),
+  );
+  return rows
+    .filter(({ id }) => ownedMessageIds.has(id))
+    .flatMap((row) => {
+      const message = chatMessageFromPersisted(row);
+      // The production reader of what a turn awaits, so this lists exactly
+      // what a continuation is validated against.
+      return getAwaitingUserInteractions(message).flatMap(
+        ({ toolCallId, type }) => {
+          const part = message.parts.find(
+            (candidate) =>
+              candidate.type === "tool-call" && candidate.id === toolCallId,
+          );
+          return part?.type === "tool-call"
+            ? [{ kind: type, messageId: row.id, state: part.state, toolCallId }]
+            : [];
+        },
+      );
+    });
 };
 
 /** Every persisted-thread invariant, keyed by name; all empty for a sound

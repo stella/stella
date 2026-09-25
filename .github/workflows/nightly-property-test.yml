@@ -59,3 +59,44 @@ jobs:
         env:
           TURBO_FORCE: "true"
           PROPERTY_TEST_NUM_RUNS_FACTOR: ${{ github.event.inputs.factor || '10' }}
+
+  chat-mutation-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      # Each entry of apps/api/scripts/chat-mutation-matrix.json removes one
+      # behaviour of the chat pipeline from the tree and requires its scenario
+      # to fail at the oracle the entry names. A survivor, a failure at any
+      # other point, or an entry whose mutation no longer applies fails the
+      # job. Too slow for PR CI: every entry runs its scenario twice. The
+      # --self-test run first proves a stopped runner leaves no mutation behind.
+      - name: Chat mutation matrix
+        run: |
+          bun apps/api/scripts/chat-mutation-matrix.ts --self-test
+          bun apps/api/scripts/chat-mutation-matrix.ts

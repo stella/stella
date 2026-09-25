@@ -12,7 +12,7 @@ import {
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
-import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { findUnownedPendingInteractions } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -35,6 +35,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+const openHarnesses: ChatHarness[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -47,6 +48,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  for (const harness of openHarnesses) {
+    harness.close();
+  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -57,27 +61,27 @@ afterAll(async () => {
 
 describe("forking a thread at a pending approval", () => {
   test("the fork carries no answerable approval, and the approved tool runs once, on the source thread", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    openHarnesses.push(harness);
     const {
-      adapters,
       approveContext,
       executions,
       lastAssistant,
+      script,
       send,
       sendContext,
-    } = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    } = harness;
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
     seededThreadIds.push(threadId);
     const firstRunId = `run-${Bun.randomUUIDv7()}`;
 
-    adapters.push(
-      createScriptedTextAdapter([
-        {
-          arguments: approvalToolArguments("NDA"),
-          toolName: APPROVAL_TOOL_NAME,
-          type: "tool-call",
-        },
-      ]),
-    );
+    script(threadId, [
+      {
+        arguments: approvalToolArguments("NDA"),
+        toolName: APPROVAL_TOOL_NAME,
+        type: "tool-call",
+      },
+    ]);
     expect(
       await send(
         sendContext({
@@ -129,11 +133,9 @@ describe("forking a thread at a pending approval", () => {
     ).toEqual([]);
 
     // Approve on the source thread: the loop executes the tool, then answers.
-    adapters.push(
-      createScriptedTextAdapter([
-        { finishReason: "stop", text: "Deleted.", type: "text" },
-      ]),
-    );
+    script(threadId, [
+      { finishReason: "stop", text: "Deleted.", type: "text" },
+    ]);
     expect(
       await send(
         approveContext({
@@ -149,11 +151,9 @@ describe("forking a thread at a pending approval", () => {
 
     // The same approval, answered on the fork, is not a resumable interaction.
     const forkAnswer = await lastAssistant(forkThreadId);
-    adapters.push(
-      createScriptedTextAdapter([
-        { finishReason: "stop", text: "Deleted again.", type: "text" },
-      ]),
-    );
+    script(forkThreadId, [
+      { finishReason: "stop", text: "Deleted again.", type: "text" },
+    ]);
     const forkResult = await send(
       approveContext({
         call: pendingCall,

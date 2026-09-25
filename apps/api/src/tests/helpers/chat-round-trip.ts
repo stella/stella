@@ -1,27 +1,11 @@
-import {
-  EventType,
-  maxIterations,
-  toServerSentEventsResponse,
-} from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk, TokenUsage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 
-import {
-  processTurnForPersistence,
-  pruneOrphanedToolParts,
-} from "@/api/handlers/chat/stream-chat";
-import type { streamChat } from "@/api/handlers/chat/stream-chat";
-import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
-import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
-import { withSseHeartbeat } from "@/api/lib/sse";
-import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
-
-// A shared chat round-trip harness: a scripted provider adapter driven through
-// the real `@tanstack/ai` `chat()` loop, and a `streamResponse` that runs that
-// loop through the production stream processor and hands the result to the
-// caller's `onFinish` persistence. Model resolution is the one substituted
-// piece; everything the SDK decides (tool execution, approval interrupts,
-// per-iteration RUN_FINISHED) is the SDK's own.
+// A scripted provider: each provider iteration answers with the next scripted
+// turn, in the chunk shapes a provider adapter emits. Everything above the
+// adapter (the `chat()` loop, tool execution, approvals, persistence, the
+// client-visible stream) stays the production code.
 
 type ScriptedTurnUsage = Pick<
   TokenUsage,
@@ -52,13 +36,324 @@ export type ScriptedTurn =
       code?: string | undefined;
       message: string;
       type: "error";
-    };
+    }
+  | {
+      /** The provider call fails before it yields anything. */
+      message: string;
+      type: "fail-before-output";
+    }
+  | ScriptedStep;
+
+/**
+ * One provider iteration shaped like a reasoning model's: optional thinking,
+ * optional text, then any number of tool calls in one response. With no tool
+ * calls it ends the run as a text answer, cut off at the output limit when
+ * `finishReason` is `length`.
+ */
+type ScriptedStep = {
+  finishReason?: "length" | "stop" | undefined;
+  reasoning?: string | undefined;
+  text?: string | undefined;
+  toolCalls: readonly {
+    arguments: string;
+    /**
+     * The input the adapter hands the engine on `TOOL_CALL_END`, when it
+     * differs from `arguments`: a strict-mode provider spells an absent
+     * optional field `null` on the wire, and its adapter drops it.
+     */
+    input?: unknown;
+    toolCallId: string;
+    toolName: string;
+  }[];
+  type: "step";
+  usage?: ScriptedTurnUsage | undefined;
+};
 
 const DEFAULT_TURN_USAGE = {
   completionTokens: 1,
   promptTokens: 1,
   totalTokens: 2,
 } as const satisfies ScriptedTurnUsage;
+
+/** Where a scripted turn runs: the provider call's model, run and thread. */
+type ScriptedTurnContext = {
+  /** The turn's position in its run, for ids that are stable per run. */
+  index: number;
+  model: string;
+  runId: string;
+  threadId: string;
+};
+
+/**
+ * The events a provider adapter emits for one step, in the order the
+ * Anthropic adapter emits them: the thinking block (with its signature), the
+ * text block, then each tool call.
+ *
+ * @yields Each provider event of the step, ending with its `RUN_FINISHED`.
+ */
+function* scriptedStepChunks({
+  messageId,
+  model,
+  runId,
+  step,
+  threadId,
+  timestamp,
+}: {
+  messageId: string;
+  model: string;
+  runId: string;
+  step: ScriptedStep;
+  threadId: string;
+  timestamp: number;
+}): Generator<StreamChunk> {
+  if (step.reasoning !== undefined) {
+    // A provider mints a fresh id for every thinking block; message ids here
+    // repeat across requests, so these must not derive from them.
+    const blockId = Bun.randomUUIDv7();
+    const reasoningId = `reasoning-${blockId}`;
+    const stepId = `thinking-${blockId}`;
+    yield {
+      type: EventType.REASONING_START,
+      messageId: reasoningId,
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.REASONING_MESSAGE_START,
+      messageId: reasoningId,
+      role: "reasoning",
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.STEP_STARTED,
+      stepName: stepId,
+      stepId,
+      model,
+      timestamp,
+      stepType: "thinking",
+    };
+    yield {
+      type: EventType.REASONING_MESSAGE_CONTENT,
+      messageId: reasoningId,
+      delta: step.reasoning,
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.STEP_FINISHED,
+      stepName: stepId,
+      stepId,
+      model,
+      timestamp,
+      delta: step.reasoning,
+      content: step.reasoning,
+    };
+    yield {
+      type: EventType.STEP_FINISHED,
+      stepName: stepId,
+      stepId,
+      model,
+      timestamp,
+      delta: "",
+      content: step.reasoning,
+      signature: `signature-${stepId}`,
+    };
+    yield {
+      type: EventType.REASONING_MESSAGE_END,
+      messageId: reasoningId,
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.REASONING_END,
+      messageId: reasoningId,
+      model,
+      timestamp,
+    };
+  }
+  if (step.text !== undefined) {
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId,
+      role: "assistant",
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: step.text,
+      model,
+      timestamp,
+    };
+    yield { type: EventType.TEXT_MESSAGE_END, messageId, model, timestamp };
+  }
+  for (const call of step.toolCalls) {
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: call.toolCallId,
+      toolCallName: call.toolName,
+      parentMessageId: messageId,
+      timestamp,
+    };
+    yield {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId: call.toolCallId,
+      delta: call.arguments,
+      model,
+      timestamp,
+    };
+    yield {
+      type: EventType.TOOL_CALL_END,
+      toolCallId: call.toolCallId,
+      timestamp,
+      ...(call.input === undefined
+        ? {}
+        : {
+            input: call.input,
+            toolCallName: call.toolName,
+            toolName: call.toolName,
+          }),
+    };
+  }
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    finishReason:
+      step.toolCalls.length > 0 ? "tool_calls" : (step.finishReason ?? "stop"),
+    model,
+    timestamp,
+    usage: step.usage ?? DEFAULT_TURN_USAGE,
+  };
+}
+
+/** A scripted provider call that fails, as a provider's transport would. */
+export class ScriptedProviderError extends TaggedError(
+  "ScriptedProviderError",
+)<{ message: string }> {}
+
+/**
+ * The provider events for one scripted turn.
+ *
+ * @yields Each provider event of the turn, from `RUN_STARTED` on.
+ */
+export async function* scriptedTurnChunks(
+  turn: ScriptedTurn,
+  { index, model, runId, threadId }: ScriptedTurnContext,
+): AsyncGenerator<StreamChunk> {
+  // A provider answers asynchronously; so does the script.
+  await Promise.resolve();
+  if (turn.type === "fail-before-output") {
+    throw new ScriptedProviderError({ message: turn.message });
+  }
+  const messageId = `provider-message-${String(index + 1)}`;
+  const timestamp = Date.now();
+  yield {
+    type: EventType.RUN_STARTED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+  } satisfies StreamChunk;
+  switch (turn.type) {
+    case "tool-call": {
+      yield* scriptedStepChunks({
+        messageId,
+        model,
+        runId,
+        step: {
+          toolCalls: [
+            {
+              arguments: turn.arguments,
+              toolCallId: turn.toolCallId ?? `call-${String(index + 1)}`,
+              toolName: turn.toolName,
+            },
+          ],
+          type: "step",
+          usage: turn.usage,
+        },
+        threadId,
+        timestamp,
+      });
+      return;
+    }
+    case "text": {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: turn.text,
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId,
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId,
+        threadId,
+        finishReason: turn.finishReason,
+        model,
+        timestamp,
+        usage: turn.usage ?? DEFAULT_TURN_USAGE,
+      } satisfies StreamChunk;
+      return;
+    }
+    case "step": {
+      yield* scriptedStepChunks({
+        messageId,
+        model,
+        runId,
+        step: turn,
+        threadId,
+        timestamp,
+      });
+      return;
+    }
+    case "error": {
+      yield {
+        type: EventType.RUN_ERROR,
+        message: turn.message,
+        ...(turn.code === undefined ? {} : { code: turn.code }),
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      return;
+    }
+    default: {
+      turn satisfies never;
+      panic("Unhandled scripted turn");
+    }
+  }
+}
+
+/** The adapter shape every scripted provider shares; only `chatStream`
+ *  differs. */
+export const scriptedAdapterBase = {
+  kind: "text",
+  name: "scripted",
+  model: "scripted",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+} as const;
 
 /**
  * A text adapter answering the n-th provider iteration with the n-th scripted
@@ -70,173 +365,24 @@ export const createScriptedTextAdapter = (
 ): AnyTextAdapter => {
   let turnIndex = 0;
   return {
-    kind: "text",
-    name: "scripted",
-    model: "scripted",
-    "~types": {
-      providerOptions: {},
-      inputModalities: ["text"],
-      messageMetadataByModality: {},
-      toolCapabilities: [],
-      toolCallMetadata: {},
-      systemPromptMetadata: undefined,
-    },
+    ...scriptedAdapterBase,
     async *chatStream({ model, runId, threadId }) {
       const index = turnIndex;
       turnIndex += 1;
-      // A provider answers asynchronously; so does the script.
-      const turn = await Promise.resolve(turns.at(index));
+      const turn = turns.at(index);
       if (turn === undefined) {
         panic("The scripted adapter ran out of turns");
       }
-      const resolvedRunId = runId ?? "run-1";
-      const resolvedThreadId = threadId ?? "thread-1";
-      const messageId = `provider-message-${String(index + 1)}`;
-      const timestamp = Date.now();
-      yield {
-        type: EventType.RUN_STARTED,
-        runId: resolvedRunId,
-        threadId: resolvedThreadId,
+      yield* scriptedTurnChunks(turn, {
+        index,
         model,
-        timestamp,
-      } satisfies StreamChunk;
-      switch (turn.type) {
-        case "tool-call": {
-          const callId = turn.toolCallId ?? `call-${String(index + 1)}`;
-          yield {
-            type: EventType.TOOL_CALL_START,
-            toolCallId: callId,
-            toolCallName: turn.toolName,
-            parentMessageId: messageId,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.TOOL_CALL_ARGS,
-            toolCallId: callId,
-            delta: turn.arguments,
-            model,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.TOOL_CALL_END,
-            toolCallId: callId,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.RUN_FINISHED,
-            runId: resolvedRunId,
-            threadId: resolvedThreadId,
-            finishReason: "tool_calls",
-            model,
-            timestamp,
-            usage: turn.usage ?? DEFAULT_TURN_USAGE,
-          } satisfies StreamChunk;
-          return;
-        }
-        case "text": {
-          yield {
-            type: EventType.TEXT_MESSAGE_START,
-            messageId,
-            role: "assistant",
-            model,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.TEXT_MESSAGE_CONTENT,
-            messageId,
-            delta: turn.text,
-            model,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.TEXT_MESSAGE_END,
-            messageId,
-            model,
-            timestamp,
-          } satisfies StreamChunk;
-          yield {
-            type: EventType.RUN_FINISHED,
-            runId: resolvedRunId,
-            threadId: resolvedThreadId,
-            finishReason: turn.finishReason,
-            model,
-            timestamp,
-            usage: turn.usage ?? DEFAULT_TURN_USAGE,
-          } satisfies StreamChunk;
-          return;
-        }
-        case "error": {
-          yield {
-            type: EventType.RUN_ERROR,
-            message: turn.message,
-            ...(turn.code === undefined ? {} : { code: turn.code }),
-            model,
-            timestamp,
-          } satisfies StreamChunk;
-          return;
-        }
-        default: {
-          turn satisfies never;
-          panic("Unhandled scripted turn");
-        }
-      }
+        runId: runId ?? "run-1",
+        threadId: threadId ?? "thread-1",
+      });
     },
     structuredOutput: () =>
       panic("Structured output is not part of the scripted adapter"),
   };
-};
-
-type StreamResponse = typeof streamChat;
-
-/**
- * A `streamResponse` dependency for `createSendMessage` that runs the real
- * `chat()` loop over the request's own messages and tool set, then persists
- * through the handler's `onFinish` exactly as `streamChat` does. Each call
- * takes the next adapter, so one test can script several requests.
- */
-export const createScriptedStreamResponse = (
-  nextAdapter: () => AnyTextAdapter,
-): StreamResponse => {
-  const streamResponse: StreamResponse = async ({
-    abortSignal,
-    messages: rawMessages,
-    onFinish,
-    owningAssistantMessageId,
-    parentRunId,
-    resume,
-    runId,
-    threadId,
-    tools,
-  }) => {
-    const messages = pruneOrphanedToolParts(rawMessages);
-    const abortController = abortControllerFromSignal(abortSignal);
-    const source = streamChatChunks({
-      abortController,
-      adapter: nextAdapter(),
-      agentLoopStrategy: maxIterations(5),
-      messages,
-      runId,
-      threadId,
-      tools: chatToolMapToArray(tools),
-      ...(parentRunId === undefined ? {} : { parentRunId }),
-      ...(resume === undefined ? {} : { resume }),
-    });
-    const processed = processTurnForPersistence({
-      abortSignal: abortController.signal,
-      deadlineSignal: abortSignal,
-      initialMessages: messages,
-      onFinish,
-      owningAssistantMessageId,
-      restorationPairs: [],
-      source,
-    });
-    return await Promise.resolve(
-      withSseHeartbeat(
-        toServerSentEventsResponse(processed, { abortController }),
-      ),
-    );
-  };
-  return streamResponse;
 };
 
 /** Read a streamed response to its end, so its terminal persistence runs. */
