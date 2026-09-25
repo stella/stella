@@ -55,6 +55,7 @@ import ts from "typescript";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
   isResidualDirective,
@@ -1011,30 +1012,12 @@ const countTsSuppressions = (content: string): number => {
   return total;
 };
 
-// Suppressions of the type-aware N+1 check (scripts/db-await-in-loop.ts):
-// `// db-await-in-loop: <reason>` and `// db-await-in-loop-disable: <reason>`.
-// The closing `-enable` is not a second suppression. Literal contents are
-// blanked first, so a directive quoted inside a string does not count, and
-// the directive must open its comment, so prose quoting one does not either.
-const DB_AWAIT_IN_LOOP_DIRECTIVE = /\/\/\s*db-await-in-loop(?:-disable)?:/u;
-
-const countDbAwaitInLoopSuppressions = (content: string): number => {
-  let total = 0;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripStringLiterals(raw, literalState);
-    literalState = state;
-    const directive = DB_AWAIT_IN_LOOP_DIRECTIVE.exec(code);
-    if (
-      directive !== null &&
-      !COMMENT_LINE.test(code.slice(0, directive.index))
-    ) {
-      total += 1;
-    }
-  }
-  return total;
-};
+// Suppressions of the type-aware N+1 check (scripts/db-await-in-loop.ts),
+// counted by the check's own directive parser: next-line and trailing
+// `// db-await-in-loop: <reason>` plus each closed disable/enable block. One
+// parser means the budget counts exactly the suppressions the check honours.
+const countDbAwaitInLoopSuppressions: FileCounter = (content, file) =>
+  countDbAwaitInLoopDirectives(content, file);
 
 // Explicitly detached calls bypass no-floating-promises when `void` is
 // accepted, while async JSX handlers bypass no-misused-promises because JSX
@@ -3727,17 +3710,23 @@ const DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES = [
   "// db-await-in-loop-enable",
   "// db-await-in-loop without a colon is malformed, not a suppression",
   "// prose quoting `// db-await-in-loop: <reason>` is not a suppression",
-  "   * // db-await-in-loop: inside a block comment's prose",
+  "/*",
+  " * // db-await-in-loop: inside a block comment",
+  " */",
   'const doc = "// db-await-in-loop: quoted in a string";',
   "const multiline = `",
   "// db-await-in-loop: inside a template literal",
   "`;",
+  "const interpolated = `${",
+  "  // db-await-in-loop: inside an interpolation, a real comment",
+  "  await rootDb.$count(items)",
+  "}`;",
 ];
 const SELF_TEST_DB_AWAIT_IN_LOOP_SUPPRESSIONS = `${DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// The next-line, trailing, and block-opening forms; not the closing
-// `-enable`, the malformed directive, the two prose mentions, or either
-// quoted copy.
-const EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS = 3;
+// The next-line, trailing, closed-block, and interpolation forms; not the
+// closing `-enable`, the malformed directive, the prose mention, the block
+// comment, or either quoted copy.
+const EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS = 4;
 
 const DETACHED_PROMISE_FIXTURE_LINES = [
   "void saveDraft();",

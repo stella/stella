@@ -6,6 +6,7 @@ import ts from "typescript";
 import {
   type DbAwaitInLoopReport,
   isApiSourceInScope,
+  countDbAwaitInLoopDirectives,
   scanDbAwaitInLoop,
 } from "./db-await-in-loop";
 
@@ -368,6 +369,19 @@ export const suppressed = async () => {
     await writeOne(rootDb, id);
   }
   // db-await-in-loop-enable
+  const texts: string[] = [];
+  for (const id of ids) {
+    const text = \`\${
+      // db-await-in-loop: a directive inside an interpolation is a real comment
+      await rootDb.$count(items)
+    } \${id}\`;
+    /*
+    // db-await-in-loop: text inside a block comment is not a directive
+    */
+    await writeOne(rootDb, id); // expect: handle
+    texts.push(text);
+  }
+  return texts;
 };
 `,
   "directives.ts": `
@@ -405,6 +419,7 @@ let fixtureRoot = "";
 let report: DbAwaitInLoopReport = {
   hits: [],
   suppressedHits: 0,
+  directiveCounts: {},
   directiveProblems: [],
   unclassified: [],
   filesScanned: 0,
@@ -470,14 +485,26 @@ describe("db-await-in-loop", () => {
     expect(observed("helpers.ts")).toEqual([]);
   });
 
+  test("the ratchet's count agrees with the directives the check applied", () => {
+    for (const [file, source] of Object.entries(FIXTURE_FILES)) {
+      expect({
+        file,
+        count: countDbAwaitInLoopDirectives(source.trimStart(), file),
+      }).toEqual({ file, count: report.directiveCounts[file] ?? 0 });
+    }
+    expect(report.directiveCounts["suppressed.ts"]).toBe(5);
+  });
+
   test("next-line, trailing, and block directives suppress their sites", () => {
-    expect(observed("suppressed.ts")).toEqual([]);
+    expect(observed("suppressed.ts")).toEqual(
+      expectedFromMarkers(sourceOf("suppressed.ts")),
+    );
     expect(
       report.directiveProblems.filter(
         (problem) => problem.file === "suppressed.ts",
       ),
     ).toEqual([]);
-    expect(report.suppressedHits).toBe(5);
+    expect(report.suppressedHits).toBe(6);
   });
 
   test("unused, reasonless, and unbalanced directives are errors", () => {

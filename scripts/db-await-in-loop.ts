@@ -66,8 +66,11 @@
 //                                            line when trailing code
 //   // db-await-in-loop-disable: <reason>    until
 //   // db-await-in-loop-enable
-// A directive that suppresses nothing is an error, like an unused lint
-// directive. `scripts/ratchet.ts` budgets the directives.
+// Directives are read from comment trivia, so one inside a template
+// interpolation counts and text inside a string, template, or block comment
+// does not. A directive that suppresses nothing is an error, like an unused
+// lint directive. `scripts/ratchet.ts` budgets the directives through
+// `countDbAwaitInLoopDirectives`, the same parse the check applies.
 //
 // Usage: bun scripts/db-await-in-loop.ts
 
@@ -185,6 +188,8 @@ export type DbAwaitInLoopReport = {
   readonly directiveProblems: readonly DbAwaitInLoopDirectiveProblem[];
   readonly unclassified: readonly DbAwaitInLoopUnclassified[];
   readonly filesScanned: number;
+  // Suppressions per file, counted from the same parse the check applied.
+  readonly directiveCounts: Readonly<Record<string, number>>;
 };
 
 export type ScanDbAwaitInLoopOptions = {
@@ -599,74 +604,94 @@ type FileDirectives = {
 };
 
 const DIRECTIVE_TOKEN = "db-await-in-loop";
-const DIRECTIVE_PATTERN =
-  /\/\/[ \t]*db-await-in-loop(?<variant>-disable|-enable)?(?<rest>[^\n]*)/gu;
+const DIRECTIVE_BODY =
+  /^[ \t]*db-await-in-loop(?<variant>-disable|-enable)?(?<rest>.*)$/u;
 
-const literalRanges = (sourceFile: ts.SourceFile): [number, number][] => {
-  const ranges: [number, number][] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node) ||
-      ts.isTemplateMiddle(node) ||
-      ts.isTemplateTail(node) ||
-      ts.isRegularExpressionLiteral(node)
-    ) {
-      ranges.push([node.getStart(sourceFile), node.getEnd()]);
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return ranges;
+type DirectiveComment = {
+  readonly line: number;
+  // The line a next-line directive covers: its own when code precedes it,
+  // otherwise the line of the first token after it.
+  readonly target: number;
+  readonly variant: string;
+  readonly rest: string;
 };
 
-const isCommentOnlyLine = (text: string): boolean => {
-  const trimmed = text.trim();
-  return (
-    trimmed.length === 0 ||
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("/*") ||
-    trimmed.startsWith("*")
-  );
+const isJsDocNode = (node: ts.Node): boolean =>
+  node.kind >= ts.SyntaxKind.FirstJSDocNode &&
+  node.kind <= ts.SyntaxKind.LastJSDocNode;
+
+// Every `//` comment that opens with the directive token, read from the
+// comment trivia in front of each token, so a directive inside a template
+// interpolation is found and text inside a string, a template, or a block
+// comment never is.
+const directiveComments = (sourceFile: ts.SourceFile): DirectiveComment[] => {
+  const text = sourceFile.text;
+  const comments = new Map<number, ts.CommentRange>();
+  const tokenStarts: number[] = [];
+  const visit = (node: ts.Node): void => {
+    if (isJsDocNode(node)) {
+      return;
+    }
+    // Leading trivia skips a comment on the previous token's own line; the
+    // trailing read at each token's end picks that one up.
+    for (const range of [
+      ...(ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []),
+      ...(ts.getTrailingCommentRanges(text, node.getEnd()) ?? []),
+    ]) {
+      if (range.kind === ts.SyntaxKind.SingleLineCommentTrivia) {
+        comments.set(range.pos, range);
+      }
+    }
+    const children = node.getChildren(sourceFile);
+    if (children.length === 0) {
+      tokenStarts.push(node.getStart(sourceFile));
+    }
+    for (const child of children) {
+      visit(child);
+    }
+  };
+  visit(sourceFile);
+  tokenStarts.sort((a, b) => a - b);
+
+  const lineOf = (position: number): number =>
+    sourceFile.getLineAndCharacterOfPosition(position).line + 1;
+
+  const directives: DirectiveComment[] = [];
+  for (const range of [...comments.values()].toSorted(
+    (a, b) => a.pos - b.pos,
+  )) {
+    const match = DIRECTIVE_BODY.exec(text.slice(range.pos + 2, range.end));
+    if (match === null) {
+      continue;
+    }
+    const line = lineOf(range.pos);
+    const lineStart =
+      range.pos - sourceFile.getLineAndCharacterOfPosition(range.pos).character;
+    const trailing = text.slice(lineStart, range.pos).trim() !== "";
+    const next = tokenStarts.find((position) => position >= range.end);
+    directives.push({
+      line,
+      target: trailing || next === undefined ? line : lineOf(next),
+      variant: match.groups?.["variant"] ?? "",
+      rest: match.groups?.["rest"] ?? "",
+    });
+  }
+  return directives;
 };
 
 export const parseDirectives = (
   sourceFile: ts.SourceFile,
   file: string,
 ): FileDirectives => {
-  const text = sourceFile.text;
-  if (!text.includes(DIRECTIVE_TOKEN)) {
+  if (!sourceFile.text.includes(DIRECTIVE_TOKEN)) {
     return { lines: [], blocks: [], problems: [] };
   }
-  const literals = literalRanges(sourceFile);
-  const sourceLines = text.split("\n");
   const lines: Directive[] = [];
   const blocks: BlockRange[] = [];
   const problems: DbAwaitInLoopDirectiveProblem[] = [];
   let openBlock: Directive | null = null;
 
-  for (const match of text.matchAll(DIRECTIVE_PATTERN)) {
-    const position = match.index;
-    if (literals.some(([start, end]) => position >= start && position < end)) {
-      continue;
-    }
-    const line = sourceFile.getLineAndCharacterOfPosition(position).line + 1;
-    const variant = match.groups?.["variant"] ?? "";
-    const rest = match.groups?.["rest"] ?? "";
-    const before = text
-      .slice(
-        position - sourceFile.getLineAndCharacterOfPosition(position).character,
-        position,
-      )
-      .trim();
-    if (isCommentOnlyLine(before) && before !== "") {
-      // The token is quoted inside another comment's prose, not a directive.
-      continue;
-    }
-    const trailing = before !== "";
-
+  for (const { line, target, variant, rest } of directiveComments(sourceFile)) {
     if (variant === "-enable") {
       if (rest.trim() !== "") {
         problems.push({
@@ -714,16 +739,6 @@ export const parseDirectives = (
       continue;
     }
 
-    let target = line;
-    if (!trailing) {
-      target = line + 1;
-      while (
-        target <= sourceLines.length &&
-        isCommentOnlyLine(sourceLines[target - 1] ?? "")
-      ) {
-        target += 1;
-      }
-    }
     lines.push({ kind: "line", line, target, reason, used: false });
   }
 
@@ -736,6 +751,30 @@ export const parseDirectives = (
     });
   }
   return { lines, blocks, problems };
+};
+
+// The suppressions a file carries, as the check applies them: next-line and
+// trailing directives plus each closed disable/enable block. The ratchet
+// budgets exactly this count, so what it counts and what the check honours
+// cannot drift apart.
+const countParsedDirectives = (directives: FileDirectives): number =>
+  directives.lines.length + directives.blocks.length;
+
+export const countDbAwaitInLoopDirectives = (
+  text: string,
+  file: string,
+): number => {
+  if (!text.includes(DIRECTIVE_TOKEN)) {
+    return 0;
+  }
+  const sourceFile = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  return countParsedDirectives(parseDirectives(sourceFile, file));
 };
 
 export const scanDbAwaitInLoop = ({
@@ -1218,6 +1257,7 @@ export const scanDbAwaitInLoop = ({
   const hits: DbAwaitInLoopHit[] = [];
   const unclassified: DbAwaitInLoopUnclassified[] = [];
   const directiveProblems: DbAwaitInLoopDirectiveProblem[] = [];
+  const directiveCounts: Record<string, number> = {};
   let suppressedHits = 0;
   let filesScanned = 0;
 
@@ -1325,6 +1365,10 @@ export const scanDbAwaitInLoop = ({
 
     const directives = parseDirectives(sourceFile, file);
     directiveProblems.push(...directives.problems);
+    const directiveCount = countParsedDirectives(directives);
+    if (directiveCount > 0) {
+      directiveCounts[file] = directiveCount;
+    }
     for (const hit of fileHits) {
       const lineDirective = directives.lines.find(
         (directive) => directive.target === hit.line,
@@ -1366,6 +1410,7 @@ export const scanDbAwaitInLoop = ({
     directiveProblems: directiveProblems.toSorted(byLocation),
     unclassified: unclassified.toSorted(byLocation),
     filesScanned,
+    directiveCounts,
   };
 };
 
