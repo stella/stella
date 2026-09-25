@@ -91,6 +91,57 @@ test("the persisted tool-call arguments carry TOOL_CALL_END.input, not the strea
   expect(JSON.parse(part.arguments)).toEqual(NORMALIZED_INPUT);
 });
 
+// A call can be completed before its TOOL_CALL_END arrives (RUN_FINISHED
+// completes every open call). The canonical input still replaces the
+// arguments, and the part keeps the state it already reached.
+test("TOOL_CALL_END.input replaces the arguments of a call that was already completed", () => {
+  const timestamp = Date.now();
+  const model = "fixture";
+
+  const part = persistToolCallPart([
+    {
+      type: EventType.RUN_STARTED,
+      runId: "run-1",
+      threadId: "thread-1",
+      model,
+      timestamp,
+    },
+    {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "call-1",
+      toolCallName: TOOL_NAME,
+      parentMessageId: "provider-message-1",
+      timestamp,
+    },
+    {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId: "call-1",
+      delta: WIDENED_ARGUMENTS,
+      model,
+      timestamp,
+    },
+    {
+      type: EventType.RUN_FINISHED,
+      runId: "run-1",
+      threadId: "thread-1",
+      finishReason: "tool_calls",
+      model,
+      timestamp,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    },
+    {
+      type: EventType.TOOL_CALL_END,
+      toolCallId: "call-1",
+      input: NORMALIZED_INPUT,
+      timestamp,
+    },
+  ]);
+
+  expect(part.state).toBe("input-complete");
+  expect(part.input).toEqual(NORMALIZED_INPUT);
+  expect(JSON.parse(part.arguments)).toEqual(NORMALIZED_INPUT);
+});
+
 // An input JSON cannot carry is not canonical: `arguments` and `input` both
 // stay with the streamed value rather than disagreeing.
 test.each([

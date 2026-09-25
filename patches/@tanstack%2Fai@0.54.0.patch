@@ -1,5 +1,5 @@
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
-index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..a76b7c137fc5b26e0ab149a9c0b4ffc5c85121bd 100644
+index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b342445fbe 100644
 --- a/dist/esm/activities/chat/stream/processor.js
 +++ b/dist/esm/activities/chat/stream/processor.js
 @@ -37,6 +37,15 @@ function interruptBatchHasGeneric(interrupts) {
@@ -18,19 +18,34 @@ index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..a76b7c137fc5b26e0ab149a9c0b4ffc5
  /**
  * StreamProcessor - State machine for processing AI response streams
  *
-@@ -838,12 +847,11 @@ var StreamProcessor = class StreamProcessor {
+@@ -837,19 +846,22 @@ var StreamProcessor = class StreamProcessor {
+ 		if (!msgState) return;
  		const input = chunk.input !== void 0 ? chunk.input : tanstackMetadata(chunk)?.input;
  		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
- 		if (existingToolCall && existingToolCall.state !== "input-complete") {
+-		if (existingToolCall && existingToolCall.state !== "input-complete") {
 -			if (input !== void 0 && !existingToolCall.arguments) try {
 -				existingToolCall.arguments = JSON.stringify(input);
 -			} catch {}
+-			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
+-			this.completeToolCall(messageId, index, existingToolCall);
+-			if (input !== void 0) {
++		if (existingToolCall) {
 +			const serializedInput = serializeToolInput(input);
 +			if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;
- 			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
- 			this.completeToolCall(messageId, index, existingToolCall);
--			if (input !== void 0) {
++			const wasComplete = existingToolCall.state === "input-complete";
++			if (!wasComplete) {
++				const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
++				this.completeToolCall(messageId, index, existingToolCall);
++			}
 +			if (serializedInput !== void 0) {
  				existingToolCall.parsedArguments = input;
++				const currentPart = wasComplete ? this.messages.find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === existingToolCall.id) : void 0;
  				this.messages = updateToolCallPart(this.messages, messageId, {
  					id: existingToolCall.id,
+ 					name: existingToolCall.name,
+ 					arguments: existingToolCall.arguments,
+-					state: "input-complete",
++					state: currentPart?.state ?? "input-complete",
+ 					input,
+ 					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
+ 				});
