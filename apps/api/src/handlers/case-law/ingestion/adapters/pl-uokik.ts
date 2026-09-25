@@ -1062,14 +1062,6 @@ export const plUokikDecisionIdentifiers = (
       ];
 };
 
-/** The key the courts' rows that cite this decision can meet it by. */
-export type PlUokikCrossSourceKey = {
-  court: string;
-  caseNumber: string;
-  decisionDate: string | undefined;
-  decisionType: string;
-};
-
 const sha256 = (bytes: Uint8Array): string =>
   new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
@@ -1344,15 +1336,6 @@ export const assemblePlUokikDecision = async ({
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
 
-  const crossSourceKey: PlUokikCrossSourceKey | undefined = placeholder
-    ? undefined
-    : {
-        court: authority,
-        caseNumber,
-        decisionDate,
-        decisionType: PL_UOKIK_DECISION_TYPE,
-      };
-
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = missing !== undefined;
   const decision: IngestionResult = {
@@ -1389,7 +1372,6 @@ export const assemblePlUokikDecision = async ({
         id: quarantined ? undefined : id,
         files,
       }),
-      ...(crossSourceKey === undefined ? {} : { crossSourceKey }),
       ...(listingOnly ? { detailStatus: missing } : {}),
       ...documentStateOf({
         listingOnly,
@@ -1565,12 +1547,6 @@ export const assemblePlUokikRuling = async ({
         : {
             divisionAsPrinted: read.divisionAsPrinted,
             rulingKeys: rulingKeysOf(read),
-            crossSourceKey: {
-              court: read.court,
-              caseNumber: read.caseNumber,
-              decisionDate: read.decisionDate,
-              decisionType: read.decisionType,
-            },
           }),
     }),
     rawHash: hashContent(

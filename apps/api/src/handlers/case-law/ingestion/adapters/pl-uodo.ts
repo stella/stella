@@ -81,6 +81,9 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -1415,17 +1418,35 @@ const assembleAuthorityDecision = ({
 };
 
 /**
- * The key the courts' own database stores the same ruling under: its court,
- * its docket in the shared grammar's spelling, its date and its kind, and the
- * database's document id where the record states one. The rows of both
- * sources carry the same four values, so they meet on them.
+ * The keys the courts' own sources store the same ruling under: the
+ * administrative courts' portal id and court, docket, date and kind for an
+ * administrative court's ruling, and the Supreme Court's and the common
+ * courts' keys for theirs.
  */
-export type PlUodoCrossSourceKey = {
-  court: string;
+const rulingKeysOf = ({
+  court,
+  ...keyed
+}: {
+  court: PlUodoCourt;
   caseNumber: string;
   decisionDate: string | undefined;
   decisionType: string | undefined;
   cbosaDocumentId: string | undefined;
+}): string[] => {
+  const input = {
+    caseNumber: keyed.caseNumber,
+    court: court.name,
+    decisionDate: keyed.decisionDate,
+    decisionType: keyed.decisionType,
+  };
+  return [
+    ...plAdministrativeCourtRulingKeys({
+      ...input,
+      portalDocumentId: keyed.cbosaDocumentId,
+    }),
+    ...plSupremeCourtRulingKeys(input),
+    ...(court.level === "common" ? plCommonCourtRulingKeys(input) : []),
+  ];
 };
 
 /**
@@ -1470,13 +1491,13 @@ const assembleCourtRuling = ({
   const cbosaDocumentId = row.publicator.extids.find(
     (extid) => extid.type === "cbosa",
   )?.id;
-  const crossSourceKey: PlUodoCrossSourceKey = {
-    court: court.name,
+  const rulingKeys = rulingKeysOf({
+    court,
     caseNumber,
     decisionDate,
     decisionType,
     cbosaDocumentId,
-  };
+  });
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
   const decision: IngestionResult = {
@@ -1511,7 +1532,7 @@ const assembleCourtRuling = ({
         : {}),
       ...(row.refname === undefined ? {} : { docketAsPrinted: row.refname }),
       ...(cbosaDocumentId === undefined ? {} : { cbosaDocumentId }),
-      crossSourceKey,
+      rulingKeys,
     }),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO],

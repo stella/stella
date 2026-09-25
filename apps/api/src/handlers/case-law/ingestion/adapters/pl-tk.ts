@@ -35,19 +35,16 @@
  *   numbers and read end to end; the slice's pages are the three stages.
  *
  * Overlap with `pl-courts`: SAOS republished this court until 2015-12-09. The
- * two sources keep separate id spaces; {@link plTkCrossSourceKey} is the key
- * a SAOS row and a row from this portal share when they describe the same
- * ruling, and it is stored on every row here.
+ * two sources keep separate id spaces; {@link plConstitutionalTribunalRulingKeys}
+ * are the keys a SAOS row and a row from this portal share when they describe
+ * the same ruling, stored as `rulingKeys` on the rows of both.
  */
 
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import {
-  isPolishConstitutionalDocket,
-  polishConstitutionalDocketKey,
-} from "@stll/api-contract/decision-docket-grammar";
+import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -80,6 +77,10 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  PL_TK_RULING_FAMILY,
+  plConstitutionalTribunalRulingKeys,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -724,24 +725,8 @@ export const plTkDecisionType = (
   return matched;
 };
 
-/**
- * What a ruling is, whichever source names it: a judgment on the merits
- * (`wyrok`, the pre-1997 `orzeczenie`, and the three 2016 judgments the
- * portal files as `rozstrzygnięcie`), a procedural decision (`postanowienie`,
- * a signalling decision among them), or a resolution (`uchwała`). SAOS names
- * the same three as SENTENCE, DECISION and RESOLUTION.
- */
-const CROSS_SOURCE_FAMILY = {
-  wyrok: "wyrok",
-  orzeczenie: "wyrok",
-  rozstrzygnięcie: "wyrok",
-  postanowienie: "postanowienie",
-  sygnalizacja: "postanowienie",
-  uchwała: "uchwała",
-} as const satisfies Record<PlTkDecisionType, string>;
-
-const isPlTkDecisionType = (value: string): value is PlTkDecisionType =>
-  Object.hasOwn(CROSS_SOURCE_FAMILY, value);
+// Every kind this portal files has a family the key names it by.
+PL_TK_RULING_FAMILY satisfies Record<PlTkDecisionType, string>;
 
 /**
  * The courts this portal is known to publish, as a ruling's text names them.
@@ -774,36 +759,6 @@ export const plTkDecidingCourt = ({
   return caseNumber !== undefined && isPolishConstitutionalDocket(caseNumber)
     ? { type: "stated", court: PL_TK_COURT }
     : { type: "unknown", courtAsPrinted: undefined };
-};
-
-/**
- * The key a ruling of this court carries in every source that republishes
- * it: the docket's shared comparison spelling (without the prefix's dot or
- * letter case, so SAOS's `U. 4/86` meets the portal's `U 4/86`), the
- * decision date, and the kind of ruling. None for a docket that is not the
- * Tribunal's.
- *
- * It is a candidate key, not an identity: the Tribunal issues several
- * procedural decisions in one case on one day often enough (costs orders
- * beside a judgment), so two rows sharing it are the same ruling only when
- * neither source holds a second one under it.
- */
-export const plTkCrossSourceKey = ({
-  caseNumber,
-  decisionDate,
-  decisionType,
-}: {
-  caseNumber: string;
-  decisionDate: string | undefined;
-  decisionType: string | undefined;
-}): string | undefined => {
-  const type = decisionType?.toLocaleLowerCase("pl-PL");
-  if (decisionDate === undefined || type === undefined) {
-    return undefined;
-  }
-  const family = isPlTkDecisionType(type) ? CROSS_SOURCE_FAMILY[type] : type;
-  const docket = polishConstitutionalDocketKey(caseNumber);
-  return docket === null ? undefined : `${docket}|${decisionDate}|${family}`;
 };
 
 /**
@@ -1037,11 +992,12 @@ export const assemblePlTkDecision = ({
         subject: ruling?.subject ?? row.subject,
         ...recordMetadata(page?.record),
         ...rulingMetadata(ruling),
-        crossSourceKey:
+        rulingKeys:
           statedCaseNumber === undefined
             ? undefined
-            : plTkCrossSourceKey({
+            : plConstitutionalTribunalRulingKeys({
                 caseNumber: statedCaseNumber,
+                court,
                 decisionDate,
                 decisionType,
               }),

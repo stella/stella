@@ -381,19 +381,6 @@ describe("a decision", () => {
     expect(JSON.stringify(rulings)).toContain("XVII ama 32-12");
   });
 
-  test("the key a citing court's row meets it by is its authority, number, date and kind", async () => {
-    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
-    const decision = decisionOf(
-      await buildFrom(entry, await pageOf(WITH_RULINGS)),
-    );
-    expect(decision.metadata["crossSourceKey"]).toEqual({
-      court: PRESIDENT,
-      caseNumber: "DOK-9/2011",
-      decisionDate: "2011-11-28",
-      decisionType: "decyzja",
-    });
-  });
-
   test("a page filed with no attachment is the decision without a document, its unlabelled rows kept", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
@@ -414,7 +401,6 @@ describe("a decision", () => {
     expect(decision.caseNumber).toBe(NUMBERLESS);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
-    expect(decision.metadata["crossSourceKey"]).toBeUndefined();
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {
@@ -927,12 +913,6 @@ describe("the court rulings a decision page attaches", () => {
         decisionType: "wyrok",
       }),
     );
-    expect(appeal.metadata["crossSourceKey"]).toEqual({
-      court: "Sąd Apelacyjny w Warszawie",
-      caseNumber: "VI ACa 527/08",
-      decisionDate: "2008-09-29",
-      decisionType: "wyrok",
-    });
     // The Supreme Court's own adapter keys it by docket, date and kind.
     expect(
       rulingNamed(decisions, "Postanowienie III SK 17_09.pdf").metadata[

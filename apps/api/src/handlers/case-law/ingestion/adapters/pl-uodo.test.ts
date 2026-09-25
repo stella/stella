@@ -536,13 +536,10 @@ describe("a court ruling the portal files", () => {
     expect(ruling.documentDelivery).toBeUndefined();
     expect(ruling.fulltext).toBeUndefined();
     expect(ruling.documentAst).toEqual({});
-    expect(ruling.metadata["crossSourceKey"]).toEqual({
-      court: "Wojewódzki Sąd Administracyjny w Warszawie",
-      caseNumber: "II SA/Wa 996/23",
-      decisionDate: "2023-11-06",
-      decisionType: "wyrok",
-      cbosaDocumentId: "CB7D6E6DEE",
-    });
+    expect(ruling.metadata["rulingKeys"]).toEqual([
+      "sa-doc|CB7D6E6DEE",
+      "sa|wojewódzki sąd administracyjny w warszawie|IISA/WA996/23|2023-11-06|wyrok",
+    ]);
   });
 
   test("names its bench by the functions the record prints", async () => {
