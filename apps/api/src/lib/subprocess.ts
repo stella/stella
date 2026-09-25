@@ -14,6 +14,8 @@ type SpawnWorkerOptions = {
   env?: Record<string, string>;
   /** Aborting kills the subprocess instead of letting it run to timeout. */
   signal?: AbortSignal;
+  /** Receives what a worker that exited successfully wrote to stderr. */
+  onStderr?: (stderr: string) => void;
 };
 
 type SpawnBinaryWorkerOptions = SpawnWorkerOptions & {
@@ -185,6 +187,7 @@ export const spawnWorker = async ({
   timeoutMs,
   env,
   signal,
+  onStderr,
 }: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -216,6 +219,9 @@ export const spawnWorker = async ({
       );
     }
 
+    if (stderr.length > 0) {
+      onStderr?.(stderr);
+    }
     return Result.ok(stdout);
   } catch (error) {
     subprocess.kill();

@@ -12,7 +12,8 @@
  * Usage:  bun run extraction-worker.ts <mimeType>
  *   stdin  → raw file bytes
  *   stdout → extracted text (empty if none)
- *   stderr → error messages (captured by parent)
+ *   stderr → error messages (captured by parent), plus one line per
+ *            email attachment whose text could not be extracted
  *   exit 0 = success, exit 1 = extraction error
  */
 
@@ -39,6 +40,10 @@ import {
   isOfficeDocumentMimeType,
   normalizeMimeType,
 } from "@/api/lib/search/extractable-mime-types";
+import {
+  classifyAttachmentError,
+  formatAttachmentIssue,
+} from "@/api/lib/search/extraction-worker-attachments";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -242,7 +247,12 @@ const extractAttachmentPlaintext = async ({
 }): Promise<string | null> => {
   try {
     return await extract(bytes, mimeType, maxChars, nestingDepth);
-  } catch {
+  } catch (error) {
+    // The email keeps its other text; the parent reads this line back to
+    // record the attachment that did not contribute any.
+    process.stderr.write(
+      formatAttachmentIssue(classifyAttachmentError(error, mimeType)),
+    );
     return null;
   }
 };
