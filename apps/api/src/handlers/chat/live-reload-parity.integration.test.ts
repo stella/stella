@@ -804,12 +804,7 @@ describe("a conversation's live view", () => {
       "approve",
     ],
     ["a denial", "fail", [[{ ...STEP, calls: ["approval"] }]], "deny"],
-    [
-      "a denial",
-      "report-error",
-      [[{ ...STEP, calls: ["approval"] }]],
-      "deny",
-    ],
+    ["a denial", "report-error", [[{ ...STEP, calls: ["approval"] }]], "deny"],
   ];
 
   test.each(failsBeforeAnswering)(

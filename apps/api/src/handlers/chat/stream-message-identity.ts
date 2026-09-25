@@ -1,4 +1,5 @@
 import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
+import type { ToolCall } from "@tanstack/ai";
 
 import { Temporal } from "@stll/time";
 
@@ -367,10 +368,18 @@ const keepDeniedApprovals = ({
       },
       message.id,
     );
-    const denied = parts.map((part) =>
-      part.type === "tool-call" ? asStoredDenial(part, deniedApprovals) : part,
-    );
-    return [{ ...message, parts: denied }];
+    // Still a valid AG-UI assistant message, now also carrying `parts`: the
+    // client's `aguiSnapshotMessageToUIMessage` takes a message with `parts`
+    // as it is instead of rebuilding it from `toolCalls`.
+    const inUIForm = {
+      ...message,
+      parts: parts.map((part) =>
+        part.type === "tool-call"
+          ? asStoredDenial(part, deniedApprovals)
+          : part,
+      ),
+    };
+    return [inUIForm];
   });
 };
 
@@ -378,10 +387,17 @@ type SnapshotToolCall = NonNullable<
   AssistantSnapshotMessage["toolCalls"]
 >[number];
 
+/** A wire tool call as the engine's own call type, with the provider
+ *  metadata the snapshot keeps beside it. */
 const withCallMetadata = (
   call: SnapshotToolCall,
   metadata: unknown,
-): SnapshotToolCall => (metadata === undefined ? call : { ...call, metadata });
+): ToolCall => ({
+  function: call.function,
+  id: call.id,
+  type: "function",
+  ...(metadata === undefined ? {} : { metadata }),
+});
 
 type UIToolCallPart = Extract<
   ReturnType<typeof modelMessageToUIMessage>["parts"][number],
@@ -397,8 +413,14 @@ const asStoredDenial = (
   if (approval === undefined) {
     return part;
   }
-  const { output: _output, ...call } = part;
-  return { ...call, approval, state: "approval-responded" };
+  const denied: UIToolCallPart = {
+    ...part,
+    approval,
+    state: "approval-responded",
+  };
+  // The engine's replayed result is what the denial never produced.
+  delete denied.output;
+  return denied;
 };
 
 const remapChunkMessageId = ({
