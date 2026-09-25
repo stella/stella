@@ -97,7 +97,7 @@ export type ExecutionPlanProperty = {
   tool: PropertyTool;
 };
 
-export type PropertyDependency = {
+export type PropertyDependencyEdge = {
   propertyId: string;
   dependsOnPropertyId: string;
   condition: ConditionNode | null;
@@ -113,7 +113,7 @@ type DependencyGraph = {
 
 type ExecutionPlanData = {
   properties: ExecutionPlanProperty[];
-  dependencies: PropertyDependency[];
+  dependencies: PropertyDependencyEdge[];
 };
 
 export const getExecutionPlanData = async (
@@ -152,7 +152,7 @@ export const getExecutionPlanData = async (
     }),
   );
 
-  const edges: PropertyDependency[] = propertiesResult.flatMap((property) =>
+  const edges: PropertyDependencyEdge[] = propertiesResult.flatMap((property) =>
     property.dependencies.flatMap((dep) => {
       const parsed = parseStoredCondition(
         dep.condition,

@@ -1,13 +1,13 @@
 import { createDetached } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import {
   errorFingerprint,
   errorTag,
-  logDevError,
+  logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
 import { getRequestContext } from "@/api/lib/observability/request-context";
@@ -210,7 +210,7 @@ const captureErrorWithOptions = (
 
   // Before the throttle: dev sinks are local and unmetered, and a developer
   // reproducing a tight failure loop needs every occurrence.
-  logDevError(error, properties);
+  logServerDevError(error, properties);
 
   const suppressed = admitCapture(
     captureWindowKey(properties),
@@ -220,7 +220,7 @@ const captureErrorWithOptions = (
     return;
   }
 
-  getAnalytics().capture({
+  getServerAnalytics().capture({
     distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
     event: SERVER_ANALYTICS_EVENTS.exception,
     ...(options.organizationId

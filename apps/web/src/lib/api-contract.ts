@@ -39,7 +39,7 @@ type PropertiesResponse =
 // silently drifting.
 export type WorkspacePropertyWire = PropertiesResponse[number];
 export type PropertyContent = PropertiesResponse[number]["content"];
-export type OptionColor = Extract<
+export type PropertyOptionColor = Extract<
   PropertyContent,
   { type: "multi-select" | "single-select" }
 >["options"][number]["color"];

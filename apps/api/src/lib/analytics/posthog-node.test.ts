@@ -18,7 +18,7 @@ void mock.module("posthog-node", () => ({
   PostHog: MockPostHog,
 }));
 
-const { createPostHogAnalytics } = await import("./posthog-node");
+const { createPostHogNodeAnalytics } = await import("./posthog-node");
 
 // Pinned as a literal on purpose: it must equal the browser adapter's group
 // type so client and server events land on one profile. Importing the
@@ -33,7 +33,7 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("upserts the organization group under the shared group type", () => {
-    const analytics = createPostHogAnalytics(
+    const analytics = createPostHogNodeAnalytics(
       "phc_test",
       "https://posthog.test",
     );
@@ -54,7 +54,7 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("captures only explicitly allowed server telemetry events", () => {
-    const analytics = createPostHogAnalytics(
+    const analytics = createPostHogNodeAnalytics(
       "phc_test",
       "https://posthog.test",
     );

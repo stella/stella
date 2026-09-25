@@ -110,7 +110,7 @@ import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureRequestError, detached } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   getAuth,
   resolveUserRealtimeAuthorization,
@@ -514,7 +514,7 @@ const api = new Elysia()
     }
 
     if (!env.isDev && shouldLogRequest(path)) {
-      const analytics = getAnalytics();
+      const analytics = getServerAnalytics();
       await analytics.flush().catch((error: unknown) => {
         logger.error("analytics.flush.failed", {
           "error.type": errorTag(error),

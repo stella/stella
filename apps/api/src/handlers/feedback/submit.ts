@@ -43,7 +43,7 @@ import {
   sanitizeFeedbackReport,
 } from "@/api/handlers/feedback/sanitize-report";
 import { captureError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type {
   FeedbackDeliveryOutcome,
   FeedbackReportSubmittedProperties,
@@ -425,7 +425,7 @@ const recordAnalytics = ({
     return;
   }
 
-  getAnalytics().capture({
+  getServerAnalytics().capture({
     distinctId,
     event: SERVER_ANALYTICS_EVENTS.feedbackReportSubmitted,
     ...(organizationId === undefined

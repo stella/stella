@@ -62,7 +62,7 @@ const annotateDirective = (
   return paragraph;
 };
 
-export const extractText = async (
+export const extractDocxDocument = async (
   docxBytes: Uint8Array,
 ): Promise<ExtractedDocument> => {
   const result = await extractDocxText(docxBytes);
@@ -129,6 +129,6 @@ export const documentTextForAiFields = async (
   if (!wantsDocumentText) {
     return undefined;
   }
-  const { paragraphs } = await extractText(docxBytes);
+  const { paragraphs } = await extractDocxDocument(docxBytes);
   return paragraphs.map((paragraph) => paragraph.text).join("\n");
 };

@@ -1421,32 +1421,13 @@
     "files": {}
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 29,
+    "count": 6,
     "files": {
-      "apps/web/src/lib/analytics/posthog.ts": 1,
-      "apps/web/src/lib/analytics/provider.tsx": 1,
-      "apps/web/src/lib/analytics/types.ts": 1,
-      "apps/web/src/lib/citations.ts": 2,
       "apps/web/src/lib/detached.ts": 1,
-      "apps/web/src/lib/errors/telemetry.ts": 1,
-      "apps/web/src/lib/knowledge/playbook-types.ts": 1,
       "apps/web/src/lib/safe-id.ts": 1,
-      "apps/web/src/lib/types.ts": 1,
       "packages/api-contract/src/safe-id.ts": 2,
       "packages/business-registries/src/shared/guards.ts": 1,
-      "packages/chat/src/runtime.ts": 2,
-      "packages/cli/src/auth/cli-config.ts": 1,
-      "packages/cli/src/auth/oauth-metadata.ts": 1,
-      "packages/cli/src/auth/pkce.ts": 1,
-      "packages/cli/src/auth/token-exchange.ts": 2,
-      "packages/cli/src/generate-capability-tree.ts": 2,
-      "packages/cli/src/json-schema-validate.ts": 1,
-      "packages/docx-utils/src/zip.ts": 1,
-      "packages/template-conditions/src/field-values.ts": 1,
-      "packages/template-conditions/src/index.ts": 1,
-      "packages/template-conditions/src/path.ts": 1,
-      "packages/ui/src/lib/option-color.ts": 1,
-      "packages/workspace-model/src/properties.ts": 1
+      "packages/template-conditions/src/index.ts": 1
     }
   },
   "duplicate-token-blocks": {

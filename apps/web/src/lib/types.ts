@@ -174,7 +174,7 @@ export type WorkspaceProperty = Omit<
   role?: WorkspacePropertyWire["role"];
 };
 
-export type WorkspacePropertyOption = {
+export type SelectPropertyOption = {
   color: OptionColor;
   value: string;
 };

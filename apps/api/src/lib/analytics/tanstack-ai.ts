@@ -42,10 +42,10 @@ import {
 } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
-import { getAnalytics } from "./client";
+import { getServerAnalytics } from "./client";
 import {
   SERVER_ANALYTICS_EVENTS,
-  type Analytics,
+  type ServerAnalytics,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
@@ -93,7 +93,7 @@ type TanStackAIAnalyticsProps = {
   sessionId?: string;
   distinctId?: string;
   properties?: AnalyticsMetadata;
-  analytics?: Analytics;
+  analytics?: ServerAnalytics;
   modelRole?: ModelRole;
   /**
    * Explicit per-turn model selection (dev override or validated
@@ -331,7 +331,7 @@ const recordTanStackConsumption = async ({
 };
 
 export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getAnalytics(),
+  analytics = getServerAnalytics(),
   ...config
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;

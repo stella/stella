@@ -1,4 +1,4 @@
-import type { Analytics } from "@/api/lib/analytics/server-analytics";
+import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
@@ -12,7 +12,7 @@ type PersistedOrganization = {
 };
 
 type OrganizationLifecycleHooksOptions = {
-  analytics: Analytics;
+  analytics: ServerAnalytics;
   seedDefaultDocumentTypes: (
     organizationId: SafeId<"organization">,
   ) => Promise<void>;
@@ -21,7 +21,7 @@ type OrganizationLifecycleHooksOptions = {
 // Mirrors the organization's display name onto its PostHog group profile so
 // insights and group pages show a name instead of an opaque id.
 const identifyOrganizationName = (
-  analytics: Analytics,
+  analytics: ServerAnalytics,
   { id, name }: PersistedOrganization,
 ): void => {
   analytics.identifyOrganizationGroup({

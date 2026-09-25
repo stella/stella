@@ -27,7 +27,7 @@ import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
   WorkspaceField,
-  WorkspacePropertyOption,
+  SelectPropertyOption,
 } from "@/lib/types";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -140,7 +140,7 @@ type EditFieldDialogProps = {
   propertyId: string;
   entityId: string;
   entityKind: EntityKind;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   fieldContent: EditableFieldContent;
   className: string;
 };

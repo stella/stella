@@ -10,7 +10,7 @@ import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
 // Hand-written rather than `v.InferOutput<typeof schema>` (see
 // `cli-config.ts` for why: this package builds with `isolatedDeclarations`).
-export type TokenResponse = {
+export type TokenEndpointResponse = {
   readonly access_token: string;
   readonly expires_in: number;
   /** Issued when `openid` was granted; carries the email/name the access token lacks. */
@@ -59,7 +59,7 @@ const describeTokenEndpointError = async (
   };
 };
 
-export type ExchangeAuthorizationCodeInput = {
+export type RedeemAuthorizationCodeInput = {
   readonly metadata: AuthorizationServerMetadata;
   readonly clientId: string;
   readonly code: string;
@@ -68,15 +68,15 @@ export type ExchangeAuthorizationCodeInput = {
   readonly resource: string;
 };
 
-export const exchangeAuthorizationCode = async ({
+export const redeemAuthorizationCode = async ({
   clientId,
   code,
   codeVerifier,
   metadata,
   redirectUri,
   resource,
-}: ExchangeAuthorizationCodeInput): Promise<
-  Result<TokenResponse, TokenExchangeError>
+}: RedeemAuthorizationCodeInput): Promise<
+  Result<TokenEndpointResponse, TokenExchangeError>
 > => {
   const body = new URLSearchParams({
     client_id: clientId,
@@ -129,7 +129,7 @@ export const refreshAccessToken = async ({
   refreshToken,
   resource,
 }: RefreshAccessTokenInput): Promise<
-  Result<TokenResponse, TokenRefreshError>
+  Result<TokenEndpointResponse, TokenRefreshError>
 > => {
   const body = new URLSearchParams({
     client_id: clientId,

@@ -46,7 +46,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { OptionColor } from "@/lib/api-contract";
+import type { PropertyOptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
@@ -582,7 +582,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const handleChangeColor = (() => {
     if (groupByProperty) {
-      return (optionValue: string, newColor: OptionColor) => {
+      return (optionValue: string, newColor: PropertyOptionColor) => {
         if (
           groupByProperty.content.type !== "single-select" &&
           groupByProperty.content.type !== "multi-select"
