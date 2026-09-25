@@ -9,6 +9,8 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
 
 import {
   AIGenerationCancelledError,
@@ -20,14 +22,20 @@ import type {
   ChatTerminalError,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
+import type { AwsExceptionName } from "@/api/lib/observability/failure";
+import {
+  providerStatusFieldsOf,
+  shadowGradeFields,
+} from "@/api/lib/observability/failure";
+import {
+  readEvidence,
+  readProviderStatus,
+} from "@/api/lib/observability/failure-evidence";
 
 export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
-const HTTP_STATUS_MIN = 100;
-const HTTP_STATUS_MAX = 599;
 const HTTP_SERVER_ERROR_MIN = 500;
-const HTTP_STATUS_STRING_PATTERN = /^[1-5]\d{2}$/u;
 
 // TanStack preserves these provider-owned response-body values when an adapter
 // cannot preserve the numeric status itself (notably OpenAI's 401 response).
@@ -42,27 +50,6 @@ const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
-const isHttpStatus = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isInteger(value) &&
-  value >= HTTP_STATUS_MIN &&
-  value <= HTTP_STATUS_MAX;
-
-const httpStatusFromString = (value: unknown): number | null => {
-  if (typeof value !== "string" || !HTTP_STATUS_STRING_PATTERN.test(value)) {
-    return null;
-  }
-  const status = Number(value);
-  return isHttpStatus(status) ? status : null;
-};
-
-const httpStatusFromValue = (value: unknown): number | null => {
-  if (isHttpStatus(value)) {
-    return value;
-  }
-  return httpStatusFromString(value);
-};
-
 /**
  * The provider HTTP status one link of an error chain carries, or `null` when
  * that link carries none of its own.
@@ -71,73 +58,14 @@ const httpStatusFromValue = (value: unknown): number | null => {
  * the same way: naming the failure here, and the service-tier retry predicate
  * in `tanstack-ai-generate`. A second reader drifts, and it drifts silently,
  * because both agree on the shape the tests happen to use and disagree on the
- * one production sends. The `HandlerError` exclusion below is exactly such a
+ * one production sends. The `HandlerError` exclusion is exactly such a
  * disagreement: a reader without it names every wrapped failure 502 and reads
  * a permanent credential, billing or retired-model answer as a server error.
+ * The rule lives with the failure snapshot, so the status a failure is graded
+ * and logged with is the one it is answered with.
  */
-export const providerStatusCode = (error: unknown): number | null => {
-  if (!isRecord(error)) {
-    return null;
-  }
-
-  // A `HandlerError` answers with a status of this service's own: the AI stack
-  // wraps a provider failure in a fixed 502 and keeps the provider's status in
-  // `code`. Reading `status` off one names every wrapped failure by the
-  // wrapper, so only the provider-owned fields below are read for it.
-  if (!HandlerError.is(error)) {
-    // Range-checked like the nested body fields below: an integer outside the
-    // HTTP range is not a status, and treating one as one both mis-names the
-    // failure (>= 500 would read as a provider outage) and puts a meaningless
-    // number in the failure log.
-    const statusCode = error["statusCode"];
-    if (isHttpStatus(statusCode)) {
-      return statusCode;
-    }
-
-    const status = error["status"];
-    if (isHttpStatus(status)) {
-      return status;
-    }
-  }
-
-  // An AWS SDK service exception (Bedrock) keeps the response status in its
-  // `$metadata`.
-  const metadata = error["$metadata"];
-  if (isRecord(metadata)) {
-    const metadataStatus = metadata["httpStatusCode"];
-    if (isHttpStatus(metadataStatus)) {
-      return metadataStatus;
-    }
-  }
-
-  // TanStack's RUN_ERROR contract carries `code` as a string, while raw
-  // provider events can carry the same HTTP status as a number. Accept either
-  // representation here; symbolic provider codes still need an explicit
-  // classification.
-  const codeStatus = httpStatusFromValue(error["code"]);
-  if (codeStatus !== null) {
-    return codeStatus;
-  }
-
-  // A provider response body nests the status one level down, as
-  // `{ error: { code, message, status } }`, where `code` is the HTTP status and
-  // `status` its symbolic name. Only an integer inside the HTTP range counts,
-  // so a body whose `code` is symbolic ("insufficient_quota") or an
-  // application error number still falls through to the cause walk.
-  const body = error["error"];
-  if (isRecord(body)) {
-    const bodyStatus = body["status"];
-    if (isHttpStatus(bodyStatus)) {
-      return bodyStatus;
-    }
-    const bodyCode = httpStatusFromValue(body["code"]);
-    if (bodyCode !== null) {
-      return bodyCode;
-    }
-  }
-
-  return null;
-};
+export const providerStatusCode = (error: unknown): number | null =>
+  readProviderStatus(error)?.status ?? null;
 
 const isProviderCredentialRejection = (error: unknown): boolean => {
   if (!isRecord(error)) {
@@ -180,9 +108,7 @@ const AWS_EXCEPTION_KINDS = {
   ServiceUnavailableException: "provider_unavailable",
   ThrottlingException: "quota_exhausted",
   ValidationException: "unknown",
-} as const satisfies Record<string, AIErrorKind>;
-
-type AwsExceptionName = keyof typeof AWS_EXCEPTION_KINDS;
+} as const satisfies Record<AwsExceptionName, AIErrorKind>;
 
 const isAwsExceptionName = (name: unknown): name is AwsExceptionName =>
   typeof name === "string" && Object.hasOwn(AWS_EXCEPTION_KINDS, name);
@@ -235,23 +161,6 @@ const errorCause = (error: unknown): unknown => {
     return undefined;
   }
   return error["cause"];
-};
-
-// The first provider status in the cause chain, walked exactly as
-// `classifyAIError` walks it so the status a failure is logged with is the
-// one the classifier judged it by.
-const providerStatusCodeFromCauseChain = (error: unknown): number | null => {
-  const seen = new Set<object>();
-  let candidate = error;
-  while (isRecord(candidate) && !seen.has(candidate)) {
-    seen.add(candidate);
-    const status = providerStatusCode(candidate);
-    if (status !== null) {
-      return status;
-    }
-    candidate = errorCause(candidate);
-  }
-  return null;
 };
 
 const classifyAIErrorInternal = (
@@ -350,11 +259,12 @@ export const classifyAIError = (error: unknown): AIErrorKind =>
  * non-`Error` to a bare `UnknownError`, leaving the two indistinguishable in
  * the log.
  *
- * The walk mirrors `classifyAIError`'s: a status reached only through a
- * wrapper's `cause` is the same evidence, and reading just the outer error
- * would report nothing for the shapes the classifier looked hardest at. A
- * status found here is always one the classifier could not map, because a
- * mapped one makes the failure anticipated and it is never logged.
+ * The walk follows `cause` like `classifyAIError`'s: a status reached only
+ * through a wrapper's `cause` is the same evidence, and reading just the
+ * outer error would report nothing for the shapes the classifier looked
+ * hardest at. It reads the shared failure snapshot, bounded at six levels
+ * where the classifier is not; a status deeper than that is a chain no
+ * provider adapter builds.
  *
  * An integer status is structural, so it ships under the same non-PII
  * contract as `error.class`. The body it was read from is never logged: a
@@ -364,8 +274,10 @@ export const classifyAIError = (error: unknown): AIErrorKind =>
 export const providerStatusFields = (
   error: unknown,
 ): Record<string, string> => {
-  const status = providerStatusCodeFromCauseChain(error);
-  return status === null ? {} : { "error.provider.status": String(status) };
+  const fields = providerStatusFieldsOf(readEvidence(error));
+  return Object.keys(fields).length === 0
+    ? fields
+    : { ...fields, ...shadowGradeFields(error) };
 };
 
 // Total over `ChatTerminalError`, so a new terminal outcome cannot be added to
@@ -450,19 +362,37 @@ type AIHandlerErrorFallback = {
   message: string;
 };
 
+// The failure reason each named kind is observed as. Total over the named
+// kinds, so a new kind cannot ship without deciding how a sink grades it.
+const AI_ERROR_KIND_FAILURE_REASON = {
+  quota_exhausted: "quota_exhausted",
+  provider_billing: "provider_billing",
+  provider_credentials_rejected: "provider_credentials_rejected",
+  model_unavailable: "model_unavailable",
+  provider_unavailable: "provider_unavailable",
+  loop_detected: "chat_loop_detected",
+  empty_completion: "chat_empty_completion",
+} as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
+
 /**
- * Build a `HandlerError` for an AI provider failure.
- *
- * For known AI failure modes (quota, usage limits, transient
- * upstream outage) returns a typed error with an actionable
- * status + message. For everything else, returns the caller's
- * fallback so unrelated bugs aren't masked as "AI unavailable".
+ * Name a failure at the AI boundary, and classify it for every sink that
+ * later observes it: the decision the classifier makes here, with its
+ * unbounded walk, is the one a sink records, so a bare provider error and the
+ * same error wrapped by `aiHandlerError` grade alike.
  */
-export const aiHandlerError = (
+export const classifyAIBoundaryFailure = (error: unknown): AIErrorKind => {
+  const kind = classifyAIError(error);
+  if (kind !== "unknown" && typeof error === "object" && error !== null) {
+    classifyFailure(error, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  }
+  return kind;
+};
+
+const aiKindHandlerError = (
+  kind: AIErrorKind,
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
-  const kind = classifyAIError(error);
   switch (kind) {
     case "quota_exhausted":
       return new HandlerError({
@@ -520,6 +450,28 @@ export const aiHandlerError = (
       return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
+};
+
+/**
+ * Build a `HandlerError` for an AI provider failure.
+ *
+ * For known AI failure modes (quota, usage limits, transient
+ * upstream outage) returns a typed error with an actionable
+ * status + message, classified with the kind before it is wrapped: the
+ * status answers the caller, the classification tells a failure sink what
+ * happened. A provider 429 answered 429 is still an exhausted quota, not a
+ * client error. For everything else, returns the caller's fallback so
+ * unrelated bugs aren't masked as "AI unavailable".
+ */
+export const aiHandlerError = (
+  error: unknown,
+  fallback: AIHandlerErrorFallback,
+): HandlerError => {
+  const kind = classifyAIBoundaryFailure(error);
+  const handlerError = aiKindHandlerError(kind, error, fallback);
+  return kind === "unknown"
+    ? handlerError
+    : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
 };
 
 type AIErrorStatusBody = {

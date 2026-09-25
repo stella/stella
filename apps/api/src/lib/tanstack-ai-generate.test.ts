@@ -13,6 +13,8 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   generateTanStackObjectForRole,
@@ -1268,6 +1270,17 @@ describe("TanStack AI text generation", () => {
     // The 502 is what the caller answers with; the cause is what keeps a
     // failure sink from grading a caller-requested cancellation as a defect.
     expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+    // The failure owner reads the helper's own classification of the 502.
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({
+      reason: "generation_cancelled",
+      grade: "anticipated",
+      rule: "brand",
+    });
   });
 
   test("classifies an abort rejection from a cancelled run as anticipated", async () => {
