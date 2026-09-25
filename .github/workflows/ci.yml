@@ -1255,7 +1255,7 @@ jobs:
         run: |
           bun test --preload ./apps/api/src/tests/setup-env.ts \
             scripts/check-api-cli-contract.test.ts
-          bun test scripts/quickwit-compose-contract.test.ts
+          bun test scripts/dev-compose-contract.test.ts
 
       # Self-test the desktop-release skip decision. This script
       # decides whether prod desktop users get an update at all; a
