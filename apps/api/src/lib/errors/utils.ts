@@ -20,8 +20,8 @@ import {
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 // Re-exported so callers keep one import path, while modules that must not
-// pay this file's import-time env read can take them from the split module.
-export { errorClassName, errorTag };
+// pay this file's import-time env read can take it from the split module.
+export { errorTag };
 
 /**
  * Non-PII connection/system fields for infra observability.
@@ -111,7 +111,7 @@ const safeErrorStringProperty = (
   return typeof value === "string" && value !== "" ? value : undefined;
 };
 
-export const safeErrorCause = (error: Error): unknown => {
+const safeErrorCause = (error: Error): unknown => {
   try {
     return Reflect.get(error, "cause");
   } catch {

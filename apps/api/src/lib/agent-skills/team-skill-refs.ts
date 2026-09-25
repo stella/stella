@@ -13,7 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  * request next to the documents, so the bound keeps prompts that link many
  * skills from crowding out the sources.
  */
-export const TEAM_SKILL_REFS_PRELOAD_MAX = 3;
+const TEAM_SKILL_REFS_PRELOAD_MAX = 3;
 
 type LoadedTeamSkill = {
   body: string;

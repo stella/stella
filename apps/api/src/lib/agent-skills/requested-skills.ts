@@ -19,7 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  * system prompt, so the bound keeps a message that references many skills
  * from crowding out the conversation; the rest stay loadable by `load-skill`.
  */
-export const REQUESTED_SKILLS_PRELOAD_MAX = 3;
+const REQUESTED_SKILLS_PRELOAD_MAX = 3;
 
 export type RequestedSkills = {
   /** Referenced, available, and loaded for this turn. */

@@ -13,7 +13,7 @@ export const SKILL_READ_SURFACE = {
   mcp: "mcp",
 } as const;
 
-export type SkillReadSurface =
+type SkillReadSurface =
   (typeof SKILL_READ_SURFACE)[keyof typeof SKILL_READ_SURFACE];
 
 export const SKILL_READ_OUTCOME = {
@@ -37,7 +37,7 @@ type SkillReadAuditEventOptions = {
  * The one audit event for an agent reading a stored skill, whichever surface
  * served it. It names the skill and the file, never the content.
  */
-export const skillReadAuditEvent = ({
+const skillReadAuditEvent = ({
   outcome,
   path,
   skillId,
