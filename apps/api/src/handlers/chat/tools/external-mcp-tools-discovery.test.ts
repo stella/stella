@@ -251,3 +251,47 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
     expect(fakeClient.close).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("loadExternalMcpToolsForUser across connectors", () => {
+  test("discovers every connector at once and keeps the listing's order", async () => {
+    const first: LoadedMcpConnection = {
+      ...buildRow(),
+      connectorId: toSafeId<"mcpConnector">("connector-first"),
+      slug: "first",
+      userConnectionId: toSafeId<"mcpUserConnection">("connection-first"),
+    };
+    const second: LoadedMcpConnection = {
+      ...buildRow(),
+      connectorId: toSafeId<"mcpConnector">("connector-second"),
+      slug: "second",
+      userConnectionId: toSafeId<"mcpUserConnection">("connection-second"),
+    };
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue([first, second]);
+    // The first connector answers only once the second has started, so a
+    // discovery that waited for one connector before the next never settles.
+    const secondStarted = createDeferred<undefined>();
+    createMcpClientForConnectionMock.mockImplementation(
+      async ({ row }: { row: LoadedMcpConnection }) => {
+        if (row.slug === "first") {
+          await secondStarted.promise;
+        } else {
+          secondStarted.resolve(undefined);
+        }
+        return asMcpClient(buildFakeClient());
+      },
+    );
+
+    const loaded = await loadExternalMcpToolsForUserForTest({
+      nullUnionStrategy: "json-schema",
+      organizationId: orgId,
+      safeDb: stubSafeDb,
+      userId,
+    });
+
+    expect(loaded.connectors.map((connector) => connector.slug)).toEqual([
+      "first",
+      "second",
+    ]);
+    await loaded.close();
+  });
+});

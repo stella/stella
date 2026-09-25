@@ -2,6 +2,8 @@ import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { Result } from "better-result";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   getExternalMcpToolDefinitionsForConnector,
@@ -12,6 +14,7 @@ import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createMcpClientForConnection,
   loadActiveMcpConnectionsForUser,
@@ -82,21 +85,21 @@ export const loadExternalMcpToolsForUser = async ({
   // upstream server no longer multiplies latency by connector count the
   // way a sequential loop would. A per-connector failure — including a
   // timeout — degrades to "no tools from that connector" rather than
-  // failing the whole load; see `loadConnectorTools`.
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-connector client, credentials and upstream tool discovery; nothing to batch
-  const results = await Promise.all(
-    rows.map(
-      async (row) =>
-        await loadConnectorTools({
-          nullUnionStrategy,
-          organizationId,
-          row,
-          safeDb,
-          userId,
-          dependencies,
-        }),
-    ),
-  );
+  // failing the whole load; see `loadConnectorTools`. The listing already
+  // caps rows at the gateway's connector limit, so the pool never queues.
+  const results = await mapWithConcurrency({
+    items: rows,
+    limit: LIMITS.mcpGatewayConnectorsMax,
+    operation: async (row) =>
+      await loadConnectorTools({
+        nullUnionStrategy,
+        organizationId,
+        row,
+        safeDb,
+        userId,
+        dependencies,
+      }),
+  });
 
   const clients: MCPClient[] = [];
   const connectors: LoadedExternalMcpConnector[] = [];
