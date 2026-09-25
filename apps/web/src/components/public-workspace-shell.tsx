@@ -28,12 +28,14 @@ import {
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarProvider,
   SidebarToggleHotkey,
   useSidebar,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
+import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -342,19 +344,25 @@ const PublicSidebar = ({
           {authStatus.isAuthenticated && <FeedbackSidebarItem />}
           {authStatus.status === "anonymous" && (
             <SidebarMenuItem>
-              <SidebarMenuButton
-                aria-label={t("auth.signIn")}
-                className="h-auto gap-2 p-2"
-                onClick={() => requestAuth(currentHref)}
-                tooltip={t("auth.signIn")}
+              <Tooltip
+                content={isCollapsed ? t("auth.signIn") : null}
+                render={
+                  <button
+                    aria-label={t("auth.signIn")}
+                    className={cn(sidebarIdentityTriggerClassName(isCollapsed))}
+                    onClick={() => requestAuth(currentHref)}
+                    type="button"
+                  />
+                }
+                side="right"
               >
                 <Avatar className="size-7 rounded-full">
                   <AvatarFallback>
                     <CircleUserRoundIcon className="size-4" />
                   </AvatarFallback>
                 </Avatar>
-                <span>{t("auth.signIn")}</span>
-              </SidebarMenuButton>
+                {!isCollapsed && <span>{t("auth.signIn")}</span>}
+              </Tooltip>
             </SidebarMenuItem>
           )}
           {authStatus.isAuthenticated && (

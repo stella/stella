@@ -593,6 +593,22 @@ const sidebarMenuButtonVariants = cva(
   },
 );
 
+/**
+ * The footer's avatar trigger, signed in (user menu) or not (sign-in): a
+ * 28px avatar, then its label while expanded. Collapsed, it is the rail's
+ * 32px square with the avatar centred on the axis of the icons above.
+ *
+ * Not a `SidebarMenuButton` size: that button fades its last span when
+ * collapsed, and an avatar renders as a span. Every avatar trigger takes
+ * this class and renders its label only while expanded, so the two auth
+ * states cannot drift apart.
+ */
+const sidebarIdentityTriggerClassName = (collapsed: boolean): string =>
+  cn(
+    "ring-sidebar-ring hover:bg-sidebar-accent flex items-center overflow-hidden rounded-md text-start text-sm outline-hidden focus-visible:ring-2",
+    collapsed ? "size-8 justify-center p-0.5" : "w-full gap-2 p-2",
+  );
+
 const SidebarMenuButton = ({
   asChild = false,
   isActive = false,
@@ -801,6 +817,7 @@ export {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,
