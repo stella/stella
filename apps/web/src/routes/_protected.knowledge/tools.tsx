@@ -179,7 +179,7 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
     ]);
 
     return {
-      canImportSkills: authClient.organization.checkRolePermission({
+      canCreateSkills: authClient.organization.checkRolePermission({
         permissions: { agentSkill: ["create"] },
         role,
       }),
@@ -207,11 +207,11 @@ function ToolsPage() {
   });
   const routeData = Route.useLoaderData({
     select: ({
-      canImportSkills,
+      canCreateSkills,
       canManageCustomTools,
       practiceJurisdictions,
     }) => ({
-      canImportSkills,
+      canCreateSkills,
       canManageCustomTools,
       practiceJurisdictions,
     }),
@@ -252,7 +252,7 @@ function ToolsPage() {
       <ToolsPageHeader />
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
         <LazyCatalogueBrowser
-          canImportSkills={routeData.canImportSkills}
+          canCreateSkills={routeData.canCreateSkills}
           canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
           initialSlug={initialSlug}
