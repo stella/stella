@@ -23,32 +23,29 @@ import {
 } from "@/components/chat/docked-composer";
 
 export const GatedChatComposer = (props: FileChatPlaceholderSource) => {
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
   const { placeholder, placeholderAction, sourceLabel } =
     useFileChatPlaceholder(props);
 
   return (
-    <>
-      <DockedComposer
-        bar={
-          <PromptBarPending
-            activation={{
-              // The editor's own placeholder names the document, which is what
-              // a screen reader needs from a bar it cannot type into.
-              label: placeholder ?? "",
-              onActivate: () => {
-                ensureAccount("askAboutDocument");
-              },
-            }}
-          >
-            <FileChatEmptyPlaceholder
-              placeholderAction={placeholderAction}
-              sourceLabel={sourceLabel}
-            />
-          </PromptBarPending>
-        }
-      />
-      {accountDialog}
-    </>
+    <DockedComposer
+      bar={
+        <PromptBarPending
+          activation={{
+            // The editor's own placeholder names the document, which is what
+            // a screen reader needs from a bar it cannot type into.
+            label: placeholder ?? "",
+            onActivate: () => {
+              ensureAccount();
+            },
+          }}
+        >
+          <FileChatEmptyPlaceholder
+            placeholderAction={placeholderAction}
+            sourceLabel={sourceLabel}
+          />
+        </PromptBarPending>
+      }
+    />
   );
 };

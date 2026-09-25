@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
-    "requireAccount": {
-      "askAboutDocument": "Hozzon létre ingyenes fiókot, hogy kérdezhessen erről a dokumentumról",
-      "askInChat": "Hozzon létre ingyenes fiókot, hogy ezt megkérdezhesse a csevegésben",
-      "description": "Amint elkészül a fiókja, visszatér erre az oldalra.",
-      "generateHeadnotes": "Hozzon létre ingyenes fiókot az AI jogi tételek elkészítéséhez",
-      "refineSearch": "Hozzon létre ingyenes fiókot, hogy AI-val javíthassa a keresését",
-      "writeResearchQuestion": "Hozzon létre ingyenes fiókot, hogy kérdést tegyen fel ezeknek a találatoknak"
-    },
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",

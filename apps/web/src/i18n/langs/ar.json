@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
-    "requireAccount": {
-      "askAboutDocument": "أنشئ حسابًا مجانيًا لطرح سؤال عن هذا المستند",
-      "askInChat": "أنشئ حسابًا مجانيًا لطرح هذا السؤال في الدردشة",
-      "description": "ستعود إلى هذه الصفحة بمجرد أن يصبح حسابك جاهزًا.",
-      "generateHeadnotes": "أنشئ حسابًا مجانيًا لتوليد خلاصات الحكم بالذكاء الاصطناعي",
-      "refineSearch": "أنشئ حسابًا مجانيًا لتحسين بحثك بالذكاء الاصطناعي",
-      "writeResearchQuestion": "أنشئ حسابًا مجانيًا لطرح سؤال على هذه النتائج"
-    },
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",

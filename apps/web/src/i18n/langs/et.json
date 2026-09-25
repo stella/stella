@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
-    "requireAccount": {
-      "askAboutDocument": "Loo tasuta konto, et selle dokumendi kohta küsida",
-      "askInChat": "Loo tasuta konto, et seda vestluses küsida",
-      "description": "Kui konto on valmis, naasete sellele lehele.",
-      "generateHeadnotes": "Loo tasuta konto, et AI koostaks lühikokkuvõtted",
-      "refineSearch": "Loo tasuta konto, et otsingut AI-ga täpsustada",
-      "writeResearchQuestion": "Loo tasuta konto, et nende tulemuste kohta küsimus esitada"
-    },
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",

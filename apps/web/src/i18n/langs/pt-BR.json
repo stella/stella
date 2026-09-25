@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
-    "requireAccount": {
-      "askAboutDocument": "Crie uma conta gratuita para perguntar sobre este documento",
-      "askInChat": "Crie uma conta gratuita para perguntar isso no chat",
-      "description": "Você voltará a esta página assim que sua conta estiver pronta.",
-      "generateHeadnotes": "Crie uma conta gratuita para gerar ementas com IA",
-      "refineSearch": "Crie uma conta gratuita para melhorar sua pesquisa com IA",
-      "writeResearchQuestion": "Crie uma conta gratuita para fazer uma pergunta a estes resultados"
-    },
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",

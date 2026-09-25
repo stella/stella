@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
-    "requireAccount": {
-      "askAboutDocument": "Vytvorte si bezplatný účet a spýtajte sa na tento dokument",
-      "askInChat": "Vytvorte si bezplatný účet a spýtajte sa na to v chate",
-      "description": "Keď bude účet hotový, vrátite sa na túto stránku.",
-      "generateHeadnotes": "Vytvorte si bezplatný účet a nechajte AI zostaviť právne vety",
-      "refineSearch": "Vytvorte si bezplatný účet a vylepšite vyhľadávanie pomocou AI",
-      "writeResearchQuestion": "Vytvorte si bezplatný účet a položte týmto výsledkom otázku"
-    },
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
