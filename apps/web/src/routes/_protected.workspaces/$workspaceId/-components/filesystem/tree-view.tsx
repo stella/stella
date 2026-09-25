@@ -63,7 +63,7 @@ import {
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
 import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
-import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-flash";
+import { flashElement } from "@/components/workspaces/hooks/use-inspector-flash";
 import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -101,7 +101,10 @@ import {
   getFolderClickIntent,
   orderSelectedIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
-import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
+import {
+  flattenFilesystemRows,
+  planFilesystemReveal,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -286,6 +289,13 @@ const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
 
 // -- Component --
 
+/** A reveal first scrolls the virtualized list to the row, then flashes the
+ * row once it has mounted. */
+type RevealState =
+  | { type: "idle" }
+  | { type: "scrolling"; entityId: string; rowIndex: number }
+  | { type: "flashing"; entityId: string };
+
 type FilesystemViewProps = {
   workspaceId: string;
   view: WorkspaceView<"filesystem">;
@@ -433,6 +443,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const currentFolderId = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
     select: (s) => s.folder,
+  });
+  // One-shot "show me this entity" from outside the tree (chat mentions).
+  const revealEntityId = useSearch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    select: (s) => s.reveal,
   });
   const navigate = useNavigate();
 
@@ -672,6 +687,54 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     overscan: FILESYSTEM_ROW_OVERSCAN,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  // Consume `reveal`: expand the path to the entity, scroll its row into
+  // view, flash it once it renders, and drop the param so reloads and
+  // back-navigation don't replay it.
+  const [revealState, setRevealState] = useState<RevealState>({
+    type: "idle",
+  });
+  // The param lingers until the replace-navigation lands; handle it once.
+  const handledRevealRef = useRef<string | null>(null);
+  useExternalSyncEffect(() => {
+    if (!revealEntityId) {
+      handledRevealRef.current = null;
+      return;
+    }
+    if (handledRevealRef.current === revealEntityId) {
+      return;
+    }
+    handledRevealRef.current = revealEntityId;
+    const reveal = planFilesystemReveal({
+      ancestorIds: getAncestorIds(revealEntityId),
+      entityId: revealEntityId,
+      expandedIds,
+      roots: visibleNodes,
+    });
+    if (reveal) {
+      setExpandedIds(reveal.expandedIds);
+      setRevealState({
+        type: "scrolling",
+        entityId: revealEntityId,
+        rowIndex: reveal.rowIndex,
+      });
+    }
+    detached(
+      navigate({
+        from: "/workspaces/$workspaceId/$viewId",
+        search: (prev) => ({ ...prev, reveal: undefined }),
+        replace: true,
+      }),
+      "tree-view.clear-reveal",
+    );
+  }, [revealEntityId, getAncestorIds, expandedIds, visibleNodes, navigate]);
+  useExternalSyncEffect(() => {
+    if (revealState.type !== "scrolling") {
+      return;
+    }
+    rowVirtualizer.scrollToIndex(revealState.rowIndex, { align: "center" });
+    setRevealState({ type: "flashing", entityId: revealState.entityId });
+  }, [revealState, rowVirtualizer]);
 
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -940,6 +1003,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     editingEntityId={editingEntityId}
                     expandedIds={expandedIds}
                     extraColumns={extraColumns}
+                    flash={
+                      revealState.type === "flashing" &&
+                      revealState.entityId === row.node.entityId
+                    }
                     folderStatistics={folderStatistics.get(row.node.entityId)}
                     getSelectedDragItems={getSelectedDragItems}
                     getSelectedEntities={getSelectedEntities}
@@ -947,6 +1014,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     gridTemplate={gridTemplate}
                     isFiltered={entityData.isFiltered}
                     node={row.node}
+                    onFlashed={() => setRevealState({ type: "idle" })}
                     onNavigateToFolder={(folderId) => {
                       detached(
                         navigateToFolder(folderId),
@@ -1165,6 +1233,9 @@ type FilesystemRowProps = {
   depth: number | undefined;
   workspaceId: string;
   extraColumns: ExtraColumn[];
+  /** Flash this row once it is mounted, then report back via `onFlashed`. */
+  flash?: boolean;
+  onFlashed?: () => void;
   folderStatistics: FolderStatistics | undefined;
   gridTemplate: string;
   isFiltered: boolean;
@@ -1194,6 +1265,8 @@ const FilesystemRow = ({
   depth = 0,
   workspaceId,
   extraColumns,
+  flash = false,
+  onFlashed,
   folderStatistics,
   gridTemplate,
   isFiltered,
@@ -1319,7 +1392,12 @@ const FilesystemRow = ({
   // Drag + drop support via pragmatic-drag-and-drop.
   const rowRef = useRef<HTMLDivElement>(null);
 
-  useInspectorFlash(node.entityId, rowRef, { enabled: false });
+  useExternalSyncEffect(() => {
+    if (flash && rowRef.current) {
+      flashElement(rowRef.current);
+      onFlashed?.();
+    }
+  }, [flash, onFlashed]);
 
   const moveEntity = useMoveEntity();
   const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);

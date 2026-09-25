@@ -34,3 +34,32 @@ export const flattenFilesystemRows = (
 
   return rows;
 };
+
+export type FilesystemReveal = {
+  expandedIds: Set<string>;
+  rowIndex: number;
+};
+
+/** Where a revealed entity lands in the tree: its ancestors (and the entity
+ * itself, when it is a folder) expanded, plus its row in the flattened list.
+ * Null when the entity is not among the rendered nodes, e.g. filtered out. */
+export const planFilesystemReveal = ({
+  ancestorIds,
+  entityId,
+  expandedIds,
+  roots,
+}: {
+  ancestorIds: readonly string[];
+  entityId: string;
+  expandedIds: ReadonlySet<string>;
+  roots: readonly TableTreeNode[];
+}): FilesystemReveal | null => {
+  const nextExpandedIds = new Set([...expandedIds, ...ancestorIds, entityId]);
+  const rowIndex = flattenFilesystemRows(roots, nextExpandedIds).findIndex(
+    (row) => row.node.entityId === entityId,
+  );
+  if (rowIndex === -1) {
+    return null;
+  }
+  return { expandedIds: nextExpandedIds, rowIndex };
+};

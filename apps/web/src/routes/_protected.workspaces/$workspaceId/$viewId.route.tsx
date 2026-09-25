@@ -59,6 +59,7 @@ import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-compon
 // including params from child routes; strictObject would reject them.
 const searchSchema = v.object({
   folder: optionalSearchStringSchema(),
+  reveal: optionalSearchStringSchema(),
   page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
 

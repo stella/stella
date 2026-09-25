@@ -1,6 +1,7 @@
 import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
@@ -331,6 +332,7 @@ const EntityRefChip = ({
   interactive: boolean;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -365,6 +367,7 @@ const EntityRefChip = ({
       onActivate={buildParsedEntityActivate({
         navigate,
         pathname,
+        queryClient,
         id: refEntityId,
         textLabel,
         workspaceId: refWorkspaceId,
@@ -459,12 +462,14 @@ const buildParsedEntityActivate =
   ({
     navigate,
     pathname,
+    queryClient,
     id,
     textLabel,
     workspaceId,
   }: {
     navigate: ReturnType<typeof useNavigate>;
     pathname: string;
+    queryClient: QueryClient;
     id: string;
     textLabel: string;
     workspaceId: string;
@@ -478,6 +483,7 @@ const buildParsedEntityActivate =
             folderId: result.entityId,
             navigate,
             pathname,
+            queryClient,
             targetWorkspaceId: result.workspaceId,
           });
         }
@@ -498,6 +504,7 @@ const ParsedMentionChip = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -525,6 +532,7 @@ const ParsedMentionChip = ({
         onActivate={buildParsedEntityActivate({
           navigate,
           pathname,
+          queryClient,
           id,
           textLabel,
           workspaceId: mentionWorkspaceId,
