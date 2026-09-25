@@ -66,7 +66,7 @@ describe("agent skill revision trigger", () => {
       organizationId: ids.orgA,
       scope: "team",
       slug: `update-revision-${Bun.randomUUIDv7()}`,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       body: "Body v1",
       contentHash: "hash-v1",
     });
@@ -75,7 +75,7 @@ describe("agent skill revision trigger", () => {
       skillId,
       body: "Body v2",
       contentHash: "hash-v2",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
     });
 
     const revisions = await revisionsFor(skillId);
@@ -89,7 +89,7 @@ describe("agent skill revision trigger", () => {
       organizationId: ids.orgA,
       scope: "team",
       slug: `coalesce-${Bun.randomUUIDv7()}`,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       body: "Body v1",
       contentHash: "hash-v1",
     });
@@ -97,14 +97,14 @@ describe("agent skill revision trigger", () => {
       skillId,
       body: "Body v2",
       contentHash: "hash-v2",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
     });
 
     await updateBody({
       skillId,
       body: "Body v2b",
       contentHash: "hash-v2b",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
     });
 
     const revisions = await revisionsFor(skillId);
@@ -118,7 +118,7 @@ describe("agent skill revision trigger", () => {
       organizationId: ids.orgA,
       scope: "team",
       slug: `isolated-${Bun.randomUUIDv7()}`,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       body: "Body v1",
       contentHash: "hash-v1",
     });
@@ -126,14 +126,14 @@ describe("agent skill revision trigger", () => {
       skillId,
       body: "Body v2",
       contentHash: "hash-v2",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
     });
 
     await updateBody({
       skillId,
       body: "Body v3",
       contentHash: "hash-v3",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       isolated: true,
     });
 
@@ -148,7 +148,7 @@ describe("agent skill revision trigger", () => {
       organizationId: ids.orgA,
       scope: "team",
       slug: `referenced-${Bun.randomUUIDv7()}`,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       body: "Body v1",
       contentHash: "hash-v1",
     });
@@ -162,14 +162,14 @@ describe("agent skill revision trigger", () => {
       skillId,
       baseRevisionId: revision1.id,
       body: "Proposed body",
-      authorId: ids.userA1,
+      authorId: ids.userAdmin,
     });
 
     await updateBody({
       skillId,
       body: "Body v2",
       contentHash: "hash-v2",
-      userId: ids.userA1,
+      userId: ids.userAdmin,
     });
 
     const revisions = await revisionsFor(skillId);

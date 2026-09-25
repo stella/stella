@@ -88,7 +88,10 @@ const reviewSkillProposal = createSafeRootHandler(
               ),
             ),
           )
-          .limit(1);
+          .limit(1)
+          // Serializes with the author editing or withdrawing the proposal,
+          // which locks this row rather than the skill.
+          .for("update");
 
         const proposal = rows.at(0);
         if (!proposal) {

@@ -87,12 +87,9 @@ const updateSkillProposal = createSafeRootHandler(
 
     yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        // Locked because a concurrent decide on the same skill would
-        // otherwise decide the proposal between this read and the write.
         const skill = await loadVisibleSkill(tx, {
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
-          lock: "update",
         });
 
         const rows = await tx
@@ -114,7 +111,11 @@ const updateSkillProposal = createSafeRootHandler(
               ),
             ),
           )
-          .limit(1);
+          .limit(1)
+          // Locks the proposal, not the skill: its author may be a member who
+          // cannot write the skill row. Deciding locks the same row, so a
+          // concurrent decide cannot land between this read and the write.
+          .for("update");
 
         const existing = rows.at(0);
         if (!existing) {
