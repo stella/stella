@@ -14,7 +14,7 @@
  * output pin.
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
@@ -86,11 +86,14 @@ export const reportEmitFailure = (stage: EmitStage, error: unknown): void => {
     return;
   }
   reportingEmitFailure = true;
+  // The callers catch through `Result.try`, which wraps what was thrown; the
+  // thrown value is what names the fault.
+  const thrown = UnhandledException.is(error) ? error.cause : error;
   // A failure here has nothing left to report through, so it is dropped.
   Result.try(() => {
     logger.warn("observability.emit_failed", {
       "observability.stage": stage,
-      "error.type": errorTag(error),
+      "error.type": errorTag(thrown),
     });
   }).unwrapOr(undefined);
   reportingEmitFailure = false;

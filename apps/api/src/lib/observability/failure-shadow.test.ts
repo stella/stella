@@ -1,3 +1,4 @@
+import { UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
@@ -154,6 +155,20 @@ describe("emitter failure isolation", () => {
           },
         },
       ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("names the thrown value, not the wrapper it was caught in", () => {
+    const logs = installRecordingLogger();
+    try {
+      reportEmitFailure(
+        "observe",
+        new UnhandledException({ cause: new RangeError("grading failed") }),
+      );
+
+      expect(logs.records.at(0)?.attributes?.["error.type"]).toBe("RangeError");
     } finally {
       logs.restore();
     }
