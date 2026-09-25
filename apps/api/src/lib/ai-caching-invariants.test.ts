@@ -25,6 +25,7 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
       // These contract tests deliberately construct real adapters with intercepted
       // clients; they are not imported by app code.
       "handlers/chat/stream-chat.test.ts",
+      "handlers/chat/tool-call-end-arguments.test.ts",
       "handlers/chat/chat-schema.seam.test.ts",
       "handlers/chat/tools/provider-null-normalization.property.test.ts",
       "handlers/chat/tools/tool-schema.test.ts",
