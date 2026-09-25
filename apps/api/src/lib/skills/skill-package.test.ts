@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { LIMITS } from "@/api/lib/limits";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
@@ -53,14 +54,13 @@ Follow the checklist.`,
     expect(result.value.name).toBe("contract-review");
     expect(result.value.license).toBe("Apache-2.0");
     expect(result.value.resources).toEqual([]);
-    expect(result.value.contentHash).toHaveLength(64);
     expect(result.value.entrypointHash).toHaveLength(64);
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
           integrity: {
             type: "content-hash",
-            value: result.value.contentHash,
+            value: hashSkillPackageContent(result.value),
           },
           parsed: result.value,
           sourceUrl: "https://example.com/SKILL.md",
@@ -218,7 +218,9 @@ Use the references.`,
       "assets/example.txt",
       "references/checklist.md",
     ]);
-    expect(result.value.contentHash).not.toBe(result.value.entrypointHash);
+    expect(hashSkillPackageContent(result.value)).not.toBe(
+      result.value.entrypointHash,
+    );
     const commitSha = "b".repeat(40);
     const pinnedSourceUrl = `https://github.com/example/skills/tree/${commitSha}/nda-review`;
     expect(
@@ -275,8 +277,8 @@ Instructions.`;
     if (Result.isError(combinedResult) || Result.isError(splitResult)) {
       throw new TypeError("Package parsing unexpectedly failed");
     }
-    expect(combinedResult.value.contentHash).not.toBe(
-      splitResult.value.contentHash,
+    expect(hashSkillPackageContent(combinedResult.value)).not.toBe(
+      hashSkillPackageContent(splitResult.value),
     );
   });
 

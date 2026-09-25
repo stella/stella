@@ -100,7 +100,6 @@ Follow the checklist.`,
       version: "1.2.3",
     });
     expect(result.value.body).not.toContain("---");
-    expect(result.value.contentHash).toHaveLength(64);
   });
 
   it("rejects bundled skill frontmatter that does not match the catalogue slug", () => {

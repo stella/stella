@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
+import { refreshSkillContentHash } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -86,6 +87,7 @@ const deleteSkillResource = createSafeRootHandler(
             await innerTx
               .delete(agentSkillResources)
               .where(eq(agentSkillResources.id, existing.id));
+            await refreshSkillContentHash(innerTx, params.skillId);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.DELETE,

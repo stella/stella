@@ -13,7 +13,7 @@ import { uniqueSlug } from "@/api/handlers/skills/slug";
 import type { SkillSlug } from "@/api/handlers/skills/slug";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -296,12 +296,9 @@ const updateSkill = createSafeRootHandler(
         updates.name !== undefined ||
         updates.version !== undefined
       ) {
-        updates.contentHash = hashAuthoredSkillContent({
-          body: updates.body ?? existing.body,
-          description: updates.description ?? existing.description,
-          name: updates.name ?? existing.name,
-          version:
-            updates.version !== undefined ? updates.version : existing.version,
+        updates.contentHash = await skillContentHashAfter(tx, {
+          skillId: params.skillId,
+          patch: updates,
         });
       }
 

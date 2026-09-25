@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNotNull } from "drizzle-orm";
 
 import { agentSkills } from "@/api/db/schema";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -89,10 +89,14 @@ const seedSkills = createSafeRootHandler(
           name: skill.name,
           description: skill.description,
           metadata: {},
-          contentHash: hashAuthoredSkillContent({
+          contentHash: hashSkillContent({
             body: skill.body,
+            compatibility: null,
             description: skill.description,
+            license: null,
+            metadata: {},
             name: skill.name,
+            resources: [],
             version: null,
           }),
           body: skill.body,

@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -214,6 +215,7 @@ export const installSkill = async (props: InstallSkillProps) => {
     user,
   } = props;
   const urlReplayIdentity = urlReplayIdentityOf(props);
+  const contentHash = hashSkillPackageContent(parsed);
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
@@ -256,7 +258,7 @@ export const installSkill = async (props: InstallSkillProps) => {
             return isUnchangedUrlSkill({
               existing,
               origin,
-              parsed,
+              parsed: { contentHash, sourceUrl: parsed.sourceUrl },
               replayIdentity: urlReplayIdentity,
             })
               ? existing
@@ -327,7 +329,7 @@ export const installSkill = async (props: InstallSkillProps) => {
             compatibility: parsed.compatibility,
             metadata: parsed.metadata,
             sourceUrl: parsed.sourceUrl,
-            contentHash: parsed.contentHash,
+            contentHash,
             body: parsed.body,
             enabled,
           });
@@ -369,7 +371,7 @@ export const installSkill = async (props: InstallSkillProps) => {
               created: {
                 old: null,
                 new: {
-                  contentHash: parsed.contentHash,
+                  contentHash,
                   origin,
                   resourceCount: parsed.resources.length,
                   scope,
@@ -462,7 +464,7 @@ export const isUnchangedUrlSkill = ({
     "contentHash" | "origin" | "sourceUrl"
   >;
   origin: AgentSkillOrigin;
-  parsed: Pick<ParsedSkillPackage, "contentHash" | "sourceUrl">;
+  parsed: { contentHash: string; sourceUrl: string | null };
   replayIdentity: UrlReplayIdentity;
 }): boolean => {
   if (

@@ -107,10 +107,6 @@ export const toParsedBundledSkillPackage = ({
       return {
         body: parsed.body,
         compatibility: parsed.metadata.compatibility ?? null,
-        contentHash: hashBundledSkillPackage({
-          resources,
-          source,
-        }),
         description: parsed.metadata.description,
         entrypointHash: hashBundledSkillPackage({
           resources: [],

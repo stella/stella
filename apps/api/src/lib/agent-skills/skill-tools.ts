@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -29,7 +29,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
 import { auditedSkillBody } from "./audited-body";
-import { hashAuthoredSkillContent } from "./authored-content-hash";
+import {
+  refreshSkillContentHash,
+  skillContentHashAfter,
+} from "./content-hash";
 
 type AvailableSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;
@@ -422,31 +425,15 @@ const updateCurrentSkillBody = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
-        const currentRows = await innerTx
-          .select({
-            name: agentSkills.name,
-            description: agentSkills.description,
-            version: agentSkills.version,
-          })
-          .from(agentSkills)
-          .where(eq(agentSkills.id, activeSkillContext.id))
-          .limit(1)
-          .for("update");
-        const current = currentRows.at(0);
-        if (current === undefined) {
-          panic("active skill vanished during body update");
-        }
-        // The content hash covers the body, so a body-only write must refresh
-        // it: the revision trigger snapshots whatever hash the row carries.
+        // The content hash covers the body and goes out in the same write:
+        // the revision trigger snapshots whatever hash the row carries.
         await innerTx
           .update(agentSkills)
           .set({
             body: content,
-            contentHash: hashAuthoredSkillContent({
-              body: content,
-              description: current.description,
-              name: current.name,
-              version: current.version,
+            contentHash: await skillContentHashAfter(innerTx, {
+              skillId: activeSkillContext.id,
+              patch: { body: content },
             }),
           })
           .where(eq(agentSkills.id, activeSkillContext.id));
@@ -545,6 +532,7 @@ const updateCurrentSkillResource = async ({
           .update(agentSkillResources)
           .set({ content, sizeBytes: nextSizeBytes })
           .where(eq(agentSkillResources.id, row.id));
+        await refreshSkillContentHash(innerTx, activeSkillContext.id);
 
         await recordAuditEvent(innerTx, {
           action: AUDIT_ACTION.UPDATE,
@@ -660,6 +648,7 @@ const createCurrentSkillResource = async ({
             sizeBytes,
           })
           .returning({ id: agentSkillResources.id });
+        await refreshSkillContentHash(innerTx, activeSkillContext.id);
         const row = rows.at(0);
         if (row) {
           await recordAuditEvent(innerTx, {

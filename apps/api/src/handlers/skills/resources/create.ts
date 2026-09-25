@@ -5,6 +5,7 @@ import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
+import { refreshSkillContentHash } from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -94,6 +95,7 @@ const createSkillResource = createSafeRootHandler(
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
+            await refreshSkillContentHash(innerTx, params.skillId);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.CREATE,

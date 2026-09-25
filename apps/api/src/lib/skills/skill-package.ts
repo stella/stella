@@ -14,6 +14,7 @@ import {
 } from "@stll/skills/package-limits";
 import { Temporal } from "@stll/time";
 
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -74,7 +75,6 @@ export type ParsedSkillResource = {
 export type ParsedSkillPackage = {
   body: string;
   compatibility: string | null;
-  contentHash: string;
   description: string;
   entrypointHash: string;
   license: string | null;
@@ -361,7 +361,7 @@ export const discoverSkillPackagesFromUrl = async (
             toDiscoveredSkill({
               integrity: {
                 type: "content-hash",
-                value: parsed.value.contentHash,
+                value: hashSkillPackageContent(parsed.value),
               },
               parsed: parsed.value,
               sourceUrl: rawUrl,
@@ -544,15 +544,8 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   return {
     body: parsed.body,
     compatibility: parsed.metadata.compatibility ?? null,
-    contentHash: hashSkillPackage({
-      resources,
-      source: relativeSkillSource,
-    }),
     description: parsed.metadata.description,
-    entrypointHash: hashSkillPackage({
-      resources: [],
-      source: relativeSkillSource,
-    }),
+    entrypointHash: hashSkillEntrypoint(relativeSkillSource),
     license: parsed.metadata.license ?? null,
     metadata: parsed.metadata.metadata ?? {},
     name,
@@ -1276,13 +1269,8 @@ const normalizePackageFilePath = (path: string): string | null => {
   }
 };
 
-const hashSkillPackage = ({
-  resources,
-  source,
-}: {
-  resources: readonly ParsedSkillResource[];
-  source: string;
-}) => {
+// Identifies the SKILL.md a GitHub preview showed, independent of resources.
+const hashSkillEntrypoint = (source: string) => {
   const hasher = new Bun.CryptoHasher("sha256");
   const updateField = (value: string) => {
     const bytes = UTF8_ENCODER.encode(value);
@@ -1291,11 +1279,7 @@ const hashSkillPackage = ({
   };
   updateField("stella-skill-package-v1");
   updateField(source);
-  updateField(String(resources.length));
-  for (const resource of resources) {
-    updateField(resource.path);
-    updateField(resource.content);
-  }
+  updateField("0");
   return hasher.digest("hex");
 };
 
@@ -1720,7 +1704,7 @@ export const verifySkillPackageIntegrity = ({
 }): Result<void, HandlerError> => {
   switch (integrity.type) {
     case "content-hash":
-      if (integrity.value === parsed.contentHash) {
+      if (integrity.value === hashSkillPackageContent(parsed)) {
         return Result.ok(undefined);
       }
       break;

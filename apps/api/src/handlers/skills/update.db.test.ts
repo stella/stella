@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { agentSkills } from "@/api/db/schema";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   handlerFailure,
@@ -116,8 +116,11 @@ describe("concurrent skill edits", () => {
     const [row] = await testDb
       .select({
         body: agentSkills.body,
+        compatibility: agentSkills.compatibility,
         contentHash: agentSkills.contentHash,
         description: agentSkills.description,
+        license: agentSkills.license,
+        metadata: agentSkills.metadata,
         name: agentSkills.name,
         version: agentSkills.version,
       })
@@ -126,7 +129,7 @@ describe("concurrent skill edits", () => {
     expect(row?.body).toBe("Concurrently edited instructions.");
     expect(row?.description).toBe("Concurrently edited description.");
     expect(row?.contentHash).toBe(
-      row ? hashAuthoredSkillContent(row) : undefined,
+      row ? hashSkillPackageContent({ ...row, resources: [] }) : undefined,
     );
   });
 

@@ -50,7 +50,6 @@ describe("resolveCatalogueSkillPackage", () => {
         return Result.ok({
           body: "",
           compatibility: null,
-          contentHash: "",
           description: "",
           entrypointHash: "",
           license: null,
@@ -89,7 +88,6 @@ describe("resolveCatalogueSkillPackage", () => {
           return Result.ok({
             body: "Analyze the ruling.",
             compatibility: null,
-            contentHash: "hash",
             description: "Upstream skill.",
             entrypointHash: "entrypoint-hash",
             license: "cc-by-4.0",
@@ -236,7 +234,6 @@ const githubPackageOptions = () => ({
 const parsedGithubPackage = ({ license = "CC-BY-4.0" } = {}) => ({
   body: "Review the agreement.",
   compatibility: null,
-  contentHash: "hash",
   description: "Review agreements.",
   entrypointHash: "entrypoint-hash",
   license,

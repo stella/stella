@@ -9,7 +9,7 @@ import {
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -175,11 +175,9 @@ const reviewSkillProposal = createSafeRootHandler(
           .update(agentSkills)
           .set({
             body: proposal.body,
-            contentHash: hashAuthoredSkillContent({
-              body: proposal.body,
-              description: skill.description,
-              name: skill.name,
-              version: skill.version,
+            contentHash: await skillContentHashAfter(tx, {
+              skillId: params.skillId,
+              patch: { body: proposal.body },
             }),
           })
           .where(
