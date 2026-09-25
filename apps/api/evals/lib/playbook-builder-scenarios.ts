@@ -590,7 +590,12 @@ const CONFIRMED_DOCUMENTS = [KELLER, BRANDT];
 const CONFIRMED_MARKERS = ["Keller", "Brandt"];
 const CANDIDATE_MARKERS = [...CONFIRMED_MARKERS, "Vogel", "Harbour"];
 
+/**
+ * A matter's name can carry a marker ("Harbour Co v Nordwind"), so the
+ * question that offers the matters is never the one that offers documents.
+ */
 const isCandidatesQuestion = (question: AskedQuestion) =>
+  !isMattersQuestion(question) &&
   CANDIDATE_MARKERS.some((marker) => questionText(question).includes(marker));
 
 /** Picks the two executed agreements from the candidates offered. */
