@@ -70,8 +70,8 @@ describe("organization management roles", () => {
         roles[role].authorize({ organizationSettings: ["update"] }).success,
     );
 
-    expect(ORGANIZATION_MANAGEMENT_ROLES.toSorted()).toEqual(
-      holdersOfManagementGrants.toSorted(),
+    expect(holdersOfManagementGrants.toSorted()).toEqual(
+      ORGANIZATION_MANAGEMENT_ROLES.toSorted(),
     );
     for (const role of ROLE_NAMES) {
       expect(isOrganizationManagementRole(role)).toBe(
