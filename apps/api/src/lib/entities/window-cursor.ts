@@ -2,6 +2,8 @@ import { Result } from "better-result";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 const ENTITIES_WINDOW_CURSOR_VERSION = 2;
 
@@ -67,4 +69,57 @@ export const decodeEntitiesWindowCursor = (
   }
 
   return Result.ok(parsed.values);
+};
+
+const unreadableCursorValues = failureSink({
+  event: "entities.window_cursor_values_unreadable",
+  expected: [],
+});
+
+const reportUnreadableCursorValues = (
+  error: unknown,
+  rawValues: unknown,
+): EntitiesWindowCursorValues => {
+  observeFailure(error, {
+    sink: unreadableCursorValues,
+    ctx: {
+      step: "readGeneratedCursorValues",
+      phase: Array.isArray(rawValues) ? "array" : typeof rawValues,
+    },
+  });
+  return [];
+};
+
+/**
+ * Read the sort values Postgres generated for a window row's cursor
+ * (`jsonb_build_array`). The driver hands them over parsed or as JSON text.
+ * Anything else is reported and reads as no values: the page itself is still
+ * served, and the next-page cursor built from it is rejected as invalid.
+ */
+export const readGeneratedCursorValues = (
+  rawValues: unknown,
+): EntitiesWindowCursorValues => {
+  if (Array.isArray(rawValues)) {
+    return rawValues.filter(isCursorValue);
+  }
+
+  if (typeof rawValues !== "string") {
+    return reportUnreadableCursorValues(
+      new TypeError("Generated cursor values are neither an array nor text"),
+      rawValues,
+    );
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(rawValues));
+  if (Result.isError(parsed)) {
+    return reportUnreadableCursorValues(parsed.error.cause, rawValues);
+  }
+  if (!Array.isArray(parsed.value)) {
+    return reportUnreadableCursorValues(
+      new TypeError("Generated cursor values are not a JSON array"),
+      parsed.value,
+    );
+  }
+
+  return parsed.value.filter(isCursorValue);
 };
