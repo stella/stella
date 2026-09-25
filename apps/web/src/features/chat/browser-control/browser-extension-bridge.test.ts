@@ -10,6 +10,10 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import {
+  BROWSER_APPROVAL_MODE,
+  setBrowserApprovalMode,
+} from "./browser-approval-mode";
+import {
   executeBrowserExtensionCommand,
   mountBrowserExtensionBridge,
 } from "./browser-extension-bridge";
@@ -29,7 +33,11 @@ type FakeWindow = {
   posted: BrowserExtensionRequest[];
   postMessage: (message: BrowserExtensionRequest) => void;
   removeEventListener: (type: string) => void;
+  sessionStorage: Pick<Storage, "getItem" | "setItem">;
 };
+
+const APPROVAL_MODE_KEY = "stella.chat.browserApprovalMode";
+const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
 let messageListener: ((event: unknown) => void) | null = null;
@@ -54,6 +62,12 @@ beforeEach(() => {
         messageListener = null;
       }
     },
+    sessionStorage: {
+      getItem: (key) => storedValues.get(key) ?? null,
+      setItem: (key, value) => {
+        storedValues.set(key, value);
+      },
+    },
   };
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -72,24 +86,72 @@ afterEach(() => {
   }
 });
 
-const connect = () => {
-  unmount = mountBrowserExtensionBridge();
-  messageListener?.({
-    data: {
-      allSitesGranted: true,
-      controllerId: "controller-1",
-      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-      requestId: "ping-1",
-      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-      type: "pong",
-    },
-    origin: ORIGIN,
-    source: fakeWindow,
+const deliver = (data: unknown) => {
+  messageListener?.({ data, origin: ORIGIN, source: fakeWindow });
+};
+
+const report = (
+  controllerId: string | null,
+  controlledTabId: number | null = null,
+) => {
+  deliver({
+    allSitesGranted: true,
+    controlledTabId,
+    controllerId,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: crypto.randomUUID(),
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+    type: "pong",
   });
 };
 
+const connect = () => {
+  unmount = mountBrowserExtensionBridge();
+  report("controller-1");
+};
+
+const run = (signal = new AbortController().signal) => ({
+  signal,
+  turnId: "turn-1",
+});
+
 const postedCommands = () =>
-  fakeWindow.posted.filter(({ type }) => type === "command");
+  fakeWindow.posted.filter(
+    (
+      request,
+    ): request is Extract<BrowserExtensionRequest, { type: "command" }> =>
+      request.type === "command",
+  );
+
+const postedCancels = () =>
+  fakeWindow.posted.filter(({ type }) => type === "cancel");
+
+const answer = (requestId: string, result: BrowserControlResult) => {
+  deliver({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId,
+    result,
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+    type: "command-result",
+  });
+};
+
+const snapshotResult = (tabId: number, revision: string) =>
+  ({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    snapshot: {
+      contentTrust: "untrusted-web-content",
+      elements: [],
+      revision,
+      tabId,
+      text: "",
+      textOffset: 0,
+      textTotalChars: 0,
+      title: "Example",
+      url: "https://example.com/",
+    },
+    status: "success",
+  }) satisfies BrowserControlResult;
 
 const errorCode = (result: BrowserControlResult) =>
   result.status === "error" ? result.code : null;
@@ -101,6 +163,7 @@ describe("browser extension bridge outcomes", () => {
     const result = await executeBrowserExtensionCommand(
       { ...click, target: { ...click.target, ref: "e:0:" } },
       "call-1",
+      run(),
     );
 
     expect(errorCode(result)).toBe(BROWSER_CONTROL_ERROR_CODE.invalidCommand);
@@ -110,7 +173,7 @@ describe("browser extension bridge outcomes", () => {
   test("a command that never reached the extension stays disconnected", async () => {
     unmount = mountBrowserExtensionBridge();
 
-    const result = await executeBrowserExtensionCommand(click, "call-1");
+    const result = await executeBrowserExtensionCommand(click, "call-1", run());
 
     expect(errorCode(result)).toBe(BROWSER_CONTROL_ERROR_CODE.disconnected);
     expect(postedCommands()).toHaveLength(0);
@@ -120,7 +183,7 @@ describe("browser extension bridge outcomes", () => {
     jest.useFakeTimers();
     connect();
 
-    const pending = executeBrowserExtensionCommand(click, "call-1");
+    const pending = executeBrowserExtensionCommand(click, "call-1", run());
     expect(postedCommands()).toHaveLength(1);
     jest.advanceTimersByTime(60_000);
     const result = await pending;
@@ -135,7 +198,7 @@ describe("browser extension bridge outcomes", () => {
     jest.useFakeTimers();
     connect();
 
-    const pending = executeBrowserExtensionCommand(snapshot, "call-1");
+    const pending = executeBrowserExtensionCommand(snapshot, "call-1", run());
     jest.advanceTimersByTime(60_000);
 
     expect(errorCode(await pending)).toBe(BROWSER_CONTROL_ERROR_CODE.timedOut);
@@ -144,8 +207,8 @@ describe("browser extension bridge outcomes", () => {
   test("disconnecting with a posted action pending reports an unknown outcome", async () => {
     connect();
 
-    const action = executeBrowserExtensionCommand(click, "call-1");
-    const read = executeBrowserExtensionCommand(snapshot, "call-2");
+    const action = executeBrowserExtensionCommand(click, "call-1", run());
+    const read = executeBrowserExtensionCommand(snapshot, "call-2", run());
     expect(postedCommands()).toHaveLength(2);
     unmount?.();
     unmount = null;
@@ -154,5 +217,137 @@ describe("browser extension bridge outcomes", () => {
       BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     );
     expect(errorCode(await read)).toBe(BROWSER_CONTROL_ERROR_CODE.disconnected);
+  });
+});
+
+describe("stopping browser commands from chat", () => {
+  test("a stop ends a running action at once and tells the extension", async () => {
+    connect();
+    const stop = new AbortController();
+
+    const action = executeBrowserExtensionCommand(
+      click,
+      "call-1",
+      run(stop.signal),
+    );
+    stop.abort();
+
+    expect(errorCode(await action)).toBe(
+      BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    );
+    expect(postedCancels()).toEqual([
+      expect.objectContaining({ controllerId: "controller-1", type: "cancel" }),
+    ]);
+  });
+
+  test("a stopped read is cancelled, and one stopped before posting never runs", async () => {
+    connect();
+    const stop = new AbortController();
+
+    const read = executeBrowserExtensionCommand(
+      snapshot,
+      "call-1",
+      run(stop.signal),
+    );
+    stop.abort();
+    expect(errorCode(await read)).toBe(BROWSER_CONTROL_ERROR_CODE.cancelled);
+
+    const late = await executeBrowserExtensionCommand(
+      click,
+      "call-2",
+      run(stop.signal),
+    );
+    expect(errorCode(late)).toBe(BROWSER_CONTROL_ERROR_CODE.cancelled);
+    expect(postedCommands()).toHaveLength(1);
+  });
+
+  test("a stop after the answer changes nothing", async () => {
+    connect();
+    const stop = new AbortController();
+
+    const read = executeBrowserExtensionCommand(
+      snapshot,
+      "call-1",
+      run(stop.signal),
+    );
+    const [posted] = postedCommands();
+    if (!posted) {
+      throw new TypeError("No command posted");
+    }
+    answer(posted.requestId, snapshotResult(7, "revision-1"));
+    expect((await read).status).toBe("success");
+    stop.abort();
+
+    expect(postedCancels()).toEqual([]);
+  });
+});
+
+describe("command identity", () => {
+  test("every command carries the turn and the tab of the last successful result", async () => {
+    connect();
+
+    const first = executeBrowserExtensionCommand(snapshot, "call-1", run());
+    const [firstPosted] = postedCommands();
+    if (!firstPosted) {
+      throw new TypeError("No command posted");
+    }
+    expect(firstPosted).toMatchObject({ observedTab: null, turnId: "turn-1" });
+    answer(firstPosted.requestId, snapshotResult(7, "revision-1"));
+    await first;
+
+    void executeBrowserExtensionCommand(click, "call-2", run());
+    expect(postedCommands().at(1)).toMatchObject({
+      observedTab: { revision: "revision-1", tabId: 7 },
+    });
+  });
+});
+
+describe("approval after the controlled tab changes", () => {
+  const autoApprovesReads = () =>
+    storedValues.get(APPROVAL_MODE_KEY) ===
+    JSON.stringify(BROWSER_APPROVAL_MODE.autoApproveReads);
+
+  test("the first report from the extension keeps the reads opt-in", () => {
+    connect();
+    setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+    report("controller-1");
+
+    expect(autoApprovesReads()).toBe(true);
+  });
+
+  test("re-pairing, disconnecting and handing over a tab each ask again", () => {
+    for (const change of [
+      () => report("controller-2"),
+      () => report(null),
+      () => report("controller-1", 9),
+    ]) {
+      unmount?.();
+      unmount = null;
+      connect();
+      setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+
+      change();
+
+      expect(autoApprovesReads()).toBe(false);
+    }
+  });
+
+  test("a tab chat itself opened does not count as a change", async () => {
+    connect();
+    setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+    const opened = executeBrowserExtensionCommand(
+      { action: "open", url: "https://example.com/" },
+      "call-1",
+      run(),
+    );
+    const [posted] = postedCommands();
+    if (!posted) {
+      throw new TypeError("No command posted");
+    }
+    answer(posted.requestId, snapshotResult(7, "revision-1"));
+    await opened;
+    report("controller-1", 7);
+
+    expect(autoApprovesReads()).toBe(true);
   });
 });

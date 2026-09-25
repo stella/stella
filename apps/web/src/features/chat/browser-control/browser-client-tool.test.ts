@@ -6,7 +6,7 @@ import { createBrowserClientTool } from "./browser-client-tool";
 
 describe("chat browser client tool", () => {
   test("registers the approved browser command as a native client tool", () => {
-    const tool = createBrowserClientTool();
+    const { tool } = createBrowserClientTool({ currentTurnId: () => "turn-1" });
 
     expect(tool).toMatchObject({
       __toolSide: "client",

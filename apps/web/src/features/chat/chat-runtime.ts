@@ -428,6 +428,17 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
+  // A turn starts with a user message, a regeneration or a route hand-off;
+  // tool results and approvals continue it. The extension budgets browser
+  // commands per turn.
+  let browserTurnId = crypto.randomUUID();
+  const startBrowserTurn = (): void => {
+    browserTurnId = crypto.randomUUID();
+  };
+  const browserTool = createBrowserClientTool({
+    currentTurnId: () => browserTurnId,
+  });
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
@@ -469,7 +480,7 @@ export const createChatRuntime = ({
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
-    tools: [createBrowserClientTool()],
+    tools: [browserTool.tool],
   });
 
   const withBody = async (
@@ -585,6 +596,7 @@ export const createChatRuntime = ({
       throw captureRuntimeError(new ChatMessageStartError(message.id));
     }
     startTurn();
+    startBrowserTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -812,6 +824,7 @@ export const createChatRuntime = ({
     getSnapshot: () => snapshot,
     reload: async (options) => {
       startTurn();
+      startBrowserTurn();
       await withBody(
         {
           body: {
@@ -837,6 +850,9 @@ export const createChatRuntime = ({
       return started;
     },
     stop: () => {
+      // Stopping the request does not stop the extension: a browser command
+      // already approved would otherwise keep acting on the page.
+      browserTool.cancel();
       const stoppedTurn = turnId;
       if (!isTurnActive() || stoppedTurn === null) {
         // Nothing runs, or the server has not named the turn yet and nothing

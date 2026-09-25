@@ -11,15 +11,23 @@ import { beginBrowserCommand } from "./browser-approval-mode";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 
-export const createBrowserClientTool = () => {
+type BrowserClientToolOptions = {
+  /** The chat turn now running; the extension budgets commands per turn. */
+  currentTurnId: () => string;
+};
+
+export const createBrowserClientTool = ({
+  currentTurnId,
+}: BrowserClientToolOptions) => {
   // The outcome is tracked per web tab, not per chat runtime: every chat in
   // this tab drives the same controlled Chrome tab.
   const executions = createBrowserToolExecutionCache(
     executeBrowserExtensionCommand,
     beginBrowserCommand,
   );
+  let stop = new AbortController();
 
-  return toolDefinition({
+  const tool = toolDefinition({
     name: BROWSER_CONTROL_TOOL_NAME,
     description: "Execute an approved command in the stella Chrome extension.",
     inputSchema: browserControlCommandJsonSchema,
@@ -30,6 +38,21 @@ export const createBrowserClientTool = () => {
     if (toolCallId === undefined) {
       return panic("Browser client tool execution omitted its tool-call id");
     }
-    return await executions.executeOnce(toolCallId, input);
+    return await executions.executeOnce(toolCallId, input, {
+      signal: stop.signal,
+      turnId: currentTurnId(),
+    });
   });
+
+  return {
+    /**
+     * Stops this chat's browser commands: the extension is told to stop, a
+     * running command ends at once, and nothing still queued runs.
+     */
+    cancel(): void {
+      stop.abort();
+      stop = new AbortController();
+    },
+    tool,
+  };
 };
