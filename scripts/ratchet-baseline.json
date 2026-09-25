@@ -4,22 +4,14 @@
     "files": {}
   },
   "package-as-casts": {
-    "count": 23,
+    "count": 11,
     "files": {
       "packages/boe/src/query.ts": 2,
       "packages/business-registries/src/shared/canonical-id.ts": 1,
-      "packages/business-registries/src/shared/errors.ts": 1,
-      "packages/business-registries/src/shared/status.ts": 1,
       "packages/cli/src/build-cli-tree.ts": 3,
       "packages/cli/src/cli.ts": 1,
-      "packages/money/src/cents.ts": 2,
-      "packages/money/src/index.ts": 4,
-      "packages/scripts/src/auth-md-spec-drift.ts": 1,
-      "packages/scripts/src/dev-runner.ts": 1,
-      "packages/scripts/src/i18n-check.ts": 2,
-      "packages/scripts/src/i18n-lint.ts": 2,
-      "packages/template-conditions/src/compute.ts": 1,
-      "packages/ui/src/lib/week.ts": 1
+      "packages/money/src/cents.ts": 1,
+      "packages/money/src/index.ts": 3
     }
   },
   "legacy-paint-transitions": {
@@ -1156,7 +1148,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 301,
+    "count": 293,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1341,13 +1333,10 @@
       "packages/cli/src/generated/route-map.ts": 1,
       "packages/cli/src/generated/tool-annotations.ts": 1,
       "packages/errors/src/dev-error.ts": 1,
-      "packages/money/src/cents.ts": 2,
-      "packages/money/src/index.ts": 2,
-      "packages/scripts/src/auth-md-spec-drift.ts": 1,
-      "packages/scripts/src/i18n-check.ts": 2,
-      "packages/scripts/src/i18n-lint.ts": 2,
+      "packages/money/src/cents.ts": 1,
+      "packages/money/src/index.ts": 1,
       "packages/scripts/src/model-catalog-discovery.ts": 1,
-      "packages/template-conditions/src/compute.ts": 2,
+      "packages/template-conditions/src/compute.ts": 1,
       "packages/ui/src/components/combobox.tsx": 1,
       "packages/ui/src/components/hex-color-picker.tsx": 3,
       "packages/ui/src/components/input-group.tsx": 1,

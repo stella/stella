@@ -3,6 +3,14 @@
  * Shared so the app shell and the date picker resolve week starts identically.
  */
 
+const isWeekInfo = (value: unknown): value is Intl.WeekInfo =>
+  typeof value === "object" &&
+  value !== null &&
+  "firstDay" in value &&
+  typeof value.firstDay === "number" &&
+  "weekend" in value &&
+  Array.isArray(value.weekend);
+
 /**
  * Read CLDR week info for a locale, tolerating the legacy `weekInfo` accessor
  * on engines that predate `getWeekInfo()`. Returns undefined when unavailable
@@ -13,10 +21,11 @@ export const getLocaleWeekInfo = (
 ): Intl.WeekInfo | undefined => {
   try {
     const loc = new Intl.Locale(locale);
-    const legacy = loc as Intl.Locale & { weekInfo?: Intl.WeekInfo };
-    return typeof loc.getWeekInfo === "function"
-      ? loc.getWeekInfo()
-      : legacy.weekInfo;
+    if (typeof loc.getWeekInfo === "function") {
+      return loc.getWeekInfo();
+    }
+    const legacy = "weekInfo" in loc ? loc.weekInfo : undefined;
+    return isWeekInfo(legacy) ? legacy : undefined;
   } catch {
     return undefined;
   }

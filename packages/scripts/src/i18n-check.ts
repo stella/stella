@@ -14,11 +14,37 @@
  */
 import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
+import { panic } from "better-result";
 import path from "node:path";
 
 export type NestedMessages = {
   [key: string]: string | NestedMessages;
 };
+
+export const isPlainRecord = (
+  value: unknown,
+): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isNestedMessages = (value: unknown): value is NestedMessages =>
+  isPlainRecord(value) &&
+  Object.values(value).every(
+    (entry) => typeof entry === "string" || isNestedMessages(entry),
+  );
+
+/** A locale file's messages; a file of any other shape stops the run. */
+export const parseNestedMessages = (
+  text: string,
+  source: string,
+): NestedMessages => {
+  const parsed: unknown = JSON.parse(text);
+  return isNestedMessages(parsed)
+    ? parsed
+    : panic(`${source} is not a nested map of message strings`);
+};
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 const flattenKeys = (obj: NestedMessages, prefix = ""): string[] => {
   const keys: string[] = [];
@@ -196,6 +222,24 @@ export type CheckBaseline = {
   identicalToSource: Record<string, string[]>;
   duplicatesCommon: string[];
   duplicateValues: string[];
+};
+
+const isCheckBaselinePart = (
+  value: unknown,
+): value is Partial<CheckBaseline> => {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const identical = value["identicalToSource"];
+  const common = value["duplicatesCommon"];
+  const duplicates = value["duplicateValues"];
+  return (
+    (identical === undefined ||
+      (isPlainRecord(identical) &&
+        Object.values(identical).every(isStringArray))) &&
+    (common === undefined || isStringArray(common)) &&
+    (duplicates === undefined || isStringArray(duplicates))
+  );
 };
 
 export const emptyBaseline = (): CheckBaseline => ({
@@ -549,9 +593,7 @@ if (import.meta.main) {
 
   const readLang = async (filename: string): Promise<NestedMessages> => {
     const content = await Bun.file(path.resolve(langsDir, filename)).text();
-    // SAFETY: i18n JSON files conform to NestedMessages; script validates
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return JSON.parse(content) as NestedMessages;
+    return parseNestedMessages(content, filename);
   };
 
   const enRaw = await readLang("en.json");
@@ -566,9 +608,10 @@ if (import.meta.main) {
     if (!(await file.exists())) {
       return emptyBaseline();
     }
-    // SAFETY: repo-owned baseline JSON conforms to Partial<CheckBaseline>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const parsed = JSON.parse(await file.text()) as Partial<CheckBaseline>;
+    const parsed: unknown = JSON.parse(await file.text());
+    if (!isCheckBaselinePart(parsed)) {
+      return panic(`${baselinePath} is not an i18n-check baseline`);
+    }
     return { ...emptyBaseline(), ...parsed };
   };
   const baseline = await readBaseline();
