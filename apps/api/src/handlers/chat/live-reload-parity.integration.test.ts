@@ -371,14 +371,33 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.wireSnapshotIdentity,
 ]);
 
-const checkStalePage = async (real: Real, page: WebChatClient) => {
+/**
+ * Checks `page` for what a refused page owes. `refusedElsewhere` is set when
+ * another page reported the refusal instead, as the loser of a race may be
+ * either page.
+ */
+const checkStalePage = async (
+  real: Real,
+  page: WebChatClient,
+  refusedElsewhere = false,
+) => {
   const findings = await real.harness.checkWebClient({
     client: page,
     expected: { refusal: true },
     threadId: real.threadId,
   });
   expect(
-    findings.filter(({ oracle }) => STALE_PAGE_ORACLES.has(oracle)),
+    findings.filter(
+      ({ detail, oracle }) =>
+        STALE_PAGE_ORACLES.has(oracle) &&
+        !(
+          refusedElsewhere &&
+          oracle === CHAT_ORACLE.clientNoErrors &&
+          typeof detail === "object" &&
+          detail !== null &&
+          "expectedError" in detail
+        ),
+    ),
   ).toEqual([]);
 };
 
@@ -581,7 +600,9 @@ class RaceApprovals implements fc.AsyncCommand<Model, Real> {
         }
       };
       await Promise.all([approveAll(real.client), approveAll(other)]);
-      await checkStalePage(real, other);
+      // Either page may lose; the first page's report counts for the pair.
+      const firstPageErrors = real.client.takeErrors();
+      await checkStalePage(real, other, firstPageErrors.length > 0);
     } finally {
       other.dispose();
     }
