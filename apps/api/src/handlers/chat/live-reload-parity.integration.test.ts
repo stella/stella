@@ -644,9 +644,15 @@ const stepsArb: fc.Arbitrary<StepShape[]> = fc.array(stepArb, {
   maxLength: 3,
   minLength: 1,
 });
+/** A model run: steps, or now and then a provider call that fails before it
+ *  answers. */
+const runArb: fc.Arbitrary<RunShape> = fc.oneof(
+  { arbitrary: stepsArb, weight: 5 },
+  { arbitrary: fc.constant<RunShape>("fail"), weight: 1 },
+);
 /** The runs a step's requests answer with: its own, then the ones
  *  `approve-all` sends. */
-const runsArb: fc.Arbitrary<RunShape[]> = fc.array(stepsArb, {
+const runsArb: fc.Arbitrary<RunShape[]> = fc.array(runArb, {
   maxLength: 3,
   minLength: 1,
 });
@@ -747,6 +753,33 @@ describe("a conversation's live view", () => {
           ["approve-all", "approve-all", "approve-all", "approve-all"],
           [[{ ...STEP, calls: ["approval"], text: true }]],
         ).run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  const failsBeforeAnswering: [string, RunShape[] | null, Decision][] = [
+    ["a new message", null, "approve"],
+    ["an answer", [[{ ...STEP, calls: ["ask-user"] }]], "approve"],
+  ];
+
+  test.each(failsBeforeAnswering)(
+    "keeps one message for the turn when the model fails before answering %s",
+    async (_label, first, decision) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        if (first === null) {
+          await new SendUserMessage(["fail"], "Draft the NDA").run(model, real);
+        } else {
+          await new SendUserMessage(first, "Draft the NDA").run(model, real);
+          await new ResolveCards([decision], ["fail"]).run(model, real);
+        }
+        // The fixture must reach the fault: the model call failed.
+        expect(real.ledger.latest).toBe("failed");
+        await new ReloadPage().run(model, real);
       } finally {
         closeConversation(conversation);
       }

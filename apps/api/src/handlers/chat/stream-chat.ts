@@ -1627,6 +1627,8 @@ export const processServerChatStream = async function* ({
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  // Whether the client has been told which message this turn writes.
+  let announcedAssistantMessage = false;
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -1639,6 +1641,9 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (sourceChunk.type === EventType.TEXT_MESSAGE_START) {
+        announcedAssistantMessage = true;
+      }
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -1805,6 +1810,18 @@ export const processServerChatStream = async function* ({
         flushProcessor: true,
         outcome: { type: "failed", error: kind },
       });
+    }
+    // A run that failed before its first chunk still wrote the turn's
+    // message (see `createTerminalResponseMessage`). Name it before the
+    // error, or the client opens a placeholder under an id of its own beside
+    // the message the turn stored or continued.
+    if (!announcedAssistantMessage) {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+        role: "assistant",
+        timestamp: Temporal.Now.instant().epochMilliseconds,
+      };
     }
     yield {
       type: EventType.RUN_ERROR,
