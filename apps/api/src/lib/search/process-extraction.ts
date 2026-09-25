@@ -726,6 +726,10 @@ export const requestNativeExtractionRun = async ({
  * document-processing worker owns extraction, persistence, indexing, and
  * retries; callers may still treat this as best-effort because the committed
  * run and bounded repair scan own eventual completion.
+ *
+ * Callers run it after their own transaction has committed, often detached
+ * from the request, so no request scope is left to write the run through; the
+ * run is written on the owner connection.
  */
 export const processExtraction = async (
   entityId: SafeId<"entity">,
