@@ -3,7 +3,10 @@ import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
-import { refreshSkillContentHash } from "@/api/lib/agent-skills/content-hash";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+} from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -150,6 +153,10 @@ const uploadSkillResource = createSafeRootHandler(
       safeDb(
         async (tx) =>
           await tx.transaction(async (innerTx) => {
+            const lockedSkill = await lockSkillForResourceWrite(
+              innerTx,
+              params.skillId,
+            );
             const rows = await innerTx
               .insert(agentSkillResources)
               .values({
@@ -167,7 +174,7 @@ const uploadSkillResource = createSafeRootHandler(
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
-            await refreshSkillContentHash(innerTx, params.skillId);
+            await refreshSkillContentHash(innerTx, lockedSkill);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.CREATE,

@@ -5,7 +5,10 @@ import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
-import { refreshSkillContentHash } from "@/api/lib/agent-skills/content-hash";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+} from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -24,7 +27,11 @@ const createSkillResourceParamsSchema = t.Object({
 const createSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: 512 }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
-  kind: t.Optional(t.UnionEnum(SKILL_RESOURCE_KINDS)),
+  // A literal union, not `t.UnionEnum`: Elysia fills an absent optional
+  // UnionEnum with its first member, so the path inference below never runs.
+  kind: t.Optional(
+    t.Union(SKILL_RESOURCE_KINDS.map((kind) => t.Literal(kind))),
+  ),
 });
 
 const config = {
@@ -78,6 +85,10 @@ const createSkillResource = createSafeRootHandler(
       safeDb(
         async (tx) =>
           await tx.transaction(async (innerTx) => {
+            const lockedSkill = await lockSkillForResourceWrite(
+              innerTx,
+              params.skillId,
+            );
             const rows = await innerTx
               .insert(agentSkillResources)
               .values({
@@ -95,7 +106,7 @@ const createSkillResource = createSafeRootHandler(
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
-            await refreshSkillContentHash(innerTx, params.skillId);
+            await refreshSkillContentHash(innerTx, lockedSkill);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.CREATE,

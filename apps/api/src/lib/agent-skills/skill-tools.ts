@@ -34,7 +34,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
 import { auditedSkillBody } from "./audited-body";
-import { refreshSkillContentHash, skillContentHashAfter } from "./content-hash";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+  skillContentHashAfter,
+} from "./content-hash";
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
@@ -501,11 +505,15 @@ const updateCurrentSkillResource = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
+        const lockedSkill = await lockSkillForResourceWrite(
+          innerTx,
+          activeSkillContext.id,
+        );
         await innerTx
           .update(agentSkillResources)
           .set({ content, sizeBytes: nextSizeBytes })
           .where(eq(agentSkillResources.id, row.id));
-        await refreshSkillContentHash(innerTx, activeSkillContext.id);
+        await refreshSkillContentHash(innerTx, lockedSkill);
 
         await recordAuditEvent(innerTx, {
           action: AUDIT_ACTION.UPDATE,
@@ -610,6 +618,10 @@ const createCurrentSkillResource = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
+        const lockedSkill = await lockSkillForResourceWrite(
+          innerTx,
+          activeSkillContext.id,
+        );
         const rows = await innerTx
           .insert(agentSkillResources)
           .values({
@@ -621,7 +633,7 @@ const createCurrentSkillResource = async ({
             sizeBytes,
           })
           .returning({ id: agentSkillResources.id });
-        await refreshSkillContentHash(innerTx, activeSkillContext.id);
+        await refreshSkillContentHash(innerTx, lockedSkill);
         const row = rows.at(0);
         if (row) {
           await recordAuditEvent(innerTx, {

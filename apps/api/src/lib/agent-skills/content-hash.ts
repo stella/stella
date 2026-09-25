@@ -141,10 +141,36 @@ export const skillContentHashAfter = async (
   return hashSkillContent({ ...skill, ...patch, resources });
 };
 
+const LOCKED_SKILL: unique symbol = Symbol("stella.lockedSkill");
+
+/** Proof that the transaction holds the skill row lock. */
+export type LockedSkill = {
+  readonly [LOCKED_SKILL]: true;
+  readonly skillId: SafeId<"agentSkill">;
+};
+
+/**
+ * Lock a skill row before writing its resources. Inserting a resource takes a
+ * key-share lock on the skill through its foreign key, so two concurrent
+ * inserts that locked the skill only afterwards would each hold that lock and
+ * deadlock upgrading it.
+ */
+export const lockSkillForResourceWrite = async (
+  tx: Transaction,
+  skillId: SafeId<"agentSkill">,
+): Promise<LockedSkill> => {
+  await tx
+    .select({ id: agentSkills.id })
+    .from(agentSkills)
+    .where(eq(agentSkills.id, skillId))
+    .for("update");
+  return { [LOCKED_SKILL]: true, skillId };
+};
+
 /** Store the content hash after a write to a skill's resources. */
 export const refreshSkillContentHash = async (
   tx: Transaction,
-  skillId: SafeId<"agentSkill">,
+  { skillId }: LockedSkill,
 ): Promise<void> => {
   const contentHash = await skillContentHashAfter(tx, { skillId });
   await tx
