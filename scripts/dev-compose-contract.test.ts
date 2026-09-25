@@ -38,15 +38,47 @@ const stringArrayField = (
   return candidate;
 };
 
+const readComposeServices = async (): Promise<Record<string, unknown>> => {
+  const compose: unknown = Bun.YAML.parse(
+    await Bun.file(new URL("../docker-compose.yml", import.meta.url)).text(),
+  );
+  if (!isRecord(compose)) {
+    throw new TypeError("Compose must be an object");
+  }
+  return recordField(compose, "services");
+};
+
+const LOOPBACK_HOST = "127.0.0.1";
+
+// Compose accepts both the short "host:published:target" string and the long
+// `{ host_ip, published, target }` form.
+const isLoopbackPublish = (port: unknown): boolean =>
+  typeof port === "string"
+    ? port.startsWith(`${LOOPBACK_HOST}:`)
+    : isRecord(port) && port.host_ip === LOOPBACK_HOST;
+
+describe("local compose services", () => {
+  test("publish host ports on loopback only", async () => {
+    const services = await readComposeServices();
+    const exposed = Object.entries(services).flatMap(([name, service]) => {
+      if (!isRecord(service) || service.ports === undefined) {
+        return [];
+      }
+      if (!Array.isArray(service.ports)) {
+        throw new TypeError(`${name}.ports must be an array`);
+      }
+      return service.ports
+        .filter((port) => !isLoopbackPublish(port))
+        .map((port) => `${name}: ${JSON.stringify(port)}`);
+    });
+
+    expect(exposed).toEqual([]);
+  });
+});
+
 describe("local Quickwit generation", () => {
   test("pins the engine the manifest declares, on its own metastore", async () => {
-    const compose: unknown = Bun.YAML.parse(
-      await Bun.file(new URL("../docker-compose.yml", import.meta.url)).text(),
-    );
-    if (!isRecord(compose)) {
-      throw new TypeError("Compose must be an object");
-    }
-    const services = recordField(compose, "services");
+    const services = await readComposeServices();
     const rustfsSetup = recordField(services, "rustfs-setup");
     const q09 = recordField(services, "quickwit09");
     const q09Setup = recordField(services, "quickwit09-postgres-setup");
