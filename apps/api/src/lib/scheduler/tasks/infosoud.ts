@@ -27,7 +27,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   let total = 0;
 
   while (!signal.aborted) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: the next batch depends on the attempts this one recorded
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: the page query skips cases this run already stamped, so the next page exists only after this one's attempts land
     const trackedCases = await loadNextTrackedCaseBatch(db, syncStartedAt);
     if (trackedCases.length === 0) {
       break;
@@ -58,7 +58,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         }
 
         if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
           await markTrackedCaseFailed({
             db,
             error: "InfoSoudAgendaImportLimit",
@@ -68,7 +68,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           continue;
         }
 
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case keeps a failed import isolated
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case, after its own throttled court lookup; a failed import rolls back only that case
         const importResult = await db.transaction(async (tx) => {
           const workspace = await tx.query.workspaces.findFirst({
             where: { id: { eq: trackedCase.workspaceId } },
@@ -99,7 +99,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         });
 
         if (!importResult.ok) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
           await markTrackedCaseFailed({
             db,
             error: "InfoSoudAgendaImportFailed",
@@ -116,7 +116,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           break;
         }
 
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each case's outcome is recorded after its own external lookup
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
         await markTrackedCaseFailed({
           db,
           error: errorTag(error),

@@ -708,7 +708,7 @@ const selectWorkspacesWithPendingCells = async (
             fields.workspaceId,
             workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
           );
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one distinct scan per workspace chunk; the chunk is the batch
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one set-based distinct scan per chunk; chunking caps the IN list at workflowEntityBatchSize bound parameters
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
       .from(fields)
