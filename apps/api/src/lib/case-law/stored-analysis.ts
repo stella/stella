@@ -3,8 +3,8 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 /**
  * What a stored decision analysis is worth for the document as it reads
  * now, and how a new generation run takes the row. Pure over the row's
- * `analysis` value and the current input fingerprint; the store in
- * `generate.ts` applies these against Postgres or memory.
+ * `analysis` value and the current input fingerprint; the stores in
+ * `analysis-store.ts` apply these against Postgres or memory.
  */
 
 import type {

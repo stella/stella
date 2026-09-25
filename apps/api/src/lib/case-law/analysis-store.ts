@@ -1,6 +1,11 @@
 /**
  * The application's binding of the analysis store (`analysis-store-core.ts`):
- * the decision row through the root handle, normally.
+ * the decision row through the owner connection, normally.
+ *
+ * A case-law analysis is global corpus state, not one workspace's, and the
+ * generation path writes it from a background task that outlives the request
+ * that started it; so the handlers that generate analyses reach the row only
+ * through the store operations here, never through a connection of their own.
  *
  * A shared corpus read through the read-only handle cannot take that write,
  * so production reports the analysis unavailable there, and a development
@@ -10,10 +15,6 @@
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
-// SAFETY: rootDb is used here because a case-law analysis is global, not
-// workspace-scoped, and because the generation path writes from a
-// fire-and-forget background task whose request scope has already ended.
-// oxlint-disable-next-line no-restricted-imports -- global corpus state; background writes outlive the request scope
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
