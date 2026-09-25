@@ -504,24 +504,24 @@ export const createApprovalHarness = ({
     response: Response;
     signal: AbortSignal | undefined;
   }): { done: Promise<void>; response: Response } => {
-    const reader: ReadableStreamDefaultReader<Uint8Array> =
+    const reader =
       response.body?.getReader() ??
       panic("A streamed chat response has no body");
     const decoder = new TextDecoder();
     const ended = Promise.withResolvers<RecordedExchange["ended"]>();
+    /** Closing the connection: the server's response is cancelled and the
+     *  page's errors. */
+    const connection = Promise.withResolvers<Error>();
     let text = "";
     let open = true;
     let page: ReadableStreamDefaultController<Uint8Array> | undefined;
-    /** The server's side of a closed connection: its response cancelled. */
-    let serverCancelled: Promise<void> = Promise.resolve();
     const disconnect = (error: Error) => {
       if (!open) {
         return;
       }
       open = false;
       page?.error(error);
-      serverCancelled = reader.cancel(error);
-      ended.resolve("disconnected");
+      connection.resolve(error);
     };
     const onAbort = () => {
       disconnect(new DOMException("The page aborted", "AbortError"));
@@ -530,23 +530,49 @@ export const createApprovalHarness = ({
     openConnections.set(raw.threadId, () => {
       disconnect(new TypeError("The connection dropped"));
     });
+    /** Relays the server's response to the page until either side ends. */
+    const relay = async (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+    ) => {
+      let closedBy: Error | undefined;
+      try {
+        for (;;) {
+          const next = await Promise.race([reader.read(), connection.promise]);
+          if (next instanceof Error) {
+            // A closed connection cancels the server's response, as a closed
+            // socket does.
+            await reader.cancel(next).catch(() => undefined);
+            closedBy = next;
+            break;
+          }
+          if (next.done) {
+            break;
+          }
+          const chunk: unknown = next.value;
+          if (!(chunk instanceof Uint8Array)) {
+            panic("The server wrote a chunk that is not bytes");
+          }
+          text += decoder.decode(chunk, { stream: true });
+          controller.enqueue(chunk);
+        }
+      } catch (error) {
+        await reader.cancel(error).catch(() => undefined);
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
+      if (closedBy === undefined) {
+        open = false;
+        controller.close();
+        ended.resolve("complete");
+      } else {
+        ended.resolve("disconnected");
+      }
+    };
     const body = new ReadableStream<Uint8Array>({
       start: (controller) => {
         page = controller;
-      },
-      pull: async (controller) => {
-        const read = await reader.read();
-        if (!open) {
-          return;
-        }
-        if (read.done) {
-          open = false;
-          controller.close();
-          ended.resolve("complete");
-          return;
-        }
-        text += decoder.decode(read.value, { stream: true });
-        controller.enqueue(read.value);
+        void relay(controller);
       },
       cancel: (reason) => {
         disconnect(reason instanceof Error ? reason : new Error("Cancelled"));
@@ -554,7 +580,6 @@ export const createApprovalHarness = ({
     });
     const settleResponse = async () => {
       const how = await ended.promise;
-      await serverCancelled;
       signal?.removeEventListener("abort", onAbort);
       openConnections.delete(raw.threadId);
       await afterResponse({ endRecord, ended: how, raw, text });

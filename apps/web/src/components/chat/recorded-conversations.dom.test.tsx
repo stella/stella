@@ -56,6 +56,7 @@ const { __resetChatRequestStateForTests, chatThreadOptions } =
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
@@ -356,7 +357,10 @@ const RecordedThreadPage = ({
   organizationId: string;
   threadId: string;
 }) => {
-  const threadRef = { scope: "global", threadId } as const;
+  const threadRef = {
+    scope: "global",
+    threadId: toChatThreadId(threadId),
+  } as const;
   const chatThreadContext = { allowMissingThread: true };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -432,7 +436,9 @@ const openPage = async (
   });
   // Lists the chat reads beside the thread, answered as empty.
   queryClient.setQueryData(mcpConnectorsOptions(organizationId).queryKey, {
+    canManageCustomConnectors: false,
     connectors: [],
+    nativeTools: [],
   });
   queryClient.setQueryData(
     workspacesNavigationOptions(organizationId).queryKey,
@@ -1061,16 +1067,15 @@ describe("a recorded conversation, rendered", () => {
         readRecording(scenario).steps.map(({ action }) => action.type),
       ),
     );
-    expect([...kinds].toSorted()).toEqual(
-      [
-        "answer",
-        "approve",
-        "auto-approve",
-        "client-tool",
-        "drop-connection",
-        "send",
-        "stop",
-      ].toSorted(),
-    );
+    const everyKind: RecordedAction["type"][] = [
+      "answer",
+      "approve",
+      "auto-approve",
+      "client-tool",
+      "drop-connection",
+      "send",
+      "stop",
+    ];
+    expect([...kinds].toSorted()).toEqual(everyKind.toSorted());
   });
 });
