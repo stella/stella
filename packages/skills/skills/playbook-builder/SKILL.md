@@ -30,10 +30,14 @@ draft that a person approves in the editor; you never approve it.
   skill is active; write each call from the signature there. A script has
   no imports and returns plain JSON. If a call is rejected, re-read the
   signature and correct the call yourself.
+- `save_playbook` and `ask-user` are direct tool calls, never functions in a
+  script: a script has no `save_playbook`, and `save_playbook is not
+defined` inside one means the call was written in the wrong place, not
+  that the tool is missing. Read in a script, then save with a tool call.
 - `spawn_subagents` is never used with this skill, whatever the chat's
   delegation rule says: every call is yours.
 
-If `save_playbook` is not available to you, say that you cannot save a
+If `save_playbook` is not in your tool list, say that you cannot save a
 playbook here and stop; do not draft one only in the conversation.
 
 When this skill says "ask the user", use the `ask-user` tool if you have it,

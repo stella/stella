@@ -430,6 +430,20 @@ describe("shared scoring", () => {
     ).toEqual([]);
   });
 
+  test("a script that names save_playbook is a defect", () => {
+    const events = contractsLaterRun();
+    events.splice(
+      1,
+      0,
+      event(1, "execute_typescript", {
+        code: "return await save_playbook({ name: 'IT services' });",
+      }),
+    );
+    expect(score("contracts-later", events)).toEqual([
+      "called save_playbook inside a script",
+    ]);
+  });
+
   test("looking for starter playbooks is a defect", () => {
     const events = contractsLaterRun();
     events.splice(1, 0, event(1, "list_templates"));
