@@ -32,7 +32,7 @@ const updateSkillProposalBodySchema = t.Object({
     t.String({ maxLength: LIMITS.agentSkillProposalSummaryMaxChars }),
   ),
   // Authoring statuses only: a decision is made through
-  // skills.proposals.decide, never by writing the status here.
+  // skills.proposals.review, never by writing the status here.
   status: t.Optional(t.Union([t.Literal("draft"), t.Literal("proposed")])),
 });
 

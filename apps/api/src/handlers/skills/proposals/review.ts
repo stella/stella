@@ -10,7 +10,6 @@ import {
 } from "@/api/lib/agent-skills/access";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
-import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -33,7 +32,8 @@ const reviewSkillProposalBodySchema = t.Object({
 
 const config = {
   description:
-    "Accept or reject a change proposal for an agent skill. Accepting writes " +
+    "Accept or reject a change proposal for an agent skill that its author " +
+    "has submitted for review (status proposed); a draft is a 409. Accepting writes " +
     "the proposed body to the skill and records the revision it produced; " +
     "rejecting leaves the skill untouched. Either way the decision is final. " +
     "Requires the rights to edit the skill itself.",
@@ -101,11 +101,25 @@ const reviewSkillProposal = createSafeRootHandler(
             message: "Proposal not found",
           });
         }
-        if (isDecidedProposalStatus(proposal.status)) {
-          throw new HandlerError({
-            status: 409,
-            message: "Proposal has already been decided",
-          });
+        switch (proposal.status) {
+          case "proposed":
+            break;
+          case "draft":
+            throw new HandlerError({
+              status: 409,
+              message:
+                "Proposal is still a draft; its author must submit it for review first",
+            });
+          case "accepted":
+          case "rejected":
+            throw new HandlerError({
+              status: 409,
+              message: "Proposal has already been decided",
+            });
+          default: {
+            proposal.status satisfies never;
+            return panic(`Unhandled proposal status: ${proposal.status}`);
+          }
         }
 
         const decidedAt = new Date();

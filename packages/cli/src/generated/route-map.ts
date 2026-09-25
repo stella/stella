@@ -39445,7 +39445,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "proposals-review"],
                 capabilityId: "skills.proposals.review",
                 description:
-                  "Accept or reject a change proposal for an agent skill. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
+                  "Accept or reject a change proposal for an agent skill that its author has submitted for review (status proposed); a draft is a 409. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
                 access: "write",
                 flags: [
                   {
