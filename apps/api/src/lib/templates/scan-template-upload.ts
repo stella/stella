@@ -8,11 +8,12 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 /**
  * An uploaded template DOCX, scanned before anything parses or stores it. A
  * rejecting verdict is the structured 422 every other upload route answers
- * with; the bytes that come back are the scanned copy, not the request's.
+ * with, a scanner failure a retryable 503; the bytes that come back are the
+ * scanned copy, not the request's.
  */
 export const scanTemplateUpload = async (
   file: File,
-): Promise<Result<Buffer, HandlerError<422>>> =>
+): Promise<Result<Buffer, HandlerError<422 | 503>>> =>
   Result.map(
     await scanUploadForHandler({
       bytes: await file.arrayBuffer(),
@@ -23,12 +24,12 @@ export const scanTemplateUpload = async (
   );
 
 /**
- * The same rejection as a JSON response, for the template routes that answer
+ * The same error as a JSON response, for the template routes that answer
  * with a raw `Response`. The body matches what the safe-handler boundary sends
  * for a `HandlerError`, so clients read one shape.
  */
 export const templateUploadRejectionResponse = (
-  error: HandlerError<422>,
+  error: HandlerError<422 | 503>,
 ): Response =>
   new Response(
     JSON.stringify({

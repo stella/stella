@@ -859,7 +859,7 @@ const uploadEntityHandler = async function* ({
     fileName: name,
   });
   if (Result.isError(scanResult)) {
-    return scanResult;
+    return Result.err(scanResult.error);
   }
   const scanned = scanResult.value;
   const scanWarnings = scanned.scanWarnings ?? undefined;
