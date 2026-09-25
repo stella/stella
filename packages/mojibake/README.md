@@ -9,6 +9,9 @@ against CLDR exemplar characters.
   UTF-8 read as windows-1252 or Latin-1, and any reversible mis-decoding
   between the charsets in `charsets`, with the pair, a confidence, sample
   spans and a repaired preview. `repairMisdecoding` undoes a reported pair.
+- `declared-charset`: `decodeDeclared(bytes, { contentType })` reads bytes as
+  their byte-order mark, HTTP charset or in-document declaration says, where
+  `Response.text()` always assumes UTF-8.
 - `charsets`: exact encoders and fatal decoders, derived from the platform's
   WHATWG decoders.
 - `exemplars.generated.ts`: CLDR main, auxiliary and punctuation exemplars per
