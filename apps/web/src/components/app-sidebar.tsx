@@ -1501,6 +1501,7 @@ const MatterActivityList = ({
 }: MatterActivityListProps) => {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -1540,6 +1541,7 @@ const MatterActivityList = ({
         folderId: entityId,
         navigate,
         pathname,
+        queryClient,
         targetWorkspaceId: workspaceId,
       });
       return;

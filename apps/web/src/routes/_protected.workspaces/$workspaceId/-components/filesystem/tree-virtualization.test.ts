@@ -4,7 +4,10 @@ import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
-import { flattenFilesystemRows } from "./tree-virtualization";
+import {
+  flattenFilesystemRows,
+  planFilesystemReveal,
+} from "./tree-virtualization";
 
 const safeEntityId = (value: string) => toSafeId<"entity">(value);
 const entityIds = (...values: string[]) => values.map(safeEntityId);
@@ -104,5 +107,57 @@ describe("filesystem row virtualization", () => {
       throw new Error("Expected nested folder row");
     }
     expect([...nestedFolder.ancestorIds]).toEqual(["folder-a"]);
+  });
+});
+
+describe("filesystem reveal", () => {
+  const roots = [
+    entity("folder-a", "folder", [
+      entity("doc-a-1", "document"),
+      entity("folder-b", "folder", [entity("doc-b-1", "document")]),
+    ]),
+    entity("doc-root", "document"),
+  ];
+
+  test("expands a collapsed path and lands on the revealed folder's row", () => {
+    const reveal = planFilesystemReveal({
+      ancestorIds: ["folder-a"],
+      entityId: "folder-b",
+      expandedIds: new Set(),
+      roots,
+    });
+    if (!reveal) {
+      throw new Error("Expected a reveal plan");
+    }
+
+    expect(reveal.expandedIds).toEqual(new Set(["folder-a", "folder-b"]));
+    const rows = flattenFilesystemRows(roots, reveal.expandedIds);
+    expect(rows.at(reveal.rowIndex)?.node.entityId).toBe(
+      safeEntityId("folder-b"),
+    );
+  });
+
+  test("keeps folders the user already expanded", () => {
+    const reveal = planFilesystemReveal({
+      ancestorIds: [],
+      entityId: "doc-root",
+      expandedIds: new Set(["folder-a"]),
+      roots,
+    });
+
+    // folder-a, doc-a-1, folder-b (still collapsed), doc-root
+    expect(reveal?.rowIndex).toBe(3);
+    expect(reveal?.expandedIds.has("folder-a")).toBe(true);
+  });
+
+  test("returns null for an entity outside the rendered tree", () => {
+    expect(
+      planFilesystemReveal({
+        ancestorIds: [],
+        entityId: "filtered-out",
+        expandedIds: new Set(),
+        roots,
+      }),
+    ).toBeNull();
   });
 });

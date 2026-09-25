@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ExternalLinkIcon, LandmarkIcon } from "lucide-react";
 
@@ -372,6 +372,7 @@ const SourceChip = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -396,6 +397,7 @@ const SourceChip = ({
             folderId: result.entityId,
             navigate,
             pathname,
+            queryClient,
             targetWorkspaceId: result.workspaceId,
           });
         }

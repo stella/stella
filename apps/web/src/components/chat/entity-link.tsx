@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { LandmarkIcon } from "lucide-react";
 
@@ -43,6 +44,7 @@ export const EntityLink = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { open: openDecision } = useOpenDecisionTab();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -124,6 +126,7 @@ export const EntityLink = ({
               folderId: result.entityId,
               navigate,
               pathname,
+              queryClient,
               targetWorkspaceId: result.workspaceId,
             });
           }
