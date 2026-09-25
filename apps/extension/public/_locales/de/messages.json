@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Tab trennen"
   },
+  "downloadStopped": {
+    "message": "stella hat einen Download gestoppt, während es einen Tab gesteuert hat."
+  },
   "extensionDescription": {
     "message": "Ermöglicht stella nach deiner Freigabe die Steuerung eines eigenen Chrome-Tabs."
   },

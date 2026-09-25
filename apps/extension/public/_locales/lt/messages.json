@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Atjungti kortelę"
   },
+  "downloadStopped": {
+    "message": "stella sustabdė atsisiuntimą, kol valdė skirtuką."
+  },
   "extensionDescription": {
     "message": "Gavusi leidimą leidžia stellai valdyti atskirą Chrome kortelę."
   },

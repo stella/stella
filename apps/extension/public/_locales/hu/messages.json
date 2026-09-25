@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Lap leválasztása"
   },
+  "downloadStopped": {
+    "message": "A stella leállított egy letöltést, miközben egy lapot vezérelt."
+  },
   "extensionDescription": {
     "message": "Engedély után lehetővé teszi, hogy stella egy külön Chrome-lapot vezéreljen."
   },

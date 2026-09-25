@@ -105,6 +105,61 @@ describe("browser command identity", () => {
     }
   });
 
+  test("a navigation after the user moved the page on is stale", () => {
+    const settled = { documentId: "document-top", url: URL_A };
+    for (const command of [
+      { action: "go-back" },
+      { action: "open", url: URL_A },
+    ] satisfies BrowserControlCommand[]) {
+      expect(
+        checkCommandIdentity({
+          command,
+          controlledTab,
+          navigation: { live: settled, settled },
+          observedTab,
+          snapshot,
+        }),
+      ).toEqual({ documentId: null, status: "ok" });
+      for (const live of [
+        // The user followed a link, or reloaded the same page.
+        { documentId: "document-next", url: `${URL_A}next` },
+        { documentId: "document-reloaded", url: URL_A },
+      ]) {
+        expect(
+          checkCommandIdentity({
+            command,
+            controlledTab,
+            navigation: { live, settled },
+            observedTab,
+            snapshot,
+          }),
+        ).toEqual({ status: "stale-snapshot" });
+      }
+    }
+  });
+
+  test("going back needs a snapshot of the page it leaves", () => {
+    expect(
+      checkCommandIdentity({
+        command: { action: "go-back" },
+        controlledTab,
+        observedTab,
+        snapshot: null,
+      }),
+    ).toEqual({ status: "stale-snapshot" });
+  });
+
+  test("an open after a newer snapshot than the one chat saw is stale", () => {
+    expect(
+      checkCommandIdentity({
+        command: { action: "open", url: URL_A },
+        controlledTab,
+        observedTab: { ...observedTab, revision: "revision-0" },
+        snapshot,
+      }),
+    ).toEqual({ status: "stale-snapshot" });
+  });
+
   test("going back needs the latest snapshot the web client saw", () => {
     expect(
       checkCommandIdentity({

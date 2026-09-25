@@ -208,13 +208,14 @@ export const getBrowserClientCapability = ():
     ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
     : undefined;
 
-/** Stops the controller's queued and running commands in the extension. */
-const postCancel = (controllerId: string): void => {
+/** Stops the controller's queued or running command of `turnId` in the extension. */
+const postCancel = (controllerId: string, turnId: string): void => {
   postRequest({
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     requestId: crypto.randomUUID(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+    turnId,
     type: "cancel",
   });
 };
@@ -252,7 +253,7 @@ export const executeBrowserExtensionCommand = async (
     const onStop = () => {
       clearTimeout(timeout);
       runtime.pendingRequests.delete(requestId);
-      postCancel(controllerId);
+      postCancel(controllerId, turnId);
       resolve(
         unansweredResult(command, {
           code: BROWSER_CONTROL_ERROR_CODE.cancelled,

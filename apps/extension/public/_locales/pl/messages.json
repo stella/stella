@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Odłącz kartę"
   },
+  "downloadStopped": {
+    "message": "stella zatrzymała pobieranie podczas sterowania kartą."
+  },
   "extensionDescription": {
     "message": "Po udzieleniu zgody pozwala stelli sterować osobną kartą Chrome."
   },

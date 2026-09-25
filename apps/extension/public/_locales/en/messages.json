@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Disconnect tab"
   },
+  "downloadStopped": {
+    "message": "stella stopped a download while it controlled a tab."
+  },
   "extensionDescription": {
     "message": "Lets stella operate a dedicated Chrome tab after you grant site access."
   },

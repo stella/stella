@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
+import { takeStoppedDownloads } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
@@ -196,3 +197,7 @@ revokeButton.addEventListener("click", () => {
 });
 
 await renderAccess();
+// A download stopped while stella controlled a tab is shown once, here.
+if ((await takeStoppedDownloads()) > 0) {
+  statusElement.textContent = message("downloadStopped");
+}

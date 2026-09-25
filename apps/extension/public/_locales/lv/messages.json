@@ -39,6 +39,9 @@
   "disconnectTab": {
     "message": "Atvienot cilni"
   },
+  "downloadStopped": {
+    "message": "stella apturēja lejupielādi, kamēr vadīja cilni."
+  },
   "extensionDescription": {
     "message": "Pēc atļaujas saņemšanas ļauj stellai vadīt atsevišķu Chrome cilni."
   },

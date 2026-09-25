@@ -13,7 +13,7 @@ import {
 
 import { hasAllSiteAccess, removeAllSiteAccess } from "../lib/access";
 import { browserControlError } from "../lib/browser-control-result";
-import { chargeStoredCommandBudget } from "../lib/command-budget";
+import { storedCommandBudget } from "../lib/command-budget";
 import { createControlSession } from "../lib/control-session";
 import {
   controllerForSender,
@@ -24,16 +24,17 @@ import {
   readBrowserController,
 } from "../lib/controller";
 import {
-  cancelContainedTabDownload,
-  holdContainedTabDownload,
-  isInDownloadScope,
-  refreshDownloadScope,
+  enforceStoppedDownload,
+  holdDownloadForJudgement,
+  judgeDownload,
+  refreshContainedDownloadScope,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
 import {
-  containPageOpenedTab,
   forgetOpenedTab,
+  holdCreatedTab,
   judgeOpenedTab,
+  sortNavigationTarget,
 } from "../lib/opened-tabs";
 import {
   isExtensionPageSender,
@@ -44,6 +45,7 @@ import {
 import {
   forgetContainedTab,
   onContainedTabsChanged,
+  replaceUserTab,
 } from "../lib/tab-containment";
 import {
   adoptControlledTab,
@@ -100,25 +102,51 @@ const handleTabRemoved = async (tabId: number): Promise<void> => {
   await forgetContainedTab(tabId);
 };
 
+/**
+ * `onDeterminingFilename` as Chrome documents it: a listener that answers
+ * later returns true, and Chrome then waits for its `suggest`. The bundled
+ * types declare a void listener.
+ */
+type FilenameEvents = {
+  addListener: (
+    listener: (
+      download: chrome.downloads.DownloadItem,
+      suggest: () => void,
+    ) => boolean,
+  ) => void;
+};
+
+const filenameEvents = (): FilenameEvents =>
+  chrome.downloads.onDeterminingFilename;
+
 let downloadGuardRegistered = false;
+let navigationTargetsRegistered = false;
 
 /**
- * `downloads` is optional and granted with website access, so the listener
- * attaches at startup when it is already granted and on the grant otherwise.
+ * `downloads` and `webNavigation` are optional and granted with website
+ * access, so their listeners attach at startup when already granted and on
+ * the grant otherwise.
  */
-const registerDownloadGuard = (): void => {
-  if (downloadGuardRegistered || !Reflect.has(chrome, "downloads")) {
-    return;
+const registerOptionalListeners = (): void => {
+  if (!downloadGuardRegistered && Reflect.has(chrome, "downloads")) {
+    downloadGuardRegistered = true;
+    // Chrome writes no file until the name is suggested, so a download is
+    // judged first; the created event covers downloads whose name something
+    // else chose.
+    filenameEvents().addListener(holdDownloadForJudgement);
+    chrome.downloads.onCreated.addListener((download) => {
+      judgeDownload(download).catch(() => undefined);
+    });
+    chrome.downloads.onChanged.addListener((delta) => {
+      enforceStoppedDownload(delta).catch(() => undefined);
+    });
   }
-  downloadGuardRegistered = true;
-  // Holding the file name keeps a judged download from finishing; the
-  // created event covers downloads whose name something else chose.
-  chrome.downloads.onDeterminingFilename.addListener((download, suggest) => {
-    holdContainedTabDownload(download, suggest);
-  });
-  chrome.downloads.onCreated.addListener((download) => {
-    cancelContainedTabDownload(download).catch(() => undefined);
-  });
+  if (!navigationTargetsRegistered && Reflect.has(chrome, "webNavigation")) {
+    navigationTargetsRegistered = true;
+    chrome.webNavigation.onCreatedNavigationTarget.addListener((details) => {
+      sortNavigationTarget(details).catch(() => undefined);
+    });
+  }
 };
 
 type CommandRequest = Extract<BrowserExtensionRequest, { type: "command" }>;
@@ -128,7 +156,7 @@ const runCommand = async (
   senderTabId: number,
   senderUrl: string,
 ): Promise<BrowserControlResult> => {
-  const execution = await session.runCommand(async (signal) => {
+  const execution = await session.runCommand(message.turnId, async (signal) => {
     // Checked inside the session: a pairing change that was queued ahead of
     // this command has been applied by now.
     const controller = await controllerForSender(senderTabId, senderUrl);
@@ -147,26 +175,16 @@ const runCommand = async (
     return await executeAtMostOnce({
       command: message.command,
       controllerId: message.controllerId,
-      execute: async () => {
-        const overBudget = signal.aborted
-          ? null
-          : await chargeStoredCommandBudget({
-              command: message.command,
-              controllerId: message.controllerId,
-              turnId: message.turnId,
-            });
-        if (overBudget !== null) {
-          return browserControlError(
-            BROWSER_CONTROL_ERROR_CODE.budgetExceeded,
-            overBudget,
-          );
-        }
-        return await executeBrowserCommand(
-          message.controllerId,
-          message.command,
-          { observedTab: message.observedTab, signal },
-        );
-      },
+      execute: async () =>
+        await executeBrowserCommand(message.controllerId, message.command, {
+          budget: storedCommandBudget({
+            command: message.command,
+            controllerId: message.controllerId,
+            turnId: message.turnId,
+          }),
+          observedTab: message.observedTab,
+          signal,
+        }),
       toolCallId: message.toolCallId,
     });
   });
@@ -190,10 +208,13 @@ const handleWebMessage = (
   const senderUrl = sender.url ?? "";
 
   if (message.type === "cancel") {
+    // The target is fixed on receipt; checking the sender reads storage,
+    // and a command admitted meanwhile is not the one being stopped.
+    const stop = session.stopTurn(message.turnId);
     controllerForSender(senderTabId, senderUrl)
       .then((controller) => {
         if (controller?.controllerId === message.controllerId) {
-          session.cancel();
+          stop();
         }
         return undefined;
       })
@@ -297,27 +318,27 @@ const handlePopupRequest = async (
   }
 };
 
-const refreshDownloads = (): void => {
-  refreshDownloadScope().catch(() => undefined);
+const refreshDownloadScope = (): void => {
+  refreshContainedDownloadScope().catch(() => undefined);
 };
 
 export default defineBackground(() => {
-  onContainedTabsChanged(refreshDownloads);
-  refreshDownloads();
-  registerDownloadGuard();
-  chrome.permissions.onAdded.addListener(registerDownloadGuard);
+  onContainedTabsChanged(refreshDownloadScope);
+  refreshDownloadScope();
+  registerOptionalListeners();
+  chrome.permissions.onAdded.addListener(registerOptionalListeners);
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     handleTabRemoved(tabId).catch(() => undefined);
   });
   chrome.tabs.onCreated.addListener((tab) => {
-    containPageOpenedTab(tab).catch(() => undefined);
+    holdCreatedTab(tab).catch(() => undefined);
   });
-  chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
+  chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+    replaceUserTab(addedTabId, removedTabId).catch(() => undefined);
+  });
+  chrome.tabs.onUpdated.addListener((_tabId, _change, tab) => {
     judgeOpenedTab(tab).catch(() => undefined);
-    if (change.url !== undefined && isInDownloadScope(tabId)) {
-      refreshDownloads();
-    }
   });
 
   chrome.runtime.onMessage.addListener((rawMessage, sender) => {

@@ -2,18 +2,21 @@ type CommandOutcome<T> =
   | { result: T; status: "completed" }
   | { status: "busy" };
 
+type AdmittedCommand = {
+  stop: AbortController;
+  turnId: string;
+};
+
 /**
  * The worker's single owner of browser control. Web commands and every
  * change to the pairing, the controlled tab or website access run one at a
- * time, in arrival order. A cancel or a change starts a new epoch: the
- * running command's signal aborts at once, and a command admitted in an older
- * epoch starts with its signal already aborted, so it never reaches the page.
+ * time, in arrival order. A change aborts the admitted command at once; a
+ * stop from chat aborts it only when it belongs to the stopped turn. An
+ * aborted command that has not started never reaches the page.
  */
 export const createControlSession = () => {
-  let epoch = 0;
   let tail: Promise<unknown> = Promise.resolve();
-  let running: AbortController | null = null;
-  let commandAdmitted = false;
+  let admitted: AdmittedCommand | null = null;
 
   const serialize = async <T>(task: () => Promise<T>): Promise<T> => {
     const next = tail.then(task, task);
@@ -21,53 +24,48 @@ export const createControlSession = () => {
     return await next;
   };
 
-  const interrupt = (): void => {
-    epoch += 1;
-    running?.abort();
-  };
-
   return {
-    /** Aborts the running command and every command admitted before now. */
-    cancel(): void {
-      interrupt();
+    /**
+     * Picks out, at the moment a stop arrives, the command of `turnId` that
+     * is admitted now. Call synchronously on receipt; the returned function
+     * aborts that command, and never one admitted later, once the stop's
+     * sender has been verified.
+     */
+    stopTurn(turnId: string): () => void {
+      const target = admitted?.turnId === turnId ? admitted : null;
+      return () => {
+        target?.stop.abort();
+      };
     },
     /**
-     * Interrupts running and admitted commands, then applies `change` once
-     * the running command has unwound.
+     * Aborts the admitted command, then applies `change` once that command
+     * has unwound.
      */
     async change<T>(change: () => Promise<T>): Promise<T> {
-      interrupt();
+      admitted?.stop.abort();
       return await serialize(change);
     },
     /**
      * Admits one web command at a time; another that arrives while one is
      * waiting or running is refused as busy. Call synchronously on receipt,
-     * so a cancel sent after the command always reaches it.
+     * so a stop sent after the command always finds it.
      */
     async runCommand<T>(
+      turnId: string,
       execute: (signal: AbortSignal) => Promise<T>,
     ): Promise<CommandOutcome<T>> {
-      if (commandAdmitted) {
+      if (admitted !== null) {
         return { status: "busy" };
       }
-      commandAdmitted = true;
-      const admittedEpoch = epoch;
+      const command = { stop: new AbortController(), turnId };
+      admitted = command;
       try {
-        const result = await serialize(async () => {
-          const controller = new AbortController();
-          if (admittedEpoch !== epoch) {
-            controller.abort();
-          }
-          running = controller;
-          try {
-            return await execute(controller.signal);
-          } finally {
-            running = null;
-          }
-        });
+        const result = await serialize(
+          async () => await execute(command.stop.signal),
+        );
         return { result, status: "completed" };
       } finally {
-        commandAdmitted = false;
+        admitted = null;
       }
     },
   };

@@ -16,6 +16,16 @@ export type SnapshotState = {
   url: string;
 };
 
+/**
+ * The top document of the controlled tab: Chrome's document id (null when
+ * the page cannot be scripted, such as an error page) and the tab URL (null
+ * when Chrome does not show it).
+ */
+export type TopDocument = {
+  documentId: string | null;
+  url: string | null;
+};
+
 type IdentityVerdict =
   /** `documentId` is the document an element command must act in. */
   | { documentId: string | null; status: "ok" }
@@ -34,22 +44,34 @@ type CommandIdentity = {
     tabId: number;
     url: string | undefined;
   } | null;
+  /**
+   * For `open` and `go-back`: the tab's top document now, and as it was
+   * when the last command ended, which is what chat last saw a result for.
+   */
+  navigation?: { live: TopDocument; settled: TopDocument | null };
   /** The tab and snapshot the web client last saw a result for. */
   observedTab: BrowserObservedTab | null;
   snapshot: SnapshotState | null;
 };
 
+const sameDocument = (left: TopDocument, right: TopDocument): boolean =>
+  left.documentId === right.documentId && left.url === right.url;
+
 /**
  * Whether a command still addresses what the model saw. A read is always
- * current. A navigation needs the tab the web client last saw; a web client
- * that saw none may only navigate a tab chat opened itself, never one the
- * user handed over. An element command needs the snapshot its refs came
- * from, in the same tab, at the same URL, with the frame's document still
- * the one that was read.
+ * current. A navigation needs the tab the web client last saw, still showing
+ * the document the last command ended on, so a page the user opened or
+ * reloaded in between is not navigated away; a web client that saw no tab
+ * may only navigate a tab chat opened itself, never one the user handed
+ * over. Going back also needs the snapshot the web client saw, since where
+ * it leads depends on the page. An element command needs the snapshot its
+ * refs came from, in the same tab, at the same URL, with the frame's
+ * document still the one that was read.
  */
 export const checkCommandIdentity = ({
   command,
   controlledTab,
+  navigation,
   observedTab,
   snapshot,
 }: CommandIdentity): IdentityVerdict => {
@@ -68,14 +90,26 @@ export const checkCommandIdentity = ({
       ) {
         return { status: "tab-changed" };
       }
-      // Going back from a newer snapshot than the one the web client saw
-      // leads somewhere the model did not choose.
-      return command.action === BROWSER_CONTROL_ACTION.goBack &&
+      if (
         observedTab !== null &&
         snapshot !== null &&
         snapshot.revision !== observedTab.revision
-        ? { status: "stale-snapshot" }
-        : { documentId: null, status: "ok" };
+      ) {
+        return { status: "stale-snapshot" };
+      }
+      if (
+        command.action === BROWSER_CONTROL_ACTION.goBack &&
+        (snapshot === null || observedTab === null)
+      ) {
+        return { status: "stale-snapshot" };
+      }
+      if (navigation === undefined) {
+        return { documentId: null, status: "ok" };
+      }
+      return navigation.settled === null ||
+        sameDocument(navigation.live, navigation.settled)
+        ? { documentId: null, status: "ok" }
+        : { status: "stale-snapshot" };
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.pressKey:

@@ -235,15 +235,18 @@ describe("browser control result contract", () => {
     }
   });
 
-  test("a cancel names only the controller it stops", () => {
+  test("a cancel names the controller and the turn it stops", () => {
     const cancel = {
       controllerId: "controller-1",
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       requestId: "request-2",
       source: "stella-web",
+      turnId: "turn-1",
       type: "cancel",
     } as const;
     expect(parseBrowserExtensionRequest(cancel)).toEqual(cancel);
+    const { turnId: _turnId, ...anyTurn } = cancel;
+    expect(parseBrowserExtensionRequest(anyTurn)).toBeNull();
     expect(
       parseBrowserExtensionRequest({ ...cancel, toolCallId: "tool-call-1" }),
     ).toBeNull();

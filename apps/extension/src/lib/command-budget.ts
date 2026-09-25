@@ -51,6 +51,11 @@ const add = (usage: BudgetUsage, cost: CommandCost): BudgetUsage => ({
   navigations: usage.navigations + cost.navigations,
 });
 
+const subtract = (usage: BudgetUsage, cost: CommandCost): BudgetUsage => ({
+  actions: Math.max(0, usage.actions - cost.actions),
+  navigations: Math.max(0, usage.navigations - cost.navigations),
+});
+
 type ChargeRequest = {
   command: BrowserControlCommand;
   controllerId: string;
@@ -120,6 +125,29 @@ export const chargeCommandBudget = (
   };
 };
 
+/**
+ * Gives back a charge for a command the page refused before acting. Only a
+ * command that was charged is refunded.
+ */
+export const refundCommandBudget = (
+  current: CommandBudgetLedger | null,
+  { command, controllerId, turnId }: ChargeRequest,
+): CommandBudgetLedger | null => {
+  if (current?.controllerId !== controllerId) {
+    return current;
+  }
+  const cost = commandCost(command);
+  return {
+    controllerId,
+    session: subtract(current.session, cost),
+    turns: current.turns.map((turn) =>
+      turn.turnId === turnId
+        ? { turnId, usage: subtract(turn.usage, cost) }
+        : turn,
+    ),
+  };
+};
+
 const parseUsage = (input: unknown): BudgetUsage | null =>
   typeof input === "object" &&
   input !== null &&
@@ -168,26 +196,38 @@ const parseLedger = (input: unknown): CommandBudgetLedger | null => {
     : null;
 };
 
-/**
- * Charges a command against the stored budget. Returns the refusal message
- * when a limit is reached. Callers run it inside the control session, so
- * the read and write never interleave with another command.
- */
-export const chargeStoredCommandBudget = async (
-  request: ChargeRequest,
-): Promise<string | null> => {
+const readStoredLedger = async (): Promise<CommandBudgetLedger | null> => {
   const stored = await chrome.storage.session.get(
     BROWSER_COMMAND_BUDGET_STORAGE_KEY,
   );
-  const outcome = chargeCommandBudget(
-    parseLedger(stored[BROWSER_COMMAND_BUDGET_STORAGE_KEY]),
-    request,
-  );
-  if (outcome.status === "exceeded") {
-    return outcome.message;
-  }
-  await chrome.storage.session.set({
-    [BROWSER_COMMAND_BUDGET_STORAGE_KEY]: outcome.ledger,
-  });
-  return null;
+  return parseLedger(stored[BROWSER_COMMAND_BUDGET_STORAGE_KEY]);
 };
+
+/**
+ * A command's budget, charged by the executor right before it acts, so a
+ * command refused beforehand costs nothing. `charge` returns the refusal
+ * message when a limit is reached. Callers run inside the control session,
+ * so reads and writes never interleave with another command.
+ */
+export const storedCommandBudget = (request: ChargeRequest) => ({
+  async charge(): Promise<string | null> {
+    const outcome = chargeCommandBudget(await readStoredLedger(), request);
+    if (outcome.status === "exceeded") {
+      return outcome.message;
+    }
+    await chrome.storage.session.set({
+      [BROWSER_COMMAND_BUDGET_STORAGE_KEY]: outcome.ledger,
+    });
+    return null;
+  },
+  async refund(): Promise<void> {
+    const ledger = refundCommandBudget(await readStoredLedger(), request);
+    if (ledger !== null) {
+      await chrome.storage.session.set({
+        [BROWSER_COMMAND_BUDGET_STORAGE_KEY]: ledger,
+      });
+    }
+  },
+});
+
+export type CommandBudget = ReturnType<typeof storedCommandBudget>;

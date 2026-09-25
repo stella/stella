@@ -18,9 +18,14 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { browserControlError } from "./browser-control-result";
+import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
-import { checkCommandIdentity, type SnapshotState } from "./snapshot-guard";
+import {
+  checkCommandIdentity,
+  type SnapshotState,
+  type TopDocument,
+} from "./snapshot-guard";
 import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 import { containControlledTab, forgetContainedTab } from "./tab-containment";
@@ -76,10 +81,25 @@ type ControlledTabState = {
   /** The user handed this tab over from the popup; chat did not open it. */
   adopted: boolean;
   controllerId: string;
+  /**
+   * The top document when the last command ended: what chat last saw a
+   * result for. Null until a command has run in this tab.
+   */
+  settled: TopDocument | null;
   /** Null until the tab is read, and again once an action may have changed it. */
   snapshot: SnapshotState | null;
   tabId: number;
 };
+
+const parseTopDocument = (input: unknown): TopDocument | null =>
+  typeof input === "object" &&
+  input !== null &&
+  "documentId" in input &&
+  (typeof input.documentId === "string" || input.documentId === null) &&
+  "url" in input &&
+  (typeof input.url === "string" || input.url === null)
+    ? { documentId: input.documentId, url: input.url }
+    : null;
 
 const isTabId = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
@@ -129,6 +149,7 @@ const parseControlledTabState = (input: unknown): ControlledTabState | null => {
   return {
     adopted: input.adopted,
     controllerId: input.controllerId,
+    settled: "settled" in input ? parseTopDocument(input.settled) : null,
     snapshot: parseSnapshotState(input.snapshot),
     tabId: input.tabId,
   };
@@ -421,8 +442,64 @@ const runPageOperation = async (
         "new-password",
         "one-time-code",
       ]);
-      const SECRET_FIELD_NAME =
-        /pass(?:word|wd|code|phrase)|pwd|one-?time|otp|cvc|cvv/iu;
+      // Whole words of a field's name or id that mark it secret: `userPassword`
+      // and `one_time_code` count, `hotplate` and `photoprint` do not.
+      const SECRET_NAME_WORDS = new Set([
+        "csc",
+        "cvc",
+        "cvv",
+        "onetime",
+        "otp",
+        "passcode",
+        "passphrase",
+        "passwd",
+        "password",
+        "pwd",
+        "totp",
+      ]);
+      const nameWords = (identifier: string) =>
+        identifier
+          .replaceAll(/([a-z\d])([A-Z])/gu, "$1 $2")
+          .toLowerCase()
+          .split(/[^a-z\d]+/u)
+          .filter((word) => word.length > 0);
+      const nameMarksSecret = (identifier: string) => {
+        const words = nameWords(identifier);
+        return words.some(
+          (word, index) =>
+            SECRET_NAME_WORDS.has(word) ||
+            (word === "one" && words[index + 1] === "time"),
+        );
+      };
+      // Values of secret fields seen in this document. A page can reveal a
+      // password by swapping the field for a new element or by printing it;
+      // any field holding one, and any text containing one, is withheld.
+      // Values shorter than this are too common to match safely.
+      const SECRET_VALUE_MIN_CHARS = 4;
+      const SECRETS_KEY = "stellaSecretValues";
+      const isSecretSet = (value: unknown): value is Set<string> =>
+        value instanceof Set;
+      const storedSecrets: unknown = Reflect.get(globalThis, SECRETS_KEY);
+      const secretValues = isSecretSet(storedSecrets)
+        ? storedSecrets
+        : new Set<string>();
+      Reflect.set(globalThis, SECRETS_KEY, secretValues);
+      const REDACTED = "[hidden]";
+      const holdsSecret = (text: string) => {
+        for (const secret of secretValues) {
+          if (text.includes(secret)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const redact = (text: string) => {
+        let redacted = text;
+        for (const secret of secretValues) {
+          redacted = redacted.replaceAll(secret, () => REDACTED);
+        }
+        return redacted;
+      };
       // A field once seen as secret stays secret for the life of its
       // document, so a "show password" toggle that turns type=password into
       // text does not make the value readable. The extension's isolated world
@@ -433,11 +510,14 @@ const runPageOperation = async (
       const sensitiveHistory: WeakSet<Element> =
         storedHistory instanceof WeakSet ? storedHistory : new WeakSet();
       Reflect.set(globalThis, HISTORY_KEY, sensitiveHistory);
+      const isTextField = (
+        element: Element,
+      ): element is HTMLInputElement | HTMLTextAreaElement =>
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement;
       const namedLikeSecret = (element: Element) =>
-        (element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement) &&
-        (SECRET_FIELD_NAME.test(element.name) ||
-          SECRET_FIELD_NAME.test(element.id));
+        isTextField(element) &&
+        (nameMarksSecret(element.name) || nameMarksSecret(element.id));
       // Passwords, payment cards and one-time codes: their values and text
       // are never read, and the model may not type or choose them.
       const isSensitiveField = (element: Element) => {
@@ -445,6 +525,7 @@ const runPageOperation = async (
           return true;
         }
         const sensitive =
+          (isTextField(element) && holdsSecret(element.value)) ||
           (element instanceof HTMLInputElement &&
             element.type === "password") ||
           (element.getAttribute("autocomplete") ?? "")
@@ -462,6 +543,17 @@ const runPageOperation = async (
         }
         return sensitive;
       };
+      // Every secret field's current value joins the secrets, whenever it
+      // is seen, so a value typed after the first look counts too.
+      const rememberSecretValue = (element: Element) => {
+        if (
+          isTextField(element) &&
+          element.value.length >= SECRET_VALUE_MIN_CHARS &&
+          isSensitiveField(element)
+        ) {
+          secretValues.add(element.value);
+        }
+      };
       // Records every field that is secret right now, before anything reads
       // the page or acts on it.
       const rememberSensitiveFields = (root: ParentNode) => {
@@ -472,6 +564,7 @@ const runPageOperation = async (
             element instanceof HTMLSelectElement
           ) {
             isSensitiveField(element);
+            rememberSecretValue(element);
           }
           if (element.shadowRoot) {
             rememberSensitiveFields(element.shadowRoot);
@@ -604,7 +697,7 @@ const runPageOperation = async (
             }
           }
         }
-        return normalize(parts.join(" "));
+        return redact(normalize(parts.join(" ")));
       };
       const roleFor = (element: Element) => {
         const explicit = element.getAttribute("role");
@@ -631,11 +724,13 @@ const runPageOperation = async (
         return "interactive";
       };
       const nameFor = (element: Element) =>
-        normalize(
-          element.getAttribute("aria-label") ??
-            element.getAttribute("title") ??
-            element.getAttribute("placeholder") ??
-            collectText(element, limits.elementNameChars),
+        redact(
+          normalize(
+            element.getAttribute("aria-label") ??
+              element.getAttribute("title") ??
+              element.getAttribute("placeholder") ??
+              collectText(element, limits.elementNameChars),
+          ),
         ).slice(0, limits.elementNameChars);
       const valueFor = (element: Element) => {
         if (
@@ -650,7 +745,7 @@ const runPageOperation = async (
       };
       const hrefFor = (element: Element) =>
         element instanceof HTMLAnchorElement && element.href !== ""
-          ? element.href.slice(0, limits.urlChars)
+          ? redact(element.href).slice(0, limits.urlChars)
           : undefined;
       const isDisabled = (element: Element) =>
         element.matches(":disabled") ||
@@ -876,7 +971,7 @@ const runPageOperation = async (
           elements,
           origin: window.origin,
           text: collectText(document.body, limits.pageTextTotalChars),
-          title: document.title.slice(0, limits.titleChars),
+          title: redact(document.title).slice(0, limits.titleChars),
           url: window.location.href.slice(0, limits.urlChars),
         };
       }
@@ -1211,9 +1306,11 @@ const readSnapshot = async ({
     );
   }
   if (parsed.status === "success") {
+    const current = await readControlledTabState();
     await writeControlledTabState({
-      adopted: (await readControlledTabState())?.adopted ?? false,
+      adopted: current?.adopted ?? false,
       controllerId,
+      settled: current?.settled ?? null,
       snapshot: {
         documents: Object.fromEntries(
           frames.map(({ documentId, frameId }) => [
@@ -1301,6 +1398,7 @@ export const adoptControlledTab = async (
   await writeControlledTabState({
     adopted: true,
     controllerId,
+    settled: null,
     snapshot: null,
     tabId: tab.id,
   });
@@ -1333,6 +1431,7 @@ const openControlledTab = async (
   await writeControlledTabState({
     adopted: existing?.state.adopted ?? false,
     controllerId,
+    settled: existing?.state.settled ?? null,
     snapshot: null,
     tabId,
   });
@@ -1353,11 +1452,43 @@ const openControlledTab = async (
 };
 
 type ExecuteBrowserCommandOptions = {
+  /** Charged right before the command acts; refunded if the page refuses. */
+  budget: CommandBudget;
   /** The tab and snapshot the web client last saw a result for. */
   observedTab: BrowserObservedTab | null;
   /** Aborts when chat stops the command or control changes. */
   signal: AbortSignal;
 };
+
+/** The tab's top document now; see `TopDocument`. */
+const readTopDocument = async (tabId: number): Promise<TopDocument> => {
+  const tab = await chrome.tabs.get(tabId);
+  const documentId = await runPageOperation(
+    { frameIds: [TOP_FRAME_ID], tabId },
+    { kind: "locate" },
+  ).then(
+    (results) => results.at(0)?.documentId ?? null,
+    () => null,
+  );
+  return { documentId, url: tab.url ?? null };
+};
+
+/** Records the document the command ended on, which chat now sees. */
+const recordSettledDocument = async (controllerId: string): Promise<void> => {
+  const state = await readControlledTabState();
+  if (state?.controllerId !== controllerId) {
+    return;
+  }
+  const settled = await readTopDocument(state.tabId).catch(() => null);
+  // Re-read: the command may have replaced the stored snapshot meanwhile.
+  const current = await readControlledTabState();
+  if (current?.tabId === state.tabId && settled !== null) {
+    await writeControlledTabState({ ...current, settled });
+  }
+};
+
+const budgetExceeded = (message: string): BrowserControlResult =>
+  browserControlError(BROWSER_CONTROL_ERROR_CODE.budgetExceeded, message);
 
 const identityRefusal = (
   status: "stale-snapshot" | "tab-changed",
@@ -1375,17 +1506,45 @@ const identityRefusal = (
 export const executeBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
-  { observedTab, signal }: ExecuteBrowserCommandOptions,
+  options: ExecuteBrowserCommandOptions,
 ): Promise<BrowserControlResult> => {
-  // Set once a click, fill, select, key press or navigation has been handed
-  // to the page or tab; from then on a failure cannot say it did not run.
-  let dispatched = false;
+  const progress = { dispatched: false };
+  const result = await runBrowserCommand(
+    controllerId,
+    command,
+    options,
+    progress,
+  );
+  // What chat sees next is the page this command read or left behind. A
+  // command refused before it acted shows chat nothing new, so a page the
+  // user moved to meanwhile stays unseen.
+  if (
+    progress.dispatched ||
+    command.action === BROWSER_CONTROL_ACTION.snapshot
+  ) {
+    await recordSettledDocument(controllerId).catch(() => undefined);
+  }
+  return result;
+};
+
+const runBrowserCommand = async (
+  controllerId: string,
+  command: BrowserControlCommand,
+  { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
+  // `dispatched` is set once a click, fill, select, key press or navigation
+  // has been handed to the page or tab; from then on a failure cannot say
+  // it did not run.
+  progress: { dispatched: boolean },
+): Promise<BrowserControlResult> => {
   try {
     if (isStopped(signal)) {
       return cancelled();
     }
     const controlledTab = await readControlledTab(controllerId);
     const tabId = controlledTab?.tab.id;
+    const isNavigation =
+      command.action === BROWSER_CONTROL_ACTION.open ||
+      command.action === BROWSER_CONTROL_ACTION.goBack;
     const identity = checkCommandIdentity({
       command,
       controlledTab:
@@ -1396,6 +1555,14 @@ export const executeBrowserCommand = async (
               tabId,
               url: controlledTab.tab.url,
             },
+      ...(isNavigation && controlledTab !== null && tabId !== undefined
+        ? {
+            navigation: {
+              live: await readTopDocument(tabId),
+              settled: controlledTab.state.settled,
+            },
+          }
+        : {}),
       observedTab,
       snapshot: controlledTab?.state.snapshot ?? null,
     });
@@ -1411,9 +1578,14 @@ export const executeBrowserCommand = async (
           "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
         );
       }
-      dispatched = true;
+      const overBudget = await budget.charge();
+      if (overBudget !== null) {
+        return budgetExceeded(overBudget);
+      }
+      progress.dispatched = true;
       const opened = await openControlledTab(controllerId, requested, signal);
       if (opened.status === "cancelled") {
+        await budget.refund();
         return cancelled();
       }
       if (opened.status === "unavailable") {
@@ -1474,11 +1646,16 @@ export const executeBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       const navigation = createTabNavigationObserver(tabId);
       try {
+        const overBudget = await budget.charge();
+        if (overBudget !== null) {
+          return budgetExceeded(overBudget);
+        }
         await forgetSnapshot(state);
         if (isStopped(signal)) {
+          await budget.refund();
           return cancelled();
         }
-        dispatched = true;
+        progress.dispatched = true;
         await navigateBack(tabId);
         return await readOutcome(navigation, controllerId, tabId, signal);
       } finally {
@@ -1507,13 +1684,18 @@ export const executeBrowserCommand = async (
     if (!frame.ok) {
       return frame.error;
     }
+    const overBudget = await budget.charge();
+    if (overBudget !== null) {
+      return budgetExceeded(overBudget);
+    }
     const navigation = createTabNavigationObserver(tabId);
     try {
       await forgetSnapshot(state);
       if (isStopped(signal)) {
+        await budget.refund();
         return cancelled();
       }
-      dispatched = true;
+      progress.dispatched = true;
       const outcome = await injectDomAction(
         tabId,
         identity.documentId,
@@ -1522,8 +1704,10 @@ export const executeBrowserCommand = async (
         command,
       );
       if (outcome.status === "refused") {
-        // The page refused before acting, so the snapshot still describes it.
+        // The page refused before acting, so the snapshot still describes it
+        // and nothing was spent.
         await writeControlledTabState(state);
+        await budget.refund();
         return browserControlError(outcome.code, outcome.error);
       }
       if (outcome.status === "unobserved") {
@@ -1536,7 +1720,7 @@ export const executeBrowserCommand = async (
       navigation.dispose();
     }
   } catch {
-    if (dispatched) {
+    if (progress.dispatched) {
       return outcomeUnknown(
         "Chrome could not observe the page after the action.",
       );

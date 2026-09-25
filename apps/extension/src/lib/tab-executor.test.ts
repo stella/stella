@@ -89,14 +89,14 @@ const createFakeChrome = () => {
   const chrome = {
     declarativeNetRequest: {
       updateSessionRules: async (options: {
-        addRules?: { condition: { tabIds?: number[] } }[];
+        addRules?: { condition: { excludedTabIds?: number[] } }[];
       }) => {
-        const tabIds = new Set(
+        const excluded = new Set(
           (options.addRules ?? []).flatMap(
-            (rule) => rule.condition.tabIds ?? [],
+            (rule) => rule.condition.excludedTabIds ?? [],
           ),
         );
-        log.push(`rules:${[...tabIds].join(",")}`);
+        log.push(`rules:except:${[...excluded].join(",")}`);
       },
     },
     scripting: {
@@ -138,6 +138,7 @@ const createFakeChrome = () => {
         return { ...tab };
       },
       goBack: async () => undefined,
+      query: async () => structuredClone([...tabs.values()]),
       onUpdated: {
         addListener: (listener: (tabId: number, change: TabChange) => void) => {
           listeners.add(listener);
@@ -214,17 +215,44 @@ const click = (ref = "e:0:1") =>
 
 const OBSERVED_TAB = { revision: "revision-1", tabId: CONTROLLED_TAB_ID };
 
+/** Records charges and refunds; `limit` charges succeed, then the budget is spent. */
+const createBudget = (limit = Number.POSITIVE_INFINITY) => {
+  const events: string[] = [];
+  let charged = 0;
+  return {
+    budget: {
+      async charge(): Promise<string | null> {
+        if (charged >= limit) {
+          events.push("exceeded");
+          return "This chat turn has run its browser actions.";
+        }
+        charged += 1;
+        events.push("charge");
+        return null;
+      },
+      async refund(): Promise<void> {
+        charged -= 1;
+        events.push("refund");
+      },
+    },
+    events,
+  };
+};
+
 const run = async (
   command: BrowserControlCommand,
   {
+    budget = createBudget().budget,
     observedTab = OBSERVED_TAB,
     signal = new AbortController().signal,
   }: {
+    budget?: ReturnType<typeof createBudget>["budget"];
     observedTab?: typeof OBSERVED_TAB | null;
     signal?: AbortSignal;
   } = {},
 ) =>
   await executeBrowserCommand(CONTROLLER_ID, command, {
+    budget,
     observedTab,
     signal,
   });
@@ -374,9 +402,10 @@ describe("controlled tab confinement", () => {
       { observedTab: null },
     );
     expect(result).toMatchObject({ status: "success" });
+    // Every tab but the new one stays the user's; the new one is confined.
     expect(log.slice(0, 3)).toEqual([
       "create:about:blank",
-      "rules:7",
+      `rules:except:${CONTROLLER_TAB_ID},${CONTROLLED_TAB_ID},-1`,
       `update:${PAGE_URL}`,
     ]);
   });
@@ -401,7 +430,9 @@ describe("controlled tab confinement", () => {
     expect(
       await adoptControlledTab(CONTROLLER_ID, userTab(5, PAGE_URL)),
     ).toEqual({ status: "adopted", tabId: 5, url: PAGE_URL });
-    expect(log).toEqual(["rules:5"]);
+    expect(log).toEqual([
+      `rules:except:${CONTROLLER_TAB_ID},${CONTROLLED_TAB_ID},-1`,
+    ]);
   });
 });
 
@@ -464,9 +495,12 @@ describe("command identity", () => {
     ];
 
     expect(await run(click("e:3:0.1"))).toMatchObject({ status: "success" });
+    // The locate and the action; the top frame is located again afterwards
+    // to record the page the click left behind.
     expect(targets).toEqual([
       { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
       { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
+      { frameIds: [0], tabId: CONTROLLED_TAB_ID },
     ]);
   });
 
@@ -504,7 +538,8 @@ describe("command identity", () => {
         await run(command, { observedTab: { ...OBSERVED_TAB, tabId: 99 } }),
       ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.tabChanged });
     }
-    expect(log).toEqual([]);
+    // Navigations only locate the live page before refusing.
+    expect(log.filter((entry) => entry !== "inject:locate")).toEqual([]);
   });
 
   test("a dispatched action retires the refs of the snapshot it used", async () => {
@@ -518,5 +553,109 @@ describe("command identity", () => {
     expect(await run(click())).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
     });
+  });
+});
+
+describe("action budget", () => {
+  test("a command refused before it acts costs nothing", async () => {
+    installFakeChrome();
+    const { budget, events } = createBudget();
+
+    expect(
+      await run(click(), {
+        budget,
+        observedTab: { ...OBSERVED_TAB, tabId: 99 },
+      }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.tabChanged });
+    expect(
+      await run(
+        { ...click(), page: { revision: "revision-0", url: PAGE_URL } },
+        { budget },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
+    expect(events).toEqual([]);
+  });
+
+  test("a page that refuses the action gets its charge back", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["action"] = () => [
+      {
+        frameId: 0,
+        result: {
+          code: BROWSER_CONTROL_ERROR_CODE.sensitiveField,
+          error: "Entered manually.",
+          ok: false,
+        },
+      },
+    ];
+    const { budget, events } = createBudget();
+
+    await run(click(), { budget });
+    expect(events).toEqual(["charge", "refund"]);
+  });
+
+  test("a spent budget stops the action before the page sees it", async () => {
+    const { handlers, log } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
+
+    expect(
+      await run(click(), { budget: createBudget(0).budget }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.budgetExceeded });
+    expect(log).not.toContain("inject:action");
+  });
+});
+
+describe("navigation after the user moved the page", () => {
+  test("going back is refused once the page is no longer the one chat saw", async () => {
+    const { emit, handlers, log, session } = installFakeChrome();
+    handlers["snapshot"] = () => [
+      {
+        documentId: "document-home",
+        frameId: 0,
+        result: frameSnapshot("Home"),
+      },
+    ];
+    handlers["locate"] = () => [
+      {
+        documentId: "document-home",
+        frameId: 0,
+        result: { origin: "https://example.com", url: PAGE_URL },
+      },
+    ];
+    const read = await run({ action: "snapshot" });
+    if (read.status !== "success") {
+      throw new TypeError("The fake snapshot failed");
+    }
+    expect(session["browserControlledTab"]).toMatchObject({
+      settled: { documentId: "document-home", url: PAGE_URL },
+    });
+    const observedTab = {
+      revision: read.snapshot.revision,
+      tabId: CONTROLLED_TAB_ID,
+    };
+
+    // The user follows a link in the controlled tab by hand.
+    emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+    handlers["locate"] = () => [
+      {
+        documentId: "document-elsewhere",
+        frameId: 0,
+        result: {
+          origin: "https://example.com",
+          url: "https://example.com/elsewhere",
+        },
+      },
+    ];
+
+    for (const command of [
+      { action: "go-back" },
+      { action: "open", url: PAGE_URL },
+    ] satisfies BrowserControlCommand[]) {
+      expect(await run(command, { observedTab })).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+      });
+    }
+    expect(log).not.toContain("inject:back");
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
   });
 });
