@@ -103,6 +103,42 @@ describe("the shadow aggregate", () => {
     ]);
   });
 
+  test("the scheduled flush reports a logger failure instead of throwing", () => {
+    const sink = failureSink({ event: "scheduled", expected: [] });
+    const scheduled: (() => void)[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = Object.assign(
+      (callback: () => void) => {
+        scheduled.push(callback);
+        return realSetTimeout(() => undefined, 0);
+      },
+      { __promisify__: realSetTimeout.__promisify__ },
+    );
+    try {
+      countFailureObservation({
+        sink,
+        grading,
+        channel: "capture",
+        degradation: undefined,
+      });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    const reported: string[] = [];
+    setLogSinkForTesting((record) => {
+      if (record.message === "failure.observed") {
+        throw new TypeError("log sink down");
+      }
+      reported.push(String(record.attributes?.["observability.stage"]));
+    });
+
+    // A throw here would fail the test: the callback is what the timer runs.
+    scheduled.at(0)?.();
+
+    expect(scheduled).toHaveLength(1);
+    expect(reported).toEqual(["flush"]);
+  });
+
   test("a flush starts a new window", () => {
     const sink = failureSink({ event: "windowed", expected: [] });
     countFailureObservation({

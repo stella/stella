@@ -71,7 +71,7 @@ export const SHADOW_SINKS = {
 
 // --- Emitter failure isolation ------------------------------------------------
 
-type EmitStage = "capture" | "observe" | "shadow";
+type EmitStage = "capture" | "flush" | "observe" | "shadow";
 
 let reportingEmitFailure = false;
 
@@ -145,6 +145,15 @@ export const flushFailureObservations = (): void => {
   }
 };
 
+// A throw inside a timer callback is an uncaught exception, so the scheduled
+// flush reports a failure instead of letting it escape.
+const flushOnTimer = (): void => {
+  const flushed = Result.try(flushFailureObservations);
+  if (Result.isError(flushed)) {
+    reportEmitFailure("flush", flushed.error);
+  }
+};
+
 type FailureObservationCount = {
   readonly sink: FailureSink;
   readonly grading: FailureGrading;
@@ -181,7 +190,7 @@ export const countFailureObservation = ({
     aggregate.set(key, { ...entry, occurrences: 1 });
   }
   if (flushTimer === undefined) {
-    flushTimer = setTimeout(flushFailureObservations, AGGREGATE_WINDOW_MS);
+    flushTimer = setTimeout(flushOnTimer, AGGREGATE_WINDOW_MS);
     flushTimer.unref();
   }
 };
