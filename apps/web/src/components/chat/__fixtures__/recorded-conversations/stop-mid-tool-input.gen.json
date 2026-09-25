@@ -1,0 +1,482 @@
+{
+  "initialPage": {
+    "messages": [],
+    "olderCursor": null,
+    "lastActivityAt": null
+  },
+  "scenario": "stop-mid-tool-input",
+  "steps": [
+    {
+      "action": {
+        "messageId": "00000000-0000-7000-8000-000000000001",
+        "text": "Check the register",
+        "type": "send"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-1",
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:01.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "Check the register"
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Check the register"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:02.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Check the register"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:03.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            }
+          },
+          "ended": "disconnected",
+          "response": {
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225607000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225608000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Checking the register\",\"timestamp\":1767225609000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225610000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225611000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225612000}\n\n",
+            "status": 200
+          },
+          "page": {
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:04.000Z",
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Check the register"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:05.000Z",
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "refContext": {
+                    "version": 1,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "failed",
+                    "error": "unknown"
+                  }
+                },
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Checking the register"
+                  },
+                  {
+                    "arguments": "{}",
+                    "id": "call-1",
+                    "input": {},
+                    "name": "list_templates",
+                    "state": "input-complete",
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:06.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "action": {
+        "type": "stop"
+      },
+      "exchanges": []
+    }
+  ],
+  "threadId": "00000000-0000-7000-8000-000000000002"
+}

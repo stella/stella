@@ -455,6 +455,12 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
       await recorder.client.stop();
     });
   },
+  "stop-mid-tool-input": async (recorder) => {
+    await sendUntilQuiet(recorder, "before-tool-end");
+    await step(recorder, { type: "stop" }, async () => {
+      await recorder.client.stop();
+    });
+  },
   // The process serving the turn dies after a tool call ran, and the next
   // message settles the turn it left behind.
   "interrupted-turn": async (recorder) => {
