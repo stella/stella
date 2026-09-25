@@ -16,8 +16,11 @@ import {
 import * as caseLawSchema from "@/api/db/schema";
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 
 declare const tx: {
+  execute: (query: unknown) => unknown;
   query: {
     caseLawDecisions: { findMany: () => unknown };
     caseLawMatterLinks: { findMany: () => unknown };
@@ -29,6 +32,8 @@ declare const sql: ((
 ) => unknown) & { raw: (text: string) => unknown };
 declare const getRelationName: () => keyof typeof tx.query;
 declare const relationFragment: unknown;
+declare const dynamicSql: string;
+declare const LIMITS: { pageSize: number };
 
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: private relation query crosses the boundary
 export const privateQuery = tx.query.caseLawMatterLinks.findMany();
@@ -102,6 +107,62 @@ const lateralFragment = sql`lateral (select 1 from case_law_citations)`;
 export const localFragment = sql`select 1 from case_law_decisions d join ${lateralFragment} x on true`;
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 export const rawFragment = sql`select 1 from ${sql.raw("case_law_sources")}`;
+
+// A fragment is read where the statement puts it, raw names included.
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a raw relation name in a local fragment
+const rawRelation = sql.raw("legislation_index_jobs");
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const viaRawRelation = sql`select * from ${rawRelation}`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an inline raw relation name
+export const inlineRaw = sql`select 1 from ${sql.raw("legislation_index_jobs")}`;
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+const MAPPED_RELATION = "case_law_sources";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const viaConstant = sql`select 1 from ${sql.raw(MAPPED_RELATION)}`;
+// A parameter typed as a literal union is every relation it can name.
+export const unionRelation = (
+  relation: "case_law_decisions" | "legislation_index_jobs",
+) =>
+  // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: one alternative is not a mapped relation
+  sql`select 1 from ${sql.raw(relation)}`;
+export const mappedUnion = (
+  relation: "case_law_decisions" | "case_law_sources",
+) =>
+  // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+  sql`select 1 from ${sql.raw(relation)}`;
+
+// Raw text the rule cannot read is opaque executed SQL.
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a raw string of unknown content
+export const opaqueRaw = sql.raw(dynamicSql);
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: concatenation with an unknown value
+export const concatenated = sql.raw("select 1 where id = " + dynamicSql); // oxlint-disable-line prefer-template -- fixture: the concatenation is the case
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an executed template string
+export const executedTemplate = tx.execute(`select ${dynamicSql}`);
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an executed string names its relations too
+export const runs = tx.execute("select 1 from legislation_index_jobs");
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const executedMapped = tx.execute("select 1 from case_law_decisions");
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const constantRaw = sql.raw(String(LIMITS.pageSize));
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const reviewedProducer = sql.raw(publishedCaseLawDecisionSqlFor("d"));
+
+// Ordinary syntax does not hide a relation.
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: the second table of a comma join
+export const commaJoin = sql`select 1 from case_law_decisions, legislation_index_jobs`;
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const mappedComma = sql`select 1 from case_law_decisions d, case_law_sources s`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a comment marker inside a string
+export const dashesInString = sql`select '--' as m from legislation_index_jobs`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a keyword inside a quoted identifier
+export const quotedKeyword = sql`select "from" from legislation_index_jobs`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a dollar quote
+export const dollarQuoted = sql`select $$ from x $$ from legislation_index_jobs`;
+// A CTE shadows a table only in the statement that defines it.
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const ownCte = sql`with legislation_index_jobs as (select 1) select * from legislation_index_jobs`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a CTE of another statement does not cover this one
+export const otherStatement = sql`select * from legislation_index_jobs`;
 // A literal type is not SQL text.
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 export type OrganizationKind = "organization";

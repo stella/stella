@@ -8,18 +8,30 @@
 // public-law relation map, `tx.query` names only the public relational
 // queries, and its SQL text names no private table.
 //
-// Every public-law read: a file joins by importing any owner of one —
+// Public-law SQL: a file joins by importing any owner of a public-law read —
 // `@/api/lib/case-law-public-read-db`, `@/api/lib/legislation-public-read-db`,
 // `@/api/lib/public-law-read-db` or `@/api/lib/public-law-shared-query` — and
-// the owners are always in it. Every relation a `sql` template or a `sql.raw`
-// string reads (after FROM or JOIN, quoted or schema-qualified) is in the
-// relation map, a CTE the file defines, or a system catalog. An interpolation
-// in that position must be a public schema table or a SQL fragment this file
-// writes, whose own text the rule reads; anything else is a relation the rule
-// cannot see, and needs a reviewed suppression that names what it reads.
+// the owners are always in it. Each statement a `sql` template, a `sql.raw`
+// string or a string `.execute()` spells is composed with the fragments this
+// file writes (a fragment a statement interpolates is read in place), then
+// tokenized: strings, quoted identifiers, dollar quotes and comments in one
+// pass. Every relation in a FROM list (comma joins included) or after JOIN,
+// quoted or schema-qualified, must be in the relation map, a CTE the same
+// statement defines, or a system catalog. An interpolated relation must be a
+// public schema table or a value the rule can enumerate, such as a parameter
+// typed as a union of string literals.
 //
-// Lint is the early signal. The reader-role suite, which runs the registered
-// queries as the role itself, is the proof.
+// SQL spliced in as raw text must be something the rule can read: a literal,
+// a constant, a parameter typed as a literal union, or a call to a reviewed
+// scalar producer (`REVIEWED_SQL_PRODUCERS`, each with the reason it names no
+// relation). Anything else is opaque executed SQL and is reported.
+//
+// What the rule does not see: a fragment imported from a module outside the
+// boundary is read nowhere (its text lives in a file that imports no owner),
+// and a query builder's `.from(table)` is checked only through the case-law
+// boundary's schema-import allowlist, which legislation and shared-query
+// files do not join. Lint is the early signal; the reader-role suite, which
+// runs the registered queries as the role itself, is the proof.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -53,6 +65,46 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
+
+/**
+ * Functions whose string result may be spliced into public-law SQL as raw
+ * text. Each renders a scalar expression over the column names its caller
+ * passes as code constants, and names no relation.
+ */
+export const REVIEWED_SQL_PRODUCERS: readonly {
+  modules: readonly string[];
+  name: string;
+  reason: string;
+}[] = [
+  {
+    modules: ["apps/api/src/lib/case-law/court-weights"],
+    name: "courtTierSqlFromMap",
+    reason: "A CASE over the court registry's patterns; reads no relation.",
+  },
+  {
+    modules: ["apps/api/src/lib/case-law/published-decisions"],
+    name: "publishedCaseLawDecisionSqlFor",
+    reason: "A predicate over the aliased decision's metadata column.",
+  },
+  {
+    modules: [
+      "apps/api/src/lib/case-law/redistribution",
+      "apps/api/src/lib/case-law/redistribution-sql",
+    ],
+    name: "redistributableCaseLawSourceSqlFor",
+    reason: "A predicate over the aliased source's descriptor column.",
+  },
+  {
+    modules: ["apps/api/src/handlers/case-law/citation-score"],
+    name: "polarityWeightSql",
+    reason: "A CASE over a citation's polarity column.",
+  },
+  {
+    modules: ["apps/api/src/handlers/case-law/citation-score"],
+    name: "courtWeightSql",
+    reason: "A CASE over the registry's patterns and a court column.",
+  },
+];
 
 const PRIVATE_SQL_TOKEN_RE =
   /\b(?:workspace|workspaces|organization|organizations|entity|entities|field|fields|file|files|chat|user|session|account|matter|matters|task|tasks|contact|contacts)\b/iu;
@@ -147,127 +199,696 @@ const rawTemplateText = (node: unknown): string | null => {
 const hasPrivateSqlText = (text: string): boolean =>
   PRIVATE_SQL_TOKEN_RE.test(text);
 
-// --- SQL relation scan -------------------------------------------------------
+// --- SQL composition -----------------------------------------------------------
 
-// One piece of SQL as the file writes it: literal text, or an interpolation
-// whose value the scan cannot read.
+// One piece of a composed statement.
+//
+// - text: SQL the file writes, reported at `node`;
+// - table: a schema table object interpolated by a `sql` template;
+// - choice: a value the rule can enumerate (a literal-union parameter);
+// - opaque: anything else, a bind parameter or a fragment built elsewhere.
 type SqlPart =
   | { kind: "text"; text: string; node: AstNode }
-  | { kind: "expression"; node: AstNode };
+  | { kind: "table"; name: string; public: boolean; node: AstNode }
+  | { kind: "choice"; values: readonly string[]; node: AstNode }
+  | { kind: "opaque"; node: AstNode };
 
-// Stands in for an interpolation in the flattened text. A private-use
-// character never appears in SQL the files write.
-const EXPRESSION_MARK = "";
+type RuleContext = Parameters<typeof isImportedFrom>[0]["context"];
 
-// Comments and string literals are blanked to spaces of the same length, so
-// offsets still map back to the part that holds them.
-const blank = (match: string): string => " ".repeat(match.length);
-const SQL_COMMENT_RE = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
-const SQL_STRING_RE = /'(?:[^']|'')*'/gu;
+const MAX_COMPOSITION_DEPTH = 8;
 
-// `name AS (`, `name(columns) AS (` and the MATERIALIZED spellings: a CTE,
-// wherever the file writes it. A fragment can define a CTE that another
-// template reads, so the names are collected across the whole file.
-const CTE_RE =
-  /(?<name>[a-z_][a-z0-9_]*)\s*(?:\([^()]*\))?\s+as\s+(?:not\s+)?(?:materialized\s+)?\(/giu;
+const isSqlTag = (node: unknown): boolean =>
+  isIdentifier(unwrapExpression(node), "sql");
 
-// FROM and JOIN in a position that names a relation. The functions whose
-// arguments spell FROM (`extract(year FROM x)`, `substring(x FROM 1)`) and
-// `IS DISTINCT FROM` do not.
-const RELATION_KEYWORD_RE = /\b(?:from|join)\b/giu;
-const NON_RELATION_FROM_RE =
-  /(?:\b(?:extract|substring|trim|overlay|position)\s*\([^()]*|\bdistinct\s+)$/iu;
-const RELATION_PREFIX_RE = /^\s*(?:(?:lateral|only)\b\s*)*/iu;
-const IDENTIFIER_SOURCE = String.raw`(?:"(?:[^"]|"")+"|[a-z_][a-z0-9_$]*)`;
-const QUALIFIED_NAME_RE = new RegExp(
-  String.raw`^(?<first>${IDENTIFIER_SOURCE})(?:\s*\.\s*(?<second>${IDENTIFIER_SOURCE}))?(?<call>\s*\()?`,
-  "iu",
-);
-
-const identifierName = (spelled: string): string =>
-  spelled.startsWith('"')
-    ? spelled.slice(1, -1).replaceAll('""', '"')
-    : spelled.toLowerCase();
-
-type RelationReference =
-  | { kind: "name"; schema: string | null; relation: string; part: SqlPart }
-  | { kind: "expression"; part: SqlPart };
-
-type FlatSql = {
-  text: string;
-  // The part each character of `text` came from.
-  owners: SqlPart[];
-};
-
-const flattenSql = (parts: readonly SqlPart[]): FlatSql => {
-  let text = "";
-  const owners: SqlPart[] = [];
-  for (const part of parts) {
-    const piece =
-      part.kind === "text"
-        ? part.text.replace(SQL_COMMENT_RE, blank).replace(SQL_STRING_RE, blank)
-        : EXPRESSION_MARK;
-    text += piece;
-    owners.push(...Array.from({ length: piece.length }, () => part));
+// `sql.<method>(...)`
+const isSqlMethodCall = (node: unknown, method: string): boolean => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
   }
-  return { text, owners };
+  const callee = unwrapExpression(node.callee);
+  return (
+    isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    callee.computed === false &&
+    isSqlTag(callee.object) &&
+    getPropertyName(callee.property) === method
+  );
 };
 
-const cteNamesIn = (parts: readonly SqlPart[]): string[] =>
-  [...flattenSql(parts).text.matchAll(CTE_RE)].flatMap((match) =>
-    match.groups?.name === undefined ? [] : [match.groups.name.toLowerCase()],
+const firstArgument = (call: AstNode): AstNode | null =>
+  Array.isArray(call.arguments) ? unwrapExpression(call.arguments.at(0)) : null;
+
+const stringValues = (node: unknown): string[] | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
+  if (node.type === "TSLiteralType") {
+    return stringValues(node.literal);
+  }
+  if (isStringLiteral(node)) {
+    return [node.value];
+  }
+  if (node.type === "TSUnionType" && Array.isArray(node.types)) {
+    const values: string[] = [];
+    for (const member of node.types) {
+      const memberValues = stringValues(member);
+      if (memberValues === null) {
+        return null;
+      }
+      values.push(...memberValues);
+    }
+    return values;
+  }
+  return null;
+};
+
+// A parameter declared as a union of string literals: every value it can
+// hold is written in its annotation.
+const literalUnionParameter = (
+  context: RuleContext,
+  node: AstNode,
+): string[] | null => {
+  if (!isIdentifierReference(node)) {
+    return null;
+  }
+  const variable = resolveVariable(context, node);
+  const definition = variable?.defs.at(0);
+  if (variable?.defs.length !== 1 || definition?.type !== "Parameter") {
+    return null;
+  }
+  const annotation = isAstNode(definition.name)
+    ? definition.name.typeAnnotation
+    : null;
+  return isAstNode(annotation) ? stringValues(annotation.typeAnnotation) : null;
+};
+
+const initializerOf = (context: RuleContext, node: AstNode): AstNode | null => {
+  if (!isIdentifierReference(node)) {
+    return null;
+  }
+  const variable = resolveVariable(context, node);
+  return variable === null ? null : stableInitializer(variable);
+};
+
+const isReviewedProducerCall = (context: RuleContext, node: AstNode) =>
+  node.type === "CallExpression" &&
+  REVIEWED_SQL_PRODUCERS.some((producer) =>
+    isImportedFrom({
+      context,
+      node: node.callee,
+      modules: producer.modules,
+      names: new Set([producer.name]),
+    }),
   );
 
-const relationReferences = (parts: readonly SqlPart[]): RelationReference[] => {
-  const { text, owners } = flattenSql(parts);
-  const references: RelationReference[] = [];
-  for (const keyword of text.matchAll(RELATION_KEYWORD_RE)) {
-    const before = text.slice(Math.max(0, keyword.index - 200), keyword.index);
-    if (NON_RELATION_FROM_RE.test(before)) {
-      continue;
-    }
-    let position = keyword.index + keyword[0].length;
-    position += RELATION_PREFIX_RE.exec(text.slice(position))?.[0].length ?? 0;
-    const next = text.charAt(position);
-    const owner = owners[position];
-    if (next === "" || next === "(" || owner === undefined) {
-      continue;
-    }
-    if (next === EXPRESSION_MARK) {
-      references.push({ kind: "expression", part: owner });
-      continue;
-    }
-    const name = QUALIFIED_NAME_RE.exec(text.slice(position));
-    const first = name?.groups?.first;
-    if (first === undefined || name?.groups?.call !== undefined) {
-      // A set-returning function (`jsonb_array_elements(...)`) or nothing
-      // that spells a name.
-      continue;
-    }
-    const second = name?.groups?.second;
-    references.push(
-      second === undefined
-        ? {
-            kind: "name",
-            schema: null,
-            relation: identifierName(first),
-            part: owner,
-          }
-        : {
-            kind: "name",
-            schema: identifierName(first),
-            relation: identifierName(second),
-            part: owner,
-          },
-    );
+// `LIMIT`, `POLARITY.UNKNOWN`: a code constant, named in capitals.
+const isConstantReference = (node: unknown): boolean => {
+  let target = unwrapExpression(node);
+  while (
+    isAstNode(target) &&
+    target.type === "MemberExpression" &&
+    target.computed === false
+  ) {
+    target = unwrapExpression(target.object);
   }
-  return references;
+  return isIdentifier(target) && CONSTANT_EXPORT_RE.test(target.name);
+};
+
+// `String(LIMIT)` or `String(LIMITS.name)`: a code constant rendered as text.
+const isConstantString = (node: AstNode): boolean =>
+  node.type === "CallExpression" &&
+  isIdentifier(unwrapExpression(node.callee), "String") &&
+  isConstantReference(firstArgument(node));
+
+type RawText = { parts: SqlPart[] } | { opaque: AstNode };
+
+/**
+ * The text a raw-SQL argument can spell, or the node that makes it opaque.
+ * Raw text is spliced into the statement unescaped, so every piece of it has
+ * to be something the rule can read or enumerate.
+ */
+const rawText = (context: RuleContext, node: unknown, depth = 0): RawText => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return { parts: [] };
+  }
+  if (depth > MAX_COMPOSITION_DEPTH) {
+    return { opaque: expression };
+  }
+  if (isStringLiteral(expression)) {
+    return {
+      parts: [{ kind: "text", text: expression.value, node: expression }],
+    };
+  }
+  if (expression.type === "Literal" && typeof expression.value === "number") {
+    return {
+      parts: [
+        { kind: "text", text: String(expression.value), node: expression },
+      ],
+    };
+  }
+  if (expression.type === "TemplateLiteral") {
+    const parts: SqlPart[] = [];
+    const quasis = Array.isArray(expression.quasis) ? expression.quasis : [];
+    const expressions = Array.isArray(expression.expressions)
+      ? expression.expressions
+      : [];
+    for (const [index, quasi] of quasis.entries()) {
+      const text = rawTemplateText(quasi);
+      if (isAstNode(quasi) && text !== null) {
+        parts.push({ kind: "text", text, node: quasi });
+      }
+      const interpolated: unknown = expressions[index];
+      if (isAstNode(interpolated)) {
+        const inner = rawText(context, interpolated, depth + 1);
+        if ("opaque" in inner) {
+          return inner;
+        }
+        parts.push(...inner.parts);
+      }
+    }
+    return { parts };
+  }
+  if (expression.type === "BinaryExpression" && expression.operator === "+") {
+    const left = rawText(context, expression.left, depth + 1);
+    if ("opaque" in left) {
+      return left;
+    }
+    const right = rawText(context, expression.right, depth + 1);
+    return "opaque" in right
+      ? right
+      : { parts: [...left.parts, ...right.parts] };
+  }
+  if (isReviewedProducerCall(context, expression)) {
+    return { parts: [{ kind: "opaque", node: expression }] };
+  }
+  const values = literalUnionParameter(context, expression);
+  if (values !== null) {
+    return { parts: [{ kind: "choice", values, node: expression }] };
+  }
+  const initializer = initializerOf(context, expression);
+  if (initializer !== null) {
+    return rawText(context, initializer, depth + 1);
+  }
+  // An imported constant: reviewed code, but its text is not in this file,
+  // so it stays unreadable where a relation belongs.
+  if (isConstantString(expression) || isConstantReference(expression)) {
+    return { parts: [{ kind: "opaque", node: expression }] };
+  }
+  return { opaque: expression };
+};
+
+type Composition = {
+  parts: SqlPart[];
+  // Nodes this composition read in place of a separate statement.
+  inlined: Set<AstNode>;
+  // Raw text the rule could not read.
+  opaque: AstNode[];
+};
+
+/**
+ * One statement as its text reads once the fragments the file writes are
+ * put in place. A `sql` template interpolation is a bind value or a fragment;
+ * a fragment defined in this file (directly or through a constant) is read in
+ * place, a schema table is kept as a table, and anything else stays opaque.
+ */
+const compose = (context: RuleContext, root: AstNode): Composition => {
+  const composition: Composition = {
+    parts: [],
+    inlined: new Set(),
+    opaque: [],
+  };
+  const seen = new Set<AstNode>();
+
+  const addRaw = (argument: unknown) => {
+    const text = rawText(context, argument);
+    if ("opaque" in text) {
+      composition.opaque.push(text.opaque);
+      composition.parts.push({ kind: "opaque", node: text.opaque });
+      return;
+    }
+    composition.parts.push(...text.parts);
+  };
+
+  const addFragment = (node: AstNode, depth: number): boolean => {
+    if (seen.has(node) || depth > MAX_COMPOSITION_DEPTH) {
+      return false;
+    }
+    if (node.type === "TaggedTemplateExpression" && isSqlTag(node.tag)) {
+      seen.add(node);
+      addTemplate(node.quasi, depth);
+      return true;
+    }
+    if (isSqlMethodCall(node, "raw")) {
+      seen.add(node);
+      addRaw(firstArgument(node));
+      return true;
+    }
+    if (isSqlMethodCall(node, "identifier")) {
+      const argument = firstArgument(node);
+      if (isStringLiteral(argument)) {
+        seen.add(node);
+        composition.parts.push({
+          kind: "text",
+          text: `"${argument.value.replaceAll('"', '""')}"`,
+          node: argument,
+        });
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const addExpression = (node: AstNode, depth: number) => {
+    const expression = unwrapExpression(node) ?? node;
+    if (addFragment(expression, depth + 1)) {
+      composition.inlined.add(expression);
+      return;
+    }
+    if (isIdentifierReference(expression)) {
+      const schemaTable = isImportedFrom({
+        context,
+        node: expression,
+        modules: [SCHEMA_MODULE],
+        names: PUBLIC_LAW_SCHEMA_IMPORT_SET,
+      });
+      if (schemaTable) {
+        composition.parts.push({
+          kind: "table",
+          name: expression.name,
+          public: true,
+          node: expression,
+        });
+        return;
+      }
+      const imported = isImportedFrom({
+        context,
+        node: expression,
+        modules: [SCHEMA_MODULE],
+        names: new Set([expression.name]),
+      });
+      if (imported) {
+        composition.parts.push({
+          kind: "table",
+          name: expression.name,
+          public: false,
+          node: expression,
+        });
+        return;
+      }
+      const initializer = initializerOf(context, expression);
+      if (initializer !== null && addFragment(initializer, depth + 1)) {
+        composition.inlined.add(initializer);
+        return;
+      }
+    }
+    composition.parts.push({ kind: "opaque", node: expression });
+  };
+
+  const addTemplate = (template: unknown, depth: number) => {
+    if (!isAstNode(template) || template.type !== "TemplateLiteral") {
+      return;
+    }
+    const quasis = Array.isArray(template.quasis) ? template.quasis : [];
+    const expressions = Array.isArray(template.expressions)
+      ? template.expressions
+      : [];
+    for (const [index, quasi] of quasis.entries()) {
+      const text = rawTemplateText(quasi);
+      if (isAstNode(quasi) && text !== null) {
+        composition.parts.push({ kind: "text", text, node: quasi });
+      }
+      const expression: unknown = expressions[index];
+      if (isAstNode(expression)) {
+        addExpression(expression, depth);
+      }
+    }
+  };
+
+  if (!addFragment(root, 0)) {
+    // A string handed to `.execute()`: raw text, like a `sql.raw` argument.
+    addRaw(root);
+  }
+  return composition;
+};
+
+// --- SQL tokens ------------------------------------------------------------------
+
+type SqlToken =
+  | { kind: "word"; value: string; owner: SqlPart }
+  | { kind: "quoted"; value: string; owner: SqlPart }
+  | { kind: "punct"; value: string; owner: SqlPart }
+  | { kind: "part"; owner: SqlPart };
+
+const isWordStart = (char: string): boolean =>
+  (char >= "a" && char <= "z") ||
+  (char >= "A" && char <= "Z") ||
+  char === "_" ||
+  char > "\u007f";
+
+const isWordChar = (char: string): boolean =>
+  isWordStart(char) || (char >= "0" && char <= "9") || char === "$";
+
+// The end of a `$tag$ ... $tag$` quote starting at `start`, or -1.
+const dollarQuoteEnd = (text: string, start: number): number => {
+  let tagEnd = start + 1;
+  while (
+    tagEnd < text.length &&
+    isWordChar(text.charAt(tagEnd)) &&
+    text.charAt(tagEnd) !== "$"
+  ) {
+    tagEnd += 1;
+  }
+  if (text.charAt(tagEnd) !== "$") {
+    return -1;
+  }
+  const tag = text.slice(start, tagEnd + 1);
+  const close = text.indexOf(tag, tagEnd + 1);
+  return close === -1 ? text.length : close + tag.length;
+};
+
+/**
+ * One pass over a composed statement. Strings (with `''` and, in `E''`
+ * strings, backslash escapes), quoted identifiers, dollar quotes and both
+ * comment forms are consumed where they start, so none of them can hide or
+ * forge a keyword.
+ */
+const tokenize = (parts: readonly SqlPart[]): SqlToken[] => {
+  const tokens: SqlToken[] = [];
+  for (const part of parts) {
+    if (part.kind !== "text") {
+      tokens.push({ kind: "part", owner: part });
+      continue;
+    }
+    const text = part.text;
+    let index = 0;
+    while (index < text.length) {
+      const char = text.charAt(index);
+      const next = text.charAt(index + 1);
+      if (char === "-" && next === "-") {
+        const newline = text.indexOf("\n", index);
+        index = newline === -1 ? text.length : newline + 1;
+      } else if (char === "/" && next === "*") {
+        let depth = 1;
+        index += 2;
+        while (index < text.length && depth > 0) {
+          if (text.startsWith("/*", index)) {
+            depth += 1;
+            index += 2;
+          } else if (text.startsWith("*/", index)) {
+            depth -= 1;
+            index += 2;
+          } else {
+            index += 1;
+          }
+        }
+      } else if (char === "'") {
+        const escapes =
+          index > 0 &&
+          (text.charAt(index - 1) === "E" || text.charAt(index - 1) === "e") &&
+          (index < 2 || !isWordChar(text.charAt(index - 2)));
+        index += 1;
+        while (index < text.length) {
+          const inner = text.charAt(index);
+          if (escapes && inner === "\\") {
+            index += 2;
+          } else if (inner === "'" && text.charAt(index + 1) === "'") {
+            index += 2;
+          } else if (inner === "'") {
+            index += 1;
+            break;
+          } else {
+            index += 1;
+          }
+        }
+      } else if (char === '"') {
+        let value = "";
+        index += 1;
+        while (index < text.length) {
+          const inner = text.charAt(index);
+          if (inner === '"' && text.charAt(index + 1) === '"') {
+            value += '"';
+            index += 2;
+          } else if (inner === '"') {
+            index += 1;
+            break;
+          } else {
+            value += inner;
+            index += 1;
+          }
+        }
+        tokens.push({ kind: "quoted", value, owner: part });
+      } else if (char === "$" && !(next >= "0" && next <= "9")) {
+        const end = dollarQuoteEnd(text, index);
+        if (end === -1) {
+          tokens.push({ kind: "punct", value: char, owner: part });
+          index += 1;
+        } else {
+          index = end;
+        }
+      } else if (isWordStart(char)) {
+        let end = index + 1;
+        while (end < text.length && isWordChar(text.charAt(end))) {
+          end += 1;
+        }
+        tokens.push({
+          kind: "word",
+          value: text.slice(index, end).toLowerCase(),
+          owner: part,
+        });
+        index = end;
+      } else if (char.trim() === "") {
+        index += 1;
+      } else {
+        tokens.push({ kind: "punct", value: char, owner: part });
+        index += 1;
+      }
+    }
+  }
+  return tokens;
+};
+
+// --- Relation scan ---------------------------------------------------------------
+
+// Functions whose arguments spell FROM without naming a relation.
+const FROM_ARGUMENT_FUNCTIONS: ReadonlySet<string> = new Set([
+  "extract",
+  "substring",
+  "trim",
+  "overlay",
+  "position",
+]);
+
+// Words that end a table reference instead of aliasing it.
+const REFERENCE_TERMINATORS: ReadonlySet<string> = new Set([
+  "where",
+  "join",
+  "inner",
+  "left",
+  "right",
+  "full",
+  "cross",
+  "natural",
+  "on",
+  "using",
+  "group",
+  "order",
+  "limit",
+  "offset",
+  "fetch",
+  "having",
+  "window",
+  "union",
+  "except",
+  "intersect",
+  "for",
+  "returning",
+  "select",
+  "lateral",
+  "tablesample",
+  "with",
+]);
+
+type RelationReference =
+  | { kind: "name"; schema: string | null; relation: string; token: SqlToken }
+  | { kind: "part"; part: SqlPart };
+
+const isPunct = (token: SqlToken | undefined, value: string): boolean =>
+  token?.kind === "punct" && token.value === value;
+
+const isWord = (token: SqlToken | undefined, value: string): boolean =>
+  token?.kind === "word" && token.value === value;
+
+const nameOf = (token: SqlToken | undefined): string | null =>
+  token?.kind === "word" || token?.kind === "quoted" ? token.value : null;
+
+// The index just past the parenthesis group opening at `open`.
+const skipGroup = (tokens: readonly SqlToken[], open: number): number => {
+  let depth = 0;
+  for (let index = open; index < tokens.length; index += 1) {
+    if (isPunct(tokens[index], "(")) {
+      depth += 1;
+    } else if (isPunct(tokens[index], ")")) {
+      depth -= 1;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+  }
+  return tokens.length;
+};
+
+/**
+ * The table references a FROM list or a JOIN starting at `start` names. A
+ * subquery or a set-returning function names none of its own here; the scan
+ * still walks its tokens. FROM lists continue past commas.
+ */
+const tableReferences = (
+  tokens: readonly SqlToken[],
+  start: number,
+  list: boolean,
+): RelationReference[] => {
+  const references: RelationReference[] = [];
+  let index = start;
+  for (;;) {
+    while (isWord(tokens[index], "lateral") || isWord(tokens[index], "only")) {
+      index += 1;
+    }
+    const token = tokens[index];
+    if (token === undefined) {
+      return references;
+    }
+    if (isPunct(token, "(")) {
+      index = skipGroup(tokens, index);
+    } else if (token.kind === "part") {
+      references.push({ kind: "part", part: token.owner });
+      index += 1;
+    } else {
+      const first = nameOf(token);
+      if (first === null) {
+        return references;
+      }
+      let schema: string | null = null;
+      let relation = first;
+      let nameToken: SqlToken = token;
+      index += 1;
+      if (isPunct(tokens[index], ".")) {
+        const second = tokens[index + 1];
+        const secondName = nameOf(second);
+        if (second === undefined || secondName === null) {
+          return references;
+        }
+        schema = first;
+        relation = secondName;
+        nameToken = second;
+        index += 2;
+      }
+      if (isPunct(tokens[index], "(")) {
+        // A set-returning function, not a relation.
+        index = skipGroup(tokens, index);
+      } else {
+        references.push({ kind: "name", schema, relation, token: nameToken });
+      }
+    }
+    // An optional alias and column list.
+    if (isWord(tokens[index], "as")) {
+      index += 1;
+    }
+    const alias = tokens[index];
+    if (
+      alias?.kind === "quoted" ||
+      (alias?.kind === "word" && !REFERENCE_TERMINATORS.has(alias.value))
+    ) {
+      index += 1;
+      if (isPunct(tokens[index], "(")) {
+        index = skipGroup(tokens, index);
+      }
+    }
+    if (!list || !isPunct(tokens[index], ",")) {
+      return references;
+    }
+    index += 1;
+  }
+};
+
+/** Every relation reference in a composed statement, and the CTEs it defines. */
+const statementReferences = (
+  tokens: readonly SqlToken[],
+): { references: RelationReference[]; ctes: Set<string> } => {
+  const references: RelationReference[] = [];
+  const ctes = new Set<string>();
+  // The function each open parenthesis belongs to, innermost last.
+  const calls: (string | null)[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const previous = tokens[index - 1];
+    if (isPunct(token, "(")) {
+      calls.push(previous?.kind === "word" ? previous.value : null);
+      continue;
+    }
+    if (isPunct(token, ")")) {
+      calls.pop();
+      continue;
+    }
+    if (token.kind !== "word") {
+      continue;
+    }
+    if (token.value === "as") {
+      // `name AS (`, `name(columns) AS (`, `... AS [NOT] MATERIALIZED (`.
+      let after = index + 1;
+      while (
+        isWord(tokens[after], "not") ||
+        isWord(tokens[after], "materialized")
+      ) {
+        after += 1;
+      }
+      if (isPunct(tokens[after], "(")) {
+        let nameIndex = index - 1;
+        if (isPunct(tokens[nameIndex], ")")) {
+          let depth = 0;
+          for (; nameIndex >= 0; nameIndex -= 1) {
+            if (isPunct(tokens[nameIndex], ")")) {
+              depth += 1;
+            } else if (isPunct(tokens[nameIndex], "(")) {
+              depth -= 1;
+              if (depth === 0) {
+                break;
+              }
+            }
+          }
+          nameIndex -= 1;
+        }
+        const name = nameOf(tokens[nameIndex]);
+        if (name !== null) {
+          ctes.add(name);
+        }
+      }
+      continue;
+    }
+    if (token.value === "join") {
+      references.push(...tableReferences(tokens, index + 1, false));
+      continue;
+    }
+    if (token.value !== "from") {
+      continue;
+    }
+    const call = calls.at(-1);
+    if (
+      (call !== undefined &&
+        call !== null &&
+        FROM_ARGUMENT_FUNCTIONS.has(call)) ||
+      isWord(previous, "distinct")
+    ) {
+      continue;
+    }
+    references.push(...tableReferences(tokens, index + 1, true));
+  }
+  return { references, ctes };
 };
 
 const isGrantedRelation = (
   schema: string | null,
   relation: string,
-  cteNames: ReadonlySet<string>,
+  ctes: ReadonlySet<string>,
 ): boolean => {
   if (schema !== null) {
     return (
@@ -278,78 +899,32 @@ const isGrantedRelation = (
   return (
     relation.startsWith("pg_") ||
     PUBLIC_LAW_RELATION_SET.has(relation) ||
-    cteNames.has(relation)
+    ctes.has(relation)
   );
 };
 
-const isSqlTag = (node: unknown): boolean =>
-  isIdentifier(unwrapExpression(node), "sql");
+const reportNode = (owner: SqlPart): AstNode => owner.node;
 
-// `sql.raw(...)`
-const isSqlRawCall = (node: unknown): boolean => {
+// A `.execute(...)` whose argument is a string: text the driver runs as is.
+const executedString = (node: unknown): AstNode | null => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
-    return false;
-  }
-  const callee = unwrapExpression(node.callee);
-  return (
-    isAstNode(callee) &&
-    callee.type === "MemberExpression" &&
-    callee.computed === false &&
-    isSqlTag(callee.object) &&
-    getPropertyName(callee.property) === "raw"
-  );
-};
-
-// The SQL a template literal spells, interpolations kept apart.
-const templateParts = (template: unknown): SqlPart[] => {
-  if (!isAstNode(template) || template.type !== "TemplateLiteral") {
-    return [];
-  }
-  const quasis = Array.isArray(template.quasis) ? template.quasis : [];
-  const expressions = Array.isArray(template.expressions)
-    ? template.expressions
-    : [];
-  const parts: SqlPart[] = [];
-  for (const [index, quasi] of quasis.entries()) {
-    const text = rawTemplateText(quasi);
-    if (isAstNode(quasi) && text !== null) {
-      parts.push({ kind: "text", text, node: quasi });
-    }
-    const expression: unknown = expressions[index];
-    if (isAstNode(expression)) {
-      parts.push({ kind: "expression", node: expression });
-    }
-  }
-  return parts;
-};
-
-// The SQL a `sql.raw` argument spells, when the file writes it out.
-const rawCallParts = (call: unknown): SqlPart[] | null => {
-  if (!isAstNode(call)) {
     return null;
   }
-  const argument = Array.isArray(call.arguments)
-    ? unwrapExpression(call.arguments.at(0))
+  const callee = unwrapExpression(node.callee);
+  if (
+    !isAstNode(callee) ||
+    callee.type !== "MemberExpression" ||
+    getPropertyName(callee.property) !== "execute"
+  ) {
+    return null;
+  }
+  const argument = firstArgument(node);
+  return isAstNode(argument) &&
+    (isStringLiteral(argument) ||
+      argument.type === "TemplateLiteral" ||
+      argument.type === "BinaryExpression")
+    ? argument
     : null;
-  if (isStringLiteral(argument)) {
-    return [{ kind: "text", text: argument.value, node: argument }];
-  }
-  if (isAstNode(argument) && argument.type === "TemplateLiteral") {
-    return templateParts(argument);
-  }
-  return null;
-};
-
-// SQL this file writes out, whose text the scan reads where it is written.
-const isInspectableSqlFragment = (node: unknown): boolean => {
-  const expression = unwrapExpression(node);
-  if (!isAstNode(expression)) {
-    return false;
-  }
-  if (expression.type === "TaggedTemplateExpression") {
-    return isSqlTag(expression.tag);
-  }
-  return isSqlRawCall(expression) && rawCallParts(expression) !== null;
 };
 
 export default eslintCompatPlugin({
@@ -366,44 +941,71 @@ export default eslintCompatPlugin({
           privateSqlText:
             "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables.",
           unlistedRelation:
-            "Public-law SQL may only read relations in the public-law relation map (`public-law-relations.ts`), a CTE this file defines, or a system catalog; '{{relation}}' is none of them.",
+            "Public-law SQL may only read relations in the public-law relation map (`public-law-relations.ts`), a CTE the same statement defines, or a system catalog; '{{relation}}' is none of them.",
           uninspectableRelation:
-            "Public-law SQL must name the relation it reads: a public schema table, or a SQL fragment written in this file. Any other value needs a reviewed suppression naming the relations it reads.",
+            "Public-law SQL must name the relation it reads: a public schema table, a fragment written in this file, or a value the rule can enumerate.",
+          opaqueSql:
+            "Raw SQL in a public-law read must be text the rule can read: a literal, a code constant, a literal-union parameter, or a reviewed producer in REVIEWED_SQL_PRODUCERS.",
         },
       },
       createOnce(context) {
         // The case-law data boundary: schema imports, `tx.query` and private
         // SQL text are checked here.
         let inBoundary = false;
-        // Every public-law read: the relations its SQL names are checked here.
+        // Every public-law read: the SQL it runs is checked here.
         let readsPublicLaw = false;
         let importerRepoPath = "";
-        let sqlSources: SqlPart[][] = [];
+        let candidates: AstNode[] = [];
+        let executedStrings: AstNode[] = [];
 
-        // An interpolation in a relation position the scan can vouch for.
-        const isKnownRelationExpression = (node: unknown): boolean => {
-          const expression = unwrapExpression(node);
-          if (
-            isImportedFrom({
-              context,
-              node: expression,
-              modules: [SCHEMA_MODULE],
-              names: PUBLIC_LAW_SCHEMA_IMPORT_SET,
-            })
-          ) {
-            return true;
+        const checkReference = (
+          reference: RelationReference,
+          ctes: ReadonlySet<string>,
+        ) => {
+          if (reference.kind === "name") {
+            if (
+              !isGrantedRelation(reference.schema, reference.relation, ctes)
+            ) {
+              context.report({
+                node: reportNode(reference.token.owner),
+                messageId: "unlistedRelation",
+                data: {
+                  relation:
+                    reference.schema === null
+                      ? reference.relation
+                      : `${reference.schema}.${reference.relation}`,
+                },
+              });
+            }
+            return;
           }
-          if (isInspectableSqlFragment(expression)) {
-            return true;
+          const part = reference.part;
+          if (part.kind === "table") {
+            if (!part.public) {
+              context.report({
+                node: part.node,
+                messageId: "unlistedRelation",
+                data: { relation: part.name },
+              });
+            }
+            return;
           }
-          if (!isIdentifierReference(expression)) {
-            return false;
+          if (part.kind === "choice") {
+            for (const value of part.values) {
+              if (!isGrantedRelation(null, value.toLowerCase(), ctes)) {
+                context.report({
+                  node: part.node,
+                  messageId: "unlistedRelation",
+                  data: { relation: value },
+                });
+              }
+            }
+            return;
           }
-          const variable = resolveVariable(context, expression);
-          return (
-            variable !== null &&
-            isInspectableSqlFragment(stableInitializer(variable))
-          );
+          context.report({
+            node: part.node,
+            messageId: "uninspectableRelation",
+          });
         };
 
         return {
@@ -411,7 +1013,8 @@ export default eslintCompatPlugin({
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;
-            sqlSources = [];
+            candidates = [];
+            executedStrings = [];
           },
           Program(node) {
             inBoundary =
@@ -474,17 +1077,21 @@ export default eslintCompatPlugin({
             }
           },
           TaggedTemplateExpression(node) {
-            if (readsPublicLaw && isSqlTag(node.tag)) {
-              sqlSources.push(templateParts(node.quasi));
+            if (readsPublicLaw && isAstNode(node) && isSqlTag(node.tag)) {
+              candidates.push(node);
             }
           },
           CallExpression(node) {
-            if (!readsPublicLaw || !isSqlRawCall(node)) {
+            if (!readsPublicLaw || !isAstNode(node)) {
               return;
             }
-            const parts = rawCallParts(node);
-            if (parts !== null) {
-              sqlSources.push(parts);
+            if (isSqlMethodCall(node, "raw")) {
+              candidates.push(node);
+              return;
+            }
+            const executed = executedString(node);
+            if (executed !== null) {
+              executedStrings.push(executed);
             }
           },
           Literal(node) {
@@ -513,36 +1120,31 @@ export default eslintCompatPlugin({
             if (!readsPublicLaw) {
               return;
             }
-            const cteNames = new Set(sqlSources.flatMap(cteNamesIn));
-            for (const parts of sqlSources) {
-              for (const reference of relationReferences(parts)) {
-                if (reference.kind === "expression") {
-                  if (!isKnownRelationExpression(reference.part.node)) {
-                    context.report({
-                      node: reference.part.node,
-                      messageId: "uninspectableRelation",
-                    });
-                  }
-                  continue;
+            const compositions = new Map<AstNode, Composition>();
+            const inlined = new Set<AstNode>();
+            for (const candidate of [...candidates, ...executedStrings]) {
+              const composition = compose(context, candidate);
+              compositions.set(candidate, composition);
+              for (const node of composition.inlined) {
+                inlined.add(node);
+              }
+            }
+            const reportedOpaque = new Set<AstNode>();
+            for (const [root, composition] of compositions) {
+              for (const node of composition.opaque) {
+                if (!reportedOpaque.has(node)) {
+                  reportedOpaque.add(node);
+                  context.report({ node, messageId: "opaqueSql" });
                 }
-                if (
-                  !isGrantedRelation(
-                    reference.schema,
-                    reference.relation,
-                    cteNames,
-                  )
-                ) {
-                  context.report({
-                    node: reference.part.node,
-                    messageId: "unlistedRelation",
-                    data: {
-                      relation:
-                        reference.schema === null
-                          ? reference.relation
-                          : `${reference.schema}.${reference.relation}`,
-                    },
-                  });
-                }
+              }
+              if (inlined.has(root)) {
+                continue;
+              }
+              const { references, ctes } = statementReferences(
+                tokenize(composition.parts),
+              );
+              for (const reference of references) {
+                checkReference(reference, ctes);
               }
             }
           },
