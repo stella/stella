@@ -1,0 +1,166 @@
+{
+  "$comment": "Each entry is one behaviour of the chat pipeline, stated as the mutation that removes it from the current tree, the scenario that exercises it, and the oracle (apps/api/src/tests/helpers/chat-oracles.ts) that must fail when it is gone. Run: bun apps/api/scripts/chat-mutation-matrix.ts. An entry whose mutation no longer applies fails until it is replaced or retired with a reason.",
+  "entries": [
+    {
+      "id": "snapshot-one-message-per-id",
+      "fix": "#3858",
+      "behaviour": "The interrupt snapshot carries one assistant message per id, merging the copies the engine splits at each tool result.",
+      "status": "pending",
+      "reason": "The behaviour is not on the tree yet; the scenario tests stay marked failing until it is.",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.wire.snapshot-identity"
+    },
+    {
+      "id": "continuation-keeps-owning-id",
+      "fix": "#3823",
+      "behaviour": "A continuation maps every assistant message its run emits onto the message it resumes.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),",
+      "replace": "mapMessageId: createTurnMessageIdMapper(undefined),",
+      "scenario": {
+        "file": "src/handlers/chat/approval-settlement.integration.test.ts",
+        "test": "is stored on its owning message when the model answers in text"
+      },
+      "oracle": "chat.persisted.turn-settles"
+    },
+    {
+      "id": "failed-continuation-keeps-owning-parts",
+      "fix": "#3830",
+      "behaviour": "A continuation that fails before its first chunk keeps the parts the resumed message already had.",
+      "status": "pending",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "parts: runProducedParts ? responseMessage.parts : owningParts,",
+      "replace": "parts: responseMessage?.parts ?? [],",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps an approved call's result when the model fails before answering"
+      },
+      "oracle": "chat.ledger.calls-present",
+      "reason": "No passing scenario reaches it yet: after an approval the executed tool writes a part before the model call, so the run never ends empty. The entry runs once such a scenario exists."
+    },
+    {
+      "id": "continuation-keeps-owning-metadata",
+      "fix": "#3830",
+      "behaviour": "A streamed continuation keeps the resumed message's metadata, including anonymization restorations.",
+      "status": "retired",
+      "reason": "No scenario runs an anonymized thread yet, and the plain-mode metadata a continuation replaces is not part of any view the oracles compare.",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "const merged: ChatMessageMetadata = { ...owning, ...run };",
+      "replace": "const merged: ChatMessageMetadata = { ...run };",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps an approved call's result when the model fails before answering"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "persistence-ignores-snapshots",
+      "fix": "#2186",
+      "behaviour": "The persistence processor never consumes a messages snapshot, which would reset what it accumulated.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n        processor.processChunk(chunk);\n      }",
+      "replace": "      processor.processChunk(chunk);",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a run's server call and the approval it then asks for"
+      },
+      "oracle": "chat.ledger.calls-present"
+    },
+    {
+      "id": "same-run-iterations-stay-one-message",
+      "fix": "#2186",
+      "behaviour": "An intermediate finish of the same run does not close the turn's message, so a tool-only later step is kept.",
+      "status": "retired",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        const isSameRunIteration = priorRunFinishedChunks.every(",
+      "replace": "        const isSameRunIteration = false && priorRunFinishedChunks.every(",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a run's server call and the approval it then asks for"
+      },
+      "oracle": "chat.ledger.calls-present",
+      "reason": "The installed stream processor keeps a run's message open across the finish of an earlier iteration of the same run, so the mutation no longer reaches the fault (checked with a server call followed by a tool-only step asking the user). Bring it back if the processor changes."
+    },
+    {
+      "id": "snapshot-folds-run-iterations",
+      "fix": "#2186",
+      "behaviour": "The snapshot folds a run's per-iteration assistant messages into the turn's one message.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      messages: mergeSnapshotAssistantMessages({\n        existingMessageIds,\n        mapMessageId,\n        messages: chunk.messages,\n        snapshotMessageIds,\n      }),",
+      "replace": "      messages: chunk.messages,",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a run's server call and the approval it then asks for"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "run-finish-waits-for-approval-events",
+      "fix": "#1490",
+      "behaviour": "The persistence processor sees a run's finish only after the events the engine emits once the model finished, such as an approval request.",
+      "status": "retired",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        deferredRunFinishedChunks.push(chunk);\n        continue;",
+      "replace": "        processor.processChunk(chunk);\n        yield chunk;\n        continue;",
+      "scenario": {
+        "file": "src/handlers/chat/approval-settlement.integration.test.ts",
+        "test": "is stored on its owning message when the model answers in text"
+      },
+      "oracle": "chat.live.interactions-actionable",
+      "reason": "The engine now reports an approval request in the run's own finish (its interrupt outcome), not in an event after it, so handling the finish early no longer loses the approval. Bring it back if the engine emits post-finish events again."
+    },
+    {
+      "id": "streamed-tool-input-resolves-refs",
+      "fix": "#1723",
+      "behaviour": "The tool input streamed to the page is ref-resolved like the stored copy.",
+      "status": "retired",
+      "reason": "No scenario tool takes an input that carries a chat reference yet; the entry returns with such a tool.",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "matches a reload and the ledger after every step of any conversation"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "reload-reads-canonical-output",
+      "fix": "#2371",
+      "behaviour": "A reload reads a tool call's output from the one canonical stored copy, so it matches what the page showed live.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-parts.ts",
+      "search": "      ...(part.output === undefined ? {} : { output }),",
+      "replace": "      ...(part.output === undefined\n        ? {}\n        : { output: JSON.stringify(output) }),",
+      "scenario": {
+        "file": "src/handlers/chat/approval-settlement.integration.test.ts",
+        "test": "is stored on its owning message when the model answers in text"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "continuation-input-compared-by-value",
+      "fix": "#3399",
+      "behaviour": "A continuation's tool input is compared with the stored one by value, with strict-mode nulls folded on both sides.",
+      "status": "retired",
+      "file": "src/handlers/chat/chat-schema.ts",
+      "search": "      withNullsOmitted(incomingCall.input),\n      withNullsOmitted(canonicalCall.input),",
+      "replace": "      incomingCall.input,\n      canonicalCall.input,",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "accepts an approval whose model arguments spell absent fields as null"
+      },
+      "oracle": "chat.client.requests-accepted",
+      "reason": "The web client echoes the adapter's normalized input (TOOL_CALL_END.input), so no request the page builds carries strict-mode nulls and the mutation cannot fail there; chat-schema.continuation.property.test.ts covers the comparison with generated echoes, and the scenario stays as the end-to-end strict-null check."
+    }
+  ]
+}
