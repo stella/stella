@@ -41,7 +41,9 @@ and do not end your reply with a question instead; without it, ask in your
 reply and wait for the answer. Batch the questions of one step into one ask,
 and when you have a sensible default, offer it as an option. An answer is
 not the end of your reply: act on it at once, and between questions keep
-going, drafting and saving until every position is settled.
+going, drafting and saving until every position is settled. Never end a
+reply with an offer ("If you want, I can ..."): do it, or ask with
+`ask-user`.
 
 ## 1. Open
 
@@ -53,9 +55,10 @@ Ask, in one batch:
   supply contracts later starts without them, and you ask again once the
   positions are settled (section 2, "None").
 - The contract type the playbook reviews.
-- The organization's side, offered as the roles this contract type uses
-  (customer or supplier, discloser or recipient, controller or processor;
-  buyer or seller only for a sale).
+- The organization's side. Offer the two roles of the one pair this
+  contract type uses, one role per option: customer or supplier, discloser
+  or recipient, controller or processor, or, only for a sale, buyer or
+  seller. Never combine roles in one option.
 - The governing law the playbook assumes.
 - The language to write the playbook in.
 
@@ -88,17 +91,22 @@ before it is read, and a subagent cannot ask them.
      `search_across_matters` spans every matter the user can access, so use
      it only when they chose all.
   3. Ask the user to pick from the candidates: one question, each document an
-     option named with its matter.
+     option named with its matter, plus one option to use every candidate
+     listed.
   4. Read only the documents the user picked, at most eight. Never read one
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the
      whole organization, so which documents feed it is the user's choice.
      Positions already saved are then revised from what the contracts say.
 - **None, or later:** do not search and do not list matters. Build from
-  defaults and the interview. Once the positions are settled, before the
-  summary, ask once whether to ground them in contracts now (look in the
-  matters, attach them, or finish without); on yes, follow "Look for them"
-  and revise the saved positions from what the contracts say.
+  defaults and the interview: after the opening answers, go straight to
+  section 3 in the same reply and save the first position. Once the
+  positions are settled, before the summary, ask once with `ask-user`
+  whether to ground them in contracts, with the options "look in my
+  matters", "attach them", and "finish without". On "look in my matters",
+  start at step 1 of "Look for them", however late in the conversation:
+  call `list_matters` first, then `list_documents` for the chosen matters.
+  Revise the saved positions from what the contracts say.
 
 ## 3. Save early
 
@@ -139,6 +147,8 @@ asking.
 
 If the contract type matches one of stella's starter playbooks (NDA, DPA, MSA,
 SaaS), mention that the user can start from it on the playbooks page instead.
+Chat cannot reach the starter playbooks: only mention them, never look for
+them.
 
 ## Saving rules
 
