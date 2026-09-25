@@ -8,7 +8,7 @@ import type {
   RunAgentInputContext,
   UIMessage,
 } from "@tanstack/ai-client";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -511,19 +511,24 @@ export const createChatRuntime = ({
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
     resolveToolApproval: async (response, options) => {
-      const answered = approvalAnswers.get(response.id);
-      if (answered !== undefined) {
-        await answered;
+      const pending = approvalAnswers.get(response.id);
+      if (pending !== undefined) {
+        await pending;
         return;
       }
-      const answer = answerToolApproval(response, options);
-      approvalAnswers.set(response.id, answer);
-      try {
-        await answer;
-      } catch (error) {
+      const answer = Result.tryPromise(
+        async () => await answerToolApproval(response, options),
+      );
+      approvalAnswers.set(
+        response.id,
+        answer.then(() => undefined),
+      );
+      const outcome = await answer;
+      if (Result.isError(outcome)) {
         approvalAnswers.delete(response.id);
-        // The failed continuation is the turn's error, shown like any other.
-        throw captureRuntimeError(error);
+        // The failed continuation is the turn's error, shown like any other;
+        // the approval can be answered again.
+        captureRuntimeError(outcome.error.cause);
       }
     },
     addToolResult: async (result, options) => {

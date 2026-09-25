@@ -521,22 +521,7 @@ export const useChatSession = ({
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
-  /**
-   * Answers an approval from a card. A continuation that fails is already the
-   * turn's error on the runtime, which the thread shows and reports, and the
-   * approval can be answered again, so the card's click settles either way.
-   */
-  const resolveToolApproval = useCallback(
-    async (
-      response: { approved: boolean; id: string },
-      options?: ChatSendMessageOptions,
-    ) => {
-      await Result.tryPromise(
-        async () => await chat.resolveToolApproval(response, options),
-      );
-    },
-    [chat],
-  );
+  const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
   // with each older page. Re-seed whenever a fresh runtime is hydrated — both
