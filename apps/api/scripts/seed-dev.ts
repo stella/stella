@@ -407,6 +407,22 @@ const xmlEscape = (s: string): string =>
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
 
+// A package without a styles part leaves the default font to the consumer,
+// and word processors then fall back to Times New Roman. Name the seed's font
+// explicitly so every renderer shows the same document.
+const SEED_STYLES_CONTENT_TYPE =
+  '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>';
+const SEED_STYLES_RELATIONSHIP =
+  '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+const SEED_STYLES_XML =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  "<w:docDefaults><w:rPrDefault><w:rPr>" +
+  '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/>' +
+  '<w:sz w:val="22"/><w:szCs w:val="22"/>' +
+  "</w:rPr></w:rPrDefault></w:docDefaults>" +
+  "</w:styles>";
+
 export const createMockDocx = async (
   title: string,
   bodyText?: string,
@@ -416,12 +432,13 @@ export const createMockDocx = async (
 
   zip.file(
     "[Content_Types].xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      "</Types>",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
+      }</Types>`,
   );
 
   zip
@@ -460,9 +477,12 @@ export const createMockDocx = async (
     ?.folder("_rels")
     ?.file(
       "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
+          SEED_STYLES_RELATIONSHIP
+        }</Relationships>`,
     );
+  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -826,13 +846,14 @@ const createSupplierAgreementDocx = async (
 
   zip.file(
     "[Content_Types].xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
-      "</Types>",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
+      }<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>` +
+      `</Types>`,
   );
 
   zip
@@ -942,11 +963,13 @@ const createSupplierAgreementDocx = async (
     ?.folder("_rels")
     ?.file(
       "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' +
-        "</Relationships>",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
+          SEED_STYLES_RELATIONSHIP
+        }</Relationships>`,
     );
+  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
