@@ -32,6 +32,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skUsAdapter);
@@ -169,7 +170,9 @@ type DownloadStub =
   | { type: "pdf" }
   /** A 200 carrying the portal's error page instead of the document. */
   | { type: "not-a-pdf" }
-  | { type: "status"; status: number };
+  | { type: "status"; status: number }
+  /** The request fails before any response, as a dropped connection does. */
+  | { type: "fails"; error: Error };
 
 type MockOptions = {
   /** Listing responses, one per request, in order. */
@@ -212,6 +215,8 @@ const downloadResponse = (stub: DownloadStub): Response => {
       );
     case "status":
       return new Response(null, { status: stub.status });
+    case "fails":
+      throw stub.error;
     default: {
       const exhaustive: never = stub;
       throw new Error(`unhandled download stub: ${JSON.stringify(exhaustive)}`);
@@ -1041,6 +1046,66 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
+  });
+
+  test("holds a row whose document download fails and reports the download", async () => {
+    mockFetch({
+      search: [],
+      download: { type: "fails", error: new TypeError("fetch failed") },
+    });
+    const logs = installRecordingLogger();
+    try {
+      const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+
+      expect(built).toMatchObject({
+        type: "detail-unavailable",
+        decision: { isListingOnly: true },
+      });
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "sk-us",
+          documentId: CHAMBER_RESOLUTION.documentId,
+          "error.type": "TypeError",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("a download cut short by the caller's abort ends the build", async () => {
+    const controller = new AbortController();
+    const abortError = new DOMException("Aborted", "AbortError");
+    mockFetch({ search: [], download: { type: "fails", error: abortError } });
+    const fetchDocument = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/docDownload/")) {
+          controller.abort(abortError);
+        }
+        return await fetchDocument(input, init);
+      },
+    );
+
+    const outcome = await buildSkUsDecision(CHAMBER_RESOLUTION, {
+      signal: controller.signal,
+    }).then(
+      (built) => built.type,
+      (error: unknown) => `rejected: ${errorTag(error)}`,
+    );
+
+    // Not a listing-only row: the build did not finish.
+    expect(outcome).toStartWith("rejected");
   });
 });
 
