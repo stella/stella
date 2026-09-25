@@ -598,6 +598,7 @@ type Messages = {
       };
       "generate": "Generate AI headnotes";
       "holdingAnchor": "Go to paragraph";
+      "invitation": "With a free account, AI drafts the holding, facts and reasoning of every decision.";
       "topics": "Topics";
       "treatment": "Later treatment";
     };
