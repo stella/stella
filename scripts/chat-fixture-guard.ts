@@ -43,11 +43,8 @@ const isSnapshotType = (node: ts.Expression): boolean =>
   (ts.isPropertyAccessExpression(node) && node.name.text === SNAPSHOT_TYPE);
 
 const isInsideEscape = (node: ts.Node): boolean => {
-  for (
-    let current = node.parent;
-    current !== undefined;
-    current = current.parent
-  ) {
+  let current: ts.Node | undefined = node.parent;
+  for (; current !== undefined; current = current.parent) {
     if (
       ts.isCallExpression(current) &&
       ts.isIdentifier(current.expression) &&

@@ -381,7 +381,7 @@ export const createApprovalHarness = ({
 
   const originalFetch = globalThis.fetch;
   const routedFetch = async (
-    input: RequestInfo | URL,
+    input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);

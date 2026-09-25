@@ -107,7 +107,7 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
 };
 
 /** One card the user can act on in the live view. */
-export type LiveCard =
+type LiveCard =
   | {
       approvalId: string;
       kind: "approval";

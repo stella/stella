@@ -50,7 +50,7 @@ export type ScriptedTurn =
  * calls it ends the run as a text answer, cut off at the output limit when
  * `finishReason` is `length`.
  */
-export type ScriptedStep = {
+type ScriptedStep = {
   finishReason?: "length" | "stop" | undefined;
   reasoning?: string | undefined;
   text?: string | undefined;

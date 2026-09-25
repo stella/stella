@@ -1846,11 +1846,12 @@ type ProcessTurnForPersistenceProps = Omit<
 /**
  * The one place a turn's stream becomes the assistant message `onFinish`
  * persists: the turn's message ids, the stream processor that accumulates the
- * message, and the capture of its final state. Every caller that persists a
- * turn, the round-trip test harness included, runs through this function, so
- * a change to what gets persisted cannot pass a test that wires its own copy.
+ * message, and the capture of its final state. Every turn that persists runs
+ * through this function inside `streamChat`, which the chat harness drives
+ * too, so a change to what gets persisted cannot pass a test that wires its
+ * own copy.
  */
-export const processTurnForPersistence = ({
+const processTurnForPersistence = ({
   initialMessages,
   owningAssistantMessageId,
   restorationPairs,

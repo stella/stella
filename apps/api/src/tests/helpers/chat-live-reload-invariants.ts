@@ -200,7 +200,7 @@ const findUnmountedInteractions = ({
 }): OracleViolation[] =>
   violationsOf(
     CHAT_ORACLE.liveInteractionsActionable,
-    offered.flatMap((interaction) => {
+    offered.flatMap((interaction): unknown[] => {
       const part = live
         .findLast(({ id }) => id === interaction.messageId)
         ?.parts.find(

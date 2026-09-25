@@ -721,89 +721,101 @@ describe("a conversation's live view", () => {
         closeConversation(conversation);
       }
     },
-    30_000,
+    propertyTestTimeout(30_000),
   );
 
-  test("keeps a run's server call and the approval it then asks for", async () => {
-    const conversation = await openConversation();
-    const { model, real } = conversation;
-    try {
-      await new SendUserMessage(
-        [
+  test(
+    "keeps a run's server call and the approval it then asks for",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
           [
-            { ...STEP, calls: ["plain"] },
-            { ...STEP, calls: ["approval"] },
+            [
+              { ...STEP, calls: ["plain"] },
+              { ...STEP, calls: ["approval"] },
+            ],
           ],
-        ],
-        "Draft the NDA",
-      ).run(model, real);
-      // The fixture must reach the fault: two model steps in one run, the
-      // second one tool calls only, ending at an interrupt.
-      expect(real.ledger.calls.map(({ kind }) => kind)).toEqual([
-        "plain",
-        "approval",
-      ]);
-      await new ReloadPage().run(model, real);
-    } finally {
-      closeConversation(conversation);
-    }
-  }, 30_000);
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: two model steps in one run, the
+        // second one tool calls only, ending at an interrupt.
+        expect(real.ledger.calls.map(({ kind }) => kind)).toEqual([
+          "plain",
+          "approval",
+        ]);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
 
-  test("accepts an approval whose model arguments spell absent fields as null", async () => {
-    // Strict tool schemas make every optional field required and nullable,
-    // so the provider sends `null` for one the model leaves out.
-    const { real } = await openConversation();
-    const { harness, threadId } = real;
-    try {
-      harness.script(threadId, [
-        {
-          toolCalls: [
-            {
-              arguments: JSON.stringify({ name: "NDA", note: null }),
-              input: { name: "NDA" },
-              toolCallId: "call-strict",
-              toolName: APPROVAL_TOOL_NAME,
-            },
-          ],
-          type: "step",
-        },
-      ]);
-      await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
-      await harness.expectSoundWebClient({ client: real.client, threadId });
+  test(
+    "accepts an approval whose model arguments spell absent fields as null",
+    async () => {
+      // Strict tool schemas make every optional field required and nullable,
+      // so the provider sends `null` for one the model leaves out.
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [
+          {
+            toolCalls: [
+              {
+                arguments: JSON.stringify({ name: "NDA", note: null }),
+                input: { name: "NDA" },
+                toolCallId: "call-strict",
+                toolName: APPROVAL_TOOL_NAME,
+              },
+            ],
+            type: "step",
+          },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
+        await harness.expectSoundWebClient({ client: real.client, threadId });
 
-      harness.script(threadId, [
-        { toolCalls: [], text: "Deleted.", type: "step" },
-      ]);
-      await real.client.approve("call-strict", true);
-      await harness.expectSoundWebClient({ client: real.client, threadId });
-      expect(harness.executions).toEqual(["NDA"]);
-    } finally {
-      closeConversation({ real });
-    }
-  }, 30_000);
+        harness.script(threadId, [
+          { toolCalls: [], text: "Deleted.", type: "step" },
+        ]);
+        await real.client.approve("call-strict", true);
+        await harness.expectSoundWebClient({ client: real.client, threadId });
+        expect(harness.executions).toEqual(["NDA"]);
+      } finally {
+        closeConversation({ real });
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
 
-  test("keeps an approved call's result when the model fails before answering", async () => {
-    const conversation = await openConversation();
-    const { model, real } = conversation;
-    try {
-      await new SendUserMessage(
-        [[{ ...STEP, calls: ["approval"], text: true }]],
-        "Draft the NDA",
-      ).run(model, real);
-      expect(real.ledger.pending).toHaveLength(1);
+  test(
+    "keeps an approved call's result when the model fails before answering",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval"], text: true }]],
+          "Draft the NDA",
+        ).run(model, real);
+        expect(real.ledger.pending).toHaveLength(1);
 
-      await new ResolveCards(["approve"], ["fail"]).run(model, real);
-      // The fixture must reach the fault: the tool ran and the turn failed.
-      expect({
-        executed: real.harness.executions,
-        latest: real.ledger.latest,
-      }).toEqual({ executed: real.ledger.effects, latest: "failed" });
+        await new ResolveCards(["approve"], ["fail"]).run(model, real);
+        // The fixture must reach the fault: the tool ran and the turn failed.
+        expect({
+          executed: real.harness.executions,
+          latest: real.ledger.latest,
+        }).toEqual({ executed: real.ledger.effects, latest: "failed" });
 
-      await new ReloadPage().run(model, real);
-    } finally {
-      closeConversation(conversation);
-    }
-  }, 30_000);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
 
   // Becomes a plain test in a follow-up. PR CI runs the seeded budget; the
   // nightly sweep (`PROPERTY_TEST_NUM_RUNS_FACTOR`) runs it ten times over
