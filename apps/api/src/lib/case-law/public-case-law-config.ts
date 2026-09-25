@@ -3,6 +3,7 @@ import {
   type CaseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import {
+  type CaseLawConfigReadTransaction,
   readCourtWeightRowsQuery,
   readFtsConfigRowsQuery,
 } from "@/api/lib/case-law/case-law-config-read";
@@ -52,6 +53,19 @@ export const loadPublicCourtWeights = async (
   options?: LoadCourtWeightsOptions,
 ): Promise<CourtWeightMap> =>
   await publicCaseLawConfig().courtWeights.load(options);
+
+/**
+ * The public corpus's court registry, for a caller already inside a public
+ * read: a miss reads on that transaction. Opening another read there would
+ * ask the reader's pool, which may hold two connections, for a second one
+ * while holding the first.
+ */
+export const loadPublicCourtWeightsWithin = async (
+  tx: CaseLawConfigReadTransaction,
+): Promise<CourtWeightMap> =>
+  await publicCaseLawConfig().courtWeights.loadWithin(
+    async () => await readCourtWeightRowsQuery(tx),
+  );
 
 /** One country's entries of the public corpus's court registry. */
 export const loadPublicCourtWeightsForCountry = async (

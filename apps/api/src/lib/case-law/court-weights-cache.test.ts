@@ -74,6 +74,68 @@ test("a hit serves a caller that passes no hook at all", async () => {
   expect(map.get("CZE")).toHaveLength(1);
 });
 
+/** A read the test settles by hand, to hold a miss in flight. */
+const heldRead = () => {
+  const { promise, resolve } = Promise.withResolvers<typeof ROWS>();
+  let started = 0;
+  return {
+    read: async () => {
+      started += 1;
+      return await promise;
+    },
+    release: () => resolve(ROWS),
+    started: () => started,
+  };
+};
+
+test("concurrent misses share one read", async () => {
+  const held = heldRead();
+  const shared = createCourtWeightCache(held.read);
+
+  const first = shared.load();
+  const second = shared.load();
+  held.release();
+
+  expect(await second).toBe(await first);
+  expect(held.started()).toBe(1);
+});
+
+test("a miss inside a caller's transaction reads on it, not on the source", async () => {
+  const source = heldRead();
+  const within = heldRead();
+  const shared = createCourtWeightCache(source.read);
+
+  const map = shared.loadWithin(within.read);
+  within.release();
+
+  expect((await map).get("CZE")).toHaveLength(1);
+  expect(source.started()).toBe(0);
+  expect(within.started()).toBe(1);
+  // And it fills the one cache the source's callers read.
+  expect(await shared.load()).toBe(await map);
+});
+
+// A read still queued for a pool connection can wait on the very connection
+// the transaction holder has; a read on another holder's transaction cannot.
+test("a transaction holder waits on another holder's read, never on the source's", async () => {
+  const source = heldRead();
+  const firstHolder = heldRead();
+  const secondHolder = heldRead();
+  const shared = createCourtWeightCache(source.read);
+
+  const queued = shared.load();
+  const ownRead = shared.loadWithin(firstHolder.read);
+  const joined = shared.loadWithin(secondHolder.read);
+  firstHolder.release();
+
+  expect(await joined).toBe(await ownRead);
+  expect(firstHolder.started()).toBe(1);
+  expect(secondHolder.started()).toBe(0);
+
+  source.release();
+  await queued;
+});
+
 /**
  * Two jurisdictions ranking the same court name at the same tier: the pair
  * the precedence order has to decide, and the pair a row order used to.

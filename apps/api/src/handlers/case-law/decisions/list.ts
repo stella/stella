@@ -163,9 +163,9 @@ export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
   /**
-   * The court registry the chip beside each court name is drawn from. It lives
-   * on the root pool rather than the public reader's, so a harness holding
-   * only the reader supplies its own; the route takes the default.
+   * The court registry the chip beside each court name is drawn from. The
+   * default is the public corpus's cached registry, read beside the page's
+   * transaction rather than inside it; a harness supplies its own.
    */
   readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
@@ -260,9 +260,8 @@ export const listDecisionsHandler = async (
       caseLawDb,
       languageGroupKeys,
     }),
-    // Bounded and degraded to no badge: the registry is on the root pool,
-    // which this read otherwise never touches, and a court chip is not worth
-    // failing a page of decisions over.
+    // Bounded and degraded to no badge: a court chip is not worth failing a
+    // page of decisions over.
     readCourtRegistry(readCourtWeights),
   ]);
 

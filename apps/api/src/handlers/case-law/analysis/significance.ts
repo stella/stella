@@ -35,7 +35,7 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { courtWeightFromMap } from "@/api/lib/case-law/court-weights";
-import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
+import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 
 /**
  * Which revision of the significance prompt wrote a stored text. Bump it
@@ -142,7 +142,9 @@ export const readCitationGraphFacts = async ({
     )
     .limit(1);
 
-  const weights = await loadPublicCourtWeights();
+  // On this transaction: a cold registry must not wait for a second reader
+  // connection while this one is held.
+  const weights = await loadPublicCourtWeightsWithin(tx);
   const subjectDate = subject.decisionDate;
 
   const facts: CitingDecisionFact[] = rows.map((row) => ({

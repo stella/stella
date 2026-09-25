@@ -130,9 +130,22 @@ const compileCourtWeightRows = (rows: CourtWeightRows): CourtWeightMap => {
   return map;
 };
 
+type CourtWeightRead = () => Promise<CourtWeightRows>;
+
 /** One source's registry, compiled and cached for 60 s. */
 export type CourtWeightCache = {
+  /** The registry, read through the source's own connection on a miss. */
   load: (options?: LoadCourtWeightsOptions) => Promise<CourtWeightMap>;
+  /**
+   * The registry for a caller that already holds a connection to the source:
+   * a miss runs `read` on it rather than asking the source's pool for a
+   * second one. A caller holding a transaction on a small pool must use this;
+   * waiting for another connection there can wait on itself.
+   */
+  loadWithin: (
+    read: CourtWeightRead,
+    options?: LoadCourtWeightsOptions,
+  ) => Promise<CourtWeightMap>;
   /** One country's entries, in the order `load` guarantees. */
   loadForCountry: (country: string) => Promise<CourtWeightEntry[]>;
   /** Drop the cached registry (e.g. after seeding). */
@@ -143,21 +156,33 @@ export type CourtWeightCache = {
  * A registry cache over one source's rows. The source decides which database
  * the registry comes from; the cache keeps it to one read a minute and never
  * answers from another source's rows.
+ *
+ * Concurrent misses share one read. A caller holding no connection may wait
+ * on any read in flight. A caller holding one waits only on a read that
+ * already has its connection (another holder's), never on one still queued
+ * for the pool.
  */
 export const createCourtWeightCache = (
-  readRows: () => Promise<CourtWeightRows>,
+  readRows: CourtWeightRead,
 ): CourtWeightCache => {
   let cached: { map: CourtWeightMap; expiresAt: number } | null = null;
+  let pending: {
+    promise: Promise<CourtWeightMap>;
+    holdsConnection: boolean;
+    token: symbol;
+  } | null = null;
 
-  const load = async ({
-    onRead = untimedRead,
-  }: LoadCourtWeightsOptions = {}): Promise<CourtWeightMap> => {
-    if (cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt) {
-      return cached.map;
-    }
+  const fresh = (): CourtWeightMap | null =>
+    cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt
+      ? cached.map
+      : null;
 
+  const readAndCache = async (
+    read: CourtWeightRead,
+    onRead: NonNullable<LoadCourtWeightsOptions["onRead"]>,
+  ): Promise<CourtWeightMap> => {
     const map = compileCourtWeightRows(
-      await onRead(async () => await boundedRead(readRows)),
+      await onRead(async () => await boundedRead(read)),
     );
     cached = {
       map,
@@ -166,12 +191,43 @@ export const createCourtWeightCache = (
     return map;
   };
 
+  const startRead = (
+    read: CourtWeightRead,
+    onRead: NonNullable<LoadCourtWeightsOptions["onRead"]>,
+    holdsConnection: boolean,
+  ): Promise<CourtWeightMap> => {
+    const token = Symbol("court-weight-read");
+    const promise = readAndCache(read, onRead).finally(() => {
+      if (pending?.token === token) {
+        pending = null;
+      }
+    });
+    pending = { promise, holdsConnection, token };
+    return promise;
+  };
+
+  const load = async ({
+    onRead = untimedRead,
+  }: LoadCourtWeightsOptions = {}): Promise<CourtWeightMap> =>
+    fresh() ?? (await (pending?.promise ?? startRead(readRows, onRead, false)));
+
+  const loadWithin = async (
+    read: CourtWeightRead,
+    { onRead = untimedRead }: LoadCourtWeightsOptions = {},
+  ): Promise<CourtWeightMap> =>
+    fresh() ??
+    (await (pending?.holdsConnection === true
+      ? pending.promise
+      : startRead(read, onRead, true)));
+
   return {
     load,
+    loadWithin,
     loadForCountry: async (country) =>
       arrayOrEmpty((await load()).get(country)),
     invalidate: () => {
       cached = null;
+      pending = null;
     },
   };
 };
