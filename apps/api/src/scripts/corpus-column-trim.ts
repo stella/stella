@@ -49,6 +49,7 @@ import type { SQL } from "drizzle-orm";
  * is how a keyspace whose candidates share no ordering with time gets
  * covered: by a list of spans, not by one cursor.
  */
+import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
@@ -347,11 +348,13 @@ const trimRow = async (row: TrimRow): Promise<void> => {
   }
 };
 
-const trimInChunks = async (rows: TrimRow[]): Promise<void> => {
-  for (let i = 0; i < rows.length; i += CONCURRENCY) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
-    await Promise.all(rows.slice(i, i + CONCURRENCY).map(trimRow));
-  }
+const trimRows = async (rows: TrimRow[]): Promise<void> => {
+  // trimRow settles every row into the counters itself and never rejects.
+  await mapWithConcurrency({
+    items: rows,
+    limit: CONCURRENCY,
+    operation: trimRow,
+  });
 };
 
 /**
@@ -441,7 +444,7 @@ for (const [index, range] of ranges.entries()) {
       break;
     }
 
-    await trimInChunks(rows);
+    await trimRows(rows);
 
     scanned += rows.length;
     lastId = lastRow.id;
@@ -481,7 +484,7 @@ if (failedIds.length > 0) {
       .from(caseLawDecisions)
       .where(and(candidateFilter, inArray(caseLawDecisions.id, retryIds))),
   );
-  await trimInChunks(retryRows);
+  await trimRows(retryRows);
   for (const id of failedIds) {
     console.log(`failed-row=${id}`);
   }
