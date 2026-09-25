@@ -622,8 +622,14 @@ const runAIJourney = async (
     ];
   }
 
-  const session = await mintSmokeSession(baseUrl, secret, SMOKE_PRINCIPAL_AI);
-  const cookie = sessionCookieHeader(session);
+  let cookie = sessionCookieHeader(
+    await mintSmokeSession(baseUrl, secret, SMOKE_PRINCIPAL_AI),
+  );
+  const refreshSession = async (): Promise<void> => {
+    cookie = sessionCookieHeader(
+      await mintSmokeSession(baseUrl, secret, SMOKE_PRINCIPAL_AI),
+    );
+  };
   const request: SmokeRequest = async (path, { body, method, timeoutMs }) =>
     await smokeFetch(baseUrl, path, {
       method: method ?? "GET",
@@ -635,7 +641,7 @@ const runAIJourney = async (
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       timeoutMs,
     });
-  return await runAIChatJourney({ apiKey, request });
+  return await runAIChatJourney({ apiKey, refreshSession, request });
 };
 
 const main = async (): Promise<void> => {

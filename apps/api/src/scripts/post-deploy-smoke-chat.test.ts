@@ -95,6 +95,33 @@ describe("evaluateTurnStream", () => {
     expect(check.detail).toContain("provider rejected the tool schema");
   });
 
+  test("fails a malformed complete frame even when the run finishes", () => {
+    const check = evaluateTurnStream(
+      "turn",
+      `data: {"type":"TEXT_MESSAGE_CONTENT",\n\n${sse({ type: "RUN_FINISHED" })}`,
+    );
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain("1 not JSON");
+  });
+
+  test("fails a frame without a type even when the run finishes", () => {
+    const check = evaluateTurnStream(
+      "turn",
+      sse({ delta: "ok" }, { type: "RUN_FINISHED" }),
+    );
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain("1 without a type");
+  });
+
+  test("fails a whole stream that ends mid-frame", () => {
+    const check = evaluateTurnStream(
+      "turn",
+      `${sse({ type: "RUN_FINISHED" })}data: {"type":"RUN_`,
+    );
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain("ended mid-frame");
+  });
+
   test("fails a stream that ends before the run finishes", () => {
     expect(
       evaluateTurnStream(
@@ -203,6 +230,28 @@ describe("evaluatePendingApproval", () => {
     );
     expect(check.ok).toBe(false);
     expect(check.detail).toContain("tool calls: none");
+    expect(pending).toBeNull();
+  });
+
+  test("refuses to approve a call that asks for more than one subagent", () => {
+    const { check, pending } = evaluatePendingApproval(
+      storedThread([
+        {
+          id: "a1",
+          role: "assistant",
+          parts: [
+            {
+              ...pendingCall,
+              arguments: JSON.stringify({
+                subagents: [{ task: "Reply OK." }, { task: "Reply OK." }],
+              }),
+            },
+          ],
+          metadata: awaitingApproval,
+        },
+      ]),
+    );
+    expect(check.detail).toContain("asks for 2 subagents, expected 1");
     expect(pending).toBeNull();
   });
 
@@ -333,6 +382,63 @@ describe("evaluateApprovedTurn", () => {
     ).toBe(false);
   });
 
+  test("fails when the call ran more than one subagent", () => {
+    const done = { status: "completed", result: "OK" };
+    expect(
+      settle({
+        id: "a1",
+        role: "assistant",
+        parts: [
+          {
+            ...completedCall,
+            output: {
+              results: [
+                { index: 0, ...done },
+                { index: 1, ...done },
+              ],
+            },
+          },
+          { type: "text", content: "OK" },
+        ],
+        metadata: completed,
+      }).detail,
+    ).toBe("approved call's output is not exactly one completed subagent");
+  });
+
+  test("fails when a new message replaced the continued one", () => {
+    expect(
+      settle({
+        id: "a9",
+        role: "assistant",
+        parts: [completedCall, { type: "text", content: "OK" }],
+        metadata: completed,
+      }).detail,
+    ).toBe("continued message a1 is no longer stored");
+  });
+
+  test("fails when the continuation answered in a new message", () => {
+    expect(
+      evaluateApprovedTurn({
+        messages: storedThread([
+          userMessage("u1", "go"),
+          {
+            id: "a1",
+            role: "assistant",
+            parts: [completedCall],
+            metadata: completed,
+          },
+          {
+            id: "a2",
+            role: "assistant",
+            parts: [{ type: "text", content: "OK" }],
+            metadata: completed,
+          },
+        ]),
+        pending: pendingOf(pendingThread()),
+      }).detail,
+    ).toBe("continuation answered in a new message a2 instead of a1");
+  });
+
   test("fails when the continuation lost the approved call", () => {
     expect(
       settle({
@@ -453,7 +559,11 @@ const createFakeDeployment = ({
       }),
     );
   };
-  return { calls, request };
+  const refreshSession = async (): Promise<void> => {
+    calls.push("REFRESH session");
+    await Promise.resolve();
+  };
+  return { calls, refreshSession, request };
 };
 
 describe("runAIChatJourney", () => {
@@ -461,6 +571,7 @@ describe("runAIChatJourney", () => {
     const deployment = createFakeDeployment();
     const checks = await runAIChatJourney({
       apiKey: "key",
+      refreshSession: deployment.refreshSession,
       request: deployment.request,
     });
     expect(checks.filter(({ ok }) => !ok)).toEqual([]);
@@ -493,6 +604,7 @@ describe("runAIChatJourney", () => {
     const deployment = createFakeDeployment({ chatStatus: 403 });
     const checks = await runAIChatJourney({
       apiKey: "key",
+      refreshSession: deployment.refreshSession,
       request: deployment.request,
     });
     const turn = checks.find(({ name }) => name === "POST /v1/chat/ (turn 1)");
@@ -501,6 +613,7 @@ describe("runAIChatJourney", () => {
     expect(deployment.calls).toEqual([
       "POST /v1/organization-settings/ai-config",
       "POST /v1/chat/",
+      "REFRESH session",
       expect.stringMatching(/^DELETE \/v1\/chat\/threads\/.+/u),
       "DELETE /v1/organization-settings/ai-config",
     ]);
@@ -510,14 +623,43 @@ describe("runAIChatJourney", () => {
     const deployment = createFakeDeployment({ throwOnReload: true });
     const checks = await runAIChatJourney({
       apiKey: "key",
+      refreshSession: deployment.refreshSession,
       request: deployment.request,
     });
     expect(checks.find(({ name }) => name === "AI chat journey")).toMatchObject(
       { ok: false, detail: "aborted: request timed out" },
     );
-    expect(deployment.calls.slice(-2)).toEqual([
+    expect(deployment.calls.slice(-3)).toEqual([
+      "REFRESH session",
       expect.stringMatching(/^DELETE \/v1\/chat\/threads\/.+/u),
       "DELETE /v1/organization-settings/ai-config",
+    ]);
+  });
+
+  test("reports a failed session refresh and still cleans up", async () => {
+    const deployment = createFakeDeployment();
+    const checks = await runAIChatJourney({
+      apiKey: "key",
+      refreshSession: async () => {
+        await Promise.resolve();
+        throw new Error("Could not mint a smoke session: 503");
+      },
+      request: deployment.request,
+    });
+    expect(checks.slice(-3)).toEqual([
+      {
+        name: "cleanup: refresh smoke session",
+        ok: false,
+        detail: "Could not mint a smoke session: 503",
+      },
+      expect.objectContaining({
+        name: "cleanup: DELETE /v1/chat/threads/:threadId",
+        ok: true,
+      }),
+      expect.objectContaining({
+        name: "cleanup: DELETE /v1/organization-settings/ai-config",
+        ok: true,
+      }),
     ]);
   });
 
@@ -525,6 +667,10 @@ describe("runAIChatJourney", () => {
     const calls: string[] = [];
     const checks = await runAIChatJourney({
       apiKey: "key",
+      refreshSession: async () => {
+        calls.push("REFRESH session");
+        await Promise.resolve();
+      },
       request: async (path, { method }) => {
         calls.push(`${method ?? "GET"} ${path}`);
         return await Promise.resolve(
@@ -537,6 +683,7 @@ describe("runAIChatJourney", () => {
     expect(checks.map(({ ok }) => ok)).toEqual([false, true]);
     expect(calls).toEqual([
       "POST /v1/organization-settings/ai-config",
+      "REFRESH session",
       "DELETE /v1/organization-settings/ai-config",
     ]);
   });

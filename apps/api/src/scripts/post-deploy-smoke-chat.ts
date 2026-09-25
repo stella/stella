@@ -99,38 +99,68 @@ export type SmokeRequest = (
 // Streams
 // ---------------------------------------------------------------------------
 
-/** The JSON payloads of an SSE body's `data:` lines. A partial trailing frame
- *  is skipped. */
-export const parseStreamDataFrames = (text: string): unknown[] => {
-  const frames: unknown[] = [];
-  for (const line of text.split(/\r?\n/u)) {
-    if (!line.startsWith("data:")) {
-      continue;
-    }
-    const data = line.slice("data:".length).trim();
-    if (data.length === 0) {
-      continue;
-    }
-    try {
-      frames.push(JSON.parse(data));
-    } catch {
-      // The buffered text can end mid-frame.
-    }
-  }
-  return frames;
-};
-
 const streamFrameSchema = v.object({
   type: v.string(),
   delta: v.optional(v.string()),
   message: v.optional(v.string()),
 });
 
-export const streamFramesOf = (text: string) =>
-  parseStreamDataFrames(text).flatMap((frame) => {
+type StreamFrame = v.InferOutput<typeof streamFrameSchema>;
+
+type ScannedStream = {
+  /** Every `data:` payload that parsed as JSON. */
+  data: unknown[];
+  /** Terminated `data:` lines that are not JSON. */
+  malformedLines: number;
+  /** The text ends inside a `data:` line that does not parse (yet). */
+  partialTail: boolean;
+};
+
+/**
+ * The `data:` payloads of an SSE body. Only the last, unterminated line may be
+ * incomplete; a terminated line that is not JSON is a corrupt frame.
+ */
+const scanStreamData = (text: string): ScannedStream => {
+  const lines = text.split(/\r?\n/u);
+  const lastIndex = lines.length - 1;
+  const scanned: ScannedStream = {
+    data: [],
+    malformedLines: 0,
+    partialTail: false,
+  };
+  for (const [index, line] of lines.entries()) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    const payload = line.slice("data:".length).trim();
+    if (payload.length === 0) {
+      continue;
+    }
+    try {
+      scanned.data.push(JSON.parse(payload));
+    } catch {
+      if (index === lastIndex) {
+        scanned.partialTail = true;
+      } else {
+        scanned.malformedLines += 1;
+      }
+    }
+  }
+  return scanned;
+};
+
+/** The JSON payloads of an SSE prefix's `data:` lines. */
+export const parseStreamDataFrames = (text: string): unknown[] =>
+  scanStreamData(text).data;
+
+const typedFramesOf = (data: readonly unknown[]): StreamFrame[] =>
+  data.flatMap((frame) => {
     const parsed = v.safeParse(streamFrameSchema, frame);
     return parsed.success ? [parsed.output] : [];
   });
+
+export const streamFramesOf = (text: string): StreamFrame[] =>
+  typedFramesOf(parseStreamDataFrames(text));
 
 type StreamReader = {
   cancel: () => Promise<unknown>;
@@ -209,9 +239,22 @@ export const readTurnStream = async (
   }
 };
 
-/** A finished turn stream: no run error, and the run finished. */
+/** A finished turn stream: every frame well formed, no run error, and the
+ *  run finished. */
 export const evaluateTurnStream = (name: string, text: string): SmokeCheck => {
-  const frames = streamFramesOf(text);
+  const scanned = scanStreamData(text);
+  const frames = typedFramesOf(scanned.data);
+  const untyped = scanned.data.length - frames.length;
+  if (scanned.malformedLines > 0 || scanned.partialTail || untyped > 0) {
+    return {
+      name,
+      ok: false,
+      detail:
+        `stream carried corrupt frames: ${String(scanned.malformedLines)} ` +
+        `not JSON, ${String(untyped)} without a type${ 
+        scanned.partialTail ? ", and ended mid-frame" : ""}`,
+    };
+  }
   const runError = frames.find(({ type }) => type === AG_UI_EVENT.runError);
   if (runError) {
     return {
@@ -231,17 +274,12 @@ export const evaluateTurnStream = (name: string, text: string): SmokeCheck => {
 };
 
 /** Frames that prove a turn made progress, for callers reading a prefix. */
-export const isProgressFrame = ({
-  delta,
-  type,
-}: v.InferOutput<typeof streamFrameSchema>): boolean =>
+export const isProgressFrame = ({ delta, type }: StreamFrame): boolean =>
   type === AG_UI_EVENT.runFinished ||
   type === AG_UI_EVENT.toolCallStart ||
   (type === AG_UI_EVENT.textContent && delta !== undefined && delta !== "");
 
-export const isRunErrorFrame = ({
-  type,
-}: v.InferOutput<typeof streamFrameSchema>): boolean =>
+export const isRunErrorFrame = ({ type }: StreamFrame): boolean =>
   type === AG_UI_EVENT.runError;
 
 // ---------------------------------------------------------------------------
@@ -519,6 +557,22 @@ type PendingApproval = {
   message: StoredMessage;
 };
 
+/** How many subagents a pending call's arguments ask for; null when the
+ *  arguments do not parse. */
+const requestedSubagentCount = (args: string): number | null => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(args);
+  } catch {
+    return null;
+  }
+  const input = v.safeParse(
+    v.object({ subagents: v.array(v.unknown()) }),
+    parsed,
+  );
+  return input.success ? input.output.subagents.length : null;
+};
+
 /** After the first send: the turn waits on exactly our tool's approval. */
 export const evaluatePendingApproval = (
   messages: readonly StoredMessage[],
@@ -546,6 +600,14 @@ export const evaluatePendingApproval = (
       }; text: ${String(message.texts.length)} parts)`,
     );
   }
+  const subagents = requestedSubagentCount(call.arguments);
+  if (subagents !== 1) {
+    // Refused before approving, so a model that batches more subtasks than
+    // asked never runs them.
+    return fail(
+      `${SMOKE_APPROVAL_TOOL_NAME} asks for ${String(subagents ?? "unparseable")} subagents, expected 1`,
+    );
+  }
   if (
     message.outcome?.type !== "awaiting-user" ||
     message.outcome.interaction?.toolCallId !== call.id
@@ -560,7 +622,7 @@ export const evaluatePendingApproval = (
   };
 };
 
-const hasCompletedSubagent = (output: unknown): boolean => {
+const hasOneCompletedSubagent = (output: unknown): boolean => {
   const parsed = v.safeParse(
     v.object({
       results: v.array(v.object({ status: v.string() })),
@@ -569,8 +631,8 @@ const hasCompletedSubagent = (output: unknown): boolean => {
   );
   return (
     parsed.success &&
-    parsed.output.results.length > 0 &&
-    parsed.output.results.every(({ status }) => status === "completed")
+    parsed.output.results.length === 1 &&
+    parsed.output.results[0]?.status === "completed"
   );
 };
 
@@ -599,23 +661,35 @@ export const evaluateApprovedTurn = ({
       `approved call is ${call.state}${call.output === undefined ? " without output" : ""}`,
     );
   }
-  if (!hasCompletedSubagent(call.output)) {
-    return fail("approved call's output has no completed subagent result");
+  if (!hasOneCompletedSubagent(call.output)) {
+    return fail("approved call's output is not exactly one completed subagent");
   }
+  // A continuation settles the call in place on the message it continued;
+  // losing or replacing that message is the regression, whatever else the
+  // reload shows.
   const owner = messages.find(({ id }) => id === pending.message.id);
-  if (owner) {
-    const dropped = findDroppedParts({
-      continued: pending.message.toolCalls,
-      stored: owner.toolCalls,
-    });
-    if (dropped) {
-      return fail(
-        `continuation dropped tool calls: ${dropped.droppedToolCallIds.join(", ")}`,
-      );
-    }
+  if (!owner) {
+    return fail(`continued message ${pending.message.id} is no longer stored`);
+  }
+  if (!owner.toolCalls.some(({ id }) => id === pending.callId)) {
+    return fail(`approved call moved off continued message ${owner.id}`);
+  }
+  const dropped = findDroppedParts({
+    continued: pending.message.toolCalls,
+    stored: owner.toolCalls,
+  });
+  if (dropped) {
+    return fail(
+      `continuation dropped tool calls: ${dropped.droppedToolCallIds.join(", ")}`,
+    );
   }
   const last = lastAssistantOf(messages);
-  if (last?.outcome?.type !== "completed") {
+  if (last?.id !== owner.id) {
+    return fail(
+      `continuation answered in a new message ${last?.id ?? "missing"} instead of ${owner.id}`,
+    );
+  }
+  if (last.outcome?.type !== "completed") {
     return fail(`turn outcome is ${last?.outcome?.type ?? "missing"}`);
   }
   if (last.texts.length === 0) {
@@ -921,9 +995,13 @@ const runJourneySteps = async ({
  */
 export const runAIChatJourney = async ({
   apiKey,
+  refreshSession,
   request,
 }: {
   apiKey: string;
+  /** Re-authenticates `request`, so cleanup does not depend on the journey
+   *  finishing inside one session's lifetime. */
+  refreshSession: () => Promise<void>;
   request: SmokeRequest;
 }): Promise<SmokeCheck[]> => {
   const checks: SmokeCheck[] = [];
@@ -938,6 +1016,16 @@ export const runAIChatJourney = async ({
       detail: `aborted: ${describeError(error)}`,
     });
   } finally {
+    try {
+      await refreshSession();
+    } catch (error) {
+      // Cleanup still runs on the journey's session, which may yet be valid.
+      checks.push({
+        name: "cleanup: refresh smoke session",
+        ok: false,
+        detail: describeError(error),
+      });
+    }
     if (created.thread) {
       checks.push(
         await cleanUp(
