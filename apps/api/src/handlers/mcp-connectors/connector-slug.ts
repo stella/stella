@@ -15,8 +15,9 @@ export const connectorSlugCandidates = (base: string): string[] =>
   );
 
 /**
- * The first candidate not in `taken`. When every candidate is taken, a short
- * random suffix stands in for a counter.
+ * The first candidate not in `taken`. When every candidate is taken, a random
+ * suffix stands in for a counter. It comes from the tail of a UUIDv7, which is
+ * random; the head is the timestamp and repeats for calls close together.
  */
 export const firstFreeConnectorSlug = ({
   base,
@@ -28,4 +29,4 @@ export const firstFreeConnectorSlug = ({
   taken: ReadonlySet<string>;
 }): string =>
   candidates.find((candidate) => !taken.has(candidate)) ??
-  `${base}-${Bun.randomUUIDv7().slice(0, 8)}`;
+  `${base}-${Bun.randomUUIDv7().slice(-12)}`;

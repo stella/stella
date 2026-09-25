@@ -44,14 +44,20 @@ describe("connector slug selection", () => {
 
   test("falls back to a random suffix once every candidate is taken", () => {
     const candidates = connectorSlugCandidates("registry");
+    const pick = () =>
+      firstFreeConnectorSlug({
+        base: "registry",
+        candidates,
+        taken: new Set(candidates),
+      });
 
-    const slug = firstFreeConnectorSlug({
-      base: "registry",
-      candidates,
-      taken: new Set(candidates),
-    });
+    // Two picks in the same millisecond share a UUIDv7 timestamp, so they
+    // differ only if the suffix comes from the random bits.
+    const first = pick();
+    const second = pick();
 
-    expect(candidates).not.toContain(slug);
-    expect(slug).toMatch(/^registry-[0-9a-f]{8}$/u);
+    expect(candidates).not.toContain(first);
+    expect(first).toMatch(/^registry-[0-9a-f]{12}$/u);
+    expect(second).not.toBe(first);
   });
 });
