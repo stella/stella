@@ -131,8 +131,8 @@ const UNOWNED_KEY = "observability.unowned";
 
 /**
  * Mark a WARN or ERROR record that describes an error without a failure
- * grade: a sink the failure owner has not reached yet. The runtime twin of the
- * `direct-failure-sinks` ratchet, countable from the deployed log stream.
+ * grade: a sink the failure owner has not reached yet, countable from the
+ * deployed log stream.
  */
 const annotateUnowned = (
   severityNumber: SeverityNumber,
