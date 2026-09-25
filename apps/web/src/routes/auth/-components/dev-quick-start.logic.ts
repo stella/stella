@@ -3,7 +3,6 @@ import { panic } from "better-result";
 export const DEV_QUICK_START_PHASE = {
   authenticate: "authenticate",
   organization: "organization",
-  skills: "skills",
   matters: "matters",
 } as const;
 
@@ -48,14 +47,12 @@ type RunDevQuickStartOptions = {
     identity: DevQuickStartIdentity,
     organizationId: string,
   ) => Promise<void>;
-  seedSkills: (organizationId: string) => Promise<void>;
 };
 
 const PHASE_ORDER = {
   [DEV_QUICK_START_PHASE.authenticate]: 0,
   [DEV_QUICK_START_PHASE.organization]: 1,
-  [DEV_QUICK_START_PHASE.skills]: 2,
-  [DEV_QUICK_START_PHASE.matters]: 3,
+  [DEV_QUICK_START_PHASE.matters]: 2,
 } as const satisfies Record<DevQuickStartPhase, number>;
 
 const shouldRunPhase = (
@@ -72,7 +69,6 @@ export const runDevQuickStart = async ({
   onAttemptUpdated,
   onPhase,
   startMatterImport,
-  seedSkills,
 }: RunDevQuickStartOptions): Promise<void> => {
   let currentAttempt = attempt;
   const completePhase = (
@@ -112,14 +108,6 @@ export const runDevQuickStart = async ({
   const organizationId =
     currentAttempt.organizationId ??
     panic("Dev quick start completed organization setup without an ID.");
-
-  if (
-    shouldRunPhase(currentAttempt.completedPhase, DEV_QUICK_START_PHASE.skills)
-  ) {
-    onPhase(DEV_QUICK_START_PHASE.skills);
-    await seedSkills(organizationId);
-    completePhase(DEV_QUICK_START_PHASE.skills);
-  }
 
   if (
     shouldRunPhase(currentAttempt.completedPhase, DEV_QUICK_START_PHASE.matters)

@@ -14,16 +14,13 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
-import { startSkillSeed } from "@/lib/knowledge/skill-seed";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -128,15 +125,6 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     const orgId = context.user.activeOrganizationId;
-
-    // Default slash-command skills are seeded on the first Tools visit; the
-    // page renders without waiting for it.
-    startSkillSeed({
-      queryClient: context.queryClient,
-      organizationId: orgId,
-      seedSkills: async () => unwrapEden(await api.skills.seed.post({})),
-    });
-
     const [, settings, role] = await Promise.all([
       ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
       ensureRouteQueryData(

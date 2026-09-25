@@ -554,16 +554,4 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
     },
   );
   expect(setActiveResponse.ok(), await setActiveResponse.text()).toBe(true);
-
-  // The docked chat empty state only offers suggestions from installed
-  // slash-command skills. Seed the same defaults a new user gets from the
-  // Skills surface so fresh nightly databases record the intended prompt
-  // cards instead of a permanently empty logo state.
-  const seedSkillsResponse = await request.post(
-    `${apiBaseURL}/v1/skills/seed`,
-    {
-      headers: { origin: webOrigin },
-    },
-  );
-  expect(seedSkillsResponse.ok(), await seedSkillsResponse.text()).toBe(true);
 };

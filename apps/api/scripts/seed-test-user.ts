@@ -25,6 +25,7 @@ import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
+import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { toSafeId } from "@/api/lib/branded-types";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
@@ -221,16 +222,22 @@ export const ensureMembershipExists = async ({
     return;
   }
 
-  await db.transaction(
-    async (tx) =>
-      await tx.insert(member).values({
-        id: buildMemberId(organizationId, userId),
-        organizationId,
-        userId,
-        role,
-        createdAt: now,
-      }),
-  );
+  // This seed inserts the membership directly, bypassing the organization
+  // plugin's membership hooks, so it installs the member defaults itself.
+  await db.transaction(async (tx) => {
+    await tx.insert(member).values({
+      id: buildMemberId(organizationId, userId),
+      organizationId,
+      userId,
+      role,
+      createdAt: now,
+    });
+    await seedDefaultSkills({
+      organizationId: toSafeId<"organization">(organizationId),
+      tx,
+      userId: toSafeId<"user">(userId),
+    });
+  });
 };
 
 export async function ensureSeedColleagueUsers({

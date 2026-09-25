@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
@@ -17,8 +18,8 @@ import deleteSkillResource from "@/api/handlers/skills/resources/delete";
 import renameSkillResource from "@/api/handlers/skills/resources/rename";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
-import seedSkills from "@/api/handlers/skills/seed";
 import updateSkill from "@/api/handlers/skills/update";
+import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,10 +35,7 @@ import {
   latestTestSkillRevisionId,
   skillHandlerContext,
 } from "@/api/tests/helpers/agent-skill-db";
-import {
-  asTestExecutable,
-  asTestRaw,
-} from "@/api/tests/helpers/test-tool-set";
+import { asTestExecutable, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -165,9 +163,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
     },
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
-    safeDb: asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], ids.orgA, ids.userA1),
-    ),
+    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
     skills: [],
     userId: ids.userA1,
   });
@@ -215,16 +211,14 @@ const MUTATION_PATHS = {
         }),
       ),
     ),
-  "skills.seed": async () => {
-    expectOk(
-      await seedSkills.handler(
-        skillHandlerContext<Parameters<typeof seedSkills.handler>[0]>({
-          testDb,
-          organizationId: ids.orgA,
-          userId: ids.userA2,
-        }),
-      ),
-    );
+  "membership default skills": async () => {
+    await testDb.transaction(async (tx) => {
+      await seedDefaultSkills({
+        organizationId: ids.orgA,
+        tx: asTestRaw<Transaction>(tx),
+        userId: ids.userA2,
+      });
+    });
     const [seeded] = await testDb
       .select({ id: agentSkills.id })
       .from(agentSkills)

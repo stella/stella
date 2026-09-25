@@ -10,14 +10,7 @@ import {
 const DEV_QUICK_START_STORAGE_KEY = "stella.devQuickStart.attempt";
 
 const devQuickStartAttemptSchema = v.strictObject({
-  completedPhase: v.nullable(
-    v.picklist([
-      DEV_QUICK_START_PHASE.authenticate,
-      DEV_QUICK_START_PHASE.organization,
-      DEV_QUICK_START_PHASE.skills,
-      DEV_QUICK_START_PHASE.matters,
-    ]),
-  ),
+  completedPhase: v.nullable(v.picklist(Object.values(DEV_QUICK_START_PHASE))),
   identity: v.strictObject({
     email: v.pipe(v.string(), v.minLength(1), v.maxLength(254)),
     organizationName: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),

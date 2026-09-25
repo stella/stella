@@ -1,10 +1,9 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
 import path from "node:path";
 
-import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import {
@@ -22,7 +21,6 @@ import {
   mintDevSeedSession,
   resolveMemberDevOrganization,
 } from "@/api/lib/dev-seed-session-store";
-import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
 
@@ -57,7 +55,6 @@ const firmKnowledgeJobs = new FirmKnowledgeJobStore();
 /** Matters to seed from the Dev menu; the CLI's own default. */
 const FIRM_KNOWLEDGE_MATTERS = 15;
 const MAX_FIRM_KNOWLEDGE_MATTERS = 50;
-const MAX_SKILL_SEED_RESPONSE_BYTES = 1024 * 1024;
 
 const INCOMPLETE_MATTER_MODE = {
   replace: "replace",
@@ -140,54 +137,6 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     {
       query: t.Object({
         jobId: t.String({ minLength: 1, maxLength: 128 }),
-      }),
-    },
-  )
-  .post(
-    "/seed-skills",
-    async (ctx) => {
-      const organizationId = await resolveMemberDevOrganization(
-        ctx.body.organizationId,
-        ctx.user.id,
-      );
-      if (organizationId === null) {
-        return new Response("Organization membership not found", {
-          status: 403,
-        });
-      }
-
-      const apiOrigin = getDevApiOrigin(ctx.server?.port);
-      const seedSession = await mintDevSeedSession({
-        organizationId,
-        userId: ctx.user.id,
-      });
-      // Pin the socket to loopback as well as constructing a loopback URL, so
-      // the isolated credential cannot leave this process's host.
-      const response = await fetchWithResolvedAddress({
-        addresses: [{ address: "127.0.0.1", family: 4 }],
-        body: "{}",
-        headers: {
-          cookie: seedSession.cookie,
-          "content-type": "application/json",
-        },
-        maxBytes: MAX_SKILL_SEED_RESPONSE_BYTES,
-        method: "POST",
-        timeoutMs: 30_000,
-        url: new URL(`${apiOrigin}${STELLA_API_VERSION_PREFIX}/skills/seed`),
-      });
-      if (Result.isError(response)) {
-        return new Response("Skill seed request failed", { status: 502 });
-      }
-      if (!response.value.ok) {
-        return new Response(new TextDecoder().decode(response.value.body), {
-          status: response.value.status,
-        });
-      }
-      return { ok: true };
-    },
-    {
-      body: t.Object({
-        organizationId: t.String({ minLength: 1, maxLength: 128 }),
       }),
     },
   )

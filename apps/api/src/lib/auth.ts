@@ -39,6 +39,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -856,6 +857,12 @@ const createAuth = () => {
     // own creation did.
     seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
       await ensureDefaultDocumentTypes(organizationId, rootDb),
+    // Once per membership, on the owner connection that wrote the membership
+    // row; the defaults are then the member's own private skills to delete.
+    seedMemberDefaults: async ({ organizationId, userId }) =>
+      await rootDb.transaction(
+        async (tx) => await seedDefaultSkills({ organizationId, tx, userId }),
+      ),
   });
 
   const auth = betterAuth({

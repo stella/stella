@@ -18,8 +18,13 @@
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 
 const SMOKE_PRINCIPAL = {
   default: "default",
@@ -114,12 +119,21 @@ const ensureSmokePrincipal = async (
     columns: { id: true },
   });
   if (!existingMember) {
-    await rootDb.insert(member).values({
-      id: memberId,
-      organizationId: org.id,
-      userId: smokeUser.id,
-      role: "owner",
-      createdAt: now,
+    // A direct insert skips the organization plugin's membership hooks, so
+    // the member defaults a real new owner gets are installed here.
+    await rootDb.transaction(async (tx) => {
+      await tx.insert(member).values({
+        id: memberId,
+        organizationId: org.id,
+        userId: smokeUser.id,
+        role: "owner",
+        createdAt: now,
+      });
+      await seedDefaultSkills({
+        organizationId: brandPersistedOrganizationId(org.id),
+        tx,
+        userId: brandPersistedUserId(smokeUser.id),
+      });
     });
   }
 };

@@ -791,8 +791,7 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals/count",
-      "GET /v1/workspaces/navigation",
-      "POST /v1/skills/seed"
+      "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -806,8 +805,7 @@
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/signals/count": 1,
-      "GET /v1/workspaces/navigation": 1,
-      "POST /v1/skills/seed": 1
+      "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -821,8 +819,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/signals/count": 4,
-      "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 9
+      "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -835,8 +832,7 @@
       "GET /v1/organization-settings": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/signals/count": 1024,
-      "GET /v1/workspaces/navigation": 20480,
-      "POST /v1/skills/seed": 1024
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/playbooks": {
@@ -1027,8 +1023,7 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals/count",
-      "GET /v1/workspaces/navigation",
-      "POST /v1/skills/seed"
+      "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1042,8 +1037,7 @@
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/signals/count": 1,
-      "GET /v1/workspaces/navigation": 1,
-      "POST /v1/skills/seed": 1
+      "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1057,8 +1051,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/signals/count": 4,
-      "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 9
+      "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1071,8 +1064,7 @@
       "GET /v1/organization-settings": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/signals/count": 1024,
-      "GET /v1/workspaces/navigation": 20480,
-      "POST /v1/skills/seed": 1024
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/workflows": {
@@ -1695,8 +1687,7 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals/count",
-      "GET /v1/workspaces/navigation",
-      "POST /v1/skills/seed"
+      "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1710,8 +1701,7 @@
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/signals/count": 1,
-      "GET /v1/workspaces/navigation": 1,
-      "POST /v1/skills/seed": 1
+      "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1725,8 +1715,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/signals/count": 4,
-      "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 9
+      "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1739,8 +1728,7 @@
       "GET /v1/organization-settings": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/signals/count": 1024,
-      "GET /v1/workspaces/navigation": 20480,
-      "POST /v1/skills/seed": 1024
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/document-types": {

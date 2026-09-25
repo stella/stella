@@ -40134,25 +40134,6 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            seed: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "skills", "seed"],
-                capabilityId: "skills.seed",
-                description:
-                  "Install the four default slash-command skills (summarize, risks, compare, draft) as private skills for the signed-in user in the active organization. Returns seeded false and writes nothing when that user already has any authored skill with a command in this organization, so defaults someone deleted are not put back.",
-                access: "write",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
             update: {
               kind: "capability-leaf",
               spec: {

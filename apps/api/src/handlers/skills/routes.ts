@@ -31,7 +31,6 @@ import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import getSkillRevision from "@/api/handlers/skills/revisions/get";
 import listSkillRevisions from "@/api/handlers/skills/revisions/list";
-import seedSkills from "@/api/handlers/skills/seed";
 import {
   isSkillSourceRateLimitedRequest,
   skillSourceRateLimitBinding,
@@ -82,10 +81,6 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     body: createSkill.config.body,
     resourceSetUpdated: skillRealtimeUpdates,
     permissions: createSkill.config.permissions,
-  })
-  .post("/seed", seedSkills.handler, {
-    resourceSetUpdated: skillRealtimeUpdates,
-    permissions: seedSkills.config.permissions,
   })
   .post("/from-blueprint", fromBlueprint.handler, {
     body: fromBlueprint.config.body,

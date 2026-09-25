@@ -856,9 +856,6 @@ export const CAPABILITY_DISPATCH = {
   "skills.revisions.list": {
     load: async () => await import("@/api/handlers/skills/revisions/list"),
   },
-  "skills.seed": {
-    load: async () => await import("@/api/handlers/skills/seed"),
-  },
   "skills.update": {
     load: async () => await import("@/api/handlers/skills/update"),
   },
