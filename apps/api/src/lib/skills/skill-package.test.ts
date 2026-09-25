@@ -169,9 +169,7 @@ Use the references.`,
       "references/guide.md",
     ]);
     expect(
-      result.value.skippedFiles.toSorted((a, b) =>
-        a.path < b.path ? -1 : 1,
-      ),
+      result.value.skippedFiles.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
     ).toEqual([
       { path: "README.md", reason: "outside-skill-folder" },
       { path: "skill/assets/logo.png", reason: "unsupported-extension" },
@@ -299,6 +297,29 @@ Instructions.`,
     );
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("accepts a description at the Agent Skills specification limit of 1024 characters", async () => {
+    const description = "x".repeat(1024);
+    const result = await parseUpload(
+      new File(
+        [
+          `---
+name: spec-length-description
+description: ${description}
+---
+
+Instructions.`,
+        ],
+        "SKILL.md",
+        { type: "text/markdown" },
+      ),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.description).toBe(description);
   });
 
   test("rejects oversized frontmatter before chat metadata storage", async () => {

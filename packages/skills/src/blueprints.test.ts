@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BLUEPRINTS } from "./blueprints";
 import { isAllowedResourcePath, parseSkillFile } from "./loader";
-
-// Frontmatter name rule the upload/import parser enforces (skill-package.ts).
-// Blueprint instantiation reuses that parser, so a blueprint with a bad name
-// would 400 at runtime instead of seeding a draft.
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
+import { SKILL_NAME_PATTERN } from "./package-limits";
 
 // The file-tree editor (apps/web) only renders paths whose every segment
 // starts alphanumeric. A `_guide.md`-style segment stores fine via the loader

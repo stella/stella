@@ -4,7 +4,7 @@ export const SKILL_PACKAGE_LIMITS = {
   archiveUncompressedMaxBytes: 6 * 1024 * 1024,
   bodyMaxChars: 80_000,
   compatibilityMaxChars: 1000,
-  descriptionMaxChars: 1000,
+  descriptionMaxChars: 1024,
   githubDirectoriesMax: 100,
   licenseMaxChars: 256,
   metadataEntriesMax: 32,
@@ -16,4 +16,5 @@ export const SKILL_PACKAGE_LIMITS = {
   versionMaxChars: 64,
 } as const;
 
+/** Frontmatter `name` rule every skill-package ingestion path enforces. */
 export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;

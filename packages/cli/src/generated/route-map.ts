@@ -38590,7 +38590,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         description: {
                           minLength: 1,
-                          maxLength: 1000,
+                          maxLength: 1024,
                           type: "string",
                         },
                         body: {
@@ -40245,7 +40245,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         description: {
                           minLength: 1,
-                          maxLength: 1000,
+                          maxLength: 1024,
                           type: "string",
                         },
                         body: {

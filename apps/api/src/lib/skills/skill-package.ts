@@ -8,7 +8,10 @@ import {
   parseSkillFile,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import {
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+} from "@stll/skills/package-limits";
 import { Temporal } from "@stll/time";
 
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -18,7 +21,6 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SKILL_FILE_NAME = "SKILL.md";
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_DISCOVERY_TIMEOUT_MS = 30_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
