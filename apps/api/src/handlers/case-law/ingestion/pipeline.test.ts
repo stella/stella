@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
@@ -7,6 +8,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -643,6 +645,156 @@ describe("runIngestionPipeline — database timeouts", () => {
     expect(result.nextCursor).toBe("cursor-1");
     expect(result.haltReason?.startsWith("Database timeout;")).toBe(true);
     expect(persistedCursor).toBe("cursor-1");
+  });
+});
+
+describe("runIngestionPipeline — failure records", () => {
+  type FailureRow = typeof caseLawIngestionFailures.$inferInsert;
+
+  /**
+   * A page of one decision whose write fails with an ordinary error, so the
+   * page collects one failure record. The first database call orders the
+   * observation; the second is the decision's write; later calls reach the
+   * failure-record insert and the cursor update.
+   */
+  const failingDecisionDb = (insertError: Error | null) => {
+    const state: {
+      persistedCursor: string | null | undefined;
+      insertedRows: FailureRow[];
+    } = { persistedCursor: undefined, insertedRows: [] };
+    let calls = 0;
+    const scopedDb: ScopedDb = async (callback) => {
+      calls++;
+      if (calls === 2) {
+        throw new Error("decision rejected\u0000at byte 12");
+      }
+
+      const tx = {
+        insert: () => ({
+          values: async (rows: FailureRow[]) => {
+            if (insertError !== null) {
+              throw insertError;
+            }
+            state.insertedRows.push(...rows);
+            return await Promise.resolve([]);
+          },
+        }),
+        execute: async () => await Promise.resolve([]),
+        update: (table: unknown) => ({
+          set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawSources) {
+              state.persistedCursor = values.syncCursor;
+            }
+
+            return {
+              where: () => ({
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
+              }),
+            };
+          },
+        }),
+      };
+
+      // SAFETY: this test exercises the failure-record insert and the final
+      // case_law_sources cursor update; the fake implements those chains.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+    return { scopedDb, state };
+  };
+
+  const postgresError = (sqlState: string): Error =>
+    new SQL.PostgresError("failure record insert rejected", {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: sqlState,
+      detail: "",
+      hint: "",
+      severity: "ERROR",
+    });
+
+  let logs: RecordingLogger | null = null;
+
+  afterEach(() => {
+    logs?.restore();
+    logs = null;
+  });
+
+  test("writes a failure record within the column limits and moves the cursor on", async () => {
+    const source = caseLawSourceRow({ name: "Failure-record source" });
+    const caseNumber = "X".repeat(300);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [
+          { ...baseResult({}), caseNumber, language: "sk-SK-x-long" },
+        ],
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null);
+
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(state.insertedRows).toHaveLength(1);
+    const [row] = state.insertedRows;
+    expect(row?.caseNumber).toBe(caseNumber.slice(0, 256));
+    expect(row?.language).toBe("sk-SK-x-");
+    expect(row?.errorMessage).toContain("decision rejectedat byte 12");
+    expect(result.skipped).toBe(1);
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.persistedCursor).toBe("cursor-2");
+  });
+
+  test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
+    const source = caseLawSourceRow({ name: "Failure-record source" });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+    const { scopedDb, state } = failingDecisionDb(postgresError("22021"));
+    logs = installRecordingLogger();
+
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(state.persistedCursor).toBe("cursor-2");
+    expect(result.haltReason).toBeNull();
+    expect(
+      logs
+        .at("ERROR")
+        .filter(
+          ({ message }) =>
+            message === "case_law.ingestion.failure_records_not_written",
+        ),
+    ).toHaveLength(1);
+  });
+
+  test("holds the source cursor when the failure record write meets a serialization failure", async () => {
+    const source = caseLawSourceRow({ name: "Failure-record source" });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+    const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
+
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(state.persistedCursor).toBe("cursor-1");
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toContain("cursor held for retry");
+    expect(result.skipped).toBe(1);
   });
 });
 
