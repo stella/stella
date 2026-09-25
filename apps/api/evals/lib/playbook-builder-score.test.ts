@@ -30,6 +30,8 @@ describe("playbook-builder question topics", () => {
     ["Do you have past executed contracts I should use?", "contracts"],
     ["Should I look for signed agreements in your matters?", "contracts"],
     ["Do you have any past executed NDAs you want me to use?", "contracts"],
+    ["What contract evidence should ground the playbook?", "contracts"],
+    ["What should I use as contract examples?", "contracts"],
     ["Which side are you on: buyer or seller?", "side"],
     ["Is your organization the customer/buyer under these agreements?", "side"],
     [
