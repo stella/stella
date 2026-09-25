@@ -48,6 +48,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
 import { FormulaEditor } from "@/components/conditions/formula-editor";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -1420,6 +1421,7 @@ export const FieldFace = ({
                 placeholder={t(
                   "templates.studio.aiAdaptInstructionPlaceholder",
                 )}
+                skillChips={SKILL_CHIP_CATALOG.caller}
                 value={field.aiPrompt ?? ""}
                 valueFormat="text"
                 variant="minimal"
@@ -1433,6 +1435,7 @@ export const FieldFace = ({
                 mentionExtension={fieldMention}
                 onChange={(value) => onUpdate({ aiPrompt: value })}
                 placeholder={t("templates.studio.aiPromptPlaceholder")}
+                skillChips={SKILL_CHIP_CATALOG.caller}
                 value={field.aiPrompt ?? ""}
                 valueFormat="text"
                 variant="minimal"

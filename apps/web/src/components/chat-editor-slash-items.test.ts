@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
+  SKILL_CHIP_CATALOG,
+  skillPagesForChips,
 } from "@/components/chat-editor-slash-items";
 
 describe("buildChatSlashItems", () => {
@@ -252,6 +254,44 @@ describe("buildChatSlashItems", () => {
     });
 
     expect(items).toEqual([]);
+  });
+});
+
+describe("skillPagesForChips", () => {
+  const chipPages = () => [
+    {
+      installed: [
+        skillRow({ id: "mine", slug: "mine", scope: "private" }),
+        skillRow({ id: "shared", slug: "shared", scope: "team" }),
+      ],
+    },
+    {
+      installed: [
+        skillRow({
+          command: "summary",
+          id: "command",
+          slug: "command",
+          scope: "private",
+        }),
+      ],
+    },
+  ];
+
+  test("a team-only prompt offers team skill chips alone", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: skillPagesForChips(chipPages(), SKILL_CHIP_CATALOG.team),
+    });
+
+    expect(
+      items.map((item) => (item.kind === "skill" ? item.skill.slug : "")),
+    ).toEqual(["shared"]);
+  });
+
+  test("a caller-catalog prompt offers every skill the caller has", () => {
+    const pages = chipPages();
+
+    expect(skillPagesForChips(pages, SKILL_CHIP_CATALOG.caller)).toBe(pages);
   });
 });
 

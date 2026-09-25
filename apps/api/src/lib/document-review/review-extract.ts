@@ -277,6 +277,7 @@ export const extractAskContents = async ({
         properties,
         filenames,
         textInputs: [],
+        linkedSkillsMessage: null,
         abortSignal,
         organizationId,
         workspaceId,

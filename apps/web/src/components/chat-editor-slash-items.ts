@@ -36,6 +36,39 @@ type SlashSkillPage = {
   installed: readonly SlashSkillRow[];
 };
 
+/**
+ * Which skills a prompt input offers as chips: everything the caller can use
+ * (chat, template fields) or the organization's team skills alone, for a
+ * prompt whose output is shared matter data (property prompts) and so must
+ * not depend on one member's private skill.
+ */
+export const SKILL_CHIP_CATALOG = {
+  caller: "caller",
+  team: "team",
+} as const;
+
+export type SkillChipCatalog =
+  (typeof SKILL_CHIP_CATALOG)[keyof typeof SKILL_CHIP_CATALOG];
+
+export const skillPagesForChips = (
+  pages: readonly SlashSkillPage[],
+  catalog: SkillChipCatalog,
+): readonly SlashSkillPage[] => {
+  switch (catalog) {
+    case SKILL_CHIP_CATALOG.caller:
+      return pages;
+    case SKILL_CHIP_CATALOG.team:
+      return pages.map((page) => ({
+        ...page,
+        installed: page.installed.filter((row) => row.scope === "team"),
+      }));
+    default: {
+      catalog satisfies never;
+      return panic(`Unhandled skill chip catalog: ${String(catalog)}`);
+    }
+  }
+};
+
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
