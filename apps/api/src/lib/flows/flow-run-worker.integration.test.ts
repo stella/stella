@@ -52,6 +52,8 @@ import {
   executeFlowStep,
   resolveFlowReviewGate as resolveFlowReviewGateWithDependencies,
 } from "@/api/lib/flows/flow-executor";
+import { fileFlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
+import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
@@ -172,11 +174,15 @@ const loadReviewTask = async (runId: SafeId<"flowRun">, stepIndex: number) => {
   return { taskEntityId, task, obligation };
 };
 
-type ResolveReviewGateDependencies = NonNullable<
-  Parameters<typeof resolveFlowReviewGateWithDependencies>[1]
->;
-const reviewGateDatabase =
-  asTestRaw<NonNullable<ResolveReviewGateDependencies["database"]>>(testDb);
+// The completion pointer for a run's actor is a cross-user write; production
+// files it on the owner connection, the test on its own database.
+const notifyRunCompleted: typeof notifyFlowRunActorOfCompletion = async (
+  notice,
+) =>
+  await fileFlowRunCompletionNotice(
+    notice,
+    asTestRaw<Parameters<typeof fileFlowRunCompletionNotice>[1]>(testDb),
+  );
 
 const resolveFlowReviewGate = async (
   options: Parameters<typeof resolveFlowReviewGateWithDependencies>[0],
@@ -184,7 +190,7 @@ const resolveFlowReviewGate = async (
   await resolveFlowReviewGateWithDependencies(options, {
     broadcastUpdate,
     enqueueStep: enqueueFlowStepMock,
-    database: reviewGateDatabase,
+    notifyRunCompleted,
   });
 
 // ── Fixture data ─────────────────────────────────────────
@@ -511,7 +517,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           await decideGateForTask(options, {
             broadcastUpdate,
             enqueueStep: enqueueFlowStepMock,
-            database: reviewGateDatabase,
+            notifyRunCompleted,
           }),
       }),
     );
