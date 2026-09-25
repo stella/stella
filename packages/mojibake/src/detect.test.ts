@@ -158,6 +158,9 @@ describe("text that reads correctly", () => {
     ["fr", `${UDHR_ARTICLE_1.fr} « Œuvre » de Dvořák, ¹ note, 3 ½ ans.`],
     // Ú Ž in windows-1252 are bytes DA 8E: valid UTF-8, for an Arabic letter.
     ["sk", `${UDHR_ARTICLE_1.sk} Rozhodnutie KÚŽP a stanovisko KÚŽP.`],
+    // Í Š and Ý Š in windows-1252 are UTF-8 for combining marks.
+    ["cs", `${UDHR_ARTICLE_1.cs} Žalobce POSPÍŠIL, zástupce POSPÍŠIL.`],
+    ["sk", `${UDHR_ARTICLE_1.sk} VÝŠKA NÁHRADY, VÝŠKA ÚROKU.`],
   ] as const;
 
   test("Latin words in a Cyrillic text are not read back into Cyrillic", () => {

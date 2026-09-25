@@ -181,13 +181,40 @@ const exemplarText = (language: UdhrLanguage) => {
   const letters = Array.from(CLDR_EXEMPLARS[language].main).filter((char) =>
     /\p{L}/u.test(char),
   );
+  // Some words in capitals, as headings and party names are: capitals are
+  // where two letters most often spell a valid UTF-8 sequence by accident.
   const word = fc
-    .array(fc.constantFrom(...letters), { minLength: 2, maxLength: 9 })
-    .map((chars) => chars.join(""));
+    .tuple(
+      fc.array(fc.constantFrom(...letters), { minLength: 2, maxLength: 9 }),
+      fc.boolean(),
+    )
+    .map(([chars, capitals]) =>
+      capitals ? chars.join("").toUpperCase() : chars.join(""),
+    );
   return fc
     .array(word, { minLength: 20, maxLength: 80 })
     .map((generated) => generated.join(" "));
 };
+
+describe("every pair of a language's own letters", () => {
+  // Exhaustive rather than sampled: two letters a language writes side by
+  // side can be the bytes of a UTF-8 sequence read as windows-1252 (Czech
+  // "ÍŠ" is CD 8A), and a sampler rarely draws the pair that is.
+  test.each(LANGUAGES)("%s, lower and upper case, is clean", (language) => {
+    const letters = Array.from(CLDR_EXEMPLARS[language].main).filter((char) =>
+      /\p{L}/u.test(char),
+    );
+    const cased = [
+      ...letters,
+      ...letters.map((char) => char.toUpperCase()),
+    ].filter((char) => Array.from(char).length === 1);
+    const pairs = cased.flatMap((first) =>
+      cased.map((second) => `a${first}${second}a`),
+    );
+    const text = [UDHR_ARTICLE_1[language], ...pairs, ...pairs].join(" ");
+    expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
+  });
+});
 
 describe("generated text", () => {
   test("a repair the detector proposes never writes a wrong word", () => {

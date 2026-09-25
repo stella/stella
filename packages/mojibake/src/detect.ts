@@ -497,11 +497,15 @@ const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
 
 /**
  * Words that become valid UTF-8 with a non-ASCII letter once written back as
- * windows-1252 or Latin-1 bytes. Needs no alphabet: a word a person wrote
- * almost never happens to spell a UTF-8 multi-byte sequence in those bytes.
+ * windows-1252 or Latin-1 bytes. A word a person wrote rarely spells a UTF-8
+ * multi-byte sequence in those bytes, but capitals do: Czech "POSPÍŠIL" is
+ * bytes CD 8A, a combining mark, and Slovak "VÝŠKA" is DD 8A, a Syriac one.
+ * So where the language is known the word read back must read natively in
+ * it; where it is not, it must at least stay in one script.
  */
 const utf8Signature = (
   words: ReadonlyMap<string, WordStat>,
+  alphabet: Alphabet | null,
 ): Extract<EncodingFinding, { kind: "utf8-read-as-single-byte" }> | null => {
   let occurrences = 0;
   const samples: RepairedSpan[] = [];
@@ -518,7 +522,9 @@ const utf8Signature = (
         !Array.from(undone.text).some((char) =>
           isControlOrReplacement(char.codePointAt(0) ?? 0),
         ) &&
-        writtenInOneScript(undone.text),
+        (alphabet === null
+          ? writtenInOneScript(undone.text)
+          : classifyWord(undone.text, alphabet) === "native"),
     );
     if (repaired === undefined) {
       continue;
@@ -599,12 +605,12 @@ export const checkTextEncoding = (
   }
 
   const words = collectWords(text);
-  const utf8 = utf8Signature(words);
+  const alphabet = alphabetFor(language);
+  const utf8 = utf8Signature(words, alphabet);
   if (utf8 !== null) {
     findings.push(utf8);
   }
 
-  const alphabet = alphabetFor(language);
   if (alphabet !== null) {
     const classified = Array.from(words).map(([word, stat]) => ({
       word,
