@@ -174,7 +174,7 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
       // it here so it is a synchronous cache hit on mount. Otherwise a cold-cache
       // fetch resolving mid-mount notifies the not-yet-mounted fiber (React
       // "state update on a component that hasn't mounted yet"), which flaked the
-      // route-smoke e2e on /knowledge/skills (and its twin /knowledge/prompts).
+      // route-smoke e2e.
       ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
 

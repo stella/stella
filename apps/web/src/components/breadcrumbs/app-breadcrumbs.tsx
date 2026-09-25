@@ -137,10 +137,6 @@ export const AppBreadcrumbs = () => {
     defineBreadcrumb(["/knowledge/playbooks"], <PlaybooksBreadcrumb />),
     defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
     defineBreadcrumb(
-      ["/knowledge/prompts"],
-      <BreadcrumbItem>{t("knowledge.sections.prompts.title")}</BreadcrumbItem>,
-    ),
-    defineBreadcrumb(
       ["/knowledge/tools"],
       <BreadcrumbLink to="/knowledge/tools">
         {t("knowledge.sections.tools.title")}

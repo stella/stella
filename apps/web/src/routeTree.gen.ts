@@ -48,8 +48,6 @@ import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
 import { Route as ProtectedKnowledgePlaybooksRouteImport } from './routes/_protected.knowledge/playbooks'
-import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
-import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
 import { Route as ProtectedKnowledgeStylesRouteImport } from './routes/_protected.knowledge/styles'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected.knowledge/tools'
@@ -299,18 +297,6 @@ const ProtectedKnowledgePlaybooksRoute =
   ProtectedKnowledgePlaybooksRouteImport.update({
     id: '/playbooks',
     path: '/playbooks',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgePromptsRoute =
-  ProtectedKnowledgePromptsRouteImport.update({
-    id: '/prompts',
-    path: '/prompts',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgeSkillsRoute =
-  ProtectedKnowledgeSkillsRouteImport.update({
-    id: '/skills',
-    path: '/skills',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
 const ProtectedKnowledgeStylesRoute =
@@ -655,8 +641,6 @@ export interface FileRoutesByFullPath {
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
-  '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
-  '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
@@ -741,8 +725,6 @@ export interface FileRoutesByTo {
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
-  '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
-  '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
@@ -836,8 +818,6 @@ export interface FileRoutesById {
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/_protected/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
-  '/_protected/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
-  '/_protected/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/_protected/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/_protected/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
@@ -932,8 +912,6 @@ export interface FileRouteTypes {
     | '/knowledge/clauses'
     | '/knowledge/mcp'
     | '/knowledge/playbooks'
-    | '/knowledge/prompts'
-    | '/knowledge/skills'
     | '/knowledge/styles'
     | '/knowledge/templates'
     | '/knowledge/tools'
@@ -1018,8 +996,6 @@ export interface FileRouteTypes {
     | '/knowledge/clauses'
     | '/knowledge/mcp'
     | '/knowledge/playbooks'
-    | '/knowledge/prompts'
-    | '/knowledge/skills'
     | '/knowledge/styles'
     | '/knowledge/templates'
     | '/knowledge/tools'
@@ -1112,8 +1088,6 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/mcp'
     | '/_protected/knowledge/playbooks'
-    | '/_protected/knowledge/prompts'
-    | '/_protected/knowledge/skills'
     | '/_protected/knowledge/styles'
     | '/_protected/knowledge/templates'
     | '/_protected/knowledge/tools'
@@ -1464,20 +1438,6 @@ declare module '@tanstack/react-router' {
       path: '/playbooks'
       fullPath: '/knowledge/playbooks'
       preLoaderRoute: typeof ProtectedKnowledgePlaybooksRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/prompts': {
-      id: '/_protected/knowledge/prompts'
-      path: '/prompts'
-      fullPath: '/knowledge/prompts'
-      preLoaderRoute: typeof ProtectedKnowledgePromptsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/skills': {
-      id: '/_protected/knowledge/skills'
-      path: '/skills'
-      fullPath: '/knowledge/skills'
-      preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/styles': {
@@ -1940,8 +1900,6 @@ interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
   ProtectedKnowledgeMcpRoute: typeof ProtectedKnowledgeMcpRoute
   ProtectedKnowledgePlaybooksRoute: typeof ProtectedKnowledgePlaybooksRoute
-  ProtectedKnowledgePromptsRoute: typeof ProtectedKnowledgePromptsRoute
-  ProtectedKnowledgeSkillsRoute: typeof ProtectedKnowledgeSkillsRoute
   ProtectedKnowledgeStylesRoute: typeof ProtectedKnowledgeStylesRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeToolsRoute: typeof ProtectedKnowledgeToolsRoute
@@ -1956,8 +1914,6 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
     ProtectedKnowledgeMcpRoute: ProtectedKnowledgeMcpRoute,
     ProtectedKnowledgePlaybooksRoute: ProtectedKnowledgePlaybooksRoute,
-    ProtectedKnowledgePromptsRoute: ProtectedKnowledgePromptsRoute,
-    ProtectedKnowledgeSkillsRoute: ProtectedKnowledgeSkillsRoute,
     ProtectedKnowledgeStylesRoute: ProtectedKnowledgeStylesRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeToolsRoute: ProtectedKnowledgeToolsRoute,

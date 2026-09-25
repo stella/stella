@@ -122,12 +122,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/knowledge/mcp", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=mcp" },
   }),
-  staticRoute("/knowledge/prompts", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  }),
-  staticRoute("/knowledge/skills", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  }),
   staticRoute("/knowledge/styles"),
   staticRoute("/knowledge/templates"),
   staticRoute("/knowledge/tools"),

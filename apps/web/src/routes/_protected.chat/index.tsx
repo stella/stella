@@ -634,7 +634,8 @@ function ChatIndex() {
         heading={
           <Link
             className={LANDING_SECTION_HEADING_CLASS}
-            to="/knowledge/prompts"
+            search={{ kind: "skill" }}
+            to="/knowledge/tools"
           >
             <BookOpenIcon className="size-4" />
             {t("chat.landing.prompts")}
