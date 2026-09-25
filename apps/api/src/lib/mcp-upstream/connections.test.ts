@@ -73,6 +73,7 @@ const connectionDependenciesTestDouble = {
 
 const {
   createMcpClientForConnection: createMcpClientForConnectionImpl,
+  loadActiveMcpConnectionsForUser,
   proxyMcpToolCall: proxyMcpToolCallImpl,
 } = await import("@/api/lib/mcp-upstream/connections");
 
@@ -543,5 +544,104 @@ describe("MCP upstream connection lifecycle", () => {
     expect(client).not.toBeNull();
     expect(state.refreshCalls).toBe(0);
     expect(lastAuthHeader()).toBe("Bearer decrypted-mcp_static_token");
+  });
+});
+
+describe("loading a user's active MCP connections", () => {
+  const storedRow = (overrides: Record<string, unknown>) => ({
+    accessTokenEncrypted: Buffer.from("access"),
+    accessTokenIv: Buffer.from("iv"),
+    allowedTools: null,
+    authType: "oauth2",
+    connectorId: toSafeId<"mcpConnector">("connector_1"),
+    description: "Registry connector",
+    displayName: "Registry",
+    expiresAt: null,
+    oauthAuthorizationServerUrl: "https://auth.example.com",
+    oauthClientId: "client-1",
+    oauthClientSecretEncrypted: null,
+    oauthClientSecretIv: null,
+    oauthResourceUrl: "https://mcp.example.com",
+    refreshTokenEncrypted: Buffer.from("refresh"),
+    refreshTokenIv: Buffer.from("iv"),
+    slug: "registry",
+    staticTokenEncrypted: null,
+    staticTokenIv: null,
+    url: "https://mcp.example.com/rpc",
+    userConnectionId: toSafeId<"mcpUserConnection">("conn_1"),
+    ...overrides,
+  });
+
+  // The first call is the listing read, answered with `rows`; every later call
+  // is a write, recorded through the update chain.
+  const makeListingSafeDb = (rows: unknown[]) => {
+    let calls = 0;
+    let updates = 0;
+    const chain: Record<string, (arg?: unknown) => unknown> = {
+      set: (value?: unknown) => {
+        state.dbSets.push(asTestRaw<Record<string, unknown>>(value));
+        return chain;
+      },
+      update: () => {
+        updates += 1;
+        return chain;
+      },
+      where: () => chain,
+    };
+    // SAFETY: test double; the listing read never reaches the callback, and
+    // the writes only call update().set().where().
+    const safeDb = asTestRaw<SafeDb>(async (fn: (tx: unknown) => unknown) => {
+      calls += 1;
+      if (calls === 1) {
+        return Result.ok(rows);
+      }
+      await fn(chain);
+      return Result.ok(undefined);
+    });
+    return { safeDb, updates: () => updates };
+  };
+
+  test("keeps usable rows in order and marks every malformed OAuth row in one write", async () => {
+    const listing = makeListingSafeDb([
+      storedRow({ userConnectionId: "conn_1" }),
+      storedRow({ userConnectionId: "conn_2", oauthClientId: null }),
+      storedRow({
+        authType: "none",
+        slug: "open",
+        userConnectionId: "conn_3",
+      }),
+      storedRow({
+        authType: "bearer",
+        slug: "bearer-without-token",
+        userConnectionId: "conn_4",
+      }),
+      storedRow({ userConnectionId: "conn_5", accessTokenIv: null }),
+    ]);
+
+    const loaded = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb: listing.safeDb,
+      userId,
+    });
+
+    expect(loaded.map((row) => `${row.userConnectionId}:${row.type}`)).toEqual([
+      "conn_1:oauth2",
+      "conn_3:none",
+    ]);
+    expect(listing.updates()).toBe(1);
+    expect(hasStatusSet("needs_reauth")).toBe(true);
+  });
+
+  test("writes nothing when every row is usable", async () => {
+    const listing = makeListingSafeDb([storedRow({})]);
+
+    const loaded = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb: listing.safeDb,
+      userId,
+    });
+
+    expect(loaded).toHaveLength(1);
+    expect(listing.updates()).toBe(0);
   });
 });

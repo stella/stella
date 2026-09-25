@@ -12,6 +12,8 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
@@ -306,14 +308,16 @@ export const backfillLegislationSearchIndex = async (
     return 0;
   };
 
+  // At most SEARCH_INDEX_CONCURRENCY tsvector upserts in flight, so the
+  // backfill never crowds out foreground queries on Postgres.
+  const results = await mapWithConcurrency({
+    items: rows,
+    limit: SEARCH_INDEX_CONCURRENCY,
+    operation: indexRow,
+  });
   let indexed = 0;
-  for (let i = 0; i < rows.length; i += SEARCH_INDEX_CONCURRENCY) {
-    const chunk = rows.slice(i, i + SEARCH_INDEX_CONCURRENCY);
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: each SEARCH_INDEX_CONCURRENCY chunk drains before the next so tsvector upserts don't overwhelm Postgres
-    const results = await Promise.all(chunk.map(indexRow));
-    for (const result of results) {
-      indexed += result;
-    }
+  for (const result of results) {
+    indexed += result;
   }
 
   return { found: rows.length, indexed };

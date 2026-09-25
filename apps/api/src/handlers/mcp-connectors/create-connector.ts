@@ -4,6 +4,10 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
+import {
+  connectorSlugCandidates,
+  firstFreeConnectorSlug,
+} from "@/api/handlers/mcp-connectors/connector-slug";
 import { discoverMcpIconUrl } from "@/api/handlers/mcp-connectors/icons";
 import { probeMcpServer } from "@/api/handlers/mcp-connectors/probe";
 import {
@@ -219,33 +223,32 @@ const nextSlug = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
 }) => {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential slug-collision probe: each attempt depends on the prior slug being taken
-    const existing = await safeDb((tx) =>
-      tx
-        .select({ id: mcpConnectors.id })
-        .from(mcpConnectors)
-        .where(
-          and(
-            eq(mcpConnectors.slug, slug),
-            or(
-              isNull(mcpConnectors.organizationId),
-              eq(mcpConnectors.organizationId, organizationId),
-            ),
+  const candidates = connectorSlugCandidates(base);
+  // One read for every candidate; distinct, because the same slug can be held
+  // by a global connector and this organization's own.
+  const taken = await safeDb((tx) =>
+    tx
+      .selectDistinct({ slug: mcpConnectors.slug })
+      .from(mcpConnectors)
+      .where(
+        and(
+          inArray(mcpConnectors.slug, candidates),
+          or(
+            isNull(mcpConnectors.organizationId),
+            eq(mcpConnectors.organizationId, organizationId),
           ),
-        )
-        .limit(1),
-    );
+        ),
+      )
+      .limit(candidates.length),
+  );
 
-    if (Result.isError(existing)) {
-      throw existing.error;
-    }
-
-    if (!existing.value.at(0)) {
-      return slug;
-    }
+  if (Result.isError(taken)) {
+    throw taken.error;
   }
 
-  return `${base}-${Bun.randomUUIDv7().slice(0, 8)}`;
+  return firstFreeConnectorSlug({
+    base,
+    candidates,
+    taken: new Set(taken.value.map((row) => row.slug)),
+  });
 };
