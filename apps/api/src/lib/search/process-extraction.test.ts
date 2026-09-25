@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/search/process-extraction";
 import type {
   ExecuteNativeExtractionDependencies,
+  NativeExtractionDatabase,
   ProcessExtractionDependencies,
 } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -109,27 +110,45 @@ const database = asTestRaw<
 const transactionDatabase = asTestRaw<Pick<typeof rootDb, "transaction">>({
   transaction: transactionMock,
 });
+// The one connection an extraction is handed; every database-backed
+// collaborator must receive this object and no other.
+const extractionDatabase = asTestRaw<NativeExtractionDatabase>({
+  transaction: transactionMock,
+  update: updateMock,
+});
+const recordLanguageMock = mock(async () => undefined);
 
-const persistNativeExtractionProjection: typeof persistNativeExtractionProjectionWithDatabase =
-  async (options) =>
-    await persistNativeExtractionProjectionWithDatabase(
-      options,
-      transactionDatabase,
-    );
+const persistNativeExtractionProjection = async (
+  options: Parameters<typeof persistNativeExtractionProjectionWithDatabase>[0],
+) =>
+  await persistNativeExtractionProjectionWithDatabase(
+    options,
+    transactionDatabase,
+  );
+
+const persistProjectionSpy = mock(
+  persistNativeExtractionProjectionWithDatabase,
+);
 
 const executeDependencies = {
   extractText: extractFileTextResultMock,
-  persistProjection: persistNativeExtractionProjection,
+  persistProjection: persistProjectionSpy,
+  recordLanguage: recordLanguageMock,
   requestAutomaticOcr: requestAutomaticDocumentOcrMock,
   restoreManualOcr: restoreManualOcrRunAfterProjectionLossMock,
 } satisfies ExecuteNativeExtractionDependencies;
 
-const executeNativeExtraction: typeof executeNativeExtractionWithDependencies =
-  async (input) =>
-    await executeNativeExtractionWithDependencies({
-      ...input,
-      dependencies: executeDependencies,
-    });
+const executeNativeExtraction = async (
+  input: Omit<
+    Parameters<typeof executeNativeExtractionWithDependencies>[0],
+    "database" | "dependencies"
+  >,
+) =>
+  await executeNativeExtractionWithDependencies({
+    ...input,
+    database: extractionDatabase,
+    dependencies: executeDependencies,
+  });
 
 const processExtraction: typeof processExtractionWithDependencies = async (
   targetEntityId,
@@ -224,6 +243,8 @@ beforeEach(() => {
   );
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
+  recordLanguageMock.mockClear();
+  persistProjectionSpy.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
 });

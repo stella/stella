@@ -172,7 +172,7 @@ export const persistNativeExtractionProjection = async (
     sourceSha256Hex,
     workspaceId,
   }: NativeExtractionProjectionOptions,
-  database: Pick<typeof rootDb, "transaction"> = rootDb,
+  database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
   await database.transaction(async (tx) => {
     // Manual OCR request and projection transactions take this same lock first.
@@ -289,9 +289,21 @@ type NativeExtractionRun = Pick<
   | "workspaceId"
 >;
 
+/**
+ * The worker's connection. Every database-backed step of one extraction
+ * (projection, language stamp, OCR request and restore) runs on it, so none
+ * of them reaches for a connection of its own.
+ */
+export type NativeExtractionDatabase = Pick<
+  typeof rootDb,
+  "transaction" | "update"
+>;
+
 type RecordDocxVersionLanguageOptions = {
   buffer: ArrayBuffer;
+  database: NativeExtractionDatabase;
   extractionMimeType: string;
+  recordLanguage: ExecuteNativeExtractionDependencies["recordLanguage"];
   run: NativeExtractionRun;
   text: string | null;
 };
@@ -310,7 +322,9 @@ type RecordDocxVersionLanguageOptions = {
  */
 const recordDocxVersionLanguage = async ({
   buffer,
+  database,
   extractionMimeType,
+  recordLanguage,
   run,
   text,
 }: RecordDocxVersionLanguageOptions): Promise<void> => {
@@ -325,7 +339,7 @@ const recordDocxVersionLanguage = async ({
       if (language === null) {
         return;
       }
-      await recordEntityVersionDetectedLanguage(rootDb, {
+      await recordLanguage(database, {
         entityVersionId: run.entityVersionId,
         workspaceId: run.workspaceId,
         language,
@@ -339,12 +353,14 @@ const recordDocxVersionLanguage = async ({
 };
 
 export const executeNativeExtraction = async ({
+  database,
   fileField,
   lifecycleSignal,
   readSource = readStoredFile,
   run,
   dependencies = EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES,
 }: {
+  database: NativeExtractionDatabase;
   fileField: Extract<FieldContent, { type: "file" }>;
   lifecycleSignal: AbortSignal;
   readSource?: (input: {
@@ -358,6 +374,7 @@ export const executeNativeExtraction = async ({
   const {
     extractText,
     persistProjection,
+    recordLanguage,
     requestAutomaticOcr,
     restoreManualOcr,
   } = dependencies;
@@ -392,31 +409,37 @@ export const executeNativeExtraction = async ({
   const persistedText = text ?? "";
   const encrypted = await encryptContent(run.organizationId, persistedText);
   lifecycleSignal.throwIfAborted();
-  const persistenceOutcome = await persistProjection({
-    charCount: persistedText.length,
-    ciphertext: encrypted.ciphertext,
-    entityId: run.entityId,
-    entityVersionId: run.entityVersionId,
-    fieldId: run.fieldId,
-    iv: encrypted.iv,
-    organizationId: run.organizationId,
-    sourceFileId: run.sourceFileId,
-    sourceSha256Hex: run.sourceSha256Hex,
-    workspaceId: run.workspaceId,
-  });
+  const persistenceOutcome = await persistProjection(
+    {
+      charCount: persistedText.length,
+      ciphertext: encrypted.ciphertext,
+      entityId: run.entityId,
+      entityVersionId: run.entityVersionId,
+      fieldId: run.fieldId,
+      iv: encrypted.iv,
+      organizationId: run.organizationId,
+      sourceFileId: run.sourceFileId,
+      sourceSha256Hex: run.sourceSha256Hex,
+      workspaceId: run.workspaceId,
+    },
+    database,
+  );
   if (persistenceOutcome === "source_cancelled") {
     return persistenceOutcome;
   }
 
   await recordDocxVersionLanguage({
     buffer,
+    database,
     extractionMimeType: source.extractionMimeType,
+    recordLanguage,
     run,
     text,
   });
 
   if (source.extractionMimeType === PDF_MIME_TYPE) {
     await restoreManualOcr({
+      db: database,
       entityId: run.entityId,
       entityVersionId: run.entityVersionId,
       fieldId: run.fieldId,
@@ -433,6 +456,7 @@ export const executeNativeExtraction = async ({
 
   if (text === null && source.extractionMimeType === PDF_MIME_TYPE) {
     await requestAutomaticOcr({
+      db: database,
       entityId: run.entityId,
       entityVersionId: run.entityVersionId,
       fieldId: run.fieldId,
@@ -446,28 +470,26 @@ export const executeNativeExtraction = async ({
   return persistenceOutcome;
 };
 
+/**
+ * The collaborators of one extraction. Each database-backed one receives the
+ * extraction's `database` from `executeNativeExtraction`; none binds a
+ * connection of its own.
+ */
 export type ExecuteNativeExtractionDependencies = {
   extractText: typeof extractFileTextResult;
   persistProjection: typeof persistNativeExtractionProjection;
-  requestAutomaticOcr: (
-    input: Omit<Parameters<typeof requestAutomaticDocumentOcr>[0], "db">,
-  ) => Promise<void>;
-  restoreManualOcr: (
-    input: Omit<
-      Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0],
-      "db"
-    >,
-  ) => Promise<void>;
+  recordLanguage: typeof recordEntityVersionDetectedLanguage;
+  requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
+  restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
 };
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
     extractText: extractFileTextResult,
     persistProjection: persistNativeExtractionProjection,
-    requestAutomaticOcr: async (input) =>
-      await requestAutomaticDocumentOcr({ ...input, db: rootDb }),
-    restoreManualOcr: async (input) =>
-      await restoreManualOcrRunAfterProjectionLoss({ ...input, db: rootDb }),
+    recordLanguage: recordEntityVersionDetectedLanguage,
+    requestAutomaticOcr: requestAutomaticDocumentOcr,
+    restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
   };
 
 /**
