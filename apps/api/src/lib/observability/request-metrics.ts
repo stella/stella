@@ -1,6 +1,6 @@
 import { Temporal } from "@stll/time";
 
-import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 
 /**
  * Per-request latency, split by request class, emitted as a CloudWatch
@@ -47,8 +47,10 @@ const writeMetricLine = (record: object): void => {
     return;
   }
   // Only deployed environments ship logs to CloudWatch; locally this
-  // would be noise on the dev server's stdout.
-  if (env.isDev) {
+  // would be noise on the dev server's stdout. The base environment is
+  // enough: capture reaches this module, and a worker that captures must not
+  // validate the whole API environment.
+  if (envBase.isDev) {
     return;
   }
   process.stdout.write(`${line}\n`);
