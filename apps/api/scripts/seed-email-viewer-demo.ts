@@ -13,7 +13,6 @@ import {
   member as authMember,
   session as authSession,
 } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
 import {
   entities,
   entityVersions,
@@ -26,6 +25,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -38,28 +38,33 @@ const EMAIL_QA_MATTER_NAME = "Email Viewer QA";
 const EMAIL_QA_MATTER_REFERENCE = "DEV/EMAIL";
 const IV_BYTES = 12;
 
+const db = openMaintenanceDb({ readOnly: false });
+
 const resolveTarget = async () => {
-  const activeSessions = await rootDb
-    .select({
-      organizationId: authMember.organizationId,
-      userId: authSession.userId,
-    })
-    .from(authSession)
-    .innerJoin(
-      authMember,
-      and(
-        eq(authMember.userId, authSession.userId),
-        eq(authMember.organizationId, authSession.activeOrganizationId),
-      ),
-    )
-    .where(
-      and(
-        isNotNull(authSession.activeOrganizationId),
-        gt(authSession.expiresAt, new Date()),
-      ),
-    )
-    .orderBy(desc(authSession.updatedAt))
-    .limit(1);
+  const activeSessions = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({
+          organizationId: authMember.organizationId,
+          userId: authSession.userId,
+        })
+        .from(authSession)
+        .innerJoin(
+          authMember,
+          and(
+            eq(authMember.userId, authSession.userId),
+            eq(authMember.organizationId, authSession.activeOrganizationId),
+          ),
+        )
+        .where(
+          and(
+            isNotNull(authSession.activeOrganizationId),
+            gt(authSession.expiresAt, new Date()),
+          ),
+        )
+        .orderBy(desc(authSession.updatedAt))
+        .limit(1),
+  );
   const activeSession = activeSessions.at(0);
   const activeOrganizationIdValue = activeSession?.organizationId;
   if (!activeSession || !activeOrganizationIdValue) {
@@ -73,36 +78,39 @@ const resolveTarget = async () => {
 
   const explicitWorkspaceId =
     process.env["STELLA_SEED_EMAIL_WORKSPACE_ID"]?.trim();
-  const workspaceRows = await rootDb
-    .select({
-      id: workspaces.id,
-      organizationId: workspaces.organizationId,
-      name: workspaces.name,
-    })
-    .from(workspaces)
-    .innerJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.workspaceId, workspaces.id),
-        eq(workspaceMembers.userId, activeSession.userId),
-      ),
-    )
-    .where(
-      and(
-        ne(workspaces.status, "deleting"),
-        explicitWorkspaceId
-          ? and(
-              eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),
-              eq(workspaces.organizationId, activeOrganizationId),
-            )
-          : and(
-              eq(workspaces.name, EMAIL_QA_MATTER_NAME),
-              eq(workspaces.organizationId, activeOrganizationId),
-            ),
-      ),
-    )
-    .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
-    .limit(1);
+  const workspaceRows = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+          name: workspaces.name,
+        })
+        .from(workspaces)
+        .innerJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, workspaces.id),
+            eq(workspaceMembers.userId, activeSession.userId),
+          ),
+        )
+        .where(
+          and(
+            ne(workspaces.status, "deleting"),
+            explicitWorkspaceId
+              ? and(
+                  eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),
+                  eq(workspaces.organizationId, activeOrganizationId),
+                )
+              : and(
+                  eq(workspaces.name, EMAIL_QA_MATTER_NAME),
+                  eq(workspaces.organizationId, activeOrganizationId),
+                ),
+          ),
+        )
+        .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
+        .limit(1),
+  );
   const existingWorkspace = workspaceRows.at(0);
   if (!existingWorkspace && explicitWorkspaceId) {
     panic("The requested matter is not accessible in the active organization.");
@@ -116,7 +124,7 @@ const resolveTarget = async () => {
     name: EMAIL_QA_MATTER_NAME,
   };
   if (!existingWorkspace) {
-    await rootDb.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const insertedWorkspaces = await tx
         .insert(workspaces)
         .values({
@@ -145,10 +153,13 @@ const resolveTarget = async () => {
     });
   }
 
-  const filePropertyRows = await rootDb
-    .select({ id: properties.id, content: properties.content })
-    .from(properties)
-    .where(eq(properties.workspaceId, workspace.id));
+  const filePropertyRows = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({ id: properties.id, content: properties.content })
+        .from(properties)
+        .where(eq(properties.workspaceId, workspace.id)),
+  );
   const existingFileProperty = filePropertyRows.find(
     ({ content }) => content.type === "file",
   );
@@ -158,26 +169,32 @@ const resolveTarget = async () => {
       id: seedId<"property">(`email-viewer-demo-${workspace.id}-file-property`),
     } as const);
   if (!existingFileProperty) {
-    await rootDb.insert(properties).values({
-      id: fileProperty.id,
-      workspaceId: workspace.id,
-      name: "Documents",
-      status: "fresh",
-      content: { version: 1, type: "file" },
-      tool: { version: 1, type: "manual-input" },
-      system: true,
-      kinds: ["document"],
-    });
+    await db.transaction(
+      async (tx) =>
+        await tx.insert(properties).values({
+          id: fileProperty.id,
+          workspaceId: workspace.id,
+          name: "Documents",
+          status: "fresh",
+          content: { version: 1, type: "file" },
+          tool: { version: 1, type: "manual-input" },
+          system: true,
+          kinds: ["document"],
+        }),
+    );
   }
 
   const defaultViews = buildDefaultViewRows({
     workspaceId: workspace.id,
     filePropertyId: fileProperty.id,
   });
-  const existingViews = await rootDb
-    .select({ name: workspaceViews.name, layout: workspaceViews.layout })
-    .from(workspaceViews)
-    .where(eq(workspaceViews.workspaceId, workspace.id));
+  const existingViews = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({ name: workspaceViews.name, layout: workspaceViews.layout })
+        .from(workspaceViews)
+        .where(eq(workspaceViews.workspaceId, workspace.id)),
+  );
   const missingDefaultViews = defaultViews.filter(
     (defaultView) =>
       !existingViews.some(
@@ -185,7 +202,9 @@ const resolveTarget = async () => {
       ),
   );
   if (missingDefaultViews.length > 0) {
-    await rootDb.insert(workspaceViews).values(missingDefaultViews);
+    await db.transaction(
+      async (tx) => await tx.insert(workspaceViews).values(missingDefaultViews),
+    );
   }
 
   return {
@@ -222,37 +241,46 @@ const seedEmailViewerDemo = async () => {
       .digest("hex");
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 
-    await rootDb
-      .insert(entities)
-      .values({
-        id: entityId,
-        workspaceId: target.workspaceId,
-        kind: "document",
-        name: fileName,
-        displayName: fileName,
-        createdBy: target.userId,
-        lastEditedBy: target.userId,
-        createdAt,
-        updatedAt: createdAt,
-      })
-      .onConflictDoUpdate({
-        target: entities.id,
-        set: { name: fileName, displayName: fileName },
-      });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(entities)
+          .values({
+            id: entityId,
+            workspaceId: target.workspaceId,
+            kind: "document",
+            name: fileName,
+            displayName: fileName,
+            createdBy: target.userId,
+            lastEditedBy: target.userId,
+            createdAt,
+            updatedAt: createdAt,
+          })
+          .onConflictDoUpdate({
+            target: entities.id,
+            set: { name: fileName, displayName: fileName },
+          }),
+    );
 
-    await rootDb
-      .insert(entityVersions)
-      .values({
-        id: entityVersionId,
-        workspaceId: target.workspaceId,
-        entityId,
-        createdBy: target.userId,
-      })
-      .onConflictDoNothing();
-    await rootDb
-      .update(entities)
-      .set({ currentVersionId: entityVersionId })
-      .where(eq(entities.id, entityId));
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(entityVersions)
+          .values({
+            id: entityVersionId,
+            workspaceId: target.workspaceId,
+            entityId,
+            createdBy: target.userId,
+          })
+          .onConflictDoNothing(),
+    );
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .update(entities)
+          .set({ currentVersionId: entityVersionId })
+          .where(eq(entities.id, entityId)),
+    );
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
     await writeS3ObjectWithRetry({
@@ -275,17 +303,23 @@ const seedEmailViewerDemo = async () => {
       thumbnailFileId: null,
       thumbnailDerivative: { status: "not-required" },
     } as const satisfies FieldContent;
-    await rootDb
-      .insert(fields)
-      .values({
-        id: fieldId,
-        workspaceId: target.workspaceId,
-        propertyId: target.filePropertyId,
-        entityVersionId,
-        fileId,
-        content: fileContent,
-      })
-      .onConflictDoUpdate({ target: fields.id, set: { content: fileContent } });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(fields)
+          .values({
+            id: fieldId,
+            workspaceId: target.workspaceId,
+            propertyId: target.filePropertyId,
+            entityVersionId,
+            fileId,
+            content: fileContent,
+          })
+          .onConflictDoUpdate({
+            target: fields.id,
+            set: { content: fileContent },
+          }),
+    );
 
     const extractedText = parsedEmailToText(
       await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
@@ -294,35 +328,38 @@ const seedEmailViewerDemo = async () => {
       ciphertext: Buffer.from(extractedText, "utf-8"),
       iv: Buffer.alloc(IV_BYTES),
     };
-    await rootDb
-      .insert(extractedContent)
-      .values({
-        entityId,
-        organizationId: target.organizationId,
-        workspaceId: target.workspaceId,
-        sourceEntityVersionId: entityVersionId,
-        sourceFieldId: fieldId,
-        sourceFileId: fileId,
-        sourceSha256Hex: sha256Hex,
-        ciphertext: extractionEnvelope.ciphertext,
-        iv: extractionEnvelope.iv,
-        charCount: extractedText.length,
-        language: null,
-        extractedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: extractedContent.entityId,
-        set: {
-          sourceEntityVersionId: entityVersionId,
-          sourceFieldId: fieldId,
-          sourceFileId: fileId,
-          sourceSha256Hex: sha256Hex,
-          ciphertext: extractionEnvelope.ciphertext,
-          iv: extractionEnvelope.iv,
-          charCount: extractedText.length,
-          extractedAt: new Date(),
-        },
-      });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(extractedContent)
+          .values({
+            entityId,
+            organizationId: target.organizationId,
+            workspaceId: target.workspaceId,
+            sourceEntityVersionId: entityVersionId,
+            sourceFieldId: fieldId,
+            sourceFileId: fileId,
+            sourceSha256Hex: sha256Hex,
+            ciphertext: extractionEnvelope.ciphertext,
+            iv: extractionEnvelope.iv,
+            charCount: extractedText.length,
+            language: null,
+            extractedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: extractedContent.entityId,
+            set: {
+              sourceEntityVersionId: entityVersionId,
+              sourceFieldId: fieldId,
+              sourceFileId: fileId,
+              sourceSha256Hex: sha256Hex,
+              ciphertext: extractionEnvelope.ciphertext,
+              iv: extractionEnvelope.iv,
+              charCount: extractedText.length,
+              extractedAt: new Date(),
+            },
+          }),
+    );
     await upsertSearchDocument(entityId);
   }
 

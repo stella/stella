@@ -6,6 +6,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { detached } from "@/api/lib/detached";
@@ -15,6 +16,10 @@ import {
   ensureEntityDeletionEffectChunks,
   failEntityDeletionEffectChunk,
   listRecoverableEntityDeletionEffectRequestIds,
+} from "@/api/lib/entity-deletion-effect-store";
+import type {
+  EntityDeletionEffectClaim,
+  EntityDeletionEffectDb,
 } from "@/api/lib/entity-deletion-effect-store";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
@@ -40,22 +45,36 @@ type EntityDeletionCleanupJobData = {
 };
 
 type EntityDeletionCleanupRequestDeps = {
-  claimChunk: typeof claimNextEntityDeletionEffectChunk;
-  completeChunk: typeof completeEntityDeletionEffectChunk;
+  claimChunk: (
+    requestId: SafeId<"entityDeletionCleanupRequest">,
+  ) => Promise<EntityDeletionEffectClaim | null>;
+  completeChunk: (claim: EntityDeletionEffectClaim) => Promise<boolean>;
   deleteS3Keys: typeof deleteS3Keys;
-  ensureChunks: typeof ensureEntityDeletionEffectChunks;
-  failChunk: typeof failEntityDeletionEffectChunk;
+  ensureChunks: (
+    requestId: SafeId<"entityDeletionCleanupRequest">,
+  ) => Promise<number>;
+  failChunk: (
+    claim: EntityDeletionEffectClaim,
+    error: Error,
+  ) => Promise<boolean>;
   storageDeleteTimeoutMs: number;
 };
 
-const defaultCleanupRequestDeps: EntityDeletionCleanupRequestDeps = {
-  claimChunk: claimNextEntityDeletionEffectChunk,
-  completeChunk: completeEntityDeletionEffectChunk,
+/** The effect store bound to the worker's connection. */
+const createCleanupRequestDeps = (
+  db: EntityDeletionEffectDb,
+): EntityDeletionCleanupRequestDeps => ({
+  claimChunk: async (requestId) =>
+    await claimNextEntityDeletionEffectChunk(requestId, db),
+  completeChunk: async (claim) =>
+    await completeEntityDeletionEffectChunk(claim, db),
   deleteS3Keys,
-  ensureChunks: ensureEntityDeletionEffectChunks,
-  failChunk: failEntityDeletionEffectChunk,
+  ensureChunks: async (requestId) =>
+    await ensureEntityDeletionEffectChunks(requestId, db),
+  failChunk: async (claim, error) =>
+    await failEntityDeletionEffectChunk(claim, error, db),
   storageDeleteTimeoutMs: STORAGE_DELETE_TIMEOUT_MS,
-};
+});
 
 const getQueue = createLazyBullMqQueue<EntityDeletionCleanupJobData>({
   name: QUEUE_NAME,
@@ -169,7 +188,7 @@ const drainEntityDeletionEffects = async ({
 
 export const processEntityDeletionCleanupRequest = async (
   requestId: SafeId<"entityDeletionCleanupRequest">,
-  deps: EntityDeletionCleanupRequestDeps = defaultCleanupRequestDeps,
+  deps: EntityDeletionCleanupRequestDeps,
 ): Promise<void> => {
   await deps.ensureChunks(requestId);
   await drainEntityDeletionEffects({
@@ -240,20 +259,27 @@ export const deliverEntityDeletionCleanupCandidates = async ({
   }
 };
 
-export const enqueuePendingEntityDeletionCleanupRequests =
-  async (): Promise<number> => {
-    const requestIds = await listRecoverableEntityDeletionEffectRequestIds();
-    await Promise.all(
-      requestIds.map(async (id) => await enqueueEntityDeletionCleanup(id)),
-    );
-    return requestIds.length;
-  };
+export const enqueuePendingEntityDeletionCleanupRequests = async (
+  db: EntityDeletionEffectDb,
+): Promise<number> => {
+  const requestIds = await listRecoverableEntityDeletionEffectRequestIds(db);
+  await Promise.all(
+    requestIds.map(async (id) => await enqueueEntityDeletionCleanup(id)),
+  );
+  return requestIds.length;
+};
 
-export const initEntityDeletionCleanupWorker = () => {
+export const initEntityDeletionCleanupWorker = ({
+  db,
+}: BullMqWorkerContext) => {
+  const cleanupRequestDeps = createCleanupRequestDeps(db);
   const worker = new Worker<EntityDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processEntityDeletionCleanupRequest(job.data.requestId);
+      await processEntityDeletionCleanupRequest(
+        job.data.requestId,
+        cleanupRequestDeps,
+      );
     },
     {
       connection: createBullMqConnection(),
@@ -275,7 +301,7 @@ export const initEntityDeletionCleanupWorker = () => {
 
   const reconcile = createEntityDeletionCleanupReconciler({
     run: async () => {
-      await enqueuePendingEntityDeletionCleanupRequests();
+      await enqueuePendingEntityDeletionCleanupRequests(db);
     },
     onError: (error) => {
       captureError(error);

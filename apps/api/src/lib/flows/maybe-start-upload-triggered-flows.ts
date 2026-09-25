@@ -10,7 +10,10 @@ import {
   deriveFileExtension,
   fileUploadTriggerMatches,
 } from "@/api/lib/flows/flow-trigger-logic";
-import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
+import {
+  automatedFlowRunDependencies,
+  startAutomatedFlowRun,
+} from "@/api/lib/flows/start-automated-flow-run";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -84,6 +87,7 @@ export const maybeStartUploadTriggeredFlows = async ({
   }
 
   const extension = deriveFileExtension(fileName);
+  const dependencies = automatedFlowRunDependencies(rootDb);
 
   for (const definition of definitionsResult.value) {
     if (definition.trigger.type !== "file-upload") {
@@ -99,19 +103,22 @@ export const maybeStartUploadTriggeredFlows = async ({
       continue;
     }
 
-    await startAutomatedFlowRun({
-      definitionId: definition.id,
-      organizationId,
-      workspaceId,
-      createdByUserId: definition.createdByUserId,
-      triggerSource: { type: "file-upload", entityId },
-      inputEntityIds: [entityId],
-      enqueueDelayMs: FLOW_UPLOAD_TRIGGER_DELAY_MS,
-      logContext: {
+    await startAutomatedFlowRun(
+      {
         definitionId: definition.id,
+        organizationId,
         workspaceId,
-        trigger: "file-upload",
+        createdByUserId: definition.createdByUserId,
+        triggerSource: { type: "file-upload", entityId },
+        inputEntityIds: [entityId],
+        enqueueDelayMs: FLOW_UPLOAD_TRIGGER_DELAY_MS,
+        logContext: {
+          definitionId: definition.id,
+          workspaceId,
+          trigger: "file-upload",
+        },
       },
-    });
+      dependencies,
+    );
   }
 };

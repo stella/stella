@@ -99,6 +99,11 @@ export const ensureSchedulerJob = async ({
     });
 };
 
+/** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
+export const removeSchedulerJob = async (id: string): Promise<void> => {
+  await rootDb.delete(schedulerJobs).where(eq(schedulerJobs.id, id));
+};
+
 const ensureOneShotSchedulerJob = async ({
   description,
   id,

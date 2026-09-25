@@ -16,13 +16,16 @@ export const RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK =
  * consumed.
  */
 export const recoverDocumentDeadlineScouts: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
-  const { count, hasMore } = await recoverDocumentDeadlineScoutDispatches();
+  const { count, hasMore } = await recoverDocumentDeadlineScoutDispatches({
+    database: db,
+  });
   logger.info("scheduler.document_deadline_scouts_recovered", {
     "documentDeadlineScouts.dispatched": count,
     "documentDeadlineScouts.hasMore": hasMore,

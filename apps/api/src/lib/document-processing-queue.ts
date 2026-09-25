@@ -23,7 +23,7 @@ import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -40,6 +40,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
   timestampCasToken,
@@ -227,6 +228,7 @@ const writeOcrSearchablePdfDerivative = async ({
 };
 
 const markRunCancelled = async (
+  database: typeof rootDb,
   runId: SafeId<"documentProcessingRun">,
   claimToken: string,
   cancellationCode:
@@ -234,7 +236,7 @@ const markRunCancelled = async (
     | "source_superseded"
     | "workspace_unavailable",
 ): Promise<boolean> => {
-  const cancelled = await rootDb
+  const cancelled = await database
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -314,14 +316,16 @@ export const createDocumentProcessingLeaseRenewal = ({
 
 const startDocumentProcessingLeaseHeartbeat = ({
   claimToken,
+  database,
   runId,
 }: {
   claimToken: string;
+  database: typeof rootDb;
   runId: SafeId<"documentProcessingRun">;
 }): DocumentProcessingLeaseHeartbeat => {
   const renew = createDocumentProcessingLeaseRenewal({
     renewLease: async () => {
-      await rootDb
+      await database
         .update(documentProcessingRuns)
         .set({
           claimedAt: new Date(),
@@ -356,17 +360,19 @@ const startDocumentProcessingLeaseHeartbeat = ({
 };
 
 const readCurrentDocumentSource = async ({
+  database,
   entityId,
   fieldId,
   organizationId,
   workspaceId,
 }: {
+  database: typeof rootDb;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 }): Promise<CurrentDocumentSource | null> => {
-  const rows = await rootDb
+  const rows = await database
     .select({
       content: fields.content,
       currentVersionId: entities.currentVersionId,
@@ -412,6 +418,7 @@ type OcrProjectionPersistenceOutcome =
 const persistOcrProjection = async ({
   claimToken,
   ciphertext,
+  database,
   iv,
   ocrPayloadCiphertext,
   ocrPayloadIv,
@@ -421,6 +428,7 @@ const persistOcrProjection = async ({
 }: {
   claimToken: string;
   ciphertext: Buffer;
+  database: typeof rootDb;
   iv: Buffer;
   ocrPayloadCiphertext: Buffer;
   ocrPayloadIv: Buffer;
@@ -428,7 +436,7 @@ const persistOcrProjection = async ({
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     const lockedRows = await tx
       .select({
         content: fields.content,
@@ -634,15 +642,17 @@ const persistOcrProjection = async ({
 
 const completeDocumentProcessingRun = async ({
   claimToken,
+  database,
   run,
 }: {
   claimToken: string;
+  database: typeof rootDb;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
   const shouldDispatchDeadlineScout = documentScoutsEnabled(
     envDocumentProcessingWorker,
   );
-  const completed = await rootDb
+  const completed = await database
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -706,12 +716,13 @@ export const indexDocumentProjectionAtJobBoundary = async ({
 };
 
 export const processDocumentProcessingRun = async (
+  database: typeof rootDb,
   runId: SafeId<"documentProcessingRun">,
   lifecycleSignal: AbortSignal,
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await rootDb.transaction(async (tx) => {
+  const run = await database.transaction(async (tx) => {
     const runRows = await tx
       .select({
         entityId: documentProcessingRuns.entityId,
@@ -883,17 +894,18 @@ export const processDocumentProcessingRun = async (
 
   const heartbeat = startDocumentProcessingLeaseHeartbeat({
     claimToken,
+    database,
     runId: run.id,
   });
   const processingResult = await Result.tryPromise({
     try: async () => {
       lifecycleSignal.throwIfAborted();
       if (run.kind === "ocr") {
-        const settings = await rootDb.query.organizationSettings.findFirst({
+        const settings = await database.query.organizationSettings.findFirst({
           where: { organizationId: { eq: run.organizationId } },
           columns: { documentProcessingMode: true },
         });
-        const currentRuns = await rootDb
+        const currentRuns = await database
           .select({ requestSource: documentProcessingRuns.requestSource })
           .from(documentProcessingRuns)
           .where(eq(documentProcessingRuns.id, run.id))
@@ -905,6 +917,7 @@ export const processDocumentProcessingRun = async (
           settings?.documentProcessingMode !== "searchable-text"
         ) {
           const cancelled = await markRunCancelled(
+            database,
             run.id,
             claimToken,
             "policy_disabled",
@@ -913,7 +926,7 @@ export const processDocumentProcessingRun = async (
             return;
           }
 
-          const promotedRuns = await rootDb
+          const promotedRuns = await database
             .select({
               claimedBy: documentProcessingRuns.claimedBy,
               requestSource: documentProcessingRuns.requestSource,
@@ -934,6 +947,7 @@ export const processDocumentProcessingRun = async (
       }
 
       const source = await readCurrentDocumentSource({
+        database,
         entityId: run.entityId,
         fieldId: run.fieldId,
         organizationId: run.organizationId,
@@ -942,7 +956,12 @@ export const processDocumentProcessingRun = async (
       switch (run.kind) {
         case "native-extraction": {
           if (!isCurrentNativeExtractionSource(run, source)) {
-            await markRunCancelled(run.id, claimToken, "source_superseded");
+            await markRunCancelled(
+              database,
+              run.id,
+              claimToken,
+              "source_superseded",
+            );
             return;
           }
           const extractionOutcome = await executeNativeExtraction({
@@ -963,7 +982,12 @@ export const processDocumentProcessingRun = async (
             case "preserved":
               break;
             case "source_cancelled":
-              await markRunCancelled(run.id, claimToken, "source_superseded");
+              await markRunCancelled(
+                database,
+                run.id,
+                claimToken,
+                "source_superseded",
+              );
               return;
             default:
               extractionOutcome satisfies never;
@@ -973,13 +997,19 @@ export const processDocumentProcessingRun = async (
           }
           lifecycleSignal.throwIfAborted();
           const persistedSource = await readCurrentDocumentSource({
+            database,
             entityId: run.entityId,
             fieldId: run.fieldId,
             organizationId: run.organizationId,
             workspaceId: run.workspaceId,
           });
           if (!isCurrentNativeExtractionSource(run, persistedSource)) {
-            await markRunCancelled(run.id, claimToken, "source_superseded");
+            await markRunCancelled(
+              database,
+              run.id,
+              claimToken,
+              "source_superseded",
+            );
             return;
           }
           await indexDocumentProjectionAtJobBoundary({
@@ -987,7 +1017,7 @@ export const processDocumentProcessingRun = async (
               await getSearchProvider().indexEntity(run.entityId),
           });
           lifecycleSignal.throwIfAborted();
-          await completeDocumentProcessingRun({ claimToken, run });
+          await completeDocumentProcessingRun({ claimToken, database, run });
           return;
         }
         case "ocr":
@@ -997,7 +1027,12 @@ export const processDocumentProcessingRun = async (
           panic(`Unhandled kind: ${String(run.kind)}`);
       }
       if (!isCurrentOcrSource({ run, source })) {
-        await markRunCancelled(run.id, claimToken, "source_superseded");
+        await markRunCancelled(
+          database,
+          run.id,
+          claimToken,
+          "source_superseded",
+        );
         return;
       }
 
@@ -1031,6 +1066,7 @@ export const processDocumentProcessingRun = async (
       const persistenceOutcome = await persistOcrProjection({
         claimToken,
         ciphertext: encrypted.ciphertext,
+        database,
         iv: encrypted.iv,
         ocrPayloadCiphertext: encryptedPayload.ciphertext,
         ocrPayloadIv: encryptedPayload.iv,
@@ -1070,7 +1106,7 @@ export const processDocumentProcessingRun = async (
       });
       lifecycleSignal.throwIfAborted();
 
-      await completeDocumentProcessingRun({ claimToken, run });
+      await completeDocumentProcessingRun({ claimToken, database, run });
     },
     catch: (cause) => cause,
   });
@@ -1083,11 +1119,12 @@ export const processDocumentProcessingRun = async (
       markFailed: async () =>
         markRunFailed({
           claimToken,
+          database,
           error: processingResult.error,
           run,
         }),
       returnToQueue: async () => {
-        await returnInterruptedRunToQueue({ claimToken, run });
+        await returnInterruptedRunToQueue({ claimToken, database, run });
       },
     });
     if (settlement === "unsettled") {
@@ -1123,15 +1160,17 @@ type MarkRunFailedOutcome = {
 
 const markRunFailed = async ({
   claimToken,
+  database,
   error,
   run,
 }: {
   claimToken: string;
+  database: typeof rootDb;
   error: unknown;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<"settled" | "unsettled"> => {
   const failureCode = errorCode(error);
-  const outcome = await rootDb.transaction(
+  const outcome = await database.transaction(
     async (tx): Promise<MarkRunFailedOutcome | null> => {
       const ownedRows = await tx
         .select({
@@ -1217,12 +1256,14 @@ const markRunFailed = async ({
 
 const returnInterruptedRunToQueue = async ({
   claimToken,
+  database,
   run,
 }: {
   claimToken: string;
+  database: typeof rootDb;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<void> => {
-  await rootDb
+  await database
     .update(documentProcessingRuns)
     .set({
       attemptCount: Math.max(0, run.attemptCount - 1),
@@ -1336,7 +1377,7 @@ const isSameNativeExtractionSource = (
 
 const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
-  database: typeof rootDb = rootDb,
+  database: typeof rootDb,
 ): Promise<SafeId<"documentProcessingRun">[]> => {
   if (candidates.length === 0) {
     return [];
@@ -1603,7 +1644,7 @@ export type DocumentProcessingReconciliationDependencies = {
  *  assembling the whole reconciliation set and a test can drive it with a
  *  stubbed queue. */
 type RecoverDocumentDeadlineScoutDispatchesOptions = {
-  database?: DocumentProcessingReconciliationDependencies["database"];
+  database: DocumentProcessingReconciliationDependencies["database"];
   enqueueDocumentDeadlineScout?: DocumentProcessingReconciliationDependencies["enqueueDocumentDeadlineScout"];
 };
 
@@ -1619,9 +1660,9 @@ type RecoverDocumentDeadlineScoutDispatchesOptions = {
  * the source run, so the two drivers converge rather than duplicating work.
  */
 export const recoverDocumentDeadlineScoutDispatches = async ({
-  database = rootDb,
+  database,
   enqueueDocumentDeadlineScout: enqueueScout = enqueueDocumentDeadlineScout,
-}: RecoverDocumentDeadlineScoutDispatchesOptions = {}): Promise<ReconciliationPhaseResult> => {
+}: RecoverDocumentDeadlineScoutDispatchesOptions): Promise<ReconciliationPhaseResult> => {
   const staleBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
   );
@@ -1931,18 +1972,18 @@ const updateQueuedRunSchedule = async ({
 };
 
 export const dispatchQueuedDocumentProcessingRuns = async ({
-  database = rootDb,
+  database,
   enqueue = enqueueDocumentProcessingRun,
   limit = RECONCILE_BATCH_SIZE,
   selection = QUEUED_OCR_SELECTION.ALL_DUE,
 }: {
-  database?: typeof rootDb;
+  database: typeof rootDb;
   enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
   selection?:
     | typeof QUEUED_OCR_SELECTION.ALL_DUE
     | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
-} = {}): Promise<{
+}): Promise<{
   attempted: number;
   hasMore: boolean;
   retryAt: Date | null;
@@ -2627,7 +2668,6 @@ const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 
 const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   broadcastWorkspaceResourceUpdated,
-  database: rootDb,
   enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
@@ -2638,7 +2678,7 @@ const DEFAULT_RECONCILIATION_DEPENDENCIES = {
     expectedCursor: SafeId<"field"> | null;
     nextCursor: SafeId<"field"> | null;
   }) => await writeRepairScanCursor(input),
-} satisfies DocumentProcessingReconciliationDependencies;
+} satisfies Omit<DocumentProcessingReconciliationDependencies, "database">;
 
 /** Total by type: a declared phase cannot exist without a producer. */
 const createReconciliationPhaseRunners = (
@@ -2730,10 +2770,14 @@ export const createDocumentProcessingReconciliationPhases = (
   }));
 };
 
-export const DOCUMENT_PROCESSING_RECONCILIATION_PHASES =
-  createDocumentProcessingReconciliationPhases(
-    DEFAULT_RECONCILIATION_DEPENDENCIES,
-  );
+/** The phases the worker runs, over the connection its host hands it. */
+export const createWorkerReconciliationPhases = (
+  database: typeof rootDb,
+): readonly ReconciliationPhase[] =>
+  createDocumentProcessingReconciliationPhases({
+    ...DEFAULT_RECONCILIATION_DEPENDENCIES,
+    database,
+  });
 
 /**
  * Whether the tick stopped short of draining every backlog. Each phase
@@ -2841,8 +2885,10 @@ export const handleDocumentProcessingReconcilePhaseFailure = (
 
 const reconcileDocumentProcessing = async ({
   onComplete,
+  phases,
 }: {
   onComplete: () => void;
+  phases: readonly ReconciliationPhase[];
 }): Promise<void> => {
   try {
     // Marks reconciliation unfinished before the first await, so the idle
@@ -2850,7 +2896,7 @@ const reconcileDocumentProcessing = async ({
     // long the tick runs or where a sample lands inside it.
     await reconciliationProgress.runTick(async () => {
       const results = await runDocumentProcessingReconciliationPhases({
-        phases: DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
+        phases,
         onPhaseError: handleDocumentProcessingReconcilePhaseFailure,
       });
       if (
@@ -2903,15 +2949,20 @@ export const abortDocumentProcessingWorkerBeforeClose = async ({
   await closeWorker();
 };
 
-export const initDocumentProcessingWorker = () => {
+export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
   const lifecycle = new AbortController();
   const ocrConfigured = isLocalDocumentOcrConfigured();
+  const reconciliationPhases = createWorkerReconciliationPhases(db);
 
   const worker = new Worker<DocumentProcessingJobData>(
     DOCUMENT_PROCESSING_QUEUE_NAME,
     async (job) => {
       try {
-        await processDocumentProcessingRun(job.data.runId, lifecycle.signal);
+        await processDocumentProcessingRun(
+          db,
+          job.data.runId,
+          lifecycle.signal,
+        );
       } catch (error) {
         handleDocumentProcessingFailure({ error, job });
         throw error;
@@ -2957,6 +3008,7 @@ export const initDocumentProcessingWorker = () => {
         onComplete: () => {
           reconciling = false;
         },
+        phases: reconciliationPhases,
       }),
       "document-processing.reconcile",
     );

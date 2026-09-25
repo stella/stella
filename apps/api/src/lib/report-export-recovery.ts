@@ -34,7 +34,7 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import type { ReportExportStatus } from "@/api/db/schema";
 import { reportExports } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -92,7 +92,7 @@ export type StuckExportJobQueue = {
 };
 
 type RecoverStuckReportExportsOptions = {
-  db?: Pick<typeof rootDb, "select" | "update">;
+  db: Pick<typeof rootDb, "select" | "update">;
   now?: Date;
   queue: StuckExportJobQueue;
 };
@@ -136,13 +136,13 @@ const hasLostItsJob = async (
 };
 
 /**
- * Janitor: mark every abandoned export failed. Runs cross-workspace via
- * `rootDb` (RLS-exempt internal infrastructure, like the workflow orphan
- * reconciler). Idempotent and safe to call repeatedly. Returns how many rows
+ * Janitor: mark every abandoned export failed. Runs cross-workspace on the
+ * scheduler's owner connection (RLS-exempt internal infrastructure, like the
+ * workflow orphan reconciler). Idempotent and safe to call repeatedly. Returns how many rows
  * it recovered.
  */
 export const recoverStuckReportExports = async ({
-  db = rootDb,
+  db,
   now = new Date(),
   queue,
 }: RecoverStuckReportExportsOptions): Promise<number> => {
