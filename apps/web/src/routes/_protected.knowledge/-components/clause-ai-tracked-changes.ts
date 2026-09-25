@@ -181,28 +181,33 @@ export const reviewResolutionStatus = (
   changed && hasPersistHandler ? "persisting" : "resolved";
 
 /**
- * Fires the persist of an accepted AI body, swallowing an unexpected
- * exception so this fire-and-forget call can never produce an unhandled
- * rejection. Unlike a naive `.then()` chain, this does NOT report the
- * "persisting" gate back to "resolved" on completion: `persist` owns that
- * signal itself (e.g. `ClauseBodyEditor.saveBody` calls
- * `onReviewStatusChange("resolved")` only once its POST actually succeeds,
- * after surfacing its own save-failed toast on error). A failed persist
- * therefore leaves the gate blocked exactly like "pending" — version-save
- * stays disabled — until a later successful persist lifts it: the body
- * editor's normal debounced/blur autosave retries the same call on the next
- * edit, or the user retries by blurring the (already editable) field again.
+ * Fires the persist of an accepted AI body and never rejects, so this
+ * fire-and-forget call can never produce an unhandled rejection. Unlike a
+ * naive `.then()` chain, this does NOT report the "persisting" gate back to
+ * "resolved" on completion: `persist` owns that signal itself (e.g.
+ * `ClauseBodyEditor.saveBody` calls `onReviewStatusChange("resolved")` only
+ * once its POST actually succeeds, after surfacing its own save-failed toast
+ * on an error response). A failed persist therefore leaves the gate blocked
+ * exactly like "pending" — version-save stays disabled — until a later
+ * successful persist lifts it: the body editor's normal debounced/blur
+ * autosave retries the same call on the next edit, or the user retries by
+ * blurring the (already editable) field again.
+ *
+ * A thrown persist error (e.g. the request never reached the server) goes to
+ * `reportFailure`, except an `AbortError`: that is a save superseded by a
+ * newer one, whose own outcome is the one the user sees.
  */
 export const settleReviewPersist = async (
   persist: () => Promise<void>,
+  reportFailure: (error: unknown) => void,
 ): Promise<void> => {
   try {
     await persist();
-  } catch {
-    // Unexpected persist exceptions surface their own toast inside
-    // `persist` (see the caller's save flow); swallow here purely so this
-    // fire-and-forget call never produces an unhandled rejection. The
-    // "persisting" gate stays blocked — only a successful persist lifts it.
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return;
+    }
+    reportFailure(error);
   }
 };
 
