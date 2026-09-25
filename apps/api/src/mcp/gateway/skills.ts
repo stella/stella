@@ -39,24 +39,18 @@ export const loadVisibleSkillTools = async ({
 }: {
   context: McpRequestContext;
 }): Promise<ResolvedSkillTool[]> => {
-  const skills = await listAvailableChatSkillMetadata({
-    organizationId: context.organizationId,
-    safeDb: context.safeDb,
-    userId: context.userId,
-  });
+  // A load fault propagates instead of `[]`, so a transient DB outage is not
+  // mistaken for "no skills": dispatch maps it to a retryable error and
+  // `tools/list` fails loudly rather than silently dropping skill tools.
+  const skills = throwOnLoadFault(
+    await listAvailableChatSkillMetadata({
+      organizationId: context.organizationId,
+      safeDb: context.safeDb,
+      userId: context.userId,
+    }),
+  );
 
-  if (Result.isError(skills)) {
-    captureError(skills.error, { source: "mcp-gateway-skills" });
-    // Propagate the load fault instead of `[]`, so a transient DB outage is not
-    // mistaken for "no skills": dispatch maps this to a retryable error and
-    // `tools/list` fails loudly rather than silently dropping skill tools.
-    throw new McpGatewayLoadError({
-      message: "Failed to load agent skills",
-      cause: skills.error,
-    });
-  }
-
-  return exposeSkillTools(skills.value);
+  return exposeSkillTools(skills);
 };
 
 export const resolveSkillTool = async ({
@@ -156,10 +150,10 @@ export const readSkillTool = async ({
 const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
   if (Result.isError(result)) {
     captureError(result.error, { source: "mcp-gateway-skills" });
-    // A load fault means the skill may still exist: dispatch answers a
+    // A load fault means the skills may still exist: dispatch answers a
     // retryable error rather than `unknown_tool`.
     throw new McpGatewayLoadError({
-      message: "Failed to load agent skill",
+      message: "Failed to load agent skills",
       cause: result.error,
     });
   }

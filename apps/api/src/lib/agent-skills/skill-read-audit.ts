@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 /** The agent surface that served a skill read. */
 export const SKILL_READ_SURFACE = {
@@ -56,6 +57,11 @@ type RecordSkillReadAuditOptions = {
   safeDb: SafeDb;
 };
 
+const SKILL_READ_AUDIT_SINK = failureSink({
+  event: "skill_read_audit.write_failed",
+  expected: [],
+});
+
 /**
  * Writes one skill-read audit event per read, in one statement. The reads
  * have already been served when this runs, so a failed write is captured
@@ -74,6 +80,6 @@ export const recordSkillReadAudit = async ({
       ),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "skill-read-audit" });
+    observeFailure(result.error, { sink: SKILL_READ_AUDIT_SINK });
   }
 };

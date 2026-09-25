@@ -39,7 +39,7 @@ const compareCodeUnits = (a: string, b: string): number => {
   return a > b ? 1 : 0;
 };
 
-export const sha256Hex = (text: string): string =>
+export const skillTextSha256 = (text: string): string =>
   new Bun.CryptoHasher("sha256").update(text).digest("hex");
 
 export const hashSkillContent = (content: SkillContent): string => {
@@ -91,7 +91,7 @@ export const hashSkillPackageContent = ({
   hashSkillContent({
     ...fields,
     resources: resources.map(({ content, path }) => ({
-      contentSha256: sha256Hex(content),
+      contentSha256: skillTextSha256(content),
       path,
     })),
   });

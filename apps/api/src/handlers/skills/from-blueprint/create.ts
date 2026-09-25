@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { sha256Hex } from "@/api/lib/agent-skills/content-hash";
+import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -56,7 +56,7 @@ const buildParsedBlueprint = (
     body,
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
-    entrypointHash: sha256Hex(blueprint.source),
+    entrypointHash: skillTextSha256(blueprint.source),
     license: metadata.license ?? null,
     metadata: { blueprintId: blueprint.id },
     name: metadata.name,

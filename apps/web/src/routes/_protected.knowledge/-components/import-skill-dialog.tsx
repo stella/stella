@@ -158,27 +158,25 @@ const ImportSkillDialogBody = ({
   const importSkills = useMutation({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
-    mutationFn: async () => {
+    mutationFn: async (source: SkillDiscovery) => {
       const response = await api.skills["import-urls"].post({
-        items: discovery
-          ? discovery.skills
-              .filter((skill) => selected.has(skill.sourceUrl))
-              .map((skill) => ({
-                integrity: skill.integrity,
-                sourceUrl: skill.sourceUrl,
-              }))
-          : [],
+        items: source.skills
+          .filter((skill) => selected.has(skill.sourceUrl))
+          .map((skill) => ({
+            integrity: skill.integrity,
+            sourceUrl: skill.sourceUrl,
+          })),
         scope,
       });
       return unwrapEden(response);
     },
-    onSuccess: (result) => {
+    onSuccess: (result, source) => {
       if (result.installed.length > 0) {
         onImported();
       }
       const skipped = listSkippedImportFiles({
         installed: result.installed,
-        skills: discovery?.skills ?? [],
+        skills: source.skills,
       });
       setSkippedFiles(skipped);
       if (result.failed.length === 0) {
@@ -464,26 +462,28 @@ const ImportSkillDialogBody = ({
             <p className="text-muted-foreground text-xs font-medium">
               {tSkills("skippedFiles", { count: skippedFiles.length })}
             </p>
-            <ScrollArea className="border-border max-h-60 rounded-lg border">
-              <ul className="flex flex-col">
-                {skippedFiles.map((file) => (
-                  <li
-                    className="flex flex-wrap items-baseline gap-x-2 px-3 py-2 text-xs"
-                    key={`${file.skillName} ${file.path}`}
-                  >
-                    <span className="text-foreground font-medium">
-                      <bdi>{file.skillName}</bdi>
-                    </span>
-                    <code dir="ltr">
-                      <bdi dir="ltr">{file.path}</bdi>
-                    </code>
-                    <span className="text-muted-foreground">
-                      {t(SKIPPED_FILE_REASON_MESSAGE_KEY[file.reason])}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </ScrollArea>
+            <div className="border-border overflow-hidden rounded-lg border">
+              <ScrollArea className="max-h-60">
+                <ul className="flex flex-col">
+                  {skippedFiles.map((file) => (
+                    <li
+                      className="flex flex-wrap items-baseline gap-x-2 px-3 py-2 text-xs"
+                      key={`${file.skillName} ${file.path}`}
+                    >
+                      <span className="text-foreground font-medium">
+                        <bdi>{file.skillName}</bdi>
+                      </span>
+                      <code dir="ltr">
+                        <bdi dir="ltr">{file.path}</bdi>
+                      </code>
+                      <span className="text-muted-foreground">
+                        {t(SKIPPED_FILE_REASON_MESSAGE_KEY[file.reason])}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            </div>
           </div>
         )}
       </DialogPanel>
@@ -497,7 +497,7 @@ const ImportSkillDialogBody = ({
         {discovery && discovery.skills.length > 0 && (
           <Button
             disabled={selected.size === 0 || busy}
-            onClick={() => importSkills.mutate()}
+            onClick={() => importSkills.mutate(discovery)}
             type="button"
           >
             {importSkills.isPending && (

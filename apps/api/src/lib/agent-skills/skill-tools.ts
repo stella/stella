@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import {
   RESOURCE_PATH_PATTERN,
@@ -58,7 +58,8 @@ type CreateSkillToolsProps = {
    */
   recordReadAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  skills: readonly SkillMetadata[];
+  /** The turn's skill catalog; absent when the caller loaded none. */
+  skills?: readonly SkillMetadata[] | undefined;
   userId: SafeId<"user">;
 };
 
@@ -87,7 +88,9 @@ export const createSkillTools = ({
       safeDb,
     });
   };
-  const availableSkillIds = new Set(skills.map((skill) => skill.name));
+  const availableSkillIds = new Set(
+    skills === undefined ? undefined : skills.map((skill) => skill.name),
+  );
   const activeSkillId = activeSkillContext?.id;
   const activeEditableSkillContext =
     toActiveEditableSkillContext(activeSkillContext);
@@ -102,7 +105,7 @@ export const createSkillTools = ({
       : {};
 
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
-  if (skills.length === 0 && !forValidation) {
+  if (availableSkillIds.size === 0 && !forValidation) {
     return {
       "load-skill": undefined,
       "read-skill-resource": undefined,
@@ -129,21 +132,16 @@ export const createSkillTools = ({
         skillName,
       });
 
-      const skillResult = await loadAvailableChatSkill({
-        activeSkillId,
-        organizationId,
-        safeDb,
-        skillName,
-        userId,
-      });
-      if (Result.isError(skillResult)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Skill could not be loaded.",
-          cause: skillResult.error,
-        });
-      }
-      const skill = skillResult.value;
+      const skill = unwrapSkillRead(
+        await loadAvailableChatSkill({
+          activeSkillId,
+          organizationId,
+          safeDb,
+          skillName,
+          userId,
+        }),
+        "Skill could not be loaded.",
+      );
       if (skill === null) {
         throw unavailableSkillError(skillName);
       }
@@ -186,23 +184,17 @@ export const createSkillTools = ({
         skillName,
       });
 
-      const readResult = await readAvailableChatSkillResource({
-        activeSkillId,
-        organizationId,
-        path,
-        safeDb,
-        skillName,
-        userId,
-      });
-      if (Result.isError(readResult)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Skill resource could not be read.",
-          cause: readResult.error,
-        });
-      }
-
-      const read = readResult.value;
+      const read = unwrapSkillRead(
+        await readAvailableChatSkillResource({
+          activeSkillId,
+          organizationId,
+          path,
+          safeDb,
+          skillName,
+          userId,
+        }),
+        "Skill resource could not be read.",
+      );
       switch (read.status) {
         case SKILL_RESOURCE_READ_STATUS.skillNotFound:
           throw unavailableSkillError(skillName);
@@ -718,6 +710,21 @@ const inferSkillResourceMimeType = (path: string): string => {
   }
   const ext = filename.slice(lastDot + 1).toLowerCase();
   return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
+};
+
+/** A skill read that failed in the database is a server defect for the tool. */
+const unwrapSkillRead = <T>(
+  result: Result<T, SafeDbError>,
+  message: string,
+): T => {
+  if (Result.isError(result)) {
+    throw new ChatToolError({
+      kind: "server-defect",
+      message,
+      cause: result.error,
+    });
+  }
+  return result.value;
 };
 
 const unavailableSkillError = (skillName: string) =>

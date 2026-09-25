@@ -1514,16 +1514,18 @@ export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
   return url.toString();
 };
 
+const parseSkillUrl = (rawUrl: string): URL => {
+  if (!URL.canParse(rawUrl)) {
+    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
+  }
+  return new URL(rawUrl);
+};
+
 const parseGithubSkillPath = async (
   rawUrl: string,
   budget?: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
-  }
+  const url = parseSkillUrl(rawUrl);
 
   if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
     return null;
@@ -1571,12 +1573,7 @@ const parseGithubDiscoveryPath = async (
   rawUrl: string,
   budget: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
-  }
+  const url = parseSkillUrl(rawUrl);
 
   if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
     return null;

@@ -48,6 +48,8 @@ import type {
   AiFieldDraft,
   AiFieldGenerator,
 } from "@/api/lib/docx/resolve-ai-fields";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
@@ -308,6 +310,13 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   return v.parse(input.outputSchema, output);
 };
 
+// Loading the caller's skill catalog failed before any model call, so it is a
+// database failure of this adapter rather than a generation outcome.
+const SKILL_CATALOG_LOAD_SINK = failureSink({
+  event: "ai_field.skill_catalog_load_failed",
+  expected: [],
+});
+
 export const buildAiFieldGenerator = ({
   orgAIConfig,
   organizationId,
@@ -339,7 +348,9 @@ export const buildAiFieldGenerator = ({
     try {
       const skillToolsResult = await maybeSkillTools(prompt, skillContext);
       if (Result.isError(skillToolsResult)) {
-        aiAnalytics?.captureError(skillToolsResult.error);
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
         return {
           type: "failed",
           reason: "generation-failed",
@@ -462,7 +473,9 @@ export const buildAiConditionDecider = ({
     try {
       const skillToolsResult = await maybeSkillTools(prompt, skillContext);
       if (Result.isError(skillToolsResult)) {
-        aiAnalytics?.captureError(skillToolsResult.error);
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
         return undefined;
       }
       const skillTools = skillToolsResult.value;
@@ -635,7 +648,9 @@ export const buildAiOccurrenceAdapter = ({
         skillContext,
       );
       if (Result.isError(skillToolsResult)) {
-        aiAnalytics?.captureError(skillToolsResult.error);
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
         return undefined;
       }
       const skillTools = skillToolsResult.value;

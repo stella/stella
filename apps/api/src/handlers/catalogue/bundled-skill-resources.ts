@@ -80,28 +80,33 @@ export const toParsedBundledSkillPackage = ({
   expectedSlug: string;
   resources: readonly ParsedSkillResource[];
   source: string;
-}): Result<ParsedSkillPackage, HandlerError> =>
-  Result.try({
+}): Result<ParsedSkillPackage, HandlerError> => {
+  const parsedFile = parseSkillFile(source);
+  if (parsedFile.isErr()) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: `Bundled skill file is invalid: ${expectedSlug}`,
+        cause: parsedFile.error,
+      }),
+    );
+  }
+  const parsed = parsedFile.value;
+  if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Bundled skill instructions are too large",
+      }),
+    );
+  }
+
+  return Result.try({
     try: () => {
-      const parsedFile = parseSkillFile(source);
-      if (parsedFile.isErr()) {
-        throw new HandlerError({
-          status: 500,
-          message: `Bundled skill file is invalid: ${expectedSlug}`,
-          cause: parsedFile.error,
-        });
-      }
-      const parsed = parsedFile.value;
       assertBundledSkillMetadata({
         expectedSlug,
         metadata: parsed.metadata,
       });
-      if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
-        throw new HandlerError({
-          status: 500,
-          message: "Bundled skill instructions are too large",
-        });
-      }
 
       return {
         body: parsed.body,
@@ -130,6 +135,7 @@ export const toParsedBundledSkillPackage = ({
       });
     },
   });
+};
 
 export const hashBundledSkillPackage = ({
   resources,

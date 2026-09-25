@@ -692,7 +692,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     recordAuditEvent,
     recordReadAuditEvent,
     safeDb,
-    skills: skillMetadata ?? [],
+    skills: skillMetadata,
     userId,
   });
   // Unified business-registry tool: register once with a dynamic

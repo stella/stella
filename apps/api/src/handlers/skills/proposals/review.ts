@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkills } from "@/api/db/schema";
+import type { AgentSkillProposalStatus } from "@/api/db/schema";
 import {
   canManageSkill,
   loadVisibleSkill,
@@ -47,6 +48,36 @@ type ReviewSkillProposalResult = {
   id: SafeId<"agentSkillProposal">;
   status: "accepted" | "rejected";
   resultRevisionId: SafeId<"agentSkillRevision"> | null;
+};
+
+/** Only a proposal its author submitted for review can be decided. */
+const requireReviewableStatus = (
+  status: AgentSkillProposalStatus,
+): Result<void, HandlerError> => {
+  switch (status) {
+    case "proposed":
+      return Result.ok(undefined);
+    case "draft":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "Proposal is still a draft; its author must submit it for review first",
+        }),
+      );
+    case "accepted":
+    case "rejected":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Proposal has already been decided",
+        }),
+      );
+    default: {
+      status satisfies never;
+      return panic(`Unhandled proposal status: ${String(status)}`);
+    }
+  }
 };
 
 const reviewSkillProposal = createSafeRootHandler(
@@ -101,25 +132,9 @@ const reviewSkillProposal = createSafeRootHandler(
             message: "Proposal not found",
           });
         }
-        switch (proposal.status) {
-          case "proposed":
-            break;
-          case "draft":
-            throw new HandlerError({
-              status: 409,
-              message:
-                "Proposal is still a draft; its author must submit it for review first",
-            });
-          case "accepted":
-          case "rejected":
-            throw new HandlerError({
-              status: 409,
-              message: "Proposal has already been decided",
-            });
-          default: {
-            proposal.status satisfies never;
-            return panic(`Unhandled proposal status: ${proposal.status}`);
-          }
+        const reviewable = requireReviewableStatus(proposal.status);
+        if (Result.isError(reviewable)) {
+          throw reviewable.error;
         }
 
         const decidedAt = new Date();
