@@ -1,9 +1,10 @@
+import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+
 /**
  * The prompt inputs serialize a picked skill as the markdown link
  * `[label](#stella-skill-ref=slug)`. This module is the API's one reader of
  * that form.
  */
-export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
 // The slug sits inside the link target, so it runs up to the closing paren or
 // whitespace. The prefix carries no pattern metacharacters.

@@ -2334,6 +2334,7 @@ export default defineConfig({
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",
         "**/__tests__/**/*.{ts,tsx}",
+        "packages/api-contract/src/agent-skills.ts",
         "packages/api-contract/src/resource-link.ts",
         "packages/api-contract/src/resource-ref.ts",
       ],

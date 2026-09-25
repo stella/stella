@@ -22,6 +22,7 @@ import {
   parseCanonicalChatSourceCitationHref,
   parseChatResourceHref,
   RESOURCE_TYPE,
+  SKILL_REF_HREF_PREFIX,
   type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
@@ -91,7 +92,6 @@ const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
 const UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
 const UUID_SHAPE_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-export const SKILL_REF_HASH_PREFIX = "#stella-skill-ref=";
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
 // whitelist (http/https/mailto/tel) survives. Custom schemes
@@ -615,12 +615,12 @@ const MentionChip = ({
     );
   }
 
-  if (href.startsWith(SKILL_REF_HASH_PREFIX)) {
+  if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
     return (
       <SkillRefChip
         interactive={interactive}
         label={label}
-        slug={href.slice(SKILL_REF_HASH_PREFIX.length)}
+        slug={href.slice(SKILL_REF_HREF_PREFIX.length)}
       />
     );
   }
@@ -727,7 +727,7 @@ export const StreamdownMentionLink = ({
     parseChatResourceHref(href) !== null ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
     href.startsWith(WORKSPACE_REF_HASH_PREFIX) ||
-    href.startsWith(SKILL_REF_HASH_PREFIX) ? (
+    href.startsWith(SKILL_REF_HREF_PREFIX) ? (
       <MentionChip
         href={href}
         interactive={interactive}

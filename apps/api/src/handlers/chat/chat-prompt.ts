@@ -16,6 +16,7 @@ import {
   CHAT_THREAD_PLACEHOLDER_TITLE,
   type EmailCitationBlock,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+  SKILL_REF_HREF_PREFIX,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -327,7 +328,7 @@ const buildCoreRuleSections = ({
     ? [
         "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
         "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
-        "SKILL-REF LINKS: A markdown link of the form `[name](#stella-skill-ref=slug)` in the user's message is an explicit request to use that skill. Its instructions are preloaded under REQUESTED SKILLS: apply them and follow POST-LOAD-SKILL. Call `load-skill` only for a referenced skill that section tells you to load. Do not echo the link or narrate the load.",
+        `SKILL-REF LINKS: A markdown link of the form \`[name](${SKILL_REF_HREF_PREFIX}slug)\` in the user's message is an explicit request to use that skill. Its instructions are preloaded under REQUESTED SKILLS: apply them and follow POST-LOAD-SKILL. Call \`load-skill\` only for a referenced skill that section tells you to load. Do not echo the link or narrate the load.`,
       ]
     : []),
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,

@@ -8,7 +8,10 @@ export type {
   AgendaItemWireFields,
 } from "./agenda";
 
-export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
+export {
+  SKILL_REF_HREF_PREFIX,
+  SKILL_RESOURCE_PATH_PATTERN,
+} from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {

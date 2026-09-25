@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 
 import {
   resourceRef,
+  SKILL_REF_HREF_PREFIX,
   RESOURCE_TYPE,
   toChatMentionResourceHref,
   toChatResourceHref,
@@ -9,7 +10,6 @@ import {
   isChatReferenceCategory,
 } from "@stll/api-contract";
 
-import { SKILL_REF_HREF_PREFIX } from "@/api/lib/agent-skills/skill-refs";
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";

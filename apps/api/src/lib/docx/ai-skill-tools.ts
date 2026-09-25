@@ -16,6 +16,8 @@
 
 import { Result } from "better-result";
 
+import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
@@ -69,6 +71,6 @@ export const maybeSkillTools = async (
  */
 export const SKILL_REF_GENERATOR_GUIDANCE =
   "If the instruction contains a markdown link of the form " +
-  "[label](#stella-skill-ref=slug), call load-skill with that slug first, " +
+  `[label](${SKILL_REF_HREF_PREFIX}slug), call load-skill with that slug first, ` +
   "then apply the skill's methodology to draft this field. Do not narrate " +
   "loading the skill; return only the field value.";
