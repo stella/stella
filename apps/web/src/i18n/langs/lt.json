@@ -1496,6 +1496,7 @@
     "key": "Klavišas",
     "kind": "Rūšis",
     "language": "Kalba",
+    "languageLoadFailed": "Nepavyko pakeisti kalbos. Bandykite dar kartą.",
     "languages": {
       "AR": "Arabų",
       "BG": "Bulgarų",

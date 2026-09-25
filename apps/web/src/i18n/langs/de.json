@@ -1496,6 +1496,7 @@
     "key": "Taste",
     "kind": "Art",
     "language": "Sprache",
+    "languageLoadFailed": "Die Sprache konnte nicht gewechselt werden. Versuchen Sie es erneut.",
     "languages": {
       "AR": "Arabisch",
       "BG": "Bulgarisch",

@@ -1496,6 +1496,7 @@
     "key": "Klawisz",
     "kind": "Rodzaj",
     "language": "Język",
+    "languageLoadFailed": "Nie udało się zmienić języka. Spróbuj ponownie.",
     "languages": {
       "AR": "arabski",
       "BG": "bułgarski",

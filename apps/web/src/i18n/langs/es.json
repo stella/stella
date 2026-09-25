@@ -1496,6 +1496,7 @@
     "key": "Tecla",
     "kind": "Tipo",
     "language": "Idioma",
+    "languageLoadFailed": "No se pudo cambiar el idioma. Inténtelo de nuevo.",
     "languages": {
       "AR": "Árabe",
       "BG": "Búlgaro",

@@ -1496,6 +1496,7 @@
     "key": "Billentyű",
     "kind": "Fajta",
     "language": "Nyelv",
+    "languageLoadFailed": "Nem sikerült nyelvet váltani. Próbálja újra.",
     "languages": {
       "AR": "Arab",
       "BG": "Bolgár",

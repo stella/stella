@@ -9,10 +9,12 @@ import {
   resolveUiLocale,
 } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
@@ -48,7 +50,7 @@ export type SupportedLanguage = UiLocale;
 export type LocaleMessages = typeof en;
 type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
 
-const messageLoaders = {
+export const messageLoaders = {
   en: () => en,
   ar: async () => (await import("@/i18n/langs/ar.json")).default,
   cs: async () => (await import("@/i18n/langs/cs.json")).default,
@@ -426,7 +428,7 @@ export const useI18nStore = create<State & Actions>()(
         let messages: LocaleMessages;
         try {
           messages = await loadLocaleMessages(lang);
-        } catch {
+        } catch (error) {
           if (requestId !== loadRequestId) {
             return;
           }
@@ -445,6 +447,13 @@ export const useI18nStore = create<State & Actions>()(
             lang: fallback.loadedLang,
             isLoaded: true,
             hasLoadedOnce: true,
+          });
+          // The UI stays in the previous language; tell the user the switch
+          // did not happen. The toast renders in that previous language.
+          getAnalytics().captureError(error);
+          stellaToast.add({
+            type: "error",
+            title: translator("common.languageLoadFailed"),
           });
           return;
         }
