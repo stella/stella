@@ -16,6 +16,8 @@
 
 import { panic, Result, UnhandledException } from "better-result";
 
+import { failureGradeOf } from "@stll/errors";
+
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
   FailureGrading,
@@ -30,6 +32,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
+import { recordRequestFailure } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
 /** The channel the emitting call actually used, not one inferred from nearby source. */
@@ -67,6 +70,9 @@ export const legacyChannelOf = ({
 /** The sinks graded in shadow, one handle per existing emission site. */
 export const SHADOW_SINKS = {
   capture: failureSink({ event: "exception.captured", expected: [] }),
+  handler: failureSink({ event: "request.handler_failed", expected: [] }),
+  framework: failureSink({ event: "request.framework_failed", expected: [] }),
+  completion: failureSink({ event: "request.completed", expected: [] }),
 } as const satisfies Record<string, FailureSink>;
 
 // --- Emitter failure isolation ------------------------------------------------
@@ -215,9 +221,25 @@ type ShadowObservation = {
   readonly requestState?: FailureRequestState | undefined;
 };
 
+const recordRequestObservation = (
+  request: Request,
+  sink: FailureSink,
+  grading: FailureGrading,
+): void => {
+  recordRequestFailure(request, {
+    grade: grading.grade,
+    reason: grading.reason,
+    sink: sink.event,
+  });
+  if (grading.grade === "transient") {
+    emitFailureMetric({ sink: sink.event, reason: grading.reason });
+  }
+};
+
 /**
  * Grade a failure an existing sink is about to emit, count it, and hand the
- * grade back for the sink's own record. A transient request-path one is
+ * grade back for the sink's own record. A request-path observation is also
+ * stored on the request, for the completion record, and a transient one is
  * counted in the failure metric. Returns undefined, and emits nothing extra,
  * if grading itself failed.
  */
@@ -240,8 +262,8 @@ export const observeShadow = ({
       channel,
       degradation: fingerprintDegradation(evidence),
     });
-    if (request !== undefined && grading.grade === "transient") {
-      emitFailureMetric({ sink: sink.event, reason: grading.reason });
+    if (request !== undefined) {
+      recordRequestObservation(request, sink, grading);
     }
     return grading;
   });
@@ -250,6 +272,25 @@ export const observeShadow = ({
     return undefined;
   }
   return observed.value;
+};
+
+// A 5xx the request answered with no failure observed on the way there.
+const UNOBSERVED_5XX_GRADING: FailureGrading = {
+  grade: failureGradeOf("unobserved_5xx"),
+  reason: "unobserved_5xx",
+  rule: "unobserved",
+  evidenceDepth: 0,
+};
+
+/** Count a 5xx no failure observation accounts for, and grade it. */
+export const observeUnobserved5xx = (): FailureGrading => {
+  countFailureObservation({
+    sink: SHADOW_SINKS.completion,
+    grading: UNOBSERVED_5XX_GRADING,
+    channel: "log_error",
+    degradation: undefined,
+  });
+  return UNOBSERVED_5XX_GRADING;
 };
 
 /** The fields a shadow-graded record carries. */
