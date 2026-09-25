@@ -12,6 +12,7 @@ import {
   isStatuteSlug,
   normalizeStatuteStoredSlug,
   normalizeStatuteVersionSegment,
+  parseStatutePath,
   STATUTE_SLUG_MAX_LENGTH,
   STATUTE_SLUG_PATTERN,
   toStatuteCountrySegment,
@@ -273,5 +274,97 @@ describe("public statute addresses", () => {
     expect(toStatuteCountrySegment(null)).toBe("cze");
     expect(toStatuteCountrySegment("czechia")).toBe("cze");
     expect(createStatuteIndexPath("POL")).toBe("/law/pol/statutes");
+  });
+});
+
+describe("reading a statute address back", () => {
+  const storedSlugArbitrary = fc.oneof(
+    fc.stringMatching(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
+    fc.string({ maxLength: 40 }),
+  );
+  const versionArbitrary = fc.oneof(
+    fc
+      .date({
+        min: new Date("1900-01-01T00:00:00Z"),
+        max: new Date("2999-12-31T00:00:00Z"),
+        noInvalidDate: true,
+      })
+      .map((date) => date.toISOString().slice(0, 10)),
+    fc.string({ maxLength: 12 }),
+  );
+
+  test("reads back every path the builder writes", () => {
+    fc.assert(
+      fc.property(
+        fc.option(fc.string({ maxLength: 8 }), { nil: null }),
+        fc.uuid(),
+        eliArbitrary,
+        fc.option(storedSlugArbitrary, { nil: null }),
+        fc.option(versionArbitrary, { nil: null }),
+        (country, documentId, eli, slug, version) => {
+          const params = createStatuteRouteParams({
+            country,
+            documentId,
+            eli,
+            slug,
+            version,
+          });
+
+          expect(parseStatutePath(createStatutePath(params))).toEqual(params);
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("reads back both address forms, with and without a version", () => {
+    const withVersion = routeParams({
+      slug: "89-2012-sb",
+      version: "2021-01-01",
+    });
+    const idForm = routeParams({ slug: null });
+
+    expect(withVersion.version).toBe("2021-01-01");
+    expect(parseStatutePath(createStatutePath(withVersion))).toEqual(
+      withVersion,
+    );
+    expect(idForm.slug).toBe(`89-2012-sb--${COMPACT_DOCUMENT_ID}`);
+    expect(parseStatutePath(createStatutePath(idForm))).toEqual(idForm);
+  });
+
+  test("a path outside the statutes route is not a statute", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom("cases", "statute", "decisions", "coverage"),
+        fc.stringMatching(/^[a-z]{2,3}$/u),
+        fc.array(fc.stringMatching(/^[a-z0-9-]{1,12}$/u), { maxLength: 4 }),
+        (section, country, tail) => {
+          expect(
+            parseStatutePath(`/law/${country}/${section}/${tail.join("/")}`),
+          ).toBeNull();
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("rejects a segment the builder could not have written", () => {
+    for (const pathname of [
+      "/law/cze/statutes",
+      "/law/czechia/statutes/89-2012-sb",
+      "/law/cze/statutes/89--2012",
+      "/law/cze/statutes/89-2012-SB",
+      "/law/cze/statutes/%E0%A4%A",
+      "/law/cze/statutes/89-2012-sb/v",
+      "/law/cze/statutes/89-2012-sb/v/latest",
+      "/law/cze/statutes/89-2012-sb/x/2021-01-01",
+      "/law/cze/statutes/89-2012-sb/v/2021-01-01/extra",
+      // The id form names one consolidation; a `/v/` on it names it twice.
+      `/law/cze/statutes/89-2012-sb--${COMPACT_DOCUMENT_ID}/v/2021-01-01`,
+      "/workspaces/abc",
+      "/",
+    ]) {
+      expect(parseStatutePath(pathname)).toBeNull();
+    }
   });
 });

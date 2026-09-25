@@ -14,7 +14,10 @@ import { panic } from "better-result";
  *    source correction exists, and a correction is rejected once upstream
  *    agrees;
  *  - an upstream effort keyword outside the `REASONING_EFFORTS`
- *    ladder is rejected, forcing a reviewed ladder extension.
+ *    ladder is rejected, forcing a reviewed ladder extension;
+ *  - a model without tool calling is rejected: every role sends tool
+ *    definitions or structured output, which some adapters implement
+ *    as a forced tool call, so such a model cannot serve any role.
  *
  * The emitted module keeps the compile-time exhaustiveness guarantee
  * (`satisfies Record<OfferedBYOKModelId, …>`): offering a new model
@@ -58,7 +61,7 @@ const OUTPUT_PATH = path.resolve(
 );
 
 /** Catalog provider → models.dev provider key. */
-const MODELS_DEV_KEY_BY_PROVIDER: Record<
+export const MODELS_DEV_KEY_BY_PROVIDER: Record<
   keyof typeof BYOK_MODEL_OPTIONS,
   string
 > = {
@@ -163,6 +166,18 @@ export const buildCapabilityRows = ({
           }
           efforts.push(value);
         }
+      }
+      if (record.toolCall === null) {
+        return panic(
+          `${provider}/${modelId}: models.dev record lacks the tool_call ` +
+            "field; investigate upstream before regenerating",
+        );
+      }
+      if (!record.toolCall) {
+        return panic(
+          `${provider}/${modelId}: models.dev reports no tool calling; no ` +
+            "model role can use it, so drop it from BYOK_MODEL_OPTIONS",
+        );
       }
       if (record.temperature === null) {
         return panic(

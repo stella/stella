@@ -17,14 +17,14 @@ const CHECKABLE = {
 const upstreamOf = (
   entries: Record<
     string,
-    Omit<UpstreamCapabilities, "inputModalities"> &
-      Partial<Pick<UpstreamCapabilities, "inputModalities">>
+    Omit<UpstreamCapabilities, "inputModalities" | "toolCall"> &
+      Partial<Pick<UpstreamCapabilities, "inputModalities" | "toolCall">>
   >,
 ): ReadonlyMap<string, UpstreamCapabilities> =>
   new Map(
     Object.entries(entries).map(([key, value]) => [
       key,
-      { inputModalities: ["text"], ...value },
+      { inputModalities: ["text"], toolCall: true, ...value },
     ]),
   );
 
@@ -90,6 +90,7 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: ["minimal", "low", "medium", "high"],
       inputModalities: null,
       temperature: false,
+      toolCall: null,
     });
   });
 
@@ -105,6 +106,7 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: null,
       inputModalities: null,
       temperature: null,
+      toolCall: null,
     });
     expect(
       parseUpstreamCapabilities({ reasoning: false, temperature: true }),
@@ -114,7 +116,17 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: null,
       inputModalities: null,
       temperature: true,
+      toolCall: null,
     });
+  });
+
+  test("extracts tool-call support", () => {
+    expect(
+      parseUpstreamCapabilities({ reasoning: true, tool_call: false }),
+    ).toMatchObject({ toolCall: false });
+    expect(
+      parseUpstreamCapabilities({ reasoning: false, tool_call: true }),
+    ).toMatchObject({ toolCall: true });
   });
 
   test("returns null for records without reasoning metadata", () => {
@@ -149,6 +161,7 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: ["none", "low", "medium", "high"],
       inputModalities: null,
       temperature: null,
+      toolCall: null,
     });
     // Toggle-only models have no effort vocabulary to send.
     expect(
@@ -162,6 +175,7 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: null,
       inputModalities: null,
       temperature: null,
+      toolCall: null,
     });
     // No duplicate "none" when the effort list already has it.
     expect(
@@ -178,6 +192,7 @@ describe("parseUpstreamCapabilities", () => {
       effortValues: ["none", "high"],
       inputModalities: null,
       temperature: null,
+      toolCall: null,
     });
   });
 });
@@ -486,7 +501,7 @@ describe("validateCapabilities", () => {
     const result = validateCapabilities({
       entries: [
         { provider: "google", modelId: "gemini-3.5-flash" },
-        { provider: "bedrock", modelId: "us.deepseek.r1-v1:0" },
+        { provider: "bedrock", modelId: "openai.gpt-oss-20b-1:0" },
       ],
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),

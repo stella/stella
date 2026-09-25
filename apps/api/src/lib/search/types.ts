@@ -7,6 +7,7 @@ import {
   type ResourceName,
   type ResourceRef,
 } from "@stll/api-contract";
+import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { ContactType } from "@/api/db/schema";
@@ -237,6 +238,12 @@ export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   court: string;
   country: string;
   decisionDate: string | null;
+  /** Null when the decision has no stored slug; its route then uses the id form. */
+  slug: string | null;
+  language: string;
+  /** The languages it is published in, which is all its route reads; empty
+   *  unless there are several. */
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[];
 };
 
 export type ChatGlobalSearchHit = GlobalSearchHitBase & {

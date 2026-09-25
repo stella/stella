@@ -4,6 +4,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -86,7 +87,7 @@ const sitemapShardPageSchema = v.strictObject({
 type SitemapDecision = v.InferOutput<typeof sitemapDecisionSchema>;
 type SitemapShard = v.InferOutput<typeof sitemapShardSchema>;
 type SitemapDecisionUrlInput = Omit<SitemapDecision, "languageAlternates"> & {
-  languageAlternates: readonly unknown[];
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[];
 };
 
 type FetchSitemapDecisionsOptions = {

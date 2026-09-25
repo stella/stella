@@ -725,7 +725,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 388,
+    "count": 387,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -844,7 +844,6 @@
       "apps/web/src/components/auth/sign-in-panel.tsx": 1,
       "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 2,
       "apps/web/src/components/chat-editor-provider.tsx": 3,
-      "apps/web/src/components/chat/case-law-open.ts": 1,
       "apps/web/src/components/chat/entity-open.ts": 2,
       "apps/web/src/components/chat/source-chips.logic.ts": 2,
       "apps/web/src/components/chat/source-chips.tsx": 2,

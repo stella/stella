@@ -13,7 +13,7 @@ const { searchGlobal: searchGlobalWithDatabase } =
   await import("@/api/lib/search/index-global");
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, rootDbTestDouble);
+) => await searchGlobalWithDatabase(query, { database: rootDbTestDouble });
 
 beforeEach(() => {
   clearRootDbMocks();

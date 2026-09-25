@@ -604,6 +604,9 @@ describe("search preview targets", () => {
         court: "Court",
         country: "CZ",
         decisionDate: null,
+        slug: null,
+        language: "cs",
+        languageAlternates: [],
       },
       {
         ...base,
@@ -662,6 +665,9 @@ describe("search preview dates", () => {
     ],
     court: "Court",
     country: "CZ",
+    slug: null,
+    language: "cs",
+    languageAlternates: [],
   } as const;
 
   test("uses the ruling date for case-law metadata", () => {
