@@ -2211,6 +2211,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
@@ -2385,6 +2391,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "provider_unavailable",
@@ -2447,6 +2459,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "unknown",

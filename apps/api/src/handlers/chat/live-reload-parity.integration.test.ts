@@ -96,8 +96,14 @@ type StepShape = {
   reasoning: boolean;
   text: boolean;
 };
+/** How a provider call fails before any output: it throws, or it reports
+ *  the error in the stream. */
+type FailureShape = "fail" | "report-error";
 /** A model run: its steps, or a provider call that fails before any output. */
-type RunShape = StepShape[] | "fail";
+type RunShape = StepShape[] | FailureShape;
+
+const isFailure = (shape: RunShape): shape is FailureShape =>
+  shape === "fail" || shape === "report-error";
 /**
  * How the user answers an approval card. `approve-all` approves it and then
  * every approval card that appears later in the conversation, each one
@@ -187,12 +193,14 @@ const planRun = (
   shape: RunShape,
   nextId: () => string,
 ): ScriptedTurn[] => {
-  if (shape === "fail") {
+  if (isFailure(shape)) {
     ledger.failures += 1;
     ledger.pending = [];
     ledger.latest = "failed";
     return [
-      { message: "Scripted provider failure", type: "fail-before-output" },
+      shape === "fail"
+        ? { message: "Scripted provider failure", type: "fail-before-output" }
+        : { message: "Scripted provider error", type: "error" },
     ];
   }
   const steps: ScriptedTurn[] = [];
@@ -762,22 +770,37 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  const failsBeforeAnswering: [string, RunShape[] | null, Decision][] = [
-    ["a new message", null, "approve"],
-    ["an answer", [[{ ...STEP, calls: ["ask-user"] }]], "approve"],
+  const failsBeforeAnswering: [
+    string,
+    FailureShape,
+    RunShape[] | null,
+    Decision,
+  ][] = [
+    ["a new message", "fail", null, "approve"],
+    ["an answer", "fail", [[{ ...STEP, calls: ["ask-user"] }]], "approve"],
+    ["a new message", "report-error", null, "approve"],
+    [
+      "an answer",
+      "report-error",
+      [[{ ...STEP, calls: ["ask-user"] }]],
+      "approve",
+    ],
   ];
 
   test.each(failsBeforeAnswering)(
-    "keeps one message for the turn when the model fails before answering %s",
-    async (_label, first, decision) => {
+    "keeps one message for the turn when the model fails before answering %s (%s)",
+    async (_label, failure, first, decision) => {
       const conversation = await openConversation();
       const { model, real } = conversation;
       try {
         if (first === null) {
-          await new SendUserMessage(["fail"], "Draft the NDA").run(model, real);
+          await new SendUserMessage([failure], "Draft the NDA").run(
+            model,
+            real,
+          );
         } else {
           await new SendUserMessage(first, "Draft the NDA").run(model, real);
-          await new ResolveCards([decision], ["fail"]).run(model, real);
+          await new ResolveCards([decision], [failure]).run(model, real);
         }
         // The fixture must reach the fault: the model call failed.
         expect(real.ledger.latest).toBe("failed");

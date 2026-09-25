@@ -1630,6 +1630,21 @@ export const processServerChatStream = async function* ({
   };
   // Whether the client has been told which message this turn writes.
   let announcedAssistantMessage = false;
+  // A run that fails before its first chunk still writes the turn's message
+  // (see `createTerminalResponseMessage`). Name it before the error, or the
+  // client opens a placeholder under an id of its own beside the message the
+  // turn stored or continued.
+  const announceBeforeFailure = (): StreamChunk[] =>
+    announcedAssistantMessage
+      ? []
+      : [
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+            role: "assistant",
+            timestamp: Temporal.Now.instant().epochMilliseconds,
+          },
+        ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -1733,6 +1748,7 @@ export const processServerChatStream = async function* ({
           flushProcessor: true,
           outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
         });
+        yield* announceBeforeFailure();
         yield chunk;
         return;
       }
@@ -1812,18 +1828,7 @@ export const processServerChatStream = async function* ({
         outcome: { type: "failed", error: kind },
       });
     }
-    // A run that failed before its first chunk still wrote the turn's
-    // message (see `createTerminalResponseMessage`). Name it before the
-    // error, or the client opens a placeholder under an id of its own beside
-    // the message the turn stored or continued.
-    if (!announcedAssistantMessage) {
-      yield {
-        type: EventType.TEXT_MESSAGE_START,
-        messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-        role: "assistant",
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      };
-    }
+    yield* announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,
       message: kind,
