@@ -7,7 +7,9 @@ import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecyc
 const identifyOrganizationGroup =
   mock<ServerAnalytics["identifyOrganizationGroup"]>();
 const seedDefaultDocumentTypes = mock(async () => await Promise.resolve());
-const seedMemberDefaults = mock(async () => await Promise.resolve());
+const seedMemberDefaults = mock<
+  Parameters<typeof createOrganizationLifecycleHooks>[0]["seedMemberDefaults"]
+>(async () => await Promise.resolve());
 const analytics: ServerAnalytics = {
   capture: () => undefined,
   identifyOrganizationGroup,

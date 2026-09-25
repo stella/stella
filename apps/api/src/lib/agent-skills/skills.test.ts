@@ -240,7 +240,6 @@ describe("available active chat skills", () => {
     });
     await insertResource({
       content: "team resource",
-      kind: "knowledge",
       path: "knowledge/shared.md",
       skillId: activeTeamSkillId,
     });
