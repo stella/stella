@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  agentSkillComments,
   agentSkillProposals,
   agentSkillRevisions,
   agentSkills,
@@ -19,6 +20,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import createSkillComment from "../comments/create";
+import createSkillProposal from "./create";
 import deleteSkillProposal from "./delete";
 import updateSkillProposal from "./update";
 
@@ -79,7 +82,7 @@ const insertTeamSkillWithProposal = async () => {
     body: "Proposed body",
     authorId: ids.userA1,
   });
-  return { skillId, proposalId };
+  return { skillId, proposalId, revisionId: revision.id };
 };
 
 const proposalRow = async (proposalId: SafeId<"agentSkillProposal">) =>
@@ -129,5 +132,59 @@ describe("a member's own proposal on a team skill", () => {
     );
 
     expect(await proposalRow(proposalId)).toEqual([]);
+  });
+});
+
+describe("a member reviewing a team skill", () => {
+  test("can open a proposal branched from its newest revision", async () => {
+    const { skillId, revisionId } = await insertTeamSkillWithProposal();
+
+    const result = await createSkillProposal.handler(
+      createTestHandlerContext<
+        Parameters<typeof createSkillProposal.handler>[0]
+      >({
+        memberRole: { role: "member" },
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: memberSafeDb(),
+        params: { skillId },
+        body: { summary: "Tighten the wording" },
+      }),
+    );
+    if (!("id" in result)) {
+      throw new TypeError("expected the proposal to be created");
+    }
+
+    const rows = await testDb
+      .select({
+        baseRevisionId: agentSkillProposals.baseRevisionId,
+        body: agentSkillProposals.body,
+      })
+      .from(agentSkillProposals)
+      .where(eq(agentSkillProposals.id, result.id));
+    expect(rows).toEqual([{ baseRevisionId: revisionId, body: "Team body" }]);
+  });
+
+  test("can comment on a revision", async () => {
+    const { skillId, revisionId } = await insertTeamSkillWithProposal();
+
+    await createSkillComment.handler(
+      createTestHandlerContext<
+        Parameters<typeof createSkillComment.handler>[0]
+      >({
+        memberRole: { role: "member" },
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: memberSafeDb(),
+        params: { skillId },
+        body: { revisionId, rangeStart: 0, rangeEnd: 4, body: "Which team?" },
+      }),
+    );
+
+    const rows = await testDb
+      .select({ anchorText: agentSkillComments.anchorText })
+      .from(agentSkillComments)
+      .where(eq(agentSkillComments.revisionId, revisionId));
+    expect(rows).toEqual([{ anchorText: "Team" }]);
   });
 });

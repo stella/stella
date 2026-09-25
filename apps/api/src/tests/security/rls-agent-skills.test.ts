@@ -3,7 +3,11 @@ import { eq, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import {
+  agentSkillResources,
+  agentSkillRevisions,
+  agentSkills,
+} from "@/api/db/schema";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -122,44 +126,106 @@ describe("agent skill RLS", () => {
   });
 });
 
-const WRITE_POLICY_MIGRATION = nodePath.resolve(
-  import.meta.dir,
-  "../../../drizzle/20260925100000_agent_skill_write_policies/migration.sql",
-);
+const migrationPath = (name: string) =>
+  nodePath.resolve(import.meta.dir, `../../../drizzle/${name}/migration.sql`);
 
-const readWritePolicies = async () =>
+const applyMigration = async (name: string) => {
+  const statements = readFileSync(migrationPath(name), "utf-8")
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  for (const statement of statements) {
+    await testDb.execute(sql.raw(statement));
+  }
+};
+
+const readPolicies = async (policyNames: readonly string[]) =>
   await testDb.execute<{
     name: string;
+    command: string;
     using: string | null;
     withCheck: string | null;
   }>(sql`
     SELECT
       polname AS name,
+      polcmd AS command,
       pg_catalog.pg_get_expr(polqual, polrelid) AS using,
       pg_catalog.pg_get_expr(polwithcheck, polrelid) AS "withCheck"
     FROM pg_catalog.pg_policy
-    WHERE polrelid IN (
-        'public.agent_skills'::regclass,
-        'public.agent_skill_resources'::regclass
-      )
-      AND polname NOT LIKE '%_select'
+    WHERE polname IN (${sql.join(
+      policyNames.map((name) => sql`${name}`),
+      sql`, `,
+    )})
     ORDER BY polname
   `);
 
-describe("agent skill write policy migration", () => {
-  test("leaves the policies exactly as the schema declares them", async () => {
-    const fromSchema = await readWritePolicies();
-    const statements = readFileSync(WRITE_POLICY_MIGRATION, "utf-8")
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0);
-    for (const statement of statements) {
-      await testDb.execute(sql.raw(statement));
-    }
-    const migrated = await readWritePolicies();
+describe("agent skill policy migrations", () => {
+  test("the write policy migration leaves the policies as the schema declares them", async () => {
+    const policyNames = [
+      "agent_skill_insert",
+      "agent_skill_update",
+      "agent_skill_delete",
+      "agent_skill_resource_insert",
+      "agent_skill_resource_update",
+      "agent_skill_resource_delete",
+    ];
+    const fromSchema = await readPolicies(policyNames);
+    await applyMigration("20260925100000_agent_skill_write_policies");
+    const migrated = await readPolicies(policyNames);
 
-    expect(fromSchema.rows).toHaveLength(6);
+    expect(fromSchema.rows).toHaveLength(policyNames.length);
     expect(migrated.rows).toEqual(fromSchema.rows);
+  });
+
+  test("the revision lock migration creates the policy the schema declares", async () => {
+    const policyNames = ["agent_skill_revision_lock"];
+    const fromSchema = await readPolicies(policyNames);
+    await testDb.execute(
+      sql`DROP POLICY "agent_skill_revision_lock" ON "agent_skill_revisions"`,
+    );
+    await applyMigration("20260925100100_agent_skill_revision_lock_policy");
+    const migrated = await readPolicies(policyNames);
+
+    expect(fromSchema.rows).toHaveLength(1);
+    expect(migrated.rows).toEqual(fromSchema.rows);
+  });
+});
+
+describe("agent skill revision RLS", () => {
+  test("a viewer may lock a revision but never update it", async () => {
+    const skillId = await insertSkill({
+      organizationId: ids.orgA,
+      scope: "team",
+      slug: `revision-lock-${Bun.randomUUIDv7()}`,
+      userId: ids.userAdmin,
+    });
+
+    const locked = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) =>
+        await tx
+          .select({ id: agentSkillRevisions.id })
+          .from(agentSkillRevisions)
+          .where(eq(agentSkillRevisions.skillId, skillId))
+          .for("share"),
+      ids.userA1,
+    );
+    const updateError = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) =>
+        await tryCatch(async () => {
+          await tx
+            .update(agentSkillRevisions)
+            .set({ body: "rewritten" })
+            .where(eq(agentSkillRevisions.skillId, skillId));
+        }),
+      ids.userAdmin,
+    );
+
+    expect(locked).toHaveLength(1);
+    expect(isPgError(updateError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });
 
