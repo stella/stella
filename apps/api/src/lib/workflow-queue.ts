@@ -78,6 +78,11 @@ import {
 } from "@/api/lib/workflow/get-execution-plan";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import {
+  errorPendingCells,
+  selectWorkspacesWithPendingCells,
+} from "@/api/lib/workflow/orphan-cells";
+import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
+import {
   selectExpiredStaleRunWorkspaceIds,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
@@ -690,40 +695,6 @@ const LIVE_JOB_STATES = [
 // jobs than this, skip the cycle rather than risk treating a busy
 // workspace as orphaned from a truncated scan — a false positive must
 // never clobber a healthy run. A later, quieter cycle reconciles it.
-const selectWorkspacesWithPendingCells = async (
-  workspaceIds?: readonly string[],
-): Promise<string[]> => {
-  if (workspaceIds?.length === 0) {
-    return [];
-  }
-
-  const pendingWorkspaceIds: string[] = [];
-  const workspaceIdBatches =
-    workspaceIds === undefined
-      ? [null]
-      : chunked(workspaceIds, LIMITS.workflowEntityBatchSize);
-
-  for (const workspaceIdBatch of workspaceIdBatches) {
-    const workspaceFilter =
-      workspaceIdBatch === null
-        ? undefined
-        : inArray(
-            fields.workspaceId,
-            workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
-          );
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one set-based distinct scan per chunk; chunking caps the IN list at workflowEntityBatchSize bound parameters
-    const rows = await rootDb
-      .selectDistinct({ workspaceId: fields.workspaceId })
-      .from(fields)
-      .where(and(workspaceFilter, sql`${fields.content}->>'type' = 'pending'`));
-    for (const row of rows) {
-      pendingWorkspaceIds.push(row.workspaceId);
-    }
-  }
-
-  return pendingWorkspaceIds;
-};
-
 const snapshotLiveWorkspaceIds = async () => {
   const jobSnapshots = await Promise.all(
     getAllWorkflowQueues().map(
@@ -799,13 +770,22 @@ const shouldRecoverWorkflow = async ({
     workspaceId,
   });
 
-type RecoverOrphanedWorkflowOptions = {
-  expectedRequestId: string | null;
+/**
+ * What orphan reconciliation works through: the workers' connection, for its
+ * cell reads and writes, and the run store built over that same connection.
+ */
+type OrphanReconciliationWorker = {
+  database: OrphanCellsDatabase;
   extractionRuns: ExtractionRunStore;
+};
+
+type RecoverOrphanedWorkflowOptions = OrphanReconciliationWorker & {
+  expectedRequestId: string | null;
   workspaceId: SafeId<"workspace">;
 };
 
 const recoverOrphanedWorkflow = async ({
+  database,
   expectedRequestId,
   extractionRuns,
   workspaceId,
@@ -822,16 +802,7 @@ const recoverOrphanedWorkflow = async ({
   // blocks any new run from re-populating them. `error` cells stay
   // eligible for re-extraction (see `prepareBatch`), so a retry or the
   // next full run picks them back up.
-  const erroredFields = await rootDb
-    .update(fields)
-    .set({ content: { type: "error", version: 1 } })
-    .where(
-      and(
-        eq(fields.workspaceId, workspaceId),
-        sql`${fields.content}->>'type' = 'pending'`,
-      ),
-    )
-    .returning({ id: fields.id });
+  const erroredFields = await errorPendingCells(database, workspaceId);
 
   await extractionRuns
     .failActiveForWorkspace({
@@ -846,7 +817,7 @@ const recoverOrphanedWorkflow = async ({
 
   logger.warn("workflow.orphan_reconciled", {
     workspaceId,
-    erroredFields: String(erroredFields.length),
+    erroredFields: String(erroredFields),
   });
 
   // Push the cleared status + errored cells to any connected client.
@@ -868,13 +839,13 @@ type ReconcileOrphanedWorkflowsOptions = {
  */
 export const reconcileOrphanedWorkflows = async (
   { scanPendingCells }: ReconcileOrphanedWorkflowsOptions,
-  extractionRuns: ExtractionRunStore,
+  { database, extractionRuns }: OrphanReconciliationWorker,
 ): Promise<void> => {
   const lockedWorkspaceIds =
     await getRootWorkflowRunStateStore().scanRunningWorkspaceIds();
   const pendingWorkspaceIds = scanPendingCells
-    ? await selectWorkspacesWithPendingCells()
-    : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
+    ? await selectWorkspacesWithPendingCells(database)
+    : await selectWorkspacesWithPendingCells(database, lockedWorkspaceIds);
   const staleActiveWorkspaceIds =
     await extractionRuns.listStaleActiveWorkspaceIds({
       before: new Date(
@@ -954,7 +925,9 @@ export const reconcileOrphanedWorkflows = async (
   });
 
   for (const workspaceId of recoverableOrphans) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each orphan is recovered only after its own run-lock re-check, and its recovery ends in that workspace's run-state clear and broadcast; the steps are ordered per workspace and cannot share one statement
     await recoverOrphanedWorkflow({
+      database,
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
       extractionRuns,
       workspaceId: brandPersistedWorkspaceId(workspaceId),
@@ -1209,7 +1182,10 @@ export const initWorkflowWorkers = ({ db }: BullMqWorkerContext) => {
   // without waiting for a restart.
   const runReconcile = createWorkflowReconcileRunner(
     async (options) =>
-      await reconcileOrphanedWorkflows(options, extractionRuns),
+      await reconcileOrphanedWorkflows(options, {
+        database: db,
+        extractionRuns,
+      }),
   );
   runReconcile();
   const reconcileTimer = setInterval(runReconcile, RECONCILE_INTERVAL_MS);
