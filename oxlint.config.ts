@@ -276,6 +276,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1298,6 +1299,19 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+      },
+    },
+    {
+      // The Postgres-gated suites run in one process, so a client a test
+      // leaves open holds its connections until the run ends. Tests open them
+      // through the one module that closes every client it opens.
+      files: [
+        "**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}",
+        "**/{test,tests,__tests__}/**/*.{ts,tsx,mts,cts,js,mjs}",
+      ],
+      excludeFiles: ["apps/api/src/tests/gated-test-database.ts"],
+      rules: {
+        "bun-test-hygiene/no-unmanaged-database-client": "error",
       },
     },
     {

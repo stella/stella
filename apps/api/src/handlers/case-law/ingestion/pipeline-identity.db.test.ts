@@ -1,15 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawSources,
-  relations,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -24,6 +21,7 @@ import {
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -60,9 +58,7 @@ if (!databaseUrl || !runPostgresTests) {
 } else {
   describe("case-law decision identity", () => {
     const adapterKey = `identity-${Bun.randomUUIDv7()}`;
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(tx));
     let sourceId: SafeId<"caseLawSource">;
@@ -107,11 +103,10 @@ if (!databaseUrl || !runPostgresTests) {
       sourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (sourceId) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
-      await db.$client.close();
     });
 
     test("keeps decisions that share a docket across courts", async () => {
