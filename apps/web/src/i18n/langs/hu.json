@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "Nincs egyező készség",
-      "noShortcuts": "Még nincsenek készségek. Adjon hozzá a Tudás → Készségek részen.",
       "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Átírás AI-val",
-      "aiRewritePlaceholder": "A megfogalmazás tömörítése; lépés hozzáadása a források hivatkozásához…",
-      "aiRewritePrompt": "Írja le, hogyan írjuk át ezt a fájlt",
-      "aiRewriteRunning": "Átírás…",
-      "binaryPreviewUnsupported": "A bináris előnézet nem támogatott. A fájlt a készségcsomag újbóli feltöltésével szerkesztheti.",
       "builtInSection": "Beépített készségek",
-      "chooseFile": "Válasszon fájlt, vagy húzza ide",
-      "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
-      "description": "Telepítsen SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a csevegéshez.",
       "disableSkill": "Készség kikapcsolása",
-      "disabled": "Kikapcsolva",
       "discoverSkills": "Készségek keresése",
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
-      "dropFile": "Húzza ide a SKILL.md vagy .zip fájlt",
       "editSkill": "Készség szerkesztése",
-      "emptyDescription": "Töltsön fel egy SKILL.md fájlt, egy tömörített készségmappát, vagy importáljon egy nyilvános GitHub-készség URL-jét.",
-      "emptyTitle": "Telepítse az első készségét",
       "enableSkill": "Készség bekapcsolása",
-      "enabled": "Bekapcsolva",
       "fileExists": "Ezen az útvonalon már létezik fájl",
       "filesHeading": "Fájlok",
-      "formBodyHelp": "Markdown utasítások, amelyeket az ügynök a készség meghívásakor olvas.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Fájl hozzáadása",
-      "generateDraft": "Készségvázlat",
-      "generateExamplesLabel": "Példa kiváltó okok vagy forgatókönyvek (nem kötelező)",
-      "generateExamplesPlaceholder": "Amikor a felhasználó ezt kérdezi… Olyan szerződés vizsgálatakor, amely… ",
-      "generateFeedbackLabel": "Módosítások (nem kötelező)",
-      "generateFeedbackPlaceholder": "A kiváltó feltételek szigorítása; lépés hozzáadása a források hivatkozásáról.",
-      "generateHelp": "Írja le, milyen készséget szeretne. A modell elkészít egy SKILL.md vázlatot, amelyet a telepítés előtt átnézhet és szerkeszthet.",
-      "generateIntentLabel": "Mit csináljon ez a készség?",
-      "generateIntentPlaceholder": "Egy készség, amely a bírósági határozatokat rövid összefoglalóvá sűríti a rendelkező résszel, az indokolással és a hivatkozással.",
-      "generateResourceContentPlaceholder": "A fájl Markdown-tartalma…",
-      "generateResourceDuplicatePathError": "Minden kísérőfájl elérési útjának egyedinek kell lennie.",
-      "generateResourcePathError": "Az útvonalnak references/, prompts/ vagy knowledge/ kezdetűnek és .md végződésűnek kell lennie (kisbetűk, számjegyek, kötőjelek, pontok, alulvonások).",
-      "generateResourcesHelp": "A SKILL.md mellé csomagolt kísérő Markdown-fájlok.",
-      "generateResourcesLabel": "Kísérőfájlok",
-      "generateSkill": "Generálás AI-val",
-      "generateTitle": "Készség generálása AI-val",
-      "generating": "Generálás…",
       "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",
       "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizze újra.",
@@ -3156,16 +3123,9 @@
       "newFolder": "Új mappa",
       "pdfPreviewSoon": "A PDF-előnézet a bináris készségerőforrások támogatásával válik elérhetővé.",
       "renameFile": "Átnevezés",
-      "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scopePrivate": "Csak én",
       "scopeTeam": "Mindenki a csapatban",
-      "selectFileHint": "Válasszon ki egy fájlt a listából, hogy megnyissa a jobb oldali szerkesztőpanelen.",
-      "selectedFile": "Kiválasztva: {name}",
       "selectionLimit": "Egyszerre legfeljebb {count} készséget válasszon ki.",
-      "sourceUpload": "Feltöltve",
-      "sourceUrl": "Nyilvános URL",
-      "unsavedChanges": "Nem mentett módosítások – elveti?",
-      "uploadFile": "Fájl feltöltése",
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
@@ -3408,7 +3368,6 @@
         "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
       },
       "prompts": {
-        "description": "A csevegésben / paranccsal elérhető, újrahasználható készségek",
         "title": "Készségek"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "A készség futtatásához írja be a parancsot a csevegésbe.",
       "commandLabel": "Perjeles parancs (nem kötelező)",
       "commandPlaceholder": "pl. összefoglalás",
-      "createTitle": "Új készség",
-      "deleteConfirmDescription": "Ez a készség véglegesen törlődik.",
-      "deleteShortcut": "Készség törlése",
-      "emptyDescription": "Hozzon létre újrahasználható készségeket a csapata ismétlődő munkáihoz, az összefoglalóktól az első fogalmazványok elkészítéséig.",
-      "emptyState": "Még nincsenek készségek. Adja hozzá az elsőt.",
-      "emptyTitle": "Első készség létrehozása",
-      "emptyVideoLabel": "Készségek áttekintése",
       "errors": {
-        "commandConflict": "Már létezik készség ezzel a / névvel",
-        "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon",
-        "commandReserved": "A(z) \"/{command}\" fenntartott készség"
+        "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon"
       },
       "form": {
-        "command": "Készség parancsikon",
-        "commandHint": "A / készség neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "A választóban megjelenő rövid leírás",
-        "namePlaceholder": "pl. Dokumentum összefoglalása",
-        "promptPlaceholder": "A csevegés szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "A csapat minden tagja"
-      },
-      "shadowed": "A csapat készsége felülírja"
+      }
     }
   },
   "lawHome": {

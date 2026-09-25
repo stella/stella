@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "Sin habilidades coincidentes",
-      "noShortcuts": "Aún no hay habilidades. Añádalas en Conocimiento → Habilidades.",
       "tryOne": "Prueba uno de estos para empezar"
     },
     "queuedAttachmentCount": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Reescribir con IA",
-      "aiRewritePlaceholder": "Ajusta la redacción; añade un paso para citar las fuentes…",
-      "aiRewritePrompt": "Describe cómo reescribir este archivo",
-      "aiRewriteRunning": "Reescribiendo…",
-      "binaryPreviewUnsupported": "La vista previa binaria no es compatible. Edita este archivo volviendo a subir el paquete de la habilidad.",
       "builtInSection": "Habilidades integradas",
-      "chooseFile": "Elige un archivo o arrástralo aquí",
-      "deleteConfirmDescription": "“{name}” se eliminará de este espacio de trabajo.",
       "deleteFile": "Eliminar archivo",
       "deleteFileConfirm": "¿Eliminar el archivo? No se puede deshacer.",
-      "description": "Instala paquetes SKILL.md que añaden métodos especializados y recursos de solo lectura al chat.",
       "disableSkill": "Desactivar habilidad",
-      "disabled": "Desactivada",
       "discoverSkills": "Buscar habilidades",
       "discoveredSkills": "{count, plural, one {# habilidad encontrada} other {# habilidades encontradas}}",
       "discoveryEmpty": "No se encontraron habilidades en este repositorio o carpeta.",
       "discoverySkippedInvalid": "{count, plural, one {Se omitió # habilidad no válida} other {Se omitieron # habilidades no válidas}}",
-      "dropFile": "Suelta SKILL.md o .zip aquí",
       "editSkill": "Editar habilidad",
-      "emptyDescription": "Sube un archivo SKILL.md, una carpeta de habilidad comprimida o importa una URL pública de habilidad de GitHub.",
-      "emptyTitle": "Instala tu primera habilidad",
       "enableSkill": "Activar habilidad",
-      "enabled": "Activada",
       "fileExists": "Ya existe un archivo con esta ruta",
       "filesHeading": "Archivos",
-      "formBodyHelp": "Instrucciones en Markdown que el agente lee cuando se invoca la habilidad.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Añadir archivo",
-      "generateDraft": "Redactar habilidad",
-      "generateExamplesLabel": "Ejemplos de activadores o escenarios (opcional)",
-      "generateExamplesPlaceholder": "Cuando un usuario pregunta sobre… Al revisar un contrato que… ",
-      "generateFeedbackLabel": "Ajustes (opcional)",
-      "generateFeedbackPlaceholder": "Afina las condiciones de activación; añade un paso sobre citar las fuentes.",
-      "generateHelp": "Describe la habilidad que quieres. El modelo redacta un SKILL.md que puedes revisar y editar antes de instalarlo.",
-      "generateIntentLabel": "¿Qué debe hacer esta habilidad?",
-      "generateIntentPlaceholder": "Una habilidad que resume las resoluciones judiciales en una nota breve con el fallo, el razonamiento y la cita.",
-      "generateResourceContentPlaceholder": "Contenido en Markdown para este archivo…",
-      "generateResourceDuplicatePathError": "Cada ruta de archivo complementario debe ser única.",
-      "generateResourcePathError": "La ruta debe empezar por references/, prompts/ o knowledge/ y terminar en .md (letras minúsculas, dígitos, guiones, puntos, guiones bajos).",
-      "generateResourcesHelp": "Archivos Markdown complementarios incluidos junto a SKILL.md.",
-      "generateResourcesLabel": "Archivos complementarios",
-      "generateSkill": "Generar con IA",
-      "generateTitle": "Generar habilidad con IA",
-      "generating": "Generando…",
       "howItRuns": "Cómo se ejecuta",
       "importFailureFetch": "No se pudo cargar la fuente de la habilidad.",
       "importFailureIntegrity": "La fuente de la habilidad cambió después de detectarla. Revísala de nuevo.",
@@ -3156,16 +3123,9 @@
       "newFolder": "Nueva carpeta",
       "pdfPreviewSoon": "La vista previa de PDF estará disponible cuando se admitan recursos binarios en las habilidades.",
       "renameFile": "Cambiar nombre",
-      "resources": "{count, plural, one {# recurso} other {# recursos}}",
       "scopePrivate": "Solo yo",
       "scopeTeam": "Todos en el equipo",
-      "selectFileHint": "Selecciona un archivo de la lista para abrirlo en el panel del editor de la derecha.",
-      "selectedFile": "Seleccionado: {name}",
       "selectionLimit": "Selecciona hasta {count} habilidades a la vez.",
-      "sourceUpload": "Subido",
-      "sourceUrl": "URL pública",
-      "unsavedChanges": "Cambios sin guardar, ¿descartar?",
-      "uploadFile": "Subir archivo",
       "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
@@ -3408,7 +3368,6 @@
         "description": "Listas de comprobación evaluadas que revisan documentos según tus estándares"
       },
       "prompts": {
-        "description": "Habilidades reutilizables disponibles con / en el chat",
         "title": "Habilidades"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "Escríbelo en el chat para ejecutar esta habilidad.",
       "commandLabel": "Comando con barra (opcional)",
       "commandPlaceholder": "p. ej. resumir",
-      "createTitle": "Nueva habilidad",
-      "deleteConfirmDescription": "Esta habilidad se eliminará permanentemente.",
-      "deleteShortcut": "Eliminar habilidad",
-      "emptyDescription": "Cree habilidades reutilizables para el trabajo que su equipo repite, desde resúmenes hasta instrucciones de redacción inicial.",
-      "emptyState": "Aún no hay habilidades. Añada la primera.",
-      "emptyTitle": "Cree su primera habilidad",
-      "emptyVideoLabel": "Resumen de habilidades",
       "errors": {
-        "commandConflict": "Ya existe una habilidad con este nombre /",
-        "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos",
-        "commandReserved": "\"/{command}\" es una habilidad reservada"
+        "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos"
       },
       "form": {
-        "command": "Atajo de habilidad",
-        "commandHint": "El nombre / de la habilidad: solo minúsculas, números, guiones y guiones bajos",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Descripción breve que se muestra en el selector",
-        "namePlaceholder": "p. ej. Resumir documento",
-        "promptPlaceholder": "Instrucciones insertadas en el redactor del chat al usar esta habilidad",
         "scope": "Visibilidad",
         "scopePrivate": "Solo yo",
         "scopeTeam": "Todos en el equipo"
-      },
-      "shadowed": "Oculta por la habilidad del equipo"
+      }
     }
   },
   "lawHome": {

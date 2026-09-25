@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "Žádné odpovídající dovednosti",
-      "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
       "tryOne": "Začni s jedním z těchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Přepsat pomocí AI",
-      "aiRewritePlaceholder": "Zpřesnit formulace; přidat krok pro citování zdrojů…",
-      "aiRewritePrompt": "Popište, jak tento soubor přepsat",
-      "aiRewriteRunning": "Přepisuji…",
-      "binaryPreviewUnsupported": "Náhled binárních souborů není podporován. Tento soubor upravíte opětovným nahráním balíčku dovednosti.",
       "builtInSection": "Vestavěné dovednosti",
-      "chooseFile": "Vyberte soubor nebo ho sem přetáhněte",
-      "deleteConfirmDescription": "Dovednost „{name}“ bude z tohoto pracovního prostoru odebrána.",
       "deleteFile": "Smazat soubor",
       "deleteFileConfirm": "Smazat soubor? Tuto akci nelze vrátit zpět.",
-      "description": "Instalujte balíčky SKILL.md, které do chatu přidají specializované postupy a zdroje jen pro čtení.",
       "disableSkill": "Vypnout dovednost",
-      "disabled": "Vypnuto",
       "discoverSkills": "Najít dovednosti",
       "discoveredSkills": "{count, plural, one {Nalezena # dovednost} few {Nalezeny # dovednosti} other {Nalezeno # dovedností}}",
       "discoveryEmpty": "V tomto repozitáři ani složce nebyly nalezeny žádné dovednosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná dovednost byla přeskočena} few {# neplatné dovednosti byly přeskočeny} other {# neplatných dovedností bylo přeskočeno}}",
-      "dropFile": "Přetáhněte sem SKILL.md nebo .zip",
       "editSkill": "Upravit dovednost",
-      "emptyDescription": "Nahrajte soubor SKILL.md, zazipovanou složku dovednosti nebo importujte veřejnou URL dovednosti z GitHubu.",
-      "emptyTitle": "Nainstalujte první dovednost",
       "enableSkill": "Zapnout dovednost",
-      "enabled": "Zapnuto",
       "fileExists": "Soubor s touto cestou již existuje",
       "filesHeading": "Soubory",
-      "formBodyHelp": "Pokyny v Markdownu, které agent čte při vyvolání dovednosti.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Přidat soubor",
-      "generateDraft": "Navrhnout dovednost",
-      "generateExamplesLabel": "Příklady spouštěčů nebo scénářů (volitelné)",
-      "generateExamplesPlaceholder": "Když se uživatel zeptá na… Při kontrole smlouvy, která… ",
-      "generateFeedbackLabel": "Úpravy (volitelné)",
-      "generateFeedbackPlaceholder": "Zpřesnit podmínky spuštění; přidat krok o citování zdrojů.",
-      "generateHelp": "Popište dovednost, kterou chcete. Model navrhne SKILL.md, který si před instalací můžete prohlédnout a upravit.",
-      "generateIntentLabel": "Co má tato dovednost dělat?",
-      "generateIntentPlaceholder": "Dovednost, která shrne soudní rozhodnutí do krátkého přehledu s výrokem, odůvodněním a citací.",
-      "generateResourceContentPlaceholder": "Obsah tohoto souboru v Markdownu…",
-      "generateResourceDuplicatePathError": "Cesta každého doprovodného souboru musí být jedinečná.",
-      "generateResourcePathError": "Cesta musí začínat na references/, prompts/ nebo knowledge/ a končit na .md (malá písmena, číslice, pomlčky, tečky, podtržítka).",
-      "generateResourcesHelp": "Doplňkové soubory v Markdownu přibalené k SKILL.md.",
-      "generateResourcesLabel": "Doplňkové soubory",
-      "generateSkill": "Vygenerovat pomocí AI",
-      "generateTitle": "Vygenerovat dovednost pomocí AI",
-      "generating": "Generuji…",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
       "importFailureIntegrity": "Zdroj dovednosti se po nalezení změnil. Zkontrolujte ho znovu.",
@@ -3156,16 +3123,9 @@
       "newFolder": "Nová složka",
       "pdfPreviewSoon": "Náhled PDF bude k dispozici, jakmile budou podporovány binární zdroje dovedností.",
       "renameFile": "Přejmenovat",
-      "resources": "{count, plural, one {# zdroj} few {# zdroje} other {# zdrojů}}",
       "scopePrivate": "Jen já",
       "scopeTeam": "Všichni v týmu",
-      "selectFileHint": "Výběrem souboru v seznamu jej otevřete v panelu editoru vpravo.",
-      "selectedFile": "Vybráno: {name}",
       "selectionLimit": "Najednou můžete vybrat nejvýše {count} dovedností.",
-      "sourceUpload": "Nahráno",
-      "sourceUrl": "Veřejná URL",
-      "unsavedChanges": "Neuložené změny — zahodit?",
-      "uploadFile": "Nahrát soubor",
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"
@@ -3408,7 +3368,6 @@
         "description": "Hodnocené kontrolní seznamy, které porovnávají dokumenty s vašimi standardy"
       },
       "prompts": {
-        "description": "Opakovaně použitelné dovednosti dostupné přes / v chatu",
         "title": "Dovednosti"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "Napsáním v chatu spustíte tuto dovednost.",
       "commandLabel": "Příkaz v chatu (volitelné)",
       "commandPlaceholder": "např. shrnout",
-      "createTitle": "Nová dovednost",
-      "deleteConfirmDescription": "Tato dovednost bude trvale odstraněna.",
-      "deleteShortcut": "Smazat dovednost",
-      "emptyDescription": "Vytvářejte opakovaně použitelné dovednosti pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
-      "emptyState": "Zatím žádné dovednosti. Přidejte první.",
-      "emptyTitle": "Vytvořte první dovednost",
-      "emptyVideoLabel": "Přehled dovedností",
       "errors": {
-        "commandConflict": "Dovednost s tímto / názvem již existuje",
-        "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandReserved": "\"/{command}\" je rezervovaná dovednost"
+        "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka"
       },
       "form": {
-        "command": "Zkratka dovednosti",
-        "commandHint": "Název / dovednosti: pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Stručný popis zobrazený ve výběru",
-        "namePlaceholder": "např. Shrnout dokument",
-        "promptPlaceholder": "Pokyny vložené do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
         "scopeTeam": "Všichni v týmu"
-      },
-      "shadowed": "Překryto týmovou dovedností"
+      }
     }
   },
   "lawHome": {

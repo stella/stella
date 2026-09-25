@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "لا توجد مهارات مطابقة",
-      "noShortcuts": "لا توجد مهارات بعد. أضف بعضها في المعرفة ← المهارات.",
       "tryOne": "جرّب إحدى هذه للبدء"
     },
     "queuedAttachmentCount": "{count, plural, zero {# مرفق} one {# مرفق} two {# مرفقان} few {# مرفقات} many {# مرفقاً} other {# مرفق}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "إعادة الصياغة بالذكاء الاصطناعي",
-      "aiRewritePlaceholder": "أحكم صياغة النص؛ أضف خطوة لذكر المصادر…",
-      "aiRewritePrompt": "صف كيفية إعادة صياغة هذا الملف",
-      "aiRewriteRunning": "جارٍ إعادة الصياغة…",
-      "binaryPreviewUnsupported": "معاينة الملفات الثنائية غير مدعومة. عدّل هذا الملف بإعادة رفع حزمة المهارة.",
       "builtInSection": "المهارات المُدمَجة",
-      "chooseFile": "اختر ملفاً أو اسحبه إلى هنا",
-      "deleteConfirmDescription": "ستتم إزالة «{name}» من مساحة العمل هذه.",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
-      "description": "ثبّت حزم SKILL.md التي تضيف أساليب متخصصة وموارد للقراءة فقط إلى الدردشة.",
       "disableSkill": "تعطيل المهارة",
-      "disabled": "مُعطَّلة",
       "discoverSkills": "البحث عن المهارات",
       "discoveredSkills": "{count, plural, zero {لم يُعثر على أي مهارات} one {تم العثور على مهارة واحدة} two {تم العثور على مهارتين} few {تم العثور على # مهارات} many {تم العثور على # مهارة} other {تم العثور على # مهارة}}",
       "discoveryEmpty": "لم يُعثر على أي مهارات في هذا المستودع أو المجلد.",
       "discoverySkippedInvalid": "{count, plural, zero {لم يتم تخطي أي مهارات غير صالحة} one {تم تخطي مهارة واحدة غير صالحة} two {تم تخطي مهارتين غير صالحتين} few {تم تخطي # مهارات غير صالحة} many {تم تخطي # مهارة غير صالحة} other {تم تخطي # مهارة غير صالحة}}",
-      "dropFile": "أفلِت ملف SKILL.md أو ملف .zip هنا",
       "editSkill": "تعديل المهارة",
-      "emptyDescription": "ارفع ملف SKILL.md، أو مجلد مهارة مضغوطاً، أو استورد رابط مهارة عامة من GitHub.",
-      "emptyTitle": "ثبّت أول مهارة لك",
       "enableSkill": "تفعيل المهارة",
-      "enabled": "مُفعَّلة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
       "filesHeading": "الملفات",
-      "formBodyHelp": "تعليمات Markdown يقرأها الوكيل عند استدعاء المهارة.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "إضافة ملف",
-      "generateDraft": "مسودة المهارة",
-      "generateExamplesLabel": "أمثلة على المحفّزات أو السيناريوهات (اختياري)",
-      "generateExamplesPlaceholder": "عندما يسأل المستخدم عن… عند مراجعة عقد يتضمن… ",
-      "generateFeedbackLabel": "التعديلات (اختياري)",
-      "generateFeedbackPlaceholder": "أحكم شروط التحفيز؛ أضف خطوة حول ذكر المصادر.",
-      "generateHelp": "صف المهارة التي تريدها. يُعدّ النموذج مسودة SKILL.md يمكنك مراجعتها وتعديلها قبل التثبيت.",
-      "generateIntentLabel": "ما الذي ينبغي أن تقوم به هذه المهارة؟",
-      "generateIntentPlaceholder": "مهارة تُلخّص أحكام المحاكم في موجز قصير يتضمن المنطوق والتسبيب والاستشهاد.",
-      "generateResourceContentPlaceholder": "محتوى Markdown لهذا الملف…",
-      "generateResourceDuplicatePathError": "يجب أن يكون مسار كل ملف مصاحب فريداً.",
-      "generateResourcePathError": "يجب أن يبدأ المسار بـ references/ أو prompts/ أو knowledge/ وأن ينتهي بـ ‎.md‎ (حروف صغيرة وأرقام وشرطات ونقاط وشرطات سفلية).",
-      "generateResourcesHelp": "ملفات Markdown مصاحبة مرفقة مع SKILL.md.",
-      "generateResourcesLabel": "الملفات المصاحبة",
-      "generateSkill": "إنشاء بالذكاء الاصطناعي",
-      "generateTitle": "إنشاء مهارة بالذكاء الاصطناعي",
-      "generating": "جارٍ الإنشاء…",
       "howItRuns": "كيفية تشغيلها",
       "importFailureFetch": "تعذر تحميل مصدر المهارة.",
       "importFailureIntegrity": "تغير مصدر المهارة بعد اكتشافها. راجعه مرة أخرى.",
@@ -3156,16 +3123,9 @@
       "newFolder": "مجلد جديد",
       "pdfPreviewSoon": "ستتوفر معاينة PDF بمجرد دعم موارد المهارات الثنائية.",
       "renameFile": "إعادة تسمية",
-      "resources": "{count, plural, zero {لا موارد} one {مورد واحد} two {موردان} few {# موارد} many {# مورداً} other {# مورد}}",
       "scopePrivate": "أنا فقط",
       "scopeTeam": "الجميع في الفريق",
-      "selectFileHint": "اختر ملفاً من القائمة لفتحه في لوحة المحرر على اليمين.",
-      "selectedFile": "المُختار: {name}",
       "selectionLimit": "يمكنك تحديد ما يصل إلى {count} مهارة في المرة الواحدة.",
-      "sourceUpload": "مرفوع",
-      "sourceUrl": "رابط URL عام",
-      "unsavedChanges": "تغييرات غير محفوظة — هل تريد تجاهلها؟",
-      "uploadFile": "رفع ملف",
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
@@ -3408,7 +3368,6 @@
         "description": "قوائم تحقّق مُقيَّمة تفحص المستندات وفق معاييرك"
       },
       "prompts": {
-        "description": "مهارات قابلة لإعادة الاستخدام، متاحة عبر / في الدردشة",
         "title": "المهارات"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "اكتبه في الدردشة لتشغيل هذه المهارة.",
       "commandLabel": "أمر الدردشة (اختياري)",
       "commandPlaceholder": "مثال: summarize",
-      "createTitle": "مهارة جديدة",
-      "deleteConfirmDescription": "ستتم إزالة هذه المهارة نهائياً.",
-      "deleteShortcut": "حذف المهارة",
-      "emptyDescription": "أنشئ مهارات قابلة لإعادة الاستخدام للأعمال التي يكررها فريقك، من الملخصات إلى تعليمات الصياغة الأولية.",
-      "emptyState": "لا توجد مهارات بعد. أضف أول مهارة لك.",
-      "emptyTitle": "أنشئ أول مهارة لك",
-      "emptyVideoLabel": "نظرة عامة على المهارات",
       "errors": {
-        "commandConflict": "توجد بالفعل مهارة بهذا الاسم /",
-        "commandInvalid": "استخدم الحروف الصغيرة والأرقام والشرطات والشرطات السفلية فقط",
-        "commandReserved": "«/{command}» مهارة محجوزة"
+        "commandInvalid": "استخدم الحروف الصغيرة والأرقام والشرطات والشرطات السفلية فقط"
       },
       "form": {
-        "command": "اختصار المهارة",
-        "commandHint": "اسم مهارة الـ /: حروف صغيرة وأرقام وشرطات وشرطات سفلية فقط",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "وصف قصير يظهر في أداة الاختيار",
-        "namePlaceholder": "مثال: تلخيص المستند",
-        "promptPlaceholder": "تعليمات تُدرَج في مُحرّر الدردشة عند استخدام هذه المهارة",
         "scope": "مدى الظهور",
         "scopePrivate": "أنا فقط",
         "scopeTeam": "الجميع في الفريق"
-      },
-      "shadowed": "محجوبة بمهارة الفريق"
+      }
     }
   },
   "lawHome": {

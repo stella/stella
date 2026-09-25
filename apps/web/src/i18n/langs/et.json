@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "Sobivaid oskusi pole",
-      "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
       "tryOne": "Alusta ühe nendest"
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Kirjuta AI-ga ümber",
-      "aiRewritePlaceholder": "Tihenda sõnastust; lisa samm allikatele viitamiseks…",
-      "aiRewritePrompt": "Kirjelda, kuidas seda faili ümber kirjutada",
-      "aiRewriteRunning": "Ümberkirjutamine…",
-      "binaryPreviewUnsupported": "Binaarfaili eelvaade ei ole toetatud. Muuda seda faili, laadides oskusepaketi uuesti üles.",
       "builtInSection": "Sisseehitatud oskused",
-      "chooseFile": "Vali fail või lohista see siia",
-      "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
-      "description": "Paigalda SKILL.md-paketid, mis lisavad vestlusele erimeetodeid ja kirjutuskaitstud ressursse.",
       "disableSkill": "Keela oskus",
-      "disabled": "Keelatud",
       "discoverSkills": "Otsi oskusi",
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
-      "dropFile": "Lohista SKILL.md või .zip siia",
       "editSkill": "Muuda oskust",
-      "emptyDescription": "Laadi üles SKILL.md-fail, pakitud oskuse kaust või impordi avalik GitHubi oskuse URL.",
-      "emptyTitle": "Paigalda esimene oskus",
       "enableSkill": "Luba oskus",
-      "enabled": "Lubatud",
       "fileExists": "Selle teega fail on juba olemas",
       "filesHeading": "Failid",
-      "formBodyHelp": "Markdown-juhised, mida agent loeb oskuse käivitamisel.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Lisa fail",
-      "generateDraft": "Koosta oskuse mustand",
-      "generateExamplesLabel": "Näidiskäivitajad või stsenaariumid (valikuline)",
-      "generateExamplesPlaceholder": "Kui kasutaja küsib… Kui vaatad üle lepingu, mis… ",
-      "generateFeedbackLabel": "Kohandused (valikuline)",
-      "generateFeedbackPlaceholder": "Tihenda käivitustingimusi; lisa samm allikatele viitamise kohta.",
-      "generateHelp": "Kirjelda soovitud oskust. Mudel koostab SKILL.md-faili, mille saad enne paigaldamist üle vaadata ja muuta.",
-      "generateIntentLabel": "Mida see oskus tegema peaks?",
-      "generateIntentPlaceholder": "Oskus, mis võtab kohtulahendid kokku lühikeseks märkuseks koos resolutsiooni, põhjenduse ja viitega.",
-      "generateResourceContentPlaceholder": "Selle faili Markdown-sisu…",
-      "generateResourceDuplicatePathError": "Iga kaasfaili tee peab olema kordumatu.",
-      "generateResourcePathError": "Tee peab algama references/, prompts/ või knowledge/ ja lõppema .md-ga (väiketähed, numbrid, sidekriipsud, punktid, allkriipsud).",
-      "generateResourcesHelp": "Kaasnevad Markdown-failid, mis pakitakse koos SKILL.md-ga.",
-      "generateResourcesLabel": "Kaasfailid",
-      "generateSkill": "Genereeri AI-ga",
-      "generateTitle": "Genereeri oskus AI-ga",
-      "generating": "Genereerimine…",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
@@ -3156,16 +3123,9 @@
       "newFolder": "Uus kaust",
       "pdfPreviewSoon": "PDF eelvaade muutub saadavaks, kui binaarseid oskuseressursse hakatakse toetama.",
       "renameFile": "Nimeta ümber",
-      "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik meeskonnas",
-      "selectFileHint": "Valige loendist fail, et avada see paremal asuval redigeerimispaanil.",
-      "selectedFile": "Valitud: {name}",
       "selectionLimit": "Vali korraga kuni {count} oskust.",
-      "sourceUpload": "Üles laaditud",
-      "sourceUrl": "Avalik URL",
-      "unsavedChanges": "Salvestamata muudatused — kas loobuda?",
-      "uploadFile": "Laadi fail üles",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
@@ -3408,7 +3368,6 @@
         "description": "Hinnatud kontroll-loendid, mis vaatavad dokumendid üle teie standardite alusel"
       },
       "prompts": {
-        "description": "Taaskasutatavad oskused, mis on vestluses saadaval / kaudu",
         "title": "Oskused"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "Selle oskuse käivitamiseks sisestage käsk vestlusse.",
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
-      "createTitle": "Uus oskus",
-      "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
-      "deleteShortcut": "Kustuta oskus",
-      "emptyDescription": "Loo taaskasutatavad oskused tööks, mida su tiim kordab, alates kokkuvõtetest kuni esmase koostamise juhisteni.",
-      "emptyState": "Oskusi veel pole. Lisage esimene.",
-      "emptyTitle": "Looge esimene oskus",
-      "emptyVideoLabel": "Oskuste ülevaade",
       "errors": {
-        "commandConflict": "Selle / nimega oskus on juba olemas",
-        "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
-        "commandReserved": "\"/{command}\" on reserveeritud oskus"
+        "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse"
       },
       "form": {
-        "command": "Oskuse otsetee",
-        "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Lühikirjeldus, mis kuvatakse valijas",
-        "namePlaceholder": "nt Võta dokument kokku",
-        "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
         "scopeTeam": "Kõik meeskonnas"
-      },
-      "shadowed": "Meeskonna oskus varjutab"
+      }
     }
   },
   "lawHome": {

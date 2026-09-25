@@ -1104,7 +1104,6 @@
     },
     "prompts": {
       "noResults": "Keine passenden Skills",
-      "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",
       "tryOne": "Probieren Sie zum Einstieg einen davon aus"
     },
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
@@ -3093,50 +3092,18 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Mit KI umschreiben",
-      "aiRewritePlaceholder": "Formulierung straffen; einen Schritt zum Zitieren von Quellen ergänzen…",
-      "aiRewritePrompt": "Beschreiben Sie, wie diese Datei umgeschrieben werden soll",
-      "aiRewriteRunning": "Wird umgeschrieben…",
-      "binaryPreviewUnsupported": "Die Vorschau von Binärdateien wird nicht unterstützt. Bearbeiten Sie diese Datei, indem Sie das Skill-Paket erneut hochladen.",
       "builtInSection": "Integrierte Skills",
-      "chooseFile": "Datei auswählen oder hierher ziehen",
-      "deleteConfirmDescription": "„{name}“ wird aus diesem Arbeitsbereich entfernt.",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",
-      "description": "Installieren Sie SKILL.md-Pakete, die dem Chat spezialisierte Methoden und schreibgeschützte Ressourcen hinzufügen.",
       "disableSkill": "Skill deaktivieren",
-      "disabled": "Deaktiviert",
       "discoverSkills": "Skills suchen",
       "discoveredSkills": "{count, plural, one {# Skill gefunden} other {# Skills gefunden}}",
       "discoveryEmpty": "In diesem Repository oder Ordner wurden keine Skills gefunden.",
       "discoverySkippedInvalid": "{count, plural, one {# ungültiger Skill wurde übersprungen} other {# ungültige Skills wurden übersprungen}}",
-      "dropFile": "SKILL.md oder .zip hier ablegen",
       "editSkill": "Skill bearbeiten",
-      "emptyDescription": "Laden Sie eine SKILL.md-Datei oder einen gezippten Skill-Ordner hoch oder importieren Sie eine öffentliche GitHub-Skill-URL.",
-      "emptyTitle": "Installieren Sie Ihren ersten Skill",
       "enableSkill": "Skill aktivieren",
-      "enabled": "Aktiviert",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
       "filesHeading": "Dateien",
-      "formBodyHelp": "Markdown-Anweisungen, die der Agent liest, wenn der Skill aufgerufen wird.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Datei hinzufügen",
-      "generateDraft": "Skill entwerfen",
-      "generateExamplesLabel": "Beispielauslöser oder -szenarien (optional)",
-      "generateExamplesPlaceholder": "Wenn ein Nutzer fragt nach … Wenn ein Vertrag geprüft wird, der … ",
-      "generateFeedbackLabel": "Anpassungen (optional)",
-      "generateFeedbackPlaceholder": "Auslösebedingungen straffen; einen Schritt zum Zitieren von Quellen ergänzen.",
-      "generateHelp": "Beschreiben Sie den gewünschten Skill. Das Modell entwirft eine SKILL.md, die Sie vor der Installation prüfen und bearbeiten können.",
-      "generateIntentLabel": "Was soll dieser Skill tun?",
-      "generateIntentPlaceholder": "Ein Skill, der Gerichtsentscheidungen zu einer kurzen Zusammenfassung mit Tenor, Begründung und Fundstelle verdichtet.",
-      "generateResourceContentPlaceholder": "Markdown-Inhalt für diese Datei…",
-      "generateResourceDuplicatePathError": "Jeder Pfad einer Begleitdatei muss eindeutig sein.",
-      "generateResourcePathError": "Der Pfad muss mit references/, prompts/ oder knowledge/ beginnen und auf .md enden (Kleinbuchstaben, Ziffern, Bindestriche, Punkte, Unterstriche).",
-      "generateResourcesHelp": "Ergänzende Markdown-Dateien, die zusammen mit SKILL.md gebündelt werden.",
-      "generateResourcesLabel": "Ergänzende Dateien",
-      "generateSkill": "Mit KI generieren",
-      "generateTitle": "Skill mit KI generieren",
-      "generating": "Wird generiert…",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
       "importFailureIntegrity": "Die Skill-Quelle hat sich nach der Erkennung geändert. Prüfen Sie sie erneut.",
@@ -3156,16 +3123,9 @@
       "newFolder": "Neuer Ordner",
       "pdfPreviewSoon": "Die PDF-Vorschau wird verfügbar sein, sobald binäre Skill-Ressourcen unterstützt werden.",
       "renameFile": "Umbenennen",
-      "resources": "{count, plural, one {# Ressource} other {# Ressourcen}}",
       "scopePrivate": "Nur ich",
       "scopeTeam": "Alle im Team",
-      "selectFileHint": "Wählen Sie eine Datei aus der Liste aus, um sie rechts im Editor zu öffnen.",
-      "selectedFile": "Ausgewählt: {name}",
       "selectionLimit": "Wählen Sie höchstens {count} Skills gleichzeitig aus.",
-      "sourceUpload": "Hochgeladen",
-      "sourceUrl": "Öffentliche URL",
-      "unsavedChanges": "Nicht gespeicherte Änderungen – verwerfen?",
-      "uploadFile": "Datei hochladen",
       "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
@@ -3408,7 +3368,6 @@
         "description": "Bewertete Checklisten, die Dokumente anhand Ihrer Vorgaben prüfen"
       },
       "prompts": {
-        "description": "Wiederverwendbare Skills, die im Chat über / verfügbar sind",
         "title": "Skills"
       },
       "templates": {
@@ -3452,30 +3411,14 @@
       "commandHelp": "Geben Sie den Befehl im Chat ein, um diesen Skill auszuführen.",
       "commandLabel": "Schrägstrich-Befehl (optional)",
       "commandPlaceholder": "z. B. zusammenfassen",
-      "createTitle": "Neuer Skill",
-      "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
-      "deleteShortcut": "Skill löschen",
-      "emptyDescription": "Erstellen Sie wiederverwendbare Skills für die wiederkehrende Arbeit Ihres Teams, von Zusammenfassungen bis hin zu Anweisungen für erste Entwürfe.",
-      "emptyState": "Noch keine Skills. Fügen Sie den ersten hinzu.",
-      "emptyTitle": "Ersten Skill erstellen",
-      "emptyVideoLabel": "Skills-Übersicht",
       "errors": {
-        "commandConflict": "Ein Skill mit diesem / Namen existiert bereits",
-        "commandInvalid": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
-        "commandReserved": "\"/{command}\" ist ein reservierter Skill"
+        "commandInvalid": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche"
       },
       "form": {
-        "command": "Skill-Kürzel",
-        "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Kurze Beschreibung, die in der Auswahl angezeigt wird",
-        "namePlaceholder": "z. B. Dokument zusammenfassen",
-        "promptPlaceholder": "Anweisungen, die bei Verwendung dieses Skills in den Chat-Composer eingefügt werden",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
         "scopeTeam": "Alle im Team"
-      },
-      "shadowed": "Durch Team-Skill verdeckt"
+      }
     }
   },
   "lawHome": {
