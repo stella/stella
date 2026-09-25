@@ -489,25 +489,6 @@ export const streamChat = async ({
       : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
   const restorationPairs: ChatAnonRestoration[] = [];
-  const mapAssistantMessageId = createTurnMessageIdMapper(
-    owningAssistantMessageId,
-  );
-  let responseMessage: ChatMessage | null = null;
-  const processor = new StreamProcessor({
-    initialMessages: preparedMessageList,
-    events: {
-      onStreamEnd: (message) => {
-        const convertedMessage = toChatMessage(message);
-        responseMessage =
-          convertedMessage === null
-            ? null
-            : attachRestorationMetadata({
-                message: convertedMessage,
-                restorationPairs,
-              });
-      },
-    },
-  });
 
   const stream = runChatAttempts({
     abortController,
@@ -552,19 +533,18 @@ export const streamChat = async ({
     restorationPairs,
     source: stream,
   });
-  const processedStream = processServerChatStream({
+  const processedStream = processTurnForPersistence({
     // The run's own signal, not the deadline's. Cancelling the response stream
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
     abortSignal: abortController.signal,
     deadlineSignal: abortSignal,
-    existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     flushPendingSource: persistenceVisibleStream.flushPending,
+    initialMessages: preparedMessageList,
     onFinish,
-    processor,
+    owningAssistantMessageId,
+    restorationPairs,
     source: persistenceVisibleStream,
-    mapMessageId: mapAssistantMessageId,
-    getResponseMessage: () => responseMessage,
   });
   const output = transformClientVisibleStream({
     resolveAssistantTextRefs,
@@ -1847,6 +1827,58 @@ export const processServerChatStream = async function* ({
       });
     }
   }
+};
+
+type ProcessTurnForPersistenceProps = Omit<
+  ProcessServerChatStreamProps,
+  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
+> & {
+  /** The history the run starts from: the messages it may continue. */
+  initialMessages: ChatMessage[];
+  owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
+  /** Filled while the stream runs; read once the response message ends. */
+  restorationPairs: readonly ChatAnonRestoration[];
+};
+
+/**
+ * The one place a turn's stream becomes the assistant message `onFinish`
+ * persists: the turn's message ids, the stream processor that accumulates the
+ * message, and the capture of its final state. Every caller that persists a
+ * turn, the round-trip test harness included, runs through this function, so
+ * a change to what gets persisted cannot pass a test that wires its own copy.
+ */
+export const processTurnForPersistence = ({
+  initialMessages,
+  owningAssistantMessageId,
+  restorationPairs,
+  ...stream
+}: ProcessTurnForPersistenceProps): AsyncIterable<PublicStreamChunk> => {
+  // Captured on an object property, not a bare `let`: `onStreamEnd` runs
+  // later, and type-aware lint narrows a closure-mutated local to its
+  // initializer.
+  const captured: { message: ChatMessage | null } = { message: null };
+  const processor = new StreamProcessor({
+    initialMessages,
+    events: {
+      onStreamEnd: (message) => {
+        const convertedMessage = toChatMessage(message);
+        captured.message =
+          convertedMessage === null
+            ? null
+            : attachRestorationMetadata({
+                message: convertedMessage,
+                restorationPairs,
+              });
+      },
+    },
+  });
+  return processServerChatStream({
+    ...stream,
+    existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+    getResponseMessage: () => captured.message,
+    mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
+    processor,
+  });
 };
 
 type FinishResponseMessageProps = {

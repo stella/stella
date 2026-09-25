@@ -2109,6 +2109,7 @@ export const createSendMessage = (
                       existingIds: latestMessagePlan.existingIds,
                       execution: turnExecution,
                       outcome,
+                      owningAssistantMessage,
                       recordAuditEvent,
                       responseMessage: resolvedResponseMessage,
                       safeDb,

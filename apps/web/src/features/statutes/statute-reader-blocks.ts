@@ -56,6 +56,20 @@ export const provisionCitationCountByBlockAnchor = (
 };
 
 /**
+ * The rendered block a statute tab lands on. A link may state the local
+ * provision id (`cl_7`) where the publisher namespaces it (`prilohy-cl_7`),
+ * so the request resolves through the deep-link rule; an anchor the text does
+ * not hold, or holds ambiguously, lands nowhere and the act opens at its top.
+ */
+export const statuteLandingAnchorId = (
+  blocks: readonly Block[],
+  requestedAnchorId: string | undefined,
+): string | undefined =>
+  requestedAnchorId === undefined
+    ? undefined
+    : resolveDocumentAnchor(blocks, requestedAnchorId)?.anchorId;
+
+/**
  * The provision each block sits in, by the block's own anchor: the
  * designation of the nearest preceding provision heading, as the document
  * prints it. A quotation carries this as its locator, so a citation names the

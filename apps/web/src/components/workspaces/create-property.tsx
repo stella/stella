@@ -6,6 +6,7 @@ import { PlusIcon, RouteIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -601,7 +602,7 @@ const PropertyComposerBody = ({
               id: data.id,
               workspaceId: toSafeId<"workspace">(workspaceId),
               name: trimmedName,
-              createdAt: new Date(),
+              createdAt: Temporal.Now.instant().toString(),
               status: "stale",
               kinds: null,
               content: buildContent(contentType, options, effectiveFallback),

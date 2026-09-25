@@ -64,7 +64,7 @@ const entity = (
 const aiProperty = (id: string): AIExtractionProperty => ({
   id: toSafeId<"property">(id),
   name: "AI summary",
-  createdAt: new Date("2026-06-12T00:00:00.000Z"),
+  createdAt: "2026-06-12T00:00:00.000Z",
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   kinds: null,
@@ -83,7 +83,7 @@ const manualProperty = (
 ): WorkspaceProperty => ({
   id: toSafeId<"property">(id),
   name: id,
-  createdAt: new Date("2026-06-12T00:00:00.000Z"),
+  createdAt: "2026-06-12T00:00:00.000Z",
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   kinds: null,

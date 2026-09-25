@@ -121,13 +121,13 @@ type VariantItem = {
   label: string;
   body: unknown;
   sortOrder: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
 type VersionItem = {
   id: string;
   version: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
 type ClauseDetail = {
@@ -139,8 +139,8 @@ type ClauseDetail = {
   language: string | null;
   body: ClauseParagraph[];
   currentVersion: number;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   variants: VariantItem[];
   versions: VersionItem[];
 };
