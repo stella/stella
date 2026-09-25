@@ -9,6 +9,7 @@ import {
   isChatReferenceCategory,
 } from "@stll/api-contract";
 
+import { SKILL_REF_HREF_PREFIX } from "@/api/lib/agent-skills/skill-refs";
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
@@ -51,7 +52,6 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 };
 
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);
-const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
 const isAllowedLocalHref = (href: string): boolean =>
   href.startsWith(SKILL_REF_HREF_PREFIX) &&

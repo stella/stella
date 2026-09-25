@@ -17,17 +17,11 @@
 import { Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-
-/**
- * Mirrors `SKILL_CHIP_HREF_PREFIX` on the web side (the prompt inputs serialize
- * skill chips as `[label](#stella-skill-ref=slug)`). The slug sits inside the
- * markdown link target, so it runs up to the closing paren or whitespace.
- */
-const SKILL_REF_RE = /#stella-skill-ref=(?<slug>[^)\s]+)/u;
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -48,7 +42,7 @@ export const maybeSkillTools = async (
   prompt: string,
   ctx: SkillToolsContext | undefined,
 ): Promise<Result<ChatToolMap | undefined, SafeDbError>> => {
-  if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
+  if (ctx === undefined || extractSkillRefSlugs(prompt).length === 0) {
     return Result.ok(undefined);
   }
   const skills = await listAvailableChatSkillMetadata(ctx);
