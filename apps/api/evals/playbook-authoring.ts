@@ -59,6 +59,10 @@ import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/
 import { SPAWN_SUBAGENTS_TOOL_DEFINITION } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  LIST_TEMPLATES_TOOL_DEFINITION,
+  LIST_TEMPLATES_TOOL_NAME,
+} from "@/api/handlers/chat/tools/template-tools";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -81,6 +85,7 @@ import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
 import { getStaticMcpToolHandler } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
+import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -512,12 +517,16 @@ const TASKS: EvalTask[] = [
 
 type ToolTrace = { name: string; input: unknown; result?: unknown };
 
-type ProductionToolName = (typeof TOOL_NAMES)[number] | MatterToolName;
+type ProductionToolName =
+  | (typeof TOOL_NAMES)[number]
+  | MatterToolName
+  | typeof LIST_TEMPLATES_TOOL_NAME;
 
 const PRODUCTION_DEFINITIONS = [
   ...KNOWLEDGE_TOOL_DEFINITIONS,
   ...STELLA_TOOL_DEFINITIONS,
   ...DOCUMENT_TOOL_DEFINITIONS,
+  ...TEMPLATE_TOOL_SET.definitions,
 ];
 
 const definitionOf = (name: ProductionToolName) =>
@@ -1071,6 +1080,30 @@ const spawnSubagentsStub = (): AnyServerTool =>
     })),
   }));
 
+/**
+ * `list_templates` as each surface offers it, answering with the dev
+ * database's empty library. The skill mentions starter playbooks and never
+ * looks for them, so the call itself is a defect.
+ */
+const listTemplatesStub = ({
+  surface,
+  record,
+}: {
+  surface: BuilderSurface;
+  record: Recorder;
+}): AnyServerTool => {
+  const answer = (input: unknown) => {
+    record({ name: LIST_TEMPLATES_TOOL_NAME, input });
+    return { templates: [] };
+  };
+  return surface === "chat"
+    ? LIST_TEMPLATES_TOOL_DEFINITION.server(answer)
+    : productionTool(
+        LIST_TEMPLATES_TOOL_NAME,
+        async (input) => await Promise.resolve(answer(input)),
+      );
+};
+
 const createBehaviorTools = ({
   store,
   scenario,
@@ -1147,6 +1180,7 @@ const createBehaviorTools = ({
       productionTool(name, async (input) => await callRegistry(name, input)),
     ),
     ...matterTools,
+    listTemplatesStub({ surface, record }),
     askUser,
   ];
 };

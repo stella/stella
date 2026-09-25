@@ -67,9 +67,11 @@ the default provider chain (see `getTanStackTextModelById`).
   frontmatter documents are stubbed up front as chat stubs them, the
   fixtures sit behind the production registry runner, and `spawn_subagents`
   is offered under chat's delegation rule unless the skill's frontmatter
-  excludes it, as the shipped skill does. A read rejected at the boundary, a
-  failed script, a chat read the skill did not document written before
-  `discover_tools` named it, or work handed to subagents is a defect. The
+  excludes it, as the shipped skill does. Both surfaces offer
+  `list_templates` as production does, answered with an empty library. A read
+  rejected at the boundary, a failed script, a chat read the skill did not
+  document written before `discover_tools` named it, work handed to
+  subagents, or a search for starter playbooks is a defect. The
   behavior tier is a pass criterion on `gpt-5.6-luna` and `gpt-6-sol`;
   `gpt-5.4-mini` stays in the default set to track the floor, not to gate.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
