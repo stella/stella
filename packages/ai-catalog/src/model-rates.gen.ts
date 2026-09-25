@@ -408,4 +408,10 @@ export const MODEL_RATES = {
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 125_000,
   },
+  // models.dev: amazon-bedrock:us.deepseek.r1-v1:0
+  "us.deepseek.r1-v1:0": {
+    kind: "flat",
+    inputPerMTok: 135_000,
+    outputPerMTok: 540_000,
+  },
 } as const satisfies Readonly<Record<string, ModelRate>>;

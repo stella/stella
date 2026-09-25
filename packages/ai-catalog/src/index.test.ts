@@ -376,6 +376,16 @@ describe("MODEL_RATES economic ordering", () => {
   });
 });
 
+describe("a retired model a deployment override can still select", () => {
+  const retiredModelId = "us.deepseek.r1-v1:0";
+
+  test("keeps its rate, context window, and streaming tool-use limit", () => {
+    expect(getModelRate(retiredModelId)).toBeDefined();
+    expect(getContextWindowTokens(retiredModelId)).toBe(128_000);
+    expect(supportsStreamingToolUse(retiredModelId)).toBe(false);
+  });
+});
+
 describe("CONTEXT_WINDOW_TOKENS", () => {
   test("windows are never below the conservative default", () => {
     for (const window of Object.values(CONTEXT_WINDOW_TOKENS)) {
