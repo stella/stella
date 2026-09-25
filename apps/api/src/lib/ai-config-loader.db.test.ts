@@ -8,9 +8,9 @@
 
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { organizationSettings } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
@@ -20,7 +20,6 @@ import {
   loadOrgAIConfig,
   loadOrgAISettings,
   loadOrgSettingsForAuth,
-  loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,7 +29,10 @@ import {
   loadWebSearchProvidersForOrg,
 } from "@/api/lib/web-search/load-org-keys";
 import { resolveWebSearchProvidersFromEnv } from "@/api/lib/web-search/select-provider";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -131,12 +133,30 @@ beforeAll(async () => {
     searchKey: "search-b",
   });
 
-  await testDb.insert(organization).values({
-    id: corruptOrgId,
-    name: "Corrupt settings",
-    slug: `corrupt-settings-${corruptOrgId}`,
-    createdAt: new Date(),
-  });
+  await testDb.insert(organization).values([
+    {
+      id: corruptOrgId,
+      name: "Corrupt settings",
+      slug: `corrupt-settings-${corruptOrgId}`,
+      createdAt: new Date(),
+    },
+    {
+      id: unsetOrgId,
+      name: "No settings",
+      slug: `no-settings-${unsetOrgId}`,
+      createdAt: new Date(),
+    },
+  ]);
+  // userA1 joins both, so each scope below is built for a real member.
+  await testDb.insert(member).values(
+    [corruptOrgId, unsetOrgId].map((organizationId) => ({
+      id: mintAuthProviderIdValue(),
+      organizationId,
+      userId: ids.userA1,
+      role: "member",
+      createdAt: new Date(),
+    })),
+  );
   await testDb.insert(organizationSettings).values({
     organizationId: corruptOrgId,
     aiConfigEncrypted: Buffer.from("{not an encrypted config"),
@@ -146,7 +166,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb.delete(organization).where(eq(organization.id, corruptOrgId));
+  await testDb
+    .delete(member)
+    .where(inArray(member.organizationId, [corruptOrgId, unsetOrgId]));
+  await testDb
+    .delete(organization)
+    .where(inArray(organization.id, [corruptOrgId, unsetOrgId]));
   await releaseTestDb();
 });
 
@@ -178,21 +203,19 @@ describe("organization settings under the request scope", () => {
     ).toBeNull();
   });
 
-  test("loadPromptCachingPreference reads its own organization and not another's", async () => {
+  test("another organization's prompt-caching preference reads as the default", async () => {
     const scope = requestScope(ids.orgB, ids.userB1);
 
     // orgB stores `true`; orgA stores `false`. Under orgB's scope the orgA row
-    // is invisible, so the probe falls back to the default rather than false.
+    // is invisible, so the read falls back to the default rather than false.
+    const own = await scope(
+      async (tx) => await loadOrgAISettings(tx, ids.orgB),
+    );
+    expect(providerKeys(own.orgAIConfig)).toEqual(["model-b-key"]);
+    expect(own.promptCachingEnabled).toBe(true);
     expect(
-      await scope(
-        async (tx) => await loadPromptCachingPreference(tx, ids.orgB),
-      ),
-    ).toBe(true);
-    expect(
-      await scope(
-        async (tx) => await loadPromptCachingPreference(tx, ids.orgA),
-      ),
-    ).toBe(true);
+      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgA)),
+    ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
   });
 
   test("loadOrgAISettings reads both values in one select", async () => {

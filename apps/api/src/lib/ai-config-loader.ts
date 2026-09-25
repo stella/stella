@@ -71,26 +71,14 @@ export const loadOrgAIConfig = async (
   });
 };
 
-export const loadPromptCachingPreference = async (
-  db: OrgSettingsReader,
-  organizationId: SafeId<"organization">,
-): Promise<boolean> => {
-  const rows = await db
-    .select({ promptCachingEnabled: organizationSettings.promptCachingEnabled })
-    .from(organizationSettings)
-    .where(eq(organizationSettings.organizationId, organizationId))
-    .limit(1);
-  return resolvePromptCachingPreference(rows.at(0));
-};
-
 export type OrgAISettings = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
 };
 
 /**
- * {@link loadOrgAIConfig} and {@link loadPromptCachingPreference} in one
- * select, for AI call sites that need both. Keeps the strict corruption
+ * {@link loadOrgAIConfig} plus the organization's prompt-caching preference in
+ * one select, for AI call sites that need both. Keeps the strict corruption
  * semantics of {@link loadOrgAIConfig}: a stored row that does not decrypt
  * throws instead of degrading to platform defaults.
  */
@@ -117,10 +105,9 @@ export type OrgSettingsForAuth = {
 };
 
 /**
- * Combined form of {@link loadOrgAIConfig} + {@link loadPromptCachingPreference}
- * for callers (the validateAuth resolve, the MCP capability context) that
- * need both on every request. A single `organization_settings` select
- * instead of two halves the per-request query floor for that hot path.
+ * The AI config and prompt-caching preference for callers (the validateAuth
+ * resolve, the MCP capability context) that need both on every request, in a
+ * single `organization_settings` select.
  *
  * Deliberately degrades a corrupt stored config to `orgAIConfig: null`
  * instead of throwing: this backs the shared per-request auth resolve, so a

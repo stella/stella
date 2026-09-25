@@ -50,7 +50,7 @@ const formerMember = mintAuthProviderId<"user">();
  * (owner, no matter membership), and the co-member added below. userA1 is also
  * a member of orgB; userB1 belongs to orgB only.
  */
-let orgAMembers: string[];
+let orgAMembers: SafeId<"user">[];
 
 const readAudience = async (
   organizationId: SafeId<"organization">,
