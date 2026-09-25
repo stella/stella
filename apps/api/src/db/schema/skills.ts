@@ -56,10 +56,6 @@ export const agentSkills = p.pgTable(
     // unique per (org, user). Null means "no command" and never
     // collides.
     command: p.varchar({ length: 50 }),
-    // Optional hint surfaced to the model so it can decide whether
-    // to auto-invoke this skill. When null, the skill is only
-    // user-triggered (via slash command, picker, etc.).
-    autoInvokeHint: p.text("auto_invoke_hint"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
