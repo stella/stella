@@ -42,7 +42,6 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
-import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
 const SignInDialog = lazy(async () => {
@@ -216,7 +215,6 @@ const PublicSidebar = ({
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxEntryEnabled,
     includePublicLaw: isPublicLawSsrRouteEnabled(),
-    includePublicTools: isPublicToolsRouteEnabled(),
   });
 
   const requestPrivateFeature = (redirectTo: string) => {

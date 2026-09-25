@@ -5,7 +5,6 @@ import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav"
 const ALL_GATES_OPEN = {
   includeInbox: true,
   includePublicLaw: true,
-  includePublicTools: true,
 };
 
 const navIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
@@ -19,30 +18,28 @@ const publicNavIds = getWorkspacePrimaryNavItems(ALL_GATES_OPEN)
 
 describe("workspace primary nav", () => {
   test("keeps guest access beside the canonical destination", () => {
-    expect(publicNavIds).toEqual(["caseLaw", "tools"]);
+    expect(publicNavIds).toEqual(["caseLaw"]);
   });
 
-  test("keeps every entry while all three gates are open", () => {
+  test("keeps every entry while both gates are open", () => {
     expect(navIds({})).toEqual([
       "search",
       "chat",
       "inbox",
       "matters",
       "caseLaw",
-      "tools",
       "knowledge",
       "contacts",
     ]);
   });
 
   // Each gate must remove its own entry and nothing else, so a closed inbox
-  // gate cannot take the case-law or tools entry down with it.
+  // gate cannot take the case-law entry down with it.
   test("drops only the entry whose gate closed", () => {
     expect(navIds({ includeInbox: false })).not.toContain("inbox");
     expect(navIds({ includeInbox: false })).toContain("caseLaw");
-    expect(navIds({ includeInbox: false })).toContain("tools");
+    expect(navIds({ includePublicLaw: false })).not.toContain("caseLaw");
     expect(navIds({ includePublicLaw: false })).toContain("inbox");
-    expect(navIds({ includePublicTools: false })).toContain("inbox");
   });
 
   test("leaves the ungated entries alone when every gate closes", () => {
@@ -50,7 +47,6 @@ describe("workspace primary nav", () => {
       navIds({
         includeInbox: false,
         includePublicLaw: false,
-        includePublicTools: false,
       }),
     ).toEqual(["search", "chat", "matters", "knowledge", "contacts"]);
   });

@@ -178,9 +178,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
     includePublicLaw: publicLawPreviewEnabled,
-    // The public /tools catalogue stays out of the authenticated app
-    // nav; signed-in users manage tools via /knowledge/tools instead.
-    includePublicTools: false,
   });
   const user = useAuthenticatedUser();
 
@@ -483,12 +480,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     caseLaw: {
       action: () => {
         detached(navigate({ to: "/law/cases" }), "app-sidebar.navigate");
-      },
-      contextMenu: {},
-    },
-    tools: {
-      action: () => {
-        detached(navigate({ to: "/tools" }), "app-sidebar.navigate");
       },
       contextMenu: {},
     },
