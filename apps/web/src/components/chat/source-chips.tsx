@@ -15,7 +15,6 @@ import {
   type CaseLawDecisionSourceReference,
   useExternalSourceStore,
 } from "@/components/chat/external-source-store";
-import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import type {
   ExternalSourceEntry,
   SourceDocumentEntry,
@@ -33,6 +32,7 @@ import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 type SourceChipsProps = {
   activeOrganizationId: string;

@@ -49,7 +49,6 @@ import {
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
-import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
@@ -78,6 +77,7 @@ import {
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";

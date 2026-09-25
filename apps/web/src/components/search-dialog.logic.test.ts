@@ -20,8 +20,8 @@ import {
   getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
-  getEntityLocationRoute,
-  getEntityWorkspaceRoute,
+  getEntityLocation,
+  getRecentFileLocation,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
@@ -424,14 +424,7 @@ describe("document routes", () => {
     });
   });
 
-  test("routes non-document entity hits to the all view", () => {
-    expect(getEntityWorkspaceRoute({ workspaceId: "workspace-1" })).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-    });
-  });
-
-  test("opens the containing folder for a modifier-activated entity hit", () => {
+  test("reveals a modifier-activated entity hit in its file tree", () => {
     const documentHit = getRecentFilePreviewHit({
       entityId: "entity-1",
       openedAt: "2026-07-31T05:00:00.000Z",
@@ -440,24 +433,37 @@ describe("document routes", () => {
       workspaceName: "Disclosure review",
     });
 
-    expect(
-      getEntityLocationRoute({ ...documentHit, parentId: "folder-1" }),
-    ).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-      search: { folder: "folder-1" },
-    });
+    expect(getEntityLocation({ ...documentHit, parentId: "folder-1" })).toEqual(
+      {
+        workspaceId: "workspace-1",
+        entityId: "entity-1",
+        fallbackFolderId: "folder-1",
+      },
+    );
     // Matter-root entities carry no folder scope.
-    expect(getEntityLocationRoute(documentHit)).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-    });
+    expect(getEntityLocation(documentHit)?.fallbackFolderId).toBeNull();
     // Hits without a containing matter location keep their normal open.
     expect(
-      getEntityLocationRoute(
-        chatHit({ threadId: "thread-1", workspaceId: null }),
-      ),
+      getEntityLocation(chatHit({ threadId: "thread-1", workspaceId: null })),
     ).toBeNull();
+  });
+
+  test("reveals a task's folder, since the file tree does not list tasks", () => {
+    const entityHit = getRecentFilePreviewHit({
+      entityId: "task-1",
+      openedAt: "2026-07-31T05:00:00.000Z",
+      title: "File the reply",
+      workspaceId: "workspace-1",
+      workspaceName: "Disclosure review",
+    });
+
+    expect(
+      getEntityLocation({
+        ...entityHit,
+        type: "task",
+        parentId: "folder-1",
+      })?.entityId,
+    ).toBe("folder-1");
   });
 
   test("opens a recent file directly when its field id was persisted", () => {
@@ -474,16 +480,16 @@ describe("document routes", () => {
     });
   });
 
-  test("opens the all view for a recent file without a field id", () => {
+  test("locates a recent file by its own tree row", () => {
     expect(
-      getRecentFileRoute({
+      getRecentFileLocation({
         entityId: "entity-1",
-        fileFieldId: null,
         workspaceId: "workspace-1",
       }),
     ).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
+      workspaceId: "workspace-1",
+      entityId: "entity-1",
+      fallbackFolderId: null,
     });
   });
 });

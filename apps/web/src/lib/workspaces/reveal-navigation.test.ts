@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type { WorkspaceView } from "@/lib/types";
 import {
   getCurrentWorkspaceViewId,
-  getWorkspaceFolderNavigationTarget,
-} from "@/components/chat/folder-navigation";
-import type { WorkspaceView } from "@/lib/types";
+  getWorkspaceRevealTarget,
+} from "@/lib/workspaces/reveal-navigation";
 
 const view = (
   id: string,
@@ -16,7 +16,14 @@ const someFilter: WorkspaceView["layout"]["filters"] = [
   { type: "group", combinator: "and", children: [] },
 ];
 
-describe("folder navigation", () => {
+const folderReveal = {
+  entityId: "folder_1",
+  fallbackFolderId: "folder_1",
+  pathname: "/chat",
+  targetWorkspaceId: "ws_1",
+};
+
+describe("reveal navigation", () => {
   test("reads the active view id from workspace paths", () => {
     expect(getCurrentWorkspaceViewId("/workspaces/ws_1/files", "ws_1")).toBe(
       "files",
@@ -30,12 +37,10 @@ describe("folder navigation", () => {
     ).toBeNull();
   });
 
-  test("opens the file tree, not the first view, and reveals the folder", () => {
+  test("opens the file tree, not the first view, and reveals the entity", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
-        pathname: "/chat",
-        targetWorkspaceId: "ws_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
         views: [view("overview", "overview"), view("files", "filesystem")],
       }),
     ).toEqual({
@@ -45,12 +50,21 @@ describe("folder navigation", () => {
     });
   });
 
+  test("opens the tree at its root when there is nothing to reveal", () => {
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        entityId: null,
+        views: [view("files", "filesystem")],
+      }).search,
+    ).toEqual({});
+  });
+
   test("leaves an overview view for the file tree", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
         pathname: "/workspaces/ws_1/overview",
-        targetWorkspaceId: "ws_1",
         views: [view("overview", "overview"), view("files", "filesystem")],
       }).params.viewId,
     ).toBe("files");
@@ -58,21 +72,18 @@ describe("folder navigation", () => {
 
   test("stays on the current tree view when there are several", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
         pathname: "/workspaces/ws_1/files-2/document",
-        targetWorkspaceId: "ws_1",
         views: [view("files-1", "filesystem"), view("files-2", "filesystem")],
       }).params.viewId,
     ).toBe("files-2");
   });
 
-  test("prefers an unfiltered tree, whose filters cannot hide the folder", () => {
+  test("prefers an unfiltered tree, whose filters cannot hide the entity", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
-        pathname: "/chat",
-        targetWorkspaceId: "ws_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
         views: [
           view("filtered", "filesystem", someFilter),
           view("unfiltered", "filesystem"),
@@ -83,21 +94,18 @@ describe("folder navigation", () => {
 
   test("still opens a filtered tree when it is the only one", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
-        pathname: "/chat",
-        targetWorkspaceId: "ws_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
         views: [view("filtered", "filesystem", someFilter)],
       }).params.viewId,
     ).toBe("filtered");
   });
 
-  test("scopes the current view into the folder when there is no tree", () => {
+  test("scopes the current view into the fallback folder when there is no tree", () => {
     expect(
-      getWorkspaceFolderNavigationTarget({
-        folderId: "folder_1",
-        pathname: "/chat",
-        targetWorkspaceId: "ws_1",
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        entityId: "doc_1",
         views: [view("overview", "overview")],
       }),
     ).toEqual({
@@ -105,5 +113,15 @@ describe("folder navigation", () => {
       params: { viewId: "all", workspaceId: "ws_1" },
       search: { folder: "folder_1" },
     });
+  });
+
+  test("opens the matter root when there is no tree and no folder", () => {
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        fallbackFolderId: null,
+        views: [view("overview", "overview")],
+      }).search,
+    ).toEqual({});
   });
 });
