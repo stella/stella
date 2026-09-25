@@ -82,7 +82,7 @@ import { panic } from "better-result";
  *
  * - `faithful` reproduces upstream exactly, and is kept as the reference the
  *   divergence below is measured against.
- * - `extended` is what the corpus stems with. Upstream leaves three gaps in
+ * - `extended` is what the corpus stems with. Upstream leaves four gaps in
  *   the paradigms legal text is made of, each of which splits one noun over
  *   several stems, so a query in one case misses a decision written in
  *   another:
@@ -97,6 +97,12 @@ import { panic } from "better-result";
  *     ending after it is stripped but drops it where it is the ending.
  *     Dropping a stem-final `i` after the case pass gives the whole paradigm
  *     the stem Czech Snowball gives `rozhodnutí`.
+ *   - the hard masculine nouns ending in `-es` or `-ém` (`proces`,
+ *     `problém`): upstream strips both from the nominative as if they were
+ *     endings, but not from `procesu` or `problémom`. The `-es` nouns keep
+ *     it; the `-ém` nouns drop it from every form (see
+ *     {@link removeHardStemEm}). Likewise `-imu`, read as an ending where it
+ *     is the `-u` of `režimu`.
  *   `slovak.test.ts` pins the full cost against upstream's own vectors.
  */
 type SlovakStemmerVariant = "faithful" | "extended";
@@ -216,15 +222,22 @@ const removeExtendedCase = (chars: string[], length: number): number | null => {
   // more character: `rozhodnutím` -> `rozhodnu`, a letter short of
   // `rozhodnutí`. Passing the `í`, as `-om` passes its `o`, strips the
   // ending alone.
-  // `-es` and `-ém` take the same route: upstream strips three characters
-  // there too, leaving a two-character stem of a five-character word.
-  if (
-    length > 4 &&
-    (endsWith(chars, length, "ím") ||
-      endsWith(chars, length, "es") ||
-      endsWith(chars, length, "ém"))
-  ) {
+  if (length > 4 && endsWith(chars, length, "ím")) {
     return palatalize(chars, length - 1);
+  }
+  // `-es` and `-ém` are no Slovak case ending (the table inherits them from
+  // the Czech stemmer). A Slovak word ending in them is the bare nominative
+  // of a hard masculine noun (`proces`, `problém`), whose other cases append
+  // to it (`procesu`, `problémom`), so stripping them splits the paradigm.
+  // The `-ém` nouns lose the `ém` in the hard-stem pass instead.
+  if (endsWith(chars, length, "es") || endsWith(chars, length, "ém")) {
+    return length;
+  }
+  // `-imu` is no Slovak ending either (the soft adjective dative is
+  // `-iemu`): it is the `-u` of a noun ending in `-im` (`režimu`), which
+  // upstream strips to `reh`.
+  if (length > 5 && endsWith(chars, length, "imu")) {
+    return length - 1;
   }
   return null;
 };
@@ -331,6 +344,17 @@ const removeSoftStemVowel = (
 ): number =>
   length > 4 && at(chars, length - 1) === "i" ? length - 1 : length;
 
+/**
+ * The hard-stem pass: a stem the case pass left ending in `ém` loses it.
+ * `problému` cannot be told from an adjective's dative (`novému`) by its
+ * ending, so the case pass strips `ému` from both, leaving `probl`; dropping
+ * `ém` from every other form of the noun (`problém`, `problémy`,
+ * `problémom`) meets it there. Five characters or more, as in the soft-stem
+ * pass, so `krém` keeps its stem whole in every case.
+ */
+const removeHardStemEm = (chars: readonly string[], length: number): number =>
+  length > 4 && endsWith(chars, length, "ém") ? length - 2 : length;
+
 /** Upstream's possessive pass needs six characters; `súdov` has five. */
 const MIN_POSSESSIVE_OV_LENGTH = {
   faithful: 6,
@@ -375,6 +399,10 @@ const stemSlovakVariant = (
     length = removeSoftStemVowel(chars, length);
   }
   length = removePossessives(chars, length, variant);
+  if (variant === "extended") {
+    // After the possessive pass, which is what strips `problémov`'s `-ov`.
+    length = removeHardStemEm(chars, length);
+  }
   length = removePrefixes(chars, length);
   return chars.slice(0, length).join("");
 };

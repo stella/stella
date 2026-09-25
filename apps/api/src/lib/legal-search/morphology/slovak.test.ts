@@ -95,8 +95,9 @@ describe("stemSlovakUpstream", () => {
  * Every case form, singular then plural (nominative, genitive, dative,
  * accusative, locative, instrumental), of nouns across the declension
  * patterns legal text leans on: feminine `žena` (škoda, náhrada, pokuta,
- * zmluva), masculine inanimate `dub` (pomer, súd) and neuter `vysvedčenie`
- * (rozhodnutie).
+ * zmluva), masculine inanimate `dub` (pomer, súd; proces, stres, problém,
+ * systém, whose nominative ends in a string the Czech tables strip; režim
+ * beside them as the control) and neuter `vysvedčenie` (rozhodnutie).
  */
 const PARADIGMS = {
   škod: "škoda škody škode škodu škode škodou škody škôd škodám škody škodách škodami",
@@ -109,6 +110,15 @@ const PARADIGMS = {
   pomer:
     "pomer pomeru pomeru pomer pomere pomerom pomery pomerov pomerom pomery pomeroch pomermi",
   súd: "súd súdu súdu súd súde súdom súdy súdov súdom súdy súdoch súdmi",
+  proces:
+    "proces procesu procesu proces procese procesom procesy procesov procesom procesy procesoch procesmi",
+  stres:
+    "stres stresu stresu stres strese stresom stresy stresov stresom stresy stresoch stresmi",
+  probl:
+    "problém problému problému problém probléme problémom problémy problémov problémom problémy problémoch problémami",
+  syst: "systém systému systému systém systéme systémom systémy systémov systémom systémy systémoch systémami",
+  režim:
+    "režim režimu režimu režim režime režimom režimy režimov režimom režimy režimoch režimami",
   rozhodnut:
     "rozhodnutie rozhodnutia rozhodnutiu rozhodnutie rozhodnutí rozhodnutím rozhodnutia rozhodnutí rozhodnutiam rozhodnutia rozhodnutiach rozhodnutiami",
 } as const;
