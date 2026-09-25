@@ -1,6 +1,7 @@
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
@@ -71,7 +72,9 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
@@ -495,6 +498,36 @@ const extractAbstract = (
     ),
   };
 };
+
+// ── Abstract (GetAbstract.aspx) ──────────────────────────
+
+/**
+ * What the court answered about a row's abstract, stated on the row itself.
+ *
+ * `read` and `absent` are the court's own answers and settle the row.
+ * `unavailable` says nothing about the decision: the reconciliation walk of
+ * the row's year reads it again (`recheckHeld`).
+ */
+export const CZ_US_ABSTRACT_METADATA_KEY = "abstractState";
+
+export const CZ_US_ABSTRACT_STATE = {
+  READ: "read",
+  ABSENT: "absent",
+  UNAVAILABLE: "unavailable",
+} as const;
+
+export type CzUsAbstractState =
+  (typeof CZ_US_ABSTRACT_STATE)[keyof typeof CZ_US_ABSTRACT_STATE];
+
+/**
+ * What one abstract request produced. `absent` is the court's own answer
+ * (404 or 410) that it holds no abstract page for the record; `unavailable`
+ * is every other outcome and says nothing about the decision.
+ */
+export type NalusAbstractOutcome =
+  | { type: typeof CZ_US_ABSTRACT_STATE.READ; html: string }
+  | { type: typeof CZ_US_ABSTRACT_STATE.ABSENT }
+  | { type: typeof CZ_US_ABSTRACT_STATE.UNAVAILABLE };
 
 // ── Record card (ResultDetail.aspx) ──────────────────────
 
@@ -2010,6 +2043,13 @@ export type CzUsDecisionPayloads = {
   /** What the court answered when asked for the record card. */
   recordCard: NalusRecordCardOutcome;
   abstractHtml: string | undefined;
+  /**
+   * What the court answered when asked for the abstract where no page was
+   * read: `absent` or `unavailable`. A served `abstractHtml` is `read`.
+   */
+  abstractState?:
+    | typeof CZ_US_ABSTRACT_STATE.ABSENT
+    | typeof CZ_US_ABSTRACT_STATE.UNAVAILABLE;
 };
 
 /**
@@ -2043,6 +2083,7 @@ export const buildCzUsDecision = ({
   textHtml,
   recordCard,
   abstractHtml,
+  abstractState = CZ_US_ABSTRACT_STATE.UNAVAILABLE,
 }: CzUsDecisionPayloads): IngestionResult | null => {
   // Stored whenever the court served a page, whether or not it parsed: the
   // payload is what a re-parse reads instead of asking the court again.
@@ -2067,6 +2108,11 @@ export const buildCzUsDecision = ({
   if (listed.listingDocketMissing) {
     decision.metadata["listingDocketMissing"] = true;
   }
+  decision.metadata = checkedDecisionMetadata({
+    ...decision.metadata,
+    [CZ_US_ABSTRACT_METADATA_KEY]:
+      abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
+  });
   decision.textFields =
     abstractHtml === undefined
       ? {
@@ -2096,6 +2142,12 @@ export const buildCzUsDecision = ({
   );
   return decision;
 };
+
+/** A page beside the document that the court did not answer for. */
+const detailReadFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
 
 const fetchListedDecision = async (
   listed: ListedDecision,
@@ -2133,7 +2185,31 @@ const fetchListedDecision = async (
 
   // A page beside the document: failing to read one is not failing to read
   // the decision, so the caller states what the gap looks like on the row.
+  // A failed read is reported with the page it concerns, graded as the
+  // upstream being unavailable.
+  const reportUnreadPage = (
+    part: "record-card" | "abstract",
+    error: unknown,
+  ): void => {
+    observeFailure(
+      classifyFailure(
+        typeof error === "object" && error !== null
+          ? error
+          : new Error("NALUS read failed", { cause: error }),
+        "upstream_unavailable",
+      ),
+      {
+        sink: detailReadFailed,
+        ctx: {
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          documentId: listed.sourceDocumentId,
+          operation: part,
+        },
+      },
+    );
+  };
   const optionalPage = async <T>(
+    part: "record-card" | "abstract",
     read: () => Promise<T>,
     whenUnread: T,
   ): Promise<T> => {
@@ -2145,32 +2221,58 @@ const fetchListedDecision = async (
       if (signal?.aborted || error instanceof NalusRateLimitedError) {
         throw error;
       }
+      reportUnreadPage(part, error);
       return whenUnread;
     }
   };
 
   const recordCard = await optionalPage(
+    "record-card",
     async () => await fetchRecordCard(listed, session, signal),
     CARD_NOT_ASKED,
   );
-  const abstractHtml = await optionalPage(async () => {
-    const abstractQuery = new URLSearchParams({ sz: listed.sz ?? "" });
-    const abstractResponse = await nalusResponse(
-      `${ABSTRACT_URL}?${abstractQuery.toString()}`,
-      { signal },
-    );
-    if (!abstractResponse.ok) {
+  // The court's 404 or 410 is its answer that the record has no abstract
+  // page. Every other status is a failed read, reported as a failed request
+  // is, and the row states `unavailable`, which the reconciliation reads
+  // again.
+  const abstract = await optionalPage(
+    "abstract",
+    async (): Promise<NalusAbstractOutcome> => {
+      const abstractUrl = `${ABSTRACT_URL}?${new URLSearchParams({
+        sz: listed.sz ?? "",
+      }).toString()}`;
+      const abstractResponse = await nalusResponse(abstractUrl, { signal });
+      if (abstractResponse.ok) {
+        return {
+          type: CZ_US_ABSTRACT_STATE.READ,
+          html: await abstractResponse.text(),
+        };
+      }
       await abstractResponse.text();
-      return undefined;
-    }
-    return await abstractResponse.text();
-  }, undefined);
+      if (abstractResponse.status === 404 || abstractResponse.status === 410) {
+        return { type: CZ_US_ABSTRACT_STATE.ABSENT };
+      }
+      reportUnreadPage(
+        "abstract",
+        new NalusResponseError({
+          message: `NALUS abstract returned ${httpFailureReason(
+            abstractResponse,
+            abstractUrl,
+          )}`,
+        }),
+      );
+      return { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
+    },
+    { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE },
+  );
 
   const decision = buildCzUsDecision({
     listed,
     textHtml: responseHtml,
     recordCard,
-    abstractHtml,
+    ...(abstract.type === CZ_US_ABSTRACT_STATE.READ
+      ? { abstractHtml: abstract.html }
+      : { abstractHtml: undefined, abstractState: abstract.type }),
   });
   if (!decision) {
     return {
@@ -2609,6 +2711,10 @@ const reparseStoredRaw = (
       ...decision.textFields,
       ...extractAbstract(abstractHtml),
     };
+    decision.metadata = checkedDecisionMetadata({
+      ...decision.metadata,
+      [CZ_US_ABSTRACT_METADATA_KEY]: CZ_US_ABSTRACT_STATE.READ,
+    });
   }
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
@@ -2807,6 +2913,13 @@ export const czUsAdapter = defineSourceAdapter({
     // whole decisions by design, so a detail-less row here is always a failed
     // fetch rather than a legitimate metadata-only state.
     heldRequiresDetail: true,
+    // A row whose abstract the court did not answer for keeps its text in
+    // public and is read again on each walk of its year until the court
+    // answers with an abstract or its absence.
+    recheckHeld: {
+      metadataKey: CZ_US_ABSTRACT_METADATA_KEY,
+      values: [CZ_US_ABSTRACT_STATE.UNAVAILABLE],
+    },
     listSlicePage: listCzUsSlicePage,
     buildDecision: buildCzUsFromPayload,
   },
