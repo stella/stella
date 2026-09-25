@@ -8,6 +8,7 @@
  */
 
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
+import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
 const ELYSIA_ERROR_CODE = {
   validation: "VALIDATION",
@@ -64,5 +65,30 @@ export const elysiaErrorAnswer = (
       return MALFORMED_REQUEST_ANSWER;
     default:
       return INTERNAL_ANSWER;
+  }
+};
+
+/**
+ * What a framework-raised error was, for the failure grader. Decided beside
+ * the answer so the two cannot disagree: a response-schema failure is
+ * answered 500 and observed as the handler's defect, every other validation
+ * failure is the caller's. Undefined for a code the framework answers as an
+ * internal error, which is graded from the error's own evidence.
+ */
+export const elysiaFailureReason = (
+  code: string | number,
+  error: unknown,
+): FrameworkFailure | undefined => {
+  switch (code) {
+    case ELYSIA_ERROR_CODE.validation:
+      return isResponseValidationError(error)
+        ? "response_invalid"
+        : "request_validation";
+    case ELYSIA_ERROR_CODE.notFound:
+      return "route_not_found";
+    case ELYSIA_ERROR_CODE.parse:
+      return "request_malformed";
+    default:
+      return undefined;
   }
 };

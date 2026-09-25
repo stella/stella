@@ -164,9 +164,9 @@ const TIMEOUT_CLASS_NAME = "TimeoutError";
  * `HandlerError` codes that carry a grade. Closed, so a misspelt code fails to
  * compile at the constructor rather than silently grading as a defect.
  */
-export const GRADED_HANDLER_CODES = ["upstream_unavailable"] as const;
+const GRADED_HANDLER_CODES = ["upstream_unavailable"] as const;
 
-export type GradedHandlerCode = (typeof GRADED_HANDLER_CODES)[number];
+type GradedHandlerCode = (typeof GRADED_HANDLER_CODES)[number];
 
 const GRADED_HANDLER_CODE_REASON = {
   upstream_unavailable: "upstream_unavailable",
@@ -200,7 +200,7 @@ export type FrameworkFailure =
  * is kept in fields only when the exception also carries `$fault`: any error
  * can be named `ThrottlingException`.
  */
-export const AWS_EXCEPTION_NAMES = [
+const AWS_EXCEPTION_NAMES = [
   "AccessDeniedException",
   "InternalServerException",
   "ModelNotReadyException",
@@ -238,14 +238,14 @@ export type OutputPolicy = {
  * Local, non-domain outcomes a sink may expect. A domain meaning is declared
  * at its boundary instead, where it holds for every sink.
  */
-export const EXPECTED_REASONS = [
+const EXPECTED_REASONS = [
   "optional_file_absent",
   "client_disconnected",
 ] as const satisfies readonly FailureReason[];
 
 export type ExpectedReason = (typeof EXPECTED_REASONS)[number];
 
-export type ExpectableCode =
+type ExpectableCode =
   | keyof typeof NETWORK_ERROR_CODE_REASON
   | keyof typeof REDIS_ERROR_CODE_REASON
   | PgDriverCode
@@ -259,7 +259,7 @@ type ErrorClass = abstract new (...args: never) => Error;
  * string or a message test, so an expectation cannot become a second grading
  * vocabulary.
  */
-export type ExpectedMatch =
+type ExpectedMatch =
   | { readonly code: ExpectableCode }
   | { readonly ctor: ErrorClass }
   | { readonly requestAborted: true };
@@ -303,10 +303,6 @@ class FailureSinkHandle {
   get legacy(): OutputPolicy | undefined {
     return this.#spec.legacy;
   }
-
-  static is(value: unknown): value is FailureSinkHandle {
-    return typeof value === "object" && value !== null && #spec in value;
-  }
 }
 
 export type FailureSink = FailureSinkHandle;
@@ -320,9 +316,6 @@ export const failureSink = (spec: FailureSinkSpec): FailureSink => {
   Object.freeze(handle);
   return handle;
 };
-
-export const isFailureSink = (value: unknown): value is FailureSink =>
-  FailureSinkHandle.is(value);
 
 // --- Grading ------------------------------------------------------------------
 
@@ -553,13 +546,6 @@ export const gradeFailure = (
   return graded("unclassified", "unclassified", failureIndex);
 };
 
-/** A 5xx the request answered with no failure observed on the way. */
-export const UNOBSERVED_5XX_GRADING: FailureGrading = graded(
-  "unobserved_5xx",
-  "unobserved",
-  0,
-);
-
 // --- Fields -------------------------------------------------------------------
 
 type FieldValue = number | string;
@@ -789,7 +775,7 @@ export const causeChainAttributes = ({
 };
 
 /** The level-zero numeric status the request records have carried. */
-export const requestErrorStatusFields = ({
+const requestErrorStatusFields = ({
   nodes,
 }: FailureEvidence): Record<string, number> => {
   const root = nodes.at(0);

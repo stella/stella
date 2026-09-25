@@ -76,11 +76,11 @@ const STACK_FRAME_PREFIX = "at ";
 const RECOGNIZED_FRAME_ORIGIN =
   /^(?:(?:[^\s]*\/)?(?:apps|packages|node_modules)\/|\/app\/|(?:node|bun|native):)/u;
 
-export type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
+type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
 
-export type EvidenceTruncation = "cycle" | "depth" | "none" | "read_failed";
+type EvidenceTruncation = "cycle" | "depth" | "none" | "read_failed";
 
-export type ProviderStatusSource =
+type ProviderStatusSource =
   | "body_code"
   | "body_status"
   | "code"
@@ -88,7 +88,7 @@ export type ProviderStatusSource =
   | "status"
   | "statusCode";
 
-export type ProviderStatus = {
+type ProviderStatus = {
   readonly status: number;
   readonly source: ProviderStatusSource;
 };
@@ -107,7 +107,7 @@ export const PG_IDENTIFIER_PROPERTIES = [
   "routine",
 ] as const;
 
-export type PgIdentifierProperty = (typeof PG_IDENTIFIER_PROPERTIES)[number];
+type PgIdentifierProperty = (typeof PG_IDENTIFIER_PROPERTIES)[number];
 
 export type EvidenceNode = {
   readonly kind: EvidenceNodeKind;
