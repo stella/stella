@@ -191,7 +191,7 @@ export const createCourtWeightCache = (
     return map;
   };
 
-  const startRead = (
+  const startRead = async (
     read: CourtWeightRead,
     onRead: NonNullable<LoadCourtWeightsOptions["onRead"]>,
     holdsConnection: boolean,
@@ -203,7 +203,7 @@ export const createCourtWeightCache = (
       }
     });
     pending = { promise, holdsConnection, token };
-    return promise;
+    return await promise;
   };
 
   const load = async ({

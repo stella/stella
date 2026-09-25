@@ -240,10 +240,10 @@ export const runSearchCensus = async (
   exercised.add(readCourtWeightRowsQuery.publicLawSharedQuery);
 
   const configs = await createFtsConfigCache(
-    async () => ftsRows,
+    async () => await Promise.resolve(ftsRows),
   ).loadFtsSearchConfigs();
   const courtWeights = await createCourtWeightCache(
-    async () => courtWeightRows,
+    async () => await Promise.resolve(courtWeightRows),
   ).load();
 
   const plan = caseLawSearchPlan({
