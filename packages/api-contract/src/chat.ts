@@ -140,6 +140,12 @@ type ChatSendRequestBase = {
     fileName: string;
     templateId: SafeId<"template">;
   };
+  /**
+   * The extension protocol the client speaks. Any version is accepted so a
+   * stale tab can still chat; the server offers the browser tool only when it
+   * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
+   */
+  browserClient?: { protocolVersion: number };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";

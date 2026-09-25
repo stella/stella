@@ -11,6 +11,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  BROWSER_CONTROL_ACTION,
+  BROWSER_CONTROL_TOOL_NAME,
+  isReadOnlyBrowserCommand,
+  parseBrowserControlCommand,
+} from "@stll/api-contract/browser-control";
+import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
@@ -51,6 +58,16 @@ import {
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
+import {
+  BROWSER_APPROVAL_MODE,
+  setBrowserApprovalMode,
+  useBrowserApprovalMode,
+  useBrowserCommandAutoApproved,
+} from "@/features/chat/browser-control/browser-approval-mode";
+import {
+  getBrowserApprovalDetails,
+  type BrowserApprovalDetail,
+} from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
@@ -452,15 +469,23 @@ export const ToolApprovalCard = ({
         });
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
+  const browserApprovalMode = useBrowserApprovalMode();
+  const browserCommand =
+    name === BROWSER_CONTROL_TOOL_NAME
+      ? parseBrowserControlCommand(getApprovalPartInput(part))
+      : null;
+  const isBrowserCommandAutoApproved =
+    useBrowserCommandAutoApproved(browserCommand);
   const shouldAutoApprove =
     !isBlocked &&
-    hasAutomaticApproval({
+    (hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
       isPublicOfficialApproval,
       name,
-    });
+    }) ||
+      isBrowserCommandAutoApproved);
   const automaticResponse =
     approvalId === null
       ? null
@@ -476,6 +501,11 @@ export const ToolApprovalCard = ({
           },
           shouldRespond: isBlocked || shouldAutoApprove,
         };
+  const isAwaitingDecision =
+    isApprovalRequested &&
+    !isProcessing &&
+    !isBlocked &&
+    !isPublicOfficialApproval;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;
@@ -519,15 +549,19 @@ export const ToolApprovalCard = ({
       <ToolApprovalSummary
         activeFileName={activeFileName}
         externalInput={showsExternalInput ? externalInput : undefined}
-        isAwaitingExternalDecision={
-          isApprovalRequested &&
-          !isProcessing &&
-          !isBlocked &&
-          !isPublicOfficialApproval
-        }
+        isAwaitingDecision={isAwaitingDecision}
         part={part}
         providerName={externalMcpProviderName ?? label}
       />
+      {isAwaitingDecision &&
+        browserCommand !== null &&
+        browserApprovalMode === BROWSER_APPROVAL_MODE.autoApproveReads && (
+          <BrowserApprovalModeNotice
+            onReset={() =>
+              setBrowserApprovalMode(BROWSER_APPROVAL_MODE.askEveryTime)
+            }
+          />
+        )}
 
       {approvalId &&
         !isProcessing &&
@@ -546,6 +580,25 @@ export const ToolApprovalCard = ({
             >
               {t("chat.approval.allowOnce")}
             </Button>
+            {browserCommand !== null &&
+              isReadOnlyBrowserCommand(browserCommand) &&
+              browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
+                <Button
+                  onClick={() => {
+                    if (!beginManualResponse(approvalId)) {
+                      return;
+                    }
+                    setBrowserApprovalMode(
+                      BROWSER_APPROVAL_MODE.autoApproveReads,
+                    );
+                    onApprove(approvalId, name);
+                  }}
+                  size="xs"
+                  variant="outline"
+                >
+                  {t("chat.approval.browser.autoApproveReads")}
+                </Button>
+              )}
             {canAllowInConversation && (
               <Button
                 onClick={() => {
@@ -596,13 +649,13 @@ export const ToolApprovalCard = ({
 const ToolApprovalSummary = ({
   activeFileName,
   externalInput,
-  isAwaitingExternalDecision,
+  isAwaitingDecision,
   part,
   providerName,
 }: {
   activeFileName: string | undefined;
   externalInput: unknown;
-  isAwaitingExternalDecision: boolean;
+  isAwaitingDecision: boolean;
   part: ApprovalToolPart;
   providerName: string;
 }) => {
@@ -644,10 +697,16 @@ const ToolApprovalSummary = ({
           subagents={part.input.subagents}
         />
       )}
+      {name === BROWSER_CONTROL_TOOL_NAME && input !== undefined && (
+        <BrowserControlInputSummary
+          input={input}
+          isAwaitingDecision={isAwaitingDecision}
+        />
+      )}
       {externalInput !== undefined && (
         <ExternalMcpInputSummary
           input={externalInput}
-          isAwaitingDecision={isAwaitingExternalDecision}
+          isAwaitingDecision={isAwaitingDecision}
           providerName={providerName}
         />
       )}
@@ -749,8 +808,13 @@ const getToolApprovalState = ({
     (part.state === "approval-responded" && part.approval.approved === false);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
+  // A valid browser command renders its own structured summary; one that
+  // fails the schema falls back to the generic rows so the user still sees
+  // what the model sent.
   const showsExternalInput =
-    isExternalMcpApproval || isExternalInputChatToolName(name);
+    (name !== BROWSER_CONTROL_TOOL_NAME ||
+      parseBrowserControlCommand(getApprovalPartInput(part)) === null) &&
+    (isExternalMcpApproval || isExternalInputChatToolName(name));
   // High-impact writes may only be approved once or denied: no persistent
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
@@ -946,6 +1010,111 @@ const ExternalMcpInputSummary = ({
           </dl>
         </div>
       </details>
+    </div>
+  );
+};
+
+const browserActionTranslationKey = (command: BrowserControlCommand) => {
+  switch (command.action) {
+    case BROWSER_CONTROL_ACTION.click:
+      return "chat.approval.browser.actions.click";
+    case BROWSER_CONTROL_ACTION.fill:
+      return "chat.approval.browser.actions.fill";
+    case BROWSER_CONTROL_ACTION.goBack:
+      return "common.goBack";
+    case BROWSER_CONTROL_ACTION.open:
+      return "chat.approval.browser.actions.open";
+    case BROWSER_CONTROL_ACTION.pressKey:
+      return "chat.approval.browser.actions.pressKey";
+    case BROWSER_CONTROL_ACTION.select:
+      return "chat.approval.browser.actions.select";
+    case BROWSER_CONTROL_ACTION.snapshot:
+      return (command.textOffset ?? 0) > 0
+        ? "chat.approval.browser.actions.snapshotContinue"
+        : "chat.approval.browser.actions.snapshot";
+    default:
+      command satisfies never;
+      return panic("Unhandled browser-control action");
+  }
+};
+
+const BrowserApprovalModeNotice = ({ onReset }: { onReset: () => void }) => {
+  const t = useTranslations();
+  return (
+    <div className="border-border/50 text-muted-foreground flex items-center gap-2 border-t px-3 py-1.5 text-xs">
+      <span>{t("chat.approval.browser.modeReads")}</span>
+      <Button className="ms-auto" onClick={onReset} size="xs" variant="ghost">
+        {t("chat.approval.browser.askAgain")}
+      </Button>
+    </div>
+  );
+};
+
+const BrowserControlInputSummary = ({
+  input,
+  isAwaitingDecision,
+}: {
+  input: unknown;
+  isAwaitingDecision: boolean;
+}) => {
+  const t = useTranslations();
+  const command = parseBrowserControlCommand(input);
+  if (!command) {
+    return null;
+  }
+
+  const labelForDetail = ({ type: detailType }: BrowserApprovalDetail) => {
+    switch (detailType) {
+      case "context":
+        return t("chat.approval.browser.within");
+      case "key":
+        return t("common.key");
+      case "link":
+        return t("search.kinds.link");
+      case "target":
+        return t("common.target");
+      case "value":
+        return t("common.value");
+      case "website":
+        return t("common.website");
+      default:
+        detailType satisfies never;
+        return panic("Unhandled browser approval detail");
+    }
+  };
+  const rows = [
+    {
+      label: t("common.action"),
+      value: t(browserActionTranslationKey(command)),
+    },
+    ...getBrowserApprovalDetails(command).map((detail) => ({
+      label: labelForDetail(detail),
+      value: detail.value,
+    })),
+  ];
+
+  return (
+    <div className="border-border/50 space-y-2 border-t px-3 py-2">
+      {isAwaitingDecision && (
+        <div>
+          <p className="text-sm font-medium">
+            {t("chat.approval.browser.question")}
+          </p>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            {t("chat.approval.browser.description")}
+          </p>
+        </div>
+      )}
+      <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">
+        {rows.map((row) => (
+          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.label}>
+            <dt className="text-muted-foreground text-xs">{row.label}</dt>
+            <dd className="text-xs wrap-break-word" dir="auto">
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 };

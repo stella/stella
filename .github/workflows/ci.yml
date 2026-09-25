@@ -1524,25 +1524,47 @@ jobs:
           fi
           echo "required=false" >> "$GITHUB_OUTPUT"
 
+      - name: Check extension browser test scope
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: extension-browser-tests
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        # The extension's Playwright specs load the built extension into a
+        # persistent Chromium; they run only when the extension, its protocol
+        # contract, or the browser runtime changed.
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
+            .github/actions/setup-playwright/action.yml \
+            .github/workflows/ci.yml \
+            apps/extension \
+            packages/api-contract/src/browser-control.ts \
+            bun.lock \
+            package.json; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "required=false" >> "$GITHUB_OUTPUT"
+
       # Deliberately do not restore the global Bun install cache here. Safe
       # Chain's Bun integration scans registry downloads through a proxy, so
       # cached tarballs would bypass this job's full dependency scan.
       - name: Setup Bun
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
 
       - name: Install Safe Chain
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/safe-chain
 
       - name: Turbo remote cache
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -1550,7 +1572,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         # `cp`, not `mv`: renaming the tracked .env.example would dirty the
         # working tree in apps/api and apps/web. .env is gitignored.
         run: |
@@ -1560,7 +1582,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
           # The desktop suite runs both engines; installing WebKit here keeps
@@ -1591,6 +1613,10 @@ jobs:
       - name: Test UI playground visuals
         if: steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/web test:e2e:ui-playground
+
+      - name: Test extension browser boundary
+        if: steps.extension-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/extension test:e2e
 
   code-quality:
     needs: ci-plan

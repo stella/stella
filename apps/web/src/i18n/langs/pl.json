@@ -872,6 +872,23 @@
       "allowInConversation": "Zezwól w tej rozmowie",
       "allowOnce": "Zezwól raz",
       "alwaysAllow": "Zawsze zezwalaj",
+      "browser": {
+        "actions": {
+          "click": "Kliknij",
+          "fill": "Wprowadź tekst",
+          "open": "Otwórz witrynę",
+          "pressKey": "Naciśnij klawisz",
+          "select": "Wybierz opcję",
+          "snapshot": "Odczytaj stronę",
+          "snapshotContinue": "Czytaj stronę dalej"
+        },
+        "askAgain": "Pytaj ponownie",
+        "autoApproveReads": "Automatycznie zatwierdzaj odczyt stron",
+        "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
+        "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
+        "question": "Zezwolić na to działanie w przeglądarce?",
+        "within": "W obrębie"
+      },
       "denied": "Odrzucono",
       "deny": "Odmów",
       "externalMcpDescription": "Wysłane zostaną tylko informacje niezbędne do tego wywołania narzędzia.",
@@ -1208,6 +1225,7 @@
       "unknown": "Używanie narzędzia",
       "update-entity-fields": "Aktualizacja metadanych",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
+      "use-browser": "Korzystanie z Twojej przeglądarki",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -1335,6 +1353,7 @@
   },
   "common": {
     "accept": "Akceptuj",
+    "action": "Działanie",
     "actions": "Akcje",
     "active": "Aktywny",
     "add": "Dodaj",
@@ -1474,6 +1493,7 @@
       "event": "Zdarzenie",
       "requirement": "Wymóg"
     },
+    "key": "Klawisz",
     "kind": "Rodzaj",
     "language": "Język",
     "languages": {
@@ -1595,6 +1615,7 @@
     "stepProgress": "{current} z {total}",
     "suggested": "Sugestia",
     "summarizeChanges": "Podsumuj zmiany",
+    "target": "Cel",
     "timeBilling": "Czas i rozliczenia",
     "today": "Dzisiaj",
     "translate": "Przetłumacz",
@@ -1614,10 +1635,12 @@
     "urlIdentifier": "Identyfikator URL",
     "urlIdentifierPlaceholder": "moja-organizacja",
     "user": "Użytkownik",
+    "value": "Wartość",
     "verify": "Zweryfikuj",
     "version": "Wersja",
     "versionLabel": "Wersja {version}",
     "viewSource": "Zobacz źródło",
+    "website": "Witryna",
     "workflow": "Przepływ pracy",
     "workflows": "Przepływy pracy",
     "zoomIn": "Powiększ",
@@ -1707,8 +1730,7 @@
       "labelRequired": "Nazwa pola jest wymagana.",
       "removeField": "Usuń pole",
       "title": "Pola niestandardowe",
-      "value": "Wartość pola",
-      "valuePlaceholder": "Wartość"
+      "value": "Wartość pola"
     },
     "deleteContact": "Usuń klienta",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
@@ -3637,7 +3659,6 @@
       "chooseModelsSubtitle": "Wybierz model dla każdej roli. Ceny aktualizują się po prawej.",
       "chooseModelsTitle": "Wybierz modele",
       "configure": "Skonfiguruj",
-      "credentialsPanel": "Klucz",
       "customModelBadge": "Niestandardowy · {provider}",
       "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
       "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
@@ -4141,7 +4162,6 @@
         "title": "Anonimizacja"
       },
       "auditLogs": "Rejestr aktywności",
-      "auditLogsAction": "Operacja",
       "auditLogsActionAccess": "Dostęp",
       "auditLogsActionCreate": "Utwórz",
       "auditLogsActionDelete": "Usuń",
@@ -4603,7 +4623,6 @@
     "conditionOverrideHint": "Kliknij, aby ustawić wartość samodzielnie; kliknij ponownie, aby oddać ją AI",
     "conditionUseFieldInstead": "Zamiast tego użyj pola",
     "conditionUseFormula": "ƒ Wartość obliczana…",
-    "conditionValue": "Wartość",
     "conditionWhen": "Gdy",
     "conditionsTitle": "Warunki",
     "configureFields": "Skonfiguruj pola",
@@ -5042,7 +5061,6 @@
       "fieldValueLabel": "Wartość pola",
       "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberLabel": "Wartość",
       "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
@@ -5313,7 +5331,6 @@
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
           "system": "Aktywność systemowa",
-          "target": "Cel",
           "title": "Szczegóły aktywności",
           "trigger": "Zainicjował(a)",
           "webhook": "Wywołanie sieciowe"
