@@ -220,6 +220,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "better-auth": "1.7.5",
     "better-result": "3.0.1",
+    "cldr-misc-full": "48.2.0",
     "diff": "9.0.0",
     "disposable-email-domains-js": "1.25.0",
     "drizzle-kit": "1.0.0-rc.4",

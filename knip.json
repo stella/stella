@@ -121,6 +121,14 @@
     "packages/legal-ast": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/mojibake": {
+      "entry": [
+        "src/charsets.ts",
+        "src/detect.ts",
+        "src/**/*.test.ts",
+        "scripts/*.ts"
+      ]
+    },
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
