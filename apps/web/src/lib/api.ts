@@ -1,1 +1,1 @@
-export { api, memoriesApi } from "@/lib/eden-client";
+export { api, memoriesApi, publicFeedbackApi } from "@/lib/eden-client";

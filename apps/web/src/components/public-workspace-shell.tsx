@@ -16,6 +16,7 @@ import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
+import { resolveFeedbackChannel } from "@/components/feedback-dialog.logic";
 import { FeedbackSidebarItem } from "@/components/feedback-sidebar-item";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
 import { PublicSignInRequestContext } from "@/components/public-sign-in-request";
@@ -201,6 +202,7 @@ const PublicSidebar = ({
   });
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const feedbackChannel = resolveFeedbackChannel(authStatus.status);
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const searchHotkeyLabel = formatHotkeyForPlatform(
     HOTKEYS.SEARCH,
@@ -341,7 +343,9 @@ const PublicSidebar = ({
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {authStatus.isAuthenticated && <FeedbackSidebarItem />}
+          {feedbackChannel !== null && (
+            <FeedbackSidebarItem channel={feedbackChannel} />
+          )}
           {authStatus.status === "anonymous" && (
             <SidebarMenuItem>
               <Tooltip

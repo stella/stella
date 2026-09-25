@@ -52,4 +52,5 @@ const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
 );
 
 export const api = eden.v1;
+export const publicFeedbackApi = eden.public.feedback;
 export const memoriesApi = memoriesEden.v1.memories;

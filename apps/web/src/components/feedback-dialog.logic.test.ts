@@ -1,15 +1,109 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { FEEDBACK_AREAS, FEEDBACK_KINDS } from "@stll/api-contract/feedback";
-import type { FeedbackArea } from "@stll/api-contract/feedback";
+import type {
+  FeedbackArea,
+  FeedbackSubmitResponse,
+} from "@stll/api-contract/feedback";
 
 import {
+  buildFeedbackRequestBody,
   FEEDBACK_AREA_LABEL_KEYS,
+  FEEDBACK_CHANNELS,
   FEEDBACK_FALLBACK_AREA,
   FEEDBACK_KIND_LABEL_KEYS,
+  feedbackReceiptSchema,
   ROUTE_AREA_PATTERNS,
   resolveFeedbackArea,
+  resolveFeedbackChannel,
 } from "@/components/feedback-dialog.logic";
+
+describe("feedback channel for the session", () => {
+  test("files a member's report through the account route", () => {
+    expect(resolveFeedbackChannel("authenticated")).toBe(
+      FEEDBACK_CHANNELS.account,
+    );
+  });
+
+  test("files a visitor's report through the public intake", () => {
+    expect(resolveFeedbackChannel("anonymous")).toBe(FEEDBACK_CHANNELS.public);
+  });
+
+  test("offers no channel while the session is unresolved", () => {
+    expect(resolveFeedbackChannel("checking")).toBeNull();
+  });
+});
+
+describe("feedback request body", () => {
+  const report = {
+    area: "case_law",
+    kind: "bug",
+    steps: "",
+    title: "Citation opens the wrong decision",
+    whatHappened: "Clicked the citation, got another decision.",
+  } as const;
+
+  test("omits empty optional fields instead of sending them blank", () => {
+    const body = buildFeedbackRequestBody({
+      clientVersion: "1.2.3",
+      errorReference: undefined,
+      report,
+      route: "/law/cases",
+    });
+
+    expect(body).toEqual({
+      area: "case_law",
+      kind: "bug",
+      title: report.title,
+      whatHappened: report.whatHappened,
+      context: { client: "web", clientVersion: "1.2.3", route: "/law/cases" },
+    });
+    expect(JSON.stringify(body)).not.toContain('"steps"');
+    expect(JSON.stringify(body)).not.toContain('"errorReference"');
+  });
+
+  test("carries steps and the error reference when present", () => {
+    const body = buildFeedbackRequestBody({
+      clientVersion: "1.2.3",
+      errorReference: "ERR-AB12-CD34-EF56",
+      report: { ...report, steps: "1. Open a decision" },
+      route: "/law/cases",
+    });
+
+    expect(body.steps).toBe("1. Open a decision");
+    expect(body.context.errorReference).toBe("ERR-AB12-CD34-EF56");
+  });
+});
+
+describe("public intake receipt", () => {
+  const response: FeedbackSubmitResponse = {
+    receipt: "FB-7K2Q",
+    redactions: 0,
+    deduplicated: false,
+    deliveries: [],
+    stored: true,
+    warning: "No delivery channel is configured.",
+  };
+
+  test("reads the receipt fields from a submit response", () => {
+    expect(v.parse(feedbackReceiptSchema, response)).toEqual({
+      receipt: "FB-7K2Q",
+      deduplicated: false,
+      warning: "No delivery channel is configured.",
+    });
+  });
+
+  test("rejects an answer without a receipt", () => {
+    expect(
+      v.safeParse(feedbackReceiptSchema, { deduplicated: false }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(feedbackReceiptSchema, { deduplicated: false, receipt: "" })
+        .success,
+    ).toBe(false);
+  });
+});
 
 /** Areas no web route can produce. Every other area must be reachable from a
  *  route pattern, so a new contract area forces a decision here instead of
