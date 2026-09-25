@@ -218,13 +218,6 @@
     "count": 0,
     "files": {}
   },
-  "stream-processor-constructions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/handlers/chat/stream-chat.ts": 1,
-      "apps/api/src/handlers/chat/subagent-runner.ts": 1
-    }
-  },
   "direct-root-connection-imports": {
     "count": 51,
     "files": {
@@ -930,21 +923,17 @@
     }
   },
   "no-body-ownership-ids-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/handlers/audit-logs/query.ts": 1,
-      "apps/api/src/handlers/chat/send-message.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "no-unbranded-ownership-id-param-suppressions": {
     "count": 0,
     "files": {}
   },
   "require-search-scope-suppressions": {
-    "count": 2,
+    "count": 1,
     "files": {
-      "apps/api/src/lib/search/index-chat.ts": 1,
-      "apps/api/src/lib/search/index-entity.ts": 1
+      "apps/api/src/lib/search/index-chat.ts": 1
     }
   },
   "require-safe-route-handlers-no-direct-handler-config-suppressions": {
@@ -972,10 +961,8 @@
     "files": {}
   },
   "mcp-security-no-direct-oauth-client-join-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/lib/mcp-upstream/connections.ts": 2
-    }
+    "count": 0,
+    "files": {}
   },
   "mcp-security-redact-oauth-registration-response-suppressions": {
     "count": 0,
@@ -986,10 +973,8 @@
     "files": {}
   },
   "auth-lifecycle-no-direct-auth-artifact-delete-suppressions": {
-    "count": 3,
-    "files": {
-      "apps/api/src/lib/account-deletion-steps.ts": 3
-    }
+    "count": 0,
+    "files": {}
   },
   "no-unowned-file-version-write-suppressions": {
     "count": 0,

@@ -157,7 +157,6 @@ export const loadActiveMcpConnectionsForUser = async ({
   userId: SafeId<"user">;
 }): Promise<LoadedMcpConnection[]> => {
   const rowsResult = await safeDb((tx) =>
-    // oxlint-disable-next-line mcp-security/no-direct-oauth-client-join -- this module is the shared typed MCP connection loader.
     tx
       .select(selectConnectionFields)
       .from(mcpUserConnections)
@@ -211,7 +210,6 @@ export const loadMcpConnectionById = async ({
   userId: SafeId<"user">;
 }): Promise<LoadedMcpConnection | null> => {
   const rowsResult = await safeDb((tx) =>
-    // oxlint-disable-next-line mcp-security/no-direct-oauth-client-join -- this module is the shared typed MCP connection loader.
     tx
       .select(selectConnectionFields)
       .from(mcpUserConnections)

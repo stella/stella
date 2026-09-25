@@ -33,6 +33,10 @@ import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -2165,7 +2169,41 @@ const readCreateTemplateDocx = async ({
       }),
     };
   }
-  return { status: "ok", buffer };
+
+  // Scanned before anything parses or stores it, like every other upload.
+  const scanned = await scanUpload({
+    bytes: buffer,
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: "template.docx",
+  });
+  if (Result.isError(scanned)) {
+    const scanError = scanned.error;
+    if (!FileScanRejectedError.is(scanError)) {
+      return {
+        status: "error",
+        result: structuredErrorResult({
+          code: "internal_error",
+          message: "The DOCX could not be scanned",
+          hint: "Retry the call; if it repeats, try again later.",
+          retryable: true,
+        }),
+      };
+    }
+    const { rejection } = scanError;
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: rejection.message,
+        hint: rejection.hint,
+        issues: rejection.issues.map(({ code, message }) => ({
+          path: issuePath,
+          message: `${code}: ${message}`,
+        })),
+      }),
+    };
+  }
+  return { status: "ok", buffer: Buffer.from(scanned.value.bytes) };
 };
 
 /**

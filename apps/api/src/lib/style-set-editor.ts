@@ -69,7 +69,7 @@ export const readStyleSetEditorPreset = async (
   buffer: Buffer,
   name: string,
 ): Promise<EditablePreset> => {
-  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- style-set storage has no scan boundary yet (SW-0014)
+  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- style-set packages are server-built from scanned or preset input and read back by plain storage key, which carries no ScannedFile proof (SW-0014)
   const reviewer = await FolioDocxReviewer.fromBuffer(toArrayBuffer(buffer));
   const document = reviewer.toDocument();
   const firstParagraph = document.package.document.content.find(

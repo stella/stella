@@ -84,40 +84,50 @@ export const readAuditLogsQuerySchema = t.Object({
 
 export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
 
-export const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
-  const conditions: SQL[] = [];
+/**
+ * The WHERE conditions of a compliance read: the session's organization, then
+ * the caller's filter narrowing inside it. The organization comes first and
+ * from the server, so a filter can only narrow the rows a caller could already
+ * read, never widen them.
+ */
+export const toAuditLogConditions = ({
+  organizationId,
+  filter,
+}: {
+  organizationId: SafeId<"organization">;
+  filter: AuditLogFilter;
+}): SQL[] => {
+  const conditions: SQL[] = [eq(auditLogs.organizationId, organizationId)];
 
-  /* oxlint-disable no-body-ownership-ids/no-body-ownership-ids -- org-scoped compliance filter, not an ownership source */
-  if (query.workspaceId) {
-    conditions.push(eq(auditLogs.workspaceId, query.workspaceId));
+  if (filter.workspaceId) {
+    conditions.push(eq(auditLogs.workspaceId, filter.workspaceId));
   }
-  /* oxlint-enable no-body-ownership-ids/no-body-ownership-ids */
-  if (query.action) {
-    conditions.push(eq(auditLogs.action, query.action));
+  if (filter.action) {
+    conditions.push(eq(auditLogs.action, filter.action));
   }
-  if (query.resourceType) {
-    conditions.push(eq(auditLogs.resourceType, query.resourceType));
+  if (filter.resourceType) {
+    conditions.push(eq(auditLogs.resourceType, filter.resourceType));
   }
-  if (query.resourceId) {
-    conditions.push(eq(auditLogs.resourceId, query.resourceId));
+  if (filter.resourceId) {
+    conditions.push(eq(auditLogs.resourceId, filter.resourceId));
   }
-  if (query.userId) {
-    conditions.push(eq(auditLogs.userId, query.userId));
+  if (filter.userId) {
+    conditions.push(eq(auditLogs.userId, filter.userId));
   }
-  if (query.from) {
+  if (filter.from) {
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-    conditions.push(gte(auditLogs.createdAt, new Date(query.from)));
+    conditions.push(gte(auditLogs.createdAt, new Date(filter.from)));
   }
-  if (query.to) {
+  if (filter.to) {
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-    conditions.push(lte(auditLogs.createdAt, new Date(query.to)));
+    conditions.push(lte(auditLogs.createdAt, new Date(filter.to)));
   }
-  if (query.toExclusive) {
+  if (filter.toExclusive) {
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-    conditions.push(lt(auditLogs.createdAt, new Date(query.toExclusive)));
+    conditions.push(lt(auditLogs.createdAt, new Date(filter.toExclusive)));
   }
-  if (query.cursor) {
-    const cursor = auditLogCursor.decode(query.cursor);
+  if (filter.cursor) {
+    const cursor = auditLogCursor.decode(filter.cursor);
     if (!cursor) {
       return conditions;
     }
@@ -191,10 +201,7 @@ export const queryAuditLogPage = async function* ({
 }) {
   const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
 
-  const conditions = [
-    eq(auditLogs.organizationId, organizationId),
-    ...toAuditLogConditions(query),
-  ];
+  const conditions = toAuditLogConditions({ organizationId, filter: query });
 
   const rows = yield* Result.await(
     safeDb(async (tx) => {

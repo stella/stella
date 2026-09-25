@@ -6,6 +6,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -58,6 +59,8 @@ const saveTemplateDocument = createSafeRootHandler(
       );
     }
 
+    const buffer = yield* Result.await(scanTemplateUpload(file));
+
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.templates.findFirst({
@@ -75,8 +78,6 @@ const saveTemplateDocument = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Template not found" }),
       );
     }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
 
     const written = yield* Result.await(
       Result.gen(() =>

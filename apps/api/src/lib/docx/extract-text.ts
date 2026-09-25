@@ -5,7 +5,7 @@
  */
 
 import {
-  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- template storage has no scan boundary yet (SW-0013)
+  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- stored templates and filled output are read back by plain storage key, which carries no ScannedFile proof; uploads are scanned at the route (SW-0013)
   extractDocxText,
   type ExtractedDocxParagraph,
 } from "@stll/folio-core/server";
