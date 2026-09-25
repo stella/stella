@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -12,18 +12,18 @@ import {
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import {
+  recordSkillReadAudit,
+  SKILL_READ_OUTCOME,
+  SKILL_READ_SURFACE,
+} from "@/api/lib/agent-skills/skill-read-audit";
+import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
+import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   SKILL_RESOURCE_READ_STATUS,
 } from "@/api/lib/agent-skills/skills";
-import {
-  recordSkillReadAudit,
-  SKILL_READ_OUTCOME,
-  SKILL_READ_SURFACE,
-} from "@/api/lib/agent-skills/skill-read-audit";
-import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,10 +34,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
 import { auditedSkillBody } from "./audited-body";
-import {
-  refreshSkillContentHash,
-  skillContentHashAfter,
-} from "./content-hash";
+import { refreshSkillContentHash, skillContentHashAfter } from "./content-hash";
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
@@ -231,8 +228,10 @@ export const createSkillTools = ({
             skillId: read.skillId,
             origin: read.origin,
           };
-        default:
-          return read satisfies never;
+        default: {
+          read satisfies never;
+          return panic("skill resource read returned an unknown status");
+        }
       }
     }),
 

@@ -339,7 +339,7 @@ describe("agent skill write RLS", () => {
     }
   };
 
-  test.each(writeCases)(
+  test.each([...writeCases])(
     "$actor updating or deleting a $scope skill and its resources is allowed: $allowed",
     async ({ scope, actor, allowed }) => {
       const skillId = await insertSkill({

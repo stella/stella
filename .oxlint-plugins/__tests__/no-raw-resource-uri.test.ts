@@ -13,7 +13,7 @@ describe.serial("no-raw-resource-uri", () => {
       await lint([
         "declare const slug: string;",
         'export const prefix = "#stella-skill-ref=";',
-        "export const href = `#stella-skill-ref=${slug}`;",
+        `export const href = \`#stella-skill-ref=\${slug}\`;`,
         'export const guidance = "Use [label](#stella-skill-ref=slug) links.";',
       ]),
     ).toEqual([2, 3, 4]);
@@ -24,8 +24,8 @@ describe.serial("no-raw-resource-uri", () => {
       await lint([
         'import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";',
         "declare const slug: string;",
-        "export const href = `${SKILL_REF_HREF_PREFIX}${slug}`;",
-        "export const guidance = `Use [label](${SKILL_REF_HREF_PREFIX}slug).`;",
+        `export const href = \`\${SKILL_REF_HREF_PREFIX}\${slug}\`;`,
+        `export const guidance = \`Use [label](\${SKILL_REF_HREF_PREFIX}slug).\`;`,
       ]),
     ).toEqual([]);
   });
@@ -34,7 +34,7 @@ describe.serial("no-raw-resource-uri", () => {
     expect(
       await lint([
         "declare const id: string;",
-        "export const href = `#stella-entity=${id}`;",
+        `export const href = \`#stella-entity=\${id}\`;`,
       ]),
     ).toEqual([2]);
   });
