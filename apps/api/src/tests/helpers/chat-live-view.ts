@@ -80,12 +80,12 @@ export const deliveredInterrupts = (
   ) {
     return [];
   }
-  return finished.outcome.interrupts.flatMap((interrupt) => {
-    const toolCallId = bindingToolCallId(interrupt.metadata);
-    return toolCallId === null
-      ? []
-      : [{ interruptId: interrupt.id, toolCallId }];
-  });
+  // An interrupt without a tool binding stays in the list under no call, so
+  // no card can match it and the actionable check reports the card.
+  return finished.outcome.interrupts.map((interrupt) => ({
+    interruptId: interrupt.id,
+    toolCallId: bindingToolCallId(interrupt.metadata),
+  }));
 };
 
 /**

@@ -10,9 +10,10 @@
 // in scope.
 //
 // Test files that predate the builders are listed in
-// scripts/chat-fixture-guard-ledger.json. The ledger only shrinks: a listed
-// file that no longer builds a snapshot by hand fails as stale, and a new file
-// that does fails as unlisted.
+// scripts/chat-fixture-guard-ledger.json with how many snapshots each builds
+// by hand. The ledger only shrinks: a file with more literals than its entry
+// (or with none listed) fails, and a file with fewer fails until its entry is
+// lowered or removed.
 //
 // Modes:
 //   bun scripts/chat-fixture-guard.ts              check the tree (CI gate)
@@ -91,7 +92,25 @@ export const findSnapshotLiterals = (
   return found;
 };
 
-export type GuardReport = { stale: string[]; unlisted: SnapshotLiteral[] };
+/** Hand-built snapshot literals per grandfathered file. */
+type Ledger = Readonly<Record<string, number>>;
+
+export type GuardReport = {
+  /** Files whose literal count fell below their entry. */
+  stale: string[];
+  /** Literals in files over their entry (all of a file's, if it has none). */
+  unlisted: SnapshotLiteral[];
+};
+
+const countByFile = (
+  found: readonly SnapshotLiteral[],
+): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const { path: file } of found) {
+    counts.set(file, (counts.get(file) ?? 0) + 1);
+  }
+  return counts;
+};
 
 /** Compares what the tree builds by hand with the ledger. */
 export const compareWithLedger = ({
@@ -99,13 +118,16 @@ export const compareWithLedger = ({
   ledger,
 }: {
   found: readonly SnapshotLiteral[];
-  ledger: readonly string[];
+  ledger: Ledger;
 }): GuardReport => {
-  const listed = new Set(ledger);
-  const offending = new Set(found.map(({ path: file }) => file));
+  const counts = countByFile(found);
   return {
-    stale: ledger.filter((file) => !offending.has(file)),
-    unlisted: found.filter(({ path: file }) => !listed.has(file)),
+    stale: Object.entries(ledger).flatMap(([file, allowed]) =>
+      (counts.get(file) ?? 0) < allowed ? [file] : [],
+    ),
+    unlisted: found.filter(
+      ({ path: file }) => (counts.get(file) ?? 0) > (ledger[file] ?? 0),
+    ),
   };
 };
 
@@ -136,14 +158,23 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
   );
 };
 
-const readLedger = (): string[] => {
+const readLedger = (): Ledger => {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8"),
   );
-  if (!Array.isArray(parsed) || !parsed.every((e) => typeof e === "string")) {
-    return panic(`${LEDGER_REL} must be a JSON array of file paths`);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !Object.values(parsed).every(
+      (count) => typeof count === "number" && Number.isInteger(count),
+    )
+  ) {
+    return panic(`${LEDGER_REL} must map file paths to literal counts`);
   }
-  return parsed;
+  // SAFETY: every value was checked to be an integer just above.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return parsed as Ledger;
 };
 
 const check = async (): Promise<number> => {
@@ -152,30 +183,32 @@ const check = async (): Promise<number> => {
   const { stale, unlisted } = compareWithLedger({ found, ledger });
   if (stale.length === 0 && unlisted.length === 0) {
     console.log(
-      `chat fixture guard: OK. ${String(ledger.length)} listed files still build snapshots by hand; no new ones.`,
+      `chat fixture guard: OK. ${String(Object.keys(ledger).length)} listed files still build snapshots by hand; no new ones.`,
     );
     return 0;
   }
   for (const { line, path: file } of unlisted) {
     console.error(
-      `  ${file}:${String(line)}: a hand-built messages snapshot. Build it with ${OWNER_REL}, or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
+      `  ${file}:${String(line)}: a hand-built messages snapshot beyond the file's ledger entry. Build it with ${OWNER_REL}, or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
     );
   }
   for (const file of stale) {
     console.error(
-      `  ${file}: listed in ${LEDGER_REL} but builds no snapshot by hand any more; remove the entry.`,
+      `  ${file}: builds fewer snapshots by hand than ${LEDGER_REL} allows; lower or remove its entry.`,
     );
   }
   return 1;
 };
 
 const write = async (): Promise<number> => {
-  const files = [...new Set((await scanTree()).map(({ path: file }) => file))];
+  const counts = Object.fromEntries(countByFile(await scanTree()));
   writeFileSync(
     path.join(REPO_ROOT, LEDGER_REL),
-    `${JSON.stringify(files, null, 2)}\n`,
+    `${JSON.stringify(counts, null, 2)}\n`,
   );
-  console.log(`chat fixture guard: wrote ${String(files.length)} files.`);
+  console.log(
+    `chat fixture guard: wrote ${String(Object.keys(counts).length)} files.`,
+  );
   return 0;
 };
 
@@ -217,17 +250,20 @@ const selfTest = (): number => {
   const report = compareWithLedger({
     found: [
       { line: 1, path: "listed.test.ts" },
-      { line: 2, path: "new.test.ts" },
+      { line: 2, path: "grown.test.ts" },
+      { line: 3, path: "grown.test.ts" },
+      { line: 4, path: "new.test.ts" },
     ],
-    ledger: ["listed.test.ts", "migrated.test.ts"],
+    ledger: { "grown.test.ts": 1, "listed.test.ts": 1, "migrated.test.ts": 2 },
   });
   if (
     JSON.stringify(report.stale) !== JSON.stringify(["migrated.test.ts"]) ||
-    JSON.stringify(report.unlisted.map(({ path: file }) => file)) !==
-      JSON.stringify(["new.test.ts"])
+    JSON.stringify([
+      ...new Set(report.unlisted.map(({ path: file }) => file)),
+    ]) !== JSON.stringify(["grown.test.ts", "new.test.ts"])
   ) {
     failures.push(
-      `ledger comparison must report the migrated and the new file: ${JSON.stringify(report)}`,
+      `ledger comparison must report the migrated, the grown and the new file: ${JSON.stringify(report)}`,
     );
   }
   if (failures.length === 0) {

@@ -1,1 +1,3 @@
-["apps/api/src/handlers/chat/stream-chat.test.ts"]
+{
+  "apps/api/src/handlers/chat/stream-chat.test.ts": 8
+}

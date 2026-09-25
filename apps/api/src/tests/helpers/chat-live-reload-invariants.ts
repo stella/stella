@@ -177,7 +177,11 @@ export const findWireIdentityViolations = (
   );
 
 /** An interrupt the page received with its latest response. */
-export type DeliveredInterrupt = { interruptId: string; toolCallId: string };
+export type DeliveredInterrupt = {
+  interruptId: string;
+  /** Null when the interrupt carries no tool binding. */
+  toolCallId: string | null;
+};
 
 /**
  * `chat.live.interactions-actionable`: every interaction the stored thread
