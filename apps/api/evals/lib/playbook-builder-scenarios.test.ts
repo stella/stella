@@ -231,6 +231,17 @@ describe("contracts-later scoring", () => {
   });
 });
 
+describe("scripted answers", () => {
+  test("the matters question is answered with a matter, not a document pick", () => {
+    const [question] = askWith(1, WHICH_MATTERS, MATTER_OPTIONS).questions;
+    expect(
+      scenario("discovery").answer(
+        question ?? panic("the helper builds one question"),
+      ),
+    ).toBe(`The "${matters.at(0)?.name ?? ""}" matter.`);
+  });
+});
+
 describe("chat-surface discovery scoring", () => {
   test("a documented read written without discover_tools is not a defect", () => {
     const run = contractsLaterRun();
