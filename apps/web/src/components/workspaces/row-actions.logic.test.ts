@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -8,6 +9,7 @@ import {
   getOcrSource,
   getOcrSources,
   hasOcrExport,
+  requestDesktopEditTakeover,
 } from "@/components/workspaces/row-actions.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -177,5 +179,83 @@ describe("manual OCR action visibility", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe("desktop edit takeover", () => {
+  const recordTakeover = (forceTakeover: () => Promise<void>) => {
+    const events = { forced: 0, awaitedConsent: 0, reported: [] as unknown[] };
+    return {
+      events,
+      forceTakeover: async () => {
+        events.forced += 1;
+        await forceTakeover();
+      },
+      awaitConsent: () => {
+        events.awaitedConsent += 1;
+      },
+      reportError: (error: unknown) => {
+        events.reported.push(error);
+      },
+    };
+  };
+
+  test("waits for the lock holder once the takeover request reaches them", async () => {
+    const { events, ...handlers } = recordTakeover(async () => {});
+
+    await requestDesktopEditTakeover({
+      requestTakeover: async () => true,
+      ...handlers,
+    });
+
+    expect(events).toEqual({ forced: 0, awaitedConsent: 1, reported: [] });
+  });
+
+  test("forces the takeover when the lock holder cannot be asked", async () => {
+    const { events, ...handlers } = recordTakeover(async () => {});
+
+    await requestDesktopEditTakeover({
+      requestTakeover: async () => false,
+      ...handlers,
+    });
+
+    expect(events).toEqual({ forced: 1, awaitedConsent: 0, reported: [] });
+  });
+
+  test("forces the takeover a single time", async () => {
+    const { events, ...handlers } = recordTakeover(async () => {
+      throw new Error("desktop bridge unavailable");
+    });
+
+    const outcome = await Result.tryPromise(
+      async () =>
+        await requestDesktopEditTakeover({
+          requestTakeover: async () => false,
+          ...handlers,
+        }),
+    );
+
+    expect(Result.isError(outcome) ? outcome.error.cause : null).toEqual(
+      new Error("desktop bridge unavailable"),
+    );
+    expect(events.forced).toBe(1);
+  });
+
+  test("reports a takeover request that fails, then forces the takeover", async () => {
+    const { events, ...handlers } = recordTakeover(async () => {});
+    const failure = new TypeError("Failed to fetch");
+
+    await requestDesktopEditTakeover({
+      requestTakeover: async () => {
+        throw failure;
+      },
+      ...handlers,
+    });
+
+    expect(events).toEqual({
+      forced: 1,
+      awaitedConsent: 0,
+      reported: [failure],
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
@@ -155,4 +155,38 @@ export const getDesktopEditLockState = (
   }
 
   return activeEditBy.isMe ? "locked-by-me" : "locked-by-other";
+};
+
+/**
+ * Asks the holder of a desktop edit lock to hand it over. `requestTakeover`
+ * resolves true once the request reaches the holder, and false when there is
+ * no one to ask (e.g. no active session); a thrown request is reported. In
+ * both of the latter cases the takeover is forced; `forceTakeover` owns its
+ * own failure feedback.
+ */
+export const requestDesktopEditTakeover = async ({
+  requestTakeover,
+  forceTakeover,
+  awaitConsent,
+  reportError,
+}: {
+  requestTakeover: () => Promise<boolean>;
+  forceTakeover: () => Promise<void>;
+  awaitConsent: () => void;
+  reportError: (error: unknown) => void;
+}): Promise<void> => {
+  const requested = await Result.tryPromise({
+    try: requestTakeover,
+    catch: (cause) => cause,
+  });
+  if (Result.isError(requested)) {
+    reportError(requested.error);
+    await forceTakeover();
+    return;
+  }
+  if (!requested.value) {
+    await forceTakeover();
+    return;
+  }
+  awaitConsent();
 };

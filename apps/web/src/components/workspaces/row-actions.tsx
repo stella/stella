@@ -97,6 +97,7 @@ import {
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
+  requestDesktopEditTakeover,
   type RowActionContext,
 } from "@/components/workspaces/row-actions.logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
@@ -728,46 +729,48 @@ export const RowActions = ({
 
     const lockedByName = entity.activeEditBy?.name ?? "";
 
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["desktop-edit-sessions"]["request-takeover"].post({
-          entityId: toSafeId<"entity">(file.entityId),
-          propertyId: toSafeId<"property">(file.propertyId),
+    await requestDesktopEditTakeover({
+      // Resolves false on an error response (e.g. no active session), which
+      // forces the release.
+      requestTakeover: async () => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["desktop-edit-sessions"]["request-takeover"].post({
+            entityId: toSafeId<"entity">(file.entityId),
+            propertyId: toSafeId<"property">(file.propertyId),
+          });
+        return !response.error;
+      },
+      forceTakeover: forceTakeoverWithFeedback,
+      awaitConsent: () => {
+        // Consent request sent — show waiting toast with 30s timeout
+        const toastId = stellaToast.add({
+          title: t("workspaces.files.desktopEdit.takeoverWaiting"),
+          description: t(
+            "workspaces.files.desktopEdit.takeoverWaitingDescription",
+            { name: lockedByName },
+          ),
+          type: "loading",
         });
 
-      if (response.error) {
-        // No active session or other error — force release
-        await doForceTakeover();
-        return;
-      }
-
-      // Consent request sent — show waiting toast with 30s timeout
-      const toastId = stellaToast.add({
-        title: t("workspaces.files.desktopEdit.takeoverWaiting"),
-        description: t(
-          "workspaces.files.desktopEdit.takeoverWaitingDescription",
-          { name: lockedByName },
-        ),
-        type: "loading",
-      });
-
-      // After 30 seconds, close the waiting toast and force-release.
-      // If the lock holder responds before the timeout, the SSE
-      // resource update refetches the entity list and
-      // the "Release lock" option disappears; the loading toast
-      // becomes stale but harmless (force-release on an already-
-      // released lock is a no-op on the API side).
-      setTimeout(() => {
-        stellaToast.close(toastId);
-        detached(
-          forceTakeoverWithFeedback(),
-          "row-actions.force-takeover-with-feedback",
-        );
-      }, 30_000);
-    } catch {
-      await forceTakeoverWithFeedback();
-    }
+        // After 30 seconds, close the waiting toast and force-release.
+        // If the lock holder responds before the timeout, the SSE
+        // resource update refetches the entity list and
+        // the "Release lock" option disappears; the loading toast
+        // becomes stale but harmless (force-release on an already-
+        // released lock is a no-op on the API side).
+        setTimeout(() => {
+          stellaToast.close(toastId);
+          detached(
+            forceTakeoverWithFeedback(),
+            "row-actions.force-takeover-with-feedback",
+          );
+        }, 30_000);
+      },
+      reportError: (error) => {
+        analytics.captureError(error);
+      },
+    });
   };
 
   const cellProperty =
