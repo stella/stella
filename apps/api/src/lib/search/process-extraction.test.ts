@@ -91,8 +91,20 @@ const extractFileTextResultMock = mock(
   ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
 );
-const requestAutomaticDocumentOcrMock = mock(async () => undefined);
-const restoreManualOcrRunAfterProjectionLossMock = mock(async () => undefined);
+const requestAutomaticDocumentOcrMock = mock(
+  async (
+    _input: Parameters<
+      ExecuteNativeExtractionDependencies["requestAutomaticOcr"]
+    >[0],
+  ) => undefined,
+);
+const restoreManualOcrRunAfterProjectionLossMock = mock(
+  async (
+    _input: Parameters<
+      ExecuteNativeExtractionDependencies["restoreManualOcr"]
+    >[0],
+  ) => undefined,
+);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
@@ -117,7 +129,11 @@ const extractionDatabase = asTestRaw<NativeExtractionDatabase>({
   transaction: transactionMock,
   update: updateMock,
 });
-const recordLanguageMock = mock(async () => undefined);
+const recordLanguageMock = mock(
+  async (
+    ..._args: Parameters<ExecuteNativeExtractionDependencies["recordLanguage"]>
+  ) => undefined,
+);
 
 const persistNativeExtractionProjection = async (
   options: Parameters<typeof persistNativeExtractionProjectionWithDatabase>[0],
