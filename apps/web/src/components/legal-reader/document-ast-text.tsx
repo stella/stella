@@ -1121,15 +1121,14 @@ export const BlockRenderer = ({
               </span>
             )}
             {/* Two equal side tracks keep the designation on the column's
-                axis however wide the accessory is. A column too narrow for
-                a localized action beside it stacks the actions below, so
-                they never overlap the designation or leave the pane. */}
+                axis however wide the accessory is. The actions always sit in
+                the trailing track, never in a row of their own: they appear
+                on hover, and a row kept for them would hold a gap between the
+                designation and its title. The accessory sizes itself to the
+                track (`@container/provision`). */}
             <span className="@container/provision block">
-              <span className="grid grid-cols-1 justify-items-center gap-2 @lg/provision:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @lg/provision:gap-3">
-                <span
-                  aria-hidden="true"
-                  className="hidden @lg/provision:block"
-                />
+              <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                <span aria-hidden="true" />
                 <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
                   <InlineContent
                     {...sharedInlineProps}
@@ -1137,7 +1136,7 @@ export const BlockRenderer = ({
                     inlines={provision.designation.inlines}
                   />
                 </span>
-                <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-base @lg/provision:justify-self-start">
+                <span className="flex min-w-0 items-center justify-self-start text-base">
                   {provision.accessory}
                   {/* Zero-width, as on a plain heading: the glyph is invisible
                       until hover, and stacked under the designation it would

@@ -313,8 +313,10 @@ const ProvisionDetailsAction = ({
       type="button"
     >
       <span>{t("common.details")}</span>
+      {/* The count needs a wide pane; beside the designation in a narrow
+          one there is room for the action's name only. */}
       {citationCount !== undefined && citationCount > 0 && (
-        <span className="text-muted-foreground ms-2 tabular-nums">
+        <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
           {t("caseLaw.citation.decisionCount", { count: citationCount })}
         </span>
       )}
