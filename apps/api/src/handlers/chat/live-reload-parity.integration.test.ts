@@ -96,7 +96,12 @@ type StepShape = {
 };
 /** A model run: its steps, or a provider call that fails before any output. */
 type RunShape = StepShape[] | "fail";
-type Decision = "allow" | "approve" | "deny";
+/**
+ * How the user answers an approval card. `approve-all` approves it and then
+ * every approval card that appears later in the conversation, each one
+ * clicked on the page like any other approval.
+ */
+type Decision = "approve" | "approve-all" | "deny";
 
 const isInteraction = (kind: CallKind): boolean => kind !== "plain";
 
@@ -113,14 +118,14 @@ type LedgerCall = {
  * What the conversation must look like, kept apart from every view of it:
  * the calls the thread holds, the interactions still open, the approved calls
  * whose effect must have run exactly once, how the latest turn ended, and
- * whether the user granted the approval tool for the conversation.
+ * whether the user now approves every approval card as it appears.
  */
 type Ledger = {
   calls: LedgerCall[];
   effects: string[];
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
-  granted: boolean;
+  approvesAll: boolean;
   latest: "awaiting" | "failed" | "none" | "text";
   pending: string[];
   turn: number;
@@ -130,7 +135,7 @@ const newLedger = (): Ledger => ({
   calls: [],
   effects: [],
   failures: 0,
-  granted: false,
+  approvesAll: false,
   latest: "none",
   pending: [],
   turn: 0,
@@ -228,19 +233,22 @@ const kindOf = (ledger: Ledger, id: string): CallKind =>
   expect.unreachable(`The ledger has no call ${id}`);
 
 /**
- * `AutomaticApprovalResponse` in the web approval card, in the ledger: with
- * the conversation grant, a page whose every open card is an approval answers
- * them all, which sends the next request. A page that also waits on an
- * ask-user is completed by the next resolve step.
+ * Whether, after `approve-all`, the user approves every open card at once,
+ * which sends the next request: when every open card is an approval. A page
+ * that also waits on an ask-user is completed by the next resolve step. This
+ * models the user's clicks, not the conversation grant
+ * (`onAllowInConversation` and `AutomaticApprovalResponse` in the web
+ * approval card): that runs in the React layer this harness does not render,
+ * and the planned render-layer test covers it.
  */
-const autoApprovesAll = (ledger: Ledger): boolean =>
-  ledger.granted &&
+const approvesAllOpen = (ledger: Ledger): boolean =>
+  ledger.approvesAll &&
   ledger.pending.length > 0 &&
   ledger.pending.every((id) => kindOf(ledger, id) === "approval");
 
 /**
  * Plans the requests one user step leads to: the first answers with `runs[0]`,
- * then one more for every round the conversation grant approves on its own.
+ * then one more for every round `approve-all` approves at once.
  * A request the step brought no run for answers in text.
  */
 const planRequests = (
@@ -249,7 +257,7 @@ const planRequests = (
   nextId: () => string,
 ): ScriptedTurn[][] => {
   const planned = [planRun(ledger, runs[0] ?? TEXT_ANSWER, nextId)];
-  while (autoApprovesAll(ledger)) {
+  while (approvesAllOpen(ledger)) {
     ledger.effects.push(...ledger.pending);
     planned.push(planRun(ledger, runs[planned.length] ?? TEXT_ANSWER, nextId));
   }
@@ -273,12 +281,13 @@ type Model = {
   pendingKinds: CallKind[];
 };
 
-/** The web approval card's automatic answer, for the cards on screen. */
-const autoApproveOnScreen = async (real: Real) => {
+/** After `approve-all`, approves the approval cards on screen, one click
+ *  each, round after round. */
+const approveCardsOnScreen = async (real: Real) => {
   for (let round = 0; round < 10; round += 1) {
     const cards = real.client.cards();
     if (
-      !real.ledger.granted ||
+      !real.ledger.approvesAll ||
       cards.length === 0 ||
       !cards.every((card) => card.kind === "approval")
     ) {
@@ -419,7 +428,7 @@ class SendUserMessage implements fc.AsyncCommand<Model, Real> {
       ...planRequests(real.ledger, this.runs, real.nextId),
     );
     await real.client.sendUserMessage(Bun.randomUUIDv7(), this.text);
-    await autoApproveOnScreen(real);
+    await approveCardsOnScreen(real);
     await verify(model, real, { failuresBefore });
   };
   toString = () => `SendUserMessage(${JSON.stringify(this.runs)})`;
@@ -431,11 +440,11 @@ const decideBatch = (ledger: Ledger, decisions: readonly Decision[]) =>
     if (kindOf(ledger, id) === "ask-user") {
       return { decision: "answer" as const, id };
     }
-    const decision = ledger.granted
+    const decision = ledger.approvesAll
       ? "approve"
       : (decisions[index % decisions.length] ?? "approve");
-    if (decision === "allow") {
-      ledger.granted = true;
+    if (decision === "approve-all") {
+      ledger.approvesAll = true;
     }
     if (decision !== "deny") {
       ledger.effects.push(id);
@@ -473,7 +482,7 @@ const resolveOnFirstTab = async (
     ),
   );
   await answerBatch(real.client, batch);
-  await autoApproveOnScreen(real);
+  await approveCardsOnScreen(real);
   return batch;
 };
 
@@ -526,7 +535,7 @@ class ResendLatest implements fc.AsyncCommand<Model, Real> {
       ...planRequests(ledger, this.runs, real.nextId),
     );
     await real.client.resend();
-    await autoApproveOnScreen(real);
+    await approveCardsOnScreen(real);
     await verify(model, real, { failuresBefore });
   };
   toString = () => `ResendLatest(${JSON.stringify(this.runs)})`;
@@ -635,14 +644,14 @@ const stepsArb: fc.Arbitrary<StepShape[]> = fc.array(stepArb, {
   maxLength: 3,
   minLength: 1,
 });
-/** The runs a step's requests answer with: its own, then the ones automatic
- *  approvals send. */
+/** The runs a step's requests answer with: its own, then the ones
+ *  `approve-all` sends. */
 const runsArb: fc.Arbitrary<RunShape[]> = fc.array(stepsArb, {
   maxLength: 3,
   minLength: 1,
 });
 const decisionsArb = fc.array(
-  fc.constantFrom<Decision>("allow", "approve", "deny"),
+  fc.constantFrom<Decision>("approve", "approve-all", "deny"),
   { maxLength: 4, minLength: 4 },
 );
 
@@ -735,7 +744,7 @@ describe("a conversation's live view", () => {
         expect(real.ledger.pending).toHaveLength(1);
 
         await new ResolveCards(
-          ["allow", "allow", "allow", "allow"],
+          ["approve-all", "approve-all", "approve-all", "approve-all"],
           [[{ ...STEP, calls: ["approval"], text: true }]],
         ).run(model, real);
       } finally {
