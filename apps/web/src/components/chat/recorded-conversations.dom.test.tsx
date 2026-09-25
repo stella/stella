@@ -109,7 +109,7 @@ type RecordedExchange = {
 type RecordedAction =
   | { messageId: string; text: string; type: "send" }
   | {
-      decision: "allow-once" | "deny";
+      decision: "allow-in-conversation" | "allow-once" | "deny";
       toolCallId: string;
       type: "approve";
     }
@@ -117,7 +117,8 @@ type RecordedAction =
   | { answer: string; toolCallId: string; type: "answer" }
   | { tool: string; toolCallId: string; type: "client-tool" }
   | { type: "stop" }
-  | { type: "drop-connection" };
+  | { type: "drop-connection" }
+  | { type: "reload" };
 type RecordedConversation = {
   initialPage: RecordedPage;
   scenario: string;
@@ -548,6 +549,7 @@ type ScreenState = {
 };
 
 const ALLOW_ONCE = messages.chat.approval.allowOnce;
+const ALLOW_IN_CONVERSATION = messages.chat.approval.allowInConversation;
 const DENY = messages.chat.approval.deny;
 const ALLOWED = messages.chat.approval.allowed;
 const DENIED = messages.chat.approval.denied;
@@ -827,15 +829,24 @@ const storedToolCalls = (recording: RecordedConversation) =>
  */
 const grantConversationTools = (recording: RecordedConversation) => {
   const calls = storedToolCalls(recording);
+  const toolOf = (toolCallId: string) =>
+    (
+      calls.find(({ id }) => id === toolCallId) ??
+      expect.unreachable(`No stored call ${toolCallId}`)
+    ).name;
+  /** Tools the user allows for the conversation during the recording. */
+  const allowedOnScreen = new Set(
+    recording.steps.flatMap(({ action }) =>
+      action.type === "approve" && action.decision === "allow-in-conversation"
+        ? [toolOf(action.toolCallId)]
+        : [],
+    ),
+  );
   const granted = new Set(
     recording.steps.flatMap(({ action }) =>
-      action.type === "auto-approve"
-        ? [
-            (
-              calls.find(({ id }) => id === action.toolCallId) ??
-              expect.unreachable(`No stored call ${action.toolCallId}`)
-            ).name,
-          ]
+      action.type === "auto-approve" &&
+      !allowedOnScreen.has(toolOf(action.toolCallId))
+        ? [toolOf(action.toolCallId)]
         : [],
     ),
   );
@@ -895,7 +906,11 @@ const performAction = async ({
       return;
     }
     case "approve": {
-      const name = action.decision === "deny" ? DENY : ALLOW_ONCE;
+      const name = {
+        "allow-in-conversation": ALLOW_IN_CONVERSATION,
+        "allow-once": ALLOW_ONCE,
+        deny: DENY,
+      }[action.decision];
       fireEvent.click(
         within(approvalCard(container, action.toolCallId)).getByRole("button", {
           name,
@@ -927,7 +942,9 @@ const performAction = async ({
       return;
     }
     case "auto-approve":
-    case "client-tool": {
+    case "client-tool":
+    case "reload": {
+      // The page acts on its own, or the replay reloads it (see `replay`).
       return;
     }
     default: {
@@ -971,14 +988,21 @@ const replay = async (scenario: string) => {
   const server = createRecordedServer(recording);
   routeRequest = server.fetch;
   grantConversationTools(recording);
-  const live = await openPage(recording);
-  const container = live.view.container;
+  let live = await openPage(recording);
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
   for (const [index, { action, exchanges }] of recording.steps.entries()) {
     const expectedPosts = recording.steps
       .slice(0, index + 1)
       .reduce((total, step) => total + step.exchanges.length, 0);
+    if (action.type === "reload") {
+      // A reload is a fresh page in the same tab: the app's module state
+      // starts over, the tab's session storage stays.
+      live.view.unmount();
+      __resetChatRequestStateForTests();
+      live = await openPage(recording);
+    }
+    const container = live.view.container;
     await performAction({ action, container, live, server });
     const next = recording.steps[index + 1];
     if (next !== undefined && isAutomatic(next.action)) {

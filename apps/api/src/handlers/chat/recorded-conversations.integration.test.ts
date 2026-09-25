@@ -85,7 +85,7 @@ afterAll(async () => {
 type RecordedAction =
   | { messageId: string; text: string; type: "send" }
   | {
-      decision: "allow-once" | "deny";
+      decision: "allow-in-conversation" | "allow-once" | "deny";
       toolCallId: string;
       type: "approve";
     }
@@ -95,7 +95,9 @@ type RecordedAction =
   /** The page posts a client tool's result on its own. */
   | { tool: string; toolCallId: string; type: "client-tool" }
   | { type: "stop" }
-  | { type: "drop-connection" };
+  | { type: "drop-connection" }
+  /** The user reloads the page. */
+  | { type: "reload" };
 
 type RecordedStep = {
   action: RecordedAction;
@@ -277,7 +279,7 @@ const send = async (
 const approve = async (
   recorder: Recorder,
   toolCallId: string,
-  decision: "allow-once" | "deny",
+  decision: "allow-in-conversation" | "allow-once" | "deny",
   ...runs: (readonly ScriptedTurn[])[]
 ) => {
   recorder.harness.script(recorder.threadId, ...runs);
@@ -437,6 +439,15 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
   },
   // The user has allowed the tool for this conversation, so the page answers
   // each of its approvals as the card appears.
+  // The user allows the tool for the conversation on its first card; the page
+  // answers the next one on its own.
+  "allow-in-conversation": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await approve(recorder, "call-1", "allow-in-conversation", [
+      asks([approvalCall("call-2")], "And the older copy"),
+    ]);
+    await autoApprove(recorder, "call-2", [answers("Both deleted")]);
+  },
   "conversation-grant": async (recorder) => {
     await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
     await autoApprove(recorder, "call-1", [

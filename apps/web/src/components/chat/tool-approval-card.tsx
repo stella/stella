@@ -499,7 +499,8 @@ export const ToolApprovalCard = ({
               onApprove(approvalId, name);
             }
           },
-          shouldRespond: isBlocked || shouldAutoApprove,
+          // A card the user already answered is not answered again.
+          shouldRespond: !responded && (isBlocked || shouldAutoApprove),
         };
   const isAwaitingDecision =
     isApprovalRequested &&
