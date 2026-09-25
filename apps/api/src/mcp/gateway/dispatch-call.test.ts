@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
@@ -14,12 +15,14 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // `isExternalMcpToolName`) and internal result builders stay real.
 const callGatewayExternalMcpToolMock = mock();
 const gatewayLoadErrorResultMock = mock();
+const loadSkillToolContentMock = mock();
 const recordSkillGatewayToolAuditMock = mock(async () => undefined);
 const resolveSkillToolMock = mock();
 
 const dependencies = {
   callGatewayExternalMcpTool: callGatewayExternalMcpToolMock,
   gatewayLoadErrorResult: gatewayLoadErrorResultMock,
+  loadSkillToolContent: loadSkillToolContentMock,
   recordSkillGatewayToolAudit: recordSkillGatewayToolAuditMock,
   resolveSkillTool: resolveSkillToolMock,
 };
@@ -31,15 +34,22 @@ const context = asTestRaw<McpRequestContext>({
 
 const resolvedSkill = asTestRaw<ResolvedSkillTool>({
   id: toSafeId<"agentSkill">("skill_alpha"),
-  slug: "alpha",
-  body: "# Alpha skill body",
-  metadata: { key: "value" },
-  origin: "authored",
-  version: "1.2.3",
-  license: "MIT",
-  compatibility: "stella>=1",
+  name: "alpha",
   exposedName: "skill__alpha",
 });
+
+const loadedSkill = {
+  body: "# Alpha skill body",
+  compatibility: "stella>=1",
+  description: "Alpha",
+  id: toSafeId<"agentSkill">("skill_alpha"),
+  license: "MIT",
+  metadata: { key: "value" },
+  name: "alpha",
+  origin: "authored",
+  resources: [],
+  version: "1.2.3",
+} satisfies LoadedChatSkill;
 
 describe("dispatchGatewayToolCall", () => {
   beforeEach(() => {
@@ -49,6 +59,7 @@ describe("dispatchGatewayToolCall", () => {
     recordSkillGatewayToolAuditMock.mockReset();
     recordSkillGatewayToolAuditMock.mockResolvedValue(undefined);
     resolveSkillToolMock.mockReset();
+    loadSkillToolContentMock.mockReset();
   });
 
   test("never dispatches in anonymized mode", async () => {
@@ -132,6 +143,7 @@ describe("dispatchGatewayToolCall", () => {
 
   test("dispatches a resolved skill body and records a success audit event", async () => {
     resolveSkillToolMock.mockResolvedValue(resolvedSkill);
+    loadSkillToolContentMock.mockResolvedValue(loadedSkill);
 
     const result = await dispatchGatewayToolCall({
       args: {},

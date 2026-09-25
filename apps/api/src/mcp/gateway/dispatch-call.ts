@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 
 import { Temporal } from "@stll/time";
 
+import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -14,14 +15,17 @@ import {
   gatewayLoadErrorResult,
   recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
-import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
-import { resolveSkillTool } from "@/api/mcp/gateway/skills";
+import {
+  loadSkillToolContent,
+  resolveSkillTool,
+} from "@/api/mcp/gateway/skills";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult, toolDataResult } from "@/api/mcp/tool-utils";
 
 export type GatewayDispatchDependencies = {
   callGatewayExternalMcpTool: typeof callGatewayExternalMcpTool;
   gatewayLoadErrorResult: typeof gatewayLoadErrorResult;
+  loadSkillToolContent: typeof loadSkillToolContent;
   recordSkillGatewayToolAudit: typeof recordSkillGatewayToolAudit;
   resolveSkillTool: typeof resolveSkillTool;
 };
@@ -29,9 +33,17 @@ export type GatewayDispatchDependencies = {
 const defaultDependencies: GatewayDispatchDependencies = {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
+  loadSkillToolContent,
   recordSkillGatewayToolAudit,
   resolveSkillTool,
 };
+
+const unknownToolResult = (toolName: string) =>
+  structuredErrorResult({
+    code: "unknown_tool",
+    message: `Unknown tool: ${toolName}`,
+    hint: "Call tools/list for the tools available to this session.",
+  });
 
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
@@ -70,9 +82,19 @@ export const dispatchGatewayToolCall = async ({
   }
 
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  let skill: ResolvedSkillTool | null;
+  let skill: LoadedChatSkill | null;
   try {
-    skill = await dependencies.resolveSkillTool({ context, toolName });
+    const resolved = await dependencies.resolveSkillTool({
+      context,
+      toolName,
+    });
+    skill =
+      resolved === null
+        ? null
+        : await dependencies.loadSkillToolContent({
+            context,
+            skill: resolved,
+          });
   } catch (error) {
     // A load fault means we cannot tell whether the skill exists: answer with a
     // retryable error, never a definitive `unknown_tool`.
@@ -83,14 +105,7 @@ export const dispatchGatewayToolCall = async ({
     throw error;
   }
   if (!skill) {
-    return {
-      type: "internal",
-      result: structuredErrorResult({
-        code: "unknown_tool",
-        message: `Unknown tool: ${toolName}`,
-        hint: "Call tools/list for the tools available to this session.",
-      }),
-    };
+    return { type: "internal", result: unknownToolResult(toolName) };
   }
 
   await dependencies.recordSkillGatewayToolAudit({
@@ -110,7 +125,7 @@ export const dispatchGatewayToolCall = async ({
       compatibility: skill.compatibility,
       license: skill.license,
       metadata: skill.metadata,
-      name: skill.slug,
+      name: skill.name,
       origin: skill.origin,
       version: skill.version,
     } satisfies SkillToolOutput),

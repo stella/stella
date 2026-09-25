@@ -306,7 +306,7 @@ export const skillToolDefinition = (
   access: "read",
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
-    title: toDynamicToolTitle(skill.name) || skill.exposedName,
+    title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
   },
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
   description: skill.description,

@@ -118,20 +118,23 @@ describe("MCP gateway skill tools", () => {
     const context = createContext({
       rows: [
         skillRow({
+          id: toSafeId<"agentSkill">("skill_team_shared"),
           slug: "shared",
           scope: "team",
           userId: "user_other",
-          body: "team-body",
         }),
-        skillRow({ slug: "shared", scope: "private", body: "private-body" }),
+        skillRow({
+          id: toSafeId<"agentSkill">("skill_private_shared"),
+          slug: "shared",
+          scope: "private",
+        }),
       ],
     });
 
     const tools = await loadVisibleSkillTools({ context });
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.scope).toBe("private");
-    expect(tools.at(0)?.body).toBe("private-body");
+    expect(tools.at(0)?.id).toBe(toSafeId<"agentSkill">("skill_private_shared"));
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
@@ -200,7 +203,7 @@ describe("MCP gateway skill tools", () => {
       toolName: "skill__beta",
     });
 
-    expect(resolved?.slug).toBe("beta");
+    expect(resolved?.name).toBe("beta");
     expect(resolved?.exposedName).toBe("skill__beta");
   });
 
