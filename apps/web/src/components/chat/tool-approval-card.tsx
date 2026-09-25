@@ -536,13 +536,25 @@ export const ToolApprovalCard = ({
         <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+          <LoaderIcon
+            aria-label={t("common.running")}
+            className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin"
+            role="img"
+          />
         )}
         {isApproved && (
-          <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
+          <CheckIcon
+            aria-label={t("chat.approval.allowed")}
+            className="text-success ms-auto size-3.5 shrink-0"
+            role="img"
+          />
         )}
         {isDenied && (
-          <XIcon className="text-destructive ms-auto size-3.5 shrink-0" />
+          <XIcon
+            aria-label={t("chat.approval.denied")}
+            className="text-destructive ms-auto size-3.5 shrink-0"
+            role="img"
+          />
         )}
       </div>
 
@@ -837,7 +849,9 @@ const getToolApprovalState = ({
     isBlocked,
     isDenied,
     isExternalMcpApproval,
-    isProcessing: isApprovalResponded || (responded && isApprovalRequested),
+    // A denied call runs nothing, so it never shows as working.
+    isProcessing:
+      !isDenied && (isApprovalResponded || (responded && isApprovalRequested)),
     isPublicOfficialApproval: isPublicOfficialChatToolName(name),
     isStructuredEditFailure,
     label: externalMcpProviderName ?? defaultLabel,

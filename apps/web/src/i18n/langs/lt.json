@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Leisti šiame pokalbyje",
       "allowOnce": "Leisti vieną kartą",
+      "allowed": "Leista",
       "alwaysAllow": "Visada leisti",
       "browser": {
         "actions": {

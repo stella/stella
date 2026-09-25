@@ -388,6 +388,10 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
     ]);
     await approve(recorder, "call-4", "allow-once", [answers("Tidied")]);
   },
+  deny: async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await approve(recorder, "call-1", "deny", [answers("Kept the NDA")]);
+  },
   "approve-then-another": async (recorder) => {
     await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
     await approve(recorder, "call-1", "allow-once", [

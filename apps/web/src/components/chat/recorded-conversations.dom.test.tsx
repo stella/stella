@@ -549,6 +549,8 @@ type ScreenState = {
 
 const ALLOW_ONCE = messages.chat.approval.allowOnce;
 const DENY = messages.chat.approval.deny;
+const ALLOWED = messages.chat.approval.allowed;
+const DENIED = messages.chat.approval.denied;
 const SUBMIT_ANSWERS = messages.chat.askUser.submit;
 const ANSWER_PLACEHOLDER = messages.chat.askUser.placeholder;
 const ASK_USER_TITLE = messages.chat.tool["ask-user"];
@@ -597,12 +599,11 @@ const readScreen = (container: HTMLElement): ScreenState => {
       if (hasButton(frame, ALLOW_ONCE) && hasButton(frame, DENY)) {
         state.actionable.push(callId);
       }
-      // The card's status mark: a check once the call ran, a cross once it
-      // was denied. They carry no text, so the mark itself is read.
-      if (frame.querySelector("svg.lucide-check") !== null) {
+      // The card's status mark, by the name it announces.
+      if (within(frame).queryByRole("img", { name: ALLOWED }) !== null) {
         state.approved.push(callId);
       }
-      if (frame.querySelector("svg.lucide-x") !== null) {
+      if (within(frame).queryByRole("img", { name: DENIED }) !== null) {
         state.denied.push(callId);
       }
       continue;

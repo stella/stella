@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Engedélyezés ebben a beszélgetésben",
       "allowOnce": "Engedélyezés egyszer",
+      "allowed": "Engedélyezve",
       "alwaysAllow": "Mindig engedélyezés",
       "browser": {
         "actions": {
