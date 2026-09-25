@@ -16,6 +16,7 @@ const success = {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     elements: [],
     revision: "revision-1",
+    tabId: 7,
     text: "Ready",
     textOffset: 0,
     textTotalChars: 5,
@@ -34,6 +35,8 @@ const redirected = {
 
 const untracked = () => () => undefined;
 
+const RUN = { signal: new AbortController().signal, turnId: "turn-1" };
+
 const sessionStore = () =>
   createBrowserApprovalStore(() => {
     throw new DOMException("No storage in tests", "SecurityError");
@@ -48,14 +51,22 @@ describe("chat browser tool execution cache", () => {
       return success;
     }, untracked);
 
-    const first = cache.executeOnce("call-1", { action: "click", ref: "e:0" });
-    const concurrent = cache.executeOnce("call-1", {
-      action: "click",
-      ref: "e:0",
-    });
+    const first = cache.executeOnce(
+      "call-1",
+      { action: "click", ref: "e:0" },
+      RUN,
+    );
+    const concurrent = cache.executeOnce(
+      "call-1",
+      {
+        action: "click",
+        ref: "e:0",
+      },
+      RUN,
+    );
     expect(await Promise.all([first, concurrent])).toEqual([success, success]);
     expect(
-      await cache.executeOnce("call-1", { action: "click", ref: "e:0" }),
+      await cache.executeOnce("call-1", { action: "click", ref: "e:0" }, RUN),
     ).toEqual(success);
     expect(calls).toBe(1);
   });
@@ -67,8 +78,8 @@ describe("chat browser tool execution cache", () => {
       return success;
     }, untracked);
 
-    await cache.executeOnce("call-1", { action: "snapshot" });
-    await cache.executeOnce("call-2", { action: "snapshot" });
+    await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
+    await cache.executeOnce("call-2", { action: "snapshot" }, RUN);
     expect(calls).toBe(2);
   });
 
@@ -80,15 +91,19 @@ describe("chat browser tool execution cache", () => {
       store.beginCommand,
     );
 
-    await cache.executeOnce("call-1", { action: "snapshot" });
+    await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(store.lastCommandSucceeded()).toBe(true);
-    await cache.executeOnce("call-2", {
-      action: "open",
-      url: "https://a.test",
-    });
+    await cache.executeOnce(
+      "call-2",
+      {
+        action: "open",
+        url: "https://a.test",
+      },
+      RUN,
+    );
     expect(store.lastCommandSucceeded()).toBe(false);
     // A coalesced retry of the earlier success is not a new outcome.
-    await cache.executeOnce("call-1", { action: "snapshot" });
+    await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(store.lastCommandSucceeded()).toBe(false);
   });
 
@@ -104,7 +119,7 @@ describe("chat browser tool execution cache", () => {
       store.beginCommand,
     );
 
-    const pending = cache.executeOnce("call-1", { action: "snapshot" });
+    const pending = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(store.lastCommandSucceeded()).toBe(false);
     answer(success);
     await pending;
@@ -120,12 +135,25 @@ describe("chat browser tool execution cache", () => {
     );
 
     const outcome = await cache
-      .executeOnce("call-1", { action: "snapshot" })
+      .executeOnce("call-1", { action: "snapshot" }, RUN)
       .then(
         () => null,
         (error: unknown) => error,
       );
     expect(outcome).toBeInstanceOf(Error);
     expect(store.lastCommandSucceeded()).toBe(false);
+  });
+});
+
+describe("chat browser tool run", () => {
+  test("passes the chat turn and stop signal to the executor", async () => {
+    const runs: unknown[] = [];
+    const cache = createBrowserToolExecutionCache(async (_input, _id, run) => {
+      runs.push(run);
+      return success;
+    }, untracked);
+
+    await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
+    expect(runs).toEqual([RUN]);
   });
 });

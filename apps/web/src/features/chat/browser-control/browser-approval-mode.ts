@@ -71,6 +71,17 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
     }
   };
 
+  const setMode = (next: BrowserApprovalMode): void => {
+    mode = next;
+    // Blocked site data or a sandboxed frame throws on access; the mode
+    // then lasts until reload.
+    const storage = Result.try(() => getStorage()).unwrapOr(null);
+    if (storage !== null) {
+      writeStoredJson(storage, STORAGE_KEY, next);
+    }
+    notify();
+  };
+
   return {
     /**
      * Marks a browser command as running; call the returned function once
@@ -98,16 +109,16 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
     getMode: (): BrowserApprovalMode => mode,
     lastCommandSucceeded: (): boolean =>
       commandsInFlight === 0 && lastSuccessEpoch === failureEpoch,
-    setMode(next: BrowserApprovalMode): void {
-      mode = next;
-      // Blocked site data or a sandboxed frame throws on access; the mode
-      // then lasts until reload.
-      const storage = Result.try(() => getStorage()).unwrapOr(null);
-      if (storage !== null) {
-        writeStoredJson(storage, STORAGE_KEY, next);
-      }
-      notify();
+    /**
+     * Forgets what was approved: the controller re-paired or disconnected,
+     * or the user handed chat another tab, so neither the reads opt-in nor
+     * the last success speaks for the page chat would read next.
+     */
+    reset(): void {
+      failureEpoch += 1;
+      setMode(BROWSER_APPROVAL_MODE.askEveryTime);
     },
+    setMode,
     subscribe(listener: () => void): () => void {
       listeners.add(listener);
       return () => {
@@ -134,6 +145,10 @@ export const setBrowserApprovalMode = (mode: BrowserApprovalMode): void => {
 
 export const beginBrowserCommand = (): ((succeeded: boolean) => void) =>
   getStore().beginCommand();
+
+export const resetBrowserApproval = (): void => {
+  getStore().reset();
+};
 
 export const useBrowserApprovalMode = (): BrowserApprovalMode =>
   useSyncExternalStore(

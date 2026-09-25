@@ -331,6 +331,17 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
+  // A turn starts with a user message, a regeneration or a route hand-off;
+  // tool results and approvals continue it. The extension budgets browser
+  // commands per turn.
+  let browserTurnId = crypto.randomUUID();
+  const startBrowserTurn = (): void => {
+    browserTurnId = crypto.randomUUID();
+  };
+  const browserTool = createBrowserClientTool({
+    currentTurnId: () => browserTurnId,
+  });
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
@@ -360,7 +371,7 @@ export const createChatRuntime = ({
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
-    tools: [createBrowserClientTool()],
+    tools: [browserTool.tool],
   });
 
   const withBody = async (
@@ -441,6 +452,7 @@ export const createChatRuntime = ({
     });
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
+    startBrowserTurn();
     const stream = client.sendMessage(message, options?.body);
 
     if (!hasUserMessage(snapshot.messages, message.id)) {
@@ -549,6 +561,7 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
+      startBrowserTurn();
       await withBody(
         {
           body: {
@@ -566,6 +579,7 @@ export const createChatRuntime = ({
       setSnapshot({ messages });
     },
     startRouteHandoffMessage: (message, options) => {
+      startBrowserTurn();
       const stream = client.sendMessage(message, options?.body);
 
       if (!hasUserMessage(snapshot.messages, message.id)) {
@@ -588,6 +602,9 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         });
       client.stop();
+      // Stopping the request does not stop the extension: a browser command
+      // already approved would otherwise keep acting on the page.
+      browserTool.cancel();
       // `client.stop()` aborts the live request but never rewrites message
       // parts, so a tool-call part caught mid-run stays in a running state and
       // keeps `hasRunningToolCallInLatestAssistantMessage` — and thus

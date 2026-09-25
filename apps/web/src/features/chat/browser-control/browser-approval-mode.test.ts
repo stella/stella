@@ -114,6 +114,33 @@ describe("browser approval mode", () => {
   });
 });
 
+describe("resetting browser approval", () => {
+  test("a new pairing or handed-over tab asks again for every read", () => {
+    const storage = memoryStorage();
+    const store = createBrowserApprovalStore(() => storage);
+    store.setMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+    store.beginCommand()(true);
+
+    store.reset();
+
+    expect(store.getMode()).toBe(BROWSER_APPROVAL_MODE.askEveryTime);
+    expect(store.lastCommandSucceeded()).toBe(false);
+    expect(createBrowserApprovalStore(() => storage).getMode()).toBe(
+      BROWSER_APPROVAL_MODE.askEveryTime,
+    );
+  });
+
+  test("a command that began before the reset cannot vouch for the new tab", () => {
+    const store = createBrowserApprovalStore(memoryStorage);
+    const before = store.beginCommand();
+
+    store.reset();
+    before(true);
+
+    expect(store.lastCommandSucceeded()).toBe(false);
+  });
+});
+
 describe("last browser command outcome", () => {
   test("reads wait for a successful command in this tab session", () => {
     const store = createBrowserApprovalStore(memoryStorage);
