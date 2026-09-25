@@ -13,10 +13,8 @@ import {
   relations,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  processDecision,
-  type CaseLawCorpusDependencies,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,

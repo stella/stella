@@ -29,12 +29,10 @@ import {
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  DECISION_REFRESH,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
-import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import { loadRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";

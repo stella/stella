@@ -55,7 +55,8 @@ test("the value that reaches a citation_key column comes from one helper", () =>
   // A module added to this list is a module that decided for itself what an
   // uncanonicalizable text stores, which is the decision that drifted.
   expect(modulesCalling("citationKeyOf(")).toEqual([
-    "handlers/case-law/ingestion/pipeline.ts",
+    "handlers/case-law/ingestion/pipeline/citations.ts",
+    "handlers/case-law/ingestion/pipeline/decision-plan.ts",
     "scripts/backfill-citation-keys.ts",
   ]);
 });
@@ -71,7 +72,7 @@ test("nothing derives a key from the raw canonicalizer", () => {
     "handlers/case-law/decisions/search.ts",
     "handlers/case-law/ingestion/citation-extractor.ts",
     "handlers/case-law/ingestion/citation-recall.ts",
-    "handlers/case-law/ingestion/pipeline.ts",
+    "handlers/case-law/ingestion/pipeline/decision-plan.ts",
   ]);
 });
 

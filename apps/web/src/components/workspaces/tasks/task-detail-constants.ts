@@ -38,20 +38,9 @@ export {
 };
 export type { ListItemType, TaskPriority, TaskStatus };
 
-/** Normalize a date value that may be a Date object (Eden
- *  transforms `format: "date"`) or a YYYY-MM-DD string. */
-export const toISODate = (v: string | Date | null | undefined): string => {
-  if (v === null || v === undefined) {
-    return "";
-  }
-  if (v instanceof Date) {
-    return v.toISOString().slice(0, 10);
-  }
-  if (typeof v === "string" && v.length === 10) {
-    return v;
-  }
-  return v.slice(0, 10);
-};
+/** The YYYY-MM-DD part of a serialized date, or "" when absent. */
+export const toISODate = (v: string | null | undefined): string =>
+  v === null || v === undefined ? "" : v.slice(0, 10);
 
 export const ITEM_TYPE_TRANSLATION_KEYS = {
   event: "common.itemTypeValues.event",

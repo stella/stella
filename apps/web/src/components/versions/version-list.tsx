@@ -55,7 +55,7 @@ type VersionRowProps = {
   title: string;
   author: VersionRowAuthor | null;
   /** ISO string (entity versions) or Date (Eden-deserialized). */
-  createdAt: string | Date;
+  createdAt: string;
   isCurrent?: boolean;
   isViewing?: boolean;
   isSelected?: boolean;

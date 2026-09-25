@@ -17,7 +17,7 @@ const property = ({
   name: id,
   status: "fresh",
   kinds: null,
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  createdAt: "2026-01-01T00:00:00.000Z",
   content: { version: 1, type: "text" },
   tool,
 });

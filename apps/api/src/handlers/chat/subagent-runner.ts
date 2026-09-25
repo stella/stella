@@ -59,7 +59,16 @@ export type RunSubagentOptions = {
   orgAIConfig: OrgAIConfig | null;
   role: ModelRole;
   modelId?: string | undefined;
-  system: string;
+  /**
+   * Server-built framing and tool catalog. Sent verbatim, never anonymized,
+   * like `ChatPromptParts.safePrompt` on the parent turn.
+   */
+  systemSafe: string;
+  /**
+   * Text the parent model authored (its expected-output brief). Crosses the
+   * third-party boundary like message content.
+   */
+  systemUntrusted: string;
   messages: ChatMessage[];
   /**
    * Tenant set for the model-ingress guard. A subagent runs the parent turn's
@@ -240,16 +249,23 @@ export const runSubagent = async (
 
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary: options.thirdPartyBoundary,
-    value: [options.system, options.messages],
+    value: [options.systemSafe, options.systemUntrusted, options.messages],
   });
 
-  const preparedSystem = await prepareTextForThirdParty({
+  // Same split as `streamChat`: only the parent model's brief is anonymized.
+  // The safe half carries the code-mode catalog's function signatures, which
+  // an anonymizing boundary would rewrite into names no tool answers to.
+  const preparedUntrusted = await prepareTextForThirdParty({
     boundary: options.thirdPartyBoundary,
-    text: options.system,
+    text: options.systemUntrusted,
   });
-  if (Result.isError(preparedSystem)) {
-    throw preparedSystem.error;
+  if (Result.isError(preparedUntrusted)) {
+    throw preparedUntrusted.error;
   }
+  const system =
+    preparedUntrusted.value.length > 0
+      ? `${options.systemSafe}\n\n${preparedUntrusted.value}`
+      : options.systemSafe;
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: options.thirdPartyBoundary,
@@ -277,7 +293,7 @@ export const runSubagent = async (
   // model's own tool input (the expected-output brief), so it is redacted and
   // reported rather than fail-closed.
   const guardedSystem = redactModelSystemPrompt({
-    system: preparedSystem.value,
+    system,
     workspaceIds: options.tenantWorkspaceIds,
   });
   const guardedMessages = guardModelMessages({

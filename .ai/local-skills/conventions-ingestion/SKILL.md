@@ -197,6 +197,7 @@ Prefer invariant and state-machine tests over one example retry.
 
 - Upload finalization: `apps/api/src/handlers/uploads/update.ts`
 - Case-law ingestion: `apps/api/src/handlers/case-law/ingestion/pipeline.ts`
+  and the modules under `apps/api/src/handlers/case-law/ingestion/pipeline/`
 - Legislation ingestion: `apps/api/src/handlers/legislation/ingestion.ts`
 - Hosted usage webhook deduplication:
   `apps/api/src/lib/hosted-usage-provider/webhook-store.ts`

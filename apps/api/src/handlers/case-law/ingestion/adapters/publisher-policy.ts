@@ -32,6 +32,12 @@ type PublisherGate = {
   readonly publisher: string;
   /** Minimum gap between two requests to this publisher, in milliseconds. */
   readonly intervalMs: number;
+  /**
+   * The hosts this publisher serves from, as a request names them. A URL the
+   * publisher hands back is only followed onto one of these; see
+   * `publisher-target.ts`.
+   */
+  readonly hosts: readonly string[];
 };
 
 /**
@@ -70,43 +76,72 @@ export const PUBLISHER_GATES = {
     intervalMs: Math.ceil(
       DAY_IN_MS / (NALUS_DAILY_REQUEST_LIMIT * NALUS_REQUEST_BUDGET_SHARE),
     ),
+    hosts: ["nalus.usoud.cz"],
   },
   /** ris.bka.gv.at and data.bka.gv.at. */
-  "ris-bka": { publisher: "RIS", intervalMs: 5000 },
+  "ris-bka": {
+    publisher: "RIS",
+    intervalMs: 5000,
+    hosts: ["data.bka.gv.at", "ogd.ris.bka.gv.at", "www.ris.bka.gv.at"],
+  },
   /** findok.bmf.gv.at. */
-  "findok-bmf": { publisher: "Findok", intervalMs: 1500 },
+  "findok-bmf": {
+    publisher: "Findok",
+    intervalMs: 1500,
+    hosts: ["findok.bmf.gv.at"],
+  },
   /**
    * sn.pl. A dozen requests in quick succession earned the upstream's 429
    * dressed as `{"error":"Brak tokenu"}`; the same pacing then answered
    * normally. A sustained request a second was still refused every few
    * minutes, each refusal clearing within one.
    */
-  "sn-pl": { publisher: "Sąd Najwyższy", intervalMs: 1500 },
+  "sn-pl": {
+    publisher: "Sąd Najwyższy",
+    intervalMs: 1500,
+    hosts: ["sn.pl"],
+  },
   /** orzeczenia.uzp.gov.pl. */
-  "uzp-pl": { publisher: "Urząd Zamówień Publicznych", intervalMs: 1000 },
+  "uzp-pl": {
+    publisher: "Urząd Zamówień Publicznych",
+    intervalMs: 1000,
+    hosts: ["orzeczenia.uzp.gov.pl"],
+  },
   /** ipo.trybunal.gov.pl. */
-  "trybunal-pl": { publisher: "Trybunał Konstytucyjny", intervalMs: 1500 },
+  "trybunal-pl": {
+    publisher: "Trybunał Konstytucyjny",
+    intervalMs: 1500,
+    hosts: ["ipo.trybunal.gov.pl"],
+  },
   /** apiorzeczenia.wroclaw.sa.gov.pl, the common courts' judgments API. */
   "ms-gov-pl": {
     publisher: "Ministerstwo Sprawiedliwości",
     intervalMs: 1000,
+    hosts: ["apiorzeczenia.wroclaw.sa.gov.pl"],
   },
   /** rozhodnuti.nsoud.cz. */
-  "nsoud-cz": { publisher: "Nejvyšší soud", intervalMs: POLITE_INTERVAL_MS },
+  "nsoud-cz": {
+    publisher: "Nejvyšší soud",
+    intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["rozhodnuti.nsoud.cz"],
+  },
   /** vyhledavac.nssoud.cz. */
   "nssoud-cz": {
     publisher: "Nejvyšší správní soud",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["vyhledavac.nssoud.cz"],
   },
   /** rozhodnuti.justice.cz. */
   "justice-cz": {
     publisher: "Justice.cz",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["rozhodnuti.justice.cz"],
   },
   /** obcan.justice.sk. */
   "justice-sk": {
     publisher: "Justice.sk",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["obcan.justice.sk"],
   },
   /**
    * www.usoud.cz, the court's own site rather than its decision database:
@@ -117,14 +152,20 @@ export const PUBLISHER_GATES = {
   "usoud-cz": {
     publisher: "Ústavní soud",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["www.usoud.cz"],
   },
   /** www.ustavnysud.sk. */
   "ustavnysud-sk": {
     publisher: "Ústavný súd SR",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["www.ustavnysud.sk"],
   },
   /** www.saos.org.pl. */
-  "saos-pl": { publisher: "SAOS", intervalMs: POLITE_INTERVAL_MS },
+  "saos-pl": {
+    publisher: "SAOS",
+    intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["www.saos.org.pl"],
+  },
   /**
    * huggingface.co and the CDN it redirects file reads to. Few requests: a
    * shard is a dozen ranged reads of a pinned file.
@@ -132,26 +173,37 @@ export const PUBLISHER_GATES = {
   "huggingface-datasets": {
     publisher: "Hugging Face",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["huggingface.co"],
   },
   /**
    * orzeczenia.uodo.gov.pl. Politeness, not a publisher statement: the portal
    * states no limit, and this keeps it under one request a second.
    */
-  "uodo-gov-pl": { publisher: "Prezes UODO", intervalMs: 1000 },
+  "uodo-gov-pl": {
+    publisher: "Prezes UODO",
+    intervalMs: 1000,
+    hosts: ["orzeczenia.uodo.gov.pl"],
+  },
   /** eakta.birosag.hu. */
   "birosag-hu": {
     publisher: "Országos Bírósági Hivatal",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["eakta.birosag.hu"],
   },
   /**
    * eureka.mf.gov.pl. The service states no limit; one request a second is
    * politeness, and its search stalls rather than refuses under load.
    */
-  "eureka-mf": { publisher: "EUREKA", intervalMs: 1000 },
+  "eureka-mf": {
+    publisher: "EUREKA",
+    intervalMs: 1000,
+    hosts: ["eureka.mf.gov.pl"],
+  },
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
     intervalMs: POLITE_INTERVAL_MS,
+    hosts: ["publications.europa.eu"],
   },
 } as const satisfies Record<string, PublisherGate>;
 
@@ -194,6 +246,10 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
   [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
+
+/** The hosts an adapter's publisher serves from. */
+export const publisherHosts = (adapterKey: AdapterKey): readonly string[] =>
+  PUBLISHER_GATES[ADAPTER_PUBLISHER_GATES[adapterKey]].hosts;
 
 /** Minimum gap between two requests the adapter sends to its publisher. */
 export const publisherRequestIntervalMs = (adapterKey: AdapterKey): number =>

@@ -24,13 +24,11 @@ import type {
   StoredRawReparseOutcome,
   StoredRawReparseRejection,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  allocateSourceObservationOrder,
-  caseLawCanonicalPayload,
-  DECISION_REFRESH,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import {

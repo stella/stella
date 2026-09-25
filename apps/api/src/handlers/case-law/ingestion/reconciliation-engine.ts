@@ -51,13 +51,11 @@ import {
   recordSliceWalkFailure,
   touchSliceCoverages,
 } from "@/api/handlers/case-law/ingestion/coverage-ledger";
-import {
-  allocateSourceObservationOrder,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-  processSupplement,
-  readStoredRawFromS3,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
+import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import type {
   FailedSliceCandidate,
   LedgerSlice,

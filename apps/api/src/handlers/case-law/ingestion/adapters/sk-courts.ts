@@ -40,6 +40,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -124,13 +125,26 @@ const DOCUMENT_TIMEOUT_MS = 30_000;
  * the value every caller passes: this publisher's budget, the redirect rule
  * and the download timeout in one place.
  */
-export const skCourtsDocumentFetch: SkDocumentFetch = async (url, { signal }) =>
-  await fetchPublisher(url, {
+export const skCourtsDocumentFetch: SkDocumentFetch = async (
+  url,
+  { signal },
+) => {
+  const target = publisherTarget(ADAPTER_KEYS.SK_COURTS, url);
+  if (Result.isError(target)) {
+    logger.warn("case_law.ingestion.document_target_refused", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      reason: target.error.message,
+      url: target.error.url,
+    });
+    return undefined;
+  }
+  return await fetchPublisher(target.value, {
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     redirect: "error",
     signal,
     timeoutMs: DOCUMENT_TIMEOUT_MS,
   });
+};
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   if (value === undefined || value === null) {

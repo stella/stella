@@ -53,7 +53,6 @@ const createMessage = (id = "message-A"): PersistedChatMessage => ({
   role: "user",
   parts: [{ type: "text", content: "Hello" }],
 });
-const date = (value: string): Date => new Date(value);
 const assistantMessageId = "11111111-1111-4111-8111-111111111111";
 const createOutgoingMessage = (
   id: string,
@@ -413,11 +412,11 @@ describe("mergeGroupedChatThreadPages", () => {
       {
         global: [
           {
-            createdAt: date("2026-05-16T08:00:00.000Z"),
+            createdAt: "2026-05-16T08:00:00.000Z",
             id: "global-A",
             origin: "original",
             title: "Global A",
-            updatedAt: date("2026-05-16T08:00:00.000Z"),
+            updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
           },
         ],
@@ -428,11 +427,11 @@ describe("mergeGroupedChatThreadPages", () => {
             workspaceName: "Matter A",
             threads: [
               {
-                createdAt: date("2026-05-16T07:00:00.000Z"),
+                createdAt: "2026-05-16T07:00:00.000Z",
                 id: "workspace-thread-A",
                 origin: "original",
                 title: "Workspace A",
-                updatedAt: date("2026-05-16T07:00:00.000Z"),
+                updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
               },
             ],
@@ -442,19 +441,19 @@ describe("mergeGroupedChatThreadPages", () => {
       {
         global: [
           {
-            createdAt: date("2026-05-16T08:00:00.000Z"),
+            createdAt: "2026-05-16T08:00:00.000Z",
             id: "global-A",
             origin: "original",
             title: "Global A duplicate",
-            updatedAt: date("2026-05-16T08:00:00.000Z"),
+            updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
           },
           {
-            createdAt: date("2026-05-16T06:00:00.000Z"),
+            createdAt: "2026-05-16T06:00:00.000Z",
             id: "global-B",
             origin: "fork",
             title: "Global B",
-            updatedAt: date("2026-05-16T06:00:00.000Z"),
+            updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
           },
         ],
@@ -465,19 +464,19 @@ describe("mergeGroupedChatThreadPages", () => {
             workspaceName: "Matter A",
             threads: [
               {
-                createdAt: date("2026-05-16T07:00:00.000Z"),
+                createdAt: "2026-05-16T07:00:00.000Z",
                 id: "workspace-thread-A",
                 origin: "original",
                 title: "Workspace A duplicate",
-                updatedAt: date("2026-05-16T07:00:00.000Z"),
+                updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
               },
               {
-                createdAt: date("2026-05-16T05:00:00.000Z"),
+                createdAt: "2026-05-16T05:00:00.000Z",
                 id: "workspace-thread-B",
                 origin: "original",
                 title: "Workspace B",
-                updatedAt: date("2026-05-16T05:00:00.000Z"),
+                updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
               },
             ],
@@ -487,19 +486,19 @@ describe("mergeGroupedChatThreadPages", () => {
             workspaceName: "Matter B",
             threads: [
               {
-                createdAt: date("2026-05-16T06:00:00.000Z"),
+                createdAt: "2026-05-16T06:00:00.000Z",
                 id: "workspace-thread-D",
                 origin: "original",
                 title: "Workspace D",
-                updatedAt: date("2026-05-16T06:00:00.000Z"),
+                updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
               },
               {
-                createdAt: date("2026-05-16T04:00:00.000Z"),
+                createdAt: "2026-05-16T04:00:00.000Z",
                 id: "workspace-thread-C",
                 origin: "original",
                 title: "Workspace C",
-                updatedAt: date("2026-05-16T04:00:00.000Z"),
+                updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
               },
             ],

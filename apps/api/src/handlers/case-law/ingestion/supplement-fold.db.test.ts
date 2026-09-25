@@ -32,11 +32,9 @@ import {
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import {
-  allocateSourceObservationOrder,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import {
   foldStoredSupplements,
   SUPPLEMENT_FOLD_OUTCOME,

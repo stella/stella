@@ -27,8 +27,8 @@ export const formatValidityDate = (
 type FormatValidityRangeOptions = {
   format: IntlFormatter;
   openEnded: string;
-  validFrom: Date | string | null;
-  validTo: Date | string | null;
+  validFrom: string | null;
+  validTo: string | null;
 };
 
 type StatuteCitationInput = {
@@ -70,7 +70,7 @@ export const formatStatuteCitation = ({
  * a consolidation. The instant is UTC midnight, and UTC has no DST, so a
  * 24-hour step lands on the previous calendar day.
  */
-const lastDayInForce = (validTo: Date | string | null): Date | null => {
+const lastDayInForce = (validTo: string | null): Date | null => {
   if (validTo === null) {
     return null;
   }

@@ -217,6 +217,9 @@ export type ChatCodeModeToolMap = {
   >;
 };
 
+export const CODE_MODE_EXECUTE_TOOL_NAME =
+  "execute_typescript" as const satisfies keyof ChatCodeModeToolMap;
+
 export const buildChatCodeModeTools = (
   props: BuildChatCodeModeProps,
 ): ChatCodeModeToolMap => {

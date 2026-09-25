@@ -39,14 +39,12 @@ import type {
   StoredRawResultReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import {
-  allocateSourceObservationOrder,
-  DECISION_REFRESH,
-  PROCESS_DECISION_STATUS,
-  processDecision,
-  readStoredRawFromS3,
-  rebuildStoredJudgment,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
+import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { acquireReplayLease } from "@/api/handlers/case-law/ingestion/replay";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";

@@ -35,13 +35,13 @@ import {
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
   PROCESS_DECISION_STATUS,
-  processDecision,
-  processSupplement,
-  runIngestionPipeline,
   SUPPLEMENT_RETRY_REASON,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+} from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";

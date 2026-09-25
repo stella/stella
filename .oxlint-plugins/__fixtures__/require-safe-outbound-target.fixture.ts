@@ -12,7 +12,11 @@ import SocketClient from "ws";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
 import * as http from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
@@ -40,6 +44,7 @@ declare const mutateTarget: (target: URL, hostname: string) => void;
 declare const useFreeTier: boolean;
 declare const foreignStore: { presign: (key: string) => string };
 declare const settings: { GOTENBERG_URL: string };
+declare const otherCheck: (url: string) => { value: string };
 
 export const mustFlagUnprovenConfiguredTargets = async (store: {
   presign: (key: string) => string;
@@ -447,6 +452,39 @@ export const mustAllowCanonicalBoundary = async (inputUrl: string) => {
     timeoutMs: 1000,
   });
   await fetchWithTimeout(getS3().presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
+};
+
+export const mustCheckPublisherTargets = async (
+  scrapedLink: string,
+  id: string,
+) => {
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchPublisher(`${STATIC_BASE}/items/${id}`, {
+    adapterKey: "cz-ns",
+    timeoutMs: 1000,
+  });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a link read out of a publisher response has no proven origin
+  await fetchPublisher(scrapedLink, { adapterKey: "cz-ns", timeoutMs: 1000 });
+
+  const checked = publisherTarget("cz-ns", scrapedLink);
+  if (checked.isOk()) {
+    // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+    await fetchPublisher(checked.value, {
+      adapterKey: "cz-ns",
+      timeoutMs: 1000,
+    });
+    const checkedAlias = checked.value;
+    // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+    await fetchWithRetry(checkedAlias, undefined, { adapterKey: "cz-ns" });
+  }
+
+  const unchecked = otherCheck(scrapedLink);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: only publisherTarget() proves a publisher host
+  await fetchPublisher(unchecked.value, {
+    adapterKey: "cz-ns",
     timeoutMs: 1000,
   });
 };

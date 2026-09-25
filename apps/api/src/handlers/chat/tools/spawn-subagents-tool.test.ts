@@ -1,3 +1,4 @@
+import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -9,6 +10,10 @@ import type {
   RunSubagentResult,
 } from "@/api/handlers/chat/subagent-runner";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  CHAT_CODE_MODE_SYSTEM_PROMPT,
+  CODE_MODE_EXECUTE_TOOL_NAME,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
@@ -312,6 +317,77 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       env.AI_PROVIDER = previousProvider;
       env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
+  });
+});
+
+describe("createSpawnSubagentsTool — subagent system prompt", () => {
+  const runWithToolset = async (
+    toolset: ChatToolMap,
+    subagent?: { task: string; expectedOutput?: string },
+  ) => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    runSubagentCalls.length = 0;
+    runSubagentImpl = async () => ({
+      outcome: "completed",
+      text: "done",
+      usage: undefined,
+    });
+    try {
+      await buildTool(() => toolset)(
+        { subagents: [subagent ?? { task: "a" }] },
+        {},
+      );
+      const call = runSubagentCalls.at(0);
+      if (call === undefined) {
+        throw new Error("The tool did not run a subagent");
+      }
+      return {
+        systemSafe: call.systemSafe,
+        systemUntrusted: call.systemUntrusted,
+      };
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  };
+
+  // `execute_typescript` declares `list_matters` only in this section and
+  // `discover_tools` lists only lazy reads, so a subagent without it cannot
+  // list matters. The catalog rides on the safe half: an anonymizing boundary
+  // would otherwise rewrite its function signatures.
+  test("carries the code-mode catalog on the safe half when the toolset has execute_typescript", async () => {
+    const executeTypescript = toolDefinition({
+      name: CODE_MODE_EXECUTE_TOOL_NAME,
+      description: "Run code.",
+    }).server(async () => "ok");
+
+    const { systemSafe, systemUntrusted } = await runWithToolset({
+      [CODE_MODE_EXECUTE_TOOL_NAME]: executeTypescript,
+    });
+    expect(systemSafe).toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
+    expect(systemUntrusted).toBe("");
+  });
+
+  test("omits the code-mode catalog when the toolset has no execute_typescript", async () => {
+    const { systemSafe } = await runWithToolset({});
+    expect(systemSafe).not.toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
+  });
+
+  // The shape hint is the parent model's own text, so it must cross the
+  // third-party boundary rather than ride verbatim with the framing.
+  test("puts the parent model's expected-output brief on the untrusted half", async () => {
+    const { systemSafe, systemUntrusted } = await runWithToolset(
+      {},
+      { task: "a", expectedOutput: "a table of matters" },
+    );
+    expect(systemUntrusted).toContain("a table of matters");
+    expect(systemSafe).not.toContain("a table of matters");
   });
 });
 
