@@ -50,7 +50,7 @@ export const ConditionBuilder = ({
     or: t("common.or"),
     remove: t("common.remove"),
     fieldPlaceholder: t("templates.conditionField"),
-    valuePlaceholder: t("templates.conditionValue"),
+    valuePlaceholder: t("common.value"),
     useFormula: t("templates.conditionUseFormula"),
     clearDate: t("common.clearDate"),
     selectDate: t("common.selectDate"),

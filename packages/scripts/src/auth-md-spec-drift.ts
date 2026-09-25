@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 /**
@@ -146,13 +148,29 @@ const parseCommitSha = (json: string): string => {
 
 const rawUrl = (path: string): string => `${RAW_BASE}/main/${path}`;
 
+const isLockfile = (value: unknown): value is Lockfile =>
+  typeof value === "object" &&
+  value !== null &&
+  "version" in value &&
+  typeof value.version === "string" &&
+  "commit" in value &&
+  typeof value.commit === "string" &&
+  "capturedAt" in value &&
+  typeof value.capturedAt === "string" &&
+  "files" in value &&
+  typeof value.files === "object" &&
+  value.files !== null &&
+  Object.values(value.files).every((hash) => typeof hash === "string");
+
 const readLockfile = async (): Promise<Lockfile | null> => {
   const file = Bun.file(LOCKFILE_URL);
   if (!(await file.exists())) {
     return null;
   }
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- repo-owned lockfile JSON, written only by this script's --update path
-  return (await file.json()) as Lockfile;
+  const parsed: unknown = await file.json();
+  return isLockfile(parsed)
+    ? parsed
+    : panic(`${LOCKFILE_URL.pathname} is not an auth.md spec lockfile`);
 };
 
 const update = async (): Promise<void> => {

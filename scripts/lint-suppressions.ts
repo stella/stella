@@ -179,11 +179,6 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "archive entries inflated without the loadDocxArchive size caps",
   },
   {
-    rule: "no-db-await-in-loop/no-db-await-in-loop",
-    tier: "data-volume",
-    guards: "per-row database round-trips inside a loop (N+1)",
-  },
-  {
     rule: "no-network-await-in-loop/no-network-await-in-loop",
     tier: "data-volume",
     guards: "per-iteration network round-trips inside a loop",

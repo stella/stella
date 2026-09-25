@@ -121,7 +121,7 @@ const createBaseContext = (): BaseTestHandlerContext => ({
  * type (`Parameters<typeof handler.handler>[0]`); pass it so the result slots
  * into the handler call without a further cast.
  */
-// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
 export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides = {},
 ): TContext => {

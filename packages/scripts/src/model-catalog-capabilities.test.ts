@@ -17,14 +17,27 @@ const CHECKABLE = {
 const upstreamOf = (
   entries: Record<
     string,
-    Omit<UpstreamCapabilities, "inputModalities"> &
-      Partial<Pick<UpstreamCapabilities, "inputModalities">>
+    Omit<
+      UpstreamCapabilities,
+      "inputModalities" | "outputTokens" | "toolCall"
+    > &
+      Partial<
+        Pick<
+          UpstreamCapabilities,
+          "inputModalities" | "outputTokens" | "toolCall"
+        >
+      >
   >,
 ): ReadonlyMap<string, UpstreamCapabilities> =>
   new Map(
     Object.entries(entries).map(([key, value]) => [
       key,
-      { inputModalities: ["text"], ...value },
+      {
+        inputModalities: ["text"],
+        outputTokens: null,
+        toolCall: true,
+        ...value,
+      },
     ]),
   );
 
@@ -89,7 +102,9 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["minimal", "low", "medium", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: false,
+      toolCall: null,
     });
   });
 
@@ -104,7 +119,9 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
+      toolCall: null,
     });
     expect(
       parseUpstreamCapabilities({ reasoning: false, temperature: true }),
@@ -113,8 +130,36 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: false,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: true,
+      toolCall: null,
     });
+  });
+
+  test("extracts a positive integer output limit and nothing else", () => {
+    expect(
+      parseUpstreamCapabilities({
+        reasoning: false,
+        limit: { output: 64_000 },
+      }),
+    ).toMatchObject({ outputTokens: 64_000 });
+    for (const output of [0, -1, 1.5, "64000", null]) {
+      expect(
+        parseUpstreamCapabilities({ reasoning: false, limit: { output } }),
+      ).toMatchObject({ outputTokens: null });
+    }
+    expect(parseUpstreamCapabilities({ reasoning: false })).toMatchObject({
+      outputTokens: null,
+    });
+  });
+
+  test("extracts tool-call support", () => {
+    expect(
+      parseUpstreamCapabilities({ reasoning: true, tool_call: false }),
+    ).toMatchObject({ toolCall: false });
+    expect(
+      parseUpstreamCapabilities({ reasoning: false, tool_call: true }),
+    ).toMatchObject({ toolCall: true });
   });
 
   test("returns null for records without reasoning metadata", () => {
@@ -148,7 +193,9 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["none", "low", "medium", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
+      toolCall: null,
     });
     // Toggle-only models have no effort vocabulary to send.
     expect(
@@ -161,7 +208,9 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: null,
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
+      toolCall: null,
     });
     // No duplicate "none" when the effort list already has it.
     expect(
@@ -177,7 +226,9 @@ describe("parseUpstreamCapabilities", () => {
       reasoning: true,
       effortValues: ["none", "high"],
       inputModalities: null,
+      outputTokens: null,
       temperature: null,
+      toolCall: null,
     });
   });
 });
@@ -486,7 +537,7 @@ describe("validateCapabilities", () => {
     const result = validateCapabilities({
       entries: [
         { provider: "google", modelId: "gemini-3.5-flash" },
-        { provider: "bedrock", modelId: "us.deepseek.r1-v1:0" },
+        { provider: "bedrock", modelId: "openai.gpt-oss-20b-1:0" },
       ],
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),

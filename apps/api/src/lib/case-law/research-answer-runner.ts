@@ -844,7 +844,7 @@ const writeOutcomes = async (
       // SAFETY: bounded by the columns an organization may hold, inside one
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-cell compare-and-set, each guarded by its own column snapshot and claim
+      // db-await-in-loop: per-cell compare-and-set, each guarded by its own column snapshot and claim
       await tx
         .update(caseLawResearchAnswers)
         .set({ ...values, claimId: null, updatedAt: now })

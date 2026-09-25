@@ -5,7 +5,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import {
   ensureRouteInfiniteQueryData,

@@ -1,7 +1,6 @@
 import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
-import type { Context } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
@@ -109,30 +108,19 @@ import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import { captureRequestError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
-import {
-  getAuth,
-  resolveUserRealtimeAuthorization,
-  resolveWorkspaceRealtimeAudience,
-} from "@/api/lib/auth";
+import { detached } from "@/api/lib/analytics/capture";
+import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
-import {
-  currentQueryCount,
-  DB_QUERY_COUNT_HEADER,
-} from "@/api/lib/db-query-counter";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
-import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { elysiaErrorAnswer } from "@/api/lib/errors/elysia-error";
 import { httpError } from "@/api/lib/errors/http-error";
-import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -141,15 +129,15 @@ import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
-  getRequestContext,
   getRequestId,
   initRequestContext,
-  isAiRequest,
   REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
-import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
+import {
+  answerRequestError,
+  completeRequest,
+} from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -170,14 +158,9 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
 const DEFAULT_API_PORT = 3001;
 // Keep-alive idle timeout in seconds; see the `api.listen` call.
 const HTTP_IDLE_TIMEOUT_S = 75;
-// Emit the per-request query count in local/CI runs only, so the e2e guard
-// can assert per-route budgets without deployed environments paying any
-// per-query cost. Must match the logger gate in db/root.ts.
-const DB_QUERY_COUNTER_ENABLED = env.isDev;
 const SESSION_ID_HEADER = "x-posthog-session-id";
 const TANSTACK_RUN_ID_HEADER = "X-Run-Id";
 const SESSION_ID_MAX_LENGTH = 64;
@@ -217,25 +200,6 @@ const startMemoryPressureHandler = () => {
   );
 };
 
-const getRequestPath = (request: Request): string =>
-  new URL(request.url).pathname;
-
-// Stamp the per-request query count onto the outgoing response. Reads the
-// active counter store, so it is a no-op when the store was never started
-// (production, or a request that bypassed `onRequest`).
-const setDbQueryCountHeader = (set: Context["set"]) => {
-  if (!DB_QUERY_COUNTER_ENABLED) {
-    return;
-  }
-  const queryCount = currentQueryCount();
-  if (queryCount === undefined) {
-    return;
-  }
-  set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
-};
-
-const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
-
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
   const origins: (string | RegExp)[] = frontendOrigins({
     frontendUrl: env.FRONTEND_URL,
@@ -252,54 +216,6 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
 };
 
 const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
-
-const getRouteName = (route: string | undefined): string =>
-  route ?? "unmatched";
-
-const buildRequestLogDetails = ({
-  durationMs,
-  errorType,
-  request,
-  route,
-  statusCode,
-  reqCtx,
-  elysiaCode,
-}: {
-  durationMs: number;
-  errorType?: string;
-  request: Request;
-  route?: string;
-  statusCode: number;
-  reqCtx?: ReturnType<typeof getRequestContext>;
-  elysiaCode?: string;
-}) => {
-  const details = {
-    durationMs: Math.round(durationMs),
-    method: request.method,
-    route,
-    statusCode,
-  };
-
-  if (elysiaCode) {
-    Object.assign(details, { elysiaCode });
-  }
-
-  if (errorType) {
-    Object.assign(details, { errorType });
-  }
-
-  if (reqCtx?.requestId) {
-    Object.assign(details, { requestId: reqCtx.requestId });
-  }
-
-  if (reqCtx?.clientAddressSource) {
-    Object.assign(details, {
-      clientAddressSource: reqCtx.clientAddressSource,
-    });
-  }
-
-  return details;
-};
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
@@ -392,138 +308,8 @@ const api = new Elysia()
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
   )
-  .onError(({ error, set, code, request, route }) => {
-    delete set.headers["X-Powered-By"];
-    setDbQueryCountHeader(set);
-
-    const path = getRequestPath(request);
-    const reqCtx = getRequestContext(request);
-    const { status: statusCode, message: errorMessage } = elysiaErrorAnswer(
-      code,
-      error,
-    );
-
-    if (shouldLogRequest(path)) {
-      const durationMs = reqCtx ? performance.now() - reqCtx.startTime : 0;
-      const details = buildRequestLogDetails({
-        durationMs,
-        errorType: errorTag(error),
-        request,
-        route,
-        statusCode,
-        reqCtx,
-        elysiaCode: String(code),
-      });
-
-      if (statusCode >= 500) {
-        logger.request({
-          ...details,
-          errorFingerprint: errorFingerprint(error),
-          message: "request.failed",
-          severity: "ERROR",
-        });
-      } else {
-        logger.request({
-          ...details,
-          message: "request.failed",
-          severity: "WARN",
-        });
-      }
-
-      emitRequestDurationMetric({
-        durationMs,
-        requestClass: isAiRequest() ? "ai" : "crud",
-        statusCode,
-        route: getRouteName(route),
-      });
-    }
-
-    // A framework-answered client fault (a rejected body, an unknown route,
-    // an unparseable request) is the caller's own outcome: the WARN record
-    // above keeps it, and reporting it as an exception would fill the tracker
-    // with one issue per scanner probe and schema mismatch. A response-schema
-    // violation shares the VALIDATION code but is the handler's own fault, so
-    // it stays captured along with every other code.
-    if (statusCode >= 500) {
-      captureRequestError(error, {
-        request,
-        context: {
-          route: getRouteName(route),
-          method: request.method,
-          elysiaCode: String(code),
-        },
-      });
-    }
-
-    // Return a sanitized response for unhandled errors.
-    // Elysia's default would serialize error.message, which
-    // may contain DB internals, file names, or document content.
-    set.status = statusCode;
-    return httpError(errorMessage);
-  })
-  .onAfterHandle(async ({ request, responseValue, route, set }) => {
-    delete set.headers["X-Powered-By"];
-    setDbQueryCountHeader(set);
-
-    const path = getRequestPath(request);
-    const reqCtx = getRequestContext(request);
-
-    if (shouldLogRequest(path) && reqCtx) {
-      const durationMs = performance.now() - reqCtx.startTime;
-      const statusCode = resolveResponseStatus({
-        response: responseValue,
-        set,
-      });
-      const details = buildRequestLogDetails({
-        durationMs,
-        request,
-        route,
-        statusCode,
-        reqCtx,
-      });
-
-      if (statusCode >= 500) {
-        logger.request({
-          ...details,
-          message: "request.completed",
-          severity: "ERROR",
-        });
-      } else if (statusCode >= 400) {
-        logger.request({
-          ...details,
-          message: "request.completed",
-          severity: "WARN",
-        });
-      } else {
-        logger.request({
-          ...details,
-          message: "request.completed",
-          severity: "INFO",
-        });
-      }
-
-      // Streaming responses (e.g. POST /v1/chat) settle this hook when the
-      // stream object is returned, not when generation ends, so their
-      // duration here understates the wall-clock. That is acceptable: the
-      // class is `ai` either way, which is excluded from the CRUD p95 SLO.
-      emitRequestDurationMetric({
-        durationMs,
-        requestClass: isAiRequest() ? "ai" : "crud",
-        statusCode,
-        route: getRouteName(route),
-      });
-    }
-
-    if (!env.isDev && shouldLogRequest(path)) {
-      const analytics = getAnalytics();
-      await analytics.flush().catch((error: unknown) => {
-        logger.error("analytics.flush.failed", {
-          "error.type": errorTag(error),
-          "http.route": getRouteName(route),
-        });
-      });
-    }
-  })
+  .onError((context) => answerRequestError(context))
+  .onAfterHandle(async (context) => await completeRequest(context))
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(
@@ -769,10 +555,7 @@ const startServer = async (): Promise<void> => {
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before
   // `api.listen()` starts accepting requests.
-  startSse({
-    user: resolveUserRealtimeAuthorization,
-    workspace: resolveWorkspaceRealtimeAudience,
-  });
+  startSse(realtimeAuthorizers);
 
   // Schema-drift fail-fast. If the runtime expects migrations
   // the database has not received, exit before serving any

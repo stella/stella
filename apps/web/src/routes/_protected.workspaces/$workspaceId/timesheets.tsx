@@ -11,7 +11,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { toISODate } from "@/components/workspaces/entity-utils";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import {
   ensureRouteInfiniteQueryData,

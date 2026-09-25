@@ -4,12 +4,13 @@ import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -140,7 +141,7 @@ type PendingCleanupRow = {
 
 type ReconcilePendingStyleSetPackageCleanupsOptions = {
   cleanupQueue?: StyleSetPackageCleanupQueue;
-  db?: Pick<typeof rootDb, "select">;
+  db: Pick<typeof rootDb, "select">;
 };
 
 /**
@@ -161,8 +162,8 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
  */
 export const reconcilePendingStyleSetPackageCleanups = async ({
   cleanupQueue = getQueue(),
-  db = rootDb,
-}: ReconcilePendingStyleSetPackageCleanupsOptions = {}): Promise<ReconcileScanResult> => {
+  db,
+}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<ReconcileScanResult> => {
   const settledBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - RECONCILE_SETTLE_MS,
   );
@@ -282,7 +283,7 @@ export const deleteQueuedStyleSetPackages = async (
  */
 export const deleteUnreferencedStyleSetPackage = async (
   s3Key: string,
-  db: Pick<typeof rootDb, "select" | "update"> = rootDb,
+  db: Pick<typeof rootDb, "select" | "update">,
 ): Promise<void> => {
   const [serving] = await db
     .select({ id: styleSets.id })
@@ -303,12 +304,14 @@ export const deleteUnreferencedStyleSetPackage = async (
     .where(eq(styleSets.cleanupS3Key, s3Key));
 };
 
-export const initStyleSetPackageCleanupWorker = () => {
+export const initStyleSetPackageCleanupWorker = ({
+  db,
+}: BullMqWorkerContext) => {
   const workerConnection = createBullMqConnection();
   const worker = new Worker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
-      await deleteUnreferencedStyleSetPackage(job.data.s3Key);
+      await deleteUnreferencedStyleSetPackage(job.data.s3Key, db);
     },
     { connection: workerConnection },
   );

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { MODEL_RATES } from "@stll/ai-catalog";
+
 import type { GeneratedModelRateRow } from "./model-catalog-rates-gen";
 import {
+  findDroppedRatedModelIds,
+  listModelRateTargetIds,
   modelRateFromModelsDev,
   renderModelRatesModule,
 } from "./model-catalog-rates-gen";
@@ -250,5 +254,25 @@ describe("model rate module rendering", () => {
     expect(rendered.indexOf('"gpt-test"')).toBeLessThan(
       rendered.indexOf('"claude-alias"'),
     );
+  });
+});
+
+describe("rated model retention", () => {
+  test("every rated model is still offered or retained", () => {
+    expect(
+      findDroppedRatedModelIds(
+        Object.keys(MODEL_RATES),
+        listModelRateTargetIds(),
+      ),
+    ).toEqual([]);
+  });
+
+  test("reports a rated model that left the catalog without being retained", () => {
+    expect(
+      findDroppedRatedModelIds(
+        ["gpt-kept", "gpt-withdrawn"],
+        new Set(["gpt-kept", "gpt-new"]),
+      ),
+    ).toEqual(["gpt-withdrawn"]);
   });
 });

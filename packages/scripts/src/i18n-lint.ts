@@ -29,6 +29,7 @@ import path from "node:path";
 
 import { parseGlossary } from "./glossary-gen";
 import type { Glossary } from "./glossary-gen";
+import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
 const flatten = (
@@ -605,6 +606,21 @@ export type BaselineEntry = { source: string; target: string };
 // grandfather to both values means editing either the en source or the
 // translation re-checks the string, so further same-category regressions on
 // already-grandfathered debt are not silently allowed.
+const isBaselineEntry = (value: unknown): value is BaselineEntry =>
+  isPlainRecord(value) &&
+  typeof value["source"] === "string" &&
+  typeof value["target"] === "string";
+
+const isRecordOf =
+  <Value>(isValue: (value: unknown) => value is Value) =>
+  (value: unknown): value is Record<string, Value> =>
+    isPlainRecord(value) && Object.values(value).every(isValue);
+
+const isCategoryBaseline = isRecordOf(isRecordOf(isBaselineEntry));
+
+const isLintBaselinePart = (value: unknown): value is Partial<LintBaseline> =>
+  isPlainRecord(value) && Object.values(value).every(isCategoryBaseline);
+
 export type LintBaseline = Record<
   LintCategory,
   Record<string, Record<string, BaselineEntry>>
@@ -723,9 +739,7 @@ if (import.meta.main) {
 
     const readJson = async (filePath: string): Promise<NestedMessages> => {
       const text = await Bun.file(filePath).text();
-      // SAFETY: repo-owned i18n JSON conforms to NestedMessages.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return JSON.parse(text) as NestedMessages;
+      return parseNestedMessages(text, filePath);
     };
 
     const source = flatten(await readJson(path.resolve(langsDir, "en.json")));
@@ -742,8 +756,10 @@ if (import.meta.main) {
       if (!(await file.exists())) {
         return emptyBaseline();
       }
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- repo-owned baseline JSON
-      const parsed = JSON.parse(await file.text()) as Partial<LintBaseline>;
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!isLintBaselinePart(parsed)) {
+        return panic(`${baselinePath} is not an i18n-lint baseline`);
+      }
       return { ...emptyBaseline(), ...parsed };
     };
     const baseline = await readBaseline();

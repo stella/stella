@@ -16,7 +16,7 @@
 
 import { and, asc, eq, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -29,6 +29,8 @@ export const TRANSCRIPT_MAX_CHARS = 12_000;
 const TRANSCRIPT_MESSAGE_MAX_CHARS = 2000;
 
 type LoadCompactionTranscriptOptions = {
+  /** The caller's handle; the extractor passes the scheduler's. */
+  db: Pick<typeof rootDb, "select">;
   threadId: SafeId<"chatThread">;
   firstSummarizedMessageId: SafeId<"chatMessage">;
   lastSummarizedMessageId: SafeId<"chatMessage">;
@@ -42,11 +44,12 @@ type LoadCompactionTranscriptOptions = {
  * caller with summary-only extraction rather than an error.
  */
 export const loadCompactionTranscript = async ({
+  db,
   threadId,
   firstSummarizedMessageId,
   lastSummarizedMessageId,
 }: LoadCompactionTranscriptOptions): Promise<string> => {
-  const rows = await rootDb
+  const rows = await db
     .select({
       role: chatMessages.role,
       content: chatMessages.content,

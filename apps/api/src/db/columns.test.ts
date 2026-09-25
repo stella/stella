@@ -96,7 +96,7 @@ describe("safe JSONB column", () => {
 });
 
 const stockTable = pgTable("jsonb_stock_canary", {
-  // eslint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column -- canary deliberately pins stock jsonb behaviour
+  // oxlint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column -- canary deliberately pins stock jsonb behaviour
   value: stockJsonb("value"),
 });
 

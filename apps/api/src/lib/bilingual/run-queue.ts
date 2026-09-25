@@ -16,16 +16,13 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
 } from "@/api/db/schema";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
@@ -47,6 +44,7 @@ import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
@@ -61,7 +59,7 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
-  requeueQueuedRuns,
+  reconcileQueuedRuns,
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -130,7 +128,9 @@ export const enqueueBilingualRun = async (
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
-export const reconcileStuckBilingualRuns = async (): Promise<number> => {
+export const reconcileStuckBilingualRuns = async (
+  db: Pick<typeof rootDb, "update">,
+): Promise<number> => {
   const runningCutoff = new Date(
     Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
   );
@@ -138,7 +138,7 @@ export const reconcileStuckBilingualRuns = async (): Promise<number> => {
     Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
   );
   // audit: skip — janitor bookkeeping on already-audited run rows.
-  const recovered = await rootDb
+  const recovered = await db
     .update(bilingualTranslationRuns)
     .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
     .where(
@@ -172,7 +172,7 @@ type QueuedBilingualRunRow = {
 };
 
 type ReconcileQueuedBilingualRunsOptions = {
-  db?: Pick<typeof rootDb, "select">;
+  db: Pick<typeof rootDb, "select">;
   queue?: RequeueableQueue<BilingualRunJobData>;
 };
 
@@ -201,9 +201,9 @@ type ReconcileQueuedBilingualRunsResult = ReconcileScanResult & {
  * never reach the orphan behind it.
  */
 export const reconcileQueuedBilingualRuns = async ({
-  db = rootDb,
+  db,
   queue = getQueue(),
-}: ReconcileQueuedBilingualRunsOptions = {}): Promise<ReconcileQueuedBilingualRunsResult> => {
+}: ReconcileQueuedBilingualRunsOptions): Promise<ReconcileQueuedBilingualRunsResult> => {
   const after = (cursor: QueuedBilingualRunRow | null) => {
     if (cursor === null) {
       return undefined;
@@ -235,10 +235,10 @@ export const reconcileQueuedBilingualRuns = async ({
       )
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  return await requeueQueuedRuns({ queue, readPage, runJob });
+  return await reconcileQueuedRuns({ queue, readPage, runJob });
 };
 
-export const initBilingualRunWorker = () => {
+export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
   const worker = new Worker<BilingualRunJobData>(
     QUEUE_NAME,
     async (job) => {
@@ -276,7 +276,7 @@ export const initBilingualRunWorker = () => {
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
     run: async () => {
-      const recovered = await reconcileStuckBilingualRuns();
+      const recovered = await reconcileStuckBilingualRuns(db);
       if (recovered > 0) {
         logger.warn("bilingual_run.recovered_stuck", {
           count: String(recovered),
@@ -444,12 +444,10 @@ const executeRun = async (
   }
 
   const config = await Result.tryPromise({
-    try: async () => ({
-      orgAIConfig: await loadOrgAIConfig(actor.organizationId),
-      promptCachingEnabled: await loadPromptCachingPreference(
-        actor.organizationId,
+    try: async () =>
+      await actor.scopedDb(
+        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
       ),
-    }),
     catch: (cause) => cause,
   });
   if (Result.isError(config)) {

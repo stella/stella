@@ -10,7 +10,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { listTemplateClausesHandler } from "@/api/lib/template-clause-links";
@@ -55,7 +55,7 @@ const checkTemplateHandler = async function* ({
   const [discovered, clauseSlots, extracted] = await Promise.all([
     discoverTemplate(buffer),
     discoverClauseSlots(buffer),
-    extractText(buffer),
+    extractDocxDocument(buffer),
   ]);
   const manifest = deriveManifest(discovered);
 

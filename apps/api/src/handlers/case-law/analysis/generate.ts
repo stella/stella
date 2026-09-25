@@ -17,14 +17,18 @@ import type {
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
+import {
+  analysisStore,
+  storesAnalyses,
+} from "@/api/lib/case-law/analysis-store";
+import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -34,10 +38,8 @@ import {
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
-import { analysisStore, storesAnalyses } from "./analysis-store";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
-import { storedAnalysisState } from "./stored-analysis";
 
 /**
  * Run the AI generation in the background. Updates the DB

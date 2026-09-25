@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "1dea7a84d765ad045152185f3e4d9960e65924ae99205c56fb7d78b431e6309a",
+  "sourceUrl": "https://decyzje.uokik.gov.pl/bp/dec_prez.nsf/decyzje?ReadViewEntries&OutputFormat=JSON&Start=1&Count=20",
+  "capturedAt": "2026-09-24T19:29:48.844Z",
+  "note": "the head of the flat decision view: the rows stating no decision date, then the newest decisions"
+}

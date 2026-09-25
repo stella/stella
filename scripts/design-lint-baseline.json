@@ -483,8 +483,6 @@
     "apps/api/src/handlers/verify/routes.ts": 1,
     "apps/api/src/lib/clauses/body-schema.ts": 6,
     "apps/api/src/lib/properties/create-schema.ts": 1,
-    "apps/api/src/lib/tasks/create-task-entity.ts": 1,
-    "apps/api/src/lib/tasks/update-task.ts": 1,
     "apps/api/src/lib/views-schema.ts": 3
   },
   "no-unbounded-response-body/no-unbounded-response-body": {

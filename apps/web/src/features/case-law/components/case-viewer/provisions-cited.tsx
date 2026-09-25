@@ -52,7 +52,7 @@ export const ProvisionsCited = ({
   decisionId,
   isHydrated,
 }: {
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   isHydrated?: boolean;
 }) => {

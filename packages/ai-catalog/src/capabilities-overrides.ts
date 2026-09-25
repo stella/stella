@@ -12,7 +12,14 @@ export type CapabilityOverride = {
   documentInput: boolean;
   documentInputReason: string;
   reasoningEfforts: readonly ReasoningEffort[] | null;
+  /** The most output tokens one response may carry, from the provider docs. */
+  outputTokens: number;
   temperatureSupported: boolean;
+  /**
+   * Every role sends tool definitions or structured output, so an
+   * offered model must accept tools.
+   */
+  toolCalling: true;
   /** Why the upstream source cannot answer for this model. Dated. */
   reason: string;
 };

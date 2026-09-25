@@ -7,6 +7,8 @@ export const STATUTE_VIEW = "statute";
  * structured-clone boundary and can be validated when it comes back.
  */
 export type StatuteViewPayload = {
+  /** A block to scroll to and mark once the text is shown. */
+  anchorId?: string | undefined;
   /** Jurisdiction, as the act's public address spells it. */
   country: string;
   /** The consolidation on screen: every read in the pane is addressed by it. */
@@ -25,6 +27,9 @@ const isNonEmptyString = (value: unknown): value is string =>
 
 const isNullableString = (value: unknown): value is string | null =>
   value === null || typeof value === "string";
+
+const isOptionalNonEmptyString = (value: unknown): boolean =>
+  value === undefined || isNonEmptyString(value);
 
 export const isStatuteViewPayload = (
   value: unknown,
@@ -47,7 +52,8 @@ export const isStatuteViewPayload = (
     "statuteTitle" in value &&
     isNonEmptyString(value.statuteTitle) &&
     "versionValidFrom" in value &&
-    isNullableString(value.versionValidFrom)
+    isNullableString(value.versionValidFrom) &&
+    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId))
   );
 };
 
@@ -72,6 +78,7 @@ export type StatuteViewTab = {
  * reading of the citation.
  */
 type CreateStatuteViewTabOptions = {
+  anchorId?: string | undefined;
   country: string;
   documentId: string;
   eli?: string | null | undefined;
@@ -82,6 +89,7 @@ type CreateStatuteViewTabOptions = {
 
 /** The `openView` arguments for the act a citation names. */
 export const createStatuteViewTab = ({
+  anchorId,
   country,
   documentId,
   eli,
@@ -99,5 +107,6 @@ export const createStatuteViewTab = ({
     slug: slug ?? null,
     statuteTitle,
     versionValidFrom: versionValidFrom ?? null,
+    ...(anchorId === undefined ? {} : { anchorId }),
   },
 });

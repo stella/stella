@@ -561,7 +561,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   // every keystroke / mutation.
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   useExternalSyncEffect(() => {
-    // eslint-disable-next-line react/immutability -- latest-ref mirror consumed by the polling effect, never rendered
+    // oxlint-disable-next-line react/immutability -- latest-ref mirror consumed by the polling effect, never rendered
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
     // the user just added to the allowlist disappear without
@@ -782,7 +782,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   });
   const t = useTranslations();
   const format = useFormatter();
-  /* eslint-disable react/refs -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
+  /* oxlint-disable react/refs -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
     optimisticPreview?.fieldId === fieldId
@@ -862,7 +862,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         fieldId,
       })
     : null;
-  /* eslint-enable react/refs */
+  /* oxlint-enable react/refs */
   const {
     state,
     isDirty,
@@ -1868,7 +1868,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
-  /* eslint-disable react/refs -- editing buffers and the derived editor buffer are intentionally latched in refs across the save transition */
+  /* oxlint-disable react/refs -- editing buffers and the derived editor buffer are intentionally latched in refs across the save transition */
   const editorBuffer = resolveAndPreserveDocxEditorBuffer({
     collaborationSeedBuffer: collaborationSession?.seedDocumentBuffer ?? null,
     fieldId,
@@ -1877,7 +1877,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     previewBuffer: previewFile?.buffer,
     state,
   });
-  /* eslint-enable react/refs */
+  /* oxlint-enable react/refs */
   const createVersionLabel = t("folio.createVersion");
 
   const toolbarExtra = (() => {
@@ -2013,9 +2013,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     );
   }
 
-  // eslint-disable-next-line react/refs -- retain the last style label in a ref to avoid a loading-state flash
+  // oxlint-disable-next-line react/refs -- retain the last style label in a ref to avoid a loading-state flash
   const lastStyleLabel = lastStyleLabelRef.current;
-  // eslint-disable-next-line react/refs -- retain the matching label style for the same loading-state fallback
+  // oxlint-disable-next-line react/refs -- retain the matching label style for the same loading-state fallback
   const lastStyleLabelStyle = lastStyleLabelStyleRef.current;
 
   if (previewFile === null || editorBuffer === undefined) {

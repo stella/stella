@@ -4,12 +4,12 @@ import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
-  type CapabilityTransport,
+  type CatalogTransport,
   capabilityCommandPath,
   formatCapabilityCommand,
   deriveCapabilityLeaf,
   insertCapabilities,
-  isTransportInvocable,
+  isCatalogTransportInvocable,
 } from "./generate-capability-tree.js";
 import {
   generateRouteMap,
@@ -42,7 +42,7 @@ const entry = (
   ...overrides,
 });
 
-const fileInput = (field: string, required: boolean): CapabilityTransport => ({
+const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },
 });
@@ -627,7 +627,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
       entries: catalog,
     });
     const suppressed = catalog.filter(
-      (e) => !isTransportInvocable(e.transport),
+      (e) => !isCatalogTransportInvocable(e.transport),
     ).length;
     expect(stats.suppressed).toBe(suppressed);
     expect(stats.generated).toBe(catalog.length - suppressed);

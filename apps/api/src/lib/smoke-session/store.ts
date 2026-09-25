@@ -5,10 +5,14 @@
  * `rootDb` access lives here as narrow helpers instead of being
  * imported by the handler.
  *
- * The smoke principal deliberately mirrors the production default
- * state for a fresh organization: owner role, no usage entitlement
- * row, no AI provider config. Synthetic checks must exercise what
- * real new users get, not a specially provisioned account.
+ * The default smoke principal deliberately mirrors the production
+ * default state for a fresh organization: owner role, no usage
+ * entitlement row, no AI provider config. Synthetic checks must
+ * exercise what real new users get, not a specially provisioned account.
+ *
+ * The `ai` principal is a second, equally plain organization. Nothing
+ * here configures its AI: the smoke caller sets that up through the
+ * organization settings API, exactly as a real owner would.
  */
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -17,19 +21,56 @@ import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
 
-const SMOKE_USER = {
-  id: "smoke-user-stella",
-  name: "Synthetic Monitor",
-  email: "smoke@stella.dev",
+const SMOKE_PRINCIPAL = {
+  default: "default",
+  ai: "ai",
 } as const;
 
-const SMOKE_ORG = {
-  id: "smoke-org-stella",
-  name: "Synthetic Monitoring",
-  slug: "synthetic-monitoring",
-} as const;
+type SmokePrincipal = (typeof SMOKE_PRINCIPAL)[keyof typeof SMOKE_PRINCIPAL];
 
-const SMOKE_MEMBER_ID = "smoke-member-stella";
+type SmokePrincipalRecord = {
+  memberId: string;
+  org: { id: string; name: string; slug: string };
+  user: { email: string; id: string; name: string };
+};
+
+const SMOKE_PRINCIPALS = {
+  default: {
+    user: {
+      id: "smoke-user-stella",
+      name: "Synthetic Monitor",
+      email: "smoke@stella.dev",
+    },
+    org: {
+      id: "smoke-org-stella",
+      name: "Synthetic Monitoring",
+      slug: "synthetic-monitoring",
+    },
+    memberId: "smoke-member-stella",
+  },
+  ai: {
+    user: {
+      id: "smoke-ai-user-stella",
+      name: "Synthetic Monitor (AI)",
+      email: "smoke-ai@stella.dev",
+    },
+    org: {
+      id: "smoke-ai-org-stella",
+      name: "Synthetic Monitoring (AI)",
+      slug: "synthetic-monitoring-ai",
+    },
+    memberId: "smoke-ai-member-stella",
+  },
+} as const satisfies Record<SmokePrincipal, SmokePrincipalRecord>;
+
+export const parseSmokePrincipal = (
+  value: string | null,
+): SmokePrincipal | null => {
+  if (value === null || value === SMOKE_PRINCIPAL.default) {
+    return SMOKE_PRINCIPAL.default;
+  }
+  return value === SMOKE_PRINCIPAL.ai ? SMOKE_PRINCIPAL.ai : null;
+};
 
 /** Short-lived on purpose: one session per smoke run. */
 const SMOKE_SESSION_LIFETIME_MS = 15 * 60 * 1000;
@@ -40,14 +81,17 @@ export type SmokeSession = {
   expiresAt: string;
 };
 
-const ensureSmokePrincipal = async (now: Date): Promise<void> => {
+const ensureSmokePrincipal = async (
+  { memberId, org, user: smokeUser }: SmokePrincipalRecord,
+  now: Date,
+): Promise<void> => {
   const existingUser = await rootDb.query.user.findFirst({
-    where: { id: { eq: SMOKE_USER.id } },
+    where: { id: { eq: smokeUser.id } },
     columns: { id: true },
   });
   if (!existingUser) {
     await rootDb.insert(user).values({
-      ...SMOKE_USER,
+      ...smokeUser,
       emailVerified: true,
       createdAt: now,
       updatedAt: now,
@@ -55,25 +99,25 @@ const ensureSmokePrincipal = async (now: Date): Promise<void> => {
   }
 
   const existingOrg = await rootDb.query.organization.findFirst({
-    where: { id: { eq: SMOKE_ORG.id } },
+    where: { id: { eq: org.id } },
     columns: { id: true },
   });
   if (!existingOrg) {
     await rootDb.insert(organization).values({
-      ...SMOKE_ORG,
+      ...org,
       createdAt: now,
     });
   }
 
   const existingMember = await rootDb.query.member.findFirst({
-    where: { id: { eq: SMOKE_MEMBER_ID } },
+    where: { id: { eq: memberId } },
     columns: { id: true },
   });
   if (!existingMember) {
     await rootDb.insert(member).values({
-      id: SMOKE_MEMBER_ID,
-      organizationId: SMOKE_ORG.id,
-      userId: SMOKE_USER.id,
+      id: memberId,
+      organizationId: org.id,
+      userId: smokeUser.id,
       role: "owner",
       createdAt: now,
     });
@@ -82,11 +126,14 @@ const ensureSmokePrincipal = async (now: Date): Promise<void> => {
 
 const smokeCookieName = sessionCookieName;
 
-export const mintSmokeSession = async (): Promise<SmokeSession> => {
+export const mintSmokeSession = async (
+  principal: SmokePrincipal,
+): Promise<SmokeSession> => {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SMOKE_SESSION_LIFETIME_MS);
+  const record = SMOKE_PRINCIPALS[principal];
 
-  await ensureSmokePrincipal(now);
+  await ensureSmokePrincipal(record, now);
 
   // No cleanup of prior rows: sessions expire after 15 minutes and
   // better-auth ignores expired rows, so one row per deploy is inert.
@@ -96,8 +143,8 @@ export const mintSmokeSession = async (): Promise<SmokeSession> => {
   await rootDb.insert(session).values({
     id: `smoke-session-${token}`,
     token,
-    userId: SMOKE_USER.id,
-    activeOrganizationId: SMOKE_ORG.id,
+    userId: record.user.id,
+    activeOrganizationId: record.org.id,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -117,7 +164,7 @@ export const mintSmokeSession = async (): Promise<SmokeSession> => {
   // detect a mint firing in an environment where synthetic monitoring is not
   // expected — the belt-and-suspenders the secret gate alone cannot provide.
   logger.warn("smoke.session_minted", {
-    "smoke.org_id": SMOKE_ORG.id,
+    "smoke.org_id": record.org.id,
     "smoke.is_dev": env.isDev,
     "smoke.session_expires_at": expiresAt.toISOString(),
   });

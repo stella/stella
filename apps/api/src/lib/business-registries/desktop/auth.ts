@@ -6,7 +6,7 @@ import { Temporal } from "@stll/time";
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
-import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
+import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
@@ -79,7 +79,7 @@ export const authorizeDesktopRegistry = async (
     userId: key.referenceId,
   });
   const member = await Result.tryPromise({
-    try: async () => await resolveMemberAuthorization(identity),
+    try: async () => await resolveCredentialMemberAuthorization(identity),
     catch: () =>
       new HandlerError({
         status: 503,

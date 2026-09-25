@@ -64,6 +64,10 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  revokeAllUserOAuthTokens,
+  revokeAllUserSessions,
+} from "@/api/lib/auth-artifacts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
@@ -180,7 +184,7 @@ export const collectUserOrganizationAndWorkspaceIds = async (
 
 export type RevokeAuthCredentialsParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   email: string;
 };
 
@@ -215,8 +219,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   email,
 }: RevokeAuthCredentialsParams): Promise<void> => {
   await tx.delete(account).where(eq(account.userId, currentUserId));
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
-  await tx.delete(session).where(eq(session.userId, currentUserId));
+  await revokeAllUserSessions(tx, currentUserId);
   await tx.delete(twoFactor).where(eq(twoFactor.userId, currentUserId));
   await tx.delete(apikey).where(eq(apikey.referenceId, currentUserId));
   // Delete invitations sent by the user, and also invitations sent to the user's email
@@ -236,16 +239,9 @@ export const REVOKE_OAUTH_TOKENS_TABLES = [
  */
 export const revokeOAuthTokensAndGrants = async (
   tx: Transaction,
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<void> => {
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth access tokens.
-  await tx
-    .delete(oauthAccessToken)
-    .where(eq(oauthAccessToken.userId, currentUserId));
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth refresh tokens.
-  await tx
-    .delete(oauthRefreshToken)
-    .where(eq(oauthRefreshToken.userId, currentUserId));
+  await revokeAllUserOAuthTokens(tx, currentUserId);
   await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
   await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
 };
@@ -756,7 +752,7 @@ const recordAccountDeletionAuditEvents = async (
       workspaceId: null,
       userId,
     });
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each organization's events already insert in one statement per org-bound recorder
+    // db-await-in-loop: each organization's events already insert in one statement per org-bound recorder
     await recordAuditEvent(tx, events);
   }
 };

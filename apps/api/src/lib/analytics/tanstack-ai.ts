@@ -16,7 +16,7 @@ import type {
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
+  classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
   providerStatusFields,
 } from "@/api/lib/ai-error";
@@ -42,16 +42,16 @@ import {
 } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
-import { getAnalytics } from "./client";
+import { getServerAnalytics } from "./client";
 import {
   SERVER_ANALYTICS_EVENTS,
-  type Analytics,
+  type ServerAnalytics,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
   type TokenBucket,
-} from "./types";
+} from "./server-analytics";
 
 type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 
@@ -93,7 +93,7 @@ type TanStackAIAnalyticsProps = {
   sessionId?: string;
   distinctId?: string;
   properties?: AnalyticsMetadata;
-  analytics?: Analytics;
+  analytics?: ServerAnalytics;
   modelRole?: ModelRole;
   /**
    * Explicit per-turn model selection (dev override or validated
@@ -331,7 +331,7 @@ const recordTanStackConsumption = async ({
 };
 
 export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getAnalytics(),
+  analytics = getServerAnalytics(),
   ...config
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
@@ -437,7 +437,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // carries the provider's own status for the same reason, and separates a
     // status this code does not map from a failure that carried none at all;
     // without it an `unknown` kind is indistinguishable between the two.
-    const kind = classifyAIError(error);
+    // The AI boundary: naming the failure also classifies it for the shadow
+    // grade the record carries.
+    const kind = classifyAIBoundaryFailure(error);
     const finishReason = context?.run?.finishReason;
     const attributes = {
       "error.type": errorTag(error),

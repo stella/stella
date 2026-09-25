@@ -19,7 +19,7 @@ import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
 import { browserApiRootUrl } from "@/lib/api-url";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";

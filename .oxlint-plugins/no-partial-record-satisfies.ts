@@ -43,7 +43,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // union member to be classified before it typechecks. If only a subset of
 // the union is ever relevant, derive a narrower union for the keys instead
 // of falling back to `Partial`. For genuinely sparse data where absence has
-// documented meaning (e.g. an unbounded key space), add an eslint-disable
+// documented meaning (e.g. an unbounded key space), add an oxlint-disable
 // with a comment naming what absence means.
 
 import { isIdentifier } from "./utils.ts";
@@ -102,7 +102,7 @@ export default eslintCompatPlugin({
             "— Partial cancels the totality check satisfies would otherwise " +
             "give you, so a union member can silently fall through. Make the " +
             "record total (explicit 'none'/false/null per member), narrow the " +
-            "key union, or add an eslint-disable naming what absence means " +
+            "key union, or add an oxlint-disable naming what absence means " +
             "for genuinely sparse data.",
         },
       },

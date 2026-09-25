@@ -426,7 +426,7 @@ export const refineSearchQuery = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded retry: the next attempt's prompt depends on this validation failure
+    // db-await-in-loop: bounded retry: the next attempt's prompt depends on this validation failure
     const postgresValidation = await validateSearchQueryWithPostgres({
       query: refinedQuery,
       scopedDb,
@@ -814,19 +814,22 @@ const loadSummaryContexts = async ({
     return [];
   }
 
-  const searchResult = await search({
-    query: filters.query,
-    organizationId,
-    userId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
-    types,
-    editedByUserIds: filters.editedByUserIds,
-    mimeTypes: filters.mimeTypes,
-    updatedFrom: filters.updatedFrom,
-    updatedTo: filters.updatedTo,
-    limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
-  });
+  const searchResult = await search(
+    {
+      query: filters.query,
+      organizationId,
+      userId,
+      accessibleWorkspaceIds,
+      selectedWorkspaceIds,
+      types,
+      editedByUserIds: filters.editedByUserIds,
+      mimeTypes: filters.mimeTypes,
+      updatedFrom: filters.updatedFrom,
+      updatedTo: filters.updatedTo,
+      limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+    },
+    { scopedDb },
+  );
 
   return await buildSearchResultContexts({
     hits: searchResult.hits,
@@ -969,7 +972,7 @@ const buildSearchResultContexts = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the content budget spent per hit decides the next read; the schema caps hits at five
+    // db-await-in-loop: the content budget spent per hit decides the next read; the schema caps hits at five
     const content = await loadSearchHitContent({
       hit,
       organizationId,

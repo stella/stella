@@ -3,10 +3,7 @@ import { matchError, Result } from "better-result";
 import { t } from "elysia";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -211,10 +208,9 @@ const previewProperty = createSafeHandler(
       properties: [batchProperty],
     };
 
-    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
-      loadOrgAIConfig(session.activeOrganizationId),
-      loadPromptCachingPreference(session.activeOrganizationId),
-    ]);
+    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
+      async (tx) => await loadOrgAISettings(tx, session.activeOrganizationId),
+    );
     const generateFn = getBatchGenerator();
 
     const generateResult = await generateFn({

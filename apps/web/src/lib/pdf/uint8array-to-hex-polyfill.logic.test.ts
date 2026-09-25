@@ -9,7 +9,7 @@ const originalToHex = Object.getOwnPropertyDescriptor(
 
 const restoreToHex = () => {
   if (originalToHex) {
-    // eslint-disable-next-line no-extend-native -- restore the browser/Bun prototype after testing the missing-API regression.
+    // oxlint-disable-next-line no-extend-native -- restore the browser/Bun prototype after testing the missing-API regression.
     Object.defineProperty(Uint8Array.prototype, "toHex", originalToHex);
     return;
   }
@@ -37,7 +37,7 @@ describe("PDF.js Uint8Array hex compatibility", () => {
       return "native";
     };
 
-    // eslint-disable-next-line no-extend-native -- simulate a browser-provided implementation so the polyfill does not replace it.
+    // oxlint-disable-next-line no-extend-native -- simulate a browser-provided implementation so the polyfill does not replace it.
     Object.defineProperty(Uint8Array.prototype, "toHex", {
       configurable: true,
       value: nativeToHex,

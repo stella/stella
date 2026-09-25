@@ -90,10 +90,20 @@ export type UpstreamCapabilities = {
   /** models.dev `modalities.input`, or null when absent/malformed. */
   inputModalities: readonly string[] | null;
   /**
+   * models.dev `limit.output`: the most tokens one response may produce;
+   * `null` when the record does not publish a positive integer.
+   */
+  outputTokens: number | null;
+  /**
    * models.dev `temperature`: whether the model accepts a temperature
    * override; `null` when the record does not publish it.
    */
   temperature: boolean | null;
+  /**
+   * models.dev `tool_call`: whether the model accepts tool definitions;
+   * `null` when the record does not publish it.
+   */
+  toolCall: boolean | null;
 };
 
 /** OpenRouter's concrete provider-default effort for each published model. */
@@ -168,6 +178,8 @@ export const parseUpstreamCapabilities = (
   }
   const modalities = modelVal["modalities"];
   const inputModalities = isObject(modalities) ? modalities["input"] : null;
+  const limit = modelVal["limit"];
+  const outputTokens = isObject(limit) ? limit["output"] : null;
   return {
     releaseDate:
       typeof modelVal["release_date"] === "string"
@@ -180,10 +192,18 @@ export const parseUpstreamCapabilities = (
           (modality): modality is string => typeof modality === "string",
         )
       : null,
+    outputTokens:
+      typeof outputTokens === "number" &&
+      Number.isInteger(outputTokens) &&
+      outputTokens > 0
+        ? outputTokens
+        : null,
     temperature:
       typeof modelVal["temperature"] === "boolean"
         ? modelVal["temperature"]
         : null,
+    toolCall:
+      typeof modelVal["tool_call"] === "boolean" ? modelVal["tool_call"] : null,
   };
 };
 

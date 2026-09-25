@@ -12,12 +12,10 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
+import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  loadPublicStatuteRoute,
-  publicStatuteSearchSchema,
-} from "@/routes/law/-statute-detail.logic";
+import { loadPublicStatuteRoute } from "@/routes/law/-statute-detail.logic";
 
 const SLUG = "89-2012-sb-obcansky-zakonik";
 const COUNTRY_SEGMENT = "cze";
@@ -47,7 +45,7 @@ const statute = ({
   allowsDerivedAi: true,
   citationCaseCount: null,
   country: "CZE",
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  createdAt: "2026-01-01T00:00:00.000Z",
   documentAst: null,
   documentType: "act",
   documentUrl: null,
@@ -61,7 +59,7 @@ const statute = ({
   sourceUrl: null,
   status: "current",
   title: "89/2012 Sb., občanský zákoník",
-  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  updatedAt: "2026-01-01T00:00:00.000Z",
   versionValidFrom,
   versionValidTo,
 });

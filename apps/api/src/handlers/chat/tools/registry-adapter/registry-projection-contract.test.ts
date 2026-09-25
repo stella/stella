@@ -147,7 +147,7 @@ const chainable = (rows: readonly unknown[]): ThenableBuilder => {
     innerJoin: () => builder,
     leftJoin: () => builder,
     limit: () => builder,
-    // eslint-disable-next-line unicorn/no-thenable -- drizzle query builders are deliberately thenable, and the double must be awaitable mid-chain the same way
+    // oxlint-disable-next-line unicorn/no-thenable -- drizzle query builders are deliberately thenable, and the double must be awaitable mid-chain the same way
     then: async (resolve, reject) =>
       await Promise.resolve(rows).then(resolve, reject),
   };
@@ -193,7 +193,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
-      getSearchProvider: () => asTestRaw({ search: searchProviderSearchMock }),
+      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,

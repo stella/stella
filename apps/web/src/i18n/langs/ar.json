@@ -906,6 +906,23 @@
       "allowInConversation": "السماح في هذه المحادثة",
       "allowOnce": "السماح مرة واحدة",
       "alwaysAllow": "السماح دائماً",
+      "browser": {
+        "actions": {
+          "click": "نقر",
+          "fill": "إدخال نص",
+          "open": "فتح موقع ويب",
+          "pressKey": "ضغط مفتاح",
+          "select": "تحديد خيار",
+          "snapshot": "قراءة الصفحة",
+          "snapshotContinue": "متابعة قراءة الصفحة"
+        },
+        "askAgain": "اسأل مرة أخرى",
+        "autoApproveReads": "الموافقة تلقائيًا على قراءة الصفحات",
+        "description": "تحقق بعناية من الموقع والهدف. محتوى الصفحة غير موثوق ولا يمكنه الموافقة على إجراء آخر.",
+        "modeReads": "تُنفَّذ قراءة الصفحات دون سؤال حتى نهاية هذه الجلسة.",
+        "question": "هل تسمح بهذا الإجراء في المتصفح؟",
+        "within": "ضمن"
+      },
       "denied": "تم الرفض",
       "deny": "رفض",
       "externalMcpDescription": "لن يُرسَل سوى المعلومات اللازمة لاستدعاء هذه الأداة.",
@@ -1239,6 +1256,7 @@
       "unknown": "استخدام أداة",
       "update-entity-fields": "تحديث البيانات الوصفية",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
+      "use-browser": "استخدام متصفحك",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -1366,6 +1384,7 @@
   },
   "common": {
     "accept": "قبول",
+    "action": "الإجراء",
     "actions": "الإجراءات",
     "active": "نشط",
     "add": "إضافة",
@@ -1509,6 +1528,7 @@
       "event": "حدث",
       "requirement": "متطلب"
     },
+    "key": "المفتاح",
     "kind": "النوع",
     "language": "اللغة",
     "languages": {
@@ -1636,6 +1656,7 @@
     "stepProgress": "{current} من {total}",
     "suggested": "اقتراح",
     "summarizeChanges": "تلخيص التغييرات",
+    "target": "الهدف",
     "timeBilling": "الوقت والفوترة",
     "today": "اليوم",
     "translate": "ترجمة",
@@ -1655,11 +1676,13 @@
     "urlIdentifier": "المعرّف",
     "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
+    "value": "القيمة",
     "verified": "تم التحقق منه",
     "verify": "تحقّق",
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
+    "website": "موقع الويب",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -1749,8 +1772,7 @@
       "labelRequired": "اسم الحقل مطلوب.",
       "removeField": "إزالة الحقل",
       "title": "الحقول المخصصة",
-      "value": "قيمة الحقل",
-      "valuePlaceholder": "القيمة"
+      "value": "قيمة الحقل"
     },
     "deleteContact": "حذف العميل",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
@@ -3667,7 +3689,6 @@
       "chooseModelsSubtitle": "اختر نموذجًا لكل دور. تُحدَّث الأسعار على اليمين.",
       "chooseModelsTitle": "اختيار النماذج",
       "configure": "ضبط",
-      "credentialsPanel": "المفتاح",
       "customModelBadge": "مخصص · {provider}",
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
@@ -4173,7 +4194,6 @@
         "title": "إخفاء الهوية"
       },
       "auditLogs": "سجل النشاط",
-      "auditLogsAction": "الإجراء",
       "auditLogsActionAccess": "وصول",
       "auditLogsActionCreate": "إنشاء",
       "auditLogsActionDelete": "حذف",
@@ -4635,7 +4655,6 @@
     "conditionOverrideHint": "انقر لتحديد القيمة بنفسك، وانقر مرة أخرى لإعادتها إلى الذكاء الاصطناعي",
     "conditionUseFieldInstead": "استخدام حقل بدلاً من ذلك",
     "conditionUseFormula": "ƒ قيمة محسوبة…",
-    "conditionValue": "القيمة",
     "conditionWhen": "عندما",
     "conditionsTitle": "الشروط",
     "configureFields": "تهيئة الحقول",
@@ -5074,7 +5093,6 @@
       "fieldValueLabel": "قيمة الحقل",
       "fieldValuePlaceholder": "أدخل قيمة الحقل",
       "formatNotSupported": "التنسيق غير مدعوم",
-      "numberLabel": "القيمة",
       "numberPlaceholder": "أدخل رقمًا",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم"
@@ -5344,7 +5362,6 @@
           "openTarget": "فتح العنصر",
           "runId": "معرّف التشغيل",
           "system": "نشاط النظام",
-          "target": "الهدف",
           "title": "تفاصيل النشاط",
           "trigger": "بدأه",
           "webhook": "خطاف ويب"

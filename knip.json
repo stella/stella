@@ -25,6 +25,9 @@
     "packages/agent-input": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/analytics-config": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },
@@ -77,6 +80,16 @@
         "@stll/docx-core",
         "@stll/docx-utils",
         "tailwindcss"
+      ]
+    },
+    // WXT discovers the service worker, content script and popup from
+    // src/entrypoints; knip cannot infer that, so they are listed as entries.
+    "apps/extension": {
+      "entry": [
+        "src/entrypoints/**/*.ts",
+        "scripts/*.ts",
+        "e2e/**/*.ts",
+        "src/**/*.test.ts"
       ]
     },
     "apps/landing": {

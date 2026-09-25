@@ -140,7 +140,6 @@ const MODEL_MAX_OUTPUT_TOKENS = {
   "us.amazon.nova-micro-v1:0": 10_000,
   "openai.gpt-oss-120b-1:0": null,
   "openai.gpt-oss-20b-1:0": null,
-  "us.deepseek.r1-v1:0": null,
 } as const satisfies Record<BedrockModelId, number | null>;
 
 const isBedrockModelId = (modelId: string): modelId is BedrockModelId =>

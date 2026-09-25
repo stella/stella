@@ -58,7 +58,7 @@ export type ChatRegistryContextDeps = {
     | undefined;
 };
 
-// eslint-disable-next-line promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
+// oxlint-disable-next-line promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
 const NO_OP_AUDIT_RECORDER: AuditRecorder = () => Promise.resolve();
 
 const deriveWorkspaceStatusMap = ({

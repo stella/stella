@@ -1,4 +1,8 @@
 import { safeErrorCode } from "@/api/lib/errors/utils";
+import {
+  REDIS_CONNECTION_ERROR_CODES,
+  REDIS_POLL_BLIP_ERROR_CODE,
+} from "@/api/lib/observability/failure";
 
 /**
  * Which Valkey failures are expected operational transients.
@@ -16,12 +20,12 @@ import { safeErrorCode } from "@/api/lib/errors/utils";
 // `ERR_REDIS_INVALID_RESPONSE` ("Failed to read data") roughly every few
 // seconds. It is self-recovering — the worker keeps draining jobs — so callers
 // must not treat it as a real outage. A persistent Redis outage manifests as
-// different codes / reconnection failures, which stay unclassified here.
-const RECOVERABLE_REDIS_POLL_ERROR_CODE = "ERR_REDIS_INVALID_RESPONSE";
+// different codes / reconnection failures, which stay unclassified here. The
+// code set is the failure grader's, so a code these predicates downgrade is one
+// every failure sink grades the same way.
 
 export const isRecoverableRedisPollError = (error: unknown): boolean =>
-  error instanceof Error &&
-  safeErrorCode(error) === RECOVERABLE_REDIS_POLL_ERROR_CODE;
+  error instanceof Error && safeErrorCode(error) === REDIS_POLL_BLIP_ERROR_CODE;
 
 // Bun's RedisClient reconnects a dropped socket, but a command that meets a
 // connection which is not up rejects instead of waiting for it to come back.
@@ -41,10 +45,9 @@ export const isRecoverableRedisPollError = (error: unknown): boolean =>
 // at which point the downgrade would hide a permanent failure. That is also
 // why ERR_REDIS_IDLE_TIMEOUT is not here: Bun does not reconnect after one,
 // and nothing sets `idleTimeout`, so it is unreachable rather than expected.
-const TRANSIENT_REDIS_CONNECTION_ERROR_CODES = new Set([
-  "ERR_REDIS_CONNECTION_CLOSED",
-  "ERR_REDIS_CONNECTION_TIMEOUT",
-]);
+const TRANSIENT_REDIS_CONNECTION_ERROR_CODES: ReadonlySet<string> = new Set(
+  REDIS_CONNECTION_ERROR_CODES,
+);
 
 export const isTransientRedisConnectionError = (error: unknown): boolean =>
   error instanceof Error &&

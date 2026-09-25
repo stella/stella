@@ -27,6 +27,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import {
   fanOutNotifications,
   NOTIFICATION_INSERT_BATCH_SIZE,
@@ -537,6 +538,8 @@ describe("announcements", () => {
   ) =>
     await createPublishAnnouncementEndpoint({
       getOperatorUserIds: () => operatorUserIds,
+      maxRecipients: LIMITS.announcementRecipientsMax,
+      fanOut: async (rows) => await fanOutNotifications(rows, fanOutDb()),
     }).handler(
       asTestRaw<AnnounceContext>({
         ...contextFor({ userId, organizationId: ids.orgA }),
@@ -581,7 +584,8 @@ describe("announcements", () => {
     });
     const result = await createPublishAnnouncementEndpoint({
       getOperatorUserIds: () => ids.userAdmin,
-      database: fanOutDb(),
+      maxRecipients: LIMITS.announcementRecipientsMax,
+      fanOut: async (rows) => await fanOutNotifications(rows, fanOutDb()),
     }).handler(
       asTestRaw<AnnounceContext>({
         ...context,

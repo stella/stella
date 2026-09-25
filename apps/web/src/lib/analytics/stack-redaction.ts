@@ -182,7 +182,7 @@ const redactedStack = (error: Error): string | undefined => {
 };
 
 const toRedactedTelemetryError = (error: unknown): Error => {
-  // eslint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
+  // oxlint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
   const redacted = new Error("");
   redacted.name = telemetryErrorType(error);
   const stack = error instanceof Error ? redactedStack(error) : undefined;

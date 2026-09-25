@@ -33,6 +33,7 @@ import {
   CategoryFormDialog,
   CategoryMobileFilterBar,
   CategorySidebar,
+  useCategoryOps,
 } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import type {
   CategoryLabels,
@@ -54,7 +55,7 @@ type ClauseItem = {
   title: string;
   categoryId: string | null;
   currentVersion: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
 type ClauseListProps = {
@@ -396,57 +397,26 @@ const ClauseCategorySidebar = ({
 const useClauseCategoryOps = (): CategoryOps => {
   const t = useTranslations();
 
-  return {
+  return useCategoryOps({
     create: async (name) => {
-      const response = await api["clause-categories"].put({ name });
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return null;
-      }
-      return { id: response.data.id, name: response.data.name };
+      const { data, error } = await api["clause-categories"].put({ name });
+      return { data, error };
     },
     rename: async (id, name) => {
-      const response = await api["clause-categories"]({
+      const { data, error } = await api["clause-categories"]({
         categoryId: id,
       }).post({ name });
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return false;
-      }
-      return true;
+      return { data, error };
     },
     remove: async (id) => {
-      const response = await api["clause-categories"]({
+      const { data, error } = await api["clause-categories"]({
         categoryId: id,
       }).delete();
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.deleteFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return false;
-      }
-      return true;
+      return { data, error };
     },
-  };
+    saveFailedTitle: t("clauses.saveFailed"),
+    deleteFailedTitle: t("clauses.deleteFailed"),
+  });
 };
 
 const useClauseCategoryLabels = (): CategoryLabels => {

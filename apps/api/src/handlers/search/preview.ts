@@ -25,21 +25,24 @@ const config = {
 
 const searchPreviewEndpoint = createSafeRootHandler(
   config,
-  async function* ({ body, getActiveWorkspaceIds, session, user }) {
+  async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     const preview = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readSearchPreview({
-            query: body.query,
-            resultId: body.resultId,
-            type: body.type,
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            accessibleWorkspaceIds: activeWorkspaceIds,
-          }),
+          await readSearchPreview(
+            {
+              query: body.query,
+              resultId: body.resultId,
+              type: body.type,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              accessibleWorkspaceIds: activeWorkspaceIds,
+            },
+            scopedDb,
+          ),
       ),
     );
 

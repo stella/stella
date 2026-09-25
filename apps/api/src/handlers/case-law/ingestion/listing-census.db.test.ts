@@ -42,7 +42,7 @@ const scopedDb: ScopedDb = async (callback) =>
   await db.transaction(
     async (tx) =>
       // SAFETY: pglite's transaction stands in for the one the helper expects.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite transaction is the test's transaction
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite transaction is the test's transaction
       await callback(tx as unknown as Transaction),
   );
 

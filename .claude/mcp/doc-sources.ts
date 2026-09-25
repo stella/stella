@@ -227,12 +227,56 @@ export const DOC_SOURCES = {
     ],
     url: "https://streamdown.dev/llms.txt",
   },
+  BetterResult: {
+    dependencies: ["better-result"],
+    url: "https://better-result.dev/llms.txt",
+  },
+  BullMQ: {
+    dependencies: ["bullmq"],
+    url: "https://bullmq.io/llms.txt",
+  },
+  Crossws: {
+    dependencies: ["crossws"],
+    url: "https://crossws.h3.dev/llms.txt",
+  },
+  FastCheck: {
+    dependencies: ["fast-check"],
+    url: "https://fast-check.dev/llms.txt",
+  },
+  Fontsource: {
+    dependencies: ["@fontsource-variable/source-serif-4"],
+    url: "https://fontsource.org/llms.txt",
+  },
+  Lucide: {
+    dependencies: ["lucide-react"],
+    url: "https://lucide.dev/llms.txt",
+  },
+  ReactGrab: {
+    dependencies: ["react-grab"],
+    url: "https://react-grab.com/llms.txt",
+  },
+  Tsdown: {
+    dependencies: ["tsdown"],
+    url: "https://tsdown.dev/llms.txt",
+  },
+  Ultracite: {
+    dependencies: ["ultracite"],
+    url: "https://www.ultracite.ai/llms.txt",
+  },
+  WXT: {
+    dependencies: ["wxt"],
+    url: "https://wxt.dev/llms.txt",
+  },
+  Yjs: {
+    dependencies: ["yjs"],
+    url: "https://docs.yjs.dev/llms.txt",
+  },
 } as const satisfies Record<string, DocSource>;
 
 const NO_LLMS_TXT_EXPLANATION =
   "The canonical project documentation did not publish an llms.txt endpoint when checked.";
-const NO_LLMS_TXT_CHECKED_AT = "2026-08-26T00:00:00.000Z";
-const NO_LLMS_TXT_EXPIRES_AT = "2026-09-25T00:00:00.000Z";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-25T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-25T00:00:00.000Z";
 
 const noLlmsTxt = (dependency: string): NoLlmsTxtExclusion => ({
   checkedAt: NO_LLMS_TXT_CHECKED_AT,
@@ -257,7 +301,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@electric-sql/pglite",
   "@faker-js/faker",
   "@firecrawl/anydoc",
-  "@fontsource-variable/source-serif-4",
   "@formatjs/icu-messageformat-parser",
   "@google/genai",
   "@hyzyla/pdfium",
@@ -278,6 +321,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@stricli/core",
   "@t3-oss/env-core",
   "@tailwindcss/vite",
+  "@types/chrome",
   "@types/hast",
   "@types/node",
   "@types/nodemailer",
@@ -286,15 +330,12 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",
-  "better-result",
   "buffer",
-  "bullmq",
   "cheerio",
   "class-variance-authority",
   "client-zip",
   "clsx",
   "cobe",
-  "crossws",
   "diff",
   "disposable-email-domains-js",
   "domhandler",
@@ -303,7 +344,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "eslint",
   "expect-type",
   "expo-doctor",
-  "fast-check",
   "franc",
   "i18n-unused",
   "immer",
@@ -315,7 +355,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "katex",
   "knip",
   "lefthook",
-  "lucide-react",
   "nodemailer",
   "onnxruntime-node",
   "oxlint-tailwindcss",
@@ -325,7 +364,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "quickjs-emscripten",
   "quickjs-emscripten-core",
   "re2-wasm",
-  "react-grab",
   "react-native-web",
   "rollup-plugin-visualizer",
   "scslre",
@@ -336,16 +374,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "tailwind-merge",
   "tailwindcss",
   "thinking-orbs",
-  "tsdown",
   "tw-animate-css",
   "typescript",
-  "ultracite",
   "unified",
   "uqr",
   "use-debounce",
   "use-intl",
   "uuid",
-  "yjs",
+  "web-ext",
 ]
   .map(noLlmsTxt)
   .concat(

@@ -215,11 +215,8 @@ export const MatterCard = ({
 };
 
 /** Color-code recency: today = foreground, this week = muted, older = faded. */
-const getRecencyClass = (date: Date | string): string => {
-  const timestamp =
-    date instanceof Date
-      ? Temporal.Instant.fromEpochMilliseconds(date.getTime())
-      : Temporal.Instant.from(date);
+const getRecencyClass = (date: string): string => {
+  const timestamp = Temporal.Instant.from(date);
   const age =
     Temporal.Now.instant().epochMilliseconds - timestamp.epochMilliseconds;
   if (age < DAY_IN_MS) {

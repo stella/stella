@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { listAuthSessions } from "@/lib/auth";
+import { listAuthSessions } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 // Avoid a duplicate fetch when Suspense remounts the observer while keeping

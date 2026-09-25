@@ -98,7 +98,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchReader } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -1423,8 +1423,8 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   }
 
   const result = await (
-    context.testDependencies?.getSearchProvider ?? getSearchProvider
-  )().search({
+    context.testDependencies?.getSearchReader ?? getSearchReader
+  )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,

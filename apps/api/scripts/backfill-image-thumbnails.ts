@@ -21,9 +21,9 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import {
   generateImageThumbnail,
@@ -44,6 +44,8 @@ import {
 
 const BATCH_SIZE = 200;
 
+const db = openMaintenanceDb({ readOnly: false });
+
 const THUMBNAILABLE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -60,6 +62,11 @@ type EntityFieldRow = {
   workspace_id: string;
   organization_id: string;
 };
+
+type ChatFileRow = Pick<
+  typeof userFiles.$inferSelect,
+  "id" | "userId" | "mimeType" | "s3Key"
+>;
 
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
@@ -88,8 +95,8 @@ const backfillEntityFields = async (): Promise<number> => {
   for (;;) {
     // Sequential keyset pagination: the next page cursor depends on this batch.
     const batch: Iterable<EntityFieldRow> =
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-      await rootDb.execute<EntityFieldRow>(sql`
+      // db-await-in-loop: keyset page per iteration; the page is the batch
+      await db.execute<EntityFieldRow>(sql`
       SELECT
         f.id AS field_id,
         f.content->>'mimeType' AS mime_type,
@@ -150,24 +157,28 @@ const backfillChatFiles = async (): Promise<number> => {
   let generated = 0;
 
   for (;;) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const rows = await rootDb
-      .select({
-        id: userFiles.id,
-        userId: userFiles.userId,
-        mimeType: userFiles.mimeType,
-        s3Key: userFiles.s3Key,
-      })
-      .from(userFiles)
-      .where(
-        and(
-          isNull(userFiles.thumbnailFileId),
-          inArray(userFiles.mimeType, THUMBNAILABLE_MIME_TYPES),
-          cursor ? gt(userFiles.id, cursor) : undefined,
-        ),
-      )
-      .orderBy(asc(userFiles.id))
-      .limit(BATCH_SIZE);
+    const afterCursor = cursor ? gt(userFiles.id, cursor) : undefined;
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const rows: ChatFileRow[] = await db.transaction(
+      async (tx) =>
+        await tx
+          .select({
+            id: userFiles.id,
+            userId: userFiles.userId,
+            mimeType: userFiles.mimeType,
+            s3Key: userFiles.s3Key,
+          })
+          .from(userFiles)
+          .where(
+            and(
+              isNull(userFiles.thumbnailFileId),
+              inArray(userFiles.mimeType, THUMBNAILABLE_MIME_TYPES),
+              afterCursor,
+            ),
+          )
+          .orderBy(asc(userFiles.id))
+          .limit(BATCH_SIZE),
+    );
 
     if (rows.length === 0) {
       break;
@@ -202,14 +213,23 @@ const backfillChatFiles = async (): Promise<number> => {
       });
       const updatedRows = await Result.tryPromise({
         try: async () =>
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one write per generated thumbnail so progress survives a stop
-          await rootDb
-            .update(userFiles)
-            .set({ thumbnailFileId, placeholder: thumbnail.value.placeholder })
-            .where(
-              and(eq(userFiles.id, row.id), isNull(userFiles.thumbnailFileId)),
-            )
-            .returning({ id: userFiles.id }),
+          // db-await-in-loop: one write per generated thumbnail so progress survives a stop
+          await db.transaction(
+            async (tx) =>
+              await tx
+                .update(userFiles)
+                .set({
+                  thumbnailFileId,
+                  placeholder: thumbnail.value.placeholder,
+                })
+                .where(
+                  and(
+                    eq(userFiles.id, row.id),
+                    isNull(userFiles.thumbnailFileId),
+                  ),
+                )
+                .returning({ id: userFiles.id }),
+          ),
         catch: (cause) => cause,
       });
       if (Result.isError(updatedRows)) {

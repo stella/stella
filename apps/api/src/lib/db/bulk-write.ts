@@ -17,11 +17,11 @@ const DB_INSERT_BATCH_SIZE = 500;
  * here means it is written and reviewed once, and the batch size is one named
  * constant rather than a number each caller re-derives from its table's width.
  *
- * Note for reviewers: `no-db-await-in-loop` does not fire on the loop below,
- * because what is awaited is a callback parameter rather than a database
- * handle. The rule therefore stops seeing a chunked write once it routes
- * through here — which is the point, but it means this loop is guarded by
- * review rather than by the rule.
+ * Note for reviewers: `scripts/db-await-in-loop.ts` does not flag the loop
+ * below, because what is awaited is a callback parameter rather than a
+ * database handle, and callbacks are not followed. The check therefore stops
+ * seeing a chunked write once it routes through here — which is the point, but
+ * it means this loop is guarded by review rather than by the check.
  *
  * The writer is passed in rather than the table, so `values()` is still written
  * where the table is statically known and drizzle's inference for the row type

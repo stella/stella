@@ -11,10 +11,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const config = {
   description:

@@ -20,7 +20,9 @@
  *    to keep the surface indistinguishable from a missing route.
  *  - Sessions are short-lived (15 min) and scoped to a dedicated
  *    smoke user/org that mirrors the production default state
- *    (no entitlement, no AI config).
+ *    (no entitlement, no AI config). `?principal=ai` selects a second
+ *    dedicated org whose AI the caller configures through the regular
+ *    organization settings API.
  */
 
 import Elysia from "elysia";
@@ -28,7 +30,10 @@ import { timingSafeEqual } from "node:crypto";
 
 import { env } from "@/api/env";
 import { logger } from "@/api/lib/observability/logger";
-import { mintSmokeSession } from "@/api/lib/smoke-session/store";
+import {
+  mintSmokeSession,
+  parseSmokePrincipal,
+} from "@/api/lib/smoke-session/store";
 
 const notAvailable = () => new Response("Not available", { status: 404 });
 
@@ -49,8 +54,18 @@ export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
       return notAvailable();
     }
 
-    const smokeSession = await mintSmokeSession();
+    // Parsed only after the secret check, so an unauthenticated caller
+    // cannot tell a bad parameter from a missing route.
+    const principal = parseSmokePrincipal(
+      new URL(request.url).searchParams.get("principal"),
+    );
+    if (principal === null) {
+      return new Response("Unknown smoke principal", { status: 400 });
+    }
+
+    const smokeSession = await mintSmokeSession(principal);
     logger.info("smoke.session_minted", {
+      "smoke.principal": principal,
       "smoke.expires_at": smokeSession.expiresAt,
     });
     return smokeSession;

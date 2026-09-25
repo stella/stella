@@ -24,10 +24,12 @@ import * as v from "valibot";
 import {
   MODEL_DOCUMENT_INPUT_OPTIONS,
   MODEL_DEFAULT_REASONING_EFFORTS,
+  MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 import type { ModelRate } from "./model-rate";
+import type { RETAINED_MODELS_DEV_RATE_ENTRIES } from "./model-rate-policy";
 import { MODEL_RATES } from "./model-rates.gen";
 
 export {
@@ -330,7 +332,6 @@ export const BYOK_MODEL_OPTIONS = {
     "us.amazon.nova-micro-v1:0",
     "openai.gpt-oss-120b-1:0",
     "openai.gpt-oss-20b-1:0",
-    "us.deepseek.r1-v1:0",
   ],
   mistral: [
     "mistral-large-latest",
@@ -574,10 +575,6 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
   },
-  "us.deepseek.r1-v1:0": {
-    displayName: "DeepSeek R1",
-    iconProvider: "bedrock",
-  },
   "mistral-large-latest": {
     displayName: "Mistral Large",
     iconProvider: "mistral",
@@ -779,6 +776,7 @@ export type ResolvedReasoningEffort = v.InferOutput<
 // gen:capabilities`).
 export {
   MODEL_DEFAULT_REASONING_EFFORTS,
+  MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
@@ -835,7 +833,8 @@ type OfferedAggregatorUnderlyingModelId =
 type RequiredModelRateId =
   | OfferedAggregatorUnderlyingModelId
   | OfferedFirstPartyModelId
-  | OfferedPlatformModelId;
+  | OfferedPlatformModelId
+  | keyof typeof RETAINED_MODELS_DEV_RATE_ENTRIES;
 
 /**
  * Per-provider model served when a user's included budget is exhausted
@@ -889,6 +888,19 @@ const MODEL_TEMPERATURE_POLICY_BY_ID: Readonly<
  */
 export const shouldEmitTemperature = (modelId: string): boolean =>
   MODEL_TEMPERATURE_POLICY_BY_ID[normalizeModelCatalogId(modelId)] === "emit";
+
+const MODEL_OUTPUT_TOKEN_LIMIT_BY_ID: Readonly<Record<string, number>> =
+  MODEL_OUTPUT_TOKEN_LIMITS;
+
+/**
+ * The most output tokens one response of `modelId` may carry, from the
+ * catalog. `undefined` for an id the catalog does not list (a deployment
+ * override, a dev model): the catalog knows nothing about it, so callers leave
+ * the allowance to the provider rather than guess one. Callers must never
+ * index `MODEL_OUTPUT_TOKEN_LIMITS` directly with a runtime string.
+ */
+export const getOutputTokenLimit = (modelId: string): number | undefined =>
+  MODEL_OUTPUT_TOKEN_LIMIT_BY_ID[normalizeModelCatalogId(modelId)];
 
 /**
  * Whether a model accepts tool use on a streaming request.
@@ -957,18 +969,31 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
-  // 2026-09-21 weekly provider canary: Bedrock Converse answers every
-  // streaming request that carries a toolConfig with "This model doesn't
-  // support tool use in streaming mode."
-  "us.deepseek.r1-v1:0": "unsupported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
 } as const satisfies Record<OfferedBYOKModelId, StreamingToolUseSupport>;
 
+/**
+ * Streaming tool-use support for models no longer offered that a deployment
+ * override or a dev model id can still select. Total over
+ * `RETAINED_MODELS_DEV_RATE_ENTRIES`, so retaining a model forces a decision
+ * rather than falling through to the supported default for unlisted ids.
+ */
+const RETAINED_MODEL_STREAMING_TOOL_USE = {
+  "gemini-2.5-flash": "supported",
+  "gemini-2.5-pro": "supported",
+  "gpt-4o-mini": "supported",
+  "gpt-4o": "supported",
+  "us.deepseek.r1-v1:0": "unsupported",
+} as const satisfies Record<
+  keyof typeof RETAINED_MODELS_DEV_RATE_ENTRIES,
+  StreamingToolUseSupport
+>;
+
 const MODEL_STREAMING_TOOL_USE_BY_ID: Readonly<
   Record<string, StreamingToolUseSupport>
-> = MODEL_STREAMING_TOOL_USE;
+> = { ...RETAINED_MODEL_STREAMING_TOOL_USE, ...MODEL_STREAMING_TOOL_USE };
 
 /**
  * Whether stella may send tools (or a structured-output schema) to this
@@ -1179,6 +1204,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "us.amazon.nova-micro-v1:0": 128_000, // Nova Micro: 128K input.
   "openai.gpt-oss-120b-1:0": 128_000, // gpt-oss on Bedrock: 128K.
   "openai.gpt-oss-20b-1:0": 128_000,
+  // Retired from the picker; deployment overrides can still select it.
   "us.deepseek.r1-v1:0": 128_000, // DeepSeek-R1: 128K.
 } as const satisfies Readonly<Record<string, number>>;
 

@@ -540,6 +540,7 @@ export const openCorpusPackBatch = ({
                 // buffers a whole pack before it transfers it.
                 for (const [, group] of groupByJurisdiction(transferring)) {
                   for (const packGroup of packedGroups(group)) {
+                    // db-await-in-loop: one transfer per pack; the writer buffers a whole ceiling-sized pack before it transfers
                     await transferPack(packGroup, transfer.putPacks);
                   }
                 }

@@ -8,7 +8,9 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
+  attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
+  mergeAnonRestorations,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -23,6 +25,13 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  ChatTurnDroppedPartsError,
+  ChatTurnUnsettledToolCallError,
+  findDroppedParts,
+  findUnsettledToolCallsForOutcome,
+  settleOpenToolCallsForOutcome,
+} from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -32,8 +41,10 @@ import {
 } from "@/api/handlers/chat/persistent-compaction";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
+  ChatMessageMetadata,
   ChatTurnOutcome,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -277,6 +288,116 @@ export const persistMessage = async (props: PersistMessageProps) => {
   return result;
 };
 
+type TerminalAssistantMessageProps = {
+  outcome: ChatTurnOutcome;
+  owningAssistantMessage: PersistableChatMessage | undefined;
+  /** What the run produced; a failure before its first chunk produced nothing. */
+  responseMessage: PersistableChatMessage | undefined;
+};
+
+/**
+ * The one message a terminal turn writes. A continuation writes it over the
+ * owning assistant row, so it keeps what the run did not reproduce: the owning
+ * parts when the run produced none, and the owning metadata beneath the run's.
+ * Restoration pairs accumulate because the owning text still needs the earlier
+ * ones; token usage sums because the row now spans both runs.
+ */
+const toTerminalAssistantMessage = ({
+  outcome,
+  owningAssistantMessage,
+  responseMessage,
+}: TerminalAssistantMessageProps): PersistableTerminalAssistantMessage => {
+  if (
+    owningAssistantMessage !== undefined &&
+    owningAssistantMessage.role !== "assistant"
+  ) {
+    panic("A terminal continuation owner must be an assistant message");
+  }
+  if (
+    owningAssistantMessage !== undefined &&
+    responseMessage !== undefined &&
+    responseMessage.id !== owningAssistantMessage.id
+  ) {
+    panic("A continuation must persist under its owning message id");
+  }
+  // A run that failed before its first chunk produced no parts; the owning
+  // message keeps the ones it already had.
+  const runProducedParts =
+    responseMessage !== undefined && responseMessage.parts.length > 0;
+  const owningParts =
+    owningAssistantMessage === undefined ? [] : owningAssistantMessage.parts;
+  const message = toPersistableChatMessage({
+    id:
+      responseMessage?.id ??
+      owningAssistantMessage?.id ??
+      createSafeId<"chatMessage">(),
+    metadata: mergeContinuationMetadata({
+      owning: owningAssistantMessage?.metadata,
+      run: responseMessage?.metadata,
+    }),
+    parts: runProducedParts ? responseMessage.parts : owningParts,
+    role: responseMessage?.role ?? "assistant",
+    ...(owningAssistantMessage?.createdAt === undefined
+      ? {}
+      : { createdAt: owningAssistantMessage.createdAt }),
+  });
+  return attachTerminalTurnOutcome({ message, turnOutcome: outcome });
+};
+
+/**
+ * The terminal message as stored: approved calls the run left without a
+ * result are closed as unfinished once the turn stops for good.
+ */
+const settleTerminalAssistantMessage = (
+  message: PersistableTerminalAssistantMessage,
+  outcome: ChatTurnOutcome,
+): PersistableTerminalAssistantMessage =>
+  attachTerminalTurnOutcome({
+    message: toPersistableChatMessage({
+      ...message,
+      parts: settleOpenToolCallsForOutcome({
+        outcome: outcome.type,
+        parts: message.parts,
+      }),
+    }),
+    turnOutcome: outcome,
+  });
+
+const mergeContinuationMetadata = ({
+  owning,
+  run,
+}: {
+  owning: ChatMessageMetadata | undefined;
+  run: ChatMessageMetadata | undefined;
+}): ChatMessageMetadata => {
+  const merged: ChatMessageMetadata = { ...owning, ...run };
+  if (
+    owning?.anonRestorations !== undefined &&
+    run?.anonRestorations !== undefined
+  ) {
+    merged.anonRestorations = mergeAnonRestorations(
+      owning.anonRestorations,
+      run.anonRestorations,
+    );
+  }
+  if (owning?.usage !== undefined && run?.usage !== undefined) {
+    const reasoningTokens =
+      (owning.usage.completionTokensDetails?.reasoningTokens ?? 0) +
+      (run.usage.completionTokensDetails?.reasoningTokens ?? 0);
+    merged.usage = {
+      completionTokens:
+        owning.usage.completionTokens + run.usage.completionTokens,
+      promptTokens: owning.usage.promptTokens + run.usage.promptTokens,
+      totalTokens: owning.usage.totalTokens + run.usage.totalTokens,
+      ...(owning.usage.completionTokensDetails === undefined &&
+      run.usage.completionTokensDetails === undefined
+        ? {}
+        : { completionTokensDetails: { reasoningTokens } }),
+    };
+  }
+  return merged;
+};
+
 /**
  * Persist the assistant message and settle its durable execution owner in the
  * same transaction. The stream boundary resolves refs and computes accessible
@@ -289,6 +410,7 @@ export const finalizeAssistantTurn = async ({
   existingIds,
   execution,
   outcome,
+  owningAssistantMessage,
   recordAuditEvent,
   responseMessage,
   safeDb,
@@ -302,6 +424,7 @@ export const finalizeAssistantTurn = async ({
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
+  owningAssistantMessage?: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
   responseMessage: PersistableChatMessage;
   safeDb: SafeDb;
@@ -310,10 +433,19 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
+  const producedMessage = toTerminalAssistantMessage({
+    outcome,
+    owningAssistantMessage,
+    responseMessage,
+  });
+  const assistantMessage = settleTerminalAssistantMessage(
+    producedMessage,
+    outcome,
+  );
   const persistencePlan = planAssistantFinishPersistence({
     existingIds,
     finishOutcome: outcome,
-    message: responseMessage,
+    message: assistantMessage,
   });
 
   // A terminal stream always supplies an assistant message. Silently
@@ -331,7 +463,7 @@ export const finalizeAssistantTurn = async ({
     safeDb,
     threadId,
     turnSettlement: {
-      assistantMessageId: responseMessage.id,
+      assistantMessageId: assistantMessage.id,
       execution,
       outcome,
     },
@@ -342,7 +474,61 @@ export const finalizeAssistantTurn = async ({
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  reportStoredTurnDefects({
+    continued: owningAssistantMessage,
+    outcome: outcome.type,
+    stored: producedMessage,
+  });
   return Result.ok({ persistencePlan });
+};
+
+/**
+ * Reports what a run left that breaks the settlement rules, once the write
+ * committed: the reports say a stored thread holds the defect, which a
+ * failed write never made true. The turn itself still settles; its answer is
+ * already streamed and belongs in the thread.
+ */
+const reportStoredTurnDefects = ({
+  continued,
+  outcome,
+  stored,
+}: {
+  continued: PersistableChatMessage | undefined;
+  outcome: ChatTurnOutcome["type"];
+  stored: PersistableChatMessage;
+}) => {
+  const unsettled = findUnsettledToolCallsForOutcome({
+    outcome,
+    parts: stored.parts,
+  });
+  if (unsettled.length > 0) {
+    captureError(
+      new ChatTurnUnsettledToolCallError({
+        message: "A settled chat turn stored a tool call without its result",
+      }),
+      {
+        outcome,
+        tool_call_states: unsettled.map(({ state }) => state).join(","),
+        unsettled_count: String(unsettled.length),
+      },
+    );
+  }
+  const dropped =
+    continued === undefined
+      ? null
+      : findDroppedParts({ continued: continued.parts, stored: stored.parts });
+  if (dropped !== null) {
+    captureError(
+      new ChatTurnDroppedPartsError({
+        message: "A continuation stored its message without earlier parts",
+      }),
+      {
+        dropped_tool_calls: String(dropped.droppedToolCallIds.length),
+        outcome,
+        part_count_drop: String(dropped.partCountDrop),
+      },
+    );
+  }
 };
 
 type PersistTerminalAssistantTurnProps = {
@@ -373,25 +559,14 @@ const persistTerminalAssistantTurn = async ({
   userId,
   workspaceId,
 }: PersistTerminalAssistantTurnProps) => {
-  if (
-    owningAssistantMessage !== undefined &&
-    owningAssistantMessage.role !== "assistant"
-  ) {
-    panic("A terminal continuation owner must be an assistant message");
-  }
-  const assistantMessage = toPersistableChatMessage({
-    id: owningAssistantMessage?.id ?? createSafeId<"chatMessage">(),
-    metadata: {
-      ...owningAssistantMessage?.metadata,
-      turnOutcome: outcome,
-    },
-    parts:
-      owningAssistantMessage === undefined ? [] : owningAssistantMessage.parts,
-    role: "assistant",
-    ...(owningAssistantMessage?.createdAt === undefined
-      ? {}
-      : { createdAt: owningAssistantMessage.createdAt }),
-  });
+  const assistantMessage = settleTerminalAssistantMessage(
+    toTerminalAssistantMessage({
+      outcome,
+      owningAssistantMessage,
+      responseMessage: undefined,
+    }),
+    outcome,
+  );
   return await persistMessage({
     persistencePlan:
       owningAssistantMessage === undefined

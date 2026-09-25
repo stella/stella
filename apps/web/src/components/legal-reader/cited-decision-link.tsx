@@ -5,6 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
@@ -44,7 +45,7 @@ type CitedDecisionTarget = {
   decisionType?: string | null | undefined;
   id: string;
   language: string | null;
-  languageAlternates: readonly unknown[] | null;
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
   slug: string | null;
 };
 

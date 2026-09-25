@@ -87,7 +87,7 @@ export default eslintCompatPlugin({
             strictReadAliases.clear();
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== ROUTER_MODULE) {
+            if (node.source.value !== ROUTER_MODULE) {
               return;
             }
             for (const specifier of node.specifiers) {
@@ -123,8 +123,8 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             const callee = node.callee;
             if (
-              callee?.type === "MemberExpression" &&
-              callee.computed === false &&
+              callee.type === "MemberExpression" &&
+              !callee.computed &&
               isIdentifier(callee.object) &&
               routeApiBindings.has(callee.object.name) &&
               isIdentifier(callee.property) &&

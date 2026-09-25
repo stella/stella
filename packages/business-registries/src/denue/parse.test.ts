@@ -8,7 +8,7 @@ const readFixture = async (name: string): Promise<DenueRawEstablishment[]> => {
   const value: unknown = await Bun.file(new URL(name, FIXTURE_DIR)).json();
   // SAFETY: fixtures are committed JSON payloads shaped like DENUE search
   // responses.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as DenueRawEstablishment[];
 };
 

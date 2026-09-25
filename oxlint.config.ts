@@ -203,6 +203,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("failure-sink-handle.fixture.ts", [
+    "failure-sink-handle/failure-sink-handle",
+  ]),
   fixtureRuleOverride("no-redacted-log-attribute-key.fixture.ts", [
     "no-redacted-log-attribute-key/no-redacted-log-attribute-key",
   ]),
@@ -273,6 +276,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -699,7 +703,7 @@ export default defineConfig({
     // The generic rule fires on every sequential await, including the ones a
     // stream, a cursor, a rate limit, or an ordered write requires; it was
     // waived far more often than it was obeyed. The cost it exists to catch
-    // is per-iteration I/O, which `no-db-await-in-loop` and
+    // is per-iteration I/O, which `scripts/db-await-in-loop.ts` and
     // `no-network-await-in-loop` flag with the owner in hand.
     "no-await-in-loop": "off",
     "no-console": "error",
@@ -1129,6 +1133,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -1251,7 +1256,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
-    "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
@@ -1294,6 +1298,19 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+      },
+    },
+    {
+      // The Postgres-gated suites run in one process, so a client a test
+      // leaves open holds its connections until the run ends. Tests open them
+      // through the one module that closes every client it opens.
+      files: [
+        "**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}",
+        "**/{test,tests,__tests__}/**/*.{ts,tsx,mts,cts,js,mjs}",
+      ],
+      excludeFiles: ["apps/api/src/tests/gated-test-database.ts"],
+      rules: {
+        "bun-test-hygiene/no-unmanaged-database-client": "error",
       },
     },
     {
@@ -2139,8 +2156,8 @@ export default defineConfig({
       // thing identifying a captured rejection, so it must be a dotted
       // `feature.action` literal rather than the enclosing component or
       // handler name. Scoped to the two apps that can import the helper
-      // (`apps/web/src/lib/detached.ts`, `apps/api/src/lib/detached.ts`);
-      // no package ships one. Tests are in scope: a detached label there is
+      // (`apps/web/src/lib/detached.ts`, `apps/api/src/lib/analytics/capture.ts`);
+      // `@stll/errors` ships only the factory. Tests are in scope: a label there is
       // a telemetry tag like any other, and no test detaches today.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
@@ -2915,12 +2932,6 @@ export default defineConfig({
       },
     },
     {
-      files: [".oxlint-plugins/__fixtures__/no-db-await-in-loop.fixture.ts"],
-      rules: {
-        "no-db-await-in-loop/no-db-await-in-loop": "error",
-      },
-    },
-    {
       files: [
         ".oxlint-plugins/__fixtures__/no-network-await-in-loop.fixture.ts",
       ],
@@ -3087,7 +3098,7 @@ export default defineConfig({
                   "Public SEO endpoints must not import authenticated query options.",
               },
               {
-                name: "@/lib/auth",
+                name: "@/lib/auth-client",
                 message: "Public SEO endpoints must not import auth clients.",
               },
             ],
@@ -3285,7 +3296,7 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
-              "apps/api/src/lib/analytics/posthog.ts",
+              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading
@@ -3460,33 +3471,6 @@ export default defineConfig({
       },
     },
     {
-      // no-db-await-in-loop flags an `await db...` / `await tx...` /
-      // `await safeDb(...)` or `yield* Result.await(safeDb(...))` lexically
-      // inside a loop position that re-runs per iteration, plus a
-      // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
-      // to backend source and the workspace scripts, where `db`/`tx`/`safeDb`
-      // are Drizzle handles; test files intentionally exercise unbatched
-      // loops in fixtures/mocks and are excluded.
-      files: [
-        "apps/api/src/**/*.ts",
-        "apps/*/scripts/**/*.ts",
-        "packages/*/scripts/**/*.ts",
-      ],
-      excludeFiles: [
-        "apps/api/src/**/*.test.ts",
-        "apps/api/src/tests/**/*.ts",
-        "**/*.test.{ts,tsx}",
-        "**/*.spec.{ts,tsx}",
-        // Development seeds write fixture data once into a local database;
-        // their loop lengths are the fixture's, not a tenant's, so the query
-        // count is not a scaling property there.
-        "apps/api/scripts/seed-*.ts",
-      ],
-      rules: {
-        "no-db-await-in-loop/no-db-await-in-loop": "error",
-      },
-    },
-    {
       // no-network-await-in-loop flags an awaited HTTP request, AWS SDK
       // command dispatch, or API-client method lexically inside a loop body:
       // one round-trip per iteration, growing with the input. Scoped to
@@ -3573,6 +3557,18 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "security-guards/require-secure-document-response": "error",
+      },
+    },
+    {
+      // A failure sink handle is a reviewed module-level declaration. Tests
+      // build handles as fixtures, so they are excluded.
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "failure-sink-handle/failure-sink-handle": "error",
       },
     },
     {
@@ -4149,10 +4145,11 @@ export default defineConfig({
       },
     },
     {
-      // The rule applies itself to every file that imports
-      // `@/api/lib/case-law-public-read-db` (and to that module). The excluded
-      // modules read the public connection and tenant data side by side, so
-      // they sit outside the public-only boundary; this list may only shrink.
+      // The rule applies itself to every file that imports an owner of a
+      // public-law read (the case-law and legislation handles, the connection,
+      // the shared-query registry) and to those modules. The excluded modules
+      // read the public connection and tenant data side by side, so they sit
+      // outside the public-only boundary; this list may only shrink.
       files: ["apps/api/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",

@@ -1,7 +1,98 @@
 import { describe, expect, test } from "bun:test";
 
+import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+
 import { resolveTemperaturePolicy } from "./model-catalog-capabilities";
-import { renderCapabilitiesModule } from "./model-catalog-capabilities-gen";
+import type { UpstreamCapabilities } from "./model-catalog-capabilities";
+import {
+  MODELS_DEV_KEY_BY_PROVIDER,
+  buildCapabilityRows,
+  renderCapabilitiesModule,
+} from "./model-catalog-capabilities-gen";
+
+const offeredModelIds = TANSTACK_AI_PROVIDERS.flatMap((provider) =>
+  BYOK_MODEL_OPTIONS[provider].map((modelId) => ({ provider, modelId })),
+);
+
+const upstreamWithToolCall = (
+  toolCallFor: (modelId: string) => boolean | null,
+): ReadonlyMap<string, UpstreamCapabilities> =>
+  new Map(
+    offeredModelIds.map(({ provider, modelId }) => [
+      `${MODELS_DEV_KEY_BY_PROVIDER[provider]}:${modelId}`,
+      {
+        releaseDate: null,
+        reasoning: false,
+        effortValues: null,
+        inputModalities: ["text"],
+        outputTokens: 8192,
+        temperature: false,
+        toolCall: toolCallFor(modelId),
+      },
+    ]),
+  );
+
+describe("tool-calling requirement", () => {
+  const toolLessModelId = BYOK_MODEL_OPTIONS.bedrock.at(-1) ?? "";
+
+  test("generates a row for every offered model that accepts tools", () => {
+    const rows = buildCapabilityRows({
+      openRouterDefaults: new Map(),
+      upstream: upstreamWithToolCall(() => true),
+    });
+    expect(rows.map((row) => row.modelId)).toEqual(
+      offeredModelIds.map(({ modelId }) => modelId),
+    );
+  });
+
+  test("rejects an offered model that cannot take tools", () => {
+    expect(() =>
+      buildCapabilityRows({
+        openRouterDefaults: new Map(),
+        upstream: upstreamWithToolCall(
+          (modelId) => modelId !== toolLessModelId,
+        ),
+      }),
+    ).toThrow(`bedrock/${toolLessModelId}: models.dev reports no tool calling`);
+  });
+
+  test("rejects a record that does not publish an output limit", () => {
+    const upstream = new Map(
+      [...upstreamWithToolCall(() => true)].map(([key, record]) => [
+        key,
+        key.endsWith(`:${toolLessModelId}`)
+          ? { ...record, outputTokens: null }
+          : record,
+      ]),
+    );
+    expect(() =>
+      buildCapabilityRows({ openRouterDefaults: new Map(), upstream }),
+    ).toThrow(
+      `bedrock/${toolLessModelId}: models.dev record lacks limit.output`,
+    );
+  });
+
+  test("carries each model's output limit into its row", () => {
+    const rows = buildCapabilityRows({
+      openRouterDefaults: new Map(),
+      upstream: upstreamWithToolCall(() => true),
+    });
+    expect(new Set(rows.map(({ outputTokens }) => outputTokens))).toEqual(
+      new Set([8192]),
+    );
+  });
+
+  test("rejects a record that does not publish tool support", () => {
+    expect(() =>
+      buildCapabilityRows({
+        openRouterDefaults: new Map(),
+        upstream: upstreamWithToolCall((modelId) =>
+          modelId === toolLessModelId ? null : true,
+        ),
+      }),
+    ).toThrow("lacks the tool_call field");
+  });
+});
 
 describe("capability module generation", () => {
   test("emits document-input models, source corrections, and empty providers", () => {
@@ -12,6 +103,7 @@ describe("capability module generation", () => {
         documentInputOverrideReason: "2026-08-20: reviewed source correction",
         efforts: null,
         modelId: "gpt-test",
+        outputTokens: 4096,
         overrideReason: null,
         provider: "openai",
         temperaturePolicy: "omit",
@@ -22,6 +114,7 @@ describe("capability module generation", () => {
         documentInputOverrideReason: null,
         efforts: null,
         modelId: "gpt-text-only",
+        outputTokens: 4096,
         overrideReason: null,
         provider: "openai",
         temperaturePolicy: "omit",

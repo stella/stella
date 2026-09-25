@@ -10,7 +10,6 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import {
   auditLogs,
   entities,
@@ -18,6 +17,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 import { DEFAULT_USER_ID, seedId } from "./seed-utils";
 
@@ -31,26 +31,33 @@ export const seedMatterActivity = async () => {
   if (process.env.NODE_ENV === "production") {
     panic("Refusing to seed Matter Activity in production.");
   }
+  const db = openMaintenanceDb({ readOnly: false });
 
   const configuredWorkspaceId = process.env["MATTER_ACTIVITY_WORKSPACE_ID"];
   const workspaceId = configuredWorkspaceId
     ? toSafeId<"workspace">(configuredWorkspaceId)
     : DEFAULT_WORKSPACE_ID;
-  const workspace = await rootDb.query.workspaces.findFirst({
-    where: {
-      id: { eq: workspaceId },
-    },
-    columns: { id: true, organizationId: true },
-  });
+  const workspace = await db.transaction(
+    async (tx) =>
+      await tx.query.workspaces.findFirst({
+        where: {
+          id: { eq: workspaceId },
+        },
+        columns: { id: true, organizationId: true },
+      }),
+  );
   if (!workspace) {
     panic(`Matter Activity target workspace not found: ${workspaceId}`);
   }
 
-  const members = await rootDb.query.workspaceMembers.findMany({
-    where: { workspaceId: { eq: workspaceId } },
-    columns: { userId: true },
-    limit: 2,
-  });
+  const members = await db.transaction(
+    async (tx) =>
+      await tx.query.workspaceMembers.findMany({
+        where: { workspaceId: { eq: workspaceId } },
+        columns: { userId: true },
+        limit: 2,
+      }),
+  );
   const configuredUserIdValue = process.env["MATTER_ACTIVITY_USER_ID"];
   const configuredUserId = configuredUserIdValue
     ? toSafeId<"user">(configuredUserIdValue)
@@ -61,13 +68,16 @@ export const seedMatterActivity = async () => {
       : undefined;
   const requestedUserId = configuredUserId ?? defaultUserId;
   const requestedMembership = requestedUserId
-    ? await rootDb.query.workspaceMembers.findFirst({
-        where: {
-          workspaceId: { eq: workspaceId },
-          userId: { eq: requestedUserId },
-        },
-        columns: { userId: true },
-      })
+    ? await db.transaction(
+        async (tx) =>
+          await tx.query.workspaceMembers.findFirst({
+            where: {
+              workspaceId: { eq: workspaceId },
+              userId: { eq: requestedUserId },
+            },
+            columns: { userId: true },
+          }),
+      )
     : undefined;
   const primaryUserId = requestedMembership?.userId ?? members.at(0)?.userId;
   if (!primaryUserId || (requestedUserId && !requestedMembership)) {
@@ -77,10 +87,13 @@ export const seedMatterActivity = async () => {
     members.find(({ userId }) => userId !== primaryUserId)?.userId ??
     primaryUserId;
 
-  const document = await rootDb.query.entities.findFirst({
-    where: { workspaceId: { eq: workspaceId }, kind: { eq: "document" } },
-    columns: { id: true },
-  });
+  const document = await db.transaction(
+    async (tx) =>
+      await tx.query.entities.findFirst({
+        where: { workspaceId: { eq: workspaceId }, kind: { eq: "document" } },
+        columns: { id: true },
+      }),
+  );
   if (!document) {
     panic("Matter Activity target workspace must contain a document.");
   }
@@ -94,7 +107,7 @@ export const seedMatterActivity = async () => {
   const groupId = (label: string) => seedId(`${workspaceId}-${label}`);
 
   const now = new Date();
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     await tx
       .insert(entities)
       .values({
@@ -299,10 +312,13 @@ export const seedMatterActivity = async () => {
     );
   });
 
-  await rootDb
-    .update(workspaces)
-    .set({ lastActivityAt: now })
-    .where(eq(workspaces.id, workspaceId));
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: now })
+        .where(eq(workspaces.id, workspaceId)),
+  );
 
   console.log(
     `Seeded Matter Activity in ${workspaceId}: 9 events across 3 days.`,

@@ -12,7 +12,7 @@ type SESTransportConfig = {
   configurationSetName?: string;
 };
 
-// eslint-disable-next-line unicorn/text-encoding-identifier-case -- IANA-standard name required by AWS SES API
+// oxlint-disable-next-line unicorn/text-encoding-identifier-case -- IANA-standard name required by AWS SES API
 const SES_CHARSET = "UTF-8";
 
 export const createSESTransport = (

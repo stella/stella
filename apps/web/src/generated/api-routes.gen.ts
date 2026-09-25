@@ -2,13 +2,13 @@
 // WebApiContract in apps/api/src/eden-contract.ts. Do not edit.
 // Regenerate: bun --filter @stll/api gen:web-api-types
 import type { toolApprovalCapability as __symbol0 } from "../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.js";
-import type { ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
+import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
 import type { CentsAmount as stll_money_CentsAmount } from "@stll/money";
 import type { FieldDateFormat as stll_template_conditions_FieldDateFormat, NamedCondition as stll_template_conditions_NamedCondition } from "@stll/template-conditions";
-import type { AudioPart as tanstack_ai_AudioPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
+import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
 import type { TextPart as tanstack_ai_client_TextPart, ThinkingPart as tanstack_ai_client_ThinkingPart, ToolResultPart as tanstack_ai_client_ToolResultPart, UIMessage as tanstack_ai_client_UIMessage } from "@tanstack/ai-client";
 import type { Brand as valibot_Brand } from "valibot";
 
@@ -641,7 +641,7 @@ export type WebRoutes = {
               email: string;
               name: string;
               detectedCountry: T432e07d100;
-              createdAt: Date;
+              createdAt: string;
             }>;
             nextCursor: T432e07d100;
             limit: number;
@@ -1766,8 +1766,8 @@ export type WebRoutes = {
               readonly fieldCount: number;
               readonly sizeBytes: number;
               readonly categoryId: T988e7b2faa;
-              readonly createdAt: Date;
-              readonly updatedAt: Date;
+              readonly createdAt: string;
+              readonly updatedAt: string;
               readonly lastUsedAt: T4124e1264c;
               readonly useCount: number;
               readonly tags: T97430ff0f7;
@@ -2366,8 +2366,8 @@ export type WebRoutes = {
               };
               tags: T97430ff0f7;
               id: T1173055df0;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
               createdBy: string;
               fieldCount: number;
               fileName: string;
@@ -2491,7 +2491,7 @@ export type WebRoutes = {
               id: T1173055df0;
               name: string;
               fieldCount: number;
-              updatedAt: Date;
+              updatedAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -2533,7 +2533,7 @@ export type WebRoutes = {
               200: {
                 name: string;
                 id: T1173055df0;
-                updatedAt: Date;
+                updatedAt: string;
                 fieldCount: number;
               };
               400: Tc642053948;
@@ -2615,7 +2615,7 @@ export type WebRoutes = {
                   id: Teb6522997d;
                   version: number;
                   fieldCount: number;
-                  createdAt: Date;
+                  createdAt: string;
                   author: (null | {
                     name: string;
                     image: T432e07d100;
@@ -2706,7 +2706,7 @@ export type WebRoutes = {
                   id: Teb6522997d;
                   version: number;
                   fieldCount: number;
-                  createdAt: Date;
+                  createdAt: string;
                   downloadUrl: string;
                 };
                 400: Tc642053948;
@@ -2865,7 +2865,7 @@ export type WebRoutes = {
                   clauseVersionId: T439317a49b;
                   slotName: T432e07d100;
                   sortOrder: number;
-                  insertedAt: Date;
+                  insertedAt: string;
                   clause: (null | {
                     title: string;
                     id: T3cde614388;
@@ -2950,7 +2950,7 @@ export type WebRoutes = {
                 clauseVersionId: T439317a49b;
                 slotName: T432e07d100;
                 sortOrder: number;
-                insertedAt: Date;
+                insertedAt: string;
               };
               400: {
                 code?: string;
@@ -3630,8 +3630,8 @@ export type WebRoutes = {
                 scope: T432e07d100;
                 expiresAt: T4124e1264c;
                 lastUsedAt: T4124e1264c;
-                createdAt: Date;
-                updatedAt: Date;
+                createdAt: string;
+                updatedAt: string;
               }>;
             };
             400: Tc642053948;
@@ -3846,7 +3846,7 @@ export type WebRoutes = {
               readonly phones: T59ad5fb938;
               readonly tags: T97430ff0f7;
               readonly color: T432e07d100;
-              readonly createdAt: Date;
+              readonly createdAt: string;
               readonly clientMatterCount: number;
             }>;
             nextCursor: T432e07d100;
@@ -4267,8 +4267,8 @@ export type WebRoutes = {
             type: Te287bedd42;
             metadata: T6ef87eb7c7;
             id: T938d9cc2e1;
-            createdAt: Date;
-            updatedAt: Date;
+            createdAt: string;
+            updatedAt: string;
             createdBy: T432e07d100;
             displayName: string;
             firstName: T432e07d100;
@@ -4511,12 +4511,12 @@ export type WebRoutes = {
               clientMatters: Array<{
                 name: string;
                 id: Teb5c753062;
-                createdAt: Date;
+                createdAt: string;
                 color: T432e07d100;
               }>;
               partyMatters: Array<{
                 color: T432e07d100;
-                createdAt: Date;
+                createdAt: string;
                 id: Teb5c753062;
                 name: string;
                 roles: Array<T8e2a10c549>;
@@ -4526,8 +4526,8 @@ export type WebRoutes = {
               type: Te287bedd42;
               metadata: T6ef87eb7c7;
               id: T938d9cc2e1;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
               createdBy: T432e07d100;
               displayName: string;
               firstName: T432e07d100;
@@ -5630,7 +5630,7 @@ export type WebRoutes = {
               content: Tfcce4260b1;
               kinds: T75e7369e19;
               role: T875ec33b50;
-              createdAt: Date;
+              createdAt: string;
             } | {
               tool: {
                 dependencies: Array<Tce28b0606f>;
@@ -5645,7 +5645,7 @@ export type WebRoutes = {
               content: Tfcce4260b1;
               kinds: T75e7369e19;
               role: T875ec33b50;
-              createdAt: Date;
+              createdAt: string;
             } | {
               tool: {
                 version: 1;
@@ -5660,7 +5660,7 @@ export type WebRoutes = {
               content: Tfcce4260b1;
               kinds: T75e7369e19;
               role: T875ec33b50;
-              createdAt: Date;
+              createdAt: string;
             }>;
             400: Tc642053948;
             401: Tc642053948;
@@ -5826,7 +5826,7 @@ export type WebRoutes = {
                 clientIcon: T432e07d100;
                 clientUri: T432e07d100;
                 scopes: Array<string>;
-                createdAt: Date;
+                createdAt: string;
                 referenceId: T432e07d100;
                 organizationName: T432e07d100;
               }>;
@@ -6340,7 +6340,7 @@ export type WebRoutes = {
                 });
                 id: T9a509045a7;
                 workspaceId: Teb5c753062;
-                createdAt: Date;
+                createdAt: string;
                 priority: T432e07d100;
                 listItemType: Tbf94b8914e;
                 dueDate: T432e07d100;
@@ -6380,7 +6380,7 @@ export type WebRoutes = {
                   status: T432e07d100;
                   location: T432e07d100;
                   id: T9a509045a7;
-                  createdAt: Date;
+                  createdAt: string;
                   priority: T432e07d100;
                   listItemType: Tbf94b8914e;
                   dueDate: T432e07d100;
@@ -6407,7 +6407,7 @@ export type WebRoutes = {
                   assignees: Array<{
                     id: Tb09958ae39;
                     workspaceId: Teb5c753062;
-                    createdAt: Date;
+                    createdAt: string;
                     entityId: T9a509045a7;
                     role: Tad3978d98f;
                     userId: string;
@@ -6422,7 +6422,7 @@ export type WebRoutes = {
                 assignees: Array<{
                   id: Tb09958ae39;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
+                  createdAt: string;
                   entityId: T9a509045a7;
                   role: Tad3978d98f;
                   userId: string;
@@ -6458,7 +6458,7 @@ export type WebRoutes = {
                     eTag: string;
                     webUrl: string;
                   });
-                  createdAt: Date;
+                  createdAt: string;
                   createdBy: T432e07d100;
                   entityId: T9a509045a7;
                   label: T432e07d100;
@@ -6482,8 +6482,8 @@ export type WebRoutes = {
                   status: T308fce9321;
                   type: T888e660ed8;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                   entityId: T9a509045a7;
                   sourceType: Tc76e62dca7;
                   createdByUserId: T432e07d100;
@@ -6537,7 +6537,7 @@ export type WebRoutes = {
                       previousStatus: Ta56b4ba098;
                       nextStatus: Ta56b4ba098;
                     };
-                    occurredAt: Date;
+                    occurredAt: string;
                     actorUserId: T432e07d100;
                     obligationEntityId: T9a509045a7;
                     actor: (null | {
@@ -6557,7 +6557,7 @@ export type WebRoutes = {
                 linksAsSource: Array<{
                   id: Tbcf4936bb0;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
+                  createdAt: string;
                   linkType: string;
                   sourceEntityId: T9a509045a7;
                   targetEntityId: T9a509045a7;
@@ -6570,7 +6570,7 @@ export type WebRoutes = {
                 linksAsTarget: Array<{
                   id: Tbcf4936bb0;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
+                  createdAt: string;
                   linkType: string;
                   sourceEntityId: T9a509045a7;
                   targetEntityId: T9a509045a7;
@@ -6846,7 +6846,7 @@ export type WebRoutes = {
                   });
                   id: Tbcf4936bb0;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
+                  createdAt: string;
                   linkType: string;
                   sourceEntityId: T9a509045a7;
                   targetEntityId: T9a509045a7;
@@ -6898,8 +6898,8 @@ export type WebRoutes = {
               language: T432e07d100;
               description: T432e07d100;
               currentVersion: number;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
             }>;
             nextCursor: T432e07d100;
             limit: number;
@@ -6961,7 +6961,7 @@ export type WebRoutes = {
             title: string;
             categoryId: Tb85b0b5de5;
             currentVersion: number;
-            createdAt: Date;
+            createdAt: string;
           };
           400: Tc642053948;
           401: Tc642053948;
@@ -7187,21 +7187,21 @@ export type WebRoutes = {
               title: string;
               id: T3cde614388;
               language: T432e07d100;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
               createdBy: string;
               categoryId: Tb85b0b5de5;
               currentVersion: number;
               usageNotes: T432e07d100;
               versions: Array<{
                 id: T7256bc01d8;
-                createdAt: Date;
+                createdAt: string;
                 version: number;
               }>;
               variants: Array<{
                 body: Array<Te9707abbcc>;
                 id: T38aa50e8be;
-                createdAt: Date;
+                createdAt: string;
                 label: string;
                 sortOrder: number;
               }>;
@@ -7268,7 +7268,7 @@ export type WebRoutes = {
               title: string;
               categoryId: Tb85b0b5de5;
               currentVersion: number;
-              updatedAt: Date;
+              updatedAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -7345,7 +7345,7 @@ export type WebRoutes = {
                 200: {
                   body: Array<Te9707abbcc>;
                   id: T7256bc01d8;
-                  createdAt: Date;
+                  createdAt: string;
                   version: number;
                 };
                 400: Tc642053948;
@@ -7479,7 +7479,7 @@ export type WebRoutes = {
                   200: {
                     id: T3cde614388;
                     currentVersion: number;
-                    updatedAt: Date;
+                    updatedAt: string;
                   };
                   400: Tc642053948;
                   401: Tc642053948;
@@ -7523,8 +7523,8 @@ export type WebRoutes = {
                 variants: Array<{
                   body: Array<Te9707abbcc>;
                   id: T38aa50e8be;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                   label: string;
                   sortOrder: number;
                 }>;
@@ -7586,7 +7586,7 @@ export type WebRoutes = {
                 id: T38aa50e8be;
                 label: string;
                 sortOrder: number;
-                createdAt: Date;
+                createdAt: string;
               };
               400: Tc642053948;
               401: Tc642053948;
@@ -7648,7 +7648,7 @@ export type WebRoutes = {
                   id: T38aa50e8be;
                   label: string;
                   sortOrder: number;
-                  updatedAt: Date;
+                  updatedAt: string;
                 };
                 400: Tc642053948;
                 401: Tc642053948;
@@ -7967,8 +7967,8 @@ export type WebRoutes = {
                 id: string;
                 origin: stll_api_contract_ChatThreadOrigin;
                 title: string;
-                createdAt: Date;
-                updatedAt: Date;
+                createdAt: string;
+                updatedAt: string;
                 usedAnonymization: T1bdf39f14a;
               }>;
               nextCursor: T432e07d100;
@@ -7979,8 +7979,8 @@ export type WebRoutes = {
                   id: string;
                   origin: stll_api_contract_ChatThreadOrigin;
                   title: string;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                   usedAnonymization: T1bdf39f14a;
                 }>;
               }>;
@@ -10885,8 +10885,8 @@ export type WebRoutes = {
               clientId: Ta197d6f640;
               color: T432e07d100;
               leadUserId: T432e07d100;
-              lastActivityAt: Date;
-              createdAt: Date;
+              lastActivityAt: string;
+              createdAt: string;
               client: (null | {
                 id: T938d9cc2e1;
                 displayName: string;
@@ -11057,8 +11057,8 @@ export type WebRoutes = {
               status: T9c6eb40403;
               reference: string;
               id: Teb5c753062;
-              lastActivityAt: Date;
-              createdAt: Date;
+              lastActivityAt: string;
+              createdAt: string;
               billingReference: T432e07d100;
               color: T432e07d100;
               organizationId: Tf4965e37f8;
@@ -12097,7 +12097,7 @@ export type WebRoutes = {
               200: Array<{
                 id: Ta28b1867ef;
                 workspaceId: Teb5c753062;
-                createdAt: Date;
+                createdAt: string;
                 contactId: T938d9cc2e1;
                 role: T8e2a10c549;
                 isPrimary: T1bdf39f14a;
@@ -12152,7 +12152,7 @@ export type WebRoutes = {
               200: {
                 id: Ta28b1867ef;
                 workspaceId: Teb5c753062;
-                createdAt: Date;
+                createdAt: string;
                 contactId: T938d9cc2e1;
                 role: T8e2a10c549;
                 isPrimary: T1bdf39f14a;
@@ -12243,7 +12243,7 @@ export type WebRoutes = {
                   variants: Array<string>;
                   enabled: T1bdf39f14a;
                   createdBy: T432e07d100;
-                  createdAt: Date;
+                  createdAt: string;
                 }>;
               };
               400: Tc642053948;
@@ -12376,7 +12376,7 @@ export type WebRoutes = {
                   label: string;
                   canonical: string;
                   createdBy: T432e07d100;
-                  createdAt: Date;
+                  createdAt: string;
                 }>;
               };
               400: Tc642053948;
@@ -12499,7 +12499,7 @@ export type WebRoutes = {
             response: {
               200: Array<{
                 id: T6f65fd94a6;
-                createdAt: Date;
+                createdAt: string;
                 userId: string;
                 user: (null | {
                   name: string;
@@ -12547,7 +12547,7 @@ export type WebRoutes = {
               200: {
                 id: T6f65fd94a6;
                 userId: string;
-                createdAt: Date;
+                createdAt: string;
               };
               400: Tc642053948;
               401: Tc642053948;
@@ -13435,7 +13435,7 @@ export type WebRoutes = {
                       outputEntityId: T6b73348afa;
                       outputFieldId: Tdb872dbe7d;
                       outputFileName: T432e07d100;
-                      createdAt: Date;
+                      createdAt: string;
                       startedAt: T4124e1264c;
                       finishedAt: T4124e1264c;
                     };
@@ -13622,7 +13622,7 @@ export type WebRoutes = {
                       targetLang: string;
                       total: number;
                       completed: number;
-                      createdAt: Date;
+                      createdAt: string;
                       startedAt: T4124e1264c;
                       finishedAt: T4124e1264c;
                     };
@@ -14619,7 +14619,7 @@ export type WebRoutes = {
                 accountLabel: T432e07d100;
                 expiresAt: T4124e1264c;
                 lastUsedAt: T4124e1264c;
-                createdAt: Date;
+                createdAt: string;
               });
             };
             400: Tc642053948;
@@ -17765,7 +17765,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  createdAt: Date;
+                  createdAt: string;
                   items: Array<{
                     ref: string;
                     id: T95a4a01f59;
@@ -17823,7 +17823,7 @@ export type WebRoutes = {
                     area: string;
                     status: ("pending" | "accepted" | "rejected");
                     appliedMode: (null | "direct" | "suggested" | "tracked-changes");
-                    createdAt: Date;
+                    createdAt: string;
                     origin: ("review" | "chat");
                   }>;
                   nextCursor: T432e07d100;
@@ -18021,8 +18021,8 @@ export type WebRoutes = {
               name: string;
               fileName: string;
               sizeBytes: number;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
             }>;
             styleSetsCountLimit: 100;
             nextCursor: T432e07d100;
@@ -18064,7 +18064,7 @@ export type WebRoutes = {
           200: {
             id: T52d277c57b;
             name: string;
-            updatedAt: Date;
+            updatedAt: string;
           };
           400: Tc642053948;
           401: Tc642053948;
@@ -18214,7 +18214,7 @@ export type WebRoutes = {
             200: {
               id: T52d277c57b;
               name: string;
-              updatedAt: Date;
+              updatedAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -18296,8 +18296,8 @@ export type WebRoutes = {
               name: string;
               fileName: string;
               sizeBytes: number;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -18339,7 +18339,7 @@ export type WebRoutes = {
               200: {
                 id: T52d277c57b;
                 name: string;
-                updatedAt: Date;
+                updatedAt: string;
               };
               400: Tc642053948;
               401: Tc642053948;
@@ -18379,7 +18379,7 @@ export type WebRoutes = {
             response: {
               200: {
                 name: string;
-                updatedAt: Date;
+                updatedAt: string;
                 settings: Ta3d11202d8;
               };
               400: Tc642053948;
@@ -18455,7 +18455,7 @@ export type WebRoutes = {
               200: {
                 id: T52d277c57b;
                 name: string;
-                updatedAt: Date;
+                updatedAt: string;
               };
               400: Tc642053948;
               401: Tc642053948;
@@ -18530,8 +18530,8 @@ export type WebRoutes = {
               name: string;
               description: T432e07d100;
               id: T9ccef839a9;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
               parentId: T988e7b2faa;
               sortOrder: number;
             }>;
@@ -18576,7 +18576,7 @@ export type WebRoutes = {
             name: string;
             description: T432e07d100;
             sortOrder: number;
-            createdAt: Date;
+            createdAt: string;
           };
           400: {
             code?: string;
@@ -18662,7 +18662,7 @@ export type WebRoutes = {
               name: string;
               description: T432e07d100;
               sortOrder: number;
-              updatedAt: Date;
+              updatedAt: string;
             };
             400: {
               code?: string;
@@ -19243,7 +19243,7 @@ export type WebRoutes = {
             name: string;
             description: T432e07d100;
             definition: stll_api_contract_TemplateRecipeDefinition;
-            createdAt: Date;
+            createdAt: string;
           };
           400: {
             code?: string;
@@ -20897,7 +20897,7 @@ export type WebRoutes = {
               audience: (null | "default" | "anonymized" | "documents" | "law");
               enabled: T1bdf39f14a;
               expiresAt: T4124e1264c;
-              createdAt: Date;
+              createdAt: string;
               lastRequest: T4124e1264c;
             }>;
             limit: number;
@@ -21068,8 +21068,8 @@ export type WebRoutes = {
               name: string;
               description: T432e07d100;
               id: Tf38d7a3340;
-              createdAt: Date;
-              updatedAt: Date;
+              createdAt: string;
+              updatedAt: string;
               parentId: Tb85b0b5de5;
               sortOrder: number;
             }>;
@@ -21114,7 +21114,7 @@ export type WebRoutes = {
             name: string;
             description: T432e07d100;
             sortOrder: number;
-            createdAt: Date;
+            createdAt: string;
           };
           400: Tc642053948;
           401: Tc642053948;
@@ -21160,7 +21160,7 @@ export type WebRoutes = {
               name: string;
               description: T432e07d100;
               sortOrder: number;
-              updatedAt: Date;
+              updatedAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -21253,8 +21253,8 @@ export type WebRoutes = {
                 endOffset: number;
                 quote: string;
                 body: T432e07d100;
-                createdAt: Date;
-                updatedAt: Date;
+                createdAt: string;
+                updatedAt: string;
               }>;
               nextCursor: T432e07d100;
             };
@@ -21609,7 +21609,7 @@ export type WebRoutes = {
           200: {
             items: Array<{
               id: T0beb2a0a9f;
-              createdAt: Date;
+              createdAt: string;
               action: string;
               resourceType: string;
               resourceId: string;
@@ -21757,7 +21757,7 @@ export type WebRoutes = {
                 sourceUrl: T432e07d100;
                 headnote: Tdf8a0dc6ac;
                 citationCount: number;
-                createdAt: Date;
+                createdAt: string;
               }>;
               nextCursor: T432e07d100;
               limit: number;
@@ -22830,9 +22830,9 @@ export type WebRoutes = {
                       id: string;
                       language: string;
                       slug: T432e07d100;
-                      updatedAt: Date;
+                      updatedAt: string;
                     }>;
-                    updatedAt: Date;
+                    updatedAt: string;
                   }>;
                   limit: 5000;
                   nextCursor: null;
@@ -23462,7 +23462,7 @@ export type WebRoutes = {
                   decisionId: Tf4b485f2ea;
                   note: T432e07d100;
                   linkedBy: string;
-                  createdAt: Date;
+                  createdAt: string;
                   decision: {
                     id: Tf4b485f2ea;
                     caseNumber: string;
@@ -23815,7 +23815,7 @@ export type WebRoutes = {
               command: T432e07d100;
               body: T432e07d100;
               userId: string;
-              createdAt: Date;
+              createdAt: string;
             }>;
             limit: number;
             nextCursor: T432e07d100;
@@ -23916,7 +23916,7 @@ export type WebRoutes = {
               enabled: T1bdf39f14a;
               body: string;
               command: T432e07d100;
-              createdAt: Date;
+              createdAt: string;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -24617,8 +24617,8 @@ export type WebRoutes = {
                   revisionNumber: number;
                   contentHash: string;
                   createdBy: T432e07d100;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                 }>;
               };
               400: Tc642053948;
@@ -24666,8 +24666,8 @@ export type WebRoutes = {
                   body: string;
                   contentHash: string;
                   createdBy: T432e07d100;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                 };
                 400: Tc642053948;
                 401: Tc642053948;
@@ -24717,8 +24717,8 @@ export type WebRoutes = {
                   reviewerId: T432e07d100;
                   decidedAt: T4124e1264c;
                   resultRevisionId: T61ca628658;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                 }>;
               };
               400: Tc642053948;
@@ -24771,8 +24771,8 @@ export type WebRoutes = {
                   reviewerId: T432e07d100;
                   decidedAt: T4124e1264c;
                   resultRevisionId: T61ca628658;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                   baseBody: string;
                 };
                 400: Tc642053948;
@@ -25048,7 +25048,7 @@ export type WebRoutes = {
                   readonly authorId: T432e07d100;
                   readonly resolvedAt: T4124e1264c;
                   readonly resolvedBy: T432e07d100;
-                  readonly createdAt: Date;
+                  readonly createdAt: string;
                 }>;
               };
               400: Tc642053948;
@@ -25717,8 +25717,8 @@ export type WebRoutes = {
                 name: string;
                 description: T432e07d100;
                 status: Te9902600f8;
-                createdAt: Date;
-                updatedAt: Date;
+                createdAt: string;
+                updatedAt: string;
               }>;
               nextCursor: T432e07d100;
               limit: number;
@@ -26861,8 +26861,8 @@ export type WebRoutes = {
                     id: T00abe13820;
                     status: Td2f2107b0f;
                     instruction: string;
-                    createdAt: Date;
-                    updatedAt: Date;
+                    createdAt: string;
+                    updatedAt: string;
                     completedAt: T4124e1264c;
                   }>;
                   nextCursor: T432e07d100;
@@ -26911,15 +26911,15 @@ export type WebRoutes = {
                 name: string;
                 description: T432e07d100;
                 status: Te9902600f8;
-                createdAt: Date;
-                updatedAt: Date;
+                createdAt: string;
+                updatedAt: string;
                 itemCount: number;
                 sections: Array<{
                   name: string;
                   id: T7a2655a211;
                   workspaceId: Teb5c753062;
-                  createdAt: Date;
-                  updatedAt: Date;
+                  createdAt: string;
+                  updatedAt: string;
                   listId: T6709dca913;
                   position: string;
                 }>;
@@ -26984,8 +26984,8 @@ export type WebRoutes = {
                     position: string;
                     description: T432e07d100;
                     reviewStatus: ("verified" | "in_review" | "rejected" | "unreviewed" | "changes_requested");
-                    createdAt: Date;
-                    updatedAt: Date;
+                    createdAt: string;
+                    updatedAt: string;
                     factDetails: (null | {
                       occurredOn: T432e07d100;
                       occurredOnPrecision: T1c70c47ed9;
@@ -26999,7 +26999,7 @@ export type WebRoutes = {
                     customFields: Array<{
                       entityId: T9a509045a7;
                       propertyId: T80d841ed63;
-                      content: T533797319a;
+                      content: T491b5c09bf;
                     }>;
                   }>;
                   nextCursor: T432e07d100;
@@ -27056,7 +27056,7 @@ export type WebRoutes = {
                         action: string;
                         actorName: T432e07d100;
                         changes: Tab67d2a75b;
-                        createdAt: Date;
+                        createdAt: string;
                         operation: T432e07d100;
                       }>;
                       nextCursor: T432e07d100;
@@ -27119,7 +27119,7 @@ export type WebRoutes = {
                         verificationStatus: ("verified" | "unverified" | "rejected");
                         verifiedBy: T432e07d100;
                         verifiedAt: T4124e1264c;
-                        createdAt: Date;
+                        createdAt: string;
                       }>;
                       nextCursor: T432e07d100;
                       limit: number;
@@ -28975,7 +28975,7 @@ export type WebRoutes = {
                       fields: Array<{
                         id: T1c7a854487;
                         propertyId: T80d841ed63;
-                        content: T533797319a;
+                        content: T491b5c09bf;
                       }>;
                     };
                     400: Tc642053948;
@@ -29313,13 +29313,13 @@ export type WebRoutes = {
                   kind: T219ebda4a4;
                   name: string;
                   currentVersionId: T116a5c37c8;
-                  currentVersionCreatedAt: Date;
+                  currentVersionCreatedAt: string;
                   currentVersionReference: T432e07d100;
                   extractionFileFieldId: Tdb872dbe7d;
                   fields: Array<{
                     id: T1c7a854487;
                     propertyId: T80d841ed63;
-                    content: T533797319a;
+                    content: T491b5c09bf;
                   }>;
                 };
                 400: Tc642053948;
@@ -29562,7 +29562,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: any, context?: Ta2dc1740cf): any;
   };
@@ -29576,7 +29576,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29604,7 +29604,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Record<never, never>, context?: Ta2dc1740cf): unknown;
   };
@@ -29634,7 +29634,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Tf87d0b824c, context?: Ta2dc1740cf): unknown;
   };
@@ -29648,7 +29648,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29660,19 +29660,19 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "read_document";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29684,7 +29684,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29696,7 +29696,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29708,7 +29708,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29720,7 +29720,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29732,7 +29732,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29744,7 +29744,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29756,7 +29756,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29768,7 +29768,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29780,7 +29780,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29792,7 +29792,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29804,7 +29804,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29816,7 +29816,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29828,7 +29828,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29840,7 +29840,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29852,7 +29852,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29864,7 +29864,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29876,7 +29876,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29888,7 +29888,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29900,7 +29900,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29912,7 +29912,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -29956,7 +29956,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: false;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T78000c7c99, context?: Ta2dc1740cf): (T59c3f5062f | T561e5b54a2 | T2dc94a4ef0 | Te1221ee9e8 | Promise<T51cad8ef60>);
   };
@@ -30002,7 +30002,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: false;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T46f58f58fc, context?: Ta2dc1740cf): (T8a3caedfda | Promise<T8a3caedfda>);
   };
@@ -30016,7 +30016,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -30028,7 +30028,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -30040,7 +30040,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -30068,7 +30068,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Td220c5b82e, context?: Ta2dc1740cf): unknown;
   };
@@ -30098,7 +30098,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T527969c00a, context?: Ta2dc1740cf): unknown;
   };
@@ -30128,7 +30128,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T3a3428dc33, context?: Ta2dc1740cf): unknown;
   };
@@ -30158,7 +30158,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T66e35ccd51, context?: Ta2dc1740cf): unknown;
   };
@@ -30188,7 +30188,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T980f887156, context?: Ta2dc1740cf): unknown;
   };
@@ -30218,7 +30218,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Tfb9effd8c9, context?: Ta2dc1740cf): unknown;
   };
@@ -30248,7 +30248,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T8fa9d7c67b, context?: Ta2dc1740cf): unknown;
   };
@@ -30278,7 +30278,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T4c2454b604, context?: Ta2dc1740cf): unknown;
   };
@@ -30308,14 +30308,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T2e350463c1, context?: Ta2dc1740cf): unknown;
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "infosoud_lookup_case";
+  name: "use-browser";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30334,18 +30334,34 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly types?: undefined | T3432cdf68d;
     };
   };
-  outputSchema?: undefined;
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tba9914ae60;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T6d91cbfa6c;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T22dff6b3c2 | Promise<(T916c6c1f8b | T22dff6b3c2)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T6d91cbfa6c;
+    };
+  };
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
-    (args: Taa8bbb5904, context?: Ta2dc1740cf): unknown;
+    (args: Taa8bbb5904, context?: Ta2dc1740cf): (Ta33827f356 | T74581fa9f5 | Promise<Tde9f0e1d2b>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "update-entity-fields";
+  name: "infosoud_lookup_case";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30364,57 +30380,87 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly types?: undefined | Ta24f5c3087;
     };
   };
+  outputSchema?: undefined;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T8ff44a5c87;
+  execute?: {
+    (args: T2c9a2b8de1, context?: Ta2dc1740cf): unknown;
+  };
+  readonly [__symbol0]?: Tc9666df965;
+} | {
+  __toolSide: "client";
+  name: "update-entity-fields";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tba9914ae60;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | Teb4b46f294;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tec9bde9280 | Promise<(T916c6c1f8b | Tec9bde9280)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | Teb4b46f294;
+    };
+  };
   outputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tba9914ae60;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T557251045c;
+      readonly types?: undefined | T9c13fbf3ff;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tba0a2a4af3 | Promise<(T916c6c1f8b | Tba0a2a4af3)>);
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T47507ade46 | Promise<(T916c6c1f8b | T47507ade46)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T557251045c;
+      readonly types?: undefined | T9c13fbf3ff;
     };
   };
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
-    (args: T2c9a2b8de1, context?: Ta2dc1740cf): (T3d16f860ff | Promise<T3d16f860ff>);
+    (args: Tb2c7942b11, context?: Ta2dc1740cf): (Tf1bf25fb4a | Promise<Tf1bf25fb4a>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "suggest_changes";
   description: string;
-  inputSchema?: Td09f3f3108 | {
+  inputSchema?: T8ff44a5c87 | {
     readonly "~standard": {
       readonly jsonSchema: Tba9914ae60;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tad20dce351;
+      readonly types?: undefined | T1514b5c1a2;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tece462aa22 | Promise<(T916c6c1f8b | Tece462aa22)>);
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T5b41c36554 | Promise<(T916c6c1f8b | T5b41c36554)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tad20dce351;
+      readonly types?: undefined | T1514b5c1a2;
     };
   };
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: unknown, context?: Ta2dc1740cf): unknown;
   };
@@ -30423,183 +30469,137 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   __toolSide: "client";
   name: "get_document_outline";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "read_section";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "list_stories";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "read_story";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "find_text";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "read_comments";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "read_changes";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "add_comment";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "reply_comment";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "resolve_comment";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "show_in_document";
   description: string;
-  inputSchema?: Td09f3f3108;
+  inputSchema?: T8ff44a5c87;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T78fb706128;
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
   name: "create_matter_document";
-  description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tba9914ae60;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | T982ae915eb;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T53b5147e55 | Promise<(T916c6c1f8b | T53b5147e55)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | T982ae915eb;
-    };
-  };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tba9914ae60;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | T295e0f993e;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Ta8fc8ea2ad | Promise<(T916c6c1f8b | Ta8fc8ea2ad)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | T295e0f993e;
-    };
-  };
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: Td09f3f3108;
-  execute?: {
-    (args: T7a41dd6a7b, context?: Ta2dc1740cf): (T33e181e080 | Promise<T33e181e080>);
-  };
-  readonly [__symbol0]?: Tc9666df965;
-} | {
-  __toolSide: "client";
-  name: "web_search";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30638,14 +30638,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Tf477029a44, context?: Ta2dc1740cf): (T36734b71d6 | Promise<T36734b71d6>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "fetch_url";
+  name: "web_search";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30684,14 +30684,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T74114cb775, context?: Ta2dc1740cf): (Ta2cb9f1c54 | Promise<Ta2cb9f1c54>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "search-chat-history";
+  name: "fetch_url";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30730,14 +30730,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T1214881f9f, context?: Ta2dc1740cf): (T7020765e60 | Promise<T7020765e60>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "expand-chat-history";
+  name: "search-chat-history";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30776,68 +30776,84 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Tcb4e2e17b4, context?: Ta2dc1740cf): (Tccbcb316fa | Promise<Tccbcb316fa>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "search-past-chats";
-  description: string;
-  inputSchema?: T72880ed30d;
-  outputSchema?: Tfa609f319e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: Td09f3f3108;
-  execute?: T5dbacf96e7;
-  readonly [__symbol0]?: Tc9666df965;
-} | {
-  __toolSide: "client";
-  name: "search-all-past-chats";
-  description: string;
-  inputSchema?: T72880ed30d;
-  outputSchema?: Tfa609f319e;
-  needsApproval?: true;
-  approvalSchema?: undefined;
-  lazy?: false | true;
-  metadata?: Td09f3f3108;
-  execute?: T5dbacf96e7;
-  readonly [__symbol0]?: Tc9666df965;
-} | {
-  __toolSide: "client";
-  name: "describe_template";
+  name: "expand-chat-history";
   description: string;
   inputSchema?: {
     readonly "~standard": {
       readonly jsonSchema: Tba9914ae60;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T2f4709c888;
+      readonly types?: undefined | T151c8c8adf;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Td4b7fddf97 | Promise<(T916c6c1f8b | Td4b7fddf97)>);
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tf9791990e8 | Promise<(T916c6c1f8b | Tf9791990e8)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T2f4709c888;
+      readonly types?: undefined | T151c8c8adf;
     };
   };
-  outputSchema?: undefined;
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tba9914ae60;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T4d93baa3cf;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T82a15f6a03 | Promise<(T916c6c1f8b | T82a15f6a03)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T4d93baa3cf;
+    };
+  };
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
-    (args: T93f05f2bc9, context?: Ta2dc1740cf): unknown;
+    (args: T64efadf7d1, context?: Ta2dc1740cf): (T8387742e1c | Promise<T8387742e1c>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "suggest_template_fields";
+  name: "search-past-chats";
+  description: string;
+  inputSchema?: T7893435901;
+  outputSchema?: T6585d3a53b;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T8ff44a5c87;
+  execute?: Tf6b700038f;
+  readonly [__symbol0]?: Tc9666df965;
+} | {
+  __toolSide: "client";
+  name: "search-all-past-chats";
+  description: string;
+  inputSchema?: T7893435901;
+  outputSchema?: T6585d3a53b;
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T8ff44a5c87;
+  execute?: Tf6b700038f;
+  readonly [__symbol0]?: Tc9666df965;
+} | {
+  __toolSide: "client";
+  name: "describe_template";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30860,14 +30876,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Tf74132cd3e, context?: Ta2dc1740cf): unknown;
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "review_folder_consistency";
+  name: "suggest_template_fields";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30886,34 +30902,18 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly types?: undefined | Tffce8f1b46;
     };
   };
-  outputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tba9914ae60;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | Taf8f77d898;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Ta4255119d0 | Promise<(T916c6c1f8b | Ta4255119d0)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: undefined | Taf8f77d898;
-    };
-  };
+  outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
-    (args: Taccc62a1a5, context?: Ta2dc1740cf): (Tffa11b61c2 | Promise<Tffa11b61c2>);
+    (args: Taccc62a1a5, context?: Ta2dc1740cf): unknown;
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "spawn_subagents";
+  name: "review_folder_consistency";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30952,14 +30952,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: T424c5f5482, context?: Ta2dc1740cf): (Tee61f4ed5c | Promise<Tee61f4ed5c>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
   __toolSide: "client";
-  name: "remember";
+  name: "spawn_subagents";
   description: string;
   inputSchema?: {
     readonly "~standard": {
@@ -30998,9 +30998,55 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: {
     (args: Ta7d8e78679, context?: Ta2dc1740cf): (T162fd4d3a0 | Promise<T162fd4d3a0>);
+  };
+  readonly [__symbol0]?: Tc9666df965;
+} | {
+  __toolSide: "client";
+  name: "remember";
+  description: string;
+  inputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tba9914ae60;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T25d1a44208;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T1a2df2c222 | Promise<(T916c6c1f8b | T1a2df2c222)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T25d1a44208;
+    };
+  };
+  outputSchema?: {
+    readonly "~standard": {
+      readonly jsonSchema: Tba9914ae60;
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T6f4f928320;
+    };
+  } & {
+    readonly "~standard": {
+      readonly validate: {
+        (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Te2e7aaef1d | Promise<(T916c6c1f8b | Te2e7aaef1d)>);
+      };
+      readonly version: 1;
+      readonly vendor: string;
+      readonly types?: undefined | T6f4f928320;
+    };
+  };
+  needsApproval?: true;
+  approvalSchema?: undefined;
+  lazy?: false | true;
+  metadata?: T8ff44a5c87;
+  execute?: {
+    (args: T126fdd24cb, context?: Ta2dc1740cf): (T97154a1463 | Promise<T97154a1463>);
   };
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -31012,7 +31058,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 } | {
@@ -31024,14 +31070,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
-  metadata?: Td09f3f3108;
+  metadata?: T8ff44a5c87;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
 }>, unknown> & {
   metadata?: T0122da017b;
 });
 
-export type ChatPart = Tff5735a10a;
+export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Taf8c16946a | Tbe97c83005 | Te802d84b37 | T4d74f1977d | T43f8512c42 | T6b9f6d95b0 | T2ce1dcd2d1 | T7b4b1ae2d6 | Te415da5e99 | T6de3346f48 | T0de167a39e | T15f9bd0b08 | Tac6a8b45ed | Tb907617eea | Te692f74bf1 | T8bd8879a52 | T8345aa93a5 | T76f59c27ef | Tdbc99a28d8 | Tc5060b6d6f | T1932d07b54 | T73ca6eeca2 | T9f9de186a2 | T94fccf15e8 | Ta68caeef2b | Tad35539127 | Tcbc1d9afe8 | T5c8b4fa5e4 | Tf6d539f6f9 | Tc6723fc695 | T55a7904a23 | T84d7e563d2 | T8138772153 | Teb831cdd61 | Tb100969417 | T4ad701fc7d | Tb183ddee4b | T7b30d8cb42 | T41fa392e99 | Te4f7d177c0 | T1313862f74 | T3e6575ab3e | T62aafd0a7e | T337589194f | Tba62cffc90 | Tdc146c6ea6 | T8378cc1469 | T6a94b6a846 | Ta130d275b4 | T436fe4ed9b | Tabdd33f23f | Te993ddb640 | Tb5eb32574f | T047ab24e12 | Tad7bfc169a | Tcc64a82ef6 | T958623bd0c | T7b50fc6047 | Tc3a09169de | T069c4bbe58 | Ta3eb1f794b | Te417608c11 | Ta5ef597117 | T0c520e01bf | Tad1c33f9ec | T7901dca7c1 | T481f32db71 | Td758891541 | T1958bbf2de | Tfd818c98a8 | tanstack_ai_StructuredOutputPart<unknown>);
 
 export type ChatSourceDocument = T18f8f5f7e8;
 
@@ -31192,61 +31238,65 @@ export type ChatUITools = {
     input: T2e350463c1;
     output: unknown;
   };
-  infosoud_lookup_case: {
+  "use-browser": {
     input: Taa8bbb5904;
+    output: T1143a9d800;
+  };
+  infosoud_lookup_case: {
+    input: T2c9a2b8de1;
     output: unknown;
   };
   "update-entity-fields": {
-    input: T2c9a2b8de1;
-    output: T596c558ecb;
+    input: Tb2c7942b11;
+    output: T83e75a100c;
   };
   create_matter_document: {
-    input: T7a41dd6a7b;
-    output: T1d47fa3dc0;
-  };
-  web_search: {
     input: Tf477029a44;
     output: T55fe720a8c;
   };
-  fetch_url: {
+  web_search: {
     input: T74114cb775;
     output: T06fc334600;
   };
-  "search-chat-history": {
+  fetch_url: {
     input: T1214881f9f;
     output: T1f1ce35744;
   };
-  "expand-chat-history": {
+  "search-chat-history": {
     input: Tcb4e2e17b4;
     output: Tf7f2d88b62;
   };
-  "search-past-chats": {
+  "expand-chat-history": {
     input: T64efadf7d1;
     output: Tc6f587c6bd;
+  };
+  "search-past-chats": {
+    input: Tc7cb9678d1;
+    output: Td69e9e71d3;
   };
   "search-all-past-chats": {
-    input: T64efadf7d1;
-    output: Tc6f587c6bd;
+    input: Tc7cb9678d1;
+    output: Td69e9e71d3;
   };
   describe_template: {
-    input: T93f05f2bc9;
-    output: unknown;
-  };
-  suggest_template_fields: {
     input: Tf74132cd3e;
     output: unknown;
   };
-  review_folder_consistency: {
+  suggest_template_fields: {
     input: Taccc62a1a5;
-    output: Tde0e71406c;
+    output: unknown;
   };
-  spawn_subagents: {
+  review_folder_consistency: {
     input: T424c5f5482;
     output: T0720439bb0;
   };
-  remember: {
+  spawn_subagents: {
     input: Ta7d8e78679;
     output: Tea3eb4808d;
+  };
+  remember: {
+    input: T126fdd24cb;
+    output: T381fa8ea96;
   };
   execute_typescript: {
     input: unknown;
@@ -31265,7 +31315,7 @@ export type ChatUITools = {
     });
   };
   suggest_changes: {
-    input: T348917fbeb;
+    input: Tff2de0aa71;
     output: {
       success: true;
       versionId: string;
@@ -31583,6 +31633,16 @@ type T03f9b9c11b = {
   name: T432e07d100;
 };
 
+type T047ab24e12 = {
+  type: "tool-call";
+  id: string;
+  name: "reply_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T057e58854e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillRevision";
 };
@@ -31592,26 +31652,68 @@ type T06188f12f1 = {
   readonly output: Td7e6add81d;
 };
 
-type T069e650050 = "global" | "at" | "de" | "eu" | "sk" | "cz";
+type T069c4bbe58 = {
+  type: "tool-call";
+  id: string;
+  name: "search-chat-history";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: Tccbcb316fa;
+} & Te4ad2efe8c;
 
 type T06fc334600 = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: T1bdf39f14a;
-  provider: "jina";
+  query: string;
+  jurisdiction: Tff7d96076d;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: undefined | string;
+    source: string;
+    score?: undefined | number;
+  }>;
+  provider: "tavily";
+  answer?: undefined | string;
 };
 
 type T0720439bb0 = {
-  results: Array<{
-    index: number;
-    status: "completed";
-    result: string;
+  folder: {
+    folderRef: string;
+    name: string;
+  };
+  coverage: {
+    complete: T1bdf39f14a;
+    snapshotDocumentCount: number;
+    traversalDepthLimit: number;
+    additionalDescendantsMayExist: T1bdf39f14a;
+  };
+  documentsReviewed: Array<T8415f92f8d>;
+  documentsSkipped: Array<{
+    documentRef: string;
+    name: string;
+    reason: string;
+  }>;
+  documentsNotChecked: Array<T8415f92f8d>;
+  documentsNotCheckedOmittedCount: number;
+  review: string;
+  citations: Array<{
+    type: "docx-folio";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    passage: string;
+    blockId: string;
   } | {
-    index: number;
-    status: "failed";
-    error: string;
+    type: "pdf-bates";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    bates: string;
+    pageNumber: number;
   }>;
 };
 
@@ -31628,6 +31730,11 @@ type T0823792555 = {
 
 type T08bc488f5e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "aiMemory";
+};
+
+type T09ea2c2c78 = {
+  readonly value: Td69e9e71d3;
+  readonly issues?: undefined;
 };
 
 type T0a46fb6ba4 = "medium" | "high" | "low" | "blocker";
@@ -31703,6 +31810,16 @@ type T0bf624198d = {
   updatedAt: string;
 };
 
+type T0c520e01bf = {
+  type: "tool-call";
+  id: string;
+  name: "describe_template";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T0c8f4cf1e2 = {
   type: "file";
   version: 1;
@@ -31748,9 +31865,17 @@ type T0d213827f5 = {
   field: T8854c1a08e;
 };
 
-type T0e085dcc40 = "none" | "br_cpf_cnpj";
+type T0de167a39e = {
+  type: "tool-call";
+  id: string;
+  name: "save_matter";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
-type T0e8943eb14 = "matters" | "all-chats";
+type T0e085dcc40 = "none" | "br_cpf_cnpj";
 
 type T0eb9f816ff = {
   workspaceId?: Teb5c753062;
@@ -31767,6 +31892,7 @@ type T0eb9f816ff = {
   activeExternal?: Taf5ff5c24f;
   activeSkill?: T8649aae095;
   activeStatute?: Tc33c7b536f;
+  browserClient?: Td2073558e4;
   editApplyMode?: "auto" | "manual";
   docxEditRepresentation?: "direct" | "tracked-changes";
   devModelId?: string;
@@ -31794,6 +31920,33 @@ type T109fc089ae = {
   date: string;
 };
 
+type T1143a9d800 = {
+  protocolVersion: 3;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: undefined | string;
+      href?: undefined | string;
+      name: string;
+      ref: string;
+      role: string;
+      value?: undefined | string;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
+} | {
+  code: T237fe0fe5e;
+  message: string;
+  protocolVersion: 3;
+  status: "error";
+};
+
 type T114f58ccca = "search" | "fetch";
 
 type T1168738ff9 = {
@@ -31810,8 +31963,14 @@ type T1173055df0 = string & valibot_Brand<"SafeId"> & {
 };
 
 type T1214881f9f = {
-  query: string;
-  limit?: undefined | number;
+  url: string;
+  maxChars?: undefined | number;
+};
+
+type T126fdd24cb = {
+  content: string;
+  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
+  scope?: undefined | "workspace" | "user";
 };
 
 type T129a6d450b = {
@@ -31824,6 +31983,16 @@ type T129a6d450b = {
 } | {
   authType: "none";
 };
+
+type T1313862f74 = {
+  type: "tool-call";
+  id: string;
+  name: "borme_get_summary";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T136bf514df = {
   index: number;
@@ -32007,6 +32176,11 @@ type T15125483db = {
   playbookId: T6ebb5b60ba;
 };
 
+type T1514b5c1a2 = {
+  readonly input: Tff2de0aa71;
+  readonly output: Tff2de0aa71;
+};
+
 type T151c8c8adf = {
   readonly input: T64efadf7d1;
   readonly output: Tc69524a13b;
@@ -32017,8 +32191,26 @@ type T15a377c39a = {
   reason: string;
 };
 
+type T15f9bd0b08 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_matter";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T162fd4d3a0 = {
-  status: "saved";
+  results: Array<{
+    index: number;
+    status: "completed";
+    result: string;
+  } | {
+    index: number;
+    status: "failed";
+    error: string;
+  }>;
 };
 
 type T16953276e4 = {
@@ -32029,6 +32221,14 @@ type T16953276e4 = {
 type T1754ed2395 = 1 | 2 | 3 | 4 | 5 | 6;
 
 type T178e72f979 = "accepted" | "rejected";
+
+type T18e3b024e1 = {
+  context?: undefined | string;
+  href?: undefined | string;
+  name: string;
+  ref: string;
+  role: string;
+};
 
 type T18f8f5f7e8 = {
   entityId: string;
@@ -32044,6 +32244,26 @@ type T18f8f5f7e8 = {
 type T192572b4c1 = {
   workspaceId: string;
 };
+
+type T1932d07b54 = {
+  type: "tool-call";
+  id: string;
+  name: "run_playbook";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type T1958bbf2de = {
+  type: "tool-call";
+  id: string;
+  name: "execute_typescript";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T196b4403fb = {
   path: string;
@@ -32080,13 +32300,18 @@ type T1a148d287c = {
   requiredFields?: Array<T196b4403fb>;
 };
 
+type T1a2df2c222 = {
+  readonly value: Tef51a766c6;
+  readonly issues?: undefined;
+};
+
 type T1a4826e1af = {
   id: T7524b2c883;
   decisionId: Tf4b485f2ea;
   workspaceId: Teb5c753062;
   note: T432e07d100;
   linkedBy: string;
-  createdAt: Date;
+  createdAt: string;
 };
 
 type T1a6d2d119a = {
@@ -32128,15 +32353,6 @@ type T1c70c47ed9 = null | "year" | "month" | "day";
 
 type T1c7a854487 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "field";
-};
-
-type T1d47fa3dc0 = {
-  success: true;
-  fileName: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
 };
 
 type T1db05d7243 = {
@@ -32184,13 +32400,12 @@ type T1eec80096a = {
 };
 
 type T1f1ce35744 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
+  url: string;
+  title?: undefined | string;
+  publishedAt?: undefined | string;
+  content: string;
+  truncated: T1bdf39f14a;
+  provider: "jina";
 };
 
 type T1f92bc3afa = "url" | "authored" | "bundled" | "upload";
@@ -32245,6 +32460,13 @@ type T22668e5fed = {
   packId: string;
 };
 
+type T22dff6b3c2 = {
+  readonly value: T1143a9d800;
+  readonly issues?: undefined;
+};
+
+type T237fe0fe5e = "disconnected" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-closed" | "timed-out" | "unsupported-page";
+
 type T2430547df2 = {
   readonly error: "Not Found";
 };
@@ -32259,6 +32481,11 @@ type T24da1e86c5 = {
 type T24df5d72b3 = {
   type: "pending";
   version: 1;
+};
+
+type T25d1a44208 = {
+  readonly input: T126fdd24cb;
+  readonly output: Tef51a766c6;
 };
 
 type T2609ebaa39 = null | T976b70d646;
@@ -32289,11 +32516,6 @@ type T28f55fc43c = null | Array<{
   title: T432e07d100;
   text: string;
 }>;
-
-type T295e0f993e = {
-  readonly input: T33e181e080;
-  readonly output: T1d47fa3dc0;
-};
 
 type T2985b4f624 = {
   readonly value: Record<never, never>;
@@ -32357,7 +32579,7 @@ type T2b12d7c01e = {
 
 type T2b4af5b5ce = {
   readonly target: ((T6d90fb7f32 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
-  readonly libraryOptions?: undefined | Td09f3f3108;
+  readonly libraryOptions?: undefined | T8ff44a5c87;
 };
 
 type T2bbd03475a = "private" | "shared";
@@ -32376,11 +32598,19 @@ type T2c8d30ce61 = {
 };
 
 type T2c9a2b8de1 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: Te80094a196;
+  courtCode: string;
+  spisZn: string;
 };
+
+type T2ce1dcd2d1 = {
+  type: "tool-call";
+  id: string;
+  name: "read_document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T2cf86f3d35 = null | {
   siret: string;
@@ -32447,11 +32677,6 @@ type T2f1b6312a1 = {
   blockId: string;
 };
 
-type T2f4709c888 = {
-  readonly input: T93f05f2bc9;
-  readonly output: T355e36f9c1;
-};
-
 type T302e959e47 = "left" | "right" | "preserve" | "center" | "both";
 
 type T304946b2ad = null | {
@@ -32477,6 +32702,13 @@ type T30ffd8d711 = {
   readonly output: T9ab85afc3e;
 };
 
+type T3197782633 = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: T6f4caa070d;
+};
+
 type T31d2159604 = {
   columnId: T82d2fa2fc8;
 };
@@ -32491,27 +32723,23 @@ type T3292e4e3e4 = {
   readonly issues?: undefined;
 };
 
-type T33933638b8 = "free" | "pro";
+type T337589194f = {
+  type: "tool-call";
+  id: string;
+  name: "update-entity-fields";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: Tf1bf25fb4a;
+} & Te4ad2efe8c;
 
-type T33e181e080 = {
-  success: true;
-  fileName: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-};
+type T33933638b8 = "free" | "pro";
 
 type T342c6c1fea = "global" | "ch" | "eu";
 
 type T3432cdf68d = {
   readonly input: Taa8bbb5904;
   readonly output: Tc7b9fe0fcd;
-};
-
-type T348917fbeb = {
-  operations: Array<unknown>;
-  documentVersion?: string;
 };
 
 type T349dac8902 = {
@@ -32526,10 +32754,6 @@ type T349dac8902 = {
   line1: string;
 };
 
-type T355e36f9c1 = {
-  templateId: string;
-};
-
 type T35788588c9 = "date" | "text" | "single-select" | "multi-select" | "int";
 
 type T36221949fd = {
@@ -32537,20 +32761,18 @@ type T36221949fd = {
   readonly issues?: undefined;
 };
 
+type T363b1d936b = {
+  documentRef: string;
+  name: string;
+};
+
 type T36734b71d6 = {
-  query: string;
-  jurisdiction: T069e650050;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
+  success: true;
+  fileName: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
 };
 
 type T36db913080 = null | {
@@ -32581,6 +32803,10 @@ type T37bd525dcb = {
 type T3808ab4adf = {
   readonly value: T19f8a3623b;
   readonly issues?: undefined;
+};
+
+type T381fa8ea96 = {
+  status: "saved";
 };
 
 type T38aa50e8be = string & valibot_Brand<"SafeId"> & {
@@ -32633,16 +32859,19 @@ type T3cedcce572 = {
   }>;
 };
 
-type T3d16f860ff = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
 type T3e2a904f6c = {
   [key: string]: unknown;
 };
+
+type T3e6575ab3e = {
+  type: "tool-call";
+  id: string;
+  name: "use-browser";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: Ta33827f356 | T74581fa9f5;
+} & Te4ad2efe8c;
 
 type T3ed4bbeee3 = {
   email: T432e07d100;
@@ -32658,7 +32887,17 @@ type T3ff6d2c179 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "rateTable";
 };
 
-type T4124e1264c = null | Date;
+type T4124e1264c = null | string;
+
+type T41fa392e99 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_get_law_block";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T42090b159e = {
   wordEditShortcut?: string;
@@ -32675,12 +32914,7 @@ type T422efe7526 = string & valibot_Brand<"SafeId"> & {
 type T4240f19bc1 = null | Tbf9ef52639;
 
 type T424c5f5482 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
+  folderRef: string;
 };
 
 type T4275dec338 = {
@@ -32698,6 +32932,7 @@ type T4275dec338 = {
   activeExternal?: Taf5ff5c24f;
   activeSkill?: T8649aae095;
   activeStatute?: Tc33c7b536f;
+  browserClient?: Td2073558e4;
   editApplyMode?: "auto" | "manual";
   docxEditRepresentation?: "direct" | "tracked-changes";
   devModelId?: string;
@@ -32710,6 +32945,21 @@ type T4275dec338 = {
   runId: string;
   threadId: T780bacb7ad;
   sendMode: Tbbd6b6f3b5;
+};
+
+type T430389cc7f = {
+  query: string;
+  scope: T85b1644775;
+  hint: T432e07d100;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: T432e07d100;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
 };
 
 type T4304cec9eb = {
@@ -32731,14 +32981,32 @@ type T4340530c23 = {
   nombre?: string;
 };
 
+type T436fe4ed9b = {
+  type: "tool-call";
+  id: string;
+  name: "find_text";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T439317a49b = null | T7256bc01d8;
 
 type T43e78e86e2 = {
-  query: string;
-  jurisdiction: T069e650050;
-  freshness: ("year" | "any" | "month" | "week" | "day");
-  maxResults: number;
+  title: string;
+  markdown: string;
 };
+
+type T43f8512c42 = {
+  type: "tool-call";
+  id: string;
+  name: "create_template";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T440388b593 = null | "free" | "paid";
 
@@ -32783,7 +33051,8 @@ type T462a2d055d = {
 };
 
 type T46ab7251d5 = {
-  folderRef: string;
+  text: string;
+  instructions: T432e07d100;
 };
 
 type T46f58f58fc = {
@@ -32795,6 +33064,21 @@ type T46f58f58fc = {
     default?: undefined | string;
   }>;
 };
+
+type T47507ade46 = {
+  readonly value: T83e75a100c;
+  readonly issues?: undefined;
+};
+
+type T481f32db71 = {
+  type: "tool-call";
+  id: string;
+  name: "spawn_subagents";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T162fd4d3a0;
+} & Te4ad2efe8c;
 
 type T488ab33bc2 = "user" | "proposed" | "detected";
 
@@ -32814,10 +33098,22 @@ type T48e3c0ff63 = {
   type: "kanban";
 };
 
+type T491b5c09bf = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
+
 type T49a4b60f9b = {
   ok: true;
   result: stll_folio_agents_FolioAgentApplyOperationsSummary;
 };
+
+type T4ad701fc7d = {
+  type: "tool-call";
+  id: string;
+  name: "boe_search_legislation";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T4b1112b06e = {
   placeholder: string;
@@ -32904,6 +33200,16 @@ type T4d6cdf8636 = Response | {
   message: string;
 };
 
+type T4d74f1977d = {
+  type: "tool-call";
+  id: string;
+  name: "fill_template";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T4d93baa3cf = {
   readonly input: T8387742e1c;
   readonly output: Tc6f587c6bd;
@@ -32964,8 +33270,6 @@ type T52d277c57b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "styleSet";
 };
 
-type T533797319a = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
-
 type T533ec86c6c = {
   readonly input: T51cad8ef60;
   readonly output: T0bc71347dc;
@@ -32977,21 +33281,21 @@ type T53430f009c = string & valibot_Brand<"SafeId"> & {
 
 type T53a42b0477 = "decision" | "statute";
 
-type T53b5147e55 = {
-  readonly value: Ta21762d27e;
-  readonly issues?: undefined;
-};
-
 type T54bf6fc207 = {
   value: T432e07d100;
   type: "date";
   version: 1;
 };
 
-type T557251045c = {
-  readonly input: T3d16f860ff;
-  readonly output: T596c558ecb;
-};
+type T55a7904a23 = {
+  type: "tool-call";
+  id: string;
+  name: "update-current-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T55bdf3ebb2 = {
   metadata?: Record<never, never>;
@@ -33001,19 +33305,12 @@ type T55bdf3ebb2 = {
 };
 
 type T55fe720a8c = {
-  query: string;
-  jurisdiction: T069e650050;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
+  success: true;
+  fileName: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
 };
 
 type T561e5b54a2 = {
@@ -33069,13 +33366,6 @@ type T594988174f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "savedSearch";
 };
 
-type T596c558ecb = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
 type T599434ec07 = {
   workspaceId: Tb9596e18eb;
 };
@@ -33089,6 +33379,11 @@ type T59a8dbef95 = {
 };
 
 type T59ad5fb938 = null | Array<Tca248f9d2b>;
+
+type T59b94cac05 = {
+  query: string;
+  limit: number;
+};
 
 type T59c3f5062f = {
   success: true;
@@ -33113,15 +33408,19 @@ type T5a51f85bbe = string & valibot_Brand<"SafeId"> & {
 type T5a7c3abed7 = null | Tb47b7b98fd;
 
 type T5af6308a18 = {
-  messageId: string;
-  before: number;
-  after: number;
+  query: string;
+  limit: number;
 };
 
 type T5b30b2c0a8 = {
   type: "footnote";
   label: string;
   noteId?: undefined | string;
+};
+
+type T5b41c36554 = {
+  readonly value: Tff2de0aa71;
+  readonly issues?: undefined;
 };
 
 type T5ba34a16c0 = {
@@ -33133,6 +33432,16 @@ type T5ba34a16c0 = {
     kind: ("same" | "del" | "ins");
     text: string;
   }>;
+};
+
+type T5c8b4fa5e4 = {
+  type: "tool-call";
+  id: string;
+  name: "create-document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T59c3f5062f | T561e5b54a2 | T2dc94a4ef0 | Te1221ee9e8;
 };
 
 type T5cffd2424c = {
@@ -33170,10 +33479,6 @@ type T5dba4beb60 = null | {
   name: string;
   url: string;
   retrievedAt?: undefined | string;
-};
-
-type T5dbacf96e7 = {
-  (args: T64efadf7d1, context?: Ta2dc1740cf): (T8387742e1c | Promise<T8387742e1c>);
 };
 
 type T5dbcd4218d = "pending" | "applied";
@@ -33239,6 +33544,16 @@ type T628ff2d974 = {
   workspaceId: string;
 };
 
+type T62aafd0a7e = {
+  type: "tool-call";
+  id: string;
+  name: "infosoud_lookup_case";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T63c4458d83 = {
   type: "headingSection";
   story: "main";
@@ -33247,17 +33562,41 @@ type T63c4458d83 = {
   headingLevel: number;
 };
 
+type T63e462a762 = {
+  revision: string;
+  url: string;
+};
+
 type T645caae274 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateRecipe";
 };
 
 type T64efadf7d1 = {
-  query: string;
-  limit?: undefined | number;
+  messageId: string;
+  before?: undefined | number;
+  after?: undefined | number;
 };
 
 type T65289db29c = {
   workspaceId: string;
+};
+
+type T6585d3a53b = {
+  readonly "~standard": {
+    readonly jsonSchema: Tba9914ae60;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T7cc1dee93a;
+  };
+} & {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T09ea2c2c78 | Promise<(T916c6c1f8b | T09ea2c2c78)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T7cc1dee93a;
+  };
 };
 
 type T65e2c35ff8 = {
@@ -33287,12 +33626,7 @@ type T6662e6acc7 = {
 };
 
 type T66d8615e4f = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
+  folderRef: string;
 };
 
 type T66e35ccd51 = {
@@ -33314,6 +33648,11 @@ type T6709dca913 = string & valibot_Brand<"SafeId"> & {
 type T6726f71d15 = {
   readonly input: T162fd4d3a0;
   readonly output: Tea3eb4808d;
+};
+
+type T67613c4e35 = {
+  readonly input: Tc7cb9678d1;
+  readonly output: T59b94cac05;
 };
 
 type T688f6f1190 = null | number;
@@ -33353,6 +33692,16 @@ type T6a76a17ac2 = {
   error: string;
 };
 
+type T6a94b6a846 = {
+  type: "tool-call";
+  id: string;
+  name: "list_stories";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T6ab1edb8c0 = {
   country: string;
   subdivision?: undefined | string;
@@ -33381,12 +33730,17 @@ type T6b1ceddef1 = {
 
 type T6b2d0b9da2 = "none" | "api-key" | "account";
 
-type T6b5cf52115 = {
-  documentRef: string;
-  name: string;
-};
-
 type T6b73348afa = null | T9a509045a7;
+
+type T6b9f6d95b0 = {
+  type: "tool-call";
+  id: string;
+  name: "configure_template_fields";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T6bf9fa81f9 = "double" | "single" | "preserve" | "onePoint15" | "onePoint5";
 
@@ -33401,10 +33755,25 @@ type T6cbbcf9437 = {
 };
 
 type T6cf37641cd = undefined | {
-  readonly libraryOptions?: undefined | Td09f3f3108;
+  readonly libraryOptions?: undefined | T8ff44a5c87;
 };
 
 type T6d90fb7f32 = {};
+
+type T6d91cbfa6c = {
+  readonly input: Tde9f0e1d2b;
+  readonly output: T1143a9d800;
+};
+
+type T6de3346f48 = {
+  type: "tool-call";
+  id: string;
+  name: "set_field_value";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T6e3baa4852 = {
   system: string;
@@ -33436,6 +33805,13 @@ type T6ef87eb7c7 = null | (T699c354d0c & {
   version: 1;
   custom?: T9b42ed15a8;
 });
+
+type T6f4caa070d = null | string | number | Array<string>;
+
+type T6f4f928320 = {
+  readonly input: T97154a1463;
+  readonly output: T381fa8ea96;
+};
 
 type T6f65fd94a6 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "workspaceMember";
@@ -33477,13 +33853,12 @@ type T6ffeb8632f = {
 };
 
 type T7020765e60 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
+  url: string;
+  title?: undefined | string;
+  publishedAt?: undefined | string;
+  content: string;
+  truncated: T1bdf39f14a;
+  provider: "jina";
 };
 
 type T706d588728 = null | "supported" | "tension" | "contradicted" | "nocover" | "notverifiable";
@@ -33511,23 +33886,15 @@ type T7256bc01d8 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseVersion";
 };
 
-type T72880ed30d = {
-  readonly "~standard": {
-    readonly jsonSchema: Tba9914ae60;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T151c8c8adf;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | Tf9791990e8 | Promise<(T916c6c1f8b | Tf9791990e8)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T151c8c8adf;
-  };
-};
+type T73ca6eeca2 = {
+  type: "tool-call";
+  id: string;
+  name: "create_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type T73f271d728 = {
   source: "tiers";
@@ -33550,8 +33917,17 @@ type T73f271d728 = {
 };
 
 type T74114cb775 = {
-  url: string;
-  maxChars?: undefined | number;
+  query: string;
+  jurisdiction?: undefined | "global" | "at" | "de" | "eu" | "sk" | "cz";
+  freshness?: undefined | "year" | "any" | "month" | "week" | "day";
+  maxResults?: undefined | number;
+};
+
+type T74581fa9f5 = {
+  code: T237fe0fe5e;
+  message: string;
+  protocolVersion: 3;
+  status: "error";
 };
 
 type T74610d9d20 = string & valibot_Brand<"SafeId"> & {
@@ -33643,6 +34019,16 @@ type T767b63a67e = "message" | "document" | "contact" | "matter" | "folder" | "t
 
 type T76b418efa9 = null | "task" | "event" | "deadline" | "meeting" | "hearing";
 
+type T76f59c27ef = {
+  type: "tool-call";
+  id: string;
+  name: "save_clause";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T774c2c36f6 = Response | {
   status: "idle";
   jobId: string;
@@ -33692,7 +34078,7 @@ type T77769e1af9 = {
   clientId: Ta197d6f640;
   color: T432e07d100;
   status: T9c6eb40403;
-  lastActivityAt: Date;
+  lastActivityAt: string;
 };
 
 type T78000c7c99 = {
@@ -33715,6 +34101,24 @@ type T7870a2de7e = {
 
 type T7881dfbb44 = "draft" | "approved" | "billed" | "written_off";
 
+type T7893435901 = {
+  readonly "~standard": {
+    readonly jsonSchema: Tba9914ae60;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T67613c4e35;
+  };
+} & {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T8330927857 | Promise<(T916c6c1f8b | T8330927857)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | T67613c4e35;
+  };
+};
+
 type T78d7036743 = {
   label?: string;
   type: T21bb8cfb40;
@@ -33731,6 +34135,16 @@ type T78fb706128 = {
   (args: unknown, context?: Ta2dc1740cf): unknown;
 };
 
+type T7901dca7c1 = {
+  type: "tool-call";
+  id: string;
+  name: "review_folder_consistency";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: Tee61f4ed5c;
+} & Te4ad2efe8c;
+
 type T7985261e0e = "single-select" | "multi-select";
 
 type T79fba9c913 = {
@@ -33742,15 +34156,40 @@ type T7a2655a211 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListSection";
 };
 
-type T7a41dd6a7b = {
-  title: string;
-  markdown: string;
-};
-
 type T7a92932f06 = {
   value: string;
   description: string;
 };
+
+type T7b30d8cb42 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_get_law_structure";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type T7b4b1ae2d6 = {
+  type: "tool-call";
+  id: string;
+  name: "save_document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type T7b50fc6047 = {
+  type: "tool-call";
+  id: string;
+  name: "web_search";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: Ta2cb9f1c54;
+} & Te4ad2efe8c;
 
 type T7b52b1c160 = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline" | "avt";
 
@@ -33834,7 +34273,7 @@ type T7bba2468e2 = T2430547df2 | {
   sourceUrl: T432e07d100;
   sourceAttributionUrl: T432e07d100;
   documentUrl: T432e07d100;
-  metadata: Td09f3f3108;
+  metadata: T8ff44a5c87;
   headnote: Td06876de99;
   textFields: {
     readonly abstract: Td06876de99;
@@ -33842,8 +34281,8 @@ type T7bba2468e2 = T2430547df2 | {
     readonly legalSentence: Td06876de99;
     readonly summary: Td06876de99;
   };
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   source: {
     id: T9163bffd43;
     name: string;
@@ -33924,8 +34363,8 @@ type T7c8bca7f18 = {
 };
 
 type T7c9021b9f6 = {
-  query: string;
-  limit: number;
+  url: string;
+  maxChars: number;
 };
 
 type T7c9c034721 = {
@@ -33935,6 +34374,11 @@ type T7c9c034721 = {
 } | {
   status: "cancelled";
   interruptId: string;
+};
+
+type T7cc1dee93a = {
+  readonly input: T430389cc7f;
+  readonly output: Td69e9e71d3;
 };
 
 type T7d2603043e = null | {
@@ -34016,6 +34460,16 @@ type T80d841ed63 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
 };
 
+type T8138772153 = {
+  type: "tool-call";
+  id: string;
+  name: "load-skill";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T81fff8a53f = "medium" | "high" | "low";
 
 type T827d04be89 = {
@@ -34039,26 +34493,58 @@ type T82d662a0f0 = null | T116a5c37c8;
 
 type T83293cdac9 = "portrait" | "landscape";
 
+type T8330927857 = {
+  readonly value: T59b94cac05;
+  readonly issues?: undefined;
+};
+
+type T8345aa93a5 = {
+  type: "tool-call";
+  id: string;
+  name: "link_matter_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type T8378cc1469 = {
+  type: "tool-call";
+  id: string;
+  name: "read_section";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T837d6a04e7 = "api-key" | "user-agent";
 
 type T8387742e1c = {
-  query: string;
-  scope: T0e8943eb14;
-  hint: T432e07d100;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: T432e07d100;
+  targetMessageId: string;
+  messages: Array<{
     messageId: string;
     role: string;
-    excerpt: string;
     createdAt: string;
+    content: string;
   }>;
+};
+
+type T83e75a100c = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
 };
 
 type T84093f1fc9 = {
   blockId: string;
   text: string;
+};
+
+type T8415f92f8d = {
+  documentRef: string;
+  name: string;
 };
 
 type T846b0784de = {
@@ -34073,6 +34559,16 @@ type T846b0784de = {
   limit?: undefined | number;
 };
 
+type T84d7e563d2 = {
+  type: "tool-call";
+  id: string;
+  name: "create-current-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T8500b3f9f9 = {
   workspaceId: string;
 };
@@ -34080,6 +34576,16 @@ type T8500b3f9f9 = {
 type T85657694a1 = {
   readonly input: T2e350463c1;
   readonly output: T109fc089ae;
+};
+
+type T85b1644775 = "matters" | "all-chats";
+
+type T85b5909e9d = {
+  context?: undefined | string;
+  href?: undefined | string;
+  name: string;
+  ref: string;
+  role: string;
 };
 
 type T8649aae095 = {
@@ -34106,7 +34612,17 @@ type T873a479438 = {
   id: T7d9d93bde2;
   metadata?: T0122da017b;
   role: Tefd05507c2;
-  parts: Array<Tff5735a10a>;
+  parts: Array<(tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | {
+    type: "tool-result";
+    id?: string;
+    name?: string;
+    toolCallId: string;
+    content: (string | Array<tanstack_ai_ContentPart>);
+    state: ("error" | "complete" | "streaming");
+    error?: string;
+    metadata?: T8ff44a5c87;
+    createdAt?: string;
+  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Taf8c16946a | Tbe97c83005 | Te802d84b37 | T4d74f1977d | T43f8512c42 | T6b9f6d95b0 | T2ce1dcd2d1 | T7b4b1ae2d6 | Te415da5e99 | T6de3346f48 | T0de167a39e | T15f9bd0b08 | Tac6a8b45ed | Tb907617eea | Te692f74bf1 | T8bd8879a52 | T8345aa93a5 | T76f59c27ef | Tdbc99a28d8 | Tc5060b6d6f | T1932d07b54 | T73ca6eeca2 | T9f9de186a2 | T94fccf15e8 | Ta68caeef2b | Tad35539127 | Tcbc1d9afe8 | T5c8b4fa5e4 | Tf6d539f6f9 | Tc6723fc695 | T55a7904a23 | T84d7e563d2 | T8138772153 | Teb831cdd61 | Tb100969417 | T4ad701fc7d | Tb183ddee4b | T7b30d8cb42 | T41fa392e99 | Te4f7d177c0 | T1313862f74 | T3e6575ab3e | T62aafd0a7e | T337589194f | Tba62cffc90 | Tdc146c6ea6 | T8378cc1469 | T6a94b6a846 | Ta130d275b4 | T436fe4ed9b | Tabdd33f23f | Te993ddb640 | Tb5eb32574f | T047ab24e12 | Tad7bfc169a | Tcc64a82ef6 | T958623bd0c | T7b50fc6047 | Tc3a09169de | T069c4bbe58 | Ta3eb1f794b | Te417608c11 | Ta5ef597117 | T0c520e01bf | Tad1c33f9ec | T7901dca7c1 | T481f32db71 | Td758891541 | T1958bbf2de | Tfd818c98a8 | tanstack_ai_StructuredOutputPart<unknown>)>;
 };
 
 type T875ec33b50 = null | "document-type-classifier";
@@ -34197,6 +34713,16 @@ type T8b75e960c1 = {
   count: number;
 };
 
+type T8bd8879a52 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_task";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T8c66118833 = {
   (args: unknown, context?: Ta2dc1740cf): unknown;
 };
@@ -34259,6 +34785,10 @@ type T8fa9d7c67b = {
   blockId: string;
 };
 
+type T8ff44a5c87 = {
+  [key: string]: unknown;
+};
+
 type T90212efe7a = {
   message: string;
   paragraphIndex: number;
@@ -34312,8 +34842,10 @@ type T92357156ac = string & valibot_Brand<"SafeId"> & {
 };
 
 type T92b1e52bb0 = {
-  url: string;
-  maxChars: number;
+  query: string;
+  jurisdiction: Tff7d96076d;
+  freshness: ("year" | "any" | "month" | "week" | "day");
+  maxResults: number;
 };
 
 type T9372e54e9c = {
@@ -34327,10 +34859,6 @@ type T93ee1fa9f8 = {
   jurisdiction: T9960bad961;
   query: string;
   limit?: undefined | number;
-};
-
-type T93f05f2bc9 = {
-  templateId: string;
 };
 
 type T9411263f78 = {
@@ -34359,6 +34887,16 @@ type T94e2de2165 = {
   children: Array<T94e2de2165>;
 };
 
+type T94fccf15e8 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T952a349ecb = null | Array<T349dac8902>;
 
 type T9531885fa8 = {
@@ -34370,6 +34908,16 @@ type T95752d89bb = string | {
   code?: string;
   message: string;
 };
+
+type T958623bd0c = {
+  type: "tool-call";
+  id: string;
+  name: "create_matter_document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T36734b71d6;
+} & Te4ad2efe8c;
 
 type T95a4a01f59 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "docxSuggestion";
@@ -34447,14 +34995,18 @@ type T96412b8318 = {
   sections: T28f55fc43c;
   sourceUrl: T432e07d100;
   documentUrl: T432e07d100;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   citationCaseCount: T688f6f1190;
   allowsDerivedAi: T1bdf39f14a;
   id: Td90f3cb611;
 };
 
 type T97123e865d = "failed" | "cancelled" | "running" | "completed" | "queued";
+
+type T97154a1463 = {
+  status: "saved";
+};
 
 type T971aac1483 = {
   chat: Tab86be84f5;
@@ -34479,11 +35031,6 @@ type T980f887156 = {
   analysis?: undefined | false | true;
   fullText?: undefined | false | true;
   eli?: undefined | false | true;
-};
-
-type T982ae915eb = {
-  readonly input: T7a41dd6a7b;
-  readonly output: Ta21762d27e;
 };
 
 type T9871c1e63a = {
@@ -34570,6 +35117,11 @@ type T9b42ed15a8 = {
 
 type T9c01826163 = {
   readonly __safeIdType?: "workspace";
+};
+
+type T9c13fbf3ff = {
+  readonly input: Tf1bf25fb4a;
+  readonly output: T83e75a100c;
 };
 
 type T9c6eb40403 = "active" | "archived" | "deleting";
@@ -35055,6 +35607,16 @@ type T9f51aef7c3 = {
   };
 };
 
+type T9f9de186a2 = {
+  type: "tool-call";
+  id: string;
+  name: "update_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type T9fe3112f57 = "workspaces.parties.client" | "templates.binding.sourceParty" | "common.matter" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "common.displayName" | "contacts.fields.firstName" | "contacts.fields.lastName" | "common.organizationName" | "common.email" | "contacts.columns.phone" | "common.anonymizationLabels.address" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressPostalCode" | "common.country" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "contacts.fields.bankAccountIban" | "contacts.fields.bankAccountBic" | "contacts.communication.dataBoxPlaceholder" | "common.name" | "common.reference" | "templates.binding.fieldBillingReference" | "common.status" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.witness" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.other" | "contacts.attorneys.responsible" | "contacts.attorneys.originating" | "templates.binding.attorneyLead";
 
 type T9ffc3fafa7 = {
@@ -35070,8 +35632,7 @@ type T9ffc3fafa7 = {
 type Ta083079a24 = "other" | "mobile" | "office" | "home" | "fax";
 
 type Ta0b306ecbf = {
-  text: string;
-  instructions: T432e07d100;
+  templateId: string;
 };
 
 type Ta0c53468e3 = string & valibot_Brand<"SafeId"> & {
@@ -35080,12 +35641,17 @@ type Ta0c53468e3 = string & valibot_Brand<"SafeId"> & {
 
 type Ta0f85a4b95 = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
 
-type Ta197d6f640 = null | T938d9cc2e1;
+type Ta130d275b4 = {
+  type: "tool-call";
+  id: string;
+  name: "read_story";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
-type Ta21762d27e = {
-  title: string;
-  markdown: string;
-};
+type Ta197d6f640 = null | T938d9cc2e1;
 
 type Ta24f5c3087 = {
   readonly input: T2c9a2b8de1;
@@ -35114,15 +35680,44 @@ type Ta2ba582892 = {
 };
 
 type Ta2cb9f1c54 = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: T1bdf39f14a;
-  provider: "jina";
+  query: string;
+  jurisdiction: Tff7d96076d;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: undefined | string;
+    source: string;
+    score?: undefined | number;
+  }>;
+  provider: "tavily";
+  answer?: undefined | string;
 };
 
 type Ta2dc1740cf = undefined | tanstack_ai_ToolExecutionContext<unknown>;
+
+type Ta33827f356 = {
+  protocolVersion: 3;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: undefined | string;
+      href?: undefined | string;
+      name: string;
+      ref: string;
+      role: string;
+      value?: undefined | string;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
+};
 
 type Ta3d11202d8 = {
   body: {
@@ -35156,16 +35751,41 @@ type Ta3d11202d8 = {
   };
 };
 
-type Ta4255119d0 = {
-  readonly value: Tde0e71406c;
-  readonly issues?: undefined;
-};
+type Ta3eb1f794b = {
+  type: "tool-call";
+  id: string;
+  name: "expand-chat-history";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T8387742e1c;
+} & Te4ad2efe8c;
 
 type Ta56b4ba098 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
 
 type Ta5cd720bed = "available" | "unavailable" | "installed";
 
 type Ta5d3bf10c8 = null | Tf13f15d459;
+
+type Ta5ef597117 = {
+  type: "tool-call";
+  id: string;
+  name: "search-all-past-chats";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T430389cc7f;
+} & Te4ad2efe8c;
+
+type Ta68caeef2b = {
+  type: "tool-call";
+  id: string;
+  name: "save_time_entry";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Ta6ace2bae9 = null | Teb5c753062;
 
@@ -35197,9 +35817,12 @@ type Ta76c7a3d9d = null | Array<{
 }>;
 
 type Ta7d8e78679 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
+  subagents: Array<{
+    task: string;
+    context?: undefined | string;
+    expectedOutput?: undefined | string;
+    model?: undefined | string;
+  }>;
 };
 
 type Ta846db0598 = {
@@ -35208,11 +35831,6 @@ type Ta846db0598 = {
 
 type Ta8b78a42c5 = "unknown" | "disabled" | "current" | "delayed" | "stalled";
 
-type Ta8fc8ea2ad = {
-  readonly value: T1d47fa3dc0;
-  readonly issues?: undefined;
-};
-
 type Ta95272d8d2 = {
   workspaceId: string;
 };
@@ -35220,13 +35838,37 @@ type Ta95272d8d2 = {
 type Taa1b35a86b = "companies-house" | "denue" | "edgar";
 
 type Taa8bbb5904 = {
-  courtCode: string;
-  spisZn: string;
+  action: "open";
+  url: string;
+} | {
+  action: "snapshot";
+  textOffset?: undefined | number;
+} | {
+  action: "click";
+  page: Tc93e65953b;
+  target: T85b5909e9d;
+} | {
+  action: "fill";
+  page: Tc93e65953b;
+  target: T85b5909e9d;
+  value: string;
+} | {
+  action: "select";
+  page: Tc93e65953b;
+  target: T85b5909e9d;
+  value: string;
+} | {
+  action: "press-key";
+  key: Tf9f17dbdf3;
+  page: Tc93e65953b;
+  target: T85b5909e9d;
+} | {
+  action: "go-back";
 };
 
 type Tab56697f3b = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
 
-type Tab67d2a75b = null | Td09f3f3108;
+type Tab67d2a75b = null | T8ff44a5c87;
 
 type Tab86be84f5 = {
   provider: Tf822306fb6;
@@ -35237,11 +35879,31 @@ type Tab9b292a50 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListClaim";
 };
 
+type Tabdd33f23f = {
+  type: "tool-call";
+  id: string;
+  name: "read_comments";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tac2a3266c6 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
 
 type Tac5e0997d1 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "expense";
 };
+
+type Tac6a8b45ed = {
+  type: "tool-call";
+  id: string;
+  name: "save_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Taca2a07939 = {
   readonly value: Tf79cee9ca8;
@@ -35249,18 +35911,34 @@ type Taca2a07939 = {
 };
 
 type Taccc62a1a5 = {
-  folderRef: string;
+  text: string;
+  instructions: T432e07d100;
 };
 
-type Tad20dce351 = {
-  readonly input: T348917fbeb;
-  readonly output: T348917fbeb;
-};
+type Tad1c33f9ec = {
+  type: "tool-call";
+  id: string;
+  name: "suggest_template_fields";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tad34918dcf = {
   text: string;
   id: string;
 };
+
+type Tad35539127 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_time_entry";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tad3978d98f = "assignee" | "reviewer";
 
@@ -35272,6 +35950,16 @@ type Tad492b101a = null | {
   postalCode?: string;
   city?: string;
 };
+
+type Tad7bfc169a = {
+  type: "tool-call";
+  id: string;
+  name: "resolve_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tad8a18f823 = {
   code?: string;
@@ -35404,10 +36092,15 @@ type Taf5ff5c24f = {
   title: string;
 };
 
-type Taf8f77d898 = {
-  readonly input: Tffa11b61c2;
-  readonly output: Tde0e71406c;
-};
+type Taf8c16946a = {
+  type: "tool-call";
+  id: string;
+  name: `mcp__${string}`;
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: any;
+} & Te4ad2efe8c;
 
 type Tafda8a9ee4 = (T27402211cc & {
   type: T219ebda4a4;
@@ -35447,6 +36140,11 @@ type Tafda8a9ee4 = (T27402211cc & {
   court: string;
   country: string;
   decisionDate: T432e07d100;
+  slug: T432e07d100;
+  language: string;
+  languageAlternates: ReadonlyArray<{
+    language: string;
+  }>;
 }) | (T27402211cc & {
   type: "chat";
   resource: {
@@ -35472,10 +36170,30 @@ type Tb09958ae39 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "taskAssignee";
 };
 
+type Tb100969417 = {
+  type: "tool-call";
+  id: string;
+  name: "business_registry_lookup";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tb13bfff6df = {
   readonly input: Tf87d0b824c;
   readonly output: T13f2f9bd72;
 };
+
+type Tb183ddee4b = {
+  type: "tool-call";
+  id: string;
+  name: "boe_get_law";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tb1ed7519f1 = {
   open: number;
@@ -35501,6 +36219,13 @@ type Tb2ae6e53e6 = {
 
 type Tb2b6819922 = "keep" | "accept" | "reject";
 
+type Tb2c7942b11 = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: T6f4caa070d;
+};
+
 type Tb2d33c80ac = "draft" | "approved" | "ephemeral";
 
 type Tb368e5ae56 = {
@@ -35516,6 +36241,16 @@ type Tb47b7b98fd = string & valibot_Brand<"SafeId"> & {
 type Tb5b50d2995 = {
   workspaceId: string;
 };
+
+type Tb5eb32574f = {
+  type: "tool-call";
+  id: string;
+  name: "add_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tb60a03a607 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "reportExport";
@@ -35592,21 +36327,36 @@ type Tb8ee110390 = {
   readonly issues?: undefined;
 };
 
+type Tb907617eea = {
+  type: "tool-call";
+  id: string;
+  name: "delete_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tb9596e18eb = string & valibot_Brand<"SafeId"> & T9c01826163;
 
-type Tba0a2a4af3 = {
-  readonly value: T596c558ecb;
-  readonly issues?: undefined;
-};
+type Tba62cffc90 = {
+  type: "tool-call";
+  id: string;
+  name: "suggest_changes";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tba98ee81e0 = "table" | "paragraph" | "heading" | "listItem";
 
 type Tba9914ae60 = {
   readonly input: {
-    (options: T2b4af5b5ce): Td09f3f3108;
+    (options: T2b4af5b5ce): T8ff44a5c87;
   };
   readonly output: {
-    (options: T2b4af5b5ce): Td09f3f3108;
+    (options: T2b4af5b5ce): T8ff44a5c87;
   };
 };
 
@@ -35632,6 +36382,16 @@ type Tbcf4936bb0 = string & valibot_Brand<"SafeId"> & {
 };
 
 type Tbdce6ead48 = null | T7f76e93fad;
+
+type Tbe97c83005 = {
+  type: "tool-call";
+  id: string;
+  name: "set_practice_jurisdictions";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tbecb65774d = {
   workspaceId: Tb9596e18eb;
@@ -35692,6 +36452,16 @@ type Tc33c7b536f = {
   documentId: Td90f3cb611;
 };
 
+type Tc3a09169de = {
+  type: "tool-call";
+  id: string;
+  name: "fetch_url";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T7020765e60;
+} & Te4ad2efe8c;
+
 type Tc3d4d912b6 = {
   readonly value: Tf5e31e73aa;
   readonly issues?: undefined;
@@ -35743,6 +36513,16 @@ type Tc4b9125369 = {
   version: 1;
 };
 
+type Tc5060b6d6f = {
+  type: "tool-call";
+  id: string;
+  name: "save_playbook";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tc5f67256c1 = {
   id: string;
   eli: string;
@@ -35781,12 +36561,23 @@ type Tc65782e9a6 = {
   fileName: string;
   fieldCount: number;
   sizeBytes: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
+type Tc6723fc695 = {
+  type: "tool-call";
+  id: string;
+  name: "update-current-skill-body";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tc69524a13b = {
-  query: string;
-  limit: number;
+  messageId: string;
+  before: number;
+  after: number;
 };
 
 type Tc6cd6234fd = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
@@ -35799,17 +36590,12 @@ type Tc6e8f2c363 = {
 };
 
 type Tc6f587c6bd = {
-  query: string;
-  scope: T0e8943eb14;
-  hint: T432e07d100;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: T432e07d100;
+  targetMessageId: string;
+  messages: Array<{
     messageId: string;
     role: string;
-    excerpt: string;
     createdAt: string;
+    content: string;
   }>;
 };
 
@@ -35852,8 +36638,37 @@ type Tc78d41b768 = {
 };
 
 type Tc7b9fe0fcd = {
-  courtCode: string;
-  spisZn: string;
+  action: "open";
+  url: string;
+} | {
+  action: "snapshot";
+  textOffset?: undefined | number;
+} | {
+  action: "click";
+  page: T63e462a762;
+  target: T18e3b024e1;
+} | {
+  action: "fill";
+  page: T63e462a762;
+  target: T18e3b024e1;
+  value: string;
+} | {
+  action: "select";
+  page: T63e462a762;
+  target: T18e3b024e1;
+  value: string;
+} | {
+  action: "press-key";
+  key: Tf9f17dbdf3;
+  page: T63e462a762;
+  target: T18e3b024e1;
+} | {
+  action: "go-back";
+};
+
+type Tc7cb9678d1 = {
+  query: string;
+  limit?: undefined | number;
 };
 
 type Tc81f44a4a0 = string & valibot_Brand<"SafeId"> & {
@@ -35885,6 +36700,11 @@ type Tc8699411bc = {
   readonly issues?: undefined;
 };
 
+type Tc93e65953b = {
+  revision: string;
+  url: string;
+};
+
 type Tc9666df965 = {
   needsApproval: true;
   approvalSchema: undefined;
@@ -35910,18 +36730,40 @@ type Tca248f9d2b = {
 };
 
 type Tcb4e2e17b4 = {
-  messageId: string;
-  before?: undefined | number;
-  after?: undefined | number;
+  query: string;
+  limit?: undefined | number;
 };
 
 type Tcb64065203 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
+  subagents: Array<{
+    task: string;
+    context?: undefined | string;
+    expectedOutput?: undefined | string;
+    model?: undefined | string;
+  }>;
 };
 
+type Tcbc1d9afe8 = {
+  type: "tool-call";
+  id: string;
+  name: "manage_organization";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tcbe8612c20 = "draft" | "accepted" | "rejected" | "proposed";
+
+type Tcc64a82ef6 = {
+  type: "tool-call";
+  id: string;
+  name: "show_in_document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tcc80affb43 = {
   defaultFormatId: T432e07d100;
@@ -35929,12 +36771,12 @@ type Tcc80affb43 = {
 };
 
 type Tccbcb316fa = {
-  targetMessageId: string;
-  messages: Array<{
+  query: string;
+  results: Array<{
     messageId: string;
     role: string;
+    excerpt: string;
     createdAt: string;
-    content: string;
   }>;
 };
 
@@ -35962,10 +36804,6 @@ type Tce28b0606f = {
 
 type Td06876de99 = T24da1e86c5 | T8cd5b388a4;
 
-type Td09f3f3108 = {
-  [key: string]: unknown;
-};
-
 type Td0d20fc706 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawJudge";
 };
@@ -35978,6 +36816,10 @@ type Td0e4afd336 = {
 
 type Td120f37682 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpUserConnection";
+};
+
+type Td2073558e4 = {
+  protocolVersion: number;
 };
 
 type Td220c5b82e = {
@@ -36014,11 +36856,6 @@ type Td4552d8c2b = {
   readonly issues?: undefined;
 };
 
-type Td4b7fddf97 = {
-  readonly value: T355e36f9c1;
-  readonly issues?: undefined;
-};
-
 type Td50e30d0f1 = {
   readonly value: T0bc71347dc;
   readonly issues?: undefined;
@@ -36035,6 +36872,31 @@ type Td5abdf9c63 = {
     answer: string;
   }>;
 };
+
+type Td69e9e71d3 = {
+  query: string;
+  scope: T85b1644775;
+  hint: T432e07d100;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: T432e07d100;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type Td758891541 = {
+  type: "tool-call";
+  id: string;
+  name: "remember";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T97154a1463;
+} & Te4ad2efe8c;
 
 type Td787ffea34 = {
   readonly value: T665ac097fb;
@@ -36079,6 +36941,26 @@ type Tdaa282e677 = string & valibot_Brand<"SafeId"> & {
 };
 
 type Tdb872dbe7d = null | T1c7a854487;
+
+type Tdbc99a28d8 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_clause";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type Tdc146c6ea6 = {
+  type: "tool-call";
+  id: string;
+  name: "get_document_outline";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tdc26bce8d6 = {
   status: ("accepted" | "new" | "snoozed" | "dismissed");
@@ -36241,45 +37123,6 @@ type Tddcaa6c051 = {
   message: string;
 };
 
-type Tde0e71406c = {
-  folder: {
-    folderRef: string;
-    name: string;
-  };
-  coverage: {
-    complete: T1bdf39f14a;
-    snapshotDocumentCount: number;
-    traversalDepthLimit: number;
-    additionalDescendantsMayExist: T1bdf39f14a;
-  };
-  documentsReviewed: Array<T6b5cf52115>;
-  documentsSkipped: Array<{
-    documentRef: string;
-    name: string;
-    reason: string;
-  }>;
-  documentsNotChecked: Array<T6b5cf52115>;
-  documentsNotCheckedOmittedCount: number;
-  review: string;
-  citations: Array<{
-    type: "docx-folio";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    passage: string;
-    blockId: string;
-  } | {
-    type: "pdf-bates";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    bates: string;
-    pageNumber: number;
-  }>;
-};
-
 type Tde69c6096b = {
   role?: null | "document-type-classifier";
   dependencies?: Array<{
@@ -36327,6 +37170,8 @@ type Tde69c6096b = {
   sourceId: string;
   createIfMissing: T1bdf39f14a;
 };
+
+type Tde9f0e1d2b = Ta33827f356 | T74581fa9f5;
 
 type Tdf22af53e7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillComment";
@@ -36390,6 +37235,11 @@ type Te27c9d3a2b = {
 
 type Te287bedd42 = "organization" | "person";
 
+type Te2e7aaef1d = {
+  readonly value: T381fa8ea96;
+  readonly issues?: undefined;
+};
+
 type Te2ec8e0b17 = null | T6ebb5b60ba;
 
 type Te350a1ab11 = {
@@ -36400,7 +37250,7 @@ type Te35800633c = {
   readonly error: "Not Found";
 };
 
-type Te3ba023acf = {
+type Te3ba023acf = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
   workspaceName: string;
@@ -36418,26 +37268,6 @@ type Te3ba023acf = {
   status: T432e07d100;
   priority: T432e07d100;
   listItemType: T432e07d100;
-  dueDate: T432e07d100;
-  agendaKind: ("task" | "event" | "deadline" | "meeting" | "hearing");
-  startAt: T432e07d100;
-  endAt: T432e07d100;
-  occurredAt: T432e07d100;
-  remindAt: T432e07d100;
-  allDay: T1bdf39f14a;
-  timeZone: T432e07d100;
-  location: T432e07d100;
-  onlineMeetingUrl: T432e07d100;
-  availability: T432e07d100;
-  sensitivity: T432e07d100;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: ("email" | "manual" | "calendar" | "infosoud" | "import" | "api");
-  externalSource: T432e07d100;
-  externalId: T432e07d100;
-  externalChangeKey: T432e07d100;
-  externalICalUid: T432e07d100;
   readOnly: T1bdf39f14a;
   sortOrder: T432e07d100;
   activeEditBy: (null | {
@@ -36449,7 +37279,7 @@ type Te3ba023acf = {
     id: string;
     propertyId: string;
     entityId: string;
-    content: T533797319a;
+    content: T491b5c09bf;
     ocrExportStatus?: "text" | "unavailable" | "text-and-pdf";
   }>;
   cellMetadata: Array<{
@@ -36484,6 +37314,26 @@ type Te3ba023acf = {
   }>;
 };
 
+type Te415da5e99 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_document";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
+type Te417608c11 = {
+  type: "tool-call";
+  id: string;
+  name: "search-past-chats";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T430389cc7f;
+} & Te4ad2efe8c;
+
 type Te4598481ee = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpConnector";
 };
@@ -36498,9 +37348,29 @@ type Te4ad2efe8c = {
   };
 };
 
+type Te4f7d177c0 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_find_related_laws";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Te5542ad5a8 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillProposal";
 };
+
+type Te692f74bf1 = {
+  type: "tool-call";
+  id: string;
+  name: "save_task";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Te73195d9c3 = {
   type: "main";
@@ -36518,7 +37388,15 @@ type Te73195d9c3 = {
   noteId: number;
 };
 
-type Te80094a196 = null | string | number | Array<string>;
+type Te802d84b37 = {
+  type: "tool-call";
+  id: string;
+  name: "list_templates";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Te831c71c90 = {
   kind: "fallback";
@@ -36568,12 +37446,30 @@ type Te9707abbcc = {
 
 type Te9902600f8 = "active" | "archived";
 
+type Te993ddb640 = {
+  type: "tool-call";
+  id: string;
+  name: "read_changes";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
+
 type Tea019afe5d = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "justification";
 };
 
 type Tea3eb4808d = {
-  status: "saved";
+  results: Array<{
+    index: number;
+    status: "completed";
+    result: string;
+  } | {
+    index: number;
+    status: "failed";
+    error: string;
+  }>;
 };
 
 type Teb3fcd8ef4 = string & valibot_Brand<"SafeId"> & {
@@ -36581,6 +37477,11 @@ type Teb3fcd8ef4 = string & valibot_Brand<"SafeId"> & {
 };
 
 type Teb4507dfaa = "draft" | "approved";
+
+type Teb4b46f294 = {
+  readonly input: Tb2c7942b11;
+  readonly output: T3197782633;
+};
 
 type Teb5c753062 = string & valibot_Brand<"SafeId"> & T9c01826163;
 
@@ -36591,6 +37492,16 @@ type Teb6522997d = string & valibot_Brand<"SafeId"> & {
 type Teb6688001f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "invoice";
 };
+
+type Teb831cdd61 = {
+  type: "tool-call";
+  id: string;
+  name: "read-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Teba0ca2bc3 = "stale" | "fresh";
 
@@ -36635,8 +37546,8 @@ type Tec7940d497 = {
   field: "name";
 };
 
-type Tece462aa22 = {
-  readonly value: T348917fbeb;
+type Tec9bde9280 = {
+  readonly value: T3197782633;
   readonly issues?: undefined;
 };
 
@@ -36652,18 +37563,51 @@ type Tede2d5a69f = {
 };
 
 type Tee61f4ed5c = {
-  results: Array<{
-    index: number;
-    status: "completed";
-    result: string;
+  folder: {
+    folderRef: string;
+    name: string;
+  };
+  coverage: {
+    complete: T1bdf39f14a;
+    snapshotDocumentCount: number;
+    traversalDepthLimit: number;
+    additionalDescendantsMayExist: T1bdf39f14a;
+  };
+  documentsReviewed: Array<T363b1d936b>;
+  documentsSkipped: Array<{
+    documentRef: string;
+    name: string;
+    reason: string;
+  }>;
+  documentsNotChecked: Array<T363b1d936b>;
+  documentsNotCheckedOmittedCount: number;
+  review: string;
+  citations: Array<{
+    type: "docx-folio";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    passage: string;
+    blockId: string;
   } | {
-    index: number;
-    status: "failed";
-    error: string;
+    type: "pdf-bates";
+    documentName: string;
+    documentRef: string;
+    sourceHref: string;
+    statement: string;
+    bates: string;
+    pageNumber: number;
   }>;
 };
 
 type Teef0e50364 = "manual" | "schedule" | "file-upload";
+
+type Tef51a766c6 = {
+  content: string;
+  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
+  scope?: undefined | "workspace" | "user";
+};
 
 type Tefbda21c4c = "draft" | "finalized" | "sent" | "paid" | "void";
 
@@ -36685,6 +37629,13 @@ type Tf13f15d459 = {
 };
 
 type Tf1506fd1ab = T80d841ed63 | "_status" | "_kind";
+
+type Tf1bf25fb4a = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
+};
 
 type Tf1e37b2227 = "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
 
@@ -36716,10 +37667,8 @@ type Tf38d7a3340 = string & valibot_Brand<"SafeId"> & {
 };
 
 type Tf477029a44 = {
-  query: string;
-  jurisdiction?: undefined | "global" | "at" | "de" | "eu" | "sk" | "cz";
-  freshness?: undefined | "year" | "any" | "month" | "week" | "day";
-  maxResults?: undefined | number;
+  title: string;
+  markdown: string;
 };
 
 type Tf4965e37f8 = string & valibot_Brand<"SafeId"> & {
@@ -36774,31 +37723,42 @@ type Tf618255f8e = {
   maxItems?: undefined | number;
 };
 
+type Tf6b700038f = {
+  (args: Tc7cb9678d1, context?: Ta2dc1740cf): (T430389cc7f | Promise<T430389cc7f>);
+};
+
 type Tf6d1adf4f8 = {
   status: "pending";
 };
 
+type Tf6d539f6f9 = {
+  type: "tool-call";
+  id: string;
+  name: "ask-user";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: T8a3caedfda;
+};
+
 type Tf74132cd3e = {
-  text: string;
-  instructions: T432e07d100;
+  templateId: string;
 };
 
 type Tf79cee9ca8 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: Te80094a196;
+  courtCode: string;
+  spisZn: string;
 };
 
 type Tf7b6a1b7cb = "docx" | "xlsx" | "csv";
 
 type Tf7f2d88b62 = {
-  targetMessageId: string;
-  messages: Array<{
+  query: string;
+  results: Array<{
     messageId: string;
     role: string;
+    excerpt: string;
     createdAt: string;
-    content: string;
   }>;
 };
 
@@ -36895,6 +37855,8 @@ type Tf9d55cf19d = {
   standard: T73f271d728;
 };
 
+type Tf9f17dbdf3 = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "Backspace" | "Enter" | "Escape" | "Space" | "Tab";
+
 type Tfa384bd983 = {
   [key: string]: string;
 };
@@ -36902,29 +37864,6 @@ type Tfa384bd983 = {
 type Tfa4d090dd5 = {
   readonly type: "entity";
   readonly id: stll_api_contract_SafeId<"entity">;
-};
-
-type Tfa609f319e = {
-  readonly "~standard": {
-    readonly jsonSchema: Tba9914ae60;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T4d93baa3cf;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T6cf37641cd): (T916c6c1f8b | T82a15f6a03 | Promise<(T916c6c1f8b | T82a15f6a03)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T4d93baa3cf;
-  };
-};
-
-type Tfa998c5874 = {
-  documentRef: string;
-  name: string;
 };
 
 type Tfb9effd8c9 = {
@@ -36964,6 +37903,16 @@ type Tfd3efc6c3f = {
   readonly value: T66d8615e4f;
   readonly issues?: undefined;
 };
+
+type Tfd818c98a8 = {
+  type: "tool-call";
+  id: string;
+  name: "discover_tools";
+  arguments: string;
+  input?: unknown;
+  state: Tf85ca6744e;
+  output?: unknown;
+} & Te4ad2efe8c;
 
 type Tfde6260a4e = {
   entityId: string;
@@ -37006,602 +37955,16 @@ type Tfe81175840 = {
   readonly message: "Legislation document not found";
 };
 
-type Tff5735a10a = tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | {
-  type: "tool-call";
-  id: string;
-  name: `mcp__${string}`;
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: any;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "set_practice_jurisdictions";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "list_templates";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "fill_template";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "create_template";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "configure_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read_document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "set_field_value";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_matter";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_matter";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_task";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_task";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "link_matter_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_playbook";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "run_playbook";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "create_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "update_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "save_time_entry";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "delete_time_entry";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "manage_organization";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "create-document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T59c3f5062f | T561e5b54a2 | T2dc94a4ef0 | Te1221ee9e8;
-} | {
-  type: "tool-call";
-  id: string;
-  name: "ask-user";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T8a3caedfda;
-} | {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-body";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "create-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "load-skill";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "business_registry_lookup";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "boe_search_legislation";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law_structure";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law_block";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "boe_find_related_laws";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "borme_get_summary";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "infosoud_lookup_case";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "update-entity-fields";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T3d16f860ff;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "suggest_changes";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "get_document_outline";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read_section";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "list_stories";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read_story";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "find_text";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read_comments";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "read_changes";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "add_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "reply_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "resolve_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "show_in_document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "create_matter_document";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T33e181e080;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "web_search";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T36734b71d6;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "fetch_url";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: Ta2cb9f1c54;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "search-chat-history";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T7020765e60;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "expand-chat-history";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: Tccbcb316fa;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "search-past-chats";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T8387742e1c;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "search-all-past-chats";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T8387742e1c;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "describe_template";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "suggest_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "review_folder_consistency";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: Tffa11b61c2;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "spawn_subagents";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: Tee61f4ed5c;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "remember";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: T162fd4d3a0;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "execute_typescript";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | {
-  type: "tool-call";
-  id: string;
-  name: "discover_tools";
-  arguments: string;
-  input?: unknown;
-  state: Tf85ca6744e;
-  output?: unknown;
-} & Te4ad2efe8c | tanstack_ai_StructuredOutputPart<unknown>;
+type Tff2de0aa71 = {
+  operations: Array<unknown>;
+  documentVersion?: string;
+};
 
 type Tff67652b63 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "signal";
 };
 
-type Tffa11b61c2 = {
-  folder: {
-    folderRef: string;
-    name: string;
-  };
-  coverage: {
-    complete: T1bdf39f14a;
-    snapshotDocumentCount: number;
-    traversalDepthLimit: number;
-    additionalDescendantsMayExist: T1bdf39f14a;
-  };
-  documentsReviewed: Array<Tfa998c5874>;
-  documentsSkipped: Array<{
-    documentRef: string;
-    name: string;
-    reason: string;
-  }>;
-  documentsNotChecked: Array<Tfa998c5874>;
-  documentsNotCheckedOmittedCount: number;
-  review: string;
-  citations: Array<{
-    type: "docx-folio";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    passage: string;
-    blockId: string;
-  } | {
-    type: "pdf-bates";
-    documentName: string;
-    documentRef: string;
-    sourceHref: string;
-    statement: string;
-    bates: string;
-    pageNumber: number;
-  }>;
-};
+type Tff7d96076d = "global" | "at" | "de" | "eu" | "sk" | "cz";
 
 type Tffb9800473 = {
   documentId: Td90f3cb611;

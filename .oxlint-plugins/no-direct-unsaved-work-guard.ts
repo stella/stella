@@ -27,7 +27,7 @@ import {
   isAstNode,
   isFileIn,
   isIdentifier,
-  isStringLiteral,
+  staticStringValue,
 } from "./utils.ts";
 
 const ROUTER_MODULE = "@tanstack/react-router";
@@ -48,28 +48,6 @@ const allowedFilesFromOptions = (options: unknown): string[] => {
 };
 
 // A string literal or an interpolation-free template literal.
-const staticStringValue = (node: unknown): string | null => {
-  if (isStringLiteral(node)) {
-    return node.value;
-  }
-  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
-    return null;
-  }
-  const { expressions, quasis } = node;
-  if (
-    !Array.isArray(expressions) ||
-    expressions.length > 0 ||
-    !Array.isArray(quasis)
-  ) {
-    return null;
-  }
-  const quasi: unknown = quasis.at(0);
-  if (!isRecord(quasi) || !isRecord(quasi.value)) {
-    return null;
-  }
-  return typeof quasi.value.cooked === "string" ? quasi.value.cooked : null;
-};
-
 // Unlike the shared memberPropertyName, accepts any node (null for a
 // non-member) and reads an interpolation-free template key.
 const staticMemberKey = (node: unknown): string | null => {

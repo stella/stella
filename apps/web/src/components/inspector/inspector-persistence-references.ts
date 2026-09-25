@@ -85,13 +85,14 @@ registerInspectorPersistenceReference({
   }),
 });
 
-// An act tab carries only its address and its name: the wording itself is
-// read again, so a reload comes back on the consolidation the citation
-// resolved to rather than on whatever is latest.
+// An act tab carries only its address, its name and the passage it was
+// opened at: the wording itself is read again, so a reload comes back on the
+// consolidation the citation resolved to rather than on whatever is latest.
 registerInspectorPersistenceReference({
   type: STATUTE_VIEW,
   validate: isStatuteViewPayload,
   project: ({
+    anchorId,
     country,
     documentId,
     eli,
@@ -105,5 +106,6 @@ registerInspectorPersistenceReference({
     slug,
     statuteTitle,
     versionValidFrom,
+    ...(anchorId === undefined ? {} : { anchorId }),
   }),
 });

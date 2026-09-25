@@ -1,3 +1,4 @@
+import { rootDb } from "@/api/db/root";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
@@ -16,10 +17,11 @@ import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
  * The workers the HTTP server hosts in-process. The host check holds this
  * list to exactly the queues `BULLMQ_QUEUE_HOSTS` assigns to `api`, using the
  * queue names each starter reports, so a queue cannot be declared without
- * the worker that drains it being started and closed here.
+ * the worker that drains it being started and closed here. The host owns the
+ * root connection and hands it to every worker.
  */
 export const initApiBackgroundWorkers = () =>
-  createBullMqWorkerHost("api", [
+  createBullMqWorkerHost("api", { db: rootDb }, [
     initAccountDeletionCleanupWorker,
     initBilingualRunWorker,
     initDocumentDeadlineScoutWorker,

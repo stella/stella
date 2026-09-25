@@ -202,6 +202,7 @@ const unknownCodes = new Map<string, number>();
 const courts = new Map<string, number>();
 
 while (reattributed + superseded < limit) {
+  // db-await-in-loop: keyset page per iteration; the page is the batch
   const page = await readPage(cursor);
 
   // The cursor advances by rows examined, not by rows matched. A page whose
@@ -236,6 +237,7 @@ while (reattributed + superseded < limit) {
           reattributed += 1;
           break;
         }
+        // db-await-in-loop: one transaction per row: each takes its projection lock and syncs that row, so a failure rolls back only that row
         const written = await reattributeRow(repair);
         if (written) {
           reattributed += 1;

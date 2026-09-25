@@ -13,6 +13,10 @@
 # Usage:
 #   bun run verify           # affected packages vs origin/main (CI PR behavior)
 #   bun run verify --all     # full run, no --affected (CI nightly behavior)
+#   bun run verify --db-await-in-loop
+#                            # also run the whole-program database-await check,
+#                            # which CI always runs (one TypeScript program over
+#                            # the API, several GB of memory); off by default
 set -uo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,11 +25,16 @@ cd "$repo_root"
 
 affected_flag="--affected"
 base_ref="origin/main"
+db_await_in_loop="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all)
       affected_flag=""
+      shift
+      ;;
+    --db-await-in-loop)
+      db_await_in_loop="true"
       shift
       ;;
     --base)
@@ -38,7 +47,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "Usage: bun run verify [--all] [--base <ref>]" >&2
+      echo "Usage: bun run verify [--all] [--base <ref>] [--db-await-in-loop]" >&2
       exit 1
       ;;
   esac
@@ -322,8 +331,8 @@ run_step "Desktop Rust change detector self-test" bash \
   scripts/detect-tauri-rust-changes.test.sh
 run_step "Self-host production contract self-test" bun test \
   scripts/selfhost-contract.test.ts
-run_step "Local Quickwit generation contract" bun test \
-  scripts/quickwit-compose-contract.test.ts
+run_step "Local compose contract" bun test \
+  scripts/dev-compose-contract.test.ts
 run_step "Self-host production contract" bun run selfhost:check
 run_step "Railway template shape" bun run check:railway-template
 run_step "i18n" bun run i18n:check
@@ -338,6 +347,15 @@ if [[ -n "$affected_flag" ]]; then
 else
   run_step "Result consumption" bun run check:result-consumption -- --all
 fi
+run_db_await_in_loop_guard() {
+  bun test scripts/db-await-in-loop.test.ts || return 1
+  if [[ "$db_await_in_loop" != "true" ]]; then
+    echo "Whole-program check skipped; pass --db-await-in-loop to run it (CI always does)."
+    return 0
+  fi
+  bun run check:db-await-in-loop
+}
+run_step "Database awaits in loops" run_db_await_in_loop_guard
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_design_system_backlog_guard() {
   bun test scripts/design-lint-baseline.test.ts \

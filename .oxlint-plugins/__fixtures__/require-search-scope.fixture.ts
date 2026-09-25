@@ -1577,6 +1577,24 @@ const writeOnlyMergeEntityProjection = sql`
 // Public case law is intentionally organization-independent.
 const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
+// A bound value after `IS [NOT] DISTINCT FROM` is a comparison operand, not a
+// relation, so it needs no scope.
+const distinctFromComparisonControl = sql`
+  SELECT e.id
+  FROM entities e
+  WHERE e.updated_at IS NOT DISTINCT FROM ${organizationId}::timestamptz
+    AND e.workspace_id IS DISTINCT FROM ${organizationId}
+    AND e.created_at IS NOT DISTINCT FROM ( ${organizationId}::timestamptz)
+    AND e.workspace_id IS DISTINCT FROM((${organizationId}))
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a comparison operand does not hide an unscoped private projection read in the same statement
+const unsafeDistinctFromPrivateRead = sql`
+  SELECT sd.entity_id
+  FROM search_documents sd
+  WHERE sd.updated_at IS DISTINCT FROM ${organizationId}::timestamptz
+`;
+
 void [
   unsafeEntity,
   unsafeBuilderEntity,
@@ -1812,4 +1830,6 @@ void [
   nonSqlPrivateText,
   nonSqlNestedPrivateText,
   publicCaseLaw,
+  distinctFromComparisonControl,
+  unsafeDistinctFromPrivateRead,
 ];

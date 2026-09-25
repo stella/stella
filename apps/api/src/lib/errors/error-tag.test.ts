@@ -11,7 +11,7 @@ class ExampleTaggedError extends TaggedError("ExampleTaggedError")<{
 // enforces — a class whose identifier and declared name disagree, and a class
 // that declares no name at all. `errorClassName` has to name both, so the
 // fixtures cannot be made rule-compliant without erasing what they test.
-/* eslint-disable unicorn/custom-error-definition */
+/* oxlint-disable unicorn/custom-error-definition */
 
 // The shape a bundler emits when a class expression collides with the outer
 // binding it is assigned to: a distinct, suffixed identifier over a `name`
@@ -25,7 +25,7 @@ const BundlerRenamedError = class BundlerRenamedError2 extends Error {
 
 class SilentError extends Error {}
 
-/* eslint-enable unicorn/custom-error-definition */
+/* oxlint-enable unicorn/custom-error-definition */
 
 describe("errorClassName", () => {
   // `better-result` ships minified, so `Panic` is bound to a single letter

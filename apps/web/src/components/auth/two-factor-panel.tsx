@@ -21,7 +21,7 @@ import { cn } from "@stll/ui/utils";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
+import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 type TwoFactorMode = "totp" | "backupCode";

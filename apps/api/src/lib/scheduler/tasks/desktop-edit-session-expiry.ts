@@ -39,7 +39,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   let expired = 0;
 
   while (!signal.aborted) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const unnotifiedExpiredSessions = await db
       .select({
         id: desktopEditSessions.id,
@@ -55,7 +55,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       .orderBy(asc(desktopEditSessions.closedAt))
       .limit(EXPIRE_SWEEP_BATCH_SIZE);
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: one batched publish per page of sessions
+    // db-await-in-loop: page loop: one batched publish per page of sessions
     await publishAndMarkExpiryNotifications(db, unnotifiedExpiredSessions);
 
     if (unnotifiedExpiredSessions.length === EXPIRE_SWEEP_BATCH_SIZE) {
@@ -65,7 +65,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     // Mirror authorizeDesktopEditSession's liveness check: a session past
     // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const batch = await db
       .select({
         id: desktopEditSessions.id,
@@ -90,7 +90,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     const batchIds = batch.map((session) => session.id);
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transition per swept page
+    // db-await-in-loop: one transition per swept page
     const expiredSessions = await db.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
@@ -147,7 +147,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
           workspaceId: null,
           userId: firstEvent.userId,
         });
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched audit insert per actor; the recorder binds organization and user
+        // db-await-in-loop: one batched audit insert per actor; the recorder binds organization and user
         await recordAuditEvent(
           tx,
           actorEvents.map(({ event }) => event),
@@ -158,7 +158,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     });
 
     expired += expiredSessions.length;
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- page loop: one batched publish per page of sessions
+    // db-await-in-loop: page loop: one batched publish per page of sessions
     await publishAndMarkExpiryNotifications(db, expiredSessions);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {

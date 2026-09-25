@@ -36,10 +36,8 @@ import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
 } from "@/api/lib/search/process-extraction";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const duplicateEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),

@@ -33,10 +33,10 @@ import { registerLoopbackClient } from "./oauth-client-registration.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 import { persistLogin } from "./persist-login.js";
-import { createOAuthState, createPkcePair } from "./pkce.js";
+import { createAuthorizationState, createPkcePair } from "./pkce.js";
 import { negotiateOAuthScopes } from "./scope-negotiation.js";
 import { resolveServerUrl } from "./server-resolution.js";
-import { exchangeAuthorizationCode } from "./token-exchange.js";
+import { redeemAuthorizationCode } from "./token-exchange.js";
 
 export type LoginOptions = {
   readonly configDir: string;
@@ -289,7 +289,7 @@ export const login = async (
     );
 
     const { codeChallenge, codeVerifier } = createPkcePair();
-    const state = createOAuthState();
+    const state = createAuthorizationState();
 
     if (options.orgHint) {
       io.print(
@@ -320,7 +320,7 @@ export const login = async (
     );
 
     const token = yield* Result.await(
-      exchangeAuthorizationCode({
+      redeemAuthorizationCode({
         clientId,
         code: callback.code,
         codeVerifier,

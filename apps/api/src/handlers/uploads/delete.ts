@@ -88,7 +88,7 @@ const abortUpload = createSafeHandler(
     }
 
     const abortedRows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — pending_uploads bookkeeping; the row never
         // became a durable entity, so there's nothing for the audit

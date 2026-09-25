@@ -18,7 +18,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { apikey } from "@/api/db/auth-schema";
 import { createListMachineApiKeysHandler } from "@/api/handlers/api-keys/list";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
-import { listOrganizationMachineApiKeys } from "@/api/lib/machine-api-key-queries";
+import { readOrganizationMachineApiKeyPage } from "@/api/lib/machine-api-key-queries";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
@@ -71,8 +71,7 @@ beforeAll(async () => {
   // The queries module reads this table through the owner connection; point
   // that connection at the test database.
   listMachineApiKeys = createListMachineApiKeysHandler(
-    async (input) =>
-      await listOrganizationMachineApiKeys({ ...input, db: testDb }),
+    async (input) => await readOrganizationMachineApiKeyPage(testDb, input),
   );
 
   const timestamps = [...KEY_TIMESTAMPS, ...DISTINCT_MS_TIMESTAMPS];

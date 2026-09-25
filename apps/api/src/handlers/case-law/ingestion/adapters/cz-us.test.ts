@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { Result } from "better-result";
 import {
   afterAll,

@@ -3,7 +3,7 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -157,7 +157,6 @@ export const loadActiveMcpConnectionsForUser = async ({
   userId: SafeId<"user">;
 }): Promise<LoadedMcpConnection[]> => {
   const rowsResult = await safeDb((tx) =>
-    // oxlint-disable-next-line mcp-security/no-direct-oauth-client-join -- this module is the shared typed MCP connection loader.
     tx
       .select(selectConnectionFields)
       .from(mcpUserConnections)
@@ -211,7 +210,6 @@ export const loadMcpConnectionById = async ({
   userId: SafeId<"user">;
 }): Promise<LoadedMcpConnection | null> => {
   const rowsResult = await safeDb((tx) =>
-    // oxlint-disable-next-line mcp-security/no-direct-oauth-client-join -- this module is the shared typed MCP connection loader.
     tx
       .select(selectConnectionFields)
       .from(mcpUserConnections)
@@ -260,15 +258,30 @@ const normalizeConnectionRows = async ({
   rows: RawConnectionRow[];
   safeDb: SafeDb;
 }): Promise<LoadedMcpConnection[]> => {
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- pure row mapping; only a repair write when an OAuth row is malformed
-  const normalizedRows = await Promise.all(
-    rows.map(
-      async (rawRow) => await normalizeMcpConnectionRow({ rawRow, safeDb }),
-    ),
-  );
-  return normalizedRows.filter(
-    (row): row is LoadedMcpConnection => row !== null,
-  );
+  const loaded: LoadedMcpConnection[] = [];
+  const needsReauthIds: SafeId<"mcpUserConnection">[] = [];
+  for (const rawRow of rows) {
+    const normalized = normalizeMcpConnectionRow(rawRow);
+    switch (normalized.type) {
+      case "loaded":
+        loaded.push(normalized.connection);
+        break;
+      case "needsReauth":
+        needsReauthIds.push(normalized.connectionId);
+        break;
+      case "unusable":
+        break;
+      default: {
+        normalized satisfies never;
+        return panic(
+          `Unhandled MCP connection row: ${JSON.stringify(normalized)}`,
+        );
+      }
+    }
+  }
+  // Every malformed OAuth row is repaired by one statement.
+  await markConnectionsNeedReauth({ connectionIds: needsReauthIds, safeDb });
+  return loaded;
 };
 
 export const createMcpClientForConnection = async ({
@@ -398,7 +411,7 @@ export const refreshCachedMcpToolsForConnection = async ({
       safeDb,
       userId,
     });
-    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     const updated = await safeDb((tx) => {
       // audit: skip — derived MCP tool-cache metadata, not a user-facing state change
       return tx
@@ -726,7 +739,7 @@ const resolveAuthorizationToken = async ({
       })
     : null;
 
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   const persistResult = await safeDb((tx) => {
     // audit: skip — OAuth token refresh metadata for an existing MCP connection
     return tx
@@ -752,13 +765,19 @@ const resolveAuthorizationToken = async ({
   return { type: "ok", value: refreshed.value.access_token };
 };
 
-const normalizeMcpConnectionRow = async ({
-  rawRow,
-  safeDb,
-}: {
-  rawRow: RawConnectionRow;
-  safeDb: SafeDb;
-}): Promise<LoadedMcpConnection | null> => {
+/**
+ * What a stored row can serve, decided without I/O. An OAuth row missing the
+ * material a refresh needs cannot recover by itself, so it asks the caller to
+ * mark it for reauthorization.
+ */
+type NormalizedConnectionRow =
+  | { type: "loaded"; connection: LoadedMcpConnection }
+  | { type: "needsReauth"; connectionId: SafeId<"mcpUserConnection"> }
+  | { type: "unusable" };
+
+const normalizeMcpConnectionRow = (
+  rawRow: RawConnectionRow,
+): NormalizedConnectionRow => {
   const base = {
     allowedTools: rawRow.allowedTools,
     connectorId: rawRow.connectorId,
@@ -770,19 +789,22 @@ const normalizeMcpConnectionRow = async ({
   } satisfies McpConnectionBase;
 
   if (rawRow.authType === "none") {
-    return { ...base, type: "none" };
+    return { type: "loaded", connection: { ...base, type: "none" } };
   }
 
   if (rawRow.authType === "bearer") {
     if (!rawRow.staticTokenEncrypted || !rawRow.staticTokenIv) {
-      return null;
+      return { type: "unusable" };
     }
 
     return {
-      ...base,
-      staticTokenEncrypted: rawRow.staticTokenEncrypted,
-      staticTokenIv: rawRow.staticTokenIv,
-      type: "bearer",
+      type: "loaded",
+      connection: {
+        ...base,
+        staticTokenEncrypted: rawRow.staticTokenEncrypted,
+        staticTokenIv: rawRow.staticTokenIv,
+        type: "bearer",
+      },
     };
   }
 
@@ -793,23 +815,25 @@ const normalizeMcpConnectionRow = async ({
     !rawRow.oauthClientId ||
     !rawRow.oauthResourceUrl
   ) {
-    await markNeedsReauth({ connectionId: rawRow.userConnectionId, safeDb });
-    return null;
+    return { type: "needsReauth", connectionId: rawRow.userConnectionId };
   }
 
   return {
-    ...base,
-    accessTokenEncrypted: rawRow.accessTokenEncrypted,
-    accessTokenIv: rawRow.accessTokenIv,
-    expiresAt: rawRow.expiresAt,
-    oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
-    oauthClientId: rawRow.oauthClientId,
-    oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
-    oauthClientSecretIv: rawRow.oauthClientSecretIv,
-    oauthResourceUrl: rawRow.oauthResourceUrl,
-    refreshTokenEncrypted: rawRow.refreshTokenEncrypted,
-    refreshTokenIv: rawRow.refreshTokenIv,
-    type: "oauth2",
+    type: "loaded",
+    connection: {
+      ...base,
+      accessTokenEncrypted: rawRow.accessTokenEncrypted,
+      accessTokenIv: rawRow.accessTokenIv,
+      expiresAt: rawRow.expiresAt,
+      oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
+      oauthClientId: rawRow.oauthClientId,
+      oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
+      oauthClientSecretIv: rawRow.oauthClientSecretIv,
+      oauthResourceUrl: rawRow.oauthResourceUrl,
+      refreshTokenEncrypted: rawRow.refreshTokenEncrypted,
+      refreshTokenIv: rawRow.refreshTokenIv,
+      type: "oauth2",
+    },
   };
 };
 
@@ -820,13 +844,26 @@ const markNeedsReauth = async ({
   connectionId: SafeId<"mcpUserConnection">;
   safeDb: SafeDb;
 }) => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await markConnectionsNeedReauth({ connectionIds: [connectionId], safeDb });
+};
+
+const markConnectionsNeedReauth = async ({
+  connectionIds,
+  safeDb,
+}: {
+  connectionIds: readonly SafeId<"mcpUserConnection">[];
+  safeDb: SafeDb;
+}) => {
+  if (connectionIds.length === 0) {
+    return;
+  }
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   const result = await safeDb((tx) => {
     // audit: skip — derived MCP connection reauth status from failed token validation
     return tx
       .update(mcpUserConnections)
       .set({ status: "needs_reauth", updatedAt: new Date() })
-      .where(eq(mcpUserConnections.id, connectionId));
+      .where(inArray(mcpUserConnections.id, connectionIds));
   });
   if (Result.isError(result)) {
     captureError(result.error, { source: "mcp-upstream-mark-needs-reauth" });

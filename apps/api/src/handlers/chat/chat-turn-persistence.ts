@@ -12,6 +12,7 @@ import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
+import { settleOpenToolCallsForOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type {
   ChatTurnFailureCode,
   ChatTurnInteractionType,
@@ -19,6 +20,7 @@ import type {
 import type {
   ChatTurnOutcome,
   ChatMessageRole,
+  PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -100,6 +102,79 @@ const lockChatThreadForTurnOnTx = async ({
 };
 
 /**
+ * Store the terminal form of an assistant message whose turn the server ended
+ * (superseded, or its owner gone), in the transaction that ends the turn.
+ */
+const storeServerEndedMessageOnTx = async ({
+  message,
+  threadId,
+  tx,
+}: {
+  message: PersistableTerminalAssistantMessage;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  // audit: skip — this is the server-owned counterpart of the turn transition written in the same transaction
+  await tx
+    .update(chatMessages)
+    .set({ content: chatMessageContentFromMessage(message) })
+    .where(
+      and(eq(chatMessages.id, message.id), eq(chatMessages.threadId, threadId)),
+    );
+};
+
+/**
+ * A running turn owns no assistant row, so the message it resumed is the
+ * thread's latest assistant message, stored when the continuation was
+ * claimed. Its approved calls end with the run, as unfinished calls whose
+ * outcome is unknown. A latest message with nothing to settle belongs to an
+ * earlier turn and is left untouched.
+ */
+const settleInterruptedContinuationOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const latest = (
+    await tx
+      .select({
+        content: chatMessages.content,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.threadId, threadId),
+          eq(chatMessages.role, "assistant"),
+        ),
+      )
+      .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+      .limit(1)
+  ).at(0);
+  if (latest === undefined) {
+    return;
+  }
+  const message = chatMessageFromPersisted(latest);
+  const outcome = { reason: "timeout", type: "interrupted" } as const;
+  const parts = settleOpenToolCallsForOutcome({
+    outcome: outcome.type,
+    parts: message.parts,
+  });
+  // Settling adds a result part per closed call; no new part, nothing to do.
+  if (parts.length === message.parts.length) {
+    return;
+  }
+  const settled = attachTerminalTurnOutcome({
+    message: { ...message, parts },
+    turnOutcome: outcome,
+  });
+  await storeServerEndedMessageOnTx({ message: settled, threadId, tx });
+};
+
+/**
  * Under the thread lock, turn an abandoned provider owner into its durable
  * terminal outcome. A live owner renews its lease conditionally, so it either
  * wins that renewal before this write (and remains running), or loses it after
@@ -114,7 +189,7 @@ const interruptExpiredRunningChatTurnOnTx = async ({
 }): Promise<void> => {
   const now = databaseNow();
   // audit: skip — timeout terminalization records that an execution lease ended; no user-authored content changes
-  await tx
+  const interrupted = await tx
     .update(chatTurns)
     .set({
       assistantMessageId: null,
@@ -136,7 +211,11 @@ const interruptExpiredRunningChatTurnOnTx = async ({
         // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
         lte(chatTurns.leaseExpiresAt, now),
       ),
-    );
+    )
+    .returning({ id: chatTurns.id });
+  if (interrupted.length > 0) {
+    await settleInterruptedContinuationOnTx({ threadId, tx });
+  }
 };
 
 /**
@@ -209,22 +288,24 @@ const cancelAwaitingAssistantMessagesOnTx = async ({
   if (awaitingMessage.role !== "assistant") {
     panic("Awaiting chat turn does not own an assistant message");
   }
+  const cancelled = cancelPendingChatToolCalls(
+    chatMessageFromPersisted(awaitingMessage),
+  );
   const cancelledMessage = attachTerminalTurnOutcome({
-    message: cancelPendingChatToolCalls(
-      chatMessageFromPersisted(awaitingMessage),
-    ),
+    message: {
+      ...cancelled,
+      parts: settleOpenToolCallsForOutcome({
+        outcome: "cancelled",
+        parts: cancelled.parts,
+      }),
+    },
     turnOutcome: { reason: "superseded", type: "cancelled" },
   });
-  // audit: skip — this is the server-owned counterpart of the same turn cancellation below
-  await tx
-    .update(chatMessages)
-    .set({ content: chatMessageContentFromMessage(cancelledMessage) })
-    .where(
-      and(
-        eq(chatMessages.id, awaitingMessage.id),
-        eq(chatMessages.threadId, threadId),
-      ),
-    );
+  await storeServerEndedMessageOnTx({
+    message: cancelledMessage,
+    threadId,
+    tx,
+  });
 };
 
 /**

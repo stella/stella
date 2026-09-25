@@ -1,84 +1,14 @@
 {
   "waivers": [
     {
-      "id": "SW-0001",
-      "kind": "permanent",
-      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "revokeAuthCredentialsAndInvitations",
-      "count": 1,
-      "reason": "Account deletion must revoke Better Auth session artifacts.",
-      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
-    },
-    {
-      "id": "SW-0002",
-      "kind": "permanent",
-      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "revokeOAuthTokensAndGrants",
-      "count": 2,
-      "reason": "Account deletion must revoke Better Auth OAuth access and refresh tokens; both deletes are the revocation, so neither can route through the helper the rule points at.",
-      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
-    },
-    {
-      "id": "SW-0003",
-      "kind": "permanent",
-      "rule": "mcp-security/no-direct-oauth-client-join",
-      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
-      "symbol": "loadActiveMcpConnectionsForUser",
-      "count": 1,
-      "reason": "this module is the shared typed MCP connection loader.",
-      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
-    },
-    {
-      "id": "SW-0004",
-      "kind": "permanent",
-      "rule": "mcp-security/no-direct-oauth-client-join",
-      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
-      "symbol": "loadMcpConnectionById",
-      "count": 1,
-      "reason": "this module is the shared typed MCP connection loader.",
-      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
-    },
-    {
-      "id": "SW-0005",
-      "kind": "permanent",
-      "rule": "no-body-ownership-ids/no-body-ownership-ids",
-      "file": "apps/api/src/handlers/audit-logs/query.ts",
-      "symbol": "toAuditLogConditions",
-      "count": 1,
-      "reason": "org-scoped compliance filter, not an ownership source",
-      "evidence": "apps/api/src/handlers/audit-logs/query-scope.integration.test.ts"
-    },
-    {
-      "id": "SW-0006",
-      "kind": "permanent",
-      "rule": "no-body-ownership-ids/no-body-ownership-ids",
-      "file": "apps/api/src/handlers/chat/send-message.ts",
-      "symbol": "createSendMessage",
-      "count": 1,
-      "reason": "root handler; resolveChatScope performs targeted workspace authorization",
-      "evidence": "apps/api/src/handlers/chat/chat-scope.test.ts"
-    },
-    {
       "id": "SW-0007",
       "kind": "permanent",
       "rule": "require-search-scope/require-search-scope",
       "file": "apps/api/src/lib/search/index-chat.ts",
       "symbol": "backfillChatThreadSearchIndex",
       "count": 1,
-      "reason": "system backfill repairs derived search documents across all threads; it does not return request data",
+      "reason": "tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller",
       "evidence": "apps/api/src/lib/search/index-chat.test.ts"
-    },
-    {
-      "id": "SW-0008",
-      "kind": "permanent",
-      "rule": "require-search-scope/require-search-scope",
-      "file": "apps/api/src/lib/search/index-entity.ts",
-      "symbol": "upsertSearchDocument",
-      "count": 1,
-      "reason": "atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance",
-      "evidence": "apps/api/src/lib/search/index-entity.test.ts"
     },
     {
       "id": "SW-0013",
@@ -88,7 +18,7 @@
       "file": "apps/api/src/lib/docx/extract-text.ts",
       "symbol": "import @stll/folio-core/server",
       "count": 1,
-      "reason": "Template packages and filled template output are read from template storage, which has no scan boundary yet; this parser input moves to a ScannedFile once template storage gets one.",
+      "reason": "Template uploads are scanned at the route, but stored templates and filled template output are read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once template storage keys get a stored-file reader.",
       "evidence": "apps/api/src/lib/docx/extract-text.test.ts"
     },
     {
@@ -99,7 +29,7 @@
       "file": "apps/api/src/lib/style-set-editor.ts",
       "symbol": "readStyleSetEditorPreset",
       "count": 1,
-      "reason": "Style-set packages are server-built from extracted styles and read from style-set storage, which has no scan boundary yet; this parser input moves to a ScannedFile once that storage gets one.",
+      "reason": "Style-set packages are server-built from scanned uploads or presets and read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once style-set storage keys get a stored-file reader.",
       "evidence": "apps/api/src/lib/style-set-editor.test.ts"
     }
   ]

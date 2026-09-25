@@ -53,7 +53,7 @@ import {
 // genuinely fire-and-forget, wrap it in `void (async () => { ... })()` (or
 // `Result.tryPromise` for a throwaway mutation) and still check
 // `response.error` inside. If checking the result is truly meaningless for
-// a specific best-effort call, suppress with `// eslint-disable-next-line
+// a specific best-effort call, suppress with `// oxlint-disable-next-line
 // require-eden-error-check -- SAFETY: <reason>` rather than leaving the
 // discard unexplained.
 //

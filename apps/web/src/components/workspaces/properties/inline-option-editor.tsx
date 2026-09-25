@@ -23,18 +23,18 @@ import {
   optionColors,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
-import type { OptionColor } from "@/lib/api-contract";
-import type { WorkspacePropertyOption } from "@/lib/types";
+import type { PropertyOptionColor } from "@/lib/api-contract";
+import type { SelectPropertyOption } from "@/lib/types";
 
-const colorAt = (index: number): OptionColor =>
+const colorAt = (index: number): PropertyOptionColor =>
   optionColors[index % optionColors.length] ?? "gray";
 
 type InlineOptionEditorProps = {
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   /** Several at once: a pasted list lands in one update, never one per option. */
-  pushOptions: (options: WorkspacePropertyOption[]) => void;
+  pushOptions: (options: SelectPropertyOption[]) => void;
   removeOptionAt: (index: number) => void;
-  replaceOptionAt: (index: number, option: WorkspacePropertyOption) => void;
+  replaceOptionAt: (index: number, option: SelectPropertyOption) => void;
   fallback: string | null;
   /**
    * Omitted where the column has no fallback to offer: a case-law question
@@ -206,8 +206,8 @@ export const InlineOptionEditor = ({
 };
 
 type OptionRowProps = {
-  option: WorkspacePropertyOption;
-  onPickColor: (color: OptionColor) => void;
+  option: SelectPropertyOption;
+  onPickColor: (color: PropertyOptionColor) => void;
   onRemove: () => void;
   onRename: (next: string) => void;
 };

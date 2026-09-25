@@ -1,5 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -19,7 +20,9 @@ import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { emitDevCanaryError } from "@/lib/dev-canary";
+import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -44,16 +47,32 @@ import type { ChatRuntime } from "./chat-runtime";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
-type SerializedChatMessage = Omit<PersistedChatMessage, "createdAt"> & {
-  createdAt: string;
+type SerializedChatMessage =
+  WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number];
+
+const readChatTimestamp = (value: string): Date =>
+  parseDeterministicDate(value) ??
+  panic("The chat API returned an invalid timestamp");
+
+const deserializeChatPart = (
+  part: SerializedChatMessage["parts"][number],
+): PersistedChatMessage["parts"][number] => {
+  if (part.type !== "tool-result") {
+    return part;
+  }
+  const { createdAt, ...rest } = part;
+  return createdAt === undefined
+    ? rest
+    : { ...rest, createdAt: readChatTimestamp(createdAt) };
 };
 
 const deserializeChatMessages = (
   messages: readonly SerializedChatMessage[],
 ): PersistedChatMessage[] =>
-  messages.map(({ createdAt, ...message }) => ({
+  messages.map(({ createdAt, parts, ...message }) => ({
     ...message,
-    createdAt: new Date(createdAt),
+    createdAt: readChatTimestamp(createdAt),
+    parts: parts.map(deserializeChatPart),
   }));
 
 /**
@@ -557,7 +576,7 @@ export const fileChatThreadOptions = ({
   key,
   hasDocxEditSurface,
 }: FileChatThreadOptionsArgs) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- `hasDocxEditSurface` deliberately excluded from this query's key: the file-thread identity it resolves is the same regardless of docx-vs-pdf, it only steers which sibling `chatThreadOptions` cache key the queryFn seeds below.
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- `hasDocxEditSurface` deliberately excluded from this query's key: the file-thread identity it resolves is the same regardless of docx-vs-pdf, it only steers which sibling `chatThreadOptions` cache key the queryFn seeds below.
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,

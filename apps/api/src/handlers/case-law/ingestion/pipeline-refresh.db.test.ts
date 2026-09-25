@@ -21,13 +21,11 @@
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -42,6 +40,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -90,9 +89,7 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
-  const db = drizzle(databaseUrl, {
-    relations: { ...relations, ...authRelationsPart },
-  });
+  const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
   const scopedDb: ScopedDb = async (callback) =>
     await db.transaction(async (tx) => await callback(tx));
 
@@ -223,7 +220,7 @@ if (!databaseUrl || !runPostgresTests) {
       sourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (created.length > 0) {
         await db
           .delete(caseLawDecisions)

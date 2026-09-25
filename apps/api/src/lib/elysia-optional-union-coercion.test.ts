@@ -28,7 +28,7 @@ const absentField = async (schema: ReturnType<typeof t.Object>) => {
 describe("Elysia optional union coercion (canary)", () => {
   test("t.Optional(t.UnionEnum([...])) coerces an absent field to the FIRST member", async () => {
     const received = await absentField(
-      // eslint-disable-next-line no-coerced-optional-union-enum/no-coerced-optional-union-enum -- canary deliberately pins the UnionEnum coercion behaviour
+      // oxlint-disable-next-line no-coerced-optional-union-enum/no-coerced-optional-union-enum -- canary deliberately pins the UnionEnum coercion behaviour
       t.Object({ field: t.Optional(t.UnionEnum(["a", "b"])) }),
     );
     expect(received).toBe("a");

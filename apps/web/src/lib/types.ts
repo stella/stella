@@ -1,4 +1,5 @@
 import type {
+  AgendaItemWireFields,
   EntityPriority,
   OcrExportStatus,
   ReviewFlag,
@@ -13,8 +14,6 @@ import type {
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   BoundingBox,
-  AgendaItemKind,
-  AgendaItemSource,
   ConditionNode,
   EntityKind,
   ViewLayout,
@@ -35,8 +34,6 @@ export type { OptionColor, WorkspaceFieldContent };
 export type {
   EntityKind,
   ConditionNode,
-  AgendaItemKind,
-  AgendaItemSource,
   ViewLayout,
   ViewLayoutType,
   ViewTemplateProperty,
@@ -177,7 +174,7 @@ export type WorkspaceProperty = Omit<
   role?: WorkspacePropertyWire["role"];
 };
 
-export type WorkspacePropertyOption = {
+export type SelectPropertyOption = {
   color: OptionColor;
   value: string;
 };
@@ -228,7 +225,7 @@ export type WorkspaceEntityAssignee = {
   image: string | null;
 };
 
-export type WorkspaceEntity = {
+export type WorkspaceEntity = AgendaItemWireFields & {
   entityId: EntityId;
   kind: EntityKind;
   name: string | null;
@@ -253,26 +250,6 @@ export type WorkspaceEntity = {
   priority: EntityPriority | null;
   /** Legal-list discriminator; malformed legacy wire values are normalized to null. */
   listItemType: ListItemType | null;
-  dueDate: string | null;
-  agendaKind: AgendaItemKind;
-  startAt: string | null;
-  endAt: string | null;
-  occurredAt: string | null;
-  remindAt: string | null;
-  allDay: boolean;
-  timeZone: string | null;
-  location: string | null;
-  onlineMeetingUrl: string | null;
-  availability: string | null;
-  sensitivity: string | null;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: AgendaItemSource;
-  externalSource: string | null;
-  externalId: string | null;
-  externalChangeKey: string | null;
-  externalICalUid: string | null;
   readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;

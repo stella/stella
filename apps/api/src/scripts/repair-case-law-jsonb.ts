@@ -150,6 +150,7 @@ const main = async () => {
 
   while (true) {
     const batchStart = performance.now();
+    // db-await-in-loop: keyset batch per iteration; each batch is one set-based repair statement
     const result = await repairBatch(cursor);
 
     if (!result || result.scanned === 0) {

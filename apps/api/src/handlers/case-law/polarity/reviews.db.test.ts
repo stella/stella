@@ -64,7 +64,7 @@ let observationOrder = 0n;
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 const transactionRunner = {

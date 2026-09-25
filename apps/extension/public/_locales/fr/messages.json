@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "L’accès aux sites est désactivé. Accordez-le une fois pour permettre à stella d’utiliser les sites auxquels vous êtes connecté."
+  },
+  "accessReady": {
+    "message": "Prêt. stella peut utiliser un onglet dédié tout en conservant vos connexions aux sites."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome n’a pas pu modifier l’accès aux sites."
+  },
+  "adoptTab": {
+    "message": "Utiliser cet onglet avec stella"
+  },
+  "adoptUnsupported": {
+    "message": "Seules les pages HTTPS publiques peuvent être utilisées avec stella."
+  },
+  "adoptedTab": {
+    "message": "stella peut maintenant lire $ORIGIN$ dans cet onglet. Posez vos questions dans le chat.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Vérification de l’accès aux sites…"
+  },
+  "connectTab": {
+    "message": "Connecter l’onglet stella actuel"
+  },
+  "controllerReady": {
+    "message": "Connecté à $ORIGIN$. Chaque action doit toujours être autorisée dans stella.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Déconnecter l’onglet"
+  },
+  "extensionDescription": {
+    "message": "Permet à stella de contrôler un onglet Chrome dédié après votre autorisation."
+  },
+  "extensionName": {
+    "message": "Navigateur stella"
+  },
+  "grantAccess": {
+    "message": "Autoriser tous les sites"
+  },
+  "revokeAccess": {
+    "message": "Retirer l’accès aux sites"
+  },
+  "unsupportedTab": {
+    "message": "Ouvrez un onglet de l’application stella, puis réessayez."
+  }
+}

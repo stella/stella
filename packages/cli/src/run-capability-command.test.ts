@@ -128,7 +128,7 @@ const makeTtyContext = ({
   const proc = { stdin, stdout, stderr, exitCode: undefined, env: {} };
   const context: Context = {
     // SAFETY: the executor only reads stdin/stdout/stderr/exitCode off process.
-    // eslint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
     process: proc as unknown as NodeJS.Process,
     configDir: "/tmp/stella-test",
     serverUrl,

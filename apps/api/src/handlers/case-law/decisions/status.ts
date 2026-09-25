@@ -21,8 +21,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { loadCourtWeights } from "@/api/lib/case-law/court-weights";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -277,7 +277,7 @@ export const readCaseLawCorpusStatusHandler = async (
       // it returns.
       const named = buckets.slice(0, LIMITS.caseLawFacetLimit);
       const [courtWeights, activity] = await Promise.all([
-        loadCourtWeights(),
+        loadPublicCourtWeights(),
         caseLawDb(
           async (tx) =>
             await readCaseLawCourtActivityQuery(tx, {

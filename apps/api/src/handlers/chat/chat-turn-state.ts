@@ -171,6 +171,79 @@ const rejectedTransition = (
   type: "rejected",
 });
 
+type ChatTurnIdentity = Pick<
+  ChatTurnState,
+  "id" | "threadId" | "userMessageId"
+>;
+
+type ChatTurnTransitionOf<Type extends ChatTurnTransition["type"]> = Extract<
+  ChatTurnTransition,
+  { type: Type }
+>;
+
+// The target states more than one source status reaches, each carrying the
+// turn's identity forward unchanged.
+const runningTurn = (
+  state: ChatTurnIdentity,
+  transition: ChatTurnTransitionOf<"resume" | "start">,
+): ChatTurnTransitionResult => ({
+  state: {
+    executionId: transition.executionId,
+    id: state.id,
+    leaseExpiresAt: transition.leaseExpiresAt,
+    status: "running",
+    threadId: state.threadId,
+    userMessageId: state.userMessageId,
+  },
+  type: "applied",
+});
+
+const failedTurn = (
+  state: ChatTurnIdentity,
+  transition: ChatTurnTransitionOf<"fail">,
+): ChatTurnTransitionResult => ({
+  state: {
+    assistantMessageId: transition.assistantMessageId,
+    failedAt: transition.failedAt,
+    failure: transition.failure,
+    id: state.id,
+    status: "failed",
+    threadId: state.threadId,
+    userMessageId: state.userMessageId,
+  },
+  type: "applied",
+});
+
+const cancelledTurn = (
+  state: ChatTurnIdentity,
+  transition: ChatTurnTransitionOf<"cancel">,
+): ChatTurnTransitionResult => ({
+  state: {
+    cancelledAt: transition.cancelledAt,
+    id: state.id,
+    reason: transition.reason,
+    status: "cancelled",
+    threadId: state.threadId,
+    userMessageId: state.userMessageId,
+  },
+  type: "applied",
+});
+
+const interruptedTurn = (
+  state: ChatTurnIdentity,
+  transition: ChatTurnTransitionOf<"interrupt">,
+): ChatTurnTransitionResult => ({
+  state: {
+    id: state.id,
+    interruptedAt: transition.interruptedAt,
+    reason: transition.reason,
+    status: "interrupted",
+    threadId: state.threadId,
+    userMessageId: state.userMessageId,
+  },
+  type: "applied",
+});
+
 /**
  * Pure lifecycle planner. Persistence must apply the returned branch with a
  * compare-and-set on the source status; this function deliberately never
@@ -184,54 +257,13 @@ export const planChatTurnTransition = (
     case "accepted":
       switch (transition.type) {
         case "start":
-          return {
-            state: {
-              executionId: transition.executionId,
-              id: state.id,
-              leaseExpiresAt: transition.leaseExpiresAt,
-              status: "running",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return runningTurn(state, transition);
         case "fail":
-          return {
-            state: {
-              assistantMessageId: transition.assistantMessageId,
-              failedAt: transition.failedAt,
-              failure: transition.failure,
-              id: state.id,
-              status: "failed",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return failedTurn(state, transition);
         case "cancel":
-          return {
-            state: {
-              cancelledAt: transition.cancelledAt,
-              id: state.id,
-              reason: transition.reason,
-              status: "cancelled",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return cancelledTurn(state, transition);
         case "interrupt":
-          return {
-            state: {
-              id: state.id,
-              interruptedAt: transition.interruptedAt,
-              reason: transition.reason,
-              status: "interrupted",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return interruptedTurn(state, transition);
         case "await-user":
         case "complete":
         case "resume":
@@ -267,42 +299,11 @@ export const planChatTurnTransition = (
             type: "applied",
           };
         case "fail":
-          return {
-            state: {
-              assistantMessageId: transition.assistantMessageId,
-              failedAt: transition.failedAt,
-              failure: transition.failure,
-              id: state.id,
-              status: "failed",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return failedTurn(state, transition);
         case "cancel":
-          return {
-            state: {
-              cancelledAt: transition.cancelledAt,
-              id: state.id,
-              reason: transition.reason,
-              status: "cancelled",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return cancelledTurn(state, transition);
         case "interrupt":
-          return {
-            state: {
-              id: state.id,
-              interruptedAt: transition.interruptedAt,
-              reason: transition.reason,
-              status: "interrupted",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return interruptedTurn(state, transition);
         case "resume":
         case "start":
           return rejectedTransition(state, transition);
@@ -313,29 +314,9 @@ export const planChatTurnTransition = (
     case "awaiting-user":
       switch (transition.type) {
         case "resume":
-          return {
-            state: {
-              executionId: transition.executionId,
-              id: state.id,
-              leaseExpiresAt: transition.leaseExpiresAt,
-              status: "running",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return runningTurn(state, transition);
         case "cancel":
-          return {
-            state: {
-              cancelledAt: transition.cancelledAt,
-              id: state.id,
-              reason: transition.reason,
-              status: "cancelled",
-              threadId: state.threadId,
-              userMessageId: state.userMessageId,
-            },
-            type: "applied",
-          };
+          return cancelledTurn(state, transition);
         case "await-user":
         case "complete":
         case "fail":

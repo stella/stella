@@ -381,7 +381,7 @@ export const mustAllowFixedOrigins = async (id: string) => {
   const target = new URL("https://api.example.com/items");
   target.searchParams.set("id", id);
   await fetchWithTimeout(target, { timeoutMs: 1000 });
-  // eslint-disable-next-line typescript/dot-notation -- fixture: static computed access reaches the genuine global fetch binding
+  // oxlint-disable-next-line typescript/dot-notation -- fixture: static computed access reaches the genuine global fetch binding
   await globalThis["fetch"](`https://api.example.com/items/${id}`, {
     signal,
   });

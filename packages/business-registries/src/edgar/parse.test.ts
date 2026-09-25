@@ -16,7 +16,7 @@ const APPLE_FIXTURE_NOW = Temporal.Instant.from(
 // by construction (the parser tolerates absent optional fields, so
 // the cast narrows JSON `unknown` to the documented response type
 // without runtime risk).
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const apple = appleFixture as unknown as EdgarRawSubmission;
 
 describe("parseAddress", () => {

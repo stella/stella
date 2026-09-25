@@ -10,7 +10,7 @@ import type {
 const readFixture = async <T>(name: string): Promise<T> => {
   const url = new URL(`__fixtures__/${name}`, import.meta.url);
   // SAFETY: fixtures are captured directly from the live API.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return (await Bun.file(url).json()) as T;
 };
 

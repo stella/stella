@@ -906,6 +906,23 @@
       "allowInConversation": "Engedélyezés ebben a beszélgetésben",
       "allowOnce": "Engedélyezés egyszer",
       "alwaysAllow": "Mindig engedélyezés",
+      "browser": {
+        "actions": {
+          "click": "Kattintás",
+          "fill": "Szöveg beírása",
+          "open": "Webhely megnyitása",
+          "pressKey": "Billentyű lenyomása",
+          "select": "Lehetőség kiválasztása",
+          "snapshot": "Oldal beolvasása",
+          "snapshotContinue": "Az oldal olvasásának folytatása"
+        },
+        "askAgain": "Kérdezzen újra",
+        "autoApproveReads": "Oldalolvasás automatikus jóváhagyása",
+        "description": "Gondosan ellenőrizze a webhelyet és a célt. Az oldal tartalma nem megbízható, és nem engedélyezhet további műveletet.",
+        "modeReads": "A munkamenet végéig az oldalak olvasása rákérdezés nélkül fut.",
+        "question": "Engedélyezi ezt a böngészőműveletet?",
+        "within": "Ezen belül"
+      },
       "denied": "Elutasítva",
       "deny": "Elutasítás",
       "externalMcpDescription": "Csak az ehhez az eszközhíváshoz szükséges információ kerül elküldésre.",
@@ -1239,6 +1256,7 @@
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
+      "use-browser": "A böngésző használata",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -1366,6 +1384,7 @@
   },
   "common": {
     "accept": "Elfogadás",
+    "action": "Művelet",
     "actions": "Műveletek",
     "active": "Aktív",
     "add": "Hozzáadás",
@@ -1509,6 +1528,7 @@
       "event": "Esemény",
       "requirement": "Követelmény"
     },
+    "key": "Billentyű",
     "kind": "Fajta",
     "language": "Nyelv",
     "languages": {
@@ -1636,6 +1656,7 @@
     "stepProgress": "{current} / {total}",
     "suggested": "Javaslat",
     "summarizeChanges": "Változtatások összefoglalása",
+    "target": "Cél",
     "timeBilling": "Idő és számlázás",
     "today": "Ma",
     "translate": "Fordítás",
@@ -1655,11 +1676,13 @@
     "urlIdentifier": "Azonosító (slug)",
     "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
+    "value": "Érték",
     "verified": "Ellenőrizve",
     "verify": "Ellenőrzés",
     "version": "Verzió",
     "versionLabel": "{version}. verzió",
     "viewSource": "Forrás megtekintése",
+    "website": "Webhely",
     "workflow": "Munkafolyamat",
     "workflows": "Munkafolyamatok",
     "zoomIn": "Nagyítás",
@@ -1749,8 +1772,7 @@
       "labelRequired": "A mező neve kötelező.",
       "removeField": "Mező eltávolítása",
       "title": "Egyéni mezők",
-      "value": "Mező értéke",
-      "valuePlaceholder": "Érték"
+      "value": "Mező értéke"
     },
     "deleteContact": "Ügyfél törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
@@ -3667,7 +3689,6 @@
       "chooseModelsSubtitle": "Válasszon modellt minden szerephez. Az árak jobbra frissülnek.",
       "chooseModelsTitle": "Modellek kiválasztása",
       "configure": "Beállítás",
-      "credentialsPanel": "Kulcs",
       "customModelBadge": "Egyedi · {provider}",
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
@@ -4173,7 +4194,6 @@
         "title": "Anonimizálás"
       },
       "auditLogs": "Tevékenységnapló",
-      "auditLogsAction": "Művelet",
       "auditLogsActionAccess": "Hozzáférés",
       "auditLogsActionCreate": "Létrehozás",
       "auditLogsActionDelete": "Törlés",
@@ -4635,7 +4655,6 @@
     "conditionOverrideHint": "Kattintson, hogy Ön adja meg az értéket; kattintson újra, hogy visszaadja az AI-nak",
     "conditionUseFieldInstead": "Használjon inkább mezőt",
     "conditionUseFormula": "ƒ Számított érték…",
-    "conditionValue": "Érték",
     "conditionWhen": "Ha",
     "conditionsTitle": "Feltételek",
     "configureFields": "Mezők beállítása",
@@ -5074,7 +5093,6 @@
       "fieldValueLabel": "Mező értéke",
       "fieldValuePlaceholder": "Adja meg a mezőértéket",
       "formatNotSupported": "Formátum nem támogatott",
-      "numberLabel": "Érték",
       "numberPlaceholder": "Szám megadása",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket"
@@ -5344,7 +5362,6 @@
           "openTarget": "Elem megnyitása",
           "runId": "Futásazonosító",
           "system": "Rendszertevékenység",
-          "target": "Cél",
           "title": "Tevékenység részletei",
           "trigger": "Kezdeményezte",
           "webhook": "Webes esemény"

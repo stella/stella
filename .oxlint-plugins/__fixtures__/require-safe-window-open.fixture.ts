@@ -25,7 +25,7 @@ export const windowWithFeatures = window.open(
 );
 
 // MUST flag: static bracket notation cannot bypass the rule.
-// eslint-disable-next-line require-safe-window-open/require-safe-window-open, typescript/dot-notation -- fixture: static bracket access is equivalent to window.open
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open, typescript/dot-notation -- fixture: static bracket access is equivalent to window.open
 export const bracketWindow = window["open"](externalDocumentUrl);
 
 // MUST flag: globalThis exposes the same browser primitive directly.
@@ -42,7 +42,7 @@ export const explicitGlobalWindow = globalThis.window.open(externalDocumentUrl);
 
 // MUST flag: static template properties cannot bypass either member access.
 export const computedGlobalWindow =
-  // eslint-disable-next-line require-safe-window-open/require-safe-window-open, typescript/dot-notation -- fixture: static computed properties preserve the global call identity
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open, typescript/dot-notation -- fixture: static computed properties preserve the global call identity
   globalThis[`window`][`open`](externalDocumentUrl);
 
 // MUST flag: immutable aliases retain the browser window's provenance.

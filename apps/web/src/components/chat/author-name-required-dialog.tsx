@@ -18,7 +18,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 

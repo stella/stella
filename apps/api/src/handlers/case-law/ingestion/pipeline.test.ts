@@ -627,7 +627,7 @@ describe("runIngestionPipeline — database timeouts", () => {
 
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update after the synthetic timeout; the fake implements that chain.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -709,7 +709,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update (the empty page performs no decision writes); the fake
       // implements that chain.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -767,7 +767,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
 
       // SAFETY: these cases exercise only the case_law_sources cursor update;
       // the fake implements that chain.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -950,7 +950,7 @@ describe("processDecision — corpus storage off", () => {
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -1045,7 +1045,7 @@ describe("processDecision — the decision's judges", () => {
       try {
         // SAFETY: the refresh path walks only these chains; anything else
         // would throw and fail the test loudly.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return await callback(tx as unknown as Transaction);
       } finally {
         inTransaction = false;
@@ -1188,7 +1188,7 @@ describe("processDecision — fields on an existing row", () => {
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -1306,7 +1306,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 
@@ -1387,7 +1387,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
 

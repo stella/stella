@@ -1,0 +1,56 @@
+import { PostHog } from "posthog-node";
+
+import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import type {
+  ServerAnalytics,
+  ServerAnalyticsCaptureParams,
+} from "@/api/lib/analytics/server-analytics";
+import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
+
+const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
+  Object.values(SERVER_ANALYTICS_EVENTS),
+);
+
+export const createPostHogNodeAnalytics = (
+  key: string,
+  host: string,
+): ServerAnalytics => {
+  const client = new PostHog(key, { host });
+
+  return {
+    capture: ({ event, properties, ...rest }) => {
+      if (!ALLOWED_EVENTS.has(event)) {
+        return;
+      }
+
+      client.capture({
+        event,
+        ...rest,
+        properties: {
+          ...properties,
+          app_commit: APP_COMMIT_SHA,
+          app_version: APP_VERSION,
+        },
+        // Mark `$exception` events as originating from a deliberate capture
+        // path so posthog-node skips its built-in warning about
+        // `capture('$exception')`. We intentionally avoid `captureException`
+        // because it would extract the message and stack, violating the
+        // redaction contract enforced by `captureError`.
+        ...(event === SERVER_ANALYTICS_EVENTS.exception
+          ? { _originatedFromCaptureException: true }
+          : {}),
+      });
+    },
+    identifyOrganizationGroup: (params) => {
+      client.groupIdentify({
+        groupType: POSTHOG_ORGANIZATION_GROUP_TYPE,
+        groupKey: params.organizationId,
+        properties: params.properties,
+      });
+    },
+    // oxlint-disable-next-line promise-function-async -- forwards client.flush()'s promise directly; async would add a redundant wrapper
+    flush: () => client.flush(),
+  };
+};

@@ -22,18 +22,13 @@ import {
   legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import { errorTag } from "@/api/lib/errors/utils";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
@@ -46,16 +41,15 @@ import type {
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
-  requeueQueuedRuns,
+  reconcileQueuedRuns,
 } from "@/api/lib/queue-reconcile-scan";
-import type {
-  QueuedRunCursorRow,
-  ReconcileQueuedRunsResult,
-} from "@/api/lib/queue-reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -68,6 +62,19 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 
 const QUEUE_NAME = "legal-list-verification-runs";
+
+const CONFIG_FAILED_SINK = failureSink({
+  event: "list_verification_run.config_failed",
+  expected: [],
+});
+const RUN_FAILED_SINK = failureSink({
+  event: "list_verification_run.failed",
+  expected: [],
+});
+const MARK_FAILED_SINK = failureSink({
+  event: "list_verification_run.mark_failed_failed",
+  expected: [],
+});
 const JOB_NAME = "run-list-verification";
 const WORKER_CONCURRENCY = 2;
 const JOB_ATTEMPTS = 1;
@@ -165,7 +172,18 @@ const runCursorCodec = createTimestampIdCursorCodec({
   brandId: brandPersistedListVerificationRunId,
 });
 
-type QueuedRunRow = QueuedRunCursorRow<"legalListVerificationRun">;
+type QueuedRunRow = {
+  createdCursor: string;
+  id: SafeId<"legalListVerificationRun">;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ReconcileQueuedRunsResult = ReconcileScanResult & {
+  /** Runs whose requester is gone, left to the staleness janitor. */
+  unattributed: number;
+};
 
 type ReconcileQueuedOptions = {
   db: Pick<SchedulerDb, "select">;
@@ -211,7 +229,7 @@ export const reconcileQueuedListVerificationRuns = async ({
       )
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  return await requeueQueuedRuns({ queue, readPage, runJob });
+  return await reconcileQueuedRuns({ queue, readPage, runJob });
 };
 
 type RunActor = RootRunActor<"legalListVerificationRun">;
@@ -377,7 +395,9 @@ const executeRun = async (
 
   const config = await Result.tryPromise({
     try: async () => {
-      const orgAIConfig = await loadOrgAIConfig(actor.organizationId);
+      const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
+        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+      );
       return {
         orgAIConfig,
         model: getTanStackTextModelInfoForRole(
@@ -385,17 +405,15 @@ const executeRun = async (
           orgAIConfig,
           { organizationId: actor.organizationId },
         ),
-        promptCachingEnabled: await loadPromptCachingPreference(
-          actor.organizationId,
-        ),
+        promptCachingEnabled,
       };
     },
     catch: (cause) => cause,
   });
   if (Result.isError(config)) {
-    captureError(config.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+    observeFailure(config.error, {
+      sink: CONFIG_FAILED_SINK,
+      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
     });
     return "ai_unavailable";
   }
@@ -498,9 +516,9 @@ const processJob = async (data: ListVerificationJobData): Promise<void> => {
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+    observeFailure(outcome.error, {
+      sink: RUN_FAILED_SINK,
+      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
     });
     await setRunFailed(actor, "internal");
     return;
@@ -523,21 +541,21 @@ export const initListVerificationRunWorker = () => {
     if (job) {
       setRunFailed(brandActor(job.data), "internal").catch(
         (markError: unknown) => {
-          captureError(markError, {
-            runId: job.data.runId,
-            workspaceId: job.data.workspaceId,
+          observeFailure(markError, {
+            sink: MARK_FAILED_SINK,
+            ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
           });
         },
       );
     }
-    const runId = job ? job.data.runId : "";
-    const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
-    logger.error("list_verification_run.failed", {
-      runId,
-      "error.type": errorTag(error),
-      queue: QUEUE_NAME,
-      workspaceId,
+    observeFailure(error, {
+      sink: RUN_FAILED_SINK,
+      ctx: {
+        queue: QUEUE_NAME,
+        ...(job
+          ? { runId: job.data.runId, workspaceId: job.data.workspaceId }
+          : {}),
+      },
     });
   });
 

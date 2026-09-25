@@ -118,6 +118,7 @@ let totalUpdated = 0;
 let batchCount = 0;
 
 while (true) {
+  // db-await-in-loop: keyset batch per iteration; each batch is one set-based update
   const result = await backfillBatch(cursor);
 
   if (!result || result.scanned_workspaces === 0) {

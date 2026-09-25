@@ -345,7 +345,7 @@ const scopedDb: ScopedDb = async (callback) => {
 
   // SAFETY: the double implements exactly the chains this insert path
   // walks; anything else would throw and fail the test loudly.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return await callback(tx as unknown as Transaction);
 };
 

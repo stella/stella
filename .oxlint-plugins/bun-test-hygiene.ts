@@ -26,14 +26,28 @@
 //            strings are not compared, and each branch of a conditional is a
 //            block of its own, so the skipped and the real registration of
 //            one suite may share a title.
+//
+// no-unmanaged-database-client
+//   Flagged: constructing a database client, called or with `new`, through
+//            its import: `SQL` from `bun` (and `Bun.SQL`), `drizzle(url)` or
+//            `drizzle({ connection })` from a network drizzle driver,
+//            `postgres` from `postgres`, `Pool` and `Client` from `pg`.
+//   Allowed: `drizzle({ client })`, which wraps a client opened elsewhere.
+//   The gated suites run in one process, so a client a test leaves open
+//   holds its connections for the rest of the run. Tests open them through
+//   `apps/api/src/tests/gated-test-database.ts`, which closes every client it
+//   opens; the lint config exempts that module.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  getPropertyName,
   isAstNode,
+  isIdentifierReference,
   isStringLiteral,
   memberPropertyName,
   resolveImportedExpression,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode, ScopeContext } from "./utils.ts";
@@ -280,6 +294,99 @@ const enclosingBlock = (node: AstNode): EnclosingBlock => {
 const mentionsBunTest = (text: string): boolean =>
   text.includes(BUN_TEST_MODULE);
 
+// Exports that open a database connection pool when constructed, by module.
+const CLIENT_CONSTRUCTORS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["bun", new Set(["SQL"])],
+  ["postgres", new Set(["default"])],
+  ["pg", new Set(["Pool", "Client"])],
+]);
+
+// Drizzle drivers whose `drizzle` opens its own client from a URL or a
+// `connection` option.
+const DRIZZLE_NETWORK_DRIVERS = new Set([
+  "drizzle-orm/bun-sql",
+  "drizzle-orm/node-postgres",
+  "drizzle-orm/postgres-js",
+]);
+
+const CLIENT_CONSTRUCTOR_HINT = /\bSQL\b|drizzle|postgres|\bpg\b/u;
+
+// `Bun.SQL`, with `Bun` the runtime global rather than a local binding.
+const isGlobalBunSql = (context: ScopeContext, callee: AstNode): boolean => {
+  if (
+    callee.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "SQL"
+  ) {
+    return false;
+  }
+  const object = unwrapExpression(callee.object);
+  return (
+    isIdentifierReference(object) &&
+    object.name === "Bun" &&
+    resolveVariable(context, object) === null
+  );
+};
+
+// `drizzle({ client })` wraps a client something else opened and closes; any
+// other argument (a URL, a `connection` option, or nothing) makes the driver
+// open one.
+const wrapsProvidedClient = (argument: unknown): boolean => {
+  const options = unwrapExpression(argument);
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return false;
+  }
+  const keys = new Set(
+    options.properties.map((property: unknown) =>
+      isAstNode(property) && property.type === "Property"
+        ? getPropertyName(property.key)
+        : null,
+    ),
+  );
+  return keys.has("client") && !keys.has("connection");
+};
+
+// The client a call or `new` expression constructs, named for the report, or
+// null when it constructs none.
+const constructedClient = (
+  context: ScopeContext,
+  node: unknown,
+): string | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
+  const callee = unwrapExpression(node.callee);
+  if (!isAstNode(callee)) {
+    return null;
+  }
+  if (isGlobalBunSql(context, callee)) {
+    return "Bun.SQL";
+  }
+  const binding = resolveImportedExpression(context, callee);
+  if (binding === null) {
+    return null;
+  }
+  if (CLIENT_CONSTRUCTORS.get(binding.source)?.has(binding.imported) === true) {
+    return binding.imported === "default"
+      ? binding.source
+      : `${binding.imported} from "${binding.source}"`;
+  }
+  if (
+    node.type === "CallExpression" &&
+    binding.imported === "drizzle" &&
+    DRIZZLE_NETWORK_DRIVERS.has(binding.source) &&
+    !wrapsProvidedClient(
+      Array.isArray(node.arguments) ? node.arguments.at(0) : undefined,
+    )
+  ) {
+    return `drizzle from "${binding.source}"`;
+  }
+  return null;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
@@ -364,6 +471,45 @@ export default eslintCompatPlugin({
               messageId: "disabled",
               data: { call: describeRegistration(registration) },
             });
+          },
+        };
+      },
+    },
+    "no-unmanaged-database-client": {
+      meta: {
+        type: "problem",
+        messages: {
+          unmanagedClient:
+            "This test constructs a database client ({{client}}) that nothing " +
+            "is bound to close. Open it through `openGatedTestDatabase` or " +
+            "`withGatedTestClients` from `@/api/tests/gated-test-database`, " +
+            "which close every client they open even when cleanup throws.",
+        },
+      },
+      createOnce(context) {
+        const report = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+        ) => {
+          const client = constructedClient(context, node);
+          if (client === null) {
+            return;
+          }
+          context.report({
+            node,
+            messageId: "unmanagedClient",
+            data: { client },
+          });
+        };
+
+        return {
+          before() {
+            return CLIENT_CONSTRUCTOR_HINT.test(context.sourceCode.text);
+          },
+          CallExpression(node) {
+            report(node);
+          },
+          NewExpression(node) {
+            report(node);
           },
         };
       },

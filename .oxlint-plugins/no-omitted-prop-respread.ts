@@ -96,11 +96,11 @@ const EMPTY_SPREAD_KEYWORDS = new Set([
   "TSVoidKeyword",
 ]);
 
-const typeArgumentsOf = (typeNode) =>
+const typeArgumentsOf = (typeNode): unknown[] =>
   typeNode?.typeArguments?.params ?? typeNode?.typeParameters?.params ?? [];
 
 // The dotted name of a type reference: `Props`, `React.ComponentProps`.
-const typeReferenceName = (typeName) => {
+const typeReferenceName = (typeName): string | null => {
   if (isIdentifier(typeName)) {
     return typeName.name;
   }
@@ -134,7 +134,7 @@ const intersectAll = (keySets): string[] => {
 // A stable spelling of a type node, enough to tell whether two `Omit`s remove
 // from the same source. Structural, not semantic: two spellings of one type are
 // two sources here.
-const typeSignature = (typeNode) => {
+const typeSignature = (typeNode): string => {
   if (typeNode === null || typeNode === undefined) {
     return "?";
   }
@@ -153,9 +153,9 @@ const typeSignature = (typeNode) => {
   }
   // Two inline objects are different sources when they declare different keys.
   if (typeNode.type === "TSTypeLiteral") {
-    const names = (typeNode.members ?? [])
-      .map((member) => getPropertyName(member.key) ?? "?")
-      .sort();
+    const names: string[] = (typeNode.members ?? [])
+      .map((member): string => getPropertyName(member.key) ?? "?")
+      .toSorted();
     return `{${names.join(",")}}`;
   }
   if (
@@ -163,7 +163,8 @@ const typeSignature = (typeNode) => {
     typeNode.type === "TSIntersectionType"
   ) {
     const separator = typeNode.type === "TSUnionType" ? "|" : "&";
-    return `(${typeNode.types.map(typeSignature).join(separator)})`;
+    const branches: string[] = typeNode.types.map(typeSignature);
+    return `(${branches.join(separator)})`;
   }
   return typeNode.type;
 };
@@ -199,7 +200,7 @@ const suppliersOf = (typeNode, localTypes, open = new Set()) => {
       })),
     ];
   }
-  if (MODIFIER_UTILITIES.has(name)) {
+  if (name !== null && MODIFIER_UTILITIES.has(name)) {
     return suppliersOf(args.at(0), localTypes, open);
   }
   const alias = expandAlias(name, localTypes, open);
@@ -290,7 +291,7 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
         ...omittedKeysOf(args.at(0), localTypes, open),
       ];
     }
-    if (MODIFIER_UTILITIES.has(name)) {
+    if (name !== null && MODIFIER_UTILITIES.has(name)) {
       return omittedKeysOf(args.at(0), localTypes, open);
     }
     const alias = expandAlias(name, localTypes, open);
@@ -348,7 +349,7 @@ const reintroducedKeysOf = (
         (key) => !removed.has(key),
       );
     }
-    if (MODIFIER_UTILITIES.has(name)) {
+    if (name !== null && MODIFIER_UTILITIES.has(name)) {
       return reintroducedKeysOf(args.at(0), localTypes, open);
     }
     const alias = expandAlias(name, localTypes, open);
@@ -370,7 +371,7 @@ const patternOf = (param) =>
 
 // The props parameter. An erased `this` parameter occupies the first slot in
 // the AST while contributing no runtime argument, so props follow it.
-const propsParamOf = (params = []) => {
+const propsParamOf = (params: readonly unknown[] = []) => {
   const first = params.at(0);
   return isIdentifier(first, "this") ? params.at(1) : first;
 };
@@ -624,7 +625,7 @@ export default eslintCompatPlugin({
           // as unresolvable.
           ImportDeclaration(node) {
             for (const specifier of node.specifiers) {
-              if (typeof specifier.local?.name === "string") {
+              if (typeof specifier.local.name === "string") {
                 localTypes.set(specifier.local.name, null);
               }
             }
@@ -633,7 +634,7 @@ export default eslintCompatPlugin({
           // introduces it, shadowing any alias that shares it. Nothing concrete
           // can be read from it, so claim the name as unresolvable too.
           TSTypeParameter(node) {
-            if (typeof node.name?.name === "string") {
+            if (typeof node.name.name === "string") {
               localTypes.set(node.name.name, null);
             }
           },

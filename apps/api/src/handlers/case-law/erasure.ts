@@ -257,7 +257,7 @@ const recordFailedRedactionAudit = async ({
 }: FailedRedactionAuditOptions): Promise<void> => {
   const errorMessage =
     error instanceof Error ? error.message : "Unknown corpus redaction error";
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — this insert IS the append-only failed erasure audit row
     return tx.insert(caseLawIndexJobs).values({
@@ -563,7 +563,7 @@ export const redactCaseLawDecision = async ({
   // erasure retains exact retry targets while the row tombstone already
   // blocks every reader.
   if (corpusErasure.type !== "incomplete" && rawErasure.type !== "incomplete") {
-    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb((tx) => {
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
       return tx
@@ -605,7 +605,7 @@ export const redactCaseLawDecision = async ({
       .filter((part) => part !== null)
       .join("; ")
       .slice(0, 2048) || null;
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — this insert IS the append-only erasure audit row
     return tx.insert(caseLawIndexJobs).values({

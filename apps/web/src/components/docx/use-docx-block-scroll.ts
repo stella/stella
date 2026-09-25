@@ -64,7 +64,7 @@ const debugDocxBlockScroll = (
     return;
   }
 
-  // eslint-disable-next-line no-console -- localStorage-gated dev scroll diagnostic
+  // oxlint-disable-next-line no-console -- localStorage-gated dev scroll diagnostic
   console.info("[folio:scroll]", event, details);
 };
 

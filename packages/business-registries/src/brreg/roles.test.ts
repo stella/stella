@@ -13,7 +13,7 @@ import {
 // SAFETY: the fixtures are static JSON captured from the live API and
 // the runtime types match the file shape; the assertion narrows the
 // `unknown` inferred from JSON import attributes.
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const asResponse = (value: unknown) => value as BrregRawRolesResponse;
 
 const stringifyFetchInput = (input: Parameters<typeof fetch>[0]): string => {

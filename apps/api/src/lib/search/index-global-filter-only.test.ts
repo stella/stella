@@ -8,12 +8,14 @@ import {
   rootDbExecuteMock,
   rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { searchGlobal: searchGlobalWithDatabase } =
   await import("@/api/lib/search/index-global");
+const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, rootDbTestDouble);
+) => await searchGlobalWithDatabase(query, { scopedDb });
 
 beforeEach(() => {
   clearRootDbMocks();

@@ -906,6 +906,23 @@
       "allowInConversation": "Autoriser dans cette conversation",
       "allowOnce": "Autoriser une fois",
       "alwaysAllow": "Toujours autoriser",
+      "browser": {
+        "actions": {
+          "click": "Cliquer",
+          "fill": "Saisir du texte",
+          "open": "Ouvrir le site web",
+          "pressKey": "Appuyer sur une touche",
+          "select": "Sélectionner une option",
+          "snapshot": "Lire la page",
+          "snapshotContinue": "Continuer la lecture de la page"
+        },
+        "askAgain": "Redemander",
+        "autoApproveReads": "Approuver automatiquement la lecture des pages",
+        "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
+        "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
+        "question": "Autoriser cette action dans le navigateur ?",
+        "within": "Dans"
+      },
       "denied": "Refusé",
       "deny": "Refuser",
       "externalMcpDescription": "Seules les informations nécessaires à cet appel d’outil seront envoyées.",
@@ -1239,6 +1256,7 @@
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
+      "use-browser": "Utilisation de votre navigateur",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -1366,6 +1384,7 @@
   },
   "common": {
     "accept": "Accepter",
+    "action": "Opération",
     "actions": "Actions",
     "active": "Actif",
     "add": "Ajouter",
@@ -1509,6 +1528,7 @@
       "event": "Événement",
       "requirement": "Exigence"
     },
+    "key": "Touche",
     "kind": "Type",
     "language": "Langue",
     "languages": {
@@ -1636,6 +1656,7 @@
     "stepProgress": "{current} sur {total}",
     "suggested": "Suggestion",
     "summarizeChanges": "Résumer les modifications",
+    "target": "Cible",
     "timeBilling": "Temps et facturation",
     "today": "Aujourd'hui",
     "translate": "Traduire",
@@ -1655,11 +1676,13 @@
     "urlIdentifier": "Identifiant URL",
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
+    "value": "Valeur",
     "verified": "Vérifié",
     "verify": "Vérifier",
     "version": "Version",
     "versionLabel": "Version {version}",
     "viewSource": "Voir la source",
+    "website": "Site web",
     "workflow": "Flux de travail",
     "workflows": "Flux de travail",
     "zoomIn": "Zoom avant",
@@ -1749,8 +1772,7 @@
       "labelRequired": "Le nom du champ est obligatoire.",
       "removeField": "Supprimer le champ",
       "title": "Champs personnalisés",
-      "value": "Valeur du champ",
-      "valuePlaceholder": "Valeur"
+      "value": "Valeur du champ"
     },
     "deleteContact": "Supprimer le client",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
@@ -3667,7 +3689,6 @@
       "chooseModelsSubtitle": "Choisissez un modèle par rôle. Les prix se mettent à jour à droite.",
       "chooseModelsTitle": "Choisir les modèles",
       "configure": "Configurer",
-      "credentialsPanel": "Clé",
       "customModelBadge": "Personnalisé · {provider}",
       "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
@@ -4173,7 +4194,6 @@
         "title": "Anonymisation"
       },
       "auditLogs": "Journal d'activité",
-      "auditLogsAction": "Action",
       "auditLogsActionAccess": "Accès",
       "auditLogsActionCreate": "Créer",
       "auditLogsActionDelete": "Supprimer",
@@ -4635,7 +4655,6 @@
     "conditionOverrideHint": "Cliquez pour définir la valeur vous-même, cliquez de nouveau pour la rendre à l’IA",
     "conditionUseFieldInstead": "Utiliser plutôt un champ",
     "conditionUseFormula": "ƒ Valeur calculée…",
-    "conditionValue": "Valeur",
     "conditionWhen": "Lorsque",
     "conditionsTitle": "Conditions",
     "configureFields": "Configurer les champs",
@@ -5074,7 +5093,6 @@
       "fieldValueLabel": "Valeur du champ",
       "fieldValuePlaceholder": "Saisir la valeur du champ",
       "formatNotSupported": "Format non pris en charge",
-      "numberLabel": "Valeur",
       "numberPlaceholder": "Saisir un nombre",
       "selectAValue": "Sélectionner une valeur",
       "selectValues": "Sélectionner des valeurs"
@@ -5344,7 +5362,6 @@
           "openTarget": "Ouvrir l’élément",
           "runId": "ID d’exécution",
           "system": "Activité système",
-          "target": "Cible",
           "title": "Détails de l’activité",
           "trigger": "Initiée par",
           "webhook": "Déclencheur web"

@@ -6,7 +6,12 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import { runSubagent } from "@/api/handlers/chat/subagent-runner";
+import type { RunSubagentOptions } from "@/api/handlers/chat/subagent-runner";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  CHAT_CODE_MODE_SYSTEM_PROMPT,
+  CODE_MODE_EXECUTE_TOOL_NAME,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   createSubagentProposalBuffer,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -129,20 +134,45 @@ export type SpawnSubagentsToolOutput = v.InferOutput<
 
 type SubagentSpec = SpawnSubagentsToolInput["subagents"][number];
 
+type BuildSubagentSystemPromptOptions = {
+  expectedOutput: string | undefined;
+  tools: ChatToolMap;
+};
+
+type SubagentSystemPrompt = Pick<
+  RunSubagentOptions,
+  "systemSafe" | "systemUntrusted"
+>;
+
 /**
  * Brief on purpose (see Jan's "keep system prompts brief" preference):
  * the subagent gets just enough framing to act autonomously, plus the
- * caller's optional shape hint.
+ * caller's optional shape hint. The code-mode section is the exception:
+ * `execute_typescript` declares its eager reads (`list_matters`) only
+ * there, and `discover_tools` lists only the lazy ones, so without it a
+ * subagent cannot see how to list matters at all.
+ *
+ * The framing and catalog are server constants and stay on the safe half;
+ * the shape hint is the parent model's own text and crosses the third-party
+ * boundary on the untrusted half.
  */
-const buildSubagentSystemPrompt = (expectedOutput?: string): string => {
+const buildSubagentSystemPrompt = ({
+  expectedOutput,
+  tools,
+}: BuildSubagentSystemPromptOptions): SubagentSystemPrompt => {
   const base =
     "You are a subagent completing one delegated subtask inside stella, a legal workspace. " +
     "You have read tools plus write tools, but no direct user interaction — never ask the user a question; make reasonable assumptions and proceed. " +
     "Any write/mutation you call is queued for user approval and applied only after you finish, not immediately; treat it as proposed, do not retry it, and do not assume it took effect. " +
     "Return a concise final result summarizing what you did and the output the caller needs.";
-  return expectedOutput
-    ? `${base} Return output matching: ${expectedOutput}`
-    : base;
+  return {
+    systemSafe: tools[CODE_MODE_EXECUTE_TOOL_NAME]
+      ? `${base}\n\n${CHAT_CODE_MODE_SYSTEM_PROMPT}`
+      : base,
+    systemUntrusted: expectedOutput
+      ? `Return output matching: ${expectedOutput}`
+      : "",
+  };
 };
 
 /**
@@ -399,7 +429,10 @@ export const createSpawnSubagentsTool = (
               subModel: sub.model,
               modelInfo: fastModelInfo,
             }),
-            system: buildSubagentSystemPrompt(sub.expectedOutput),
+            ...buildSubagentSystemPrompt({
+              expectedOutput: sub.expectedOutput,
+              tools,
+            }),
             tenantWorkspaceIds: props.workspaceId ? [props.workspaceId] : [],
             messages: [
               buildSubagentUserMessage({
@@ -460,12 +493,13 @@ export const createSpawnSubagentsTool = (
       if (props.thirdPartyBoundary.type === "anonymized") {
         const results: Awaited<ReturnType<typeof runOneSubagent>>[] = [];
         for (const [index, sub] of subagents.entries()) {
+          // db-await-in-loop: anonymized subagents share the boundary's mutable redaction state, so they run one at a time; MAX_SUBAGENTS_PER_CALL bounds them
           results.push(await runOneSubagent(sub, index));
         }
         return { results };
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
+      // db-await-in-loop: bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
       const results = await Promise.all(subagents.map(runOneSubagent));
 
       return { results };

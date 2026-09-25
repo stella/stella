@@ -31,7 +31,7 @@ const fakeProcess = (): FakeProcess => {
   };
   return {
     // SAFETY: runWhoami only writes to process.stdout; this covers that slice.
-    // eslint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
     process: proc as unknown as Context["process"],
     stdout: () => chunks.join(""),
   };

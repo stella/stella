@@ -84,7 +84,7 @@ export const EditorLiveDemo = () => {
       // namespace for this isolated island's `IntlProvider` scope, not the
       // app's catalog — same reasoning apps/web/src/i18n/formatting-context.test.tsx
       // uses for the same mismatch.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       messages={FOLIO_MESSAGES as never}
     >
       <div

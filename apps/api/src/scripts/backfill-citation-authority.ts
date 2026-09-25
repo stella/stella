@@ -91,7 +91,7 @@ let cited = 0;
 
 while (true) {
   const position = after;
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded keyset batch per iteration; the next batch starts where this one stopped
+  // db-await-in-loop: bounded keyset batch per iteration; the next batch starts where this one stopped
   const batch = await rootDb.transaction(
     async (tx) =>
       await recomputeCitationAuthorityBatch(tx, {

@@ -10,10 +10,10 @@ import { getImportedName } from "./utils.ts";
 
 // The grouped alias (@stll/ui/components/toast) is deprecated but still
 // resolves to this module, so both spellings are the toast entry point.
-const STELLA_TOAST_MODULES: readonly string[] = [
+const STELLA_TOAST_MODULES: ReadonlySet<string> = new Set([
   "@stll/ui/toast",
   "@stll/ui/components/toast",
-];
+]);
 const RAW_TOAST_MODULE = "@base-ui/react/toast";
 
 const DISALLOWED_STELLA_IMPORTS = new Set([
@@ -48,7 +48,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (!STELLA_TOAST_MODULES.includes(node.source.value)) {
+            if (!STELLA_TOAST_MODULES.has(node.source.value)) {
               return;
             }
 

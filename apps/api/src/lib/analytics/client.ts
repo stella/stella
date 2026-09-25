@@ -1,43 +1,49 @@
+import { shouldEnablePostHog } from "@stll/analytics-config";
+
 import { envBase } from "@/api/env-base";
 
-import { shouldEnablePostHog } from "./config";
-import { noopAnalytics } from "./noop";
-import { createPostHogAnalytics } from "./posthog";
-import type { Analytics } from "./types";
+import { createPostHogNodeAnalytics } from "./posthog-node";
+import type { ServerAnalytics } from "./server-analytics";
 
-let analytics: Analytics | null = null;
+const noop = () => undefined;
+const asyncNoop = async () => await Promise.resolve();
+
+// What the server sends when no PostHog project is configured: nothing.
+const noopAnalytics: ServerAnalytics = {
+  capture: noop,
+  identifyOrganizationGroup: noop,
+  flush: asyncNoop,
+};
+
+let analytics: ServerAnalytics | null = null;
 
 export const isLocalPostHogDebugEnabled = (): boolean =>
   envBase.isDev && envBase.POSTHOG_LOCAL_DEBUG;
 
-export const getAnalytics = (): Analytics => {
+export const getServerAnalytics = (): ServerAnalytics => {
   if (analytics) {
     return analytics;
   }
 
-  const key = envBase.POSTHOG_KEY;
-  const host = envBase.POSTHOG_HOST;
-  analytics =
-    shouldEnablePostHog({
-      isDev: envBase.isDev,
-      key,
-      host,
-      localDebug: envBase.POSTHOG_LOCAL_DEBUG,
-    }) &&
-    key &&
-    host
-      ? createPostHogAnalytics(key, host)
-      : noopAnalytics;
+  const posthogConfig = {
+    isDev: envBase.isDev,
+    key: envBase.POSTHOG_KEY,
+    host: envBase.POSTHOG_HOST,
+    localDebug: envBase.POSTHOG_LOCAL_DEBUG,
+  };
+  analytics = shouldEnablePostHog(posthogConfig)
+    ? createPostHogNodeAnalytics(posthogConfig.key, posthogConfig.host)
+    : noopAnalytics;
 
   return analytics;
 };
 
 /**
- * Test seam: hand every caller of `getAnalytics()` this implementation, so a
+ * Test seam: hand every caller of `getServerAnalytics()` this implementation, so a
  * test records what the real capture path emits (event, fingerprint,
  * throttling) instead of replacing the module that emits it.
  */
-export const setAnalyticsForTesting = (replacement: Analytics): void => {
+export const setAnalyticsForTesting = (replacement: ServerAnalytics): void => {
   analytics = replacement;
 };
 

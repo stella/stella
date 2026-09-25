@@ -9,7 +9,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
+// oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   caseLawPublicReadDb,

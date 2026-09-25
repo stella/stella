@@ -5,6 +5,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  createAccountDeletionCleanupRequestDeps,
   enqueueAccountDeletionCleanup,
   processAccountDeletionCleanupRequest,
 } from "@/api/lib/account-deletion-cleanup-queue";
@@ -381,14 +382,15 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
     });
 
-    processAccountDeletionCleanupRequest(deletionRequestId).catch(
-      (cleanupError: unknown) => {
-        captureError(cleanupError, { deletionRequestId });
-        logger.error("account_deletion_cleanup.inline_failed", {
-          "error.type": errorTag(cleanupError),
-          deletionRequestId,
-        });
-      },
-    );
+    processAccountDeletionCleanupRequest(
+      deletionRequestId,
+      createAccountDeletionCleanupRequestDeps(rootDb),
+    ).catch((cleanupError: unknown) => {
+      captureError(cleanupError, { deletionRequestId });
+      logger.error("account_deletion_cleanup.inline_failed", {
+        "error.type": errorTag(cleanupError),
+        deletionRequestId,
+      });
+    });
   }
 };

@@ -84,12 +84,12 @@ export const useCreateBBoxes = ({
   // useCallback (deps: [aiAvailability?.available]) reads the freshest
   // pendingMutationsCount + mutation.mutate without being recreated on every
   // mutation; a stable callback identity is load-bearing for consumers.
-  /* eslint-disable react/refs -- deliberate latest-value ref writes during render, see comment above */
+  /* oxlint-disable react/refs -- deliberate latest-value ref writes during render, see comment above */
   const pendingRef = useRef(pendingMutationsCount);
   pendingRef.current = pendingMutationsCount;
   const mutateRef = useRef(mutation.mutate);
   mutateRef.current = mutation.mutate;
-  /* eslint-enable react/refs */
+  /* oxlint-enable react/refs */
 
   return useCallback(() => {
     if (!aiAvailability?.available) {

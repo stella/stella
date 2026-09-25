@@ -21,7 +21,7 @@ import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
-import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/types";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,

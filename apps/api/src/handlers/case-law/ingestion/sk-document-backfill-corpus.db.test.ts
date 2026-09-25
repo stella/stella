@@ -16,11 +16,9 @@
  */
 
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -28,7 +26,6 @@ import {
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
-  relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -49,6 +46,7 @@ import {
   pendingDocumentPredicate,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 /** A pack that does not decode fails the test rather than a case in it. */
 const unwrapPackFooter = (
@@ -130,9 +128,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("sk-courts document backfill — corpus storage", () => {
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(tx));
 
@@ -227,7 +223,7 @@ if (!databaseUrl || !runPostgresTests) {
       sourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (created.length > 0) {
         await db
           .delete(caseLawDecisions)

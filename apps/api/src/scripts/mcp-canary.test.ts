@@ -329,7 +329,7 @@ describe("probe failure reporting", () => {
     "attributes %s to its probe without printing exception details",
     async (_classification, error, detail) => {
       const result = await runNamedProbe("GET /mcp", async () => {
-        // eslint-disable-next-line typescript/only-throw-error -- exercises the unknown rejection branch
+        // oxlint-disable-next-line typescript/only-throw-error -- exercises the unknown rejection branch
         throw error;
       });
 

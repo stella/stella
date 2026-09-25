@@ -55,6 +55,7 @@ import ts from "typescript";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
   isResidualDirective,
@@ -63,10 +64,15 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
+import { ROOT_CONNECTION_DOORS } from "./ownership";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_SOURCE_GLOBS,
 } from "./result-boundary-globs";
+import {
+  countRootConnectionShapes,
+  isRootConnectionModule,
+} from "./root-connection-shapes";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -690,11 +696,6 @@ const countDirectAuditLogInserts = (content: string): number => {
 // Value imports of the root connection handle, static or dynamic, by alias
 // or relative path. Request handlers are covered by lint; this keeps the
 // remaining sites visible. Type-only imports are not counted.
-const ROOT_CONNECTION_MODULE_SUFFIX = "db/root";
-const isRootConnectionModule = (node: ts.Node | undefined): boolean =>
-  node !== undefined &&
-  ts.isStringLiteralLike(node) &&
-  node.text.endsWith(ROOT_CONNECTION_MODULE_SUFFIX);
 const countRootConnectionImportsAs = (
   content: string,
   scriptKind: ts.ScriptKind,
@@ -747,6 +748,12 @@ const countDirectRootConnectionImports = (content: string): number =>
     countRootConnectionImportsAs(content, ts.ScriptKind.TS),
     countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
   );
+
+// The worker hosts and doors that hand the root connection on by design. The
+// lint rule confining each door's importers reads the same rows.
+const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
+  ROOT_CONNECTION_DOORS.flatMap((door) => door.owner),
+);
 
 // `audit: skip` directives: occurrences in comments only, found as the
 // occurrences that stripping comments removes.
@@ -983,20 +990,6 @@ const countTrackedRuleSuppressions =
 const countResidualLintSuppressions = (content: string, file: string): number =>
   collectLintDirectives(content, file).filter(isResidualDirective).length;
 
-// The linter is oxlint, so the oxlint spelling of a disable directive is the
-// one the conventions teach; the eslint spelling is a legacy alias oxlint still
-// honors. Two spellings for one directive make every suppression audit grep
-// twice, so the alias may only shrink.
-const ESLINT_SPELLED_DIRECTIVE = /^(?:\/\/|\/\*)\s*eslint-disable/u;
-
-const countEslintSpelledSuppressions = (
-  content: string,
-  file: string,
-): number =>
-  collectLintDirectives(content, file).filter(({ text }) =>
-    ESLINT_SPELLED_DIRECTIVE.test(text),
-  ).length;
-
 // A compiler-suppression directive. Fidelity limit: a prose comment that
 // STARTS with the directive token (`// @ts-expect-error is bad`) counts, one
 // that merely mentions it mid-sentence does not; directives and leading
@@ -1018,6 +1011,13 @@ const countTsSuppressions = (content: string): number => {
   }
   return total;
 };
+
+// Suppressions of the type-aware N+1 check (scripts/db-await-in-loop.ts),
+// counted by the check's own directive parser: next-line and trailing
+// `// db-await-in-loop: <reason>` plus each closed disable/enable block. One
+// parser means the budget counts exactly the suppressions the check honours.
+const countDbAwaitInLoopSuppressions: FileCounter = (content, file) =>
+  countDbAwaitInLoopDirectives(content, file);
 
 // Explicitly detached calls bypass no-floating-promises when `void` is
 // accepted, while async JSX handlers bypass no-misused-promises because JSX
@@ -1490,6 +1490,442 @@ const countWorkspaceOnlyRlsOnOrgTables = (content: string): number => {
   return count;
 };
 
+// --- Failure sinks ------------------------------------------------------------
+//
+// Terminal failure emissions that bypass the failure owner, counted on
+// resolved bindings rather than spellings: `captureError as captureTelemetry`
+// is still a capture, a logger reached through destructuring or a computed key
+// is still the logger, and an attribute object held in a local is still the
+// attribute object. The metric is gated per file, so removing a bypass in one
+// file cannot fund a new one in another.
+
+const FAILURE_SINK_MODULES = {
+  capture: "apps/api/src/lib/analytics/capture",
+  errorTag: "apps/api/src/lib/errors/error-tag",
+  errorUtils: "apps/api/src/lib/errors/utils",
+  logger: "apps/api/src/lib/observability/logger",
+  pgError: "apps/api/src/lib/pg-error",
+  aiError: "apps/api/src/lib/ai-error",
+  documentProcessingFields:
+    "apps/api/src/lib/document-processing-failure-fields",
+} as const;
+
+const TERMINAL_CAPTURE_EXPORTS: ReadonlySet<string> = new Set([
+  "captureError",
+  "captureObservedError",
+  "captureRequestError",
+]);
+
+// The legacy field helpers: a logger call spreading or calling one of these
+// is reporting a failure on its own.
+const FOLDED_HELPER_EXPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  [FAILURE_SINK_MODULES.errorUtils]: new Set([
+    "connectionErrorFields",
+    "errorClassName",
+    "errorFingerprint",
+    "errorSystemFields",
+    "errorTag",
+    "safeErrorTelemetryFields",
+    "unredactedErrorFields",
+  ]),
+  [FAILURE_SINK_MODULES.errorTag]: new Set(["errorClassName", "errorTag"]),
+  [FAILURE_SINK_MODULES.pgError]: new Set(["pgErrorFields"]),
+  [FAILURE_SINK_MODULES.aiError]: new Set(["providerStatusFields"]),
+  // Wrappers composing the helpers above count as the helpers they wrap.
+  [FAILURE_SINK_MODULES.documentProcessingFields]: new Set([
+    "documentProcessingFailureFields",
+  ]),
+};
+
+const FAILURE_LOGGER_METHODS: ReadonlySet<string> = new Set([
+  "error",
+  "request",
+  "warn",
+]);
+const ERROR_ATTRIBUTE_PREFIX = "error.";
+const RUNNER_ERROR_WRITER = "logError";
+const RUNNER_SOURCE_PREFIX = "apps/legal-atlas-runner/src/";
+const PROCESS_STREAMS: ReadonlySet<string> = new Set(["stderr", "stdout"]);
+
+// A module specifier as a repo-relative path without extension, so an alias
+// and a relative import of the same module compare equal.
+const resolvedModulePath = (file: string, specifier: string): string => {
+  if (specifier.startsWith(API_ALIAS_PREFIX)) {
+    return `${API_ALIAS_ROOT}/${specifier.slice(API_ALIAS_PREFIX.length)}`;
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix.join(path.posix.dirname(file), specifier);
+  }
+  return specifier;
+};
+
+type FailureSinkBindings = {
+  readonly captures: ReadonlySet<string>;
+  readonly helpers: ReadonlySet<string>;
+  readonly loggers: ReadonlySet<string>;
+  /** Local names destructured off the logger, e.g. `const { warn } = logger`. */
+  readonly loggerMethods: ReadonlySet<string>;
+};
+
+const importedFailureBindings = (
+  sourceFile: ts.SourceFile,
+  file: string,
+): { captures: Set<string>; helpers: Set<string>; loggers: Set<string> } => {
+  const captures = new Set<string>();
+  const helpers = new Set<string>();
+  const loggers = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    const modulePath = resolvedModulePath(file, statement.moduleSpecifier.text);
+    for (const specifier of bindings.elements) {
+      if (specifier.isTypeOnly) {
+        continue;
+      }
+      const imported = (specifier.propertyName ?? specifier.name).text;
+      const local = specifier.name.text;
+      if (
+        modulePath === FAILURE_SINK_MODULES.capture &&
+        TERMINAL_CAPTURE_EXPORTS.has(imported)
+      ) {
+        captures.add(local);
+      }
+      if (FOLDED_HELPER_EXPORTS[modulePath]?.has(imported) === true) {
+        helpers.add(local);
+      }
+      if (modulePath === FAILURE_SINK_MODULES.logger && imported === "logger") {
+        loggers.add(local);
+      }
+    }
+  }
+  return { captures, helpers, loggers };
+};
+
+const propertyNameText = (name: ts.PropertyName): string | null =>
+  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
+
+// Initializers of `const x = …` in the file, for following a name to the
+// value it was bound to.
+const constInitializers = (
+  sourceFile: ts.SourceFile,
+): Map<string, ts.Expression> => {
+  const initializers = new Map<string, ts.Expression>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      initializers.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return initializers;
+};
+
+const loggerMethodAliases = (
+  sourceFile: ts.SourceFile,
+  loggers: ReadonlySet<string>,
+): Set<string> => {
+  const aliases = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined &&
+      ts.isIdentifier(node.initializer) &&
+      loggers.has(node.initializer.text)
+    ) {
+      for (const element of node.name.elements) {
+        const method = element.propertyName ?? element.name;
+        if (
+          ts.isIdentifier(method) &&
+          FAILURE_LOGGER_METHODS.has(method.text) &&
+          ts.isIdentifier(element.name)
+        ) {
+          aliases.add(element.name.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return aliases;
+};
+
+const MAX_ATTRIBUTE_FOLLOW_DEPTH = 3;
+
+// A key or member name, not a value reference that could be followed.
+const isNameOfParent = (node: ts.Identifier): boolean => {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node)
+  );
+};
+
+// Whether an attribute expression carries error fields: an `error.*` key, or
+// a folded helper called or spread anywhere inside it. A name is followed to
+// its initializer, so a record assembled in a local still counts.
+const carriesErrorFields = (
+  expression: ts.Node,
+  bindings: FailureSinkBindings,
+  initializers: ReadonlyMap<string, ts.Expression>,
+  depth = 0,
+): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) {
+      return;
+    }
+    if (
+      (ts.isPropertyAssignment(node) ||
+        ts.isShorthandPropertyAssignment(node)) &&
+      propertyNameText(node.name)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
+    ) {
+      found = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      bindings.helpers.has(node.expression.text)
+    ) {
+      found = true;
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      depth < MAX_ATTRIBUTE_FOLLOW_DEPTH &&
+      !isNameOfParent(node)
+    ) {
+      const initializer = initializers.get(node.text);
+      if (
+        initializer !== undefined &&
+        initializer !== expression &&
+        carriesErrorFields(initializer, bindings, initializers, depth + 1)
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+};
+
+// `logger.warn(…)`, `logger["warn"](…)`, or a destructured `warn(…)`: the
+// method called, or null for any other call.
+const failureLoggerMethod = (
+  call: ts.CallExpression,
+  bindings: FailureSinkBindings,
+): string | null => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return bindings.loggerMethods.has(callee.text) ? callee.text : null;
+  }
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.loggers.has(callee.expression.text)
+  ) {
+    return FAILURE_LOGGER_METHODS.has(callee.name.text)
+      ? callee.name.text
+      : null;
+  }
+  if (
+    ts.isElementAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.loggers.has(callee.expression.text) &&
+    ts.isStringLiteral(callee.argumentExpression) &&
+    FAILURE_LOGGER_METHODS.has(callee.argumentExpression.text)
+  ) {
+    return callee.argumentExpression.text;
+  }
+  return null;
+};
+
+const isProcessStreamWrite = (call: ts.CallExpression): boolean => {
+  const callee = call.expression;
+  const target = call.arguments.at(0);
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === "Bun" &&
+    callee.name.text === "write" &&
+    target !== undefined &&
+    ts.isPropertyAccessExpression(target) &&
+    ts.isIdentifier(target.expression) &&
+    target.expression.text === "Bun" &&
+    PROCESS_STREAMS.has(target.name.text)
+  );
+};
+
+const isTerminalCapture = (
+  call: ts.CallExpression,
+  bindings: FailureSinkBindings,
+): boolean => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return bindings.captures.has(callee.text);
+  }
+  // A capture reached as a member (`telemetry.captureRequestError(…)`) is the
+  // same terminal call; the adapter seams' `captureError` members are counted
+  // by their own inventory metric instead.
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === "captureRequestError"
+  );
+};
+
+const countDirectFailureSinksAs = (
+  content: string,
+  file: string,
+  scriptKind: ts.ScriptKind,
+): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
+  const imported = importedFailureBindings(sourceFile, file);
+  const bindings: FailureSinkBindings = {
+    ...imported,
+    loggerMethods: loggerMethodAliases(sourceFile, imported.loggers),
+  };
+  const initializers = constInitializers(sourceFile);
+  const isRunner = file.startsWith(RUNNER_SOURCE_PREFIX);
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const method = failureLoggerMethod(node, bindings);
+      const attributes =
+        method === "request" ? node.arguments.at(0) : node.arguments.at(1);
+      if (
+        isTerminalCapture(node, bindings) ||
+        isProcessStreamWrite(node) ||
+        (isRunner &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === RUNNER_ERROR_WRITER) ||
+        (method !== null &&
+          attributes !== undefined &&
+          carriesErrorFields(attributes, bindings, initializers))
+      ) {
+        count += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
+const countDirectFailureSinks: FileCounter = (content, file) =>
+  Math.max(
+    countDirectFailureSinksAs(content, file, ts.ScriptKind.TS),
+    countDirectFailureSinksAs(content, file, ts.ScriptKind.TSX),
+  );
+
+// `callbacks.captureError(…)`-shaped seams: adapters that also do generation
+// bookkeeping, inventoried apart from the terminal sinks above.
+const countAnalyticsCallbackSeams = (content: string): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "captureError"
+    ) {
+      count += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
+const FAILURE_SINK_FACTORY = "failureSink";
+
+// The `failureSink({ … })` spec objects in a file.
+const failureSinkSpecs = (content: string): ts.ObjectLiteralExpression[] => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const specs: ts.ObjectLiteralExpression[] = [];
+  const visit = (node: ts.Node): void => {
+    const spec = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === FAILURE_SINK_FACTORY &&
+      spec !== undefined &&
+      ts.isObjectLiteralExpression(spec)
+    ) {
+      specs.push(spec);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specs;
+};
+
+const specProperty = (
+  spec: ts.ObjectLiteralExpression,
+  name: string,
+): ts.PropertyAssignment | undefined =>
+  spec.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      propertyNameText(property.name) === name,
+  );
+
+// One per local expectation a sink handle declares.
+const countFailureSinkExpectations = (content: string): number => {
+  let total = 0;
+  for (const spec of failureSinkSpecs(content)) {
+    const expected = specProperty(spec, "expected")?.initializer;
+    if (expected !== undefined && ts.isArrayLiteralExpression(expected)) {
+      total += expected.elements.length;
+    }
+  }
+  return total;
+};
+
+// One per sink handle whose output is pinned to its pre-migration channel.
+const countFailureLegacyOutputPins = (content: string): number =>
+  failureSinkSpecs(content).filter(
+    (spec) => specProperty(spec, "legacy") !== undefined,
+  ).length;
+
+const FAILURE_SINK_SOURCE_GLOBS = [
+  "apps/api/src/**/*.{ts,tsx}",
+  "apps/legal-atlas-runner/src/**/*.ts",
+] as const;
+
 type FileCounter = (content: string, file: string) => number;
 
 // A repo metric answers a question no single file can — the same helper copied
@@ -1512,6 +1948,12 @@ type RatchetMetric =
       readonly include: readonly string[];
       readonly exclude: (file: string) => boolean;
       readonly count: FileCounter;
+      /**
+       * Gate every file, not only the total: a file rising above its own
+       * baseline fails even when another file fell by as much, so removing
+       * one occurrence cannot fund a new one elsewhere.
+       */
+      readonly perFile?: true;
     }
   | {
       readonly scope: "repo";
@@ -1716,11 +2158,17 @@ const countLibTopLevelEntries =
 // charged: the earlier copy is as deletable as the later one, and which one
 // survives is the author's call.
 //
+// A window with fewer than one distinct token in four is a table's shape, not
+// a copy: rows of one record literal (`{ name, reference, clientLabel }` again
+// and again once their values are blanked), a list of re-exports, a column
+// map. Such a window neither matches nor is indexed, however often it recurs.
+//
 // Known limits, in the spirit of the counters above: a window that spans a
 // literal matches on the code around it, and a clone shorter than 60 tokens is
 // below the floor on purpose — short repeated shapes are idiom, not debt.
 
 const CLONE_WINDOW_TOKENS = 60;
+const CLONE_MIN_DISTINCT_TOKENS = CLONE_WINDOW_TOKENS / 4;
 // Past this size a file is vendored, packed, or a data blob: tokenising it
 // costs more than the copies it could reveal.
 const MAX_CLONE_SCAN_BYTES = 300 * 1024;
@@ -1842,6 +2290,26 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
   const slotNext: number[] = [];
   const hitPositions = new Map<number, number[]>();
 
+  // How often each token id occurs in the current window, and how many ids
+  // occur at all. Every count is back at zero once a file's last window is
+  // released, so the next file starts from an empty window.
+  const windowTokenCounts = new Uint8Array(tokenCache.size + 1);
+  let windowDistinct = 0;
+  const enterWindow = (token: number): void => {
+    const occurrences = windowTokenCounts[token] ?? 0;
+    if (occurrences === 0) {
+      windowDistinct += 1;
+    }
+    windowTokenCounts[token] = occurrences + 1;
+  };
+  const leaveWindow = (token: number): void => {
+    const occurrences = windowTokenCounts[token] ?? 0;
+    if (occurrences === 1) {
+      windowDistinct -= 1;
+    }
+    windowTokenCounts[token] = occurrences - 1;
+  };
+
   const recordHit = (fileIndex: number, position: number): void => {
     const positions = hitPositions.get(fileIndex);
     if (positions === undefined) {
@@ -1864,6 +2332,7 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
       const token = tokens[start + index] ?? 0;
       primary = Math.imul(primary, CLONE_BASE_PRIMARY) + token;
       secondary = Math.imul(secondary, CLONE_BASE_SECONDARY) + token;
+      enterWindow(token);
     }
 
     const lastPosition = length - CLONE_WINDOW_TOKENS;
@@ -1882,6 +2351,11 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
             secondary - Math.imul(leaving, secondaryPower),
             CLONE_BASE_SECONDARY,
           ) + entering;
+        leaveWindow(leaving);
+        enterWindow(entering);
+      }
+      if (windowDistinct < CLONE_MIN_DISTINCT_TOKENS) {
+        continue;
       }
 
       const windowStart = start + position;
@@ -1919,6 +2393,9 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
       }
       recordHit(fileIndex, position);
       recordHit(firstFile, firstPosition);
+    }
+    for (let index = lastPosition; index < length; index += 1) {
+      leaveWindow(tokens[start + index] ?? 0);
     }
   }
 
@@ -2104,10 +2581,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "implicit-root-connection-shapes",
+    description:
+      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, object-literal dependency properties, module-level calls and aliases, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts). Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt; everything else takes its connection as a required dependency",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/db/root.ts" ||
+      ROOT_CONNECTION_DOOR_FILES.has(file),
+    count: countRootConnectionShapes,
+  },
+  {
+    scope: "file",
     id: "audit-skip-directives",
     description:
-      "`// audit: skip - <reason>` comments in API handlers, each exempting a database write from require-audit-on-mutation; the fix is an audit recorder call in the same transaction",
-    include: ["apps/api/src/handlers/**/*.ts"],
+      "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
+    include: ["apps/api/src/**/*.ts"],
     exclude: isExcludedSource,
     count: countAuditSkipDirectives,
   },
@@ -2166,21 +2655,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   ...PER_RULE_SUPPRESSION_METRICS,
   {
     scope: "file",
+    id: "no-db-await-in-loop-suppressions",
+    description:
+      "`// db-await-in-loop:` and `// db-await-in-loop-disable:` directives, repo-wide (data-volume: per-row database round-trips inside a loop, N+1, found by scripts/db-await-in-loop.ts); gated per file",
+    include: ALL_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countDbAwaitInLoopSuppressions,
+    perFile: true,
+  },
+  {
+    scope: "file",
     id: "lint-suppression-directives",
     description:
       "eslint-/oxlint-disable directives naming only rules with no dedicated budget, repo-wide (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver). Same scope as those budgets, so every directive in the tree is charged to exactly one of them",
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countResidualLintSuppressions,
-  },
-  {
-    scope: "file",
-    id: "eslint-spelled-suppression-directives",
-    description:
-      "disable directives written with the legacy `eslint-disable` spelling instead of `oxlint-disable`, repo-wide (one directive, one spelling; new suppressions use the oxlint form)",
-    include: ALL_SOURCE_GLOBS,
-    exclude: isExcludedSource,
-    count: countEslintSpelledSuppressions,
   },
   {
     scope: "file",
@@ -2318,6 +2808,43 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countInternalModuleMockLedgerEntries,
   },
   {
+    scope: "file",
+    id: "direct-failure-sinks",
+    description:
+      "failure emissions that bypass observeFailure, on resolved bindings: captureError/captureRequestError/captureObservedError calls (aliases and member captureRequestError included), logger.error/warn/request calls whose attributes (literal, spread, or a local holding them) carry an error.* key or a legacy field helper, runner logError calls, and Bun.write to Bun.stderr/Bun.stdout; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countDirectFailureSinks,
+    perFile: true,
+  },
+  {
+    scope: "file",
+    id: "ai-analytics-callback-seams",
+    description:
+      "member captureError(...) calls: AI analytics callback seams that also do generation bookkeeping, so they migrate apart from the terminal sinks",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countAnalyticsCallbackSeams,
+  },
+  {
+    scope: "file",
+    id: "failure-sink-expectations",
+    description:
+      "local expectations declared on failureSink(...) handles; each one takes a failure out of the defect grade at one sink, so each must be justified where it is added",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countFailureSinkExpectations,
+  },
+  {
+    scope: "file",
+    id: "failure-legacy-output-pins",
+    description:
+      "failureSink(...) handles whose output is pinned to the channel the site used before it migrated; the ledger only shrinks as sites move to their grade's policy",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countFailureLegacyOutputPins,
+  },
+  {
     scope: "repo",
     id: "cross-app-lib-path-copies",
     description:
@@ -2360,6 +2887,12 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countLibTopLevelEntries(WEB_LIB_DIR),
   },
 ];
+
+const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
+  RATCHET_METRICS.filter(
+    (metric) => metric.scope === "file" && metric.perFile === true,
+  ).map(({ id }) => id),
+);
 
 // --- Scanning ---------------------------------------------------------------
 
@@ -2606,10 +3139,13 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
   return "ok";
 };
 
+type DiffOptions = { perFile?: true | undefined };
+
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
+  { perFile }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
@@ -2620,7 +3156,9 @@ const diffMetric = (
   }
   regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
 
-  const status = metricStatus(current.count, baseline.count);
+  const totalStatus = metricStatus(current.count, baseline.count);
+  const status =
+    perFile === true && regressedFiles.length > 0 ? "regressed" : totalStatus;
 
   return {
     id,
@@ -2692,6 +3230,7 @@ const runCheck = (): number => {
       metric.id,
       requireSnapshot(current, metric.id),
       base,
+      { perFile: metric.scope === "file" ? metric.perFile : undefined },
     );
     if (diff.status === "regressed") {
       regressions.push(diff);
@@ -2722,6 +3261,12 @@ const runCheck = (): number => {
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
     }
+  }
+  if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
+    console.error(
+      "\nA per-file metric fails on any file above its own baseline, even when\n" +
+        "the total did not rise: move the new occurrence behind the owner instead.",
+    );
   }
   console.error(
     "\nThese metrics may only decrease. Remove the new occurrence(s) above, or,\n" +
@@ -2941,6 +3486,38 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
 
+// One of each shape the implicit-root counter owns (the exhaustive cases live
+// in scripts/root-connection-shapes.test.ts); the same content written to a
+// door's path must count nothing.
+const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
+  'import { rootDb } from "@/api/db/root";',
+  'import { rootDb as owner } from "../db/root";',
+  'import * as root from "@/api/db/root";',
+  "export const load = async (db = rootDb) => db;",
+  "export const read = ({ database = owner }) => database;",
+  "export const pick = (db?: typeof owner) => db ?? root.rootDb;",
+  "export const write = async (ok: boolean, fn: () => Promise<void>) =>",
+  "  ok ? await rootDb.transaction(fn) : undefined;",
+  "export const deps = { db: rootDb };",
+  "export const store = createStore(rootDb);",
+  "export const explicit = async () => await notify([], rootDb);",
+  "export const shadowed = (rootDb: unknown) => ({ db: rootDb });",
+  'const text = "db = rootDb";',
+];
+const SELF_TEST_IMPLICIT_ROOT_CONNECTION = `${IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES.join("\n")}\n`;
+// Expected: default, destructured default, namespace fallback, conditional,
+// dependency property, module-level call (6). The explicit argument inside a
+// function, the shadowing parameter and the string are not shapes.
+const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 6;
+// A worker host, whose dependency property is the design, not a leak.
+const IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE =
+  "apps/api/src/api-background-workers.ts";
+const SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR = [
+  'import { rootDb } from "@/api/db/root";',
+  'export const host = startWorkers("api", { db: rootDb });',
+  "",
+].join("\n");
+
 const AUDIT_SKIP_FIXTURE_LINES = [
   "// audit: skip - scheduler bookkeeping, no user action",
   "const settled = true; // audit: skip - trailing directive counts",
@@ -3101,7 +3678,6 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
   "require-query-limit/require-query-limit": 6,
-  "no-db-await-in-loop/no-db-await-in-loop": 0,
   "no-network-await-in-loop/no-network-await-in-loop": 0,
   "require-bounded-request-schema/require-bounded-request-schema": 0,
   "no-unbounded-response-body/no-unbounded-response-body": 0,
@@ -3127,6 +3703,31 @@ const SELF_TEST_TS_SUPPRESSIONS = `${TS_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`
 // Expected: the three directive lines; the string copy and the mid-sentence
 // mention are excluded.
 const EXPECTED_TS_SUPPRESSIONS = 3;
+
+const DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES = [
+  "// db-await-in-loop: keyset page per iteration",
+  "await rootDb.select().from(items); // db-await-in-loop: trailing form",
+  "// db-await-in-loop-disable: ordered lock acquisition",
+  "// db-await-in-loop-enable",
+  "// db-await-in-loop without a colon is malformed, not a suppression",
+  "// prose quoting `// db-await-in-loop: <reason>` is not a suppression",
+  "/*",
+  " * // db-await-in-loop: inside a block comment",
+  " */",
+  'const doc = "// db-await-in-loop: quoted in a string";',
+  "const multiline = `",
+  "// db-await-in-loop: inside a template literal",
+  "`;",
+  "const interpolated = `${",
+  "  // db-await-in-loop: inside an interpolation, a real comment",
+  "  await rootDb.$count(items)",
+  "}`;",
+];
+const SELF_TEST_DB_AWAIT_IN_LOOP_SUPPRESSIONS = `${DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// The next-line, trailing, closed-block, and interpolation forms; not the
+// closing `-enable`, the malformed directive, the prose mention, the block
+// comment, or either quoted copy.
+const EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS = 4;
 
 const DETACHED_PROMISE_FIXTURE_LINES = [
   "void saveDraft();",
@@ -3543,11 +4144,12 @@ const WEB_COMPONENT_PLACEMENT_FIXTURES = {
 const EXPECTED_SLICE_OWNED_WEB_COMPONENTS = 4;
 
 // Duplicate-token-block fixtures. Ten lines of seven tokens each: 70 tokens, so
-// the shared run clears the 60-token window with room to spare.
+// the shared run clears the 60-token window with room to spare. Two tokens per
+// line are the line's own, so every window clears the distinct-token floor.
 const CLONE_BLOCK_LINES = Array.from(
   { length: 10 },
   (_, index) =>
-    `const step${String(index)} = compute(alpha, beta, gamma, delta);`,
+    `const step${String(index)} = compute(alpha${String(index)}, beta, gamma, delta);`,
 );
 const SELF_TEST_CLONE_BLOCK = `${CLONE_BLOCK_LINES.join("\n")}\n`;
 // The same shape with a different vocabulary, so it shares no window with the
@@ -3555,7 +4157,7 @@ const SELF_TEST_CLONE_BLOCK = `${CLONE_BLOCK_LINES.join("\n")}\n`;
 const SELF_TEST_UNIQUE_BLOCK = `${Array.from(
   { length: 10 },
   (_, index) =>
-    `const only${String(index)} = derive(epsilon, zeta, eta, theta);`,
+    `const only${String(index)} = derive(epsilon${String(index)}, zeta, eta, theta);`,
 ).join("\n")}\n`;
 // The shared block as the CONTENTS of a template literal. Blanking runs before
 // tokenising, so nothing here is a token and the file cannot match anything.
@@ -3568,17 +4170,143 @@ const collidingBlock = (identifier: string) =>
   `${Array.from(
     { length: 10 },
     (_, index) =>
-      `const near${String(index)} = collide(${identifier}, iota, kappa);`,
+      `const near${String(index)} = collide(${identifier}, iota${String(index)}, kappa);`,
   ).join("\n")}\n`;
 const SELF_TEST_CLONE_HASH_COLLISION_LEFT = collidingBlock(
   "contributorLastActivityMs",
 );
 const SELF_TEST_CLONE_HASH_COLLISION_RIGHT =
   collidingBlock("inspectedManifest");
+// Rows of one record literal, as a seed file or a data table writes them: once
+// their values are blanked, every window repeats the same three keys.
+const SELF_TEST_CLONE_DATA_TABLE = `export const ROWS = [\n${Array.from(
+  { length: 30 },
+  (_, index) =>
+    `  { name: "row ${String(index)}", reference: "${String(index)}", clientLabel: "c" },`,
+).join("\n")}\n];\n`;
 // One block in each of the two files that share it. The unique block, the
-// literal-only copy, the test-file copy and the hash-colliding pair all add
-// nothing.
+// literal-only copy, the test-file copy, the hash-colliding pair and the two
+// data tables all add nothing.
 const EXPECTED_DUPLICATE_TOKEN_BLOCKS = 2;
+
+const FAILURE_SINK_FIXTURE_LINES = [
+  "import {",
+  "  captureError as captureTelemetryError,",
+  "  captureRequestError,",
+  '} from "@/api/lib/analytics/capture";',
+  'import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";',
+  'import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";',
+  'import { failureSink } from "@/api/lib/observability/failure";',
+  'import { logger } from "@/api/lib/observability/logger";',
+  'import { observeFailure } from "@/api/lib/observability/observe-failure";',
+  "const { warn: warnLog } = logger;",
+  "const pinned = failureSink({",
+  '  event: "pinned.failed",',
+  '  expected: [{ match: { code: "ENOENT" }, reason: "optional_file_absent" }],',
+  '  legacy: { severity: "ERROR", capture: true },',
+  "});",
+  'const quiet = failureSink({ event: "quiet.failed", expected: [] });',
+  "export const sinks = async (error: unknown, request: Request) => {",
+  // An aliased import is still the capture.
+  "  captureTelemetryError(error);",
+  "  captureRequestError(error, { request });",
+  "  telemetry.captureRequestError(error, { request });",
+  // The attribute object held in a local.
+  '  const attributes = { "error.type": errorTag(error), phase: "x" };',
+  '  logger.error("worker.failed", attributes);',
+  // A spread helper, a literal error key, and the request record.
+  '  logger.warn("worker.retry", { ...errorSystemFields(error) });',
+  // A wrapper composing the helpers is the helpers.
+  '  logger.warn("document.failed", documentProcessingFailureFields(error));',
+  '  logger.error("worker.failed", { "error.code": "X" });',
+  '  logger.request({ message: "request.failed", errorType: errorTag(error) });',
+  // Computed and destructured logger access.
+  '  logger["warn"]("computed", { "error.type": "x" });',
+  '  warnLog("destructured", { "error.type": "x" });',
+  // Direct process-stream writes.
+  '  await Bun.write(Bun.stderr, "failed\\n");',
+  '  await Bun.write(Bun.stdout, "failed\\n");',
+  // Not direct sinks: no error fields, the owner, a file write, INFO, the
+  // analytics seams.
+  '  logger.error("worker.failed", { phase: "x" });',
+  "  observeFailure(error, { sink: quiet });",
+  "  observeFailure(error, { sink: pinned });",
+  '  await Bun.write("file.log", "x");',
+  '  logger.info("worker.done", { "error.type": "x" });',
+  "  callbacks.captureError(error);",
+  '  aiAnalytics.captureError(error, { kind: "unknown" });',
+  "};",
+];
+const SELF_TEST_FAILURE_SINKS = `${FAILURE_SINK_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_RUNNER_FAILURE_SINKS = [
+  "const logError = (message: string): void => {",
+  "  Bun.write(Bun.stderr, message);",
+  "};",
+  'logError("[daemon] failed");',
+  'logError("[daemon] retrying");',
+  "",
+].join("\n");
+const EXPECTED_DIRECT_FAILURE_SINKS = 15;
+const EXPECTED_ANALYTICS_CALLBACK_SEAMS = 2;
+const EXPECTED_FAILURE_SINK_EXPECTATIONS = 1;
+const EXPECTED_FAILURE_LEGACY_OUTPUT_PINS = 1;
+
+const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  for (const [id, expected] of [
+    ["direct-failure-sinks", EXPECTED_DIRECT_FAILURE_SINKS],
+    ["ai-analytics-callback-seams", EXPECTED_ANALYTICS_CALLBACK_SEAMS],
+    ["failure-sink-expectations", EXPECTED_FAILURE_SINK_EXPECTATIONS],
+    ["failure-legacy-output-pins", EXPECTED_FAILURE_LEGACY_OUTPUT_PINS],
+  ] as const) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+    }
+  }
+  const direct = requireSnapshot(snapshot, "direct-failure-sinks");
+  if (direct.files["apps/legal-atlas-runner/src/runner-log.ts"] !== 3) {
+    failures.push(
+      "direct-failure-sinks did not count the runner's stderr writer",
+    );
+  }
+  if ("apps/api/src/failure-sinks.test.ts" in direct.files) {
+    failures.push("direct-failure-sinks scanned a test file");
+  }
+
+  // A file rising while another falls by as much keeps the total level: a
+  // per-file metric still fails, a total-gated one does not.
+  const baseline = { count: 2, files: { "a.ts": 1, "b.ts": 1 } };
+  const moved = { count: 2, files: { "a.ts": 2 } };
+  if (
+    diffMetric("direct-failure-sinks", moved, baseline, { perFile: true })
+      .status !== "regressed"
+  ) {
+    failures.push("a per-file metric let one file fund another");
+  }
+  if (diffMetric("as-casts", moved, baseline).status !== "ok") {
+    failures.push("a total-gated metric failed on a level total");
+  }
+  if (!PER_FILE_METRIC_IDS.has("direct-failure-sinks")) {
+    failures.push("direct-failure-sinks is not gated per file");
+  }
+  // A new database-await directive in one file cannot hide behind a removal in
+  // another: the metric's own registered gate must reject the transfer.
+  const dbAwaitDirectives = RATCHET_METRICS.find(
+    ({ id }) => id === "no-db-await-in-loop-suppressions",
+  );
+  if (
+    dbAwaitDirectives?.scope !== "file" ||
+    diffMetric(dbAwaitDirectives.id, moved, baseline, {
+      perFile: dbAwaitDirectives.perFile,
+    }).status !== "regressed"
+  ) {
+    failures.push(
+      "no-db-await-in-loop-suppressions let one file's removal fund another's new directive",
+    );
+  }
+  return failures;
+};
 
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
@@ -3774,6 +4502,8 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/clone-copy.test.ts",
         "apps/api/src/clone-collision-left.ts",
         "apps/web/src/clone-collision-right.ts",
+        "apps/api/src/clone-table-origin.ts",
+        "apps/web/src/clone-table-copy.ts",
       ],
     },
     {
@@ -3958,6 +4688,16 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/scripts/implicit-root-connection.ts",
+      SELF_TEST_IMPLICIT_ROOT_CONNECTION,
+    );
+    writeFixture(
+      root,
+      IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE,
+      SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR,
+    );
+    writeFixture(
+      root,
       "apps/web/src/shared-helper-shapes.tsx",
       SELF_TEST_SHARED_WEB_HELPERS,
     );
@@ -4010,6 +4750,11 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/ts-suppressions.ts",
       SELF_TEST_TS_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/db-await-in-loop-suppressions.ts",
+      SELF_TEST_DB_AWAIT_IN_LOOP_SUPPRESSIONS,
     );
     writeFixture(
       root,
@@ -4238,6 +4983,31 @@ const runSelfTest = (): number => {
       "apps/web/src/clone-collision-right.ts",
       SELF_TEST_CLONE_HASH_COLLISION_RIGHT,
     );
+    writeFixture(
+      root,
+      "apps/api/src/clone-table-origin.ts",
+      SELF_TEST_CLONE_DATA_TABLE,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/clone-table-copy.ts",
+      SELF_TEST_CLONE_DATA_TABLE,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/failure-sinks.ts",
+      SELF_TEST_FAILURE_SINKS,
+    );
+    writeFixture(
+      root,
+      "apps/legal-atlas-runner/src/runner-log.ts",
+      SELF_TEST_RUNNER_FAILURE_SINKS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/failure-sinks.test.ts",
+      SELF_TEST_FAILURE_SINKS,
+    );
     // Excluded companions: these must NOT be counted.
     writeFixture(
       root,
@@ -4259,6 +5029,7 @@ const runSelfTest = (): number => {
     const snapshot = scanAll(root);
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...failureSinkSelfTestFailures(snapshot));
 
     const mockLedgerMetric = requireSnapshot(
       snapshot,
@@ -4341,6 +5112,10 @@ const runSelfTest = (): number => {
       ],
       ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      [
+        "implicit-root-connection-shapes",
+        EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
+      ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
       [
         "repeated-timestamp-cursor-boundary",
@@ -4352,6 +5127,12 @@ const runSelfTest = (): number => {
       if (metric.count !== expected) {
         failures.push(`${id} counted ${metric.count}, expected ${expected}`);
       }
+    }
+    if (
+      IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE in
+      requireSnapshot(snapshot, "implicit-root-connection-shapes").files
+    ) {
+      failures.push("implicit-root-connection-shapes did not exempt a door");
     }
 
     failures.push(...legacyPaintSelfTestFailures(snapshot));
@@ -4444,6 +5225,16 @@ const runSelfTest = (): number => {
       if (!budgetIds.has(suppressionMetricId(rule))) {
         failures.push(`tracked rule ${rule} has no ratchet budget`);
       }
+    }
+
+    const dbAwaitInLoopMetric = requireSnapshot(
+      snapshot,
+      "no-db-await-in-loop-suppressions",
+    );
+    if (dbAwaitInLoopMetric.count !== EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS) {
+      failures.push(
+        `no-db-await-in-loop-suppressions counted ${dbAwaitInLoopMetric.count}, expected ${EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS}`,
+      );
     }
 
     const tsSuppressionMetric = requireSnapshot(

@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
- * per-model document-input, reasoning-effort, and temperature policy maps
+ * per-model document-input, reasoning-effort, temperature policy and
+ * output-limit maps
  * from models.dev plus reviewed provider corrections and policy cutovers.
  *
  * Rules enforced here (each one turns a class of catalog mistakes
@@ -14,7 +15,10 @@ import { panic } from "better-result";
  *    source correction exists, and a correction is rejected once upstream
  *    agrees;
  *  - an upstream effort keyword outside the `REASONING_EFFORTS`
- *    ladder is rejected, forcing a reviewed ladder extension.
+ *    ladder is rejected, forcing a reviewed ladder extension;
+ *  - a model without tool calling is rejected: every role sends tool
+ *    definitions or structured output, which some adapters implement
+ *    as a forced tool call, so such a model cannot serve any role.
  *
  * The emitted module keeps the compile-time exhaustiveness guarantee
  * (`satisfies Record<OfferedBYOKModelId, …>`): offering a new model
@@ -51,6 +55,7 @@ import type {
   OpenRouterReasoningDefaults,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
+import { formatInteger } from "./model-catalog-rates-gen";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
@@ -58,7 +63,7 @@ const OUTPUT_PATH = path.resolve(
 );
 
 /** Catalog provider → models.dev provider key. */
-const MODELS_DEV_KEY_BY_PROVIDER: Record<
+export const MODELS_DEV_KEY_BY_PROVIDER: Record<
   keyof typeof BYOK_MODEL_OPTIONS,
   string
 > = {
@@ -89,6 +94,8 @@ export type CapabilityRow = {
   modelId: string;
   provider: BYOKProvider;
   efforts: readonly ReasoningEffort[] | null;
+  /** The most output tokens one response may carry. */
+  outputTokens: number;
   temperaturePolicy: TemperaturePolicy;
   overrideReason: string | null;
 };
@@ -144,6 +151,7 @@ export const buildCapabilityRows = ({
           modelId,
           provider,
           efforts: override.reasoningEfforts,
+          outputTokens: override.outputTokens,
           temperaturePolicy: override.temperatureSupported ? "emit" : "omit",
           overrideReason: override.reason,
         });
@@ -163,6 +171,24 @@ export const buildCapabilityRows = ({
           }
           efforts.push(value);
         }
+      }
+      if (record.toolCall === null) {
+        return panic(
+          `${provider}/${modelId}: models.dev record lacks the tool_call ` +
+            "field; investigate upstream before regenerating",
+        );
+      }
+      if (!record.toolCall) {
+        return panic(
+          `${provider}/${modelId}: models.dev reports no tool calling; no ` +
+            "model role can use it, so drop it from BYOK_MODEL_OPTIONS",
+        );
+      }
+      if (record.outputTokens === null) {
+        return panic(
+          `${provider}/${modelId}: models.dev record lacks limit.output; ` +
+            "investigate upstream before regenerating",
+        );
       }
       if (record.temperature === null) {
         return panic(
@@ -229,6 +255,7 @@ export const buildCapabilityRows = ({
         modelId,
         provider,
         efforts,
+        outputTokens: record.outputTokens,
         temperaturePolicy: resolveTemperaturePolicy({
           modelId,
           provider,
@@ -262,6 +289,9 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
   const temperaturePolicyLines = rows.map(
     (row) => `  "${row.modelId}": "${row.temperaturePolicy}",`,
   );
+  const outputTokenLines = rows.map(
+    (row) => `  "${row.modelId}": ${formatInteger(row.outputTokens)},`,
+  );
   const defaultEffortLines = rows.map(
     (row) =>
       `  "${row.modelId}": ${renderDefaultEffort(row.defaultReasoningEffort)},`,
@@ -286,8 +316,8 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
 // \`bun --filter @stll/ai-catalog gen:capabilities\`.
 //
 // Sources: models.dev per-model \`reasoning_options\`, \`temperature\`,
-// \`modalities.input\`, and release dates (first-party, openrouter, and
-// amazon-bedrock catalogs);
+// \`modalities.input\`, \`limit.output\`, and release dates (first-party,
+// openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model \`default_effort\`; plus reviewed provider
 // policies and dated entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
@@ -343,6 +373,15 @@ ${defaultEffortLines.join("\n")}
 export const MODEL_TEMPERATURE_POLICIES = {
 ${temperaturePolicyLines.join("\n")}
 } as const satisfies Record<OfferedBYOKModelId, TemperaturePolicy>;
+
+/**
+ * The most output tokens one response of each offered model may carry
+ * (models.dev \`limit.output\`). Consumers must go through
+ * \`getOutputTokenLimit\`.
+ */
+export const MODEL_OUTPUT_TOKEN_LIMITS = {
+${outputTokenLines.join("\n")}
+} as const satisfies Record<OfferedBYOKModelId, number>;
 `;
 };
 

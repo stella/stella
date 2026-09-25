@@ -9,17 +9,16 @@ import { panic } from "better-result";
  *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -32,9 +31,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("decision read — document state", () => {
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
 
     let sourceId: SafeId<"caseLawSource">;
     const created: SafeId<"caseLawDecision">[] = [];
@@ -103,7 +100,7 @@ if (!databaseUrl || !runPostgresTests) {
       sourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (created.length > 0) {
         await db
           .delete(caseLawDecisions)

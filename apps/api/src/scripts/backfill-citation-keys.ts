@@ -83,7 +83,7 @@ const backfillTable = async (
   const missingOnly = scope === KEY_SCOPE.MISSING;
 
   while (true) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const result: unknown = await rootDb.execute(
       sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored
             FROM ${sql.raw(table)}
@@ -133,7 +133,7 @@ const backfillTable = async (
       // key changes spelling was settled against the old one, so it goes back
       // to `pending`; a decision's rekeying reopens the citations of both its
       // old and its new key.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded batch per iteration under the graph lock
+      // db-await-in-loop: bounded batch per iteration under the graph lock
       await rootDb.transaction(async (tx) => {
         await lockCitationGraph(tx);
         if (table === "case_law_decisions") {

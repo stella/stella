@@ -35,7 +35,7 @@ const LABELS = {
 const property = (id: string): WorkspaceProperty => ({
   id: toSafeId<"property">(id),
   name: id,
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  createdAt: "2026-01-01T00:00:00.000Z",
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   kinds: null,

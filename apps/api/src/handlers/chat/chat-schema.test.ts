@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
@@ -31,6 +32,7 @@ import {
   activeTemplateSchema,
   agUiSendMessageBodySchema,
   parseMessage,
+  resolveBrowserClientCapability,
   sendMessageBodySchema,
   validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
@@ -335,6 +337,73 @@ describe("chat turn intent", () => {
         turnIntent: "retry",
       }),
     ).toBe(false);
+  });
+});
+
+describe("browser client capability", () => {
+  const request = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-browser-1",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "Read this page" }],
+    },
+  };
+
+  test("a tab on another extension protocol can still send", () => {
+    for (const protocolVersion of [
+      BROWSER_CONTROL_PROTOCOL_VERSION,
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+    ]) {
+      expect(
+        Value.Check(sendMessageBodySchema, {
+          ...request,
+          browserClient: { protocolVersion },
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects a malformed browser capability", () => {
+    for (const protocolVersion of [0, 1.5, "3"]) {
+      expect(
+        Value.Check(sendMessageBodySchema, {
+          ...request,
+          browserClient: { protocolVersion },
+        }),
+      ).toBe(false);
+    }
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        browserClient: {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          arbitraryJavaScript: true,
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("offers the browser tool only to the current extension protocol", () => {
+    expect(
+      resolveBrowserClientCapability({
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      }),
+    ).toEqual({ protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION });
+    expect(
+      resolveBrowserClientCapability({
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveBrowserClientCapability({
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeUndefined();
+    expect(resolveBrowserClientCapability(undefined)).toBeUndefined();
   });
 });
 

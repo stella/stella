@@ -46,7 +46,7 @@ import {
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
-// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
+// oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -57,7 +57,6 @@ import {
   courtTierSqlFromMap,
   courtWeightFromMap,
   flattenCourtWeightEntries,
-  loadCourtWeights,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
@@ -88,6 +87,10 @@ import {
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
+import {
+  loadPublicCourtWeights,
+  loadPublicFtsSearchConfigs,
+} from "@/api/lib/case-law/public-case-law-config";
 import {
   publishedCaseLawDecision,
   publishedCaseLawDecisionSqlFor,
@@ -153,7 +156,7 @@ import {
   type ExpandedCorpusQuery,
   resolveExpandedCorpusQuery,
 } from "@/api/lib/legal-search/expansion";
-import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
+import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import {
@@ -176,6 +179,10 @@ import type {
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 const toNullableString = (x: unknown): string | null => {
@@ -240,40 +247,56 @@ export const searchDecisionsHandler = async (
   return await searchPostgresDecisions(scopedBody, caseLawDb);
 };
 
-const searchPostgresDecisions = async (
-  body: SearchDecisionsBody,
-  caseLawDb: CaseLawPublicReadDb,
-) => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const sort = body.sort ?? DEFAULT_SEARCH_SORT;
-  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+type CaseLawSearchFacet =
+  | "court"
+  | "year"
+  | "decisionType"
+  | "source"
+  | "language";
 
-  // Validate cursor early so a tampered value fails visibly, and refuse one
-  // that bounds a different order: its key is a position in that order.
-  let parsedCursor: DecisionSearchCursor | null = null;
-  if (body.cursor) {
-    parsedCursor = decodeDecisionSearchCursor(body.cursor);
-    if (parsedCursor === null || parsedCursor.sort !== sort) {
-      return status(400, { message: "Invalid cursor" });
-    }
-  }
+export const CASE_LAW_SEARCH_FACETS = [
+  "court",
+  "year",
+  "decisionType",
+  "source",
+  "language",
+] as const satisfies readonly CaseLawSearchFacet[];
 
-  // Resolved here as well as on the corpus branch, through the same helper:
-  // which words a search required is a property of the request, not of the
-  // engine that answered it, so both providers must answer it identically.
-  const interpretation = interpretDecisionQuery(
-    body,
-    parseDecisionQuery(body.query, {
-      grammar: decisionDocketGrammarForCountry(body.country),
-    }),
-  );
+type CaseLawSearchPlanOptions = {
+  body: SearchDecisionsBody;
+  configs: readonly FtsSearchConfig[];
+  courtWeights: CourtWeightMap;
+  excerpt: Parameters<typeof decisionHeadlineConfig>[0];
+  limit: number;
+  parsedCursor: DecisionSearchCursor | null;
+  queryUsed: string;
+  sort: SearchSort;
+};
 
+/** The statements one Postgres search runs: a page, its total, each facet. */
+type CaseLawSearchPlan = {
+  hits: SQL;
+  total: SQL;
+  facets: Record<CaseLawSearchFacet, SQL>;
+};
+
+/**
+ * Every statement the Postgres search runs, built once per request. Exported
+ * so the reader-role suite executes these exact statements under SET ROLE.
+ */
+export const caseLawSearchPlan = ({
+  body,
+  configs,
+  courtWeights,
+  excerpt,
+  limit,
+  parsedCursor,
+  queryUsed,
+  sort,
+}: CaseLawSearchPlanOptions): CaseLawSearchPlan => {
   const ftsSearch = buildPgFtsSearchSql({
-    configs: await loadFtsSearchConfigs(),
-    // The words the search requires, not the sentence they were typed in.
-    // `plainto_tsquery` AND-s what it is given, so this is the same
-    // exclusion the corpus branch applies, applied at the same boundary.
-    query: interpretation.queryUsed,
+    configs,
+    query: queryUsed,
     refs: {
       language: sql`sd.language`,
       regconfig: sql`sd.regconfig`,
@@ -300,9 +323,6 @@ const searchPostgresDecisions = async (
     ? sql`AND d.language = ${body.language}`
     : sql``;
 
-  // One registry for both places the statement reads it: the tier prior on the
-  // decision itself, and the weight each incoming citation carries below.
-  const courtWeights = await loadCourtWeights();
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
     courtTier: sql.raw(
@@ -569,10 +589,95 @@ const searchPostgresDecisions = async (
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
-  type RawRows = Record<string, unknown>[];
-  const emptyRows: Promise<RawRows> = Promise.resolve([]);
-  const onFirstPage = async (query: SQL): Promise<RawRows> =>
-    parsedCursor ? await emptyRows : await caseLawDb((tx) => tx.execute(query));
+  return {
+    hits: hitsQuery,
+    total: countQuery,
+    facets: {
+      court: courtFacetQuery,
+      year: yearFacetQuery,
+      decisionType: decisionTypeFacetQuery,
+      source: sourceFacetQuery,
+      language: languageFacetQuery,
+    },
+  };
+};
+
+type RawRows = Record<string, unknown>[];
+
+export const readCaseLawSearchHits = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawSearchHits,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    plan: CaseLawSearchPlan,
+  ): Promise<RawRows> => await tx.execute(plan.hits),
+);
+
+export const readCaseLawSearchTotal = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawSearchTotal,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    plan: CaseLawSearchPlan,
+  ): Promise<RawRows> => await tx.execute(plan.total),
+);
+
+export const readCaseLawSearchFacet = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawSearchFacet,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    plan: CaseLawSearchPlan,
+    facet: CaseLawSearchFacet,
+  ): Promise<RawRows> => await tx.execute(plan.facets[facet]),
+);
+
+const searchPostgresDecisions = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const sort = body.sort ?? DEFAULT_SEARCH_SORT;
+  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+
+  // Validate cursor early so a tampered value fails visibly, and refuse one
+  // that bounds a different order: its key is a position in that order.
+  let parsedCursor: DecisionSearchCursor | null = null;
+  if (body.cursor) {
+    parsedCursor = decodeDecisionSearchCursor(body.cursor);
+    if (parsedCursor === null || parsedCursor.sort !== sort) {
+      return status(400, { message: "Invalid cursor" });
+    }
+  }
+
+  // Resolved here as well as on the corpus branch, through the same helper:
+  // which words a search required is a property of the request, not of the
+  // engine that answered it, so both providers must answer it identically.
+  const interpretation = interpretDecisionQuery(
+    body,
+    parseDecisionQuery(body.query, {
+      grammar: decisionDocketGrammarForCountry(body.country),
+    }),
+  );
+
+  const configs = await loadPublicFtsSearchConfigs();
+  // One registry for both places the statements read it: the tier prior on
+  // the decision itself, and the weight each incoming citation carries.
+  const courtWeights = await loadPublicCourtWeights();
+  const plan = caseLawSearchPlan({
+    body,
+    configs,
+    courtWeights,
+    excerpt,
+    limit,
+    parsedCursor,
+    // The words the search requires, not the sentence they were typed in.
+    // `plainto_tsquery` AND-s what it is given, so this is the same
+    // exclusion the corpus branch applies, applied at the same boundary.
+    queryUsed: interpretation.queryUsed,
+    sort,
+  });
+
+  const onFirstPage = async (
+    read: (tx: CaseLawPublicReadTransaction) => Promise<RawRows>,
+  ): Promise<RawRows> => (parsedCursor ? [] : await caseLawDb(read));
 
   // Skip the expensive COUNT(*) and the facet queries on paginated requests;
   // these values describe the result set, not the page.
@@ -585,13 +690,17 @@ const searchPostgresDecisions = async (
     sourceResultRaw,
     languageResultRaw,
   ] = await Promise.all([
-    caseLawDb((tx) => tx.execute(hitsQuery)),
-    onFirstPage(countQuery),
-    onFirstPage(courtFacetQuery),
-    onFirstPage(yearFacetQuery),
-    onFirstPage(decisionTypeFacetQuery),
-    onFirstPage(sourceFacetQuery),
-    onFirstPage(languageFacetQuery),
+    caseLawDb(async (tx) => await readCaseLawSearchHits(tx, plan)),
+    onFirstPage(async (tx) => await readCaseLawSearchTotal(tx, plan)),
+    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "court")),
+    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "year")),
+    onFirstPage(
+      async (tx) => await readCaseLawSearchFacet(tx, plan, "decisionType"),
+    ),
+    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "source")),
+    onFirstPage(
+      async (tx) => await readCaseLawSearchFacet(tx, plan, "language"),
+    ),
   ]);
 
   const hitsResult = arrayOrEmpty(hitsResultRaw);
@@ -1603,7 +1712,7 @@ export const searchCorpusIndexDecisions = async (
   // loader caches for a minute, but the ranking must see one registry across a
   // whole page. The timer brackets the query rather than the call, so a
   // request served from the cache reports no read instead of a phantom one.
-  const courtWeights = await loadCourtWeights({
+  const courtWeights = await loadPublicCourtWeights({
     onRead: async (run) =>
       await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
   });

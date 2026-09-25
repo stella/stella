@@ -906,6 +906,23 @@
       "allowInConversation": "In dieser Unterhaltung erlauben",
       "allowOnce": "Einmal erlauben",
       "alwaysAllow": "Immer erlauben",
+      "browser": {
+        "actions": {
+          "click": "Klicken",
+          "fill": "Text eingeben",
+          "open": "Website öffnen",
+          "pressKey": "Taste drücken",
+          "select": "Option auswählen",
+          "snapshot": "Seite lesen",
+          "snapshotContinue": "Seite weiterlesen"
+        },
+        "askAgain": "Wieder nachfragen",
+        "autoApproveReads": "Seitenlesen automatisch genehmigen",
+        "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
+        "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
+        "question": "Diese Browseraktion erlauben?",
+        "within": "Innerhalb von"
+      },
       "denied": "Abgelehnt",
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
@@ -1239,6 +1256,7 @@
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
+      "use-browser": "Ihren Browser verwenden",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -1366,6 +1384,7 @@
   },
   "common": {
     "accept": "Annehmen",
+    "action": "Aktion",
     "actions": "Aktionen",
     "active": "Aktiv",
     "add": "Hinzufügen",
@@ -1509,6 +1528,7 @@
       "event": "Ereignis",
       "requirement": "Anforderung"
     },
+    "key": "Taste",
     "kind": "Art",
     "language": "Sprache",
     "languages": {
@@ -1636,6 +1656,7 @@
     "stepProgress": "{current} von {total}",
     "suggested": "Vorschlag",
     "summarizeChanges": "Änderungen zusammenfassen",
+    "target": "Ziel",
     "timeBilling": "Zeit & Abrechnung",
     "today": "Heute",
     "translate": "Übersetzen",
@@ -1655,11 +1676,13 @@
     "urlIdentifier": "URL-Kennung",
     "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
+    "value": "Wert",
     "verified": "Verifiziert",
     "verify": "Bestätigen",
     "version": "Version",
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
+    "website": "Webseite",
     "workflow": "Arbeitsablauf",
     "workflows": "Workflows",
     "zoomIn": "Vergrößern",
@@ -1749,8 +1772,7 @@
       "labelRequired": "Feldname ist erforderlich.",
       "removeField": "Feld entfernen",
       "title": "Benutzerdefinierte Felder",
-      "value": "Feldwert",
-      "valuePlaceholder": "Wert"
+      "value": "Feldwert"
     },
     "deleteContact": "Klient löschen",
     "deleteContactBlockedByMatters": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
@@ -3667,7 +3689,6 @@
       "chooseModelsSubtitle": "Wählen Sie ein Modell pro Rolle. Preise erscheinen rechts.",
       "chooseModelsTitle": "Modelle wählen",
       "configure": "Konfigurieren",
-      "credentialsPanel": "Schlüssel",
       "customModelBadge": "Benutzerdefiniert · {provider}",
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
@@ -4173,7 +4194,6 @@
         "title": "Anonymisierung"
       },
       "auditLogs": "Aktivitätsprotokoll",
-      "auditLogsAction": "Aktion",
       "auditLogsActionAccess": "Zugriff",
       "auditLogsActionCreate": "Erstellen",
       "auditLogsActionDelete": "Löschen",
@@ -4635,7 +4655,6 @@
     "conditionOverrideHint": "Klicken, um den Wert selbst festzulegen; erneut klicken, um ihn der KI zurückzugeben",
     "conditionUseFieldInstead": "Stattdessen ein Feld verwenden",
     "conditionUseFormula": "ƒ Berechneter Wert…",
-    "conditionValue": "Wert",
     "conditionWhen": "Wenn",
     "conditionsTitle": "Bedingungen",
     "configureFields": "Felder konfigurieren",
@@ -5074,7 +5093,6 @@
       "fieldValueLabel": "Feldwert",
       "fieldValuePlaceholder": "Feldwert eingeben",
       "formatNotSupported": "Format nicht unterstützt",
-      "numberLabel": "Wert",
       "numberPlaceholder": "Zahl eingeben",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen"
@@ -5344,7 +5362,6 @@
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
           "system": "Systemaktivität",
-          "target": "Ziel",
           "title": "Aktivitätsdetails",
           "trigger": "Ausgelöst von",
           "webhook": "Web-Schnittstelle"

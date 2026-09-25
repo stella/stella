@@ -1,6 +1,6 @@
 import type { TSchema } from "@sinclair/typebox";
-import type { Err } from "better-result";
-import { Panic, Result, UnhandledException } from "better-result";
+import type { Err, UnhandledException } from "better-result";
+import { Result } from "better-result";
 import type {
   Context,
   ElysiaCustomStatusResponse,
@@ -19,12 +19,13 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
-import { captureRequestError } from "@/api/lib/analytics/capture";
+import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -38,12 +39,19 @@ import type {
   HandlerErrorStatusCode,
   HandlerErrorValidationIssue,
 } from "@/api/lib/errors/tagged-errors";
+import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
-  errorFingerprint,
-  errorTag,
-  safeErrorCause,
-  unredactedErrorFields,
-} from "@/api/lib/errors/utils";
+  causeChainAttributes,
+  identityFields,
+  requestErrorStatusFields,
+} from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  legacyChannelOf,
+  observeShadow,
+  SHADOW_SINKS,
+  shadowFields,
+} from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -657,34 +665,6 @@ function toSafeStatusResponse(
 type SafeHandlerLogContext = {
   request: Request;
   route: string;
-};
-
-/** How far a typed status is followed through transport wrappers. */
-const MAX_TRANSPORT_WRAPPER_DEPTH = 3;
-
-/**
- * The typed `HandlerError` an error carries, or null.
- *
- * A handler that throws a status rarely throws it here directly: a throw
- * inside `Result.tryPromise` arrives as `UnhandledException` and one inside a
- * `Result.gen` body arrives as `Panic`, both carrying the original as `cause`.
- * Grading the wrapper spends the status the thrower chose, so a refusal the
- * caller could act on (an upstream 503, a misconfiguration) is reported as a
- * generic 500.
- */
-const resolveHandlerError = (error: unknown): HandlerError | null => {
-  let candidate = error;
-  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
-    if (HandlerError.is(candidate)) {
-      return candidate;
-    }
-    if (!Panic.is(candidate) && !UnhandledException.is(candidate)) {
-      return null;
-    }
-    candidate = candidate.cause;
-  }
-
-  return null;
 };
 
 const runSafeHandler = async <
@@ -1365,31 +1345,6 @@ type LogAndCaptureSafeErrorProps = {
   telemetry: SafeErrorTelemetry;
 };
 
-const getErrorStatusCode = (error: Error): number | undefined => {
-  try {
-    if ("statusCode" in error) {
-      const statusCode: unknown = Reflect.get(error, "statusCode");
-      if (typeof statusCode === "number") {
-        return statusCode;
-      }
-    }
-
-    if ("status" in error) {
-      const statusValue: unknown = Reflect.get(error, "status");
-      if (typeof statusValue === "number") {
-        return statusValue;
-      }
-    }
-  } catch {
-    return undefined;
-  }
-
-  return undefined;
-};
-
-/** How far up `.cause` the structural walk goes. */
-const MAX_CAUSE_DEPTH = 3;
-
 /**
  * Structural attributes for an error's `.cause` chain, so nested
  * wrappers do not hide the underlying failure.
@@ -1401,34 +1356,12 @@ const MAX_CAUSE_DEPTH = 3;
  * generic 500 is the only status logged. The cause's 403
  * (misconfiguration), 400 (unsupported input) or 502 (upstream run
  * failure) is what names the failure. A status is a number, so this
- * stays as non-PII as the rest of the sink.
+ * stays as non-PII as the rest of the sink. Read from the shared failure
+ * snapshot.
  */
 export const errorCauseChainAttributes = (
   error: Error,
-): Record<string, string | number> => {
-  const attributes: Record<string, string | number> = {};
-  const seen = new WeakSet<object>([error]);
-  let cause = safeErrorCause(error);
-  let depth = 1;
-
-  while (
-    cause instanceof Error &&
-    depth <= MAX_CAUSE_DEPTH &&
-    !seen.has(cause)
-  ) {
-    seen.add(cause);
-    const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
-    attributes[`${prefix}.type`] = errorTag(cause);
-    const causeStatusCode = getErrorStatusCode(cause);
-    if (causeStatusCode !== undefined) {
-      attributes[`${prefix}.status_code`] = causeStatusCode;
-    }
-    cause = safeErrorCause(cause);
-    depth++;
-  }
-
-  return attributes;
-};
+): Record<string, string | number> => causeChainAttributes(readEvidence(error));
 
 const logAndCaptureSafeError = ({
   request,
@@ -1438,6 +1371,15 @@ const logAndCaptureSafeError = ({
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
   const reqCtx = getRequestContext(request);
+  const evidence = readEvidence(error);
+  const severity = statusCode >= 500 ? "ERROR" : "WARN";
+  const grading = observeShadow({
+    error,
+    sink: SHADOW_SINKS.handler,
+    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    request,
+    requestState: { answeredStatus: statusCode },
+  });
 
   const attributes: Record<string, string | number | boolean> = {
     "http.method": request.method,
@@ -1449,13 +1391,8 @@ const logAndCaptureSafeError = ({
     "error.type": errorTag(error),
   };
 
-  if (error instanceof Error) {
-    const errorStatusCode = getErrorStatusCode(error);
-    if (errorStatusCode !== undefined) {
-      attributes["error.status_code"] = errorStatusCode;
-    }
-    Object.assign(attributes, errorCauseChainAttributes(error));
-  }
+  Object.assign(attributes, requestErrorStatusFields(evidence));
+  Object.assign(attributes, causeChainAttributes(evidence));
 
   // Every answered failure is un-diagnosable without this: the message and
   // stack are redacted from every sink, leaving only `error.type`. The
@@ -1465,7 +1402,7 @@ const logAndCaptureSafeError = ({
   // `error.type` reads `HandlerError` at every one of the dozens of sites
   // that reject a request payload, so the frame is the only thing that says
   // which rejection fired.
-  Object.assign(attributes, errorFingerprint(error));
+  Object.assign(attributes, identityFields(evidence));
 
   if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
     Object.assign(attributes, unredactedErrorFields(error));
@@ -1487,11 +1424,14 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
+  // The owner's grade rides along in shadow; it decides nothing here yet.
+  Object.assign(attributes, shadowFields(grading));
+
   // Severity follows the status class, as it does at the request-level
   // `onError` sink that emits this same `request.failed` event. A 5xx is a
   // server fault; a 4xx is an answered client outcome, and an access denial
   // graded ERROR would sit in the same class as a panic.
-  if (statusCode >= 500) {
+  if (severity === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);
@@ -1502,12 +1442,13 @@ const logAndCaptureSafeError = ({
   // would drown real faults in traffic the client controls. The record above
   // already carries the rejecting frame.
   if (telemetry === "capture") {
-    captureRequestError(error, {
+    captureObservedError(error, {
       request,
       context: {
         method: request.method,
         route,
       },
+      observation: grading,
     });
   }
 };

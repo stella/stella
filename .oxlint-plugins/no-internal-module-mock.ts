@@ -1,4 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -100,16 +101,14 @@ const readLedger = (): ReadonlyMap<string, ReadonlySet<string>> => {
     !Array.isArray(parsed) ||
     !parsed.every((entry) => typeof entry === "string")
   ) {
-    throw new TypeError(
-      `${LEDGER_DISPLAY_PATH} must be a JSON array of strings`,
-    );
+    panic(`${LEDGER_DISPLAY_PATH} must be a JSON array of strings`);
   }
   // Sorted and duplicate-free, so a line cannot hide in the list and a merge
   // conflict on the ledger resolves by position.
   for (const [index, entry] of parsed.entries()) {
     const previous = parsed[index - 1];
     if (typeof previous === "string" && previous >= entry) {
-      throw new TypeError(
+      panic(
         `${LEDGER_DISPLAY_PATH} must be sorted and duplicate-free: "${entry}" follows "${previous}"`,
       );
     }
@@ -118,7 +117,7 @@ const readLedger = (): ReadonlyMap<string, ReadonlySet<string>> => {
   for (const entry of parsed) {
     const separator = entry.indexOf(PAIR_SEPARATOR);
     if (separator === -1) {
-      throw new TypeError(
+      panic(
         `${LEDGER_DISPLAY_PATH}: "${entry}" is not a "<file>::<specifier>" pair`,
       );
     }

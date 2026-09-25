@@ -27,7 +27,7 @@ export const createDevErrorLogger =
     if (!isDev) {
       return;
     }
-    // eslint-disable-next-line no-console -- dev-only error echo
+    // oxlint-disable-next-line no-console -- dev-only error echo
     console.error(error);
     sink?.({ error, context });
   };

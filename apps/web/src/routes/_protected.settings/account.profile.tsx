@@ -53,7 +53,7 @@ import {
 } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";

@@ -30,7 +30,7 @@ type FixtureDecision = {
 
 const fixture = (await readGzipJson(
   new URL("eu-ecj.json.gz", import.meta.url),
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed generated fixture; assertions below validate its behavioral contract
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed generated fixture; assertions below validate its behavioral contract
 )) as { decisions: FixtureDecision[] };
 
 describe("eu-ecj seed fixture", () => {

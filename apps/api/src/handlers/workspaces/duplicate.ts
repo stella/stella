@@ -63,10 +63,12 @@ import type {
   SearchIndexOwner,
 } from "@/api/lib/search/process-extraction";
 import {
-  enqueueEntitySearchRepairs,
-  enqueueWorkspaceSearchRepairs,
   flushEntitySearchRepairs,
   flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-flush";
+import {
+  enqueueEntitySearchRepairs,
+  enqueueWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";

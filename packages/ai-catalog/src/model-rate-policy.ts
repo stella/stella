@@ -51,6 +51,10 @@ export const RETAINED_MODELS_DEV_RATE_ENTRIES = {
     modelId: "gpt-4o",
     provider: "openai",
   },
+  "us.deepseek.r1-v1:0": {
+    modelId: "us.deepseek.r1-v1:0",
+    provider: "amazon-bedrock",
+  },
 } as const satisfies Readonly<Record<string, ModelRateSource>>;
 
 /**

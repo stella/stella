@@ -122,18 +122,18 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             const callee = node.callee;
             if (
-              callee?.type !== "MemberExpression" ||
+              callee.type !== "MemberExpression" ||
               callee.computed ||
-              callee.property?.name !== "send"
+              callee.property.name !== "send"
             ) {
               return;
             }
-            const [commandNode, argumentsNode] = node.arguments ?? [];
+            const [commandNode, argumentsNode] = node.arguments;
             const command = commandName(commandNode);
             if (command === null || argumentsNode?.type !== "ArrayExpression") {
               return;
             }
-            const elements = argumentsNode.elements ?? [];
+            const elements = argumentsNode.elements;
 
             if (SCRIPT_COMMANDS.has(command)) {
               const declared = elements[SCRIPT_NUMKEYS_INDEX];

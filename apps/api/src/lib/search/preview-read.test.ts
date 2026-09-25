@@ -8,10 +8,13 @@ import {
   rootDbExecuteMock,
   rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 
 const readSearchPreview = async (
   input: Parameters<typeof readSearchPreviewWithDatabase>[0],
-) => await readSearchPreviewWithDatabase(input, rootDbTestDouble);
+) => await readSearchPreviewWithDatabase(input, scopedDb);
 
 const previewQuery = {
   query: "",

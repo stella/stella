@@ -999,6 +999,7 @@ export const createDocumentCompareGenerator = (
 
       if (body.output.type === "download") {
         const fileName = redlineFileName(target.file.fileName);
+        // db-await-in-loop: one redline delivery per compared target, after its comparison; the request caps targets at DOCUMENT_COMPARE_TARGET_LIMIT
         const delivered = await deliverRedline({
           compared: compared.value,
           fileName,

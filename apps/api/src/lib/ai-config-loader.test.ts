@@ -114,7 +114,7 @@ describe("loadOrgAIConfig", () => {
   });
 });
 
-describe("loadPromptCachingPreference", () => {
+describe("resolvePromptCachingPreference", () => {
   test("defaults to enabled when settings are absent", async () => {
     expect(resolvePromptCachingPreference(undefined)).toBe(true);
   });

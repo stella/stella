@@ -187,6 +187,51 @@ type AdapterCoverage =
     }
   | { readonly disposition: "excluded"; readonly reason: string };
 
+/** The UOKiK view the conformance walk reads: dated rows under two undated. */
+const UOKIK_VIEW_ROWS = 45;
+const UOKIK_UNDATED_ROWS = 2;
+
+const uokikViewEntry = (position: number) => {
+  const dated = position > UOKIK_UNDATED_ROWS;
+  const unid = position.toString(16).toUpperCase().padStart(32, "0");
+  const day = dated ? `01.01.${2030 - position}` : "";
+  return {
+    "@position": String(position),
+    "@unid": unid,
+    "@noteid": String(position),
+    "@siblings": String(UOKIK_VIEW_ROWS),
+    entrydata: [
+      {
+        "@columnnumber": "0",
+        "@name": "$7",
+        text: {
+          "0": `[<B>Numer decyzji: </B>${dated ? `DOK-${position}/2000` : "-/"}<BR><b>]Data decyzji:      [</B>${day}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'></A>][<BR>][<BR>]`,
+        },
+      },
+    ],
+  };
+};
+
+const uokikExhaustedSource: ExhaustedSource = ({ url }) => {
+  const parsed = new URL(url);
+  if (!parsed.searchParams.has("ReadViewEntries")) {
+    return new Response("Not found", { status: 404 });
+  }
+  const start = Number(parsed.searchParams.get("Start"));
+  const count = Number(parsed.searchParams.get("Count"));
+  const step = parsed.searchParams.get("NavigateReverse") === "1" ? -1 : 1;
+  const positions = Array.from(
+    { length: count },
+    (_, index) => start + step * index,
+  ).filter((position) => position >= 1 && position <= UOKIK_VIEW_ROWS);
+  return jsonResponse({
+    "@toplevelentries": String(UOKIK_VIEW_ROWS),
+    ...(positions.length === 0
+      ? {}
+      : { viewentry: positions.map(uokikViewEntry) }),
+  });
+};
+
 const AT_RIS_COVERAGE = {
   disposition: "exercised",
   exhaustedSource: () =>
@@ -417,6 +462,17 @@ const ADAPTER_CONFORMANCE = {
     exhaustedSource: () => jsonResponse([]),
     // A lap that reaches the tip parks the cursor on the day it ended, and a
     // cycle on that day makes no request and returns the cursor it was given.
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    disposition: "exercised",
+    // A populated view every row of which is already stored: the walk reads
+    // it oldest first, the decision pages answer 404 and are kept on their
+    // rows, and the rows stating no date are read once at the top.
+    exhaustedSource: uokikExhaustedSource,
+    // A lap that reaches the newest row parks the cursor on the day it ended,
+    // and a cycle on that day makes no request and returns its cursor.
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },

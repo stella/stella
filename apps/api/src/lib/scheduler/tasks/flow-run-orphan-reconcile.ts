@@ -24,6 +24,7 @@ const STALL_WINDOW_MS = 15 * 60 * 1000;
  * refuses an already-completed step), so the sweep is safe to repeat.
  */
 export const reconcileFlowRunOrphans: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -33,12 +34,15 @@ export const reconcileFlowRunOrphans: SchedulerTask = async ({
 
   // audit: skip — re-drives derived queue state; scheduler_job_runs is the
   // durable execution trail.
-  await reconcileOrphanedFlowRuns({
-    signal,
-    stalledBefore: new Date(
-      Temporal.Now.instant().epochMilliseconds - STALL_WINDOW_MS,
-    ),
-  });
+  await reconcileOrphanedFlowRuns(
+    {
+      signal,
+      stalledBefore: new Date(
+        Temporal.Now.instant().epochMilliseconds - STALL_WINDOW_MS,
+      ),
+    },
+    { database: db },
+  );
 
   logger.debug("scheduler.flow_run_orphans_reconciled");
 };

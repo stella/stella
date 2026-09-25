@@ -177,7 +177,7 @@ type CitingDecisionOrder = {
   decision: {
     /** The materialized weight search and the citator both rank by. */
     citationAuthority: number;
-    decisionDate: Date | string | null;
+    decisionDate: string | null;
   };
 };
 

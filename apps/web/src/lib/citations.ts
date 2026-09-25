@@ -14,7 +14,7 @@ import { panic } from "better-result";
 
 import type { JustificationContent } from "@/lib/types";
 
-export type PdfBatesCitation = {
+type PdfBatesCitation = {
   kind: "pdf-bates";
   fileFieldId: string;
   bates: string;
@@ -33,7 +33,7 @@ export type PdfBatesCitation = {
  *   navigable block, so the renderer shows the raw `text` as a
  *   non-clickable hint — an unverified citation is a hint, not a source.
  */
-export type DocxFolioCitation =
+type DocxFolioCitation =
   | {
       kind: "docx-folio";
       citationStatus: "verified";

@@ -16,13 +16,13 @@ type CaseLawDecisionJsonLdInput = {
   caseNumber: string;
   country: string;
   court: string;
-  decisionDate: Date | string | null;
+  decisionDate: string | null;
   decisionType?: string | null;
   ecli: string | null;
   language: string;
   sourceName?: string | null;
   sourceUrl?: string | null;
-  updatedAt?: Date | string | null;
+  updatedAt?: string | null;
 };
 
 type StatuteJsonLdInput = {
@@ -60,15 +60,9 @@ type LegalCollectionJsonLdInput = {
   name: string;
 };
 
-const dateToIsoDate = (value: Date | string | null): string | null => {
+const dateToIsoDate = (value: string | null): string | null => {
   if (value === null) {
     return null;
-  }
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime())
-      ? null
-      : value.toISOString().slice(0, 10);
   }
 
   const raw = value.trim();

@@ -5,6 +5,8 @@ import {
 } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 
+import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+
 /** The `v.metadata` keys that are JSON Schema annotations. */
 const JSON_SCHEMA_METADATA_KEYS = new Set(["title", "description", "examples"]);
 
@@ -50,5 +52,6 @@ export const toJsonSchema = (
 ): JsonSchema =>
   convertToJsonSchema(schema, {
     ...config,
-    overrideAction: stripInternalMetadata,
+    overrideAction: (context) =>
+      stripInternalMetadata(context) ?? keepUnicodePatternSource(context),
   });

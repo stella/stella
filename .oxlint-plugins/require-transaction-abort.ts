@@ -88,11 +88,7 @@ const asRange = (value: unknown): Range | null => {
 
 const isFalseLiteral = (node: unknown): boolean => {
   const expression = unwrapExpression(node);
-  return (
-    expression !== null &&
-    expression.type === "Literal" &&
-    expression.value === false
-  );
+  return expression?.type === "Literal" && expression.value === false;
 };
 
 const isFailureObject = (node: unknown): boolean => {
@@ -156,8 +152,7 @@ const callbackArgumentIndex = (node: unknown): number | null => {
     return isTransactionReceiver(callee.name) ? 0 : null;
   }
   if (
-    callee !== null &&
-    callee.type === "MemberExpression" &&
+    callee?.type === "MemberExpression" &&
     callee.computed === false &&
     getPropertyName(callee.property) === "transaction"
   ) {
@@ -183,8 +178,7 @@ const isWriteCall = (node: unknown): boolean => {
   }
   const callee = unwrapExpression(node.callee);
   if (
-    callee !== null &&
-    callee.type === "MemberExpression" &&
+    callee?.type === "MemberExpression" &&
     callee.computed === false &&
     isIdentifier(callee.object) &&
     isTransactionReceiver(callee.object.name)

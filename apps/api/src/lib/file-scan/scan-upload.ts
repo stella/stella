@@ -83,17 +83,20 @@ export const scanUpload = async ({
 
 /**
  * `scanUpload` for request handlers: a rejection becomes the structured 422
- * security rejection, a scanner failure a plain 422.
+ * security rejection. A scanner failure says nothing about the bytes, so it is
+ * a retryable 503 rather than a verdict on the file.
  */
 export const scanUploadForHandler = async (
   input: ScanUploadInput,
-): Promise<Result<ScannedFile, HandlerError<422>>> =>
-  Result.mapError(await scanUpload(input), (error) =>
+  scan: typeof scanUpload = scanUpload,
+): Promise<Result<ScannedFile, HandlerError<422 | 503>>> =>
+  Result.mapError(await scan(input), (error) =>
     FileScanRejectedError.is(error)
       ? new HandlerError({ ...error.rejection, status: 422 })
       : new HandlerError({
-          status: 422,
-          message: "File security scan failed",
+          status: 503,
+          message: "File security scan is unavailable",
+          hint: "Retry the upload; the same file can be sent again.",
           cause: error,
         }),
   );

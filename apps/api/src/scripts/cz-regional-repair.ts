@@ -39,6 +39,7 @@ import {
   enumerateUtcDays,
   toUtcDateString,
 } from "@/api/scripts/cz-regional-repair-plan";
+import { operatorFlags } from "@/api/scripts/operator-flags";
 
 /**
  * Reconcile the cz-regional source against the publisher's own day listings.
@@ -133,41 +134,7 @@ const USAGE = `Usage: bun run src/scripts/cz-regional-repair.ts [options]
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
   --failed-out <path>  Where failed items are written (default ${DEFAULT_FAILED_OUT}).`;
 
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return undefined;
-  }
-  const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    console.error(`--${name} requires a value`);
-    console.error(USAGE);
-    process.exit(1);
-  }
-  return value;
-};
-
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const DECIMAL_INTEGER = /^\d+$/u;
-
-const positiveInteger = (
-  raw: string | undefined,
-  fallback: number,
-  name: string,
-): number => {
-  if (raw === undefined) {
-    return fallback;
-  }
-  const parsed = DECIMAL_INTEGER.test(raw)
-    ? Number.parseInt(raw, 10)
-    : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    console.error(`--${name} must be a positive integer, got: ${raw}`);
-    process.exit(1);
-  }
-  return parsed;
-};
+const { flagValue, hasFlag, positiveInteger } = operatorFlags(USAGE);
 
 const noLimit = hasFlag("no-limit");
 const limitFlag = flagValue("limit");
@@ -359,6 +326,7 @@ const heldIdentitiesChunked = async (
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
   for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
+    // db-await-in-loop: one bounded lookup per chunk; HELD_LOOKUP_CHUNK caps how many items one lookup may name
     const held = await heldIdentities(
       items.slice(index, index + HELD_LOOKUP_CHUNK),
     );
@@ -577,6 +545,7 @@ try {
           dayComplete = false;
           break;
         }
+        // db-await-in-loop: one held-identity lookup per listed page, after that page's paced publisher listing
         const held = await heldIdentities(listed.items);
         const diff = diffCzRegionalListing({ items: listed.items, held });
         day.listed += listed.items.length;
@@ -596,6 +565,7 @@ try {
               dayComplete = false;
               break;
             }
+            // db-await-in-loop: paced publisher fetch and write per missing item, under the source lease
             recordOutcome(item, await ingestItem(item, sourceLease));
             await Bun.sleep(delayMs);
           }
@@ -640,6 +610,7 @@ try {
       if (halt !== null) {
         break;
       }
+      // db-await-in-loop: paced publisher fetch and write per missing item, under the source lease
       recordOutcome(item, await ingestItem(item, sourceLease));
       await Bun.sleep(delayMs);
     }

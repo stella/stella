@@ -27,7 +27,7 @@ const updateMcpConnection = createSafeRootHandler(
   config,
   async function* ({ body, params: requestParams, safeDb, session, user }) {
     const updated = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — per-user MCP connection enable/disable toggle; the connector itself is SOC 2-audited at create-connector / delete-connector.
         return tx
