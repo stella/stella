@@ -351,10 +351,11 @@ const keepDeniedApprovals = ({
     if (message.role === "tool") {
       return deniedApprovals.has(message.toolCallId) ? [] : [message];
     }
-    if (
-      message.role !== "assistant" ||
-      !(message.toolCalls ?? []).some(({ id }) => deniedApprovals.has(id))
-    ) {
+    if (message.role !== "assistant" || message.toolCalls === undefined) {
+      return [message];
+    }
+    const { toolCalls } = message;
+    if (!toolCalls.some(({ id }) => deniedApprovals.has(id))) {
       return [message];
     }
     const toolCallMetadata = readToolCallMetadata(message) ?? {};
@@ -362,7 +363,7 @@ const keepDeniedApprovals = ({
       {
         content: typeof message.content === "string" ? message.content : null,
         role: "assistant",
-        toolCalls: (message.toolCalls ?? []).map((call) =>
+        toolCalls: toolCalls.map((call) =>
           withCallMetadata(call, toolCallMetadata[call.id]),
         ),
       },
