@@ -145,16 +145,11 @@ export const normalizeCaseLawLanguageSegment = (
   return normalized;
 };
 
-const isCaseLawLanguageAlternate = (
-  alternate: unknown,
-): alternate is { language: string } =>
-  typeof alternate === "object" &&
-  alternate !== null &&
-  "language" in alternate &&
-  typeof alternate.language === "string";
+/** All the route reads of a language version: which language it is in. */
+export type CaseLawDecisionLanguageAlternate = { language: string };
 
 const getCaseLawLanguageAlternateCount = (
-  languageAlternates: readonly unknown[] | null | undefined,
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null,
 ): number => {
   if (!languageAlternates) {
     return 0;
@@ -162,10 +157,6 @@ const getCaseLawLanguageAlternateCount = (
 
   const languages = new Set<string>();
   for (const alternate of languageAlternates) {
-    if (!isCaseLawLanguageAlternate(alternate)) {
-      continue;
-    }
-
     const normalized = normalizeCaseLawLanguageSegment(alternate.language);
     if (normalized !== null) {
       languages.add(normalized);
@@ -191,7 +182,7 @@ export type CaseLawDecisionRouteInput = CaseLawDecisionRouteIdentityInput & {
   country: string;
   court: string;
   language: string | null;
-  languageAlternates: readonly unknown[] | null;
+  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
 };
 
 /** A language segment only for decisions published in several languages. */

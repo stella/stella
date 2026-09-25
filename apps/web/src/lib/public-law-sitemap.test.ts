@@ -732,17 +732,25 @@ describe("public law sitemap", () => {
   });
 
   test("direct case-law callers are filtered by the shared dark-launch helper", async () => {
-    const [chatOpenSource, chatMentionSource, searchSource] = await Promise.all(
-      [
-        readSource("apps/web/src/components/chat/case-law-open.ts"),
-        readSource(
-          "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts",
-        ),
-        readSource("apps/web/src/components/search-dialog.tsx"),
-      ],
-    );
+    const [
+      chatLinkGateSource,
+      chatOpenSource,
+      chatStatuteOpenSource,
+      chatMentionSource,
+      searchSource,
+    ] = await Promise.all([
+      readSource("apps/web/src/components/chat/public-law-open.ts"),
+      readSource("apps/web/src/components/chat/case-law-open.ts"),
+      readSource("apps/web/src/components/chat/statute-open.ts"),
+      readSource(
+        "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts",
+      ),
+      readSource("apps/web/src/components/search-dialog.tsx"),
+    ]);
 
-    expect(chatOpenSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatLinkGateSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatOpenSource).toContain("openPublicLawLink");
+    expect(chatStatuteOpenSource).toContain("openPublicLawLink");
     expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
     expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");

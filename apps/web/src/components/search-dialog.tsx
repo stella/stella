@@ -28,7 +28,6 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
-import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -90,6 +89,7 @@ import {
 import {
   canUseAskAIShortcut,
   createDialogCloseActionQueue,
+  getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
   isLazySearchGroupActive,
@@ -171,7 +171,6 @@ import type {
   SearchRecentsScope,
 } from "@/lib/search-recents";
 import {
-  getFirstSearchHighlightText,
   selectDisplayedSearchPreviewHit,
   selectSearchPreviewHit,
   shouldShowSearchPreview,
@@ -1284,25 +1283,7 @@ export const SearchDialog = ({
       }
 
       navigateAfterClose(async () => {
-        await navigate({
-          to: "/law/$country/cases/$court/$slug",
-          // A global-search hit carries no slug or language versions, so it
-          // opens by the id form; the decision page canonicalises the path.
-          params: createCaseLawDecisionRouteParams({
-            caseNumber: hit.caseNumber,
-            country: hit.country,
-            court: hit.court,
-            decisionId: hit.decisionId,
-            language: null,
-            languageAlternates: null,
-            slug: null,
-          }),
-          search: {
-            ...(hit.headline && {
-              q: getFirstSearchHighlightText(hit.headline, ""),
-            }),
-          },
-        });
+        await navigate(getCaseLawHitRoute(hit));
       });
       return;
     }

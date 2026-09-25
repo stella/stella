@@ -6,6 +6,7 @@ import {
   RESOURCE_TYPE,
   toResourceName,
 } from "@stll/api-contract";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
   GlobalSearchHit,
@@ -16,6 +17,7 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   canUseAskAIShortcut,
   createDialogCloseActionQueue,
+  getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
   getEntityLocationRoute,
@@ -31,6 +33,7 @@ import {
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
+type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 describe("lazy search groups", () => {
@@ -260,6 +263,79 @@ describe("search chat result routing", () => {
       to: "/chat/workspaces/$workspaceId/$threadId",
       params: { workspaceId: "workspace-1", threadId: "thread-workspace" },
     });
+  });
+});
+
+describe("search dialog case-law routes", () => {
+  const decisionId = "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b";
+  const decisionResource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: toSafeId<"caseLawDecision">(decisionId),
+  });
+  const caseLawHit = (
+    overrides: Pick<
+      CaseLawGlobalSearchHit,
+      "language" | "languageAlternates" | "slug"
+    >,
+  ): CaseLawGlobalSearchHit => ({
+    id: `case-law:${decisionId}`,
+    type: "case-law",
+    resource: decisionResource,
+    resourceName: toResourceName(decisionResource),
+    decisionId,
+    caseNumber: "C-1/24",
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "C-1/24" },
+    ],
+    court: "Court of Justice",
+    country: "EU",
+    decisionDate: null,
+    title: "C-1/24 - Court of Justice",
+    headline: "The <mark>indemnity</mark> clause",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    ...overrides,
+  });
+
+  test("opens a hit on its stored slug, at the matched words", () => {
+    expect(
+      getCaseLawHitRoute(
+        caseLawHit({ language: "en", languageAlternates: [], slug: "c-1-24" }),
+      ),
+    ).toEqual({
+      to: "/law/$country/cases/$court/$slug",
+      params: { country: "eu", court: "court-of-justice", slug: "c-1-24" },
+      search: { q: "indemnity" },
+    });
+  });
+
+  test("names the language of a hit published in several", () => {
+    expect(
+      getCaseLawHitRoute(
+        caseLawHit({
+          language: "fr",
+          languageAlternates: [{ language: "en" }, { language: "fr" }],
+          slug: "c-1-24-fr",
+        }),
+      ),
+    ).toEqual({
+      to: "/law/$country/cases/$court/$language/$slug",
+      params: {
+        country: "eu",
+        court: "court-of-justice",
+        language: "fr",
+        slug: "c-1-24-fr",
+      },
+      search: { q: "indemnity" },
+    });
+  });
+
+  test("falls back to the id form only for a hit without a stored slug", () => {
+    const route = getCaseLawHitRoute(
+      caseLawHit({ language: "en", languageAlternates: [], slug: null }),
+    );
+
+    expect(route.to).toBe("/law/$country/cases/$court/$slug");
+    expect(route.params.slug.startsWith("c-1-24--")).toBeTrue();
   });
 });
 

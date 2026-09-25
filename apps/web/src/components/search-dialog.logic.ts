@@ -1,4 +1,5 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
 import type { SearchScope } from "@/components/search-scope";
 import type {
@@ -9,7 +10,9 @@ import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
+import { getFirstSearchHighlightText } from "@/lib/search.logic";
 
+type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 type EntityGlobalSearchHit = Extract<GlobalSearchHit, { entityId: string }>;
 
@@ -273,6 +276,55 @@ export const getRecentFilePreviewDateVisibility = (
 
 export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>
   chatThreadRoute({ threadId: hit.threadId, workspaceId: hit.workspaceId });
+
+type CaseLawHitSearch = { q?: string };
+
+type CaseLawHitRoute =
+  | {
+      to: "/law/$country/cases/$court/$slug";
+      params: { country: string; court: string; slug: string };
+      search: CaseLawHitSearch;
+    }
+  | {
+      to: "/law/$country/cases/$court/$language/$slug";
+      params: {
+        country: string;
+        court: string;
+        language: string;
+        slug: string;
+      };
+      search: CaseLawHitSearch;
+    };
+
+/** The decision's canonical public route, opened on the hit's first match. */
+export const getCaseLawHitRoute = (
+  hit: CaseLawGlobalSearchHit,
+): CaseLawHitRoute => {
+  const { country, court, language, slug } = createCaseLawDecisionRouteParams({
+    caseNumber: hit.caseNumber,
+    country: hit.country,
+    court: hit.court,
+    decisionId: hit.decisionId,
+    language: hit.language,
+    languageAlternates: hit.languageAlternates,
+    slug: hit.slug,
+  });
+  const search: CaseLawHitSearch = hit.headline
+    ? { q: getFirstSearchHighlightText(hit.headline, "") }
+    : {};
+
+  return language === undefined
+    ? {
+        to: "/law/$country/cases/$court/$slug",
+        params: { country, court, slug },
+        search,
+      }
+    : {
+        to: "/law/$country/cases/$court/$language/$slug",
+        params: { country, court, language, slug },
+        search,
+      };
+};
 
 /**
  * Chat message content travels as composer HTML; a raw search query must be

@@ -2,6 +2,7 @@ import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   FileTextIcon,
   FileSpreadsheetIcon,
@@ -9,6 +10,7 @@ import {
   LandmarkIcon,
   MailIcon,
   PresentationIcon,
+  ScrollTextIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -22,7 +24,6 @@ import {
   type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
-import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import { isFolioBlockId } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -31,6 +32,10 @@ import {
   type CaseLawDecisionLocator,
   openCaseLawDecision,
 } from "@/components/chat/case-law-open";
+import {
+  classifyChatHttpLink,
+  type StatuteLink,
+} from "@/components/chat/chat-app-link.logic";
 import {
   parseStellaMentionHref,
   resolveMentionWorkspaceId,
@@ -45,6 +50,7 @@ import {
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
+import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -162,13 +168,14 @@ const getHttpUrl = (href: string): URL | null => {
 };
 
 /**
- * Whether a URL points at this app: the page's own origin, or the
- * deployment's public app URL, which is not the page origin inside the
- * desktop shell.
+ * The origins this app answers on: the page's own, and the deployment's
+ * public app URL, which is not the page origin inside the desktop shell.
  */
-const isAppUrl = (url: URL): boolean =>
-  (typeof window !== "undefined" && url.origin === window.location.origin) ||
-  url.origin === new URL(env.VITE_PUBLIC_APP_URL).origin;
+const getAppOrigins = (): ReadonlySet<string> =>
+  new Set([
+    new URL(env.VITE_PUBLIC_APP_URL).origin,
+    ...(typeof window === "undefined" ? [] : [window.location.origin]),
+  ]);
 
 const getDocumentMimeFromLabel = (label: string): string | null => {
   const extension = ENTITY_EXTENSION_RE.exec(label.trim())?.groups?.["ext"];
@@ -235,6 +242,28 @@ const DecisionChip = ({
                 "streamdown-mention-link.open-case-law-decision",
               )
           : undefined
+      }
+      truncate
+    >
+      {label}
+    </InlinePill>
+  );
+};
+
+/** A link to one of this app's statute pages: the act, opened in-app. */
+const StatuteChip = ({
+  label,
+  link,
+}: {
+  label: React.ReactNode;
+  link: StatuteLink;
+}) => {
+  const openStatuteLink = useOpenStatuteLink();
+  return (
+    <InlinePill
+      leadingIcon={<ScrollTextIcon className="size-3 shrink-0" />}
+      onActivate={() =>
+        detached(openStatuteLink(link), "streamdown-mention-link.open-statute")
       }
       truncate
     >
@@ -711,28 +740,30 @@ export const StreamdownMentionLink = ({
 
   const httpUrl = getHttpUrl(href);
   if (httpUrl) {
-    // A link to one of this app's decision pages is the decision, not a web
-    // page to preview: a tool hands the model that URL, and a user pastes it.
-    const decisionRoute = isAppUrl(httpUrl)
-      ? parseCaseLawDecisionPath(httpUrl.pathname)
-      : null;
-    if (decisionRoute) {
-      return (
-        <DecisionChip
-          interactive
-          label={children}
-          locator={{ type: "route", params: decisionRoute }}
-        />
-      );
+    const link = classifyChatHttpLink(httpUrl, getAppOrigins());
+    switch (link.type) {
+      case "decision":
+        return (
+          <DecisionChip
+            interactive
+            label={children}
+            locator={{ type: "route", params: link.params }}
+          />
+        );
+      case "statute":
+        return <StatuteChip label={children} link={link.link} />;
+      case "external":
+        return (
+          <FaviconCitationChip
+            children={children}
+            url={httpUrl}
+            workspaceId={workspaceId ?? null}
+          />
+        );
+      default:
+        link satisfies never;
+        return panic(`Unhandled chat link: ${String(link)}`);
     }
-
-    return (
-      <FaviconCitationChip
-        children={children}
-        url={httpUrl}
-        workspaceId={workspaceId ?? null}
-      />
-    );
   }
 
   return (
