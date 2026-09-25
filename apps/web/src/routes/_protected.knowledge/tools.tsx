@@ -17,13 +17,13 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { BoundedSet } from "@/lib/bounded-set";
 import { detached } from "@/lib/detached";
-import { knowledgeKeys } from "@/lib/knowledge/queries";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import { startSkillSeed } from "@/lib/knowledge/skill-seed";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -124,45 +124,18 @@ const searchSchema = v.object({
   slug: v.optional(v.string()),
 });
 
-// Per-tab flag so we POST /skills/seed at most once per browser
-// session. The handler itself is idempotent (returns early when any
-// slash-command skill already exists for the user), but a wasted
-// round trip on every Tools navigation still hurts; this gates it
-// to the first visit.
-const seededThisSession = new BoundedSet<string>(20);
-
 export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
-  // Seed default slash-command skills on first Tools visit per
-  // session. Used to live on the standalone Prompts page, which no
-  // longer exists.
   loader: async ({ context }) => {
     const orgId = context.user.activeOrganizationId;
 
-    if (!seededThisSession.has(orgId)) {
-      const response = await api.skills.seed.post({});
-      // Only mark the org as seeded once the server confirmed — a
-      // transient failure would otherwise pin us into the "already
-      // seeded" branch for the rest of the session and the user would
-      // never get default slash commands without a full reload.
-      if (!response.error) {
-        seededThisSession.add(orgId);
-        // When the server actually wrote rows, invalidate the local
-        // skill/catalogue caches so chat (slash menu) and any open Tools
-        // browser pick the new commands up immediately instead of waiting
-        // for staleTime to lapse. Both queries are keyed by org id.
-        if (response.data.seeded) {
-          await Promise.all([
-            context.queryClient.invalidateQueries({
-              queryKey: knowledgeKeys.skills.all(orgId),
-            }),
-            context.queryClient.invalidateQueries({
-              queryKey: catalogueKeys.all(orgId),
-            }),
-          ]);
-        }
-      }
-    }
+    // Default slash-command skills are seeded on the first Tools visit; the
+    // page renders without waiting for it.
+    startSkillSeed({
+      queryClient: context.queryClient,
+      organizationId: orgId,
+      seedSkills: async () => unwrapEden(await api.skills.seed.post({})),
+    });
 
     const [, settings, role] = await Promise.all([
       ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
@@ -328,7 +301,7 @@ const ToolsPageHeader = () => {
   );
 };
 
-// The route's `loader` (skills.seed POST) blocks the first visit, so without a
+// The route's `loader` waits for the catalogue and settings, so without a
 // pendingComponent it flashes the glowing logo before the catalogue skeleton.
 // Render the real chrome + catalogue skeleton during route-pending as well.
 function ToolsPagePending() {
