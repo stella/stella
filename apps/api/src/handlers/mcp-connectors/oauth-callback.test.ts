@@ -1,11 +1,23 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  getRequestId,
+  initRequestContext,
+} from "@/api/lib/observability/request-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("buildCallbackRedirectUrl", () => {
@@ -147,20 +159,111 @@ describe("mcpOAuthCallback identity binding", () => {
   // callback must still redirect (never a raw JSON error body) so the popup
   // can close itself instead of showing an API error page.
   test("redirects instead of leaking a raw error when a DB lookup fails", async () => {
-    const ctx = asTestRaw<CallbackCtx>({
-      query: { code: "auth-code", state: "state-token" },
-      safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () =>
-        Result.err(new HandlerError({ status: 500, message: "db down" })),
+    const result = await mcpOAuthCallback.handler(
+      failingLookupContext(
+        new HandlerError({ status: 500, message: "db down" }),
       ),
-      scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
-      session: { activeOrganizationId: orgA },
-      user: { id: userA },
-      memberRole: { role: "owner" },
-      recordAuditEvent: async () => {},
-    });
-
-    const result = await mcpOAuthCallback.handler(ctx);
+    );
 
     expect(reasonOf(result)).toBe("invalid-secret");
+  });
+});
+
+const scopedRequest = (): Request => {
+  const request = new Request("https://api.test/mcp/oauth/callback");
+  initRequestContext(request);
+  return request;
+};
+
+const failingLookupContext = (
+  error: unknown,
+  request: Request = scopedRequest(),
+): CallbackCtx =>
+  asTestRaw<CallbackCtx>({
+    query: { code: "auth-code", state: "state-token" },
+    request,
+    safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => Result.err(error)),
+    scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
+    session: { activeOrganizationId: orgA },
+    user: { id: userA },
+    memberRole: { role: "owner" },
+    recordAuditEvent: async () => {},
+  });
+
+describe("mcpOAuthCallback failure reporting", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
+  const failureRecords = () =>
+    logs.records.filter((record) => record.message === "oauth_callback.failed");
+
+  test("reports a server-side handler error and keeps the invalid-secret redirect", async () => {
+    const result = await mcpOAuthCallback.handler(
+      failingLookupContext(
+        new HandlerError({
+          status: 500,
+          message: "Stored MCP secret envelope is invalid",
+        }),
+      ),
+    );
+
+    expect(reasonOf(result)).toBe("invalid-secret");
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "HandlerError", operation: "mcp_oauth_callback" },
+    ]);
+  });
+
+  test("does not report a client-side handler error", async () => {
+    const result = await mcpOAuthCallback.handler(
+      failingLookupContext(
+        new HandlerError({ status: 403, message: "Not allowed" }),
+      ),
+    );
+
+    expect(reasonOf(result)).toBe("invalid-secret");
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("logs the failure with the request id", async () => {
+    const request = scopedRequest();
+    await mcpOAuthCallback.handler(
+      failingLookupContext(
+        new HandlerError({ status: 500, message: "db down" }),
+        request,
+      ),
+    );
+
+    expect(failureRecords().map((record) => record.attributes)).toMatchObject([
+      { "request.id": getRequestId(request), operation: "mcp_oauth_callback" },
+    ]);
+  });
+
+  test("logs a transient network failure as a warning without reporting it", async () => {
+    const reset = Object.assign(new Error("read ECONNRESET"), {
+      code: "ECONNRESET",
+    });
+    const result = await mcpOAuthCallback.handler(
+      failingLookupContext(
+        new DatabaseError({ message: "connection reset", cause: reset }),
+      ),
+    );
+
+    expect(reasonOf(result)).toBe("unexpected");
+    expect(failureRecords().map((record) => record.severityText)).toEqual([
+      "WARN",
+    ]);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });
