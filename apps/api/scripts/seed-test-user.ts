@@ -24,11 +24,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { toSafeId } from "@/api/lib/branded-types";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 
 import {
@@ -38,6 +38,8 @@ import {
   DEFAULT_USER_ID,
   getSeedColleagues,
 } from "./seed-utils";
+
+const db = openMaintenanceDb({ readOnly: false });
 
 // Display names belong to the same fictional world as the rest of the dev
 // seed (Novák & Partners, Česká Energie, Meridian Capital Partners in
@@ -107,7 +109,7 @@ const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  rootDb.transaction(async (transaction) => {
+  db.transaction(async (transaction) => {
     await transaction
       .insert(user)
       .values({
@@ -148,36 +150,48 @@ export const ensureOrganizationExists = async (organizationId: string) => {
   const org = getSeedOrganizationIdentity(organizationId);
 
   if (
-    await rootDb.query.organization.findFirst({
-      where: { id: { eq: organizationId } },
-      columns: { id: true },
-    })
+    await db.transaction(
+      async (tx) =>
+        await tx.query.organization.findFirst({
+          where: { id: { eq: organizationId } },
+          columns: { id: true },
+        }),
+    )
   ) {
     // Reconcile the display name in place so a re-seed renames an existing
     // row (see ensureUserExists). Scoped to the seed's own deterministic org:
     // an operator-supplied STELLA_SEED_ORG_ID points at a real organization
     // whose name and slug are not this script's to rewrite.
     if (organizationId === TEST_ORG.id) {
-      await rootDb
-        .update(organization)
-        .set({ name: org.name, slug: org.slug })
-        .where(eq(organization.id, organizationId));
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .update(organization)
+            .set({ name: org.name, slug: org.slug })
+            .where(eq(organization.id, organizationId)),
+      );
     }
     return;
   }
 
-  await rootDb.insert(organization).values({
-    id: org.id,
-    name: org.name,
-    slug: org.slug,
-    createdAt: now,
-  });
+  await db.transaction(
+    async (tx) =>
+      await tx.insert(organization).values({
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        createdAt: now,
+      }),
+  );
 
   // Listing document types is a pure read, and this seed inserts the org
   // directly (bypassing the `afterCreateOrganization` hook that seeds it in
   // production), so seed the starter taxonomy here for parity. Idempotent via
   // the (organization_id, key) unique.
-  await ensureDefaultDocumentTypes(toSafeId<"organization">(org.id), rootDb);
+  await db.transaction(
+    async (tx) =>
+      await ensureDefaultDocumentTypes(toSafeId<"organization">(org.id), tx),
+  );
 };
 
 export const ensureMembershipExists = async ({
@@ -189,25 +203,34 @@ export const ensureMembershipExists = async ({
   userId: string;
   role: typeof DEFAULT_MEMBER_ROLE | typeof OWNER_MEMBER_ROLE;
 }) => {
-  const existingMembership = await rootDb
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
-    )
-    .limit(1);
+  const existingMembership = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, userId),
+          ),
+        )
+        .limit(1),
+  );
 
   if (existingMembership.length > 0) {
     return;
   }
 
-  await rootDb.insert(member).values({
-    id: buildMemberId(organizationId, userId),
-    organizationId,
-    userId,
-    role,
-    createdAt: now,
-  });
+  await db.transaction(
+    async (tx) =>
+      await tx.insert(member).values({
+        id: buildMemberId(organizationId, userId),
+        organizationId,
+        userId,
+        role,
+        createdAt: now,
+      }),
+  );
 };
 
 export async function ensureSeedColleagueUsers({
@@ -251,10 +274,13 @@ export async function ensurePrimarySeedUserInOrganization({
 }) {
   await ensureOrganizationExists(organizationId);
 
-  const existingUser = await rootDb.query.user.findFirst({
-    where: { id: { eq: userId } },
-    columns: { id: true },
-  });
+  const existingUser = await db.transaction(
+    async (tx) =>
+      await tx.query.user.findFirst({
+        where: { id: { eq: userId } },
+        columns: { id: true },
+      }),
+  );
 
   if (!existingUser) {
     panic(
@@ -308,28 +334,34 @@ async function seed() {
     process.exit(1);
   }
 
-  const existingUsers = await rootDb
-    .select({ email: user.email, id: user.id })
-    .from(user)
-    .where(
-      or(
-        inArray(user.id, ALL_TEST_USER_IDS),
-        inArray(
-          user.email,
-          [TEST_USER, ...COLLEAGUES].map(({ email }) => email),
+  const existingUsers = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({ email: user.email, id: user.id })
+        .from(user)
+        .where(
+          or(
+            inArray(user.id, ALL_TEST_USER_IDS),
+            inArray(
+              user.email,
+              [TEST_USER, ...COLLEAGUES].map(({ email }) => email),
+            ),
+          ),
         ),
-      ),
-    );
+  );
   const existingUserIds = new Set(
     existingUsers.map((existingUser) => existingUser.id),
   );
   const existingUserEmails = new Set(
     existingUsers.map((existingUser) => existingUser.email),
   );
-  const orgExistedBeforeSeed = !!(await rootDb.query.organization.findFirst({
-    where: { id: { eq: TEST_ORG.id } },
-    columns: { id: true },
-  }));
+  const orgExistedBeforeSeed = !!(await db.transaction(
+    async (tx) =>
+      await tx.query.organization.findFirst({
+        where: { id: { eq: TEST_ORG.id } },
+        columns: { id: true },
+      }),
+  ));
 
   const { testUserId } = await ensureTestUsers();
 
@@ -363,39 +395,48 @@ async function seed() {
   console.log("Ensured memberships for test organization users");
 
   // --- session (always refresh expiry) ---
-  const existingSession = await rootDb.query.session.findFirst({
-    where: { id: { eq: SESSION_ID } },
-    columns: { id: true },
-  });
+  const existingSession = await db.transaction(
+    async (tx) =>
+      await tx.query.session.findFirst({
+        where: { id: { eq: SESSION_ID } },
+        columns: { id: true },
+      }),
+  );
 
   if (existingSession) {
     // createdAt must be refreshed along with expiresAt: better-auth gates
     // sensitive endpoints (e.g. /list-sessions) on session *freshness*, which
     // is derived from createdAt. On a long-lived dev database an old row would
     // 403 those endpoints even though the session is otherwise valid.
-    await rootDb
-      .update(session)
-      .set({
-        expiresAt,
-        createdAt: now,
-        updatedAt: now,
-        activeOrganizationId: TEST_ORG.id,
-        userId: testUserId,
-      })
-      .where(eq(session.id, SESSION_ID));
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .update(session)
+          .set({
+            expiresAt,
+            createdAt: now,
+            updatedAt: now,
+            activeOrganizationId: TEST_ORG.id,
+            userId: testUserId,
+          })
+          .where(eq(session.id, SESSION_ID)),
+    );
     console.log("Refreshed test session expiry");
   } else {
-    await rootDb.insert(session).values({
-      id: SESSION_ID,
-      token: SESSION_TOKEN,
-      userId: testUserId,
-      activeOrganizationId: TEST_ORG.id,
-      expiresAt,
-      createdAt: now,
-      updatedAt: now,
-      ipAddress: "127.0.0.1",
-      userAgent: "playwright-mcp/seed",
-    });
+    await db.transaction(
+      async (tx) =>
+        await tx.insert(session).values({
+          id: SESSION_ID,
+          token: SESSION_TOKEN,
+          userId: testUserId,
+          activeOrganizationId: TEST_ORG.id,
+          expiresAt,
+          createdAt: now,
+          updatedAt: now,
+          ipAddress: "127.0.0.1",
+          userAgent: "playwright-mcp/seed",
+        }),
+    );
     console.log("Created test session");
   }
 
