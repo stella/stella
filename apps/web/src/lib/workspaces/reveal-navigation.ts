@@ -22,19 +22,26 @@ export const getCurrentWorkspaceViewId = (
   return viewId || null;
 };
 
-/** A folder opens in the matter's file tree, preferring one whose filters
+type RevealTargetInput = {
+  /** Row to reveal in the tree. */
+  entityId: string;
+  /** Folder to scope the current view into when the matter has no tree. */
+  fallbackFolderId: string | null;
+  pathname: string;
+  targetWorkspaceId: string;
+};
+
+/** An entity opens in the matter's file tree, preferring one whose filters
  * cannot hide it: the current tree, else the first tree, unfiltered ones
  * first. Only a matter without a tree falls back to the current view scoped
- * into the folder. */
-export const getWorkspaceFolderNavigationTarget = ({
-  folderId,
+ * into `fallbackFolderId`. */
+export const getWorkspaceRevealTarget = ({
+  entityId,
+  fallbackFolderId,
   pathname,
   targetWorkspaceId,
   views,
-}: {
-  folderId: string;
-  pathname: string;
-  targetWorkspaceId: string;
+}: RevealTargetInput & {
   views: readonly {
     id: string;
     layout: Pick<WorkspaceView["layout"], "type" | "filters">;
@@ -55,7 +62,7 @@ export const getWorkspaceFolderNavigationTarget = ({
     return {
       to: "/workspaces/$workspaceId/$viewId" as const,
       params: { viewId: filesystemView.id, workspaceId: targetWorkspaceId },
-      search: { reveal: folderId },
+      search: { reveal: entityId },
     };
   }
 
@@ -65,38 +72,42 @@ export const getWorkspaceFolderNavigationTarget = ({
       viewId: currentViewId ?? DEFAULT_WORKSPACE_VIEW_ID,
       workspaceId: targetWorkspaceId,
     },
-    search: { folder: folderId },
+    search: fallbackFolderId === null ? {} : { folder: fallbackFolderId },
   };
 };
 
-export const navigateToWorkspaceFolder = async ({
-  folderId,
+export const navigateToWorkspaceReveal = async ({
   navigate,
-  pathname,
   queryClient,
-  targetWorkspaceId,
-}: {
-  folderId: string;
+  ...target
+}: RevealTargetInput & {
   navigate: Navigate;
-  pathname: string;
   queryClient: QueryClient;
-  targetWorkspaceId: string;
 }) => {
   // A failed views lookup must not swallow the click: record it and fall
   // back to the folder-scoped target, which needs no view list.
   const views = await ensureRouteQueryData(
     queryClient,
-    viewsOptions(targetWorkspaceId),
+    viewsOptions(target.targetWorkspaceId),
   ).catch((error: unknown) => {
     getAnalytics().captureError(error);
     return [];
   });
-  await navigate(
-    getWorkspaceFolderNavigationTarget({
-      folderId,
-      pathname,
-      targetWorkspaceId,
-      views,
-    }),
-  );
+  await navigate(getWorkspaceRevealTarget({ ...target, views }));
+};
+
+/** A folder link reveals the folder; without a tree it scopes into it. */
+export const navigateToWorkspaceFolder = async ({
+  folderId,
+  ...rest
+}: Omit<RevealTargetInput, "entityId" | "fallbackFolderId"> & {
+  folderId: string;
+  navigate: Navigate;
+  queryClient: QueryClient;
+}) => {
+  await navigateToWorkspaceReveal({
+    ...rest,
+    entityId: folderId,
+    fallbackFolderId: folderId,
+  });
 };

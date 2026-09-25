@@ -14,7 +14,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
@@ -94,13 +94,15 @@ import {
   getCompanySearchQuery,
   isLazySearchGroupActive,
   resolveRegistryResultsPane,
-  getEntityLocationRoute,
-  getEntityWorkspaceRoute,
+  getEntityHitLocation,
+  getEntityLocation,
+  getRecentFileLocation,
   getRecentFileRoute,
   resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
+import type { EntityLocation } from "@/components/search-dialog.logic";
 import {
   EMPTY_FACET_BUCKETS,
   EMPTY_SEARCH_HITS,
@@ -175,6 +177,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
 
 type SearchSummaryCitation = {
   id: string;
@@ -523,6 +526,7 @@ export const SearchDialog = ({
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -1144,32 +1148,51 @@ export const SearchDialog = ({
     setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
   };
 
+  // Opens the matter's file tree with the entity's row revealed, or the
+  // matter itself for entities the tree does not list.
+  const openEntityLocation = async (location: EntityLocation) => {
+    if (location.type === "matter") {
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: location.workspaceId },
+      });
+      return;
+    }
+    await navigateToWorkspaceReveal({
+      entityId: location.entityId,
+      fallbackFolderId: location.fallbackFolderId,
+      navigate,
+      pathname: router.state.location.pathname,
+      queryClient,
+      targetWorkspaceId: location.workspaceId,
+    });
+  };
+
   // Formats without a mime-only full-screen viewer (emails, markdown,
-  // anything unknown) open inside their matter: navigate to the workspace,
-  // then hand the entity to the inspector, which resolves the right file
+  // anything unknown) open inside their matter: reveal the entity in the
+  // file tree, then hand it to the inspector, which resolves the right file
   // facet (email HTML viewer, markdown, metadata plus download as the
   // floor).
   const openFileInWorkspaceInspector = async ({
     entityId,
     label,
+    location,
     workspaceId,
   }: {
     entityId: string;
     label: string;
+    location: EntityLocation;
     workspaceId: string;
   }) => {
-    await navigate(getEntityWorkspaceRoute({ workspaceId }));
+    await openEntityLocation(location);
     await openEntityInInspector(entityId, label, workspaceId);
   };
 
   const openRecentFile = (file: RecentFile) => {
-    // Recent entries do not persist a containing folder, so the modifier
-    // opens the matter root.
+    const location = getRecentFileLocation(file);
     if (locationModifierHeld) {
       navigateAfterClose(async () => {
-        await navigate(
-          getEntityWorkspaceRoute({ workspaceId: file.workspaceId }),
-        );
+        await openEntityLocation(location);
       });
       return;
     }
@@ -1182,6 +1205,7 @@ export const SearchDialog = ({
         await openFileInWorkspaceInspector({
           entityId: file.entityId,
           label: file.title,
+          location,
           workspaceId: file.workspaceId,
         });
         return;
@@ -1197,9 +1221,14 @@ export const SearchDialog = ({
           workspaceId: file.workspaceId,
         }),
       );
-      const resolvedFile = { ...file, fileFieldId };
-      setRecentFiles(recordRecentFile(resolvedFile, searchRecentsScope));
-      await navigate(getRecentFileRoute(resolvedFile));
+      setRecentFiles(
+        recordRecentFile({ ...file, fileFieldId }, searchRecentsScope),
+      );
+      if (fileFieldId === null) {
+        await openEntityLocation(location);
+        return;
+      }
+      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
     });
   };
 
@@ -1252,14 +1281,15 @@ export const SearchDialog = ({
       return;
     }
 
-    if (locationModifierHeld || options?.locationModifier === true) {
-      const locationRoute = getEntityLocationRoute(hit);
-      if (locationRoute) {
-        navigateAfterClose(async () => {
-          await navigate(locationRoute);
-        });
-        return;
-      }
+    const location = getEntityLocation(hit);
+    if (
+      location &&
+      (locationModifierHeld || options?.locationModifier === true)
+    ) {
+      navigateAfterClose(async () => {
+        await openEntityLocation(location);
+      });
+      return;
     }
 
     if (hit.type === "contact") {
@@ -1329,6 +1359,7 @@ export const SearchDialog = ({
           await openFileInWorkspaceInspector({
             entityId: hit.entityId,
             label: hit.title || hit.id,
+            location: getEntityHitLocation(hit),
             workspaceId: hit.workspaceId,
           });
         });
@@ -1365,14 +1396,21 @@ export const SearchDialog = ({
             searchRecentsScope,
           ),
         );
+        if (fileFieldId === null) {
+          await openEntityLocation(getEntityHitLocation(hit));
+          return;
+        }
         await navigate(route);
       });
       return;
     }
 
-    navigateAfterClose(async () => {
-      await navigate(getEntityWorkspaceRoute(hit));
-    });
+    // Folders, tasks, messages and links open where they sit in the tree.
+    if (location) {
+      navigateAfterClose(async () => {
+        await openEntityLocation(location);
+      });
+    }
   };
 
   const openSearchResult = (
