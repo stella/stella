@@ -992,12 +992,14 @@ export const assemblePlTkDecision = ({
         subject: ruling?.subject ?? row.subject,
         ...recordMetadata(page?.record),
         ...rulingMetadata(ruling),
+        // A quarantined row keys as nothing: the fallback court name would
+        // otherwise pair it with the Tribunal's rulings from another source.
         rulingKeys:
-          statedCaseNumber === undefined
+          statedCaseNumber === undefined || deciding.type !== "stated"
             ? undefined
             : plConstitutionalTribunalRulingKeys({
                 caseNumber: statedCaseNumber,
-                court,
+                court: deciding.court,
                 decisionDate,
                 decisionType,
               }),

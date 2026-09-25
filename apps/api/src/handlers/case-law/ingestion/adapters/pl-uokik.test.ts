@@ -437,7 +437,13 @@ describe("a decision", () => {
       "<title>Decyzje Prezesa UOKiK</title>",
       "<title>Inny rejestr</title>",
     );
-    expect(decisionOf(await buildFrom(entry, page)).court).toBe("");
+    const built = await buildFrom(entry, page);
+    expect(built.type).toBe("detail-unavailable");
+    const decision = decisionOf(built);
+    expect(decision.court).toBe("");
+    expect(decision.isListingOnly).toBe(true);
+    expect(decision.metadata["quarantineReason"]).toBe("court-not-stated");
+    expect(decision.metadata["detailStatus"]).toBeUndefined();
   });
 
   test("a page stating no decision table is kept on its row, never read as an empty record", async () => {
@@ -1140,6 +1146,23 @@ describe("a listed row is never dropped silently", () => {
     expect(recovered.sourceDocumentIdRepairAliases).toEqual([
       quarantined.sourceDocumentId ?? "",
     ]);
+  });
+
+  test("a page of rows stating no UNID does not stall the walk", async () => {
+    const captured = await capturedEntries();
+    // The oldest rows, which the walk reads first, all lose their UNID.
+    const stripped = captured.length - 12;
+    const entries = captured.map((entry, index) =>
+      index < stripped ? entry : withoutAnyUnid(entry),
+    );
+    const model = await registerOverFixtures(entries);
+    serveRegister(model);
+    const walk = await walkCrawl(null);
+    const ids = new Set(idsOf(walk.decisions));
+    for (const entry of captured.slice(0, stripped)) {
+      expect(ids.has(unidOf(entry)), unidOf(entry)).toBe(true);
+    }
+    expect(parsePlUokikCursor(walk.cursor).phase).toBe("tip");
   });
 
   test("a row with nothing to key or fingerprint is reported, not stored as a guess", async () => {

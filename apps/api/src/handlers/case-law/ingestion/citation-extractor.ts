@@ -663,9 +663,11 @@ const PL_KIO_PATTERN = new RegExp(
 // DOK-1/2020", "od decyzji Prezesa Urzędu Ochrony Konkurencji i Konsumentów
 // z 29 lutego 2024 r. Nr DOZIK 3/2024". Its shape is shared with other
 // bodies' file numbers, so it is read only near its own cue
-// (PL_UOKIK_DECISION_CUE_RE).
+// (PL_UOKIK_DECISION_CUE_RE). As PL_TK_BARE_PATTERN does, it rejects a
+// Roman division before the unit: "I CSK 123/2019" is a court docket, and
+// its tail is not a decision number.
 const PL_UOKIK_DECISION_PATTERN = new RegExp(
-  String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
+  String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
   "gu",
 );
 

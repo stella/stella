@@ -940,6 +940,11 @@ describe("the deciding court", () => {
       quarantineReason: "court-not-stated",
       courtAsPrinted: "Sąd Najwyższy",
     });
+    expect(
+      built.type === "unkeyable"
+        ? "unkeyable"
+        : built.decision.metadata["rulingKeys"],
+    ).toBeUndefined();
   });
 
   test("without a served text, the docket's register names it, or nothing does", () => {

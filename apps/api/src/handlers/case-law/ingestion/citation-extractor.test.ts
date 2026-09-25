@@ -2221,6 +2221,15 @@ describe("extractCitations", () => {
       ["Prezes UOKiK, dok-1/2020", []],
       ["Prezes UOKiK, DO-1/2020", []],
       ["Prezes UOKiK, DOK-1/2020/3", []],
+      // Cued, but the tail of a court docket: the docket alone is cited.
+      [
+        "odwołanie od decyzji Prezesa UOKiK, wyrok SN z dnia 5 marca 2020 r., I CSK 123/2019",
+        ["I CSK 123/2019"],
+      ],
+      [
+        "Prezes UOKiK; sygn. akt III  CZP 12/2020",
+        ["sygn. akt III  CZP 12/2020"],
+      ],
     ];
     for (const [text, expected] of cases) {
       expect(

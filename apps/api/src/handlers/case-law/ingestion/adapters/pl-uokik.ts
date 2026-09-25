@@ -1456,7 +1456,10 @@ export const assemblePlUokikDecision = async ({
     document?.documentAst ?? EMPTY_AST;
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const listingOnly = missing !== undefined;
+  // A page naming another register is kept unpublished with the reason,
+  // never published under no authority.
+  const courtUnknown = detail !== undefined && court === undefined;
+  const listingOnly = missing !== undefined || courtUnknown;
   const decision: IngestionResult = {
     caseNumber,
     ...(placeholder
@@ -1491,7 +1494,8 @@ export const assemblePlUokikDecision = async ({
         id: quarantined ? undefined : id,
         files,
       }),
-      ...(listingOnly ? { detailStatus: missing } : {}),
+      ...(missing === undefined ? {} : { detailStatus: missing }),
+      ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
       ...appealWatchOf(detail),
       ...documentStateOf({
         listingOnly,
@@ -2290,15 +2294,19 @@ const plUokikFetchPage = async (
     // it never reached; the page is read again next cycle.
     return Result.ok({ decisions, sourceUrl: url, nextCursor: encoded });
   }
-  const anchored = taken.findLast(({ row }) => row.unid !== undefined);
+  // A page of rows stating no UNID has nothing to anchor on; the cursor
+  // still moves past them by position, or the walk would read them forever.
+  const resumed =
+    taken.findLast(({ row }) => row.unid !== undefined) ??
+    taken.findLast(({ row }) => row.position !== undefined);
   const next: PlUokikCursor =
-    anchored === undefined
+    resumed === undefined
       ? { ...position, total }
       : {
           phase: position.phase,
-          read: total - (anchored.row.position ?? 0) + 1,
+          read: total - (resumed.row.position ?? 0) + 1,
           total,
-          anchor: anchored.row.unid,
+          anchor: resumed.row.unid,
         };
   return Result.ok({
     decisions,
