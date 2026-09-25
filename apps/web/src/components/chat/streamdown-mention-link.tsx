@@ -49,6 +49,7 @@ import {
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { skillRefDestination } from "@/components/chat/skill-ref-link";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
@@ -380,6 +381,7 @@ const EntityRefChip = ({
 };
 
 const SkillRefChip = ({
+  slug,
   label,
   interactive,
 }: {
@@ -400,7 +402,7 @@ const SkillRefChip = ({
       leadingIcon={SKILL_CHIP_ICON}
       onActivate={() =>
         detached(
-          navigate({ to: "/knowledge/tools", search: { kind: "skill" } }),
+          navigate(skillRefDestination(slug)),
           "streamdown-mention-link.navigate",
         )
       }
