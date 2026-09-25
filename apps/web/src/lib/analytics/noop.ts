@@ -2,7 +2,7 @@ import { CancelledError } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { Analytics, ErrorCaptureContext } from "@/lib/analytics/types";
-import { logDevError } from "@/lib/errors/utils";
+import { logDevError } from "@/lib/errors/telemetry";
 
 const noop = () => undefined;
 const noopAsync = async () => {

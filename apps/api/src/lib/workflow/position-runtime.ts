@@ -28,10 +28,6 @@ export const isTierStandard = (
 ): position is TierStandardPosition =>
   position.mode === "graded" && position.standard.source === "tiers";
 
-/** The authored ladder, or `null` for a position graded against a reference. */
-export const positionTiers = (position: Position): Tiers | null =>
-  isTierStandard(position) ? position.standard.tiers : null;
-
 /** The reference passages a position is graded against, or `null` when its
  *  standard is an authored ladder. */
 export const positionPassages = (

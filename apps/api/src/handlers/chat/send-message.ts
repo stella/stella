@@ -168,7 +168,7 @@ import {
   type ActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   assertUsageAvailableForHandler,
@@ -200,7 +200,6 @@ import {
 } from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
-import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -1439,12 +1438,10 @@ export const createSendMessage = (
           workspace.status,
         ]),
       );
-      /* oxlint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
       const scope = yield* resolveChatScope({
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
-      /* oxlint-enable no-body-ownership-ids/no-body-ownership-ids */
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;

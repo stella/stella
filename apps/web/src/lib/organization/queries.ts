@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ORGANIZATION_MEMBERS_LIMIT } from "@/lib/organization/consts";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";

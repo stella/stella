@@ -1,24 +1,22 @@
 import { PostHog } from "posthog-node";
 
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import type {
-  Analytics,
+  ServerAnalytics,
   ServerAnalyticsCaptureParams,
-} from "@/api/lib/analytics/types";
+} from "@/api/lib/analytics/server-analytics";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
 );
 
-// Must match the browser adapter's `posthog.group` call so client and
-// server events aggregate under the same group.
-const ORGANIZATION_GROUP_TYPE = "organization";
-
-export const createPostHogAnalytics = (
+export const createPostHogNodeAnalytics = (
   key: string,
   host: string,
-): Analytics => {
+): ServerAnalytics => {
   const client = new PostHog(key, { host });
 
   return {
@@ -47,7 +45,7 @@ export const createPostHogAnalytics = (
     },
     identifyOrganizationGroup: (params) => {
       client.groupIdentify({
-        groupType: ORGANIZATION_GROUP_TYPE,
+        groupType: POSTHOG_ORGANIZATION_GROUP_TYPE,
         groupKey: params.organizationId,
         properties: params.properties,
       });

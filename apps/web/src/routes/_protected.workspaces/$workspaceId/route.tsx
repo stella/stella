@@ -27,7 +27,7 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { useWorkspaceSSE } from "@/lib/sse";
+import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";

@@ -9,15 +9,15 @@ import {
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
-  AuthorizationServerMetadata,
+  UpstreamAuthorizationServerMetadata,
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const authorizationServer = (
-  overrides: Partial<AuthorizationServerMetadata>,
-): AuthorizationServerMetadata => ({
+  overrides: Partial<UpstreamAuthorizationServerMetadata>,
+): UpstreamAuthorizationServerMetadata => ({
   issuer: "https://as.example.com",
   authorization_endpoint: "https://as.example.com/authorize",
   token_endpoint: "https://as.example.com/token",

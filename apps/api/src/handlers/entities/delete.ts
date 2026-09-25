@@ -39,7 +39,7 @@ import {
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/provider";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
@@ -340,7 +340,7 @@ export const deleteEntitiesHandler = async function* ({
   });
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
-  const provider = getSearchProvider();
+  const provider = getSearchMaintenance();
   for (const entity of deletedEntities) {
     provider
       .removeEntity({ entityId: entity.id, workspaceId })

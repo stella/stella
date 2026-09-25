@@ -33,7 +33,7 @@ import {
 import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";

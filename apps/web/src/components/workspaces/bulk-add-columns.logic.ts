@@ -17,7 +17,7 @@ import type {
   QuestionColumn,
   QuestionColumnContent,
 } from "@/features/case-law/research/question-columns.logic";
-import type { WorkspacePropertyOption } from "@/lib/types";
+import type { SelectPropertyOption } from "@/lib/types";
 
 type DraftTool = "ai-model" | "manual-input";
 
@@ -29,7 +29,7 @@ export type Draft = {
   fileIds: string[];
   contentType: CreatableContentType;
   tool: DraftTool;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   fallback: string | null;
 };
 

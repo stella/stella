@@ -15,7 +15,7 @@ import type {
 } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { BoundedSet } from "@/lib/bounded-set";
 import { detached } from "@/lib/detached";

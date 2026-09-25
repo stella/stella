@@ -35,8 +35,8 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { detached } from "@/api/lib/detached";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 

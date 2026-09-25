@@ -30,7 +30,7 @@ export const getOrganizationSchema = () => {
     ),
   });
 };
-export const formatDate = (date: string | Date, locale?: string) => {
+export const formatMemberDate = (date: string | Date, locale?: string) => {
   const timestamp = Result.try(() => {
     if (date instanceof Date) {
       return Temporal.Instant.fromEpochMilliseconds(date.getTime())

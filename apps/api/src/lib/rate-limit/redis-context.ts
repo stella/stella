@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { detached } from "@/api/lib/detached";
+import { detached } from "@/api/lib/analytics/capture";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";

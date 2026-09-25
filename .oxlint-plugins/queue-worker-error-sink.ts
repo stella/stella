@@ -79,7 +79,7 @@ const errorHandlerArgument = (node: AstNode): AstNode | null => {
   return isFunctionNode(handler) ? handler : null;
 };
 
-const staticStringValue = (
+const resolvedStringValue = (
   node: unknown,
   constants: ReadonlyMap<string, string>,
 ): string | null => {
@@ -160,7 +160,7 @@ export default eslintCompatPlugin({
                 return;
               }
               const args = Array.isArray(node.arguments) ? node.arguments : [];
-              const name = staticStringValue(args[0], constants);
+              const name = resolvedStringValue(args[0], constants);
               if (name?.endsWith(SINK_EVENT_SUFFIX) === true) {
                 context.report({
                   node,

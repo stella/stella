@@ -4,7 +4,7 @@
 // `no-detached-void` routes every fire-and-forget promise through
 // `detached(promise, context)`, and the label is the only thing that
 // identifies the call site once a rejection reaches the error-capture
-// channel. Both helpers (`@/lib/detached` on the web, `@/api/lib/detached`
+// channel. Both helpers (`@/lib/detached` on the web, `@/api/lib/analytics/capture`
 // on the API) document a short, stable dotted tag ("chat-thread.prefetch"),
 // but nothing enforced it, so most call sites drifted to the enclosing
 // component or handler name ("RouteComponent", "onSuccess", "FileTabPanel").

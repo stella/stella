@@ -7,10 +7,66 @@
 //
 // Catches both direct access (body.workspaceId) and
 // destructured access (const { workspaceId } = body).
+//
+// One sink is sanctioned: `resolveChatScope({ workspaceId: body.workspaceId })`
+// hands the requested id straight to the resolver that authorizes it through
+// getWorkspaceAccess and returns the server-validated id. The read is accepted
+// only as the value of that call's own `workspaceId` property, recognised by
+// import, so any other use of the same id is still reported.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier } from "./utils.ts";
+import {
+  type ImportedFromOptions,
+  getPropertyName,
+  invokedCallee,
+  isAstNode,
+  isIdentifier,
+  isImportedFrom,
+} from "./utils.ts";
+
+type RuleContext = ImportedFromOptions["context"];
+
+const AUTHORIZING_RESOLVERS: ReadonlySet<string> = new Set([
+  "resolveChatScope",
+]);
+const AUTHORIZING_RESOLVER_MODULE = "apps/api/src/handlers/chat/chat-scope";
+
+// Whether `node` is the `workspaceId` value in the options object passed to
+// an authorizing resolver: `resolveChatScope({ workspaceId: <node> })`.
+const isAuthorizingResolverArgument = (
+  context: RuleContext,
+  node: unknown,
+): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  const property = node.parent;
+  if (
+    !isAstNode(property) ||
+    property.type !== "Property" ||
+    property.value !== node ||
+    getPropertyName(property.key) !== "workspaceId"
+  ) {
+    return false;
+  }
+  const options = property.parent;
+  const call = isAstNode(options) ? options.parent : null;
+  return (
+    isAstNode(options) &&
+    options.type === "ObjectExpression" &&
+    isAstNode(call) &&
+    call.type === "CallExpression" &&
+    Array.isArray(call.arguments) &&
+    call.arguments.at(0) === options &&
+    isImportedFrom({
+      context,
+      node: invokedCallee(call),
+      modules: [AUTHORIZING_RESOLVER_MODULE],
+      names: AUTHORIZING_RESOLVERS,
+    })
+  );
+};
 
 const OWNERSHIP_FIELDS = new Set(["workspaceId", "organizationId"]);
 
@@ -49,7 +105,11 @@ export default eslintCompatPlugin({
 
             if (
               SOURCE_OBJECTS.has(node.object.name) &&
-              OWNERSHIP_FIELDS.has(node.property.name)
+              OWNERSHIP_FIELDS.has(node.property.name) &&
+              !(
+                node.property.name === "workspaceId" &&
+                isAuthorizingResolverArgument(context, node)
+              )
             ) {
               context.report({
                 node,

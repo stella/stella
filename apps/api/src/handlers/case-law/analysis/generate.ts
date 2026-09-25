@@ -17,14 +17,13 @@ import type {
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {

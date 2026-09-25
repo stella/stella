@@ -1,6 +1,7 @@
 import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
@@ -48,7 +49,6 @@ import {
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
-import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
@@ -77,6 +77,7 @@ import {
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
@@ -331,6 +332,7 @@ const EntityRefChip = ({
   interactive: boolean;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -365,6 +367,7 @@ const EntityRefChip = ({
       onActivate={buildParsedEntityActivate({
         navigate,
         pathname,
+        queryClient,
         id: refEntityId,
         textLabel,
         workspaceId: refWorkspaceId,
@@ -459,12 +462,14 @@ const buildParsedEntityActivate =
   ({
     navigate,
     pathname,
+    queryClient,
     id,
     textLabel,
     workspaceId,
   }: {
     navigate: ReturnType<typeof useNavigate>;
     pathname: string;
+    queryClient: QueryClient;
     id: string;
     textLabel: string;
     workspaceId: string;
@@ -478,6 +483,7 @@ const buildParsedEntityActivate =
             folderId: result.entityId,
             navigate,
             pathname,
+            queryClient,
             targetWorkspaceId: result.workspaceId,
           });
         }
@@ -498,6 +504,7 @@ const ParsedMentionChip = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -525,6 +532,7 @@ const ParsedMentionChip = ({
         onActivate={buildParsedEntityActivate({
           navigate,
           pathname,
+          queryClient,
           id,
           textLabel,
           workspaceId: mentionWorkspaceId,

@@ -1,5 +1,6 @@
 import { TaggedError } from "better-result";
 
+export { createDetached, type DetachedRejectionSink } from "./detached";
 export {
   createDevErrorLogger,
   type CreateDevErrorLoggerOptions,

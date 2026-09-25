@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { Analytics } from "@/api/lib/analytics/types";
+import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 
 const identifyOrganizationGroup =
-  mock<Analytics["identifyOrganizationGroup"]>();
+  mock<ServerAnalytics["identifyOrganizationGroup"]>();
 const seedDefaultDocumentTypes = mock(async () => await Promise.resolve());
-const analytics: Analytics = {
+const analytics: ServerAnalytics = {
   capture: () => undefined,
   identifyOrganizationGroup,
   flush: async () => await Promise.resolve(),

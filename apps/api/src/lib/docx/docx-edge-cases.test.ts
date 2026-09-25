@@ -4,13 +4,13 @@
  * or LibreOffice actually produces, verified by generating
  * .docx files and opening them in Pages/Word.
  *
- * Verifies extractText reads these patterns correctly.
+ * Verifies extractDocxDocument reads these patterns correctly.
  */
 
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { extractText } from "./extract-text";
+import { extractDocxDocument } from "./extract-text";
 import { W_NS } from "./ooxml";
 
 const WRAP = (body: string) =>
@@ -48,7 +48,7 @@ const buildDocx = async (bodyXml: string): Promise<Buffer> => {
 };
 
 // ─────────────────────────────────────────────────────────
-// STEP 1: Verify extractText reads these patterns correctly
+// STEP 1: Verify extractDocxDocument reads these patterns correctly
 // ─────────────────────────────────────────────────────────
 
 describe("extract-text: real OOXML patterns", () => {
@@ -59,8 +59,8 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:br/><w:t xml:space="preserve">After break</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
-    // extractText only collects w:t, so w:br is invisible
+    const result = await extractDocxDocument(buf);
+    // extractDocxDocument only collects w:t, so w:br is invisible
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  w:br extract result:",
@@ -78,7 +78,7 @@ describe("extract-text: real OOXML patterns", () => {
         "</w:r>" +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  w:br mid-run extract:",
@@ -93,7 +93,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:tab/><w:t xml:space="preserve">After tab</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log("  w:tab extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
@@ -111,7 +111,7 @@ describe("extract-text: real OOXML patterns", () => {
         "</w:fldSimple>" +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  fldSimple extract:",
@@ -131,7 +131,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve"> of 20</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  complex field extract:",
@@ -149,7 +149,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve"> for details.</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  bookmark extract:",
@@ -168,7 +168,7 @@ describe("extract-text: real OOXML patterns", () => {
         "</w:tbl>" +
         "<w:p><w:r><w:t>After table</w:t></w:r></w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     // Legal documents keep signature blocks and party details in tables. Keep
     // Folio's GFM rows and their positions so downstream consumers can retain
     // the table or intentionally discard its synthetic rows.
@@ -209,7 +209,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve">agreement is binding.</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  tracked changes extract:",
@@ -229,7 +229,7 @@ describe("extract-text: real OOXML patterns", () => {
         "</w:sdt>" +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log("  sdt extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
@@ -242,7 +242,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve"> 42 of the Act.</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log("  sym extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
@@ -261,7 +261,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve"> the other party.</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  comment extract:",
@@ -279,7 +279,7 @@ describe("extract-text: real OOXML patterns", () => {
         `<w:r><w:t xml:space="preserve"> above.</w:t></w:r>` +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  hyperlink extract:",
@@ -304,7 +304,7 @@ describe("extract-text: real OOXML patterns", () => {
         "</w:r>" +
         "</w:p>",
     );
-    const result = await extractText(buf);
+    const result = await extractDocxDocument(buf);
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  mixed legal extract:",

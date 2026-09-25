@@ -31,9 +31,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import type { ReadAuditLogsQuery } from "./query";
 import { queryAuditLogPage } from "./query";
 
-// Evidence for the `no-body-ownership-ids` waiver on `toAuditLogConditions`:
-// the caller-supplied `workspaceId` is a narrowing filter inside the session's
-// organization, never a source of access. `audit_logs` carries organization-only
+// `toAuditLogConditions` scopes to the session's organization first; the
+// caller-supplied `workspaceId` is a narrowing filter inside it, never a
+// source of access. `audit_logs` carries organization-only
 // RLS (`audit_logs_select` uses the organization check), so the workspace
 // narrowing is enforced by this query alone: nothing below the handler will
 // re-filter it.

@@ -1,3 +1,5 @@
+import { createDetached } from "@stll/errors";
+
 import { getAnalytics } from "@/lib/analytics/provider";
 
 /**
@@ -12,17 +14,9 @@ import { getAnalytics } from "@/lib/analytics/provider";
  * `"chat-thread.prefetch"`). Keep it a fixed string; never interpolate
  * identifiers, so it stays a safe correlation tag in telemetry.
  */
-export const detached = (
-  // Accept any fire-and-forget operand: a thenable to attach a catch to, or a
-  // synchronous/absent value we simply ignore. This mirrors the `void` operator
-  // this helper replaces; `Promise.resolve` below normalises whatever comes in.
-  operation: unknown,
-  context: string,
-): void => {
-  Promise.resolve(operation).catch((error: unknown) => {
-    getAnalytics().captureError(error, {
-      type: "detached",
-      operation: context,
-    });
+export const detached = createDetached((error, context) => {
+  getAnalytics().captureError(error, {
+    type: "detached",
+    operation: context,
   });
-};
+});

@@ -1,7 +1,7 @@
 import { rootDb } from "@/api/db/root";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { detached } from "@/api/lib/analytics/capture";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
-import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {

@@ -6,8 +6,8 @@ import {
 import type {
   OrganizationGroupIdentifyParams,
   ServerAnalyticsCaptureParams,
-} from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+} from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import {
   resetLogSinkForTesting,
   setLogSinkForTesting,

@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 
+import { createDetached } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { getAnalytics } from "@/api/lib/analytics/client";
-import type { ExceptionProperties } from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
+import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import {
   errorTag,
-  logDevError,
+  logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
 import type { FailureGrading } from "@/api/lib/observability/failure";
@@ -268,7 +269,7 @@ const captureErrorWithOptions = (
 
   // Before the throttle: dev sinks are local and unmetered, and a developer
   // reproducing a tight failure loop needs every occurrence.
-  logDevError(error, properties);
+  logServerDevError(error, properties);
 
   const suppressed = admitCapture(
     captureWindowKey(properties),
@@ -281,7 +282,7 @@ const captureErrorWithOptions = (
   // A failing analytics client must not turn into a failure of whatever
   // answer the caller is about to give.
   const sent = Result.try(() => {
-    getAnalytics().capture({
+    getServerAnalytics().capture({
       distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
       event: SERVER_ANALYTICS_EVENTS.exception,
       ...(options.organizationId
@@ -345,3 +346,18 @@ export const captureObservedError = (
     observed: { grading: observation },
   });
 };
+
+/**
+ * Run a promise as fire-and-forget work, routing any rejection to
+ * `captureError` instead of letting it surface as an unhandled rejection. Use
+ * this only for genuinely detached work (best-effort cache warming, cleanup,
+ * telemetry). When a caller needs the result or must react to failure, `await`
+ * the promise or propagate it instead.
+ *
+ * `context` is a short, stable label identifying the call site (for example
+ * `"account-cleanup.reconcile"`). Keep it a fixed string; never interpolate
+ * identifiers, so it stays a safe correlation tag in telemetry.
+ */
+export const detached = createDetached((error, context) => {
+  captureError(error, { detached: context });
+});

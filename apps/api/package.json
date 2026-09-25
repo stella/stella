@@ -86,6 +86,7 @@
     "@stll/agent-engine": "workspace:*",
     "@stll/agent-input": "workspace:*",
     "@stll/ai-catalog": "workspace:*",
+    "@stll/analytics-config": "workspace:*",
     "@stll/anonymize": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",

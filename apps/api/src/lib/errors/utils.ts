@@ -199,7 +199,7 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => ({
 // by reference) so it is resolved at call time, after `appendDevErrorJsonl`
 // below has initialized — a direct reference here would hit its TDZ during
 // module evaluation.
-export const logDevError = createDevErrorLogger({
+export const logServerDevError = createDevErrorLogger({
   isDev: envBase.isDev,
   sink: ({ error, context }) => {
     devLogWrites = devLogWrites.then(

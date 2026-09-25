@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { LandmarkIcon } from "lucide-react";
 
@@ -11,12 +12,12 @@ import {
 } from "@/components/chat/chat-mention-href";
 import { useEntityIconSource } from "@/components/chat/entity-icon-source";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 const ICON_CLASS = "inline size-3 shrink-0";
 
@@ -43,6 +44,7 @@ export const EntityLink = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { open: openDecision } = useOpenDecisionTab();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -124,6 +126,7 @@ export const EntityLink = ({
               folderId: result.entityId,
               navigate,
               pathname,
+              queryClient,
               targetWorkspaceId: result.workspaceId,
             });
           }

@@ -48,8 +48,8 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
-import type { Role } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
+import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -63,7 +63,7 @@ import {
   organizationKeys,
   organizationOptions,
 } from "@/lib/organization/queries";
-import { formatDate } from "@/lib/organization/utils";
+import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
@@ -266,7 +266,7 @@ function Members() {
                         memberRole={member.role}
                       />
                     </TableCell>
-                    <TableCell>{formatDate(member.createdAt)}</TableCell>
+                    <TableCell>{formatMemberDate(member.createdAt)}</TableCell>
                     <TableCell className="text-end">
                       {!isSelf && (
                         <Menu>
@@ -335,8 +335,12 @@ function Members() {
                         `organization.invitations.statuses.${invitation.status}`,
                       )}
                     </TableCell>
-                    <TableCell>{formatDate(invitation.createdAt)}</TableCell>
-                    <TableCell>{formatDate(invitation.expiresAt)}</TableCell>
+                    <TableCell>
+                      {formatMemberDate(invitation.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMemberDate(invitation.expiresAt)}
+                    </TableCell>
                     <TableCell className="text-end">
                       <Menu>
                         <Tooltip

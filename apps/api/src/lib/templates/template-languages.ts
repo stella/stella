@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import { toLanguageCode } from "@stll/locales";
 import type { LanguageCode } from "@stll/locales";
 
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 
 export const MAX_TEMPLATE_LANGUAGES = 4;
 
@@ -155,7 +155,7 @@ export const detectTemplateLanguagesFromDocx = async (
   docx: Uint8Array,
 ): Promise<string[]> => {
   const extracted = await Result.tryPromise(
-    async () => await extractText(docx),
+    async () => await extractDocxDocument(docx),
   );
   if (Result.isError(extracted)) {
     return [];

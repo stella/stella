@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
-import { exchangeAuthorizationCode } from "./token-exchange.js";
+import { redeemAuthorizationCode } from "./token-exchange.js";
 
-// `exchangeAuthorizationCode` is the last hop of `stella auth login`: a bad
+// `redeemAuthorizationCode` is the last hop of `stella auth login`: a bad
 // response here must surface as a typed `TokenExchangeError`, never a thrown
 // exception or a half-parsed token. These pin the error-classification paths
 // (`describeTokenEndpointError` + schema parse) that the happy-path type never
@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 const exchange = async (metadata: AuthorizationServerMetadata) =>
-  await exchangeAuthorizationCode({
+  await redeemAuthorizationCode({
     clientId: "client-1",
     code: "auth-code-1",
     codeVerifier: "verifier-1",
@@ -47,7 +47,7 @@ const exchange = async (metadata: AuthorizationServerMetadata) =>
     resource: "https://stella.example/mcp",
   });
 
-describe("exchangeAuthorizationCode error paths", () => {
+describe("redeemAuthorizationCode error paths", () => {
   test("maps an RFC 6749 error body to a TokenExchangeError carrying the oauthError", async () => {
     const server = startTokenServer(
       () =>

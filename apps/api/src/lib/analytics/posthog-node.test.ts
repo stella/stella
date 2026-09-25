@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const clientCaptureMock = mock((_event: unknown) => undefined);
@@ -18,7 +18,7 @@ void mock.module("posthog-node", () => ({
   PostHog: MockPostHog,
 }));
 
-const { createPostHogAnalytics } = await import("./posthog");
+const { createPostHogNodeAnalytics } = await import("./posthog-node");
 
 // Pinned as a literal on purpose: it must equal the browser adapter's group
 // type so client and server events land on one profile. Importing the
@@ -33,7 +33,7 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("upserts the organization group under the shared group type", () => {
-    const analytics = createPostHogAnalytics(
+    const analytics = createPostHogNodeAnalytics(
       "phc_test",
       "https://posthog.test",
     );
@@ -54,7 +54,7 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("captures only explicitly allowed server telemetry events", () => {
-    const analytics = createPostHogAnalytics(
+    const analytics = createPostHogNodeAnalytics(
       "phc_test",
       "https://posthog.test",
     );

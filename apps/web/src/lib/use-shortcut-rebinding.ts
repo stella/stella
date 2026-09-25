@@ -2,7 +2,7 @@ import type { Hotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";

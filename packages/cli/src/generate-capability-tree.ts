@@ -49,7 +49,7 @@ import {
  * that the leaves `insertCapabilities` emits are exactly the entries the
  * API-side predicate calls invocable.
  */
-export type CapabilityTransport =
+export type CatalogTransport =
   | { type: "json" }
   | { type: "file-input"; input: { field: string; required: boolean } }
   | { type: "file-response" }
@@ -67,7 +67,7 @@ export type CapabilityCatalogEntry = {
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
-  transport: CapabilityTransport;
+  transport: CatalogTransport;
   /**
    * The handler's input schema as the catalog carries it: `$defs`-compacted.
    * Flag derivation works on the expanded form; the emitted leaf keeps the
@@ -93,8 +93,8 @@ type ExpandedInputSchema = {
  * `isTransportInvocable` in `apps/api/src/lib/capability-transport.ts`; the
  * exporter fails if the two ever disagree.
  */
-export const isTransportInvocable = (
-  transport: CapabilityTransport,
+export const isCatalogTransportInvocable = (
+  transport: CatalogTransport,
 ): boolean => {
   switch (transport.type) {
     case "json":
@@ -118,9 +118,7 @@ export const isTransportInvocable = (
  * plain `--file <string>` flag that passes validation and reaches a handler
  * expecting a `File`.
  */
-const filelessOnlyField = (
-  transport: CapabilityTransport,
-): string | undefined => {
+const filelessOnlyField = (transport: CatalogTransport): string | undefined => {
   if (transport.type !== "file-input" || transport.input.required) {
     return undefined;
   }
@@ -717,7 +715,7 @@ export const insertCapabilities = ({
 
   const sorted = entries.toSorted((a, b) => a.id.localeCompare(b.id));
   for (const entry of sorted) {
-    if (!isTransportInvocable(entry.transport)) {
+    if (!isCatalogTransportInvocable(entry.transport)) {
       suppressedIds.push(entry.id);
       continue;
     }

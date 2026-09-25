@@ -478,7 +478,7 @@ export default defineConfig(({ mode }) => {
       // Vite's dep optimizer handles them during the cold pass, before any
       // navigation. Four graphs trip this:
       //
-      //   1. better-auth: src/lib/auth.ts statically imports the client
+      //   1. better-auth: src/lib/auth-client.ts statically imports the client
       //      entrypoints (better-auth/react + /client + /client/plugins,
       //      @better-auth/oauth-provider/client), but their runtime-only deep
       //      subpaths (e.g. the multi-tab session `broadcast-channel`) are not

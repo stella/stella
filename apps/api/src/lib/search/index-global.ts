@@ -7,6 +7,8 @@ import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
   ContactAddress,
@@ -83,32 +85,59 @@ type ReadLanguageAlternates = (
   languageGroupKeys: readonly string[],
 ) => Promise<PublicDecisionLanguageAlternatesByGroup>;
 
+type SearchReadTransaction = Pick<Transaction, "execute">;
+
 type SearchGlobalReaders = {
-  database?: Pick<typeof rootDb, "execute">;
+  /** The request's scoped handle; every tenant read runs under its policies. */
+  scopedDb: ScopedDb;
   /** Language versions come from the public-law reader, as on every other
    *  decision response. */
   readLanguageAlternates?: ReadLanguageAlternates;
 };
 
+type GlobalSearchRead = {
+  result: GlobalSearchResult;
+  /** Language group of each fetched decision, keyed by decision id. */
+  caseLawLanguageGroups: ReadonlyMap<string, string>;
+};
+
 /**
- * Case-law rows as hits. The language versions of the fetched rows are read
- * in one batch after them, on the case-law branch only, so the other sources,
- * counts and facets never wait on it.
+ * Language versions of the case-law hits on the page, read in one batch on
+ * the public-law reader once the tenant transaction has finished.
  */
-const readCaseLawHits = async (
-  rows: SearchPromise,
+const withLanguageAlternates = async (
+  { result, caseLawLanguageGroups }: GlobalSearchRead,
   readLanguageAlternates: ReadLanguageAlternates,
-): Promise<ScoredGlobalSearchHit[]> => {
-  const caseLawRows = await rows;
-  const languageGroupKeys = new Set<string>();
-  for (const row of caseLawRows) {
-    const key = toNullableString(row["language_group_key"]);
-    if (key !== null) {
-      languageGroupKeys.add(key);
-    }
+): Promise<GlobalSearchResult> => {
+  const pageGroupKeys = new Set(
+    result.hits.flatMap((hit) => {
+      const key =
+        hit.type === "case-law"
+          ? caseLawLanguageGroups.get(hit.decisionId)
+          : undefined;
+      return key === undefined ? [] : [key];
+    }),
+  );
+  if (pageGroupKeys.size === 0) {
+    return result;
   }
-  const alternates = await readLanguageAlternates([...languageGroupKeys]);
-  return caseLawRows.map((row) => mapCaseLawHit(row, alternates));
+  const alternates = await readLanguageAlternates([...pageGroupKeys]);
+  return {
+    ...result,
+    hits: result.hits.map((hit) =>
+      hit.type === "case-law"
+        ? {
+            ...hit,
+            // One entry per language already; the rest of each version stays
+            // off the wire, since a hit only needs to know whether to name
+            // its language.
+            languageAlternates: alternates
+              .alternatesFor(caseLawLanguageGroups.get(hit.decisionId) ?? null)
+              .map(({ language }) => ({ language })),
+          }
+        : hit,
+    ),
+  };
 };
 
 export type GlobalSearchQuery = {
@@ -347,10 +376,7 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
   return { hit, score: Number(row["score"]) };
 };
 
-const mapCaseLawHit = (
-  row: RawRow,
-  alternates: PublicDecisionLanguageAlternatesByGroup,
-): ScoredGlobalSearchHit => {
+const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
   const decisionId = String(row["id"]);
   const resource = resourceRef({
     type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -371,11 +397,8 @@ const mapCaseLawHit = (
     decisionDate: toNullableString(row["decision_date"]),
     slug: toNullableString(row["slug"]),
     language: String(row["language"]),
-    // One entry per language already; the rest of each version stays off
-    // the wire, since a hit only needs to know whether to name its language.
-    languageAlternates: alternates
-      .alternatesFor(toNullableString(row["language_group_key"]))
-      .map(({ language }) => ({ language })),
+    // Filled in for the page's hits after the tenant transaction.
+    languageAlternates: [],
     title: `${String(row["case_number"])} - ${String(row["court"])}`,
     headline: toHeadline(row["headline"]),
     updatedAt: toIso(row["updated_at"]),
@@ -649,7 +672,7 @@ const buildSearchFilterFragments = ({
   };
 };
 
-export const searchGlobal = async (
+const readGlobalSearch = async (
   {
     query,
     organizationId,
@@ -664,11 +687,8 @@ export const searchGlobal = async (
     cursor,
     limit,
   }: GlobalSearchQuery,
-  {
-    database = rootDb,
-    readLanguageAlternates = readPublicDecisionLanguageAlternatesForGroupKeys,
-  }: SearchGlobalReaders = {},
-): Promise<GlobalSearchResult> => {
+  database: SearchReadTransaction,
+): Promise<GlobalSearchRead> => {
   const parsedCursor = parseGlobalSearchCursor(cursor);
   const pagination = (() => {
     switch (parsedCursor.type) {
@@ -871,11 +891,10 @@ export const searchGlobal = async (
     `),
   );
 
-  const caseLawPromise = readCaseLawHits(
-    rowsWhen(
-      !restrictToEntities && shouldSearchType(selected, "case-law"),
-      () =>
-        database.execute(sql`
+  const caseLawPromise = rowsWhen(
+    !restrictToEntities && shouldSearchType(selected, "case-law"),
+    () =>
+      database.execute(sql`
       SELECT
         clsd.decision_id AS id,
         d.case_number,
@@ -918,8 +937,6 @@ export const searchGlobal = async (
       ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
       LIMIT ${fetchLimit}
     `),
-    ),
-    readLanguageAlternates,
   );
 
   const chatScope = chatThreadScopeSql({
@@ -1181,7 +1198,8 @@ export const searchGlobal = async (
   );
 
   // Editor facet drops its own filter so picking one editor still
-  // shows the others as toggleable options.
+  // shows the others as toggleable options. The inner join leaves out
+  // documents whose editor profile the caller cannot see.
   const editorFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
@@ -1235,7 +1253,7 @@ export const searchGlobal = async (
     entityRows,
     matterRows,
     contactRows,
-    caseLawHits,
+    caseLawRows,
     chatRows,
     entityCount,
     matterCount,
@@ -1271,7 +1289,7 @@ export const searchGlobal = async (
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
-    ...caseLawHits,
+    ...caseLawRows.map(mapCaseLawHit),
     ...chatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
@@ -1323,18 +1341,45 @@ export const searchGlobal = async (
   const editorFacetMap = toStringFacetMap(editorFacetRows);
   const mimeTypeFacetMap = toMimeTypeFacetMap(mimeTypeFacetRows);
 
+  const caseLawLanguageGroups = new Map(
+    caseLawRows.flatMap((row) => {
+      const key = toNullableString(row["language_group_key"]);
+      return key === null ? [] : [[String(row["id"]), key] as const];
+    }),
+  );
+
   return {
-    hits: page.items,
-    facets: {
-      type: facetBuckets(typeFacetMap),
-      workspace: facetBuckets(workspaceFacetMap),
-      editor: facetBuckets(editorFacetMap),
-      mimeType: facetBuckets(mimeTypeFacetMap),
+    result: {
+      hits: page.items,
+      facets: {
+        type: facetBuckets(typeFacetMap),
+        workspace: facetBuckets(workspaceFacetMap),
+        editor: facetBuckets(editorFacetMap),
+        mimeType: facetBuckets(mimeTypeFacetMap),
+      },
+      totalCount,
+      nextCursor: page.nextCursor,
     },
-    totalCount,
-    nextCursor: page.nextCursor,
+    caseLawLanguageGroups,
   };
 };
+
+/**
+ * Tenant global search. Every statement runs in one transaction on the
+ * request's scoped handle, so the database policies decide which rows,
+ * editor profiles included, the caller can see.
+ */
+export const searchGlobal = async (
+  query: GlobalSearchQuery,
+  {
+    scopedDb,
+    readLanguageAlternates = readPublicDecisionLanguageAlternatesForGroupKeys,
+  }: SearchGlobalReaders,
+): Promise<GlobalSearchResult> =>
+  await withLanguageAlternates(
+    await scopedDb(async (tx) => await readGlobalSearch(query, tx)),
+    readLanguageAlternates,
+  );
 
 // ---------------------------------------------------------------------------
 // Per-facet bucket search — used when a user types in a facet's search box
@@ -1368,7 +1413,7 @@ const labelLikeFilter = (column: SQL, search: string): SQL => {
   return sql`AND ${column} ILIKE ${pattern}`;
 };
 
-export const searchGlobalFacet = async (
+const readGlobalFacet = async (
   {
     facet,
     search,
@@ -1383,7 +1428,7 @@ export const searchGlobalFacet = async (
     updatedTo,
     limit,
   }: GlobalFacetSearchQuery,
-  database: Pick<typeof rootDb, "execute"> = rootDb,
+  database: SearchReadTransaction,
 ): Promise<{ buckets: FacetBucket[] }> => {
   const {
     selected,
@@ -1527,6 +1572,13 @@ export const searchGlobalFacet = async (
   `);
   return { buckets: facetBuckets(toStringFacetMap(rows)) };
 };
+
+/** Facet bucket lookup, read on the request's scoped handle. */
+export const searchGlobalFacet = async (
+  query: GlobalFacetSearchQuery,
+  scopedDb: ScopedDb,
+): Promise<{ buckets: FacetBucket[] }> =>
+  await scopedDb(async (tx) => await readGlobalFacet(query, tx));
 
 export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,

@@ -149,6 +149,76 @@ const rejection = (
   reason: string,
 ): CorpusProjectionMaterialRejection => ({ lease, status, reason });
 
+type MaterialRow = {
+  documentId: string;
+  projectionEpoch: CorpusProjectionIntentLease["epoch"];
+  textS3Key: string | null;
+};
+
+type ProjectedMaterialRow = {
+  descriptor: ReturnType<typeof deriveCorpusIndexProjectionDescriptor>;
+  material: (
+    lease: CorpusProjectionIntentLease,
+    textS3Key: string,
+  ) => CorpusProjectionMaterial;
+};
+
+// Every family sorts its leases the same way: a lease whose reservation moved
+// is lost, one whose canonical row, desired state or derived descriptor moved
+// is stale, and one without a text pointer is unreadable. `project` derives a
+// row's descriptor and material, and runs only for a lease whose reservation
+// and canonical state are still there.
+const sortLeasesByReadiness = <Row extends MaterialRow>(
+  {
+    leases,
+    intents,
+    states,
+    rows,
+  }: {
+    leases: readonly CorpusProjectionIntentLease[];
+    intents: ReadonlyMap<string, IntentSnapshot>;
+    states: ReadonlyMap<string, StateSnapshot>;
+    rows: readonly Row[];
+  },
+  project: (row: Row) => ProjectedMaterialRow,
+): CorpusProjectionMaterialsResult => {
+  const byEntityId = new Map<string, Row>(
+    rows.map((row) => [row.documentId, row]),
+  );
+  const ready: CorpusProjectionMaterial[] = [];
+  const rejected: CorpusProjectionMaterialRejection[] = [];
+  for (const lease of leases) {
+    const intent = intents.get(lease.intentId);
+    if (intent === undefined || !intentMatchesLease(intent, lease)) {
+      rejected.push(rejection(lease, "lease_lost", "reservation changed"));
+      continue;
+    }
+    const state = states.get(lease.entityId);
+    const row = byEntityId.get(lease.entityId);
+    if (state === undefined || row === undefined) {
+      rejected.push(rejection(lease, "stale", "canonical state disappeared"));
+      continue;
+    }
+    const { descriptor, material } = project(row);
+    if (
+      row.projectionEpoch !== lease.epoch ||
+      !stateMatchesLease(state, lease) ||
+      !descriptorMatchesLease(descriptor, lease)
+    ) {
+      rejected.push(rejection(lease, "stale", "canonical input changed"));
+      continue;
+    }
+    if (row.textS3Key === null) {
+      rejected.push(
+        rejection(lease, "unreadable", "canonical text pointer is absent"),
+      );
+      continue;
+    }
+    ready.push(material(lease, row.textS3Key));
+  }
+  return { ready, rejected };
+};
+
 const readCaseLawMaterials = async (
   tx: Transaction,
   leases: readonly CorpusProjectionIntentLease[],
@@ -220,52 +290,25 @@ const readCaseLawMaterials = async (
     }
     values.push({ type: identifier.type, value: identifier.value });
   }
-  const byEntityId = new Map(rows.map((row) => [String(row.documentId), row]));
-  const ready: CorpusProjectionMaterial[] = [];
-  const rejected: CorpusProjectionMaterialRejection[] = [];
-  for (const lease of leases) {
-    const intent = intents.get(lease.intentId);
-    if (intent === undefined || !intentMatchesLease(intent, lease)) {
-      rejected.push(rejection(lease, "lease_lost", "reservation changed"));
-      continue;
-    }
-    const state = states.get(lease.entityId);
-    const row = byEntityId.get(lease.entityId);
-    if (state === undefined || row === undefined) {
-      rejected.push(rejection(lease, "stale", "canonical state disappeared"));
-      continue;
-    }
+  return sortLeasesByReadiness({ leases, intents, states, rows }, (row) => {
     const input = caseLawProjectionInputFromCanonical({
       ...row,
       identifiers:
         identifiersByDecision.get(row.documentId) ??
         panic(`Corpus projection material lost identifiers: ${row.documentId}`),
     });
-    const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
-    if (
-      row.projectionEpoch !== lease.epoch ||
-      !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease)
-    ) {
-      rejected.push(rejection(lease, "stale", "canonical input changed"));
-      continue;
-    }
-    if (row.textS3Key === null) {
-      rejected.push(
-        rejection(lease, "unreadable", "canonical text pointer is absent"),
-      );
-      continue;
-    }
-    ready.push({
-      family: "case_law",
-      lease,
-      manifest,
-      input,
-      textS3Key: row.textS3Key,
-      astS3Key: row.astS3Key,
-    });
-  }
-  return { ready, rejected };
+    return {
+      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
+      material: (lease, textS3Key) => ({
+        family: "case_law",
+        lease,
+        manifest,
+        input,
+        textS3Key,
+        astS3Key: row.astS3Key,
+      }),
+    };
+  });
 };
 
 const readLegislationMaterials = async (
@@ -303,47 +346,20 @@ const readLegislationMaterials = async (
     )
     .where(inArray(legislationDocuments.id, entityIds))
     .limit(entityIds.length);
-  const byEntityId = new Map(rows.map((row) => [String(row.documentId), row]));
-  const ready: CorpusProjectionMaterial[] = [];
-  const rejected: CorpusProjectionMaterialRejection[] = [];
-  for (const lease of leases) {
-    const intent = intents.get(lease.intentId);
-    if (intent === undefined || !intentMatchesLease(intent, lease)) {
-      rejected.push(rejection(lease, "lease_lost", "reservation changed"));
-      continue;
-    }
-    const state = states.get(lease.entityId);
-    const row = byEntityId.get(lease.entityId);
-    if (state === undefined || row === undefined) {
-      rejected.push(rejection(lease, "stale", "canonical state disappeared"));
-      continue;
-    }
+  return sortLeasesByReadiness({ leases, intents, states, rows }, (row) => {
     const input = legislationProjectionInputFromCanonical(row);
-    const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
-    if (
-      row.projectionEpoch !== lease.epoch ||
-      !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease)
-    ) {
-      rejected.push(rejection(lease, "stale", "canonical input changed"));
-      continue;
-    }
-    if (row.textS3Key === null) {
-      rejected.push(
-        rejection(lease, "unreadable", "canonical text pointer is absent"),
-      );
-      continue;
-    }
-    ready.push({
-      family: "legislation",
-      lease,
-      manifest,
-      input,
-      textS3Key: row.textS3Key,
-      astS3Key: null,
-    });
-  }
-  return { ready, rejected };
+    return {
+      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
+      material: (lease, textS3Key) => ({
+        family: "legislation",
+        lease,
+        manifest,
+        input,
+        textS3Key,
+        astS3Key: null,
+      }),
+    };
+  });
 };
 
 /**

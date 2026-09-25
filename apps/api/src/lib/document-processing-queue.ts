@@ -37,7 +37,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
@@ -46,7 +46,6 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { detached } from "@/api/lib/detached";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
@@ -120,7 +119,7 @@ import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -1014,7 +1013,7 @@ export const processDocumentProcessingRun = async (
           }
           await indexDocumentProjectionAtJobBoundary({
             indexEntity: async () =>
-              await getSearchProvider().indexEntity(run.entityId),
+              await getSearchMaintenance().indexEntity(run.entityId),
           });
           lifecycleSignal.throwIfAborted();
           await completeDocumentProcessingRun({ claimToken, database, run });
@@ -1102,7 +1101,7 @@ export const processDocumentProcessingRun = async (
 
       await indexDocumentProjectionAtJobBoundary({
         indexEntity: async () =>
-          await getSearchProvider().indexEntity(run.entityId),
+          await getSearchMaintenance().indexEntity(run.entityId),
       });
       lifecycleSignal.throwIfAborted();
 
@@ -2671,7 +2670,7 @@ const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
-    await getSearchProvider().indexEntity(entityId),
+    await getSearchMaintenance().indexEntity(entityId),
   readRepairScanCursor: async () => await readRepairScanCursor(),
   readyRepairCursor: async () => await reconciliationRedis.ready(),
   writeRepairScanCursor: async (input: {

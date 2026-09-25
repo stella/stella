@@ -41,7 +41,7 @@ import type {
   EntityKind,
   WorkspaceFieldContent,
   WorkspaceProperty,
-  WorkspacePropertyOption,
+  SelectPropertyOption,
 } from "@/lib/types";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -314,7 +314,7 @@ type InlineSelectEditorProps = (
       onChange: (value: string[]) => void;
     }
 ) & {
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
   displayVariant: FieldValueVariant;

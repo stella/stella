@@ -1,7 +1,6 @@
 import {
   EventType,
   maxIterations,
-  StreamProcessor,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
@@ -129,6 +128,10 @@ import type {
 } from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  createStreamMessageCapture,
+  type ChatStreamProcessor,
+} from "@/api/lib/chat/stream-message-capture";
 import {
   streamChatChunks,
   toolCallEndInputOf,
@@ -1395,7 +1398,7 @@ type ProcessServerChatStreamProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
-  processor: StreamProcessor;
+  processor: ChatStreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
 };
 
@@ -1853,29 +1856,22 @@ export const processTurnForPersistence = ({
   restorationPairs,
   ...stream
 }: ProcessTurnForPersistenceProps): AsyncIterable<PublicStreamChunk> => {
-  // Captured on an object property, not a bare `let`: `onStreamEnd` runs
-  // later, and type-aware lint narrows a closure-mutated local to its
-  // initializer.
-  const captured: { message: ChatMessage | null } = { message: null };
-  const processor = new StreamProcessor({
+  const { processor, message } = createStreamMessageCapture({
     initialMessages,
-    events: {
-      onStreamEnd: (message) => {
-        const convertedMessage = toChatMessage(message);
-        captured.message =
-          convertedMessage === null
-            ? null
-            : attachRestorationMetadata({
-                message: convertedMessage,
-                restorationPairs,
-              });
-      },
+    capture: (streamed) => {
+      const convertedMessage = toChatMessage(streamed);
+      return convertedMessage === null
+        ? null
+        : attachRestorationMetadata({
+            message: convertedMessage,
+            restorationPairs,
+          });
     },
   });
   return processServerChatStream({
     ...stream,
     existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-    getResponseMessage: () => captured.message,
+    getResponseMessage: message,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
     processor,
   });
@@ -1923,7 +1919,7 @@ const createTerminalResponseMessage = ({
   });
 };
 
-const finalizeResponseProcessor = (processor: StreamProcessor): void => {
+const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
   try {
     processor.finalizeStream();
   } catch (error) {

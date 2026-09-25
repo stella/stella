@@ -78,6 +78,7 @@
         "@stll/agent-engine": "workspace:*",
         "@stll/agent-input": "workspace:*",
         "@stll/ai-catalog": "workspace:*",
+        "@stll/analytics-config": "workspace:*",
         "@stll/anonymize": "catalog:",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
@@ -331,6 +332,7 @@
         "@posthog/react": "^1.11.1",
         "@silurus/ooxml": "catalog:",
         "@stll/ai-catalog": "workspace:*",
+        "@stll/analytics-config": "workspace:*",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
@@ -507,6 +509,14 @@
         "@tanstack/ai-openrouter": "catalog:",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+      },
+    },
+    "packages/analytics-config": {
+      "name": "@stll/analytics-config",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/anonymize-chat": {
@@ -2613,6 +2623,8 @@
     "@stll/agent-input": ["@stll/agent-input@workspace:packages/agent-input"],
 
     "@stll/ai-catalog": ["@stll/ai-catalog@workspace:packages/ai-catalog"],
+
+    "@stll/analytics-config": ["@stll/analytics-config@workspace:packages/analytics-config"],
 
     "@stll/anonymize": ["@stll/anonymize@3.0.1", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.1", "@stll/anonymize-darwin-x64": "3.0.1", "@stll/anonymize-linux-arm64-gnu": "3.0.1", "@stll/anonymize-linux-x64-gnu": "3.0.1", "@stll/anonymize-win32-x64-msvc": "3.0.1" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-XcuqzWvKjTi0TI/kbhKeppZDWsruL6pGuoyH8KcYoKPiCR86lhpxFOFwgtSKUnyuDfr6Hjash/a2NfwBKDWbqQ=="],
 

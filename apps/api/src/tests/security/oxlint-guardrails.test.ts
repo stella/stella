@@ -214,7 +214,7 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/features/statutes/statute-sitemap.ts",
     );
     expect(configSource).toContain('name: "@/routes/-auth-context"');
-    expect(configSource).toContain('name: "@/lib/auth"');
+    expect(configSource).toContain('name: "@/lib/auth-client"');
     expect(configSource).toContain(
       "Public SEO endpoints must not import protected route code.",
     );

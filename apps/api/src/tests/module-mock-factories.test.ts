@@ -170,6 +170,7 @@ describe("module mock factories", () => {
       "captureError",
       "captureObservedError",
       "captureRequestError",
+      "detached",
       "resetCaptureWindows",
     ]);
   });

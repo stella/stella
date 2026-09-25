@@ -19,10 +19,12 @@ import {
   rootDbExecuteMock,
   rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, { database: rootDbTestDouble });
+) => await searchGlobalWithDatabase(query, { scopedDb });
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
@@ -90,10 +92,8 @@ describe("global search SQL scope", () => {
       }),
     );
 
-    // The user filter is the privacy boundary: chat threads are
-    // per-user, and searchGlobal runs on the RLS-bypassing root
-    // connection, so a missing user_id predicate would leak other
-    // users' conversations.
+    // The user filter restates the chat-thread policy: threads are
+    // per-user, so the predicate keeps the plan on the caller's rows.
     expect(compiled.sql).toContain("t.user_id =");
     expect(compiled.sql).toContain("t.organization_id =");
     // A workspace-scoped thread must live in an accessible workspace,

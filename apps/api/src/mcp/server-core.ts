@@ -15,7 +15,7 @@ import type {
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
-import { detached } from "@/api/lib/detached";
+import { detached } from "@/api/lib/analytics/capture";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import {
   isMcpSession,

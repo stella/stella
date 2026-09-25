@@ -26,7 +26,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -59,6 +59,7 @@ import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-compon
 // including params from child routes; strictObject would reject them.
 const searchSchema = v.object({
   folder: optionalSearchStringSchema(),
+  reveal: optionalSearchStringSchema(),
   page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
 

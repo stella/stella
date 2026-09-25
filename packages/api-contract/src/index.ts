@@ -2,7 +2,11 @@
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
-export type { AgendaItemKind, AgendaItemSource } from "./agenda";
+export type {
+  AgendaItemKind,
+  AgendaItemSource,
+  AgendaItemWireFields,
+} from "./agenda";
 
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";

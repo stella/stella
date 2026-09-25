@@ -67,7 +67,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
-import type { getSearchProvider } from "@/api/lib/search/provider";
+import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
   recordTemplateFill,
@@ -144,7 +144,7 @@ export type McpRequestContext = {
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;
     readWorkspaceMembersHandler?: typeof readWorkspaceMembersHandler;
-    getSearchProvider?: typeof getSearchProvider;
+    getSearchReader?: typeof getSearchReader;
     describeStoredTemplate?: typeof describeStoredTemplate;
     executeRegistryLookup?: typeof executeRegistryLookup;
     searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;

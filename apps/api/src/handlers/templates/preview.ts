@@ -56,7 +56,7 @@ const previewTemplateHandler = async function* ({
 
   // discoverTemplate returns structureError indices relative
   // to each section (body starts at 0, combined headers start
-  // at 0, combined footers start at 0). extractText returns
+  // at 0, combined footers start at 0). extractDocxDocument returns
   // global indices: headers first, then body, then footers.
   // Offset each error based on its source.
   const headerCount = paragraphs.filter((p) => p.source === "header").length;

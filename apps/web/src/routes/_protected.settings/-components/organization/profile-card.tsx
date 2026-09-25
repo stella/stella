@@ -15,7 +15,7 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";

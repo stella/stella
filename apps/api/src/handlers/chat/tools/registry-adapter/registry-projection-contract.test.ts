@@ -193,7 +193,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
-      getSearchProvider: () => asTestRaw({ search: searchProviderSearchMock }),
+      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,

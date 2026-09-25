@@ -43,12 +43,12 @@ import {
   sanitizeFeedbackReport,
 } from "@/api/handlers/feedback/sanitize-report";
 import { captureError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type {
   FeedbackDeliveryOutcome,
   FeedbackReportSubmittedProperties,
-} from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+} from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { feedbackReportStore } from "@/api/lib/db/feedback-report-store";
 import type { FeedbackReportStore } from "@/api/lib/db/feedback-report-store";
@@ -425,7 +425,7 @@ const recordAnalytics = ({
     return;
   }
 
-  getAnalytics().capture({
+  getServerAnalytics().capture({
     distinctId,
     event: SERVER_ANALYTICS_EVENTS.feedbackReportSubmitted,
     ...(organizationId === undefined

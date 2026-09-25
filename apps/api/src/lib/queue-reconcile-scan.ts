@@ -9,10 +9,18 @@
  * page's contents.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
 export const RECONCILE_SCAN_PAGE_SIZE = 100;
@@ -132,4 +140,78 @@ export const scanPendingRows = async <Row>({
 
   await walk(null, 0);
   return { handedOff, scanned };
+};
+
+type QueuedRunRow = {
+  id: string;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type QueuedRunJob<DataType> = {
+  data: DataType;
+  name: string;
+  opts: { jobId: string };
+};
+
+type ReconcileQueuedRunsOptions<Row extends QueuedRunRow, DataType> = {
+  queue: RequeueableQueue<DataType>;
+  /** Reads the next page of `queued` runs after `cursor`. */
+  readPage: (cursor: Row | null) => Promise<readonly Row[]>;
+  /** The job one run is enqueued as, under the run's own job id. */
+  runJob: (run: {
+    organizationId: SafeId<"organization">;
+    runId: Row["id"];
+    userId: SafeId<"user">;
+    workspaceId: SafeId<"workspace">;
+  }) => QueuedRunJob<DataType>;
+};
+
+type ReconcileQueuedRunsResult = ReconcileScanResult & {
+  /** Runs whose requester is gone, so no job can carry their actor. */
+  unattributed: number;
+};
+
+/**
+ * Hands every `queued` run the queue no longer owns back to it, under the job
+ * id derived from the run, so a repeat is a no-op. A run whose `requested_by`
+ * was nulled has no actor to carry and is counted instead of requeued; a
+ * requeue that fails is captured and the walk moves on.
+ */
+export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
+  queue,
+  readPage,
+  runJob,
+}: ReconcileQueuedRunsOptions<
+  Row,
+  DataType
+>): Promise<ReconcileQueuedRunsResult> => {
+  let unattributed = 0;
+
+  const handle = async (run: Row): Promise<boolean> => {
+    if (run.requestedBy === null) {
+      unattributed += 1;
+      return false;
+    }
+    const { data, name, opts } = runJob({
+      organizationId: run.organizationId,
+      runId: run.id,
+      userId: brandPersistedUserId(run.requestedBy),
+      workspaceId: run.workspaceId,
+    });
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(outcome)) {
+      captureError(outcome.error, { runId: run.id });
+      return false;
+    }
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  };
+
+  const scan = await scanPendingRows({ handle, readPage });
+  return { ...scan, unattributed };
 };

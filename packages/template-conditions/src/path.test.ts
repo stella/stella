@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { isRecord, resolvePath } from "./path";
+import { isNonNullObject, resolvePath } from "./path";
 
-describe("isRecord", () => {
+describe("isNonNullObject", () => {
   // Deliberately unlike the API's and business-registries' predicates of the
   // same name, which reject arrays because they screen JSON payload shapes.
   // Here the predicate gates a path walk, and a dotted path segment may be an
   // array index, so an array has to read as walkable.
   test("accepts an array, because a path segment may index one", () => {
-    expect(isRecord([1, 2])).toBe(true);
+    expect(isNonNullObject([1, 2])).toBe(true);
   });
 
   test("rejects null and primitives", () => {
-    expect(isRecord(null)).toBe(false);
-    expect(isRecord("company")).toBe(false);
-    expect(isRecord(7)).toBe(false);
+    expect(isNonNullObject(null)).toBe(false);
+    expect(isNonNullObject("company")).toBe(false);
+    expect(isNonNullObject(7)).toBe(false);
   });
 });
 
