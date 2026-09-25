@@ -6,10 +6,17 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 /**
  * Scrolls an element into view and flashes a 2px primary outline on it
  * (inset box-shadow, 500ms). Table rows get the outline on their cells,
- * since `<tr>` does not render box-shadow.
+ * since `<tr>` does not render box-shadow. Reduced motion jumps instead of
+ * scrolling smoothly; the outline fade is a color change, not motion.
  */
 export const flashElement = (el: HTMLElement) => {
-  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  const prefersReducedMotion = globalThis.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  el.scrollIntoView({
+    block: "nearest",
+    behavior: prefersReducedMotion ? "instant" : "smooth",
+  });
 
   const c = "var(--color-primary)";
   const t = "transparent";
