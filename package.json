@@ -81,6 +81,7 @@
     "check:module-ownership": "bun scripts/ownership.ts --check",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
+    "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",
     "check:query-cache-types": "bun --filter @stll/scripts test -- src/query-cache-types.test.ts && bun packages/scripts/src/query-cache-types.ts",
     "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error .claude/mcp/doc-sources.ts",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",
