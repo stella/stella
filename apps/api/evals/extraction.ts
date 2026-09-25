@@ -921,6 +921,7 @@ const runTask = async ({
     properties,
     filenames: [],
     textInputs: [],
+    linkedSkillsMessage: null,
     abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
     entityVersionId: `${task.id}-${modelId}-${String(repeat)}`,
     organizationId: EVAL_ORGANIZATION_ID,
