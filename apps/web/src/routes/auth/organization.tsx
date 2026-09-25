@@ -38,7 +38,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";

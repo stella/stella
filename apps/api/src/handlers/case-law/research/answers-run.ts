@@ -5,6 +5,7 @@ import {
   readOrganizationResearchColumns,
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -13,7 +14,6 @@ import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summari
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
 import type { ResearchRunColumn } from "@/api/lib/case-law/research-answer-runner";
-import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";

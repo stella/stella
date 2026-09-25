@@ -19,7 +19,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";
-import { authClient, type Role } from "@/lib/auth";
+import { authClient, type Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";

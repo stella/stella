@@ -22,12 +22,12 @@ import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
-} from "@/lib/auth";
-import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
+} from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

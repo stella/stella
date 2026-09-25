@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { detached } from "@/api/lib/detached";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
 const config = {

@@ -2,7 +2,7 @@
  * The `text/event-stream` wire format, read in one place.
  *
  * `EventSource` covers the streams the browser may reconnect to on its own
- * (see `@/lib/sse.ts`), but a stream opened with `POST` and a JSON body is not
+ * (see `@/lib/workspace-sse.ts`), but a stream opened with `POST` and a JSON body is not
  * one of them: it has to be read off `fetch`'s `ReadableStream`. That leaves
  * the framing — blank-line-separated blocks, `event:` and `data:` lines — for
  * the caller, and it is the same framing for every such endpoint. One parser,

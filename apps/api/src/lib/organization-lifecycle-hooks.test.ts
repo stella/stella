@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { Analytics } from "@/api/lib/analytics/types";
+import type { Analytics } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 

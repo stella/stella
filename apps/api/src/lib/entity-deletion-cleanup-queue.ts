@@ -2,14 +2,13 @@ import { Result, UnhandledException } from "better-result";
 import { Worker } from "bullmq";
 
 import type { EntityDeletionCleanupStatus } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
-import { detached } from "@/api/lib/detached";
 import {
   claimNextEntityDeletionEffectChunk,
   completeEntityDeletionEffectChunk,

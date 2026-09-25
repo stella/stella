@@ -1,5 +1,5 @@
 import { detached } from "@/lib/detached";
-import { transformUnknownError } from "@/lib/errors/utils";
+import { transformUnknownError } from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR_MIN = 500;

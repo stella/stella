@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ClientUnknownError } from "@/lib/errors/client";
-
-import { transformUnknownError } from "./utils";
+import { ClientUnknownError, transformUnknownError } from "@/lib/errors/client";
 
 describe("transformUnknownError", () => {
   test("passes through Error instances unchanged", () => {

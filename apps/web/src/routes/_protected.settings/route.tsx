@@ -22,7 +22,7 @@ import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";

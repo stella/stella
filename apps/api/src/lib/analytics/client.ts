@@ -1,9 +1,19 @@
+import { shouldEnablePostHog } from "@stll/analytics-config";
+
 import { envBase } from "@/api/env-base";
 
-import { shouldEnablePostHog } from "./config";
-import { noopAnalytics } from "./noop";
-import { createPostHogAnalytics } from "./posthog";
-import type { Analytics } from "./types";
+import { createPostHogAnalytics } from "./posthog-node";
+import type { Analytics } from "./server-analytics";
+
+const noop = () => undefined;
+const asyncNoop = async () => await Promise.resolve();
+
+// What the server sends when no PostHog project is configured: nothing.
+const noopAnalytics: Analytics = {
+  capture: noop,
+  identifyOrganizationGroup: noop,
+  flush: asyncNoop,
+};
 
 let analytics: Analytics | null = null;
 
@@ -15,19 +25,15 @@ export const getAnalytics = (): Analytics => {
     return analytics;
   }
 
-  const key = envBase.POSTHOG_KEY;
-  const host = envBase.POSTHOG_HOST;
-  analytics =
-    shouldEnablePostHog({
-      isDev: envBase.isDev,
-      key,
-      host,
-      localDebug: envBase.POSTHOG_LOCAL_DEBUG,
-    }) &&
-    key &&
-    host
-      ? createPostHogAnalytics(key, host)
-      : noopAnalytics;
+  const posthogConfig = {
+    isDev: envBase.isDev,
+    key: envBase.POSTHOG_KEY,
+    host: envBase.POSTHOG_HOST,
+    localDebug: envBase.POSTHOG_LOCAL_DEBUG,
+  };
+  analytics = shouldEnablePostHog(posthogConfig)
+    ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
+    : noopAnalytics;
 
   return analytics;
 };

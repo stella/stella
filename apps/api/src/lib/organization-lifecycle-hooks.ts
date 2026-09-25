@@ -1,4 +1,4 @@
-import type { Analytics } from "@/api/lib/analytics/types";
+import type { Analytics } from "@/api/lib/analytics/server-analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 

@@ -51,7 +51,7 @@ import {
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
   type TokenBucket,
-} from "./types";
+} from "./server-analytics";
 
 type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 

@@ -23,9 +23,8 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/scoped",
   "@/api/lib/analytics/capture",
   "@/api/lib/analytics/client",
-  "@/api/lib/analytics/config",
+  "@/api/lib/analytics/server-analytics",
   "@/api/lib/analytics/tanstack-ai",
-  "@/api/lib/analytics/types",
   "@/lib/errors/api",
   "@/lib/errors/api-tag",
   "@/lib/errors/auth",
@@ -33,7 +32,6 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/localization",
   "@/lib/errors/telemetry",
   "@/lib/errors/user-safe",
-  "@/lib/errors/utils",
 ]);
 
 const isManagedSpecifier = (specifier: string): boolean =>

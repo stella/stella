@@ -1,25 +1,31 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  hasRealPostHogProject,
-  shouldEnablePostHog,
-} from "@/api/lib/analytics/config";
+import { hasPostHogProject, shouldEnablePostHog } from "./index";
 
-describe("hasRealPostHogProject", () => {
+describe("hasPostHogProject", () => {
   test("rejects the placeholder key", () => {
     expect(
-      hasRealPostHogProject({
-        key: "phc_",
+      hasPostHogProject({
         host: "https://eu.i.posthog.com",
+        key: "phc_",
+      }),
+    ).toBeFalse();
+  });
+
+  test("rejects a missing host", () => {
+    expect(
+      hasPostHogProject({
+        host: "",
+        key: "phc_real_key",
       }),
     ).toBeFalse();
   });
 
   test("accepts a real key and host", () => {
     expect(
-      hasRealPostHogProject({
-        key: "phc_real-project-key",
+      hasPostHogProject({
         host: "https://eu.i.posthog.com",
+        key: "phc_real_key",
       }),
     ).toBeTrue();
   });
@@ -57,5 +63,16 @@ describe("shouldEnablePostHog", () => {
         localDebug: false,
       }),
     ).toBeTrue();
+  });
+
+  test("stays off in production without a real project", () => {
+    expect(
+      shouldEnablePostHog({
+        key: "phc_",
+        host: "https://eu.i.posthog.com",
+        isDev: false,
+        localDebug: false,
+      }),
+    ).toBeFalse();
   });
 });

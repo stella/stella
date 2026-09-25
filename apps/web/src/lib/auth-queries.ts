@@ -30,7 +30,7 @@ export const sessionOptions = queryOptions({
   retry: BOOT_QUERY_RETRY,
   queryKey: rootKeys.session,
   queryFn: async () => {
-    const { authClient } = await import("@/lib/auth");
+    const { authClient } = await import("@/lib/auth-client");
     const result = await authClient.getSession();
 
     if (result.error) {
@@ -46,7 +46,7 @@ export const roleOptions = queryOptions({
   retry: BOOT_QUERY_RETRY,
   queryKey: rootKeys.role,
   queryFn: async () => {
-    const { authClient } = await import("@/lib/auth");
+    const { authClient } = await import("@/lib/auth-client");
     const result = await authClient.organization.getActiveMemberRole();
 
     if (result.error) {

@@ -37,7 +37,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
@@ -46,7 +46,6 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { detached } from "@/api/lib/detached";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,

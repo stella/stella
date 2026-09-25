@@ -4,8 +4,8 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
-import type { Role } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
+import type { Role } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { organizationKeys } from "@/lib/organization/queries";

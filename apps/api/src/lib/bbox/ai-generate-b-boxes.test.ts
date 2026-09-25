@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";

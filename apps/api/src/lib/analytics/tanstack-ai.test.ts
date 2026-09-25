@@ -12,8 +12,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { SERVER_ANALYTICS_EVENTS } from "./types";
-import type { Analytics } from "./types";
+import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
+import type { Analytics } from "./server-analytics";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";

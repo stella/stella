@@ -1215,7 +1215,7 @@
       "apps/api/src/handlers/views/table/export.ts": 1,
       "apps/api/src/handlers/workspaces/delete.ts": 1,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
-      "apps/api/src/lib/analytics/posthog.ts": 1,
+      "apps/api/src/lib/analytics/posthog-node.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
       "apps/api/src/lib/document-reference.ts": 2,
@@ -1417,36 +1417,18 @@
     "files": {}
   },
   "cross-app-lib-path-copies": {
-    "count": 16,
-    "files": {
-      "apps/api/src/lib/analytics/config.ts": 1,
-      "apps/api/src/lib/analytics/noop.ts": 1,
-      "apps/api/src/lib/analytics/posthog.ts": 1,
-      "apps/api/src/lib/analytics/types.ts": 1,
-      "apps/api/src/lib/auth.ts": 1,
-      "apps/api/src/lib/detached.ts": 1,
-      "apps/api/src/lib/errors/utils.ts": 1,
-      "apps/api/src/lib/sse.ts": 1,
-      "apps/web/src/lib/analytics/config.ts": 1,
-      "apps/web/src/lib/analytics/noop.ts": 1,
-      "apps/web/src/lib/analytics/posthog.ts": 1,
-      "apps/web/src/lib/analytics/types.ts": 1,
-      "apps/web/src/lib/auth.ts": 1,
-      "apps/web/src/lib/detached.ts": 1,
-      "apps/web/src/lib/errors/utils.ts": 1,
-      "apps/web/src/lib/sse.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 30,
+    "count": 29,
     "files": {
-      "apps/web/src/lib/analytics/noop.ts": 1,
       "apps/web/src/lib/analytics/posthog.ts": 1,
       "apps/web/src/lib/analytics/provider.tsx": 1,
       "apps/web/src/lib/analytics/types.ts": 1,
       "apps/web/src/lib/citations.ts": 2,
       "apps/web/src/lib/detached.ts": 1,
-      "apps/web/src/lib/errors/utils.ts": 1,
+      "apps/web/src/lib/errors/telemetry.ts": 1,
       "apps/web/src/lib/knowledge/playbook-types.ts": 1,
       "apps/web/src/lib/safe-id.ts": 1,
       "apps/web/src/lib/types.ts": 1,
@@ -1515,7 +1497,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 288,
+    "count": 287,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1603,7 +1585,6 @@
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 1,
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
       "apps/api/src/lib/destructive-effect-chunks.ts": 1,
-      "apps/api/src/lib/detached.ts": 1,
       "apps/api/src/lib/detected-country.ts": 1,
       "apps/api/src/lib/dev-origins.ts": 1,
       "apps/api/src/lib/dev-otp-store.ts": 1,
@@ -1820,9 +1801,9 @@
       "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/arrays.ts": 1,
       "apps/web/src/lib/auth-capabilities.ts": 1,
+      "apps/web/src/lib/auth-client.ts": 1,
       "apps/web/src/lib/auth-queries.ts": 1,
       "apps/web/src/lib/auth-session.ts": 1,
-      "apps/web/src/lib/auth.ts": 1,
       "apps/web/src/lib/authenticated-user-context.tsx": 1,
       "apps/web/src/lib/beta-features.logic.ts": 1,
       "apps/web/src/lib/beta-features.ts": 1,
@@ -1927,7 +1908,6 @@
       "apps/web/src/lib/shortcut-overrides.ts": 1,
       "apps/web/src/lib/spdx-license.ts": 1,
       "apps/web/src/lib/sse-events.ts": 1,
-      "apps/web/src/lib/sse.ts": 1,
       "apps/web/src/lib/statute-route.ts": 1,
       "apps/web/src/lib/stored-json.ts": 1,
       "apps/web/src/lib/task-option-telemetry.ts": 1,
@@ -1947,6 +1927,7 @@
       "apps/web/src/lib/web-search": 1,
       "apps/web/src/lib/workspace-realtime.ts": 1,
       "apps/web/src/lib/workspace-sse-connection.logic.ts": 1,
+      "apps/web/src/lib/workspace-sse.ts": 1,
       "apps/web/src/lib/workspaces": 1
     }
   }

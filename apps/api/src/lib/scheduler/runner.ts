@@ -6,9 +6,8 @@ import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { detached } from "@/api/lib/detached";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
