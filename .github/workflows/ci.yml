@@ -2870,12 +2870,16 @@ jobs:
             fi
           elif [[ -f "$build_log" ]]; then
             # BuildKit prefixes each line with its step number; keep the
-            # output of the step that failed.
+            # output of the step that failed. Bun prints an uncaught error's
+            # headline under a caret line; without one, fall back to error
+            # words, then to the step's last line.
             step=$(grep -oE '^#[0-9]+ ERROR' "$build_log" | head -n 1 | grep -oE '[0-9]+' || true)
             if [[ -n "$step" ]]; then
-              lines=$(grep -E "^#$step [0-9.]+ " "$build_log" \
-                | sed -E 's/^#[0-9]+ [0-9.]+ //' \
-                | grep -E 'FAIL|[Ee]rror|Panic' | tail -n 5 || true)
+              output=$(grep -E "^#$step [0-9.]+ " "$build_log" | sed -E 's/^#[0-9]+ [0-9.]+ //' || true)
+              lines=$(awk 'prev ~ /^[[:space:]]*\^[[:space:]]*$/ || /FAIL|[Ee]rror|Panic/ { print } { prev = $0 }' <<< "$output" | tail -n 5)
+              if [[ -z "$lines" ]]; then
+                lines=$(grep -vE '^[[:space:]]*$' <<< "$output" | tail -n 1 || true)
+              fi
               lines+=${lines:+$'\n'}$(grep -E "^#$step ERROR" "$build_log" | head -n 1 | sed -E 's/^#[0-9]+ //')
             else
               lines=$(grep -E '^ERROR' "$build_log" | tail -n 1 || true)

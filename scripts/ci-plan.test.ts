@@ -600,6 +600,36 @@ test("a failed API image run annotates the failing lines, escaped", () => {
     "::error title=API image build (linux/arm64)::Panic: no YARA rule files were compiled",
     "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
   ]);
+  // Bun's uncaught-error report: the headline sits under a caret line.
+  expect(
+    annotate({
+      build: [
+        "#76 [runtime-asset-smoke 2/2] RUN /tmp/image-smoke",
+        '#76 0.106 1 | (function (opts) {"use strict";',
+        "#76 0.106               ^",
+        "#76 0.106 ENOENT: no such file or directory, open '/app/yara'",
+        '#76 0.106     path: "/app/yara",',
+        "#76 0.106       at /$bunfs/root/image-smoke:8478:51",
+        "#76 0.106 Bun v1.4.2 (Linux arm64)",
+        "#76 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image build (linux/arm64)::ENOENT: no such file or directory, open '/app/yara'",
+    "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
+  ]);
+  expect(
+    annotate({
+      build: [
+        "#20 [builder 9/40] RUN false",
+        "#20 0.100 last words",
+        "#20 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image build (linux/arm64)::last words",
+    "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
+  ]);
   expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
