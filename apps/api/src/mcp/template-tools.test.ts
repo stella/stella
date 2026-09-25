@@ -294,6 +294,24 @@ const makeValidDocxBase64 = async (
 ): Promise<string> =>
   Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
 
+/** A well-formed DOCX that links an external Word template, which the upload
+ *  scan rejects. */
+const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
+  const zip = await JSZip.loadAsync(await makeValidDocxBytes());
+  zip.file(
+    "word/_rels/document.xml.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" ' +
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" ' +
+      'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
+      "</Relationships>",
+  );
+  return Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString(
+    "base64",
+  );
+};
+
 /**
  * The describe payload `describeStoredTemplate` produces, which both authoring
  * tools hand back verbatim. The warning and field computation itself belongs to
@@ -2721,6 +2739,41 @@ describe("MCP template tools", () => {
       { path: "docx_base64", message: expect.any(String) },
     ]);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("create_template refuses a DOCX the upload scan rejects before storing it", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeAttachedTemplateDocxBase64(),
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      {
+        path: "docx_base64",
+        message: expect.stringContaining("ooxml_attached_template"),
+      },
+    ]);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("create_template refuses a rejected DOCX as a new version too", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        docx_base64: await makeAttachedTemplateDocxBase64(),
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(validationEnvelope(result)["code"]).toBe("validation_error");
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
   test("create_template blames the encoding, not the file, when the archive will not open", async () => {

@@ -21,6 +21,7 @@ import {
   type CreatedTemplate,
   createStoredTemplate,
 } from "@/api/lib/templates/create-template";
+import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateBodySchema = t.Object({
@@ -57,11 +58,13 @@ const createTemplateHandler = async function* ({
     );
   }
 
+  const buffer = yield* Result.await(scanTemplateUpload(file));
+
   return yield* createStoredTemplate({
     safeDb,
     organizationId,
     userId,
-    buffer: Buffer.from(await file.arrayBuffer()),
+    buffer,
     name,
     fileName: sanitizeFilename(file.name),
     categoryId,
