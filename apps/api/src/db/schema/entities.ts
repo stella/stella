@@ -9,6 +9,7 @@ import {
   FOLIO_COLLAB_ROOM_UNSEEDED_STATES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
+import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
 import {
   deletionCleanupConstraints,
@@ -1053,6 +1054,7 @@ export type PendingUploadFinalizedResult =
       skillId: SafeId<"agentSkill">;
       name: string;
       version: string;
+      skippedFiles: SkippedSkillFile[];
     };
 
 export const pendingUploads = p.pgTable(

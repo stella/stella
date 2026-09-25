@@ -136,6 +136,62 @@ Follow the checklist.`,
     ).toBe(true);
   });
 
+  test("imports a zip around files it cannot keep and lists each one with the reason", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "skill/SKILL.md",
+      `---
+name: mixed-pack
+description: A pack with files the importer does not keep.
+---
+
+Use the references.`,
+    );
+    zip.file("skill/references/guide.md", "# Guide");
+    // Latin-1 "Müller": a supported path whose bytes are not UTF-8 text.
+    zip.file(
+      "skill/references/latin1.txt",
+      new Uint8Array([0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72]),
+    );
+    zip.file("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+    zip.file("skill/notes/todo.md", "Not a resource folder");
+    zip.file("README.md", "Outside the skill folder");
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUpload(
+      new File([buffer], "mixed-pack.zip", { type: "application/zip" }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "references/guide.md",
+    ]);
+    expect(
+      result.value.skippedFiles.toSorted((a, b) =>
+        a.path < b.path ? -1 : 1,
+      ),
+    ).toEqual([
+      { path: "README.md", reason: "outside-skill-folder" },
+      { path: "skill/assets/logo.png", reason: "unsupported-extension" },
+      { path: "skill/notes/todo.md", reason: "unsupported-folder" },
+      { path: "skill/references/latin1.txt", reason: "not-utf8-text" },
+    ]);
+  });
+
+  test("a SKILL.md that is not UTF-8 text still fails the import", async () => {
+    const zip = new JSZip();
+    zip.file("SKILL.md", new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]));
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUpload(
+      new File([buffer], "broken.zip", { type: "application/zip" }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
   test("parses zipped skill folders with read-only resources", async () => {
     const zip = new JSZip();
     zip.file(

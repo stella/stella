@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 
@@ -84,6 +85,30 @@ test("a pack the file scan rejects is refused and nothing is installed", async (
     code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
   });
   expect(await installedCount(name)).toBe(0);
+});
+
+test("a pack with a binary asset is installed and the response lists the file left out", async () => {
+  const name = `binary-asset-${Bun.randomUUIDv7().slice(-8)}`;
+  const zip = new JSZip();
+  zip.file(
+    "SKILL.md",
+    `---\nname: ${name}\ndescription: Upload scan test.\n---\n\nUse the logo.\n`,
+  );
+  zip.file("references/brand.md", "# Brand");
+  zip.file("assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+  const bytes = await zip.generateAsync({ type: "arraybuffer" });
+
+  const result = await upload(
+    new File([bytes], `${name}.zip`, { type: "application/zip" }),
+  );
+
+  if ("code" in result) {
+    throw new TypeError("expected the pack to be installed");
+  }
+  expect(result.skippedFiles).toEqual([
+    { path: "assets/logo.png", reason: "unsupported-extension" },
+  ]);
+  expect(await installedCount(name)).toBe(1);
 });
 
 test("a clean pack is installed", async () => {

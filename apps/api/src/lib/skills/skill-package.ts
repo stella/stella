@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
 import {
@@ -81,6 +81,31 @@ export type ParsedSkillPackage = {
   resources: ParsedSkillResource[];
   sourceUrl: string | null;
   version: string | null;
+};
+
+/** Why an uploaded package file was left out of the installed skill. */
+export const SKIPPED_SKILL_FILE_REASON = {
+  OUTSIDE_SKILL_FOLDER: "outside-skill-folder",
+  UNSUPPORTED_FOLDER: "unsupported-folder",
+  UNSUPPORTED_EXTENSION: "unsupported-extension",
+  NOT_UTF8_TEXT: "not-utf8-text",
+} as const;
+
+type SkippedSkillFileReason =
+  (typeof SKIPPED_SKILL_FILE_REASON)[keyof typeof SKIPPED_SKILL_FILE_REASON];
+
+export type SkippedSkillFile = {
+  /** The file's path inside the uploaded package. */
+  path: string;
+  reason: SkippedSkillFileReason;
+};
+
+/**
+ * An uploaded package as parsed, plus the files it contained that the skill
+ * does not keep, so the caller can say what was left out.
+ */
+export type ImportedSkillPackage = ParsedSkillPackage & {
+  skippedFiles: SkippedSkillFile[];
 };
 
 export type SkillSourceIntegrity =
@@ -199,7 +224,7 @@ export const getOrCreateGithubTreeRequest = ({
  */
 export const parseUploadedSkillPackage = async (
   file: ScannedFile,
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+): Promise<Result<ImportedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const buffer = file.bytes;
@@ -212,7 +237,10 @@ export const parseUploadedSkillPackage = async (
 
       const parsed = isZipFile({ buffer, name: file.fileName })
         ? await parseZipSkillPackage(buffer)
-        : parseMarkdownSkillPackage(decodeUtf8(buffer));
+        : {
+            ...parseMarkdownSkillPackage(decodeUtf8(buffer)),
+            skippedFiles: [],
+          };
       return { ...parsed, sourceUrl: null };
     },
     catch: toHandlerError,
@@ -339,9 +367,57 @@ const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
     },
   ]);
 
+type ZipPackageEntry = {
+  file: JSZip.JSZipObject;
+  path: string;
+};
+
+type ZipPackagePathVerdict =
+  | { type: "entrypoint" }
+  | { type: "resource" }
+  | { type: "skipped"; reason: SkippedSkillFileReason };
+
+/**
+ * Decides from the path alone whether an archive entry becomes part of the
+ * skill, so entries the skill never keeps are not inflated or decoded.
+ */
+const classifyZipPackagePath = ({
+  path,
+  rootPrefix,
+  skillFilePath,
+}: {
+  path: string;
+  rootPrefix: string;
+  skillFilePath: string;
+}): ZipPackagePathVerdict => {
+  if (path === skillFilePath) {
+    return { type: "entrypoint" };
+  }
+  if (!path.startsWith(rootPrefix)) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.OUTSIDE_SKILL_FOLDER,
+    };
+  }
+  const relativePath = path.slice(rootPrefix.length);
+  if (getSkillResourceKind(relativePath) === null) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_FOLDER,
+    };
+  }
+  if (!isAllowedResourcePath(relativePath)) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_EXTENSION,
+    };
+  }
+  return { type: "resource" };
+};
+
 const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
-): Promise<ParsedSkillPackage> => {
+): Promise<ImportedSkillPackage> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files);
@@ -352,15 +428,30 @@ const parseZipSkillPackage = async (
     });
   }
 
-  const files: SkillFile[] = [];
-  let totalUncompressedBytes = 0;
-
+  const packageEntries: ZipPackageEntry[] = [];
   for (const file of entries) {
     if (file.dir || file.name.startsWith("__MACOSX/")) {
       continue;
     }
     const normalizedPath = normalizePackageFilePath(file.name);
     if (!normalizedPath) {
+      continue;
+    }
+    packageEntries.push({ file, path: normalizedPath });
+  }
+
+  const skillFilePath = findSkillFilePath(
+    packageEntries.map((entry) => entry.path),
+  );
+  const rootPrefix = skillFolderPrefix(skillFilePath);
+  const files: SkillFile[] = [];
+  const skippedFiles: SkippedSkillFile[] = [];
+  let totalUncompressedBytes = 0;
+
+  for (const { file, path } of packageEntries) {
+    const verdict = classifyZipPackagePath({ path, rootPrefix, skillFilePath });
+    if (verdict.type === "skipped") {
+      skippedFiles.push({ path, reason: verdict.reason });
       continue;
     }
 
@@ -373,14 +464,22 @@ const parseZipSkillPackage = async (
     totalUncompressedBytes += bytes.byteLength;
     assertZipUncompressedLimit(totalUncompressedBytes);
 
-    files.push({
-      content: decodeUtf8(bytes),
-      path: normalizedPath,
-      sizeBytes: bytes.byteLength,
-    });
+    // SKILL.md must be text; a resource that is not (a binary asset) is left
+    // out and reported rather than failing the whole package.
+    const content =
+      verdict.type === "entrypoint" ? decodeUtf8(bytes) : tryDecodeUtf8(bytes);
+    if (content === null) {
+      skippedFiles.push({
+        path,
+        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
+      });
+      continue;
+    }
+
+    files.push({ content, path, sizeBytes: bytes.byteLength });
   }
 
-  return parseSkillFiles(files);
+  return { ...parseSkillFiles(files), skippedFiles };
 };
 
 const assertZipUncompressedLimit = (totalBytes: number) => {
@@ -396,10 +495,7 @@ const assertZipUncompressedLimit = (totalBytes: number) => {
 
 const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   const skillFile = findSkillFile(files);
-  const rootPrefix =
-    skillFile.path === SKILL_FILE_NAME
-      ? ""
-      : skillFile.path.slice(0, -SKILL_FILE_NAME.length);
+  const rootPrefix = skillFolderPrefix(skillFile.path);
   const relativeSkillSource = skillFile.content;
   const parsed = parseSkillFile(relativeSkillSource);
   const name = parsed.metadata.name;
@@ -441,20 +537,32 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   };
 };
 
-const findSkillFile = (files: readonly SkillFile[]): SkillFile => {
-  const candidates = files
+/** The shallowest SKILL.md in the package is its entry point. */
+const findSkillFilePath = (paths: readonly string[]): string => {
+  const skillFilePath = paths
     .filter(
-      (file) =>
-        file.path === SKILL_FILE_NAME ||
-        file.path.endsWith(`/${SKILL_FILE_NAME}`),
+      (path) =>
+        path === SKILL_FILE_NAME || path.endsWith(`/${SKILL_FILE_NAME}`),
     )
-    .toSorted((a, b) => a.path.length - b.path.length);
-  const skillFile = candidates.at(0);
-  if (!skillFile) {
+    .toSorted((a, b) => a.length - b.length)
+    .at(0);
+  if (skillFilePath === undefined) {
     throw new HandlerError({
       status: 400,
       message: "Skill pack must include SKILL.md",
     });
+  }
+  return skillFilePath;
+};
+
+const skillFolderPrefix = (skillFilePath: string): string =>
+  skillFilePath.slice(0, -SKILL_FILE_NAME.length);
+
+const findSkillFile = (files: readonly SkillFile[]): SkillFile => {
+  const skillFilePath = findSkillFilePath(files.map((file) => file.path));
+  const skillFile = files.find((file) => file.path === skillFilePath);
+  if (!skillFile) {
+    return panic("The chosen SKILL.md path is one of the package files");
   }
   return skillFile;
 };
@@ -1979,6 +2087,9 @@ const isZipFile = ({
     bytes.at(3) === 0x04
   );
 };
+
+const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null =>
+  Result.try(() => UTF8_DECODER.decode(buffer)).unwrapOr(null);
 
 const decodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string => {
   try {

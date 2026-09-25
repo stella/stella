@@ -5204,6 +5204,7 @@ export type WebRoutes = {
                     skillId: T7fc3acf5ac;
                     name: string;
                     version: string;
+                    skippedFiles: Array<T00636ec5ef>;
                   };
                 };
                 400: Tc642053948;
@@ -24055,7 +24056,10 @@ export type WebRoutes = {
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: T7072a5aaf7;
+            200: {
+              skippedFiles: Array<T00636ec5ef>;
+              id: T7fc3acf5ac;
+            };
             400: Tc642053948;
             401: Tc642053948;
             402: Tc642053948;
@@ -31522,6 +31526,11 @@ type T001a42da95 = {
 type T004d50b559 = {
   readonly value: T13f2f9bd72;
   readonly issues?: undefined;
+};
+
+type T00636ec5ef = {
+  path: string;
+  reason: ("outside-skill-folder" | "unsupported-folder" | "unsupported-extension" | "not-utf8-text");
 };
 
 type T00abe13820 = string & valibot_Brand<"SafeId"> & {

@@ -111,6 +111,7 @@ export const finalizeAgentSkill = async function* ({
         skillId: skill.id,
         name: parsed.value.name,
         version: parsed.value.version ?? "",
+        skippedFiles: parsed.value.skippedFiles,
       };
 
       // audit: skip — final FSM transition on pending_uploads;
@@ -185,6 +186,7 @@ export const finalizeAgentSkill = async function* ({
     skillId: installResult.value.id,
     name: parsed.value.name,
     version: parsed.value.version ?? "",
+    skippedFiles: parsed.value.skippedFiles,
   };
 
   // The audit row is emitted inside `installSkill` against the
