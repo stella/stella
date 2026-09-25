@@ -950,6 +950,7 @@
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI tērzēšanā",
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
+    "commandsSection": "Komandas",
     "composerMenu": {
       "context": "Konteksts",
       "editMode": "Rediģēšanas režīms",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Iebūvētās prasmes",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
       "disableSkill": "Atspējot prasmi",

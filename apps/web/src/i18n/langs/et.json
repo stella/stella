@@ -950,6 +950,7 @@
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
+    "commandsSection": "Käsud",
     "composerMenu": {
       "context": "Kontekst",
       "editMode": "Muutmisrežiim",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Sisseehitatud oskused",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
       "disableSkill": "Keela oskus",

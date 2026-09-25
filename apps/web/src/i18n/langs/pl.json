@@ -950,6 +950,7 @@
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
+    "commandsSection": "Polecenia",
     "composerMenu": {
       "context": "Kontekst",
       "editMode": "Tryb edycji",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Wbudowane umiejętności",
       "deleteFile": "Usuń plik",
       "deleteFileConfirm": "Usunąć plik? Tej operacji nie można cofnąć.",
       "disableSkill": "Wyłącz umiejętność",

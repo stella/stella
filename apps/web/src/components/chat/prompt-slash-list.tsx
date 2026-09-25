@@ -17,12 +17,13 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 
 // Prompts and SKILL.md skills are one user-facing concept ("skills"), so
-// they share section headers grouped by scope rather than split by feed.
+// they share section headers grouped by scope rather than split by feed;
+// chat commands (/new, /rename-chat) follow under their own header.
 const SECTION_LABEL_KEYS = {
   private: "chat.skills.scope.private",
   team: "chat.skills.scope.team",
-  "built-in": "knowledge.agentSkills.builtInSection",
-} satisfies Record<SlashSectionKey, TranslationKey>;
+  commands: "chat.commandsSection",
+} as const satisfies Record<SlashSectionKey, TranslationKey>;
 
 const getItemKey = (item: SlashItem): string => {
   if (item.kind === "prompt") {

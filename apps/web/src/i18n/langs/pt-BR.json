@@ -950,6 +950,7 @@
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",
     "choosePromptImprovementStrategy": "Opções de aprimoramento do prompt",
+    "commandsSection": "Comandos",
     "composerMenu": {
       "context": "Contexto",
       "editMode": "Modo de edição",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Habilidades integradas",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "disableSkill": "Desativar habilidade",

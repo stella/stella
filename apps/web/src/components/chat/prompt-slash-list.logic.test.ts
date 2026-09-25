@@ -32,7 +32,7 @@ describe("prompt slash list ordering", () => {
     expect(groups.map((group) => group.section)).toEqual([
       "private",
       "team",
-      "built-in",
+      "commands",
     ]);
     expect(getSlashItemsInRenderOrder(groups).map(getItemId)).toEqual([
       "private-draft",

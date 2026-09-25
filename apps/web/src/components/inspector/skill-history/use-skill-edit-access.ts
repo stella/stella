@@ -10,18 +10,16 @@ import { skillEditAccess } from "./skill-history.logic";
 /**
  * The signed-in user's edit access to a skill. Reads as `"none"` until the
  * skill and the member role have loaded, so no affordance renders that the
- * server would then refuse. A null id (a resource with no stored skill behind
- * it) has no access at all.
+ * server would then refuse.
  */
-export const useSkillEditAccess = (skillId: string | null): SkillEditAccess => {
+export const useSkillEditAccess = (skillId: string): SkillEditAccess => {
   const user = useAuthenticatedUser();
-  const detail = useQuery({
-    ...skillDetailOptions(user.activeOrganizationId, skillId ?? ""),
-    enabled: skillId !== null,
-  });
+  const detail = useQuery(
+    skillDetailOptions(user.activeOrganizationId, skillId),
+  );
   const role = useQuery(roleOptions);
 
-  if (skillId === null || detail.data === undefined) {
+  if (detail.data === undefined) {
     return "none";
   }
   return skillEditAccess({

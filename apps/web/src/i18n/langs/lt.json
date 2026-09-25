@@ -950,6 +950,7 @@
     "caseLawGreeting": "Klauskite apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į DI pokalbį",
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
+    "commandsSection": "Komandos",
     "composerMenu": {
       "context": "Kontekstas",
       "editMode": "Redagavimo režimas",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "disableSkill": "Išjungti įgūdį",

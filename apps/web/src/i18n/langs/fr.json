@@ -950,6 +950,7 @@
     "caseLawGreeting": "Posez vos questions sur cette décision — son texte intégral est disponible ici.",
     "chatAbout": "Insérer dans la conversation IA",
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
+    "commandsSection": "Commandes",
     "composerMenu": {
       "context": "Contexte",
       "editMode": "Mode d'édition",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Compétences intégrées",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
       "disableSkill": "Désactiver la compétence",

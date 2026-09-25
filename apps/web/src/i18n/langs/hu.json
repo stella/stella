@@ -950,6 +950,7 @@
     "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
+    "commandsSection": "Parancsok",
     "composerMenu": {
       "context": "Kontextus",
       "editMode": "Szerkesztési mód",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Beépített készségek",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
       "disableSkill": "Készség kikapcsolása",

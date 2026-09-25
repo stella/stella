@@ -950,6 +950,7 @@
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšenia zadania",
+    "commandsSection": "Príkazy",
     "composerMenu": {
       "context": "Kontext",
       "editMode": "Režim úprav",
@@ -3092,7 +3093,6 @@
   },
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Vstavané zručnosti",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
       "disableSkill": "Vypnúť zručnosť",

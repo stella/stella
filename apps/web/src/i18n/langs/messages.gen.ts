@@ -953,6 +953,7 @@ type Messages = {
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
     "choosePromptImprovementStrategy": "Prompt improvement options";
+    "commandsSection": "Commands";
     "composerMenu": {
       "context": "Context";
       "editMode": "Edit mode";
@@ -3095,7 +3096,6 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
-      "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
       "disableSkill": "Disable skill";
