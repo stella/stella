@@ -319,7 +319,7 @@ export const foldStoredSupplements = async ({
 
   let cursor = after;
   while (report.visited < limit) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- a keyset page at a time; each row below writes its own judgment
+    // db-await-in-loop: a keyset page at a time; each row below writes its own judgment
     const page = await selectFoldPage({
       scopedDb,
       sourceId,
@@ -336,6 +336,7 @@ export const foldStoredSupplements = async ({
         continue;
       }
       const folded = await Result.tryPromise({
+        // db-await-in-loop: each supplement row folds into its own judgment, one locked write per row
         try: async () => await foldRow({ ...row, sourceRawS3Key }),
         catch: (cause) => cause,
       });

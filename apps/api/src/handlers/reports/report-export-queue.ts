@@ -134,6 +134,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   const runNotificationReconcile = async (): Promise<void> => {
     const { actors, suppressed } =
       await listPendingReportExportNotifications(db);
+    // db-await-in-loop: one claim-and-notify transaction per pending actor; the pending read caps actors at REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT
     const results = await Promise.all(
       actors.map(
         async (actorKey) =>

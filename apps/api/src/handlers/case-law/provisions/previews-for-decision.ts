@@ -187,6 +187,7 @@ export const attachDecisionProvisionPreviews = async <
         async (version) =>
           [
             version,
+            // db-await-in-loop: one storage read per distinct consolidation version, deduplicated above; the page bounds the set
             await readVersionBlocks({
               row: version,
               legislationDb,

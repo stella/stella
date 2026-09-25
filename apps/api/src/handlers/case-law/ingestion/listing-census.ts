@@ -583,7 +583,7 @@ export const runListingCensus = async (
             counted: checkpoint.counted + counted.value,
           };
     const previous = observed;
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- durable progress: each listed slice is checkpointed before the next is requested, so an interrupted census resumes instead of relisting
+    // db-await-in-loop: durable progress: each listed slice is checkpointed before the next is requested, so an interrupted census resumes instead of relisting
     const recorded = await scopedDb(
       async (tx) =>
         await recordSlice({

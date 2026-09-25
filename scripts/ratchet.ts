@@ -1011,6 +1011,31 @@ const countTsSuppressions = (content: string): number => {
   return total;
 };
 
+// Suppressions of the type-aware N+1 check (scripts/db-await-in-loop.ts):
+// `// db-await-in-loop: <reason>` and `// db-await-in-loop-disable: <reason>`.
+// The closing `-enable` is not a second suppression. Literal contents are
+// blanked first, so a directive quoted inside a string does not count, and
+// the directive must open its comment, so prose quoting one does not either.
+const DB_AWAIT_IN_LOOP_DIRECTIVE = /\/\/\s*db-await-in-loop(?:-disable)?:/u;
+
+const countDbAwaitInLoopSuppressions = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripStringLiterals(raw, literalState);
+    literalState = state;
+    const directive = DB_AWAIT_IN_LOOP_DIRECTIVE.exec(code);
+    if (
+      directive !== null &&
+      !COMMENT_LINE.test(code.slice(0, directive.index))
+    ) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
 // Explicitly detached calls bypass no-floating-promises when `void` is
 // accepted, while async JSX handlers bypass no-misused-promises because JSX
 // attributes are intentionally disabled there. Both shapes require review:
@@ -2647,6 +2672,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   ...PER_RULE_SUPPRESSION_METRICS,
   {
     scope: "file",
+    id: "no-db-await-in-loop-suppressions",
+    description:
+      "`// db-await-in-loop:` and `// db-await-in-loop-disable:` directives, repo-wide (data-volume: per-row database round-trips inside a loop, N+1, found by scripts/db-await-in-loop.ts)",
+    include: ALL_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countDbAwaitInLoopSuppressions,
+  },
+  {
+    scope: "file",
     id: "lint-suppression-directives",
     description:
       "eslint-/oxlint-disable directives naming only rules with no dedicated budget, repo-wide (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver). Same scope as those budgets, so every directive in the tree is charged to exactly one of them",
@@ -3660,7 +3694,6 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
   "require-query-limit/require-query-limit": 6,
-  "no-db-await-in-loop/no-db-await-in-loop": 0,
   "no-network-await-in-loop/no-network-await-in-loop": 0,
   "require-bounded-request-schema/require-bounded-request-schema": 0,
   "no-unbounded-response-body/no-unbounded-response-body": 0,
@@ -3686,6 +3719,25 @@ const SELF_TEST_TS_SUPPRESSIONS = `${TS_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`
 // Expected: the three directive lines; the string copy and the mid-sentence
 // mention are excluded.
 const EXPECTED_TS_SUPPRESSIONS = 3;
+
+const DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES = [
+  "// db-await-in-loop: keyset page per iteration",
+  "await rootDb.select().from(items); // db-await-in-loop: trailing form",
+  "// db-await-in-loop-disable: ordered lock acquisition",
+  "// db-await-in-loop-enable",
+  "// db-await-in-loop without a colon is malformed, not a suppression",
+  "// prose quoting `// db-await-in-loop: <reason>` is not a suppression",
+  "   * // db-await-in-loop: inside a block comment's prose",
+  'const doc = "// db-await-in-loop: quoted in a string";',
+  "const multiline = `",
+  "// db-await-in-loop: inside a template literal",
+  "`;",
+];
+const SELF_TEST_DB_AWAIT_IN_LOOP_SUPPRESSIONS = `${DB_AWAIT_IN_LOOP_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// The next-line, trailing, and block-opening forms; not the closing
+// `-enable`, the malformed directive, the two prose mentions, or either
+// quoted copy.
+const EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS = 3;
 
 const DETACHED_PROMISE_FIXTURE_LINES = [
   "void saveDraft();",
@@ -4696,6 +4748,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/db-await-in-loop-suppressions.ts",
+      SELF_TEST_DB_AWAIT_IN_LOOP_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
       "apps/web/src/detached-promises.tsx",
       SELF_TEST_DETACHED_PROMISES,
     );
@@ -5163,6 +5220,16 @@ const runSelfTest = (): number => {
       if (!budgetIds.has(suppressionMetricId(rule))) {
         failures.push(`tracked rule ${rule} has no ratchet budget`);
       }
+    }
+
+    const dbAwaitInLoopMetric = requireSnapshot(
+      snapshot,
+      "no-db-await-in-loop-suppressions",
+    );
+    if (dbAwaitInLoopMetric.count !== EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS) {
+      failures.push(
+        `no-db-await-in-loop-suppressions counted ${dbAwaitInLoopMetric.count}, expected ${EXPECTED_DB_AWAIT_IN_LOOP_SUPPRESSIONS}`,
+      );
     }
 
     const tsSuppressionMetric = requireSnapshot(

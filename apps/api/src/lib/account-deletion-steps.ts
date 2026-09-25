@@ -752,7 +752,7 @@ const recordAccountDeletionAuditEvents = async (
       workspaceId: null,
       userId,
     });
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each organization's events already insert in one statement per org-bound recorder
+    // db-await-in-loop: each organization's events already insert in one statement per org-bound recorder
     await recordAuditEvent(tx, events);
   }
 };

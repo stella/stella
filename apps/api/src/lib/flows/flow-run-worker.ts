@@ -185,7 +185,7 @@ export const reconcileOrphanedFlowRuns = async (
     if (signal?.aborted === true) {
       break;
     }
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const batch = await database
       .select({
         id: flowRuns.id,

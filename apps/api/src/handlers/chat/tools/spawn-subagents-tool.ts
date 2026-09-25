@@ -493,12 +493,13 @@ export const createSpawnSubagentsTool = (
       if (props.thirdPartyBoundary.type === "anonymized") {
         const results: Awaited<ReturnType<typeof runOneSubagent>>[] = [];
         for (const [index, sub] of subagents.entries()) {
+          // db-await-in-loop: anonymized subagents share the boundary's mutable redaction state, so they run one at a time; MAX_SUBAGENTS_PER_CALL bounds them
           results.push(await runOneSubagent(sub, index));
         }
         return { results };
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
+      // db-await-in-loop: bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
       const results = await Promise.all(subagents.map(runOneSubagent));
 
       return { results };

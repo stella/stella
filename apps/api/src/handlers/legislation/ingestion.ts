@@ -769,7 +769,7 @@ export const runLegislationIngestion = async ({
           reason: refusal.reason,
         });
       }
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-document store-and-upsert pipeline; the page cursor is held on write failure
+      // db-await-in-loop: per-document store-and-upsert pipeline; the page cursor is held on write failure
       const result = await processLegislationDocument(
         checked.document,
         scopedDb,

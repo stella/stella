@@ -416,7 +416,7 @@ export const OWNERSHIP = [
     summary:
       "`insertInChunks` owns the batch size that keeps a multi-row insert under " +
       "PostgreSQL's 65,535 bind-parameter cap, and owns the one chunking loop " +
-      "the codebase suppresses `no-db-await-in-loop` for. A caller that writes " +
+      "the codebase exempts from `scripts/db-await-in-loop.ts`. A caller that writes " +
       "its own loop pays a round trip per row or re-derives the cap per table; " +
       "callers pass the writer, so `values()` stays where the table is known and " +
       "drizzle's row inference is untouched. Scoped to writes whose result is " +

@@ -449,6 +449,7 @@ export const runCzUsJudgesBackfill = async ({
         report.stoppedBecause = BACKFILL_STOP_REASON.BUDGET_SPENT;
         return Result.ok(report);
       }
+      // db-await-in-loop: keyset page per iteration; the page is the batch
       const page = await readPage({ tier, after, limit: pageSize });
       if (page.length === 0) {
         break;
@@ -459,6 +460,7 @@ export const runCzUsJudgesBackfill = async ({
           return Result.ok(report);
         }
         const applied = await Result.tryPromise(
+          // db-await-in-loop: each row is written after its own budgeted record-card request, through the decision pipeline under the source lease
           async () => await applyRow(row),
         );
         if (Result.isError(applied)) {

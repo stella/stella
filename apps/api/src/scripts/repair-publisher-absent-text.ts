@@ -246,6 +246,7 @@ for (const source of sources) {
   let examinedHere = 0;
 
   while (repaired + superseded < limit) {
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const page = await readPage(source, cursor);
 
     // The cursor advances by rows examined, not by rows matched. A page whose
@@ -269,6 +270,7 @@ for (const source of sources) {
         repaired += 1;
         continue;
       }
+      // db-await-in-loop: one locked transaction per row; the operator's limit counts rows changed
       if (await repairRow(source, entityId)) {
         repaired += 1;
       } else {

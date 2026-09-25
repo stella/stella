@@ -179,9 +179,9 @@ export const getImportLocalName = (specifier: unknown): string | null => {
 
 // --- Loop and async-boundary shape, shared by the await-in-loop rules -------
 //
-// `no-db-await-in-loop` and `no-network-await-in-loop` must agree on what
-// counts as per-iteration work, so the shape lives here once instead of in two
-// hand-kept copies.
+// `no-network-await-in-loop` and the type-aware `scripts/db-await-in-loop.ts`
+// must agree on what counts as per-iteration work; the script mirrors these
+// positions on the TypeScript AST.
 
 // Positions of a loop node that re-run on every iteration. A `for`
 // initializer and a `for-of` / `for-in` right-hand side are evaluated once, so

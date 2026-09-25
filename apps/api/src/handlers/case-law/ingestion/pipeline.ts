@@ -318,7 +318,7 @@ export const runIngestionPipeline = async ({
     for (const supplement of supplements) {
       const placed = await Result.tryPromise({
         try: async () =>
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each supplement locks its docket and may rewrite its judgment, ordered per observation
+          // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
           await processSupplement({
             supplement,
             sourceId: source.id,
@@ -435,7 +435,7 @@ export const runIngestionPipeline = async ({
             break;
           }
           try {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
+            // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
             const outcome = await processDecision({
               input: result,
               sourceId: source.id,
@@ -580,6 +580,7 @@ export const runIngestionPipeline = async ({
         // the flush entirely once the page had halted, dropping exactly the
         // failures a halted page most needs recorded; an existing halt reason
         // still wins over the flush's own.
+        // db-await-in-loop: one batched failure insert per page, before the cursor advances
         const flushHaltReason = await flushIngestionFailures(pageFailures);
         haltReason ??= flushHaltReason;
       }
@@ -587,6 +588,7 @@ export const runIngestionPipeline = async ({
       // After the page's pack is flushed, so a judgment written on this page
       // is settled before its supplement writes it again, and before the
       // cursor moves, so a supplement that could not be placed holds it.
+      // db-await-in-loop: one placement pass per page, after the page's pack is flushed and before the cursor moves
       haltReason = await placePageSupplements({
         supplements: page.supplements,
         halted: haltReason,

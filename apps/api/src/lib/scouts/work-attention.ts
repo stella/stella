@@ -389,7 +389,7 @@ export const runWorkAttentionScout = async ({
       userId,
       workspaceIds: batch.workspaceIds,
     });
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-organization scoped connection; one run row and emit transaction per tenant
+    // db-await-in-loop: per-organization scoped connection; one run row and emit transaction per tenant
     const result = await runScout({
       db: scopedDb,
       organizationId: batch.organizationId,

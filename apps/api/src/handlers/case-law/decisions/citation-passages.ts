@@ -248,6 +248,7 @@ const readDecisionTextByDecision = async (
 ): Promise<Map<string, DecisionText>> => {
   const textByDecision = new Map<string, DecisionText>();
   for (const group of chunked(pointers, PASSAGE_AST_GROUP_SIZE)) {
+    // db-await-in-loop: one batched read per group; the group size is the bound on document bytes in flight (see above)
     const columns = await readDecisionTextColumns(
       caseLawDb,
       group.map((pointer) => pointer.id),

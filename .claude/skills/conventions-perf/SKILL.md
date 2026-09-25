@@ -31,8 +31,10 @@ up as a reviewable diff in the PR. Six guards exist today:
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch
   after the fact.
-- **Per-iteration I/O rules**: `no-db-await-in-loop` flags a database call
-  awaited once per loop iteration (the N+1), `no-network-await-in-loop` flags
+- **Per-iteration I/O checks**: `scripts/db-await-in-loop.ts` (type-aware,
+  CI) flags a database call awaited once per loop iteration (the N+1),
+  recognizing handles by type rather than name and suppressed with
+  `// db-await-in-loop: <reason>`; `no-network-await-in-loop` flags
   an HTTP request, AWS SDK command dispatch, or API-client method awaited the
   same way (`iterations x RTT`). Both are static and both name the owner, so
   the fix is concrete: batch the calls, or record in the suppression reason
