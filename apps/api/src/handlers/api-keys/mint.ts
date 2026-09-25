@@ -18,6 +18,7 @@ import {
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
+import { logger } from "@/api/lib/observability/logger";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { McpMode } from "@/api/mcp/constants";
@@ -25,19 +26,34 @@ import type { McpMode } from "@/api/mcp/constants";
 const SECONDS_PER_DAY = 24 * 60 * 60;
 
 /**
- * Deserialize one of the plugin's JSON text columns. Returns `null` on
- * malformed JSON so the valibot parse downstream reports it the same way it
- * reports a wrong shape, rather than this throwing mid-request.
+ * Deserialize one of the plugin's JSON text columns. Malformed JSON is an
+ * error result rather than a throw mid-request, so the caller can report
+ * which column it could not read.
  */
-const parseJsonColumn = (value: string | null): unknown => {
-  if (value === null) {
-    return null;
-  }
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
+const parseJsonColumn = (value: string | null): Result<unknown, unknown> =>
+  value === null
+    ? Result.ok(null)
+    : Result.try((): unknown => JSON.parse(value));
+
+const UNREADABLE_KEY_REASON = {
+  malformedJson: "malformed_json",
+  unexpectedShape: "unexpected_shape",
+  missing: "missing",
+} as const;
+
+/**
+ * Log a stored key these handlers cannot describe. The key is left out of the
+ * list and answers 404 to revoke and rotate (`mcp/api-key-auth.ts` likewise
+ * refuses a key whose metadata or permissions do not parse), so this record is
+ * where it stays visible.
+ */
+const reportUnreadableKey = (
+  keyId: string,
+  column: "metadata" | "name" | "permissions",
+  reason: (typeof UNREADABLE_KEY_REASON)[keyof typeof UNREADABLE_KEY_REASON],
+): null => {
+  logger.warn("api_keys.stored_key_unreadable", { keyId, column, reason });
+  return null;
 };
 
 /**
@@ -356,25 +372,46 @@ export const toMachineApiKeySummary = (
   // reads are bypassed), so the parse has to happen here. Reading them as
   // objects would make every key look undescribable and silently empty the
   // list.
-  const metadata = v.safeParse(
-    machineApiKeyMetadataSchema,
-    parseJsonColumn(row.metadata),
-  );
+  const metadataJson = parseJsonColumn(row.metadata);
+  if (Result.isError(metadataJson)) {
+    return reportUnreadableKey(
+      row.id,
+      "metadata",
+      UNREADABLE_KEY_REASON.malformedJson,
+    );
+  }
+  const metadata = v.safeParse(machineApiKeyMetadataSchema, metadataJson.value);
   if (!metadata.success) {
-    return null;
+    return reportUnreadableKey(
+      row.id,
+      "metadata",
+      UNREADABLE_KEY_REASON.unexpectedShape,
+    );
   }
 
+  const permissionsJson = parseJsonColumn(row.permissions);
+  if (Result.isError(permissionsJson)) {
+    return reportUnreadableKey(
+      row.id,
+      "permissions",
+      UNREADABLE_KEY_REASON.malformedJson,
+    );
+  }
   const permissions = v.safeParse(
     machineApiKeyPermissionsSchema,
-    parseJsonColumn(row.permissions),
+    permissionsJson.value,
   );
   if (!permissions.success) {
-    return null;
+    return reportUnreadableKey(
+      row.id,
+      "permissions",
+      UNREADABLE_KEY_REASON.unexpectedShape,
+    );
   }
 
   const { name } = row;
   if (name === null) {
-    return null;
+    return reportUnreadableKey(row.id, "name", UNREADABLE_KEY_REASON.missing);
   }
 
   return {
