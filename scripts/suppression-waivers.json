@@ -21,26 +21,6 @@
       "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
     },
     {
-      "id": "SW-0005",
-      "kind": "permanent",
-      "rule": "no-body-ownership-ids/no-body-ownership-ids",
-      "file": "apps/api/src/handlers/audit-logs/query.ts",
-      "symbol": "toAuditLogConditions",
-      "count": 1,
-      "reason": "org-scoped compliance filter, not an ownership source",
-      "evidence": "apps/api/src/handlers/audit-logs/query-scope.integration.test.ts"
-    },
-    {
-      "id": "SW-0006",
-      "kind": "permanent",
-      "rule": "no-body-ownership-ids/no-body-ownership-ids",
-      "file": "apps/api/src/handlers/chat/send-message.ts",
-      "symbol": "createSendMessage",
-      "count": 1,
-      "reason": "root handler; resolveChatScope performs targeted workspace authorization",
-      "evidence": "apps/api/src/handlers/chat/chat-scope.test.ts"
-    },
-    {
       "id": "SW-0007",
       "kind": "permanent",
       "rule": "require-search-scope/require-search-scope",

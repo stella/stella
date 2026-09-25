@@ -923,11 +923,8 @@
     }
   },
   "no-body-ownership-ids-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/handlers/audit-logs/query.ts": 1,
-      "apps/api/src/handlers/chat/send-message.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "no-unbranded-ownership-id-param-suppressions": {
     "count": 0,
