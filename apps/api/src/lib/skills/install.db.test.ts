@@ -57,7 +57,9 @@ const fetchPackage = async (url: string, source: string) => {
     ),
   );
   if (Result.isError(fetched)) {
-    return panic(`Expected the skill package to parse: ${fetched.error.message}`);
+    return panic(
+      `Expected the skill package to parse: ${fetched.error.message}`,
+    );
   }
   return fetched.value;
 };
@@ -105,5 +107,46 @@ describe("installing a skill fetched from a URL", () => {
         ),
       ),
     ).toBe(1);
+  });
+
+  test("a skill whose stored hash predates the current formula re-imports as unchanged", async () => {
+    const name = `stored-hash-${Bun.randomUUIDv7().slice(-12)}`;
+    const body = "Follow the stored steps.";
+    const parsed = await fetchPackage(
+      `https://skills.example/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Stored before the hash covered everything.\n---\n\n${body}`,
+    );
+    const install = async () =>
+      await installSkill({
+        memberRole: { role: "owner" },
+        origin: "url",
+        parsed,
+        recordAuditEvent: async () => undefined,
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        ),
+        scope: "private",
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      });
+    const first = await install();
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    skillIds.push(first.value.id);
+    // A hash of the body alone, as rows written under an earlier formula hold.
+    await testDb
+      .update(agentSkills)
+      .set({
+        contentHash: new Bun.CryptoHasher("sha256").update(body).digest("hex"),
+      })
+      .where(eq(agentSkills.id, first.value.id));
+
+    const second = await install();
+
+    if (Result.isError(second)) {
+      throw second.error;
+    }
+    expect(second.value.id).toBe(first.value.id);
   });
 });

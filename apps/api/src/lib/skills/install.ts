@@ -7,7 +7,10 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
-import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import {
+  hashSkillPackageContent,
+  skillContentHashAfter,
+} from "@/api/lib/agent-skills/content-hash";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -231,7 +234,6 @@ export const installSkill = async (props: InstallSkillProps) => {
             }
             const rows = await innerTx
               .select({
-                contentHash: agentSkills.contentHash,
                 id: agentSkills.id,
                 origin: agentSkills.origin,
                 sourceUrl: agentSkills.sourceUrl,
@@ -247,7 +249,8 @@ export const installSkill = async (props: InstallSkillProps) => {
                     : undefined,
                 ),
               )
-              .limit(1);
+              .limit(1)
+              .for("update");
             return rows.at(0);
           };
           const unchangedSkill = async () => {
@@ -255,8 +258,15 @@ export const installSkill = async (props: InstallSkillProps) => {
             if (!existing || urlReplayIdentity === undefined) {
               return undefined;
             }
+            // The stored content_hash may predate the current formula, so the
+            // comparison hashes what the row and its resources hold now.
             return isUnchangedUrlSkill({
-              existing,
+              existing: {
+                ...existing,
+                contentHash: await skillContentHashAfter(innerTx, {
+                  skillId: existing.id,
+                }),
+              },
               origin,
               parsed: { contentHash, sourceUrl: parsed.sourceUrl },
               replayIdentity: urlReplayIdentity,
