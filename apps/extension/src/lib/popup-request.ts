@@ -28,6 +28,10 @@ const popupRequestSchema = v.variant("type", [
     source: v.literal(POPUP_REQUEST_SOURCE),
     type: v.literal("revoke"),
   }),
+  v.strictObject({
+    source: v.literal(POPUP_REQUEST_SOURCE),
+    type: v.literal("take-download-notices"),
+  }),
 ]);
 
 type PopupRequest = v.InferOutput<typeof popupRequestSchema>;
@@ -41,6 +45,11 @@ const popupResponseSchema = v.variant("status", [
   v.strictObject({ status: v.literal("adopted"), url: v.string() }),
   v.strictObject({ status: v.literal("done") }),
   v.strictObject({ status: v.literal("failed") }),
+  v.strictObject({
+    kept: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    status: v.literal("download-notices"),
+    stopped: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  }),
   v.strictObject({ status: v.literal("unsupported-page") }),
   v.strictObject({ status: v.literal("unsupported-tab") }),
 ]);
@@ -49,7 +58,7 @@ export type PopupResponse = v.InferOutput<typeof popupResponseSchema>;
 
 type PopupRequestInput =
   | { tabId: number; type: "adopt" | "pair" }
-  | { type: "disconnect" | "revoke" };
+  | { type: "disconnect" | "revoke" | "take-download-notices" };
 
 /** Sends a popup action to the worker and reads its verdict. */
 export const sendPopupRequest = async (

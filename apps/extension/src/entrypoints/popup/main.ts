@@ -2,10 +2,7 @@ import { panic } from "better-result";
 
 import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
-import {
-  downloadNoticeMessage,
-  takeDownloadNotices,
-} from "../../lib/download-guard";
+import { downloadNoticeMessage } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
@@ -110,6 +107,7 @@ grantButton.addEventListener("click", () => {
 
 const adoptFailureMessage = {
   done: "unsupportedTab",
+  "download-notices": "accessUpdateFailed",
   failed: "accessUpdateFailed",
   "unsupported-page": "adoptUnsupported",
   "unsupported-tab": "unsupportedTab",
@@ -202,7 +200,11 @@ revokeButton.addEventListener("click", () => {
 await renderAccess();
 // Downloads stopped or kept while stella controlled a tab are shown once,
 // here; a kept file is always named, since it is on disk.
-const downloadNotice = downloadNoticeMessage(await takeDownloadNotices());
+// The worker owns the notices: it hands them over and clears them in turn
+// with any download it is recording.
+const taken = await sendPopupRequest({ type: "take-download-notices" });
+const downloadNotice =
+  taken.status === "download-notices" ? downloadNoticeMessage(taken) : null;
 if (downloadNotice !== null) {
   statusElement.textContent = message(
     downloadNotice.name,

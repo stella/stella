@@ -6,7 +6,9 @@ import {
   downloadOwner,
   holdDownloadForJudgement,
   judgeDownload,
+  recordDownloadNotice,
   refreshContainedDownloadScope,
+  takeDownloadNotices,
 } from "./download-guard";
 
 const origins = {
@@ -318,5 +320,98 @@ describe("download notices", () => {
     });
 
     expect(events).toEqual(["cancel:50", "badge:1", "title:downloadKept"]);
+  });
+});
+
+describe("recording and taking download notices", () => {
+  /**
+   * Storage whose every read waits until the test lets it through, so two
+   * updates can be made to read before either writes.
+   */
+  const installGatedStorage = () => {
+    const stored: Record<string, unknown> = {};
+    const waiting: (() => void)[] = [];
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        action: {
+          setBadgeText: async () => undefined,
+          setTitle: async () => undefined,
+        },
+        i18n: { getMessage: (name: string) => name },
+        storage: {
+          session: {
+            get: async (key: string) => {
+              await new Promise<void>((resolve) => {
+                waiting.push(resolve);
+              });
+              return { [key]: stored[key] };
+            },
+            remove: async (key: string) => {
+              Reflect.deleteProperty(stored, key);
+            },
+            set: async (items: Record<string, unknown>) => {
+              Object.assign(stored, items);
+            },
+          },
+        },
+      },
+    });
+    /** Lets every read waiting now through, then lets pending work settle. */
+    const releaseReads = async () => {
+      for (const release of waiting.splice(0)) {
+        release();
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5);
+      });
+    };
+    return { releaseReads, stored };
+  };
+
+  const settle = async (
+    releaseReads: () => Promise<void>,
+    work: Promise<unknown>,
+  ) => {
+    const progress = { done: false };
+    void work.then(() => {
+      progress.done = true;
+      return undefined;
+    });
+    // Both updates are started before any read is let through.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
+    for (let round = 0; round < 10; round += 1) {
+      if (progress.done) {
+        break;
+      }
+      await releaseReads();
+    }
+    await work;
+  };
+
+  test("a kept and a stopped download recorded at once are both counted", async () => {
+    const { releaseReads, stored } = installGatedStorage();
+    const both = Promise.all([
+      recordDownloadNotice("kept"),
+      recordDownloadNotice("stopped"),
+    ]);
+    await settle(releaseReads, both);
+
+    expect(stored["browserDownloadNotices"]).toEqual({ kept: 1, stopped: 1 });
+  });
+
+  test("a kept download recorded while the popup takes the notices is not lost", async () => {
+    const { releaseReads, stored } = installGatedStorage();
+    stored["browserDownloadNotices"] = { kept: 0, stopped: 1 };
+    const taken = takeDownloadNotices();
+    const recorded = recordDownloadNotice("kept");
+    await settle(releaseReads, Promise.all([taken, recorded]));
+
+    // The popup saw what was there when it asked; the kept file waits for
+    // the next time it opens.
+    expect(await taken).toEqual({ kept: 0, stopped: 1 });
+    expect(stored["browserDownloadNotices"]).toEqual({ kept: 1, stopped: 0 });
   });
 });
