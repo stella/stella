@@ -192,6 +192,12 @@ test.describe("public hydration", () => {
     const routeErrorTitle = page.locator("#route-error-title");
     const inspector = page.locator('[data-slot="inspector-dock"]');
     await expect(routeErrorTitle).toHaveCount(0);
+    // Decision routes seed their inspector tabs without opening the pane.
+    // Open it as a reader would so the lazy pane content is exercised too.
+    await expect(inspector).toHaveAttribute("data-state", "collapsed");
+    await inspector
+      .getByRole("button", { name: /^(?:show pane|zobrazit panel)$/iu })
+      .click();
     await expect(inspector).toHaveAttribute("data-state", "expanded");
     await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute(
       "data-state",
