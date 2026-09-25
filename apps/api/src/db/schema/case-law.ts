@@ -2438,6 +2438,7 @@ export const caseLawCourtWeights = p.pgTable(
     p.index("case_law_court_weights_country_idx").on(t.country),
     ...globalCaseLawPolicies(),
     ...caseLawAnalysisReaderPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -2448,7 +2449,7 @@ export const caseLawFtsConfigs = p.pgTable(
     regconfig: p.varchar({ length: 64 }).notNull(),
     useUnaccent: p.boolean("use_unaccent").notNull().default(true),
   },
-  () => [...globalCaseLawPolicies()],
+  () => [...globalCaseLawPolicies(), ...publicLawReaderPolicies()],
 );
 
 export const caseLawSearchDocuments = p.pgTable(
@@ -2470,6 +2471,7 @@ export const caseLawSearchDocuments = p.pgTable(
   (table) => [
     p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
