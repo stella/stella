@@ -513,7 +513,7 @@ const ComposerSkillsSubmenu = ({
         <BookOpenIcon />
         {/* Reuses the chat landing page's "Skills" section label (same
             value) instead of adding a duplicate key. */}
-        {t("chat.landing.prompts")}
+        {t("chat.landing.skills")}
       </MenuSubTrigger>
       <MenuSubPopup className="w-72">
         <ComposerSubmenuSearch

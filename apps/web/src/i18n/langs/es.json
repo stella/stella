@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Asuntos abiertos recientemente",
       "noMatters": "Aún no hay asuntos",
-      "noPrompts": "Aún no hay habilidades",
       "noRecentChats": "No hay chats recientes",
+      "noSkills": "Aún no hay habilidades",
       "pinnedMatters": "Asuntos fijados",
-      "prompts": "Habilidades",
-      "recentChats": "Chats recientes"
+      "recentChats": "Chats recientes",
+      "skills": "Habilidades"
     },
     "loadEarlierMessages": "Cargar mensajes anteriores",
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Listas de comprobación evaluadas que revisan documentos según tus estándares"
       },
-      "prompts": {
+      "skills": {
         "title": "Habilidades"
       },
       "templates": {

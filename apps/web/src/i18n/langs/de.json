@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Zuletzt geöffnete Akten",
       "noMatters": "Noch keine Akten",
-      "noPrompts": "Noch keine Skills",
       "noRecentChats": "Keine letzten Chats",
+      "noSkills": "Noch keine Skills",
       "pinnedMatters": "Angeheftete Akten",
-      "prompts": "Skills",
-      "recentChats": "Letzte Chats"
+      "recentChats": "Letzte Chats",
+      "skills": "Skills"
     },
     "loadEarlierMessages": "Ältere Nachrichten laden",
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Bewertete Checklisten, die Dokumente anhand Ihrer Vorgaben prüfen"
       },
-      "prompts": {
+      "skills": {
         "title": "Skills"
       },
       "templates": {

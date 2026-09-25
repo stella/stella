@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",
-      "noPrompts": "Aucune compétence pour le moment",
       "noRecentChats": "Aucune conversation récente",
+      "noSkills": "Aucune compétence pour le moment",
       "pinnedMatters": "Dossiers épinglés",
-      "prompts": "Compétences",
-      "recentChats": "Conversations récentes"
+      "recentChats": "Conversations récentes",
+      "skills": "Compétences"
     },
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Listes de contrôle évaluées qui examinent les documents au regard de vos référentiels"
       },
-      "prompts": {
+      "skills": {
         "title": "Compétences"
       },
       "templates": {

@@ -76,7 +76,7 @@
     "chat.contextMeter.tools",
     "chat.createDocument.continue",
     "chat.createDocument.created",
-    "chat.landing.prompts",
+    "chat.landing.skills",
     "chat.modelSelector.autoLabel",
     "chat.modelSelector.effortValues.none",
     "chat.modelSelector.effortValues.providerDefault",
@@ -158,7 +158,7 @@
     "knowledge.playbooks.review.reject",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
-    "knowledge.sections.prompts.title",
+    "knowledge.sections.skills.title",
     "knowledge.sections.templates.title",
     "knowledge.sections.tools.title",
     "memory.kinds.decision",
@@ -360,7 +360,7 @@
       "es",
       "fr"
     ],
-    "chat.landing.prompts": [
+    "chat.landing.skills": [
       "de"
     ],
     "chat.pastedText.fromPromptFallback": [
@@ -649,7 +649,7 @@
     "knowledge.playbooks.tier.acceptable": [
       "fr"
     ],
-    "knowledge.sections.prompts.title": [
+    "knowledge.sections.skills.title": [
       "de"
     ],
     "knowledge.sections.tools.title": [

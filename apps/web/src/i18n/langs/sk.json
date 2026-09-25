@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",
-      "noPrompts": "Zatiaľ žiadne zručnosti",
       "noRecentChats": "Zatiaľ žiadne nedávne chaty",
+      "noSkills": "Zatiaľ žiadne zručnosti",
       "pinnedMatters": "Pripnuté spisy",
-      "prompts": "Zručnosti",
-      "recentChats": "Nedávne chaty"
+      "recentChats": "Nedávne chaty",
+      "skills": "Zručnosti"
     },
     "loadEarlierMessages": "Načítať staršie správy",
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Hodnotené kontrolné zoznamy, ktoré porovnávajú dokumenty s vašimi štandardmi"
       },
-      "prompts": {
+      "skills": {
         "title": "Zručnosti"
       },
       "templates": {

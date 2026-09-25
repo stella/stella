@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",
-      "noPrompts": "Még nincsenek készségek",
       "noRecentChats": "Nincsenek legutóbbi csevegések",
+      "noSkills": "Még nincsenek készségek",
       "pinnedMatters": "Kitűzött ügyek",
-      "prompts": "Készségek",
-      "recentChats": "Legutóbbi csevegések"
+      "recentChats": "Legutóbbi csevegések",
+      "skills": "Készségek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
       },
-      "prompts": {
+      "skills": {
         "title": "Készségek"
       },
       "templates": {

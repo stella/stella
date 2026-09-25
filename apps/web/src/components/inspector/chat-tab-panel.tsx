@@ -110,7 +110,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -343,12 +343,12 @@ export const ChatTabPanel = ({
     };
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
-  const savedPrompts = useSavedPrompts();
+  const suggestedSkills = useSuggestedSkills();
   // A chat about a decision opens on the questions a judgment answers. The
-  // saved prompts are the reader's own drafting and review skills, which are
+  // suggested skills are the reader's own drafting and review skills, which are
   // about a document they are writing, not one a court handed down.
   const decisionPrompts = useDecisionChatPrompts(tabLegalKey);
-  const emptyStatePrompts = decisionPrompts ?? savedPrompts;
+  const emptyStatePrompts = decisionPrompts ?? suggestedSkills;
   const handleSelectPrompt = (prompt: PromptSuggestion) => {
     editorController.setContent(composerStoredMarkdown(prompt.body));
     editorController.focus();
@@ -866,7 +866,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * spinner flash, no layout shift.
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
-  const savedPrompts = useSavedPrompts();
+  const suggestedSkills = useSuggestedSkills();
   const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
   return (
@@ -888,7 +888,7 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         <ConversationContent className="gap-3 pb-32">
           <ChatEmptyState
             onSelectPrompt={noop}
-            prompts={decisionPrompts ?? savedPrompts}
+            prompts={decisionPrompts ?? suggestedSkills}
           />
         </ConversationContent>
       </Conversation>

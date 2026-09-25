@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Viimati avatud toimikud",
       "noMatters": "Toimikuid veel pole",
-      "noPrompts": "Oskusi veel pole",
       "noRecentChats": "Hiljutisi vestlusi pole",
+      "noSkills": "Oskusi veel pole",
       "pinnedMatters": "Kinnitatud toimikud",
-      "prompts": "Oskused",
-      "recentChats": "Hiljutised vestlused"
+      "recentChats": "Hiljutised vestlused",
+      "skills": "Oskused"
     },
     "loadEarlierMessages": "Laadi varasemad sõnumid",
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Hinnatud kontroll-loendid, mis vaatavad dokumendid üle teie standardite alusel"
       },
-      "prompts": {
+      "skills": {
         "title": "Oskused"
       },
       "templates": {

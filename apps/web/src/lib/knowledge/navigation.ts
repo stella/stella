@@ -11,10 +11,6 @@ import {
 
 import type { TranslationKey } from "@/i18n/types";
 
-// "prompts" used to be its own surface; after the prompts→skills
-// consolidation, slash-command prompts live alongside richer skills
-// on the Tools page. The sidebar entry was removed so the landing
-// doesn't advertise a deleted destination.
 export type KnowledgeSection = {
   key: "templates" | "styles" | "clauses" | "playbooks" | "workflows" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;

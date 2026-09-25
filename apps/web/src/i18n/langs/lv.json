@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
-      "noPrompts": "Prasmju vēl nav",
       "noRecentChats": "Nav nesenu tērzēšanu",
+      "noSkills": "Prasmju vēl nav",
       "pinnedMatters": "Piespraustās lietas",
-      "prompts": "Prasmes",
-      "recentChats": "Nesenās tērzēšanas"
+      "recentChats": "Nesenās tērzēšanas",
+      "skills": "Prasmes"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
       },
-      "prompts": {
+      "skills": {
         "title": "Prasmes"
       },
       "templates": {

@@ -1037,11 +1037,11 @@ type Messages = {
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
-      "noPrompts": "No skills yet";
       "noRecentChats": "No recent chats";
+      "noSkills": "No skills yet";
       "pinnedMatters": "Pinned matters";
-      "prompts": "Skills";
       "recentChats": "Recent chats";
+      "skills": "Skills";
     };
     "loadEarlierMessages": "Load earlier messages";
     "loadEarlierMessagesError": "Couldn't load earlier messages";
@@ -3370,7 +3370,7 @@ type Messages = {
       "playbooks": {
         "description": "Graded checklists that review documents against your standards";
       };
-      "prompts": {
+      "skills": {
         "title": "Skills";
       };
       "templates": {

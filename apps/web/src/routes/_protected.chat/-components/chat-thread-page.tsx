@@ -87,7 +87,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { managementRoles } from "@/lib/organization/consts";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
@@ -118,7 +118,7 @@ export const ChatThreadPage = ({
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const prompts = useSavedPrompts();
+  const suggestedSkills = useSuggestedSkills();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -614,7 +614,7 @@ export const ChatThreadPage = ({
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
                       <PromptSuggestions
                         onSelect={selectPrompt}
-                        prompts={prompts}
+                        prompts={suggestedSkills}
                       />
                       <GuideNudge />
                     </div>

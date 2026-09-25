@@ -12,17 +12,15 @@ const MAX_SUGGESTIONS = 4;
 
 /**
  * Returns up to 4 of the most recently created skills with a slash
- * command set. "Saved prompts" is the unified surface's name for the
- * subset of skills the user can fire from the chat composer; the
- * underlying row lives in `agent_skills` after the prompts/skills
- * consolidation. Deterministic order avoids the flicker that random
+ * command set: the skills the chat surfaces suggest firing from the
+ * composer. Deterministic order avoids the flicker that random
  * sampling causes across stale→fresh refetches.
  */
-export const useSavedPrompts = (): ChatPrompt[] => {
+export const useSuggestedSkills = (): ChatPrompt[] => {
   // Sourced from the auth context, not the /_protected route context:
   // this hook also renders inside the public law workspace, where no
   // /_protected match exists. Anonymous visitors (pre-signup AI
-  // surfaces) simply have no saved prompts.
+  // surfaces) simply have no suggested skills.
   const activeOrganizationId =
     useMaybeAuthenticatedUser()?.activeOrganizationId;
   const {
@@ -42,7 +40,7 @@ export const useSavedPrompts = (): ChatPrompt[] => {
     ) {
       return;
     }
-    detached(fetchNextPage(), "use-saved-prompts.fetch-next-page");
+    detached(fetchNextPage(), "use-suggested-skills.fetch-next-page");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
   const rows = commandShortcutRowsFromSkillPages(skillPages?.pages);
 

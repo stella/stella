@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "آخر الملفات القانونية التي تم الوصول إليها",
       "noMatters": "لا توجد ملفات قانونية بعد",
-      "noPrompts": "لا توجد مهارات بعد",
       "noRecentChats": "لا توجد دردشات حديثة",
+      "noSkills": "لا توجد مهارات بعد",
       "pinnedMatters": "الملفات القانونية المثبّتة",
-      "prompts": "المهارات",
-      "recentChats": "الدردشات الحديثة"
+      "recentChats": "الدردشات الحديثة",
+      "skills": "المهارات"
     },
     "loadEarlierMessages": "تحميل الرسائل السابقة",
     "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "قوائم تحقّق مُقيَّمة تفحص المستندات وفق معاييرك"
       },
-      "prompts": {
+      "skills": {
         "title": "المهارات"
       },
       "templates": {

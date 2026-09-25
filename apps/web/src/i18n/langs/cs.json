@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Naposledy otevřené spisy",
       "noMatters": "Zatím žádné spisy",
-      "noPrompts": "Zatím žádné dovednosti",
       "noRecentChats": "Zatím žádné nedávné chaty",
+      "noSkills": "Zatím žádné dovednosti",
       "pinnedMatters": "Připnuté spisy",
-      "prompts": "Dovednosti",
-      "recentChats": "Nedávné chaty"
+      "recentChats": "Nedávné chaty",
+      "skills": "Dovednosti"
     },
     "loadEarlierMessages": "Načíst starší zprávy",
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Hodnocené kontrolní seznamy, které porovnávají dokumenty s vašimi standardy"
       },
-      "prompts": {
+      "skills": {
         "title": "Dovednosti"
       },
       "templates": {

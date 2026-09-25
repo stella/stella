@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Paskutinės atidarytos bylos",
       "noMatters": "Bylų dar nėra",
-      "noPrompts": "Įgūdžių dar nėra",
       "noRecentChats": "Nėra naujausių pokalbių",
+      "noSkills": "Įgūdžių dar nėra",
       "pinnedMatters": "Prisegtos bylos",
-      "prompts": "Įgūdžiai",
-      "recentChats": "Neseniai naudoti pokalbiai"
+      "recentChats": "Neseniai naudoti pokalbiai",
+      "skills": "Įgūdžiai"
     },
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Įvertinti kontroliniai sąrašai, tikrinantys dokumentus pagal jūsų standartus"
       },
-      "prompts": {
+      "skills": {
         "title": "Įgūdžiai"
       },
       "templates": {

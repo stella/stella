@@ -1034,11 +1034,11 @@
     "landing": {
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
-      "noPrompts": "Nie ma jeszcze umiejętności",
       "noRecentChats": "Brak ostatnich czatów",
+      "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
-      "prompts": "Umiejętności",
-      "recentChats": "Ostatnie czaty"
+      "recentChats": "Ostatnie czaty",
+      "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
@@ -3367,7 +3367,7 @@
       "playbooks": {
         "description": "Oceniane listy kontrolne, które weryfikują dokumenty względem Twoich standardów"
       },
-      "prompts": {
+      "skills": {
         "title": "Umiejętności"
       },
       "templates": {

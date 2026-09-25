@@ -45,7 +45,7 @@ const DECISION_CHAT_PROMPTS = [
 
 /**
  * The decision prompts when the chat tab is about a decision, `undefined`
- * otherwise; the caller then falls back to the reader's saved prompts.
+ * otherwise; the caller then falls back to the reader's suggested skills.
  */
 export const useDecisionChatPrompts = (
   activeLegalKey: LegalDocumentChatKey | undefined,
