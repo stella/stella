@@ -66,7 +66,10 @@ const HANDLER_OPTION_KEYS = new Set([
 
 const isFreshIdentity = (node) => {
   const unwrapped = unwrapExpression(node);
-  switch (unwrapped?.type) {
+  if (unwrapped === null) {
+    return false;
+  }
+  switch (unwrapped.type) {
     case "ObjectExpression":
     case "ArrayExpression":
     case "ArrowFunctionExpression":
@@ -94,7 +97,7 @@ const isHookCall = (node) => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
     return false;
   }
-  const callee = node["callee"];
+  const callee = node.callee;
   if (isIdentifier(callee)) {
     return HOOK_NAME.test(callee.name);
   }
@@ -102,7 +105,7 @@ const isHookCall = (node) => {
 };
 
 const findContainingFunction = (node) => {
-  let current = isAstNode(node) ? node["parent"] : null;
+  let current = isAstNode(node) ? node.parent : null;
   while (isAstNode(current)) {
     if (
       current.type === "FunctionDeclaration" ||
@@ -111,7 +114,7 @@ const findContainingFunction = (node) => {
     ) {
       return current;
     }
-    current = current["parent"];
+    current = current.parent;
   }
   return null;
 };
@@ -124,15 +127,15 @@ const findContainingFunction = (node) => {
 const resolveLocalBindingInit = (name, fromNode) => {
   let scope = findContainingFunction(fromNode);
   while (scope !== null) {
-    const body = scope["body"];
+    const body = scope.body;
     const statements =
-      isAstNode(body) && body.type === "BlockStatement" ? body["body"] : null;
+      isAstNode(body) && body.type === "BlockStatement" ? body.body : null;
     if (Array.isArray(statements)) {
       for (const statement of statements) {
         if (!isAstNode(statement) || statement.type !== "VariableDeclaration") {
           continue;
         }
-        const declarations = statement["declarations"];
+        const declarations = statement.declarations;
         if (!Array.isArray(declarations)) {
           continue;
         }
@@ -143,8 +146,8 @@ const resolveLocalBindingInit = (name, fromNode) => {
           ) {
             continue;
           }
-          if (isIdentifier(declarator["id"], name)) {
-            return declarator["init"] ?? null;
+          if (isIdentifier(declarator.id, name)) {
+            return declarator.init ?? null;
           }
         }
       }
@@ -210,7 +213,7 @@ export default eslintCompatPlugin({
             useEditorAliases.clear();
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== TIPTAP_REACT_MODULE) {
+            if (node.source.value !== TIPTAP_REACT_MODULE) {
               return;
             }
             for (const specifier of node.specifiers) {
@@ -234,7 +237,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const properties = options["properties"];
+            const properties = options.properties;
             if (!Array.isArray(properties)) {
               return;
             }
@@ -246,7 +249,7 @@ export default eslintCompatPlugin({
               if (name === null || HANDLER_OPTION_KEYS.has(name)) {
                 continue;
               }
-              if (isUnstableOptionValue(property["value"], node)) {
+              if (isUnstableOptionValue(property.value, node)) {
                 context.report({
                   node: property,
                   messageId: "unstableOption",

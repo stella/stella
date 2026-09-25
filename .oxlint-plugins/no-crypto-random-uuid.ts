@@ -53,10 +53,7 @@ export default eslintCompatPlugin({
                 continue;
               }
 
-              if (
-                specifier.type === "ImportSpecifier" &&
-                getImportedName(specifier) === "randomUUID"
-              ) {
+              if (getImportedName(specifier) === "randomUUID") {
                 randomUuidAliases.add(specifier.local.name);
                 context.report({
                   node: specifier,

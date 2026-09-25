@@ -105,11 +105,11 @@ export default eslintCompatPlugin({
               return;
             }
             const opening = node.parent;
-            if (!opening || opening.type !== "JSXOpeningElement") {
+            if (opening.type !== "JSXOpeningElement") {
               return;
             }
             const tag = opening.name;
-            if (!tag || tag.type !== "JSXIdentifier" || !tag.name) {
+            if (tag.type !== "JSXIdentifier" || !tag.name) {
               return;
             }
             if (!INPUT_LIKE_COMPONENTS.has(tag.name)) {
