@@ -10,7 +10,7 @@ import type {
 } from "@/api/lib/notifications";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
-export type FlowRunActorSource = {
+type FlowRunActorSource = {
   definitionId: SafeId<"flowDefinition"> | null;
   triggerSource: FlowTriggerSource;
 };
@@ -42,7 +42,7 @@ export const resolveActorUserId = async (
   return null;
 };
 
-export type FlowRunCompletedNotificationArgs = {
+type FlowRunCompletedNotificationArgs = {
   actorUserId: SafeId<"user">;
   flowName: string;
   organizationId: SafeId<"organization">;

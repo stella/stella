@@ -31,10 +31,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  enqueueContactSearchRepairs,
-  flushContactSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 // The reviewed row plus the caller-generated id. The field set itself lives in
 // `contact-import-schema.ts`, shared with the validate handler.

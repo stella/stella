@@ -20,7 +20,7 @@ import {
   enqueueContactSearchRepairs,
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
+  flushSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -377,7 +377,13 @@ test("removing a party marks its matter, which nothing else records", async () =
   expect(await queueRows()).toMatchObject([{ kind, sourceId: matter }]);
 
   const log = emptyLog();
-  expect(await flushWorkspaceSearchRepairs([matter], repairDeps(log))).toEqual({
+  expect(
+    await flushSearchRepairs({
+      deps: repairDeps(log),
+      kind,
+      sourceIds: [matter],
+    }),
+  ).toEqual({
     failed: 0,
     repaired: 1,
   });
@@ -395,7 +401,13 @@ test("a flush repairs only the sources it was handed", async () => {
   await enqueueEntitySearchRepairs(asTx(), [document]);
 
   const log = emptyLog();
-  expect(await flushWorkspaceSearchRepairs([matter], repairDeps(log))).toEqual({
+  expect(
+    await flushSearchRepairs({
+      deps: repairDeps(log),
+      kind: "workspace",
+      sourceIds: [matter],
+    }),
+  ).toEqual({
     failed: 0,
     repaired: 1,
   });

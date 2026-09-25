@@ -67,7 +67,7 @@ import type { NotificationPing } from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";

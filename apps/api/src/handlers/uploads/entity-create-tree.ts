@@ -28,10 +28,8 @@ import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateParentForInsert,

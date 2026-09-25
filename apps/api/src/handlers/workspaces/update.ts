@@ -26,10 +26,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),

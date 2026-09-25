@@ -27,10 +27,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  enqueueContactSearchRepairs,
-  flushContactSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = t.Object({

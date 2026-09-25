@@ -17,10 +17,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import {
-  enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const createWorkspaceContactBodySchema = t.Object({
   contactId: tSafeId("contact", {

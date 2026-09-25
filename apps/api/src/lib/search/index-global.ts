@@ -1580,10 +1580,21 @@ export const searchGlobalFacet = async (
 ): Promise<{ buckets: FacetBucket[] }> =>
   await scopedDb(async (tx) => await readGlobalFacet(query, tx));
 
+/**
+ * The connection a contact or matter projection is rebuilt on. The caller
+ * chooses it: the standing repair drain passes its own, and a request's
+ * post-commit flush goes through `projection-repair-flush.ts`.
+ */
+type SearchDocumentDatabase = Pick<
+  typeof rootDb,
+  "query" | "select" | "transaction"
+>;
+
 export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const contact = await rootDb.query.contacts.findFirst({
+  const contact = await database.query.contacts.findFirst({
     where: { id: { eq: contactId } },
     columns: {
       id: true,
@@ -1634,7 +1645,7 @@ export const upsertContactSearchDocument = async (
     searchableText,
   );
 
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO contact_search_documents (
         contact_id, organization_id, contact_type,
@@ -1687,8 +1698,9 @@ export const upsertContactSearchDocument = async (
 
 export const upsertWorkspaceSearchDocument = async (
   workspaceId: SafeId<"workspace">,
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const workspace = await rootDb.query.workspaces.findFirst({
+  const workspace = await database.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
     columns: {
       id: true,
@@ -1780,7 +1792,7 @@ export const upsertWorkspaceSearchDocument = async (
     searchableText,
   );
 
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO workspace_search_documents (
         workspace_id, organization_id,
@@ -1849,6 +1861,7 @@ export const syncWorkspaceSearchActivity = async (
 
 export const upsertWorkspaceSearchDocuments = async (
   workspaceIds: readonly SafeId<"workspace">[],
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
   const pending = [...new Set(workspaceIds)];
   const workers: Promise<void>[] = [];
@@ -1862,7 +1875,7 @@ export const upsertWorkspaceSearchDocuments = async (
           if (!workspaceId) {
             return;
           }
-          await upsertWorkspaceSearchDocument(workspaceId);
+          await upsertWorkspaceSearchDocument(workspaceId, database);
         }
       })(),
     );
@@ -1873,8 +1886,9 @@ export const upsertWorkspaceSearchDocuments = async (
 
 export const reindexWorkspacesForContact = async (
   contactId: SafeId<"contact">,
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const contact = await rootDb.query.contacts.findFirst({
+  const contact = await database.query.contacts.findFirst({
     where: { id: { eq: contactId } },
     columns: { organizationId: true },
   });
@@ -1883,7 +1897,7 @@ export const reindexWorkspacesForContact = async (
     return;
   }
 
-  const rows = await rootDb
+  const rows = await database
     .select({ id: workspaces.id })
     .from(workspaces)
     .leftJoin(
@@ -1901,18 +1915,29 @@ export const reindexWorkspacesForContact = async (
     )
     .groupBy(workspaces.id);
 
-  await upsertWorkspaceSearchDocuments(rows.map(({ id }) => id));
+  await upsertWorkspaceSearchDocuments(
+    rows.map(({ id }) => id),
+    database,
+  );
 };
 
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
+  await rebuildSupplementalSearchDocuments(organizationId, rootDb);
+};
+
+// Keyset pages of one organization's contacts, then its matters; each page is
+// the batch, and each source is rebuilt in its own transaction.
+const rebuildSupplementalSearchDocuments = async (
+  organizationId: SafeId<"organization">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
   let lastContactId: SafeId<"contact"> | null = null;
   let hasMoreContacts = true;
 
   while (hasMoreContacts) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const batch = await rootDb
+    const batch = await database
       .select({ id: contacts.id })
       .from(contacts)
       .where(
@@ -1927,7 +1952,7 @@ export const rebuildSupplementalSearchIndex = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const contact of batch) {
-      await upsertContactSearchDocument(contact.id);
+      await upsertContactSearchDocument(contact.id, database);
     }
 
     hasMoreContacts = batch.length === REINDEX_BATCH_SIZE;
@@ -1938,8 +1963,7 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const batch = await rootDb
+    const batch = await database
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(
@@ -1954,7 +1978,7 @@ export const rebuildSupplementalSearchIndex = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const workspace of batch) {
-      await upsertWorkspaceSearchDocument(workspace.id);
+      await upsertWorkspaceSearchDocument(workspace.id, database);
     }
 
     hasMoreWorkspaces = batch.length === REINDEX_BATCH_SIZE;

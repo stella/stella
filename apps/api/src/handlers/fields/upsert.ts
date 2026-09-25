@@ -20,10 +20,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 export const upsertFieldContentSchema = t.Union(
   [

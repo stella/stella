@@ -30,7 +30,7 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import {
   canTriageSignals,
   loadVisibleSignal,

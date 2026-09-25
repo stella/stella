@@ -12,7 +12,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
 const fieldAssignmentSchema = t.Object({

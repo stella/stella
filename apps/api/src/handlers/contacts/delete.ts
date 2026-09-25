@@ -12,10 +12,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import {
-  enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const deleteContactParamsSchema = t.Object({
   contactId: tSafeId("contact", { description: "Contact ID to delete" }),

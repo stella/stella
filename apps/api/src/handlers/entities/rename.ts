@@ -15,10 +15,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const renameEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),

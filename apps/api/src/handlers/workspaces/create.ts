@@ -37,10 +37,8 @@ import {
   toScopeKey,
 } from "@/api/lib/matter-reference";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  enqueueWorkspaceSearchRepairs,
-  flushWorkspaceSearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 

@@ -31,10 +31,8 @@ import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-ver
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
   agendaFieldsBodySchema,
   validateAgendaFields,
