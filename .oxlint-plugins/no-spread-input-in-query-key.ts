@@ -205,7 +205,7 @@ const isQueryKeyFactoryReturn = (arrayNode) => {
     // `return <array>` or `return cond ? <array> : ...`; climb to the
     // function body block, then to the arrow itself.
     current = current.parent;
-    while (current && current.type === "BlockStatement") {
+    while (current?.type === "BlockStatement") {
       current = current.parent;
     }
   }

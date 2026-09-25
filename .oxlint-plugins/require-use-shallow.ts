@@ -138,7 +138,7 @@ export default eslintCompatPlugin({
             useShallowAliases.clear();
           },
           ImportDeclaration(node) {
-            if (!USE_SHALLOW_MODULES.has(node.source?.value)) {
+            if (!USE_SHALLOW_MODULES.has(node.source.value)) {
               return;
             }
             for (const specifier of node.specifiers) {

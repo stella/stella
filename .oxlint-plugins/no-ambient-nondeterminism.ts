@@ -1778,18 +1778,21 @@ const ambientPropertyPathKind = (
   beforePosition: number,
   defaults: readonly DestructuredDefault[] = [],
 ): string | null => {
+  const [firstKey, secondKey] = propertyPath;
   if (
     propertyPath.length === 1 &&
+    firstKey !== undefined &&
     isTemporalNowObject(context, object, new Set(visitedBindings))
   ) {
-    return `Temporal.Now.${propertyPath.at(0)}()`;
+    return `Temporal.Now.${firstKey}()`;
   }
   if (
     propertyPath.length === 2 &&
-    propertyPath.at(0) === "Now" &&
+    firstKey === "Now" &&
+    secondKey !== undefined &&
     isTemporalNamespace(context, object, new Set(visitedBindings))
   ) {
-    return `Temporal.Now.${propertyPath.at(1)}()`;
+    return `Temporal.Now.${secondKey}()`;
   }
   const importedObjectKind = cryptoObjectKind(
     context,
@@ -1812,11 +1815,10 @@ const ambientPropertyPathKind = (
   if (
     importedObjectKind === "module" &&
     propertyPath.length === 2 &&
-    propertyPath.at(0) === "webcrypto" &&
-    (propertyPath.at(1) === "randomUUID" ||
-      propertyPath.at(1) === "getRandomValues")
+    firstKey === "webcrypto" &&
+    (secondKey === "randomUUID" || secondKey === "getRandomValues")
   ) {
-    return `webcrypto.${propertyPath.at(1)}() from crypto`;
+    return `webcrypto.${secondKey}() from crypto`;
   }
   const localValues =
     defaults.length === 0

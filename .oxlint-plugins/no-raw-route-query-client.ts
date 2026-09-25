@@ -157,7 +157,7 @@ export default eslintCompatPlugin({
             tanstackQueryNamespaces.clear();
           },
           ImportDeclaration(node) {
-            if (node.source?.value === TANSTACK_QUERY_MODULE) {
+            if (node.source.value === TANSTACK_QUERY_MODULE) {
               for (const specifier of node.specifiers) {
                 if (specifier.type === "ImportNamespaceSpecifier") {
                   tanstackQueryNamespaces.add(specifier.local.name);
@@ -178,7 +178,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (node.source?.value !== ROUTE_QUERY_HELPERS_MODULE) {
+            if (node.source.value !== ROUTE_QUERY_HELPERS_MODULE) {
               return;
             }
 
@@ -236,7 +236,7 @@ export default eslintCompatPlugin({
 
               if (
                 callee.type === "MemberExpression" &&
-                callee.computed === false &&
+                !callee.computed &&
                 isIdentifier(callee.object) &&
                 routeQueryHelperNamespaces.has(callee.object.name)
               ) {

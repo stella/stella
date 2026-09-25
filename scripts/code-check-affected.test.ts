@@ -217,14 +217,19 @@ describe("affected code-check planning", () => {
     expect(planned.rootChecks).toContain("plugin-fixtures");
   });
 
-  test.each(["oxlint.config.ts", ".oxlint-plugins/no-raw-use-effect.ts"])(
+  // A changed rule source is linted by the plugin-fixtures check, which lints
+  // every rule source, so it is not linted a second time as a root path.
+  test.each<[string, string[]]>([
+    ["oxlint.config.ts", ["oxlint.config.ts"]],
+    [".oxlint-plugins/no-raw-use-effect.ts", []],
+  ])(
     "invalidates lint without discarding typecheck cache for %s",
-    (changedPath) => {
+    (changedPath, rootLintPaths) => {
       expect(plan([changedPath], [])).toEqual({
         type: "scoped",
         lint: { type: "all" },
         typecheck: { type: "targets", targets: [] },
-        rootLintPaths: [changedPath],
+        rootLintPaths,
         rootChecks: [
           "env",
           "assets",

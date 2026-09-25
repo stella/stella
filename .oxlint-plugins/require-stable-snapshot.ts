@@ -60,20 +60,22 @@ const isFreshReferenceCall = (node) => {
   }
 
   const callee = node.callee;
+  const method = callee.property;
 
   if (
     callee.type !== "MemberExpression" ||
     callee.computed !== false ||
-    !isIdentifier(callee.property)
+    !isIdentifier(method)
   ) {
     return false;
   }
+  const receiver = callee.object;
 
   // Object.assign(...) / Array.from(...): matched by fully-qualified name,
   // so the receiver must be the literal identifier, not an arbitrary
   // expression.
-  if (isIdentifier(callee.object)) {
-    const staticName = `${callee.object.name}.${callee.property.name}`;
+  if (isIdentifier(receiver)) {
+    const staticName = `${receiver.name}.${method.name}`;
     if (FRESH_REFERENCE_STATIC_CALLS.has(staticName)) {
       return true;
     }
@@ -82,7 +84,7 @@ const isFreshReferenceCall = (node) => {
   // .map/.filter/...: a fresh reference regardless of the receiver shape —
   // an identifier (`store.map(...)`), a nested member expression
   // (`store.items.map(...)`), or another call (`getStore().map(...)`).
-  return FRESH_REFERENCE_MEMBER_METHODS.has(callee.property.name);
+  return FRESH_REFERENCE_MEMBER_METHODS.has(method.name);
 };
 
 const isFreshReferenceExpression = (node) => {
@@ -204,7 +206,7 @@ export default eslintCompatPlugin({
             reactNamespaces.clear();
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== REACT_MODULE) {
+            if (node.source.value !== REACT_MODULE) {
               return;
             }
             for (const specifier of node.specifiers) {
@@ -215,10 +217,7 @@ export default eslintCompatPlugin({
                 reactNamespaces.add(specifier.local.name);
                 continue;
               }
-              if (
-                specifier.type === "ImportSpecifier" &&
-                getImportedName(specifier) === HOOK_NAME
-              ) {
+              if (getImportedName(specifier) === HOOK_NAME) {
                 useSyncExternalStoreAliases.add(specifier.local.name);
               }
             }

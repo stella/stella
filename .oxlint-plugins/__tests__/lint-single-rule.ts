@@ -93,9 +93,7 @@ export const lintSingleRule = async (
     return panic(`oxlint run failed: ${lintResult.error.message}`);
   }
   const { stdout, stderr } = lintResult.value;
-  const output = ["stdout:", String(stdout), "stderr:", String(stderr)].join(
-    "\n",
-  );
+  const output = ["stdout:", stdout, "stderr:", stderr].join("\n");
   const report = Result.try((): unknown => JSON.parse(stdout));
   if (Result.isError(report)) {
     return panic(`oxlint did not produce valid JSON:\n${output}`);

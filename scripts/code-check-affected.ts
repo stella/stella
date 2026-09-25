@@ -302,6 +302,7 @@ export const planCheck = ({
     rootCheckSet.has(rootCheck),
   );
   const rootScriptLintRuns = rootCheckSet.has(ROOT_CHECKS.rootScriptLint);
+  const pluginFixturesRun = rootCheckSet.has(ROOT_CHECKS.pluginFixtures);
 
   return {
     type: "scoped",
@@ -315,7 +316,8 @@ export const planCheck = ({
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
             isChangedLintPath(changedPath) &&
-            !(rootScriptLintRuns && changedPath.startsWith("scripts/")),
+            !(rootScriptLintRuns && changedPath.startsWith("scripts/")) &&
+            !(pluginFixturesRun && changedPath.startsWith(".oxlint-plugins/")),
         ),
       ),
     ].toSorted(),

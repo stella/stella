@@ -1,0 +1,8 @@
+{
+  // Oxlint's type-aware pass resolves compiler options by walking up from each
+  // file to the nearest `tsconfig.json`. The root one lists `"files": []`, so
+  // without this the rule sources belong to no project and every type-aware
+  // rule runs against default options. `tsconfig.oxlint-plugins.json` stays
+  // the project `typecheck:repo` compiles.
+  "extends": "../tsconfig.oxlint-plugins.json"
+}
