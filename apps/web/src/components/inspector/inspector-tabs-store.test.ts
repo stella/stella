@@ -433,12 +433,12 @@ describe("openExternal", () => {
 describe("openSkillResourceTab", () => {
   test("preserves edited content when reopening the same resource source", () => {
     const resource = {
-      content: "Built-in content",
+      content: "Bundled content",
       label: "Guidance",
       mimeType: "text/markdown",
-      origin: "built-in" as const,
+      origin: "bundled" as const,
       resourcePath: "knowledge/guidance.md",
-      skillId: null,
+      skillId: "agentSkill_1",
       skillName: "review",
     };
 
@@ -465,12 +465,12 @@ describe("openSkillResourceTab", () => {
 
   test("refreshes content when reopening a resource from a different source", () => {
     const resource = {
-      content: "Built-in content",
+      content: "Bundled content",
       label: "Guidance",
       mimeType: "text/markdown",
-      origin: "built-in" as const,
+      origin: "bundled" as const,
       resourcePath: "knowledge/guidance.md",
-      skillId: null,
+      skillId: "agentSkill_0",
       skillName: "review",
     };
 
@@ -1596,6 +1596,69 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().tabs).toEqual([]);
   });
 
+  const skillResourceTab = {
+    type: "skill-resource",
+    id: "skill-resource:review/SKILL.md",
+    label: "SKILL.md",
+    skillName: "review",
+    skillId: "agentSkill_1",
+    origin: "authored",
+    target: "body",
+    resourcePath: "SKILL.md",
+    mimeType: "text/markdown",
+    content: "# Review",
+  };
+  const chatTab = {
+    type: "chat",
+    id: toChatThreadId("thread-skill"),
+    label: "Review",
+    contextMatterIds: [],
+    activeSkill: { skillId: "agentSkill_1", skillName: "review" },
+  };
+
+  test.each([
+    { ...skillResourceTab, skillId: null },
+    { ...skillResourceTab, origin: "built-in" },
+    { ...chatTab, activeSkill: { skillName: "review" } },
+  ])("rejects skill context without a persisted skill id or origin", (tab) => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [tab],
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  });
+
+  test("accepts skill context carrying a persisted skill id and origin", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [skillResourceTab, chatTab],
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toMatchObject([
+      skillResourceTab,
+      chatTab,
+    ]);
+  });
+
   test("keeps local tab mutations when browser broadcast fails", () => {
     installFakeBroadcastChannel();
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
@@ -1644,7 +1707,7 @@ describe("Inspector tab broadcast", () => {
           id: "skill-resource:test/body.md",
           label: "Skill body",
           skillName: "test",
-          skillId: null,
+          skillId: "agentSkill_1",
           origin: "authored",
           target: "body",
           resourcePath: "body.md",

@@ -3098,7 +3098,6 @@
       "aiRewritePrompt": "Décrivez comment réécrire ce fichier",
       "aiRewriteRunning": "Réécriture en cours…",
       "binaryPreviewUnsupported": "L'aperçu des fichiers binaires n'est pas pris en charge. Modifiez ce fichier en téléversant à nouveau le paquet de compétence.",
-      "builtInBadge": "Intégré",
       "builtInSection": "Compétences intégrées",
       "chooseFile": "Choisissez un fichier ou déposez-le ici",
       "coaching": {

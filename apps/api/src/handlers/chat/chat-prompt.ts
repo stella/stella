@@ -72,7 +72,6 @@ import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
-  getChatSkillMetadata,
   listAvailableChatSkillMetadata,
   resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
@@ -344,7 +343,6 @@ export type UserContext = IncomingUserContext;
 
 type PromptSkillMetadata = SkillMetadata & {
   displayName?: string | undefined;
-  source?: "built-in" | "installed" | undefined;
 };
 
 const chatCacheStablePrefixSchema = v.pipe(
@@ -373,7 +371,7 @@ export type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 export type ChatPromptParts = {
   cacheStablePrefix: ChatCacheStablePrefix;
   /**
-   * Server-built scaffold: product copy, built-in skill catalog,
+   * Server-built scaffold: product copy, skill catalog,
    * jurisdictions, workspace metadata. Carries no third-party PII
    * and is sent to the model verbatim — *no anonymization*.
    */
@@ -655,7 +653,7 @@ export const buildChatSystemPromptParts = async ({
               userId,
             }),
           )
-        : getChatSkillMetadata();
+        : [];
     const activeSkillContext =
       organizationId && userId
         ? yield* Result.await(
@@ -938,7 +936,7 @@ type BuildGlobalPromptProps = {
 
 export const buildGlobalPrompt = ({
   practiceJurisdictions = [],
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps) =>
@@ -951,7 +949,7 @@ export const buildGlobalPrompt = ({
 
 export const buildGlobalPromptParts = ({
   practiceJurisdictions = [],
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
@@ -964,7 +962,7 @@ export const buildGlobalPromptParts = ({
   });
 
 export type ChatContextPromptEstimate = {
-  /** System-prompt tokens: core rule sections + built-in skill catalog. */
+  /** System-prompt tokens: core rule sections + the given skill catalog. */
   promptTokens: number;
   /** Tool-catalog tokens: the code-mode read surface (`CHAT_CODE_MODE_SYSTEM_PROMPT`). */
   toolTokens: number;
@@ -986,7 +984,7 @@ export type ChatContextPromptEstimate = {
  */
 export const estimateChatContextPromptTokens = ({
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
 }: {
   toolAvailability?: ChatToolAvailability | undefined;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
@@ -1018,7 +1016,7 @@ const buildWorkspacePromptPartsFromDb = async ({
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability,
   userContext,
   workspaceId,
@@ -1183,7 +1181,7 @@ export const buildWorkspacePromptText = ({
   extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
@@ -1206,7 +1204,7 @@ export const buildWorkspacePromptParts = ({
   extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
@@ -2465,7 +2463,6 @@ const mergeActiveSkillMetadata = ({
     description: activeSkillContext.description,
     displayName: activeSkillContext.displayName,
     name: activeSkillContext.toolName,
-    source: activeSkillContext.source,
     version: activeSkillContext.version,
   };
   const activeSkillIndex = skillMetadata.findIndex(
@@ -2486,7 +2483,6 @@ const mergeActiveSkillMetadata = ({
     return {
       ...skill,
       displayName: skill.displayName ?? activeMetadata.displayName,
-      source: skill.source ?? activeMetadata.source,
     };
   });
 };
@@ -2598,15 +2594,12 @@ const buildPromptParts = ({
   toolAvailability,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
-  const { safeSkillMetadata, untrustedSkillMetadata } =
-    splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
       ...buildCoreRuleSections({
         skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
         toolAvailability,
       }),
-      buildSkillCatalogSection(safeSkillMetadata),
       CHAT_CODE_MODE_SYSTEM_PROMPT,
     ]),
   );
@@ -2622,14 +2615,14 @@ const buildPromptParts = ({
   const safePrompt = brandChatSafePrompt(joinPromptSections(safeSections));
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. Installed skill names/descriptions are
+  // text into the prompt. Skill names/descriptions are
   // user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
   // anonymizer in anonymized mode.
   const untrustedSections: string[] = [
-    buildSkillCatalogSection(untrustedSkillMetadata),
+    buildSkillCatalogSection(skillMetadata),
     ...requestContextSections,
   ];
   const userContextBlock = buildUserContextBlock(userContext);
@@ -2650,24 +2643,6 @@ const buildPromptParts = ({
     skillMetadata,
     activeSkillContext: null,
   };
-};
-
-const splitSkillMetadataForPrompt = (
-  skillMetadata: readonly PromptSkillMetadata[],
-) => {
-  const safeSkillMetadata: PromptSkillMetadata[] = [];
-  const untrustedSkillMetadata: PromptSkillMetadata[] = [];
-
-  for (const skill of skillMetadata) {
-    if (skill.source === "installed") {
-      untrustedSkillMetadata.push(skill);
-      continue;
-    }
-
-    safeSkillMetadata.push(skill);
-  }
-
-  return { safeSkillMetadata, untrustedSkillMetadata };
 };
 
 const buildPracticeJurisdictionLine = (

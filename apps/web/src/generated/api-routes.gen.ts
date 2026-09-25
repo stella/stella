@@ -23787,19 +23787,6 @@ export type WebRoutes = {
         response: {
           200: {
             canManageTeam: T1bdf39f14a;
-            builtIn: Array<{
-              id: string;
-              scope: "built-in";
-              origin: "built-in";
-              slug: string;
-              name: string;
-              description: string;
-              version: T432e07d100;
-              license: T432e07d100;
-              compatibility: T432e07d100;
-              enabled: T1bdf39f14a;
-              resourceCount: number;
-            }>;
             installed: Array<{
               id: T7fc3acf5ac;
               scope: Ted097feadd;
@@ -34598,7 +34585,7 @@ type T85b5909e9d = {
 };
 
 type T8649aae095 = {
-  skillId?: T7fc3acf5ac;
+  skillId: T7fc3acf5ac;
   skillName: string;
 };
 

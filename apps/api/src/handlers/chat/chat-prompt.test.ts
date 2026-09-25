@@ -586,7 +586,8 @@ describe("chat prompt builders", () => {
     });
 
     expect(first.cacheStablePrefix).toBe(second.cacheStablePrefix);
-    expect(first.cacheStablePrefix).toContain("custom-research-skill");
+    expect(first.cacheStablePrefix).not.toContain("custom-research-skill");
+    expect(first.untrustedSuffix).toContain("custom-research-skill");
     expect(first.cacheStablePrefix).not.toContain("First User");
     expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);
@@ -643,7 +644,6 @@ describe("chat prompt builders", () => {
           description: "Use the Acme acquisition playbook.",
           displayName: "Acme Acquisition Review",
           name: "acme-acquisition-review",
-          source: "installed",
           version: null,
         },
       ],
@@ -668,7 +668,6 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
-      source: "installed",
       toolName: "active-workflow",
       version: "1.0",
     } satisfies ActiveChatSkillContext;
@@ -696,7 +695,6 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [],
-      source: "installed",
       toolName: "active-workflow",
       version: null,
     } satisfies ActiveChatSkillContext;

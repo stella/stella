@@ -7,7 +7,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import type { AgentSkillOrigin } from "@/api/db/schema";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -15,9 +14,9 @@ import {
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
-  listAvailableChatSkillResources,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
+  SKILL_RESOURCE_READ_STATUS,
 } from "@/api/lib/agent-skills/skills";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -34,23 +33,19 @@ import {
   skillContentHashAfter,
 } from "./content-hash";
 
-type AvailableSkillMetadata = SkillMetadata & {
-  source?: "built-in" | "installed" | undefined;
-};
-
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   /**
-   * A `validation` set registers the catalog tools whatever `skills` holds and
-   * accepts any skill name: the catalog that produced a persisted call may have
-   * changed since (a skill uninstalled, disabled, or renamed), and availability
-   * is decided when the tool runs, never by the schema.
+   * A `validation` set registers the catalog tools whatever `skills` holds:
+   * the catalog that produced a persisted call may have changed since (a
+   * skill uninstalled, disabled, or renamed), and availability is decided
+   * when the tool runs, never by the schema.
    */
   purpose?: ChatToolSetPurpose | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  skills: readonly AvailableSkillMetadata[];
+  skills: readonly SkillMetadata[];
   userId: SafeId<"user">;
 };
 
@@ -64,7 +59,7 @@ export const createSkillTools = ({
   userId,
 }: CreateSkillToolsProps) => {
   const availableSkillIds = new Set(skills.map((skill) => skill.name));
-  const activeSkillId = activeSkillContext?.id ?? undefined;
+  const activeSkillId = activeSkillContext?.id;
   const activeEditableSkillContext =
     toActiveEditableSkillContext(activeSkillContext);
   const currentSkillEditTools =
@@ -85,10 +80,6 @@ export const createSkillTools = ({
       ...currentSkillEditTools,
     };
   }
-
-  const skillNameSchema = forValidation
-    ? anySkillNameSchema
-    : createSkillNameSchema(skills);
 
   return {
     "load-skill": toolDefinition({
@@ -124,6 +115,9 @@ export const createSkillTools = ({
         });
       }
       const skill = skillResult.value;
+      if (skill === null) {
+        throw unavailableSkillError(skillName);
+      }
       return {
         name: skill.name,
         version: skill.version,
@@ -157,118 +151,59 @@ export const createSkillTools = ({
         skillName,
       });
 
-      const resourcesResult = await listAvailableChatSkillResources({
+      const readResult = await readAvailableChatSkillResource({
         activeSkillId,
         organizationId,
+        path,
         safeDb,
         skillName,
         userId,
       });
-      if (Result.isError(resourcesResult)) {
+      if (Result.isError(readResult)) {
         throw new ChatToolError({
           kind: "server-defect",
-          message: "Skill resources could not be listed.",
-          cause: resourcesResult.error,
+          message: "Skill resource could not be read.",
+          cause: readResult.error,
         });
       }
 
-      const resources = resourcesResult.value;
-      if (!resources.some((resource) => resource.path === path)) {
-        throw new ChatToolError({
-          kind: "not-found",
-          message: "Unknown or unavailable skill resource path.",
-        });
+      const read = readResult.value;
+      switch (read.status) {
+        case SKILL_RESOURCE_READ_STATUS.skillNotFound:
+          throw unavailableSkillError(skillName);
+        case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
+          throw new ChatToolError({
+            kind: "not-found",
+            message: "Unknown or unavailable skill resource path.",
+          });
+        case SKILL_RESOURCE_READ_STATUS.found:
+          return {
+            skillName,
+            path,
+            mimeType: inferSkillResourceMimeType(path),
+            content: read.content,
+            skillId: read.skillId,
+            origin: read.origin,
+          };
+        default:
+          return read satisfies never;
       }
-
-      const read = await readSkillResourceContent({
-        activeSkillId,
-        organizationId,
-        path,
-        safeDb,
-        skillName,
-        userId,
-      });
-      return {
-        skillName,
-        path,
-        mimeType: inferSkillResourceMimeType(path),
-        content: read.content,
-        skillId: read.skillId,
-        origin: read.origin,
-      };
     }),
 
     ...currentSkillEditTools,
   };
 };
 
-const SKILL_NAME_DESCRIPTION =
-  "Skill name exactly as listed in the chat skill catalog.";
-
-const anySkillNameSchema = v.pipe(
+// Installed skill names are user-controlled and can carry privileged matter
+// context, so they stay out of the provider-visible JSON Schema; the runtime
+// availability check is authoritative.
+const skillNameSchema = v.pipe(
   v.string(),
-  v.description(SKILL_NAME_DESCRIPTION),
+  v.description("Skill name exactly as listed in the chat skill catalog."),
 );
-
-const createSkillNameSchema = (skills: readonly AvailableSkillMetadata[]) => {
-  // Installed names are user-controlled and can contain privileged matter
-  // context. They stay out of provider-visible JSON Schema; the runtime
-  // availability check remains authoritative for mixed catalogs. A catalog
-  // containing only built-in public names can make invalid calls impossible
-  // at the provider boundary with an exact enum.
-  if (skills.some((skill) => skill.source === "installed")) {
-    return anySkillNameSchema;
-  }
-
-  const skillNames = skills.map((skill) => skill.name);
-  const firstSkillName = skillNames.at(0);
-  if (firstSkillName === undefined) {
-    return anySkillNameSchema;
-  }
-
-  return v.pipe(
-    v.picklist([firstSkillName, ...skillNames.slice(1)]),
-    v.description(SKILL_NAME_DESCRIPTION),
-  );
-};
-
-const readSkillResourceContent = async ({
-  activeSkillId,
-  organizationId,
-  path,
-  safeDb,
-  skillName,
-  userId,
-}: {
-  activeSkillId?: SafeId<"agentSkill"> | undefined;
-  organizationId: SafeId<"organization">;
-  path: string;
-  safeDb: SafeDb;
-  skillName: string;
-  userId: SafeId<"user">;
-}) => {
-  const resourceResult = await readAvailableChatSkillResource({
-    activeSkillId,
-    organizationId,
-    path,
-    safeDb,
-    skillName,
-    userId,
-  });
-  if (Result.isError(resourceResult)) {
-    throw new ChatToolError({
-      kind: "server-defect",
-      message: "Skill resource could not be read.",
-      cause: resourceResult.error,
-    });
-  }
-  return resourceResult.value;
-};
 
 type ActiveEditableSkillContext = ActiveChatSkillContext & {
   editable: true;
-  id: SafeId<"agentSkill">;
-  origin: AgentSkillOrigin;
 };
 
 const toActiveEditableSkillContext = (
@@ -276,16 +211,9 @@ const toActiveEditableSkillContext = (
 ): ActiveEditableSkillContext | null => {
   if (
     activeSkillContext?.editable === true &&
-    activeSkillContext.id !== null &&
-    activeSkillContext.origin !== "built-in" &&
     activeSkillContext.origin !== "bundled"
   ) {
-    return {
-      ...activeSkillContext,
-      editable: true,
-      id: activeSkillContext.id,
-      origin: activeSkillContext.origin,
-    };
+    return { ...activeSkillContext, editable: true };
   }
 
   return null;
@@ -735,6 +663,14 @@ const inferSkillResourceMimeType = (path: string): string => {
   return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
 };
 
+const unavailableSkillError = (skillName: string) =>
+  new ChatToolError({
+    kind: "not-found",
+    message:
+      `No skill named "${skillName}" is available in this chat context. ` +
+      "Continue without it or choose an exact name from the skill catalog.",
+  });
+
 const assertAvailableSkill = ({
   availableSkillIds,
   skillName,
@@ -743,11 +679,6 @@ const assertAvailableSkill = ({
   skillName: string;
 }) => {
   if (!availableSkillIds.has(skillName)) {
-    throw new ChatToolError({
-      kind: "not-found",
-      message:
-        `No skill named "${skillName}" is available in this chat context. ` +
-        "Continue without it or choose an exact name from the skill catalog.",
-    });
+    throw unavailableSkillError(skillName);
   }
 };

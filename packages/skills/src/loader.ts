@@ -2,7 +2,6 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { getSkillResourceKind } from "./resource-kinds";
 import type { SkillResourceKind } from "./resource-kinds";
-import { GENERATED_SKILLS } from "./skills.gen";
 
 export type SkillMetadata = {
   compatibility?: string | null;
@@ -16,11 +15,6 @@ export type SkillMetadata = {
 export type SkillResource = {
   path: string;
   kind: SkillResourceKind;
-};
-
-export type StellaSkill = SkillMetadata & {
-  body: string;
-  resources: SkillResource[];
 };
 
 const RESOURCE_EXTENSIONS = [
@@ -37,9 +31,6 @@ const RESOURCE_EXTENSIONS = [
   ".yaml",
   ".yml",
 ] as const;
-const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
-  GENERATED_SKILLS.map((skill) => [skill.id, skill]),
-);
 
 type Frontmatter = {
   compatibility: string | undefined;
@@ -48,77 +39,6 @@ type Frontmatter = {
   metadata: Record<string, string> | undefined;
   name: string;
   version: string | undefined;
-};
-
-type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
-
-export const listSkillMetadata = (): SkillMetadata[] =>
-  GENERATED_SKILLS.map((skill) => readSkillMetadata(skill.id)).toSorted(
-    (a, b) => a.name.localeCompare(b.name),
-  );
-
-export const loadSkill = (skillId: string): StellaSkill => {
-  const skill = getSkill(skillId);
-  const parsed = parseBundledSkillFile(skill.source);
-
-  return {
-    ...parsed.metadata,
-    body: parsed.body,
-    resources: listSkillResources(skillId),
-  };
-};
-
-export const listSkillResources = (skillId: string): SkillResource[] => {
-  const skill = getSkill(skillId);
-  return skill.resources.map(({ kind, path }) => ({ kind, path }));
-};
-
-export const readSkillResource = ({
-  resourcePath,
-  skillId,
-}: {
-  resourcePath: string;
-  skillId: string;
-}): string => {
-  const normalizedPath = normalizeResourcePath(resourcePath);
-  const skill = getSkill(skillId);
-  if (!isAllowedResourcePath(normalizedPath)) {
-    panic("Skill resource path is not a whitelisted resource");
-  }
-
-  const resource = skill.resources.find(
-    (candidate) => candidate.path === normalizedPath,
-  );
-  if (!resource) {
-    panic("Skill resource not found");
-  }
-
-  return resource.source;
-};
-
-const readSkillMetadata = (skillId: string): SkillMetadata =>
-  parseBundledSkillFile(getSkill(skillId).source).metadata;
-
-/** Bundled skills are checked in; an invalid one is a build defect. */
-const parseBundledSkillFile = (source: string): ParsedSkillFile => {
-  const parsed = parseSkillFile(source);
-  if (parsed.isErr()) {
-    return panic(`Bundled skill file is invalid: ${parsed.error.message}`);
-  }
-  return parsed.value;
-};
-
-const getSkill = (skillId: string) => {
-  if (!/^[a-z0-9][a-z0-9-]*$/u.test(skillId)) {
-    panic("Invalid skill id");
-  }
-
-  const skill = skillsById.get(skillId);
-  if (!skill) {
-    panic(`Unknown skill: ${skillId}`);
-  }
-
-  return skill;
 };
 
 /** A SKILL.md file whose frontmatter does not satisfy the skill format. */

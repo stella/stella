@@ -3098,7 +3098,6 @@
       "aiRewritePrompt": "Beschreiben Sie, wie diese Datei umgeschrieben werden soll",
       "aiRewriteRunning": "Wird umgeschrieben…",
       "binaryPreviewUnsupported": "Die Vorschau von Binärdateien wird nicht unterstützt. Bearbeiten Sie diese Datei, indem Sie das Skill-Paket erneut hochladen.",
-      "builtInBadge": "Integriert",
       "builtInSection": "Integrierte Skills",
       "chooseFile": "Datei auswählen oder hierher ziehen",
       "coaching": {

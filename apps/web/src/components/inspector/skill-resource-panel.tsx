@@ -63,16 +63,11 @@ export const SkillResourcePanel = ({
   );
 
   const renderMode = detectRenderMode(tab.mimeType, tab.resourcePath);
-  const isEditable =
-    renderMode !== "pdf" &&
-    tab.origin !== "built-in" &&
-    tab.origin !== "bundled" &&
-    tab.skillId !== null;
+  const isEditable = renderMode !== "pdf" && tab.origin !== "bundled";
   // Markdown edits in the shared hybrid editor (auto-saving), so the ICP
   // never leaves the formatted view; syntax only shows on the block being edited.
   // Other text files keep the raw editor below.
-  const useHybridEditor =
-    renderMode === "markdown" && isEditable && tab.skillId !== null;
+  const useHybridEditor = renderMode === "markdown" && isEditable;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tab.content);
@@ -91,7 +86,7 @@ export const SkillResourcePanel = ({
   }
 
   const save = async () => {
-    if (saving || tab.skillId === null) {
+    if (saving) {
       return;
     }
     setSaving(true);
@@ -149,9 +144,6 @@ export const SkillResourcePanel = ({
     return fresh;
   };
   const runSaveLoop = async (editorMarkdown: string) => {
-    if (tab.skillId === null) {
-      return;
-    }
     // Snapshot the tab now: the loop may outlive a tab switch, and `tab` would
     // then point at a different file.
     const { content, id: tabId, resourcePath, target } = tab;

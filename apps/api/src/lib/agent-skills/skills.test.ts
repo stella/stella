@@ -281,9 +281,10 @@ describe("available active chat skills", () => {
       throw activeReadResult.error;
     }
 
-    expect(activeLoadResult.value.body).toBe("Team skill body");
-    expect(fallbackLoadResult.value.body).toBe("Private skill body");
+    expect(activeLoadResult.value?.body).toBe("Team skill body");
+    expect(fallbackLoadResult.value?.body).toBe("Private skill body");
     expect(activeReadResult.value).toEqual({
+      status: "found",
       content: "team resource",
       origin: "authored",
       skillId: activeTeamSkillId,

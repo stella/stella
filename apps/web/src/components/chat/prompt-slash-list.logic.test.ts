@@ -5,6 +5,7 @@ import {
   getSlashItemsInRenderOrder,
   groupSlashItemsBySection,
 } from "@/components/chat/prompt-slash-list.logic";
+import { getReservedChatCommands } from "@/lib/reserved-chat-commands";
 
 describe("prompt slash list ordering", () => {
   test("matches selection order to grouped render order", () => {
@@ -13,11 +14,9 @@ describe("prompt slash list ordering", () => {
       name: "Team review",
       scope: "team",
     });
-    const builtInSkill = skillItem({
-      id: "built-in-summary",
-      name: "Built-in summary",
-      scope: "built-in",
-    });
+    const commandItems: SlashItem[] = getReservedChatCommands({
+      hasPersistedThread: false,
+    }).map((command) => ({ kind: "command", command }));
     const privatePrompt = promptItem({
       id: "private-draft",
       name: "Private draft",
@@ -26,7 +25,7 @@ describe("prompt slash list ordering", () => {
 
     const groups = groupSlashItemsBySection([
       teamSkill,
-      builtInSkill,
+      ...commandItems,
       privatePrompt,
     ]);
 
@@ -38,7 +37,7 @@ describe("prompt slash list ordering", () => {
     expect(getSlashItemsInRenderOrder(groups).map(getItemId)).toEqual([
       "private-draft",
       "team-review",
-      "built-in-summary",
+      "new",
     ]);
   });
 });
@@ -63,7 +62,7 @@ const promptItem = ({ id, name, scope }: PromptItemInput): SlashItem => ({
 type SkillItemInput = {
   id: string;
   name: string;
-  scope: "private" | "team" | "built-in";
+  scope: "private" | "team";
 };
 
 const skillItem = ({ id, name, scope }: SkillItemInput): SlashItem => ({

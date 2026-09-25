@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { SkillResourceOrigin } from "@/components/inspector/inspector-store-types";
 import type { TranslationKey } from "@/i18n/types";
 import type {
   skillCommentsOptions,
@@ -53,12 +54,15 @@ export const isOpenProposalStatus = (status: SkillProposalStatus): boolean =>
 
 // Bodies that ship with the product are replaced wholesale on update, so the
 // API refuses proposals against them.
-const NON_AUTHORED_ORIGINS = ["built-in", "bundled"] as const;
+const PROPOSABLE_BY_ORIGIN = {
+  authored: true,
+  bundled: false,
+  upload: true,
+  url: true,
+} as const satisfies Record<SkillResourceOrigin, boolean>;
 
-export const isProposableOrigin = (origin: string): boolean =>
-  !NON_AUTHORED_ORIGINS.some(
-    (nonAuthoredOrigin) => nonAuthoredOrigin === origin,
-  );
+export const isProposableOrigin = (origin: SkillResourceOrigin): boolean =>
+  PROPOSABLE_BY_ORIGIN[origin];
 
 type CanManageSkillOptions = {
   scope: "team" | "private";

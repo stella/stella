@@ -74,7 +74,6 @@ import {
 import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -689,7 +688,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     purpose,
     recordAuditEvent,
     safeDb,
-    skills: skillMetadata ?? getChatSkillMetadata(),
+    skills: skillMetadata ?? [],
     userId,
   });
   // Unified business-registry tool: register once with a dynamic

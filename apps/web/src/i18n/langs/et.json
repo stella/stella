@@ -3098,7 +3098,6 @@
       "aiRewritePrompt": "Kirjelda, kuidas seda faili ümber kirjutada",
       "aiRewriteRunning": "Ümberkirjutamine…",
       "binaryPreviewUnsupported": "Binaarfaili eelvaade ei ole toetatud. Muuda seda faili, laadides oskusepaketi uuesti üles.",
-      "builtInBadge": "Sisseehitatud",
       "builtInSection": "Sisseehitatud oskused",
       "chooseFile": "Vali fail või lohista see siia",
       "coaching": {

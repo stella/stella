@@ -3101,7 +3101,6 @@ type Messages = {
       "aiRewritePrompt": "Describe how to rewrite this file";
       "aiRewriteRunning": "Rewriting…";
       "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.";
-      "builtInBadge": "Built in";
       "builtInSection": "Built-in skills";
       "chooseFile": "Choose a file or drag it here";
       "coaching": {

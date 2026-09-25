@@ -216,7 +216,7 @@ export const resolveBrowserClientCapability = (
     : undefined;
 
 export const activeSkillSchema = activeContextSchema({
-  skillId: t.Optional(tSafeId("agentSkill")),
+  skillId: tSafeId("agentSkill"),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
 

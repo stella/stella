@@ -1,9 +1,8 @@
 /**
  * Globs `entries/<kind>/<slug>/manifest.json` + `icon.svg`, emits
  * `src/catalogue.gen.ts` with public manifests pre-imported, and emits
- * API-only skill install payloads into a separate module. Same trick
- * as `packages/skills/scripts/generate-manifest.ts`: keeps production
- * code filesystem-free and lets bundlers tree-shake.
+ * API-only skill install payloads into a separate module. Keeps
+ * production code filesystem-free and lets bundlers tree-shake.
  *
  * Run via `bun run generate` after adding/editing an entry; CI
  * verifies the file is up to date via `--check`.

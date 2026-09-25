@@ -17,14 +17,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isActiveSkillChatContext = (
   value: unknown,
-): value is ActiveSkillChatContext => {
-  if (!isRecord(value) || typeof value["skillName"] !== "string") {
-    return false;
-  }
-
-  const skillId = value["skillId"];
-  return skillId === undefined || typeof skillId === "string";
-};
+): value is ActiveSkillChatContext =>
+  isRecord(value) &&
+  typeof value["skillName"] === "string" &&
+  typeof value["skillId"] === "string";
 
 const getToolDetailActiveSkillContext = (
   payload: unknown,
@@ -63,10 +59,7 @@ export const getActiveSkillChatContext = (
   catalogueEntries?: readonly ActiveSkillCatalogueEntry[],
 ): ActiveSkillChatContext | undefined => {
   if (tab?.type === "skill-resource") {
-    return {
-      ...(tab.skillId === null ? {} : { skillId: tab.skillId }),
-      skillName: tab.skillName,
-    };
+    return { skillId: tab.skillId, skillName: tab.skillName };
   }
 
   if (tab?.type === "chat") {
