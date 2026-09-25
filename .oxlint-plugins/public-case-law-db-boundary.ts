@@ -13,27 +13,35 @@
 // `@/api/lib/public-law-read-db` or `@/api/lib/public-law-shared-query` — and
 // the owners are always in it. Each statement a `sql` template, a `sql.raw`
 // string or a string `.execute()` spells is composed with the fragments this
-// file writes (a fragment a statement interpolates is read in place), then
-// tokenized: strings, quoted identifiers, dollar quotes and comments in one
-// pass. Every relation in a FROM list (comma joins included) or after JOIN,
-// quoted or schema-qualified, must be in the relation map, a CTE the same
-// statement defines, or a system catalog. An interpolated relation must be a
-// public schema table or a value the rule can enumerate, such as a parameter
-// typed as a union of string literals.
+// file writes (a fragment a statement interpolates is read in place, and
+// concatenated raw text is joined), then tokenized in one pass that keeps its
+// state across the composed pieces: strings, quoted identifiers, dollar
+// quotes and comments are consumed where they start. A parameter typed as a
+// union of string literals is expanded, and the statement is read once per
+// alternative. Every relation in a FROM list (comma joins included) or after
+// JOIN, quoted or schema-qualified, must be in the relation map, a CTE the
+// statement defines, or a system catalog. A CTE may not take the name of a
+// schema table: the rule does not model which references it hides. An
+// interpolated relation must be a public schema table.
 //
 // SQL spliced in as raw text must be something the rule can read: a literal,
-// a constant, a parameter typed as a literal union, or a call to a reviewed
-// scalar producer (`REVIEWED_SQL_PRODUCERS`, each with the reason it names no
-// relation). Anything else is opaque executed SQL and is reported.
+// a constant this file defines, a literal-union parameter, a constant listed
+// in `REVIEWED_SQL_CONSTANTS`, or a call to a producer in
+// `REVIEWED_SQL_PRODUCERS` whose SQL-bearing arguments are literal
+// identifiers or qualified columns. Anything else is opaque executed SQL and
+// is reported.
 //
-// What the rule does not see: a fragment imported from a module outside the
-// boundary is read nowhere (its text lives in a file that imports no owner),
-// and a query builder's `.from(table)` is checked only through the case-law
-// boundary's schema-import allowlist, which legislation and shared-query
-// files do not join. Lint is the early signal; the reader-role suite, which
-// runs the registered queries as the role itself, is the proof.
+// Out of scope: what a reviewed producer renders beyond its checked
+// arguments (the rule does not follow calls into other modules); a fragment
+// imported from a module outside the boundary; a query builder's
+// `.from(table)` outside the case-law boundary's schema-import allowlist;
+// nested WITH scopes and several statements in one string, which share one
+// CTE set. Lint is the early signal. The enforcement boundary is the reader
+// role itself, whose grants and policies the reader-role suite exercises.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 import {
@@ -67,23 +75,33 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 const SCHEMA_MODULE = "apps/api/src/db/schema";
 
 /**
+ * Where a producer takes SQL text: an argument position, or named properties
+ * of an object argument.
+ */
+type SqlArgument = number | { index: number; properties: readonly string[] };
+
+/**
  * Functions whose string result may be spliced into public-law SQL as raw
  * text. Each renders a scalar expression over the column names its caller
- * passes as code constants, and names no relation.
+ * passes; `sqlArguments` are the arguments it interpolates verbatim, and the
+ * rule accepts only literal identifiers or qualified columns there.
  */
 export const REVIEWED_SQL_PRODUCERS: readonly {
   modules: readonly string[];
   name: string;
+  sqlArguments: readonly SqlArgument[];
   reason: string;
 }[] = [
   {
     modules: ["apps/api/src/lib/case-law/court-weights"],
     name: "courtTierSqlFromMap",
+    sqlArguments: [{ index: 0, properties: ["courtColumn", "countryColumn"] }],
     reason: "A CASE over the court registry's patterns; reads no relation.",
   },
   {
     modules: ["apps/api/src/lib/case-law/published-decisions"],
     name: "publishedCaseLawDecisionSqlFor",
+    sqlArguments: [0],
     reason: "A predicate over the aliased decision's metadata column.",
   },
   {
@@ -92,19 +110,75 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
       "apps/api/src/lib/case-law/redistribution-sql",
     ],
     name: "redistributableCaseLawSourceSqlFor",
+    sqlArguments: [0],
     reason: "A predicate over the aliased source's descriptor column.",
   },
   {
     modules: ["apps/api/src/handlers/case-law/citation-score"],
     name: "polarityWeightSql",
+    sqlArguments: [0],
     reason: "A CASE over a citation's polarity column.",
   },
   {
     modules: ["apps/api/src/handlers/case-law/citation-score"],
     name: "courtWeightSql",
+    sqlArguments: [0],
     reason: "A CASE over the registry's patterns and a court column.",
   },
 ];
+
+/**
+ * Imported constants whose members may be spliced into public-law SQL as
+ * raw text. Their values are fixed scalars, not SQL.
+ */
+export const REVIEWED_SQL_CONSTANTS: readonly {
+  modules: readonly string[];
+  name: string;
+  reason: string;
+}[] = [
+  {
+    modules: ["apps/api/src/lib/limits"],
+    name: "LIMITS",
+    reason: "Numeric limits.",
+  },
+  {
+    modules: ["apps/api/src/handlers/case-law/polarity/consts"],
+    name: "POLARITY",
+    reason: "Polarity labels, fixed lowercase words.",
+  },
+];
+
+// A producer's SQL-bearing argument: a bare identifier or `alias.column`.
+const SQL_IDENTIFIER_RE = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/iu;
+
+// The SQL name of every table and view the schema defines, read once from
+// the schema sources. A CTE that takes one of these names is reported.
+const SCHEMA_TABLE_NAME_RE =
+  /\bpg(?:Table|View|MaterializedView)\(\s*"(?<name>[a-z0-9_]+)"/gu;
+
+const readSchemaTableNames = (): ReadonlySet<string> => {
+  const directory = fileURLToPath(
+    new URL("../apps/api/src/db/schema/", import.meta.url),
+  );
+  const names = new Set<string>(PUBLIC_LAW_RELATION_SET_SOURCE);
+  const files = existsSync(directory) ? readdirSync(directory) : [];
+  for (const file of files.filter((name) => name.endsWith(".ts"))) {
+    const source = readFileSync(`${directory}${file}`, "utf-8");
+    for (const match of source.matchAll(SCHEMA_TABLE_NAME_RE)) {
+      const name = match.groups?.name;
+      if (name !== undefined) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+};
+
+const PUBLIC_LAW_RELATION_SET_SOURCE: readonly string[] = Object.values(
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
+);
+
+const SCHEMA_TABLE_NAMES = readSchemaTableNames();
 
 const PRIVATE_SQL_TOKEN_RE =
   /\b(?:workspace|workspaces|organization|organizations|entity|entities|field|fields|file|files|chat|user|session|account|matter|matters|task|tasks|contact|contacts)\b/iu;
@@ -290,19 +364,82 @@ const initializerOf = (context: RuleContext, node: AstNode): AstNode | null => {
   return variable === null ? null : stableInitializer(variable);
 };
 
-const isReviewedProducerCall = (context: RuleContext, node: AstNode) =>
-  node.type === "CallExpression" &&
-  REVIEWED_SQL_PRODUCERS.some((producer) =>
-    isImportedFrom({
-      context,
-      node: node.callee,
-      modules: producer.modules,
-      names: new Set([producer.name]),
-    }),
-  );
+type ReportedIssue = {
+  node: AstNode;
+  messageId: "opaqueSql" | "producerArgument";
+};
 
-// `LIMIT`, `POLARITY.UNKNOWN`: a code constant, named in capitals.
-const isConstantReference = (node: unknown): boolean => {
+const reviewedProducer = (context: RuleContext, node: AstNode) =>
+  node.type === "CallExpression"
+    ? REVIEWED_SQL_PRODUCERS.find((producer) =>
+        isImportedFrom({
+          context,
+          node: node.callee,
+          modules: producer.modules,
+          names: new Set([producer.name]),
+        }),
+      )
+    : undefined;
+
+const argumentAt = (call: AstNode, index: number): AstNode | null =>
+  Array.isArray(call.arguments)
+    ? unwrapExpression(call.arguments.at(index))
+    : null;
+
+const propertyValue = (object: AstNode, name: string): AstNode | null => {
+  const properties = Array.isArray(object.properties) ? object.properties : [];
+  for (const property of properties) {
+    if (
+      isAstNode(property) &&
+      property.type === "Property" &&
+      property.computed === false &&
+      getPropertyName(property.key) === name
+    ) {
+      return unwrapExpression(property.value);
+    }
+  }
+  return null;
+};
+
+const isSqlIdentifierLiteral = (node: AstNode | null): boolean =>
+  isStringLiteral(node) && SQL_IDENTIFIER_RE.test(node.value);
+
+/**
+ * The SQL-bearing arguments of a reviewed producer call that are not literal
+ * identifiers or qualified columns. The producer renders them verbatim, so a
+ * subquery or anything computed there is text the rule cannot read.
+ */
+const invalidProducerArguments = (
+  call: AstNode,
+  sqlArguments: readonly SqlArgument[],
+): AstNode[] => {
+  const invalid: AstNode[] = [];
+  for (const sqlArgument of sqlArguments) {
+    const index =
+      typeof sqlArgument === "number" ? sqlArgument : sqlArgument.index;
+    const argument = argumentAt(call, index);
+    if (typeof sqlArgument === "number") {
+      if (!isSqlIdentifierLiteral(argument)) {
+        invalid.push(argument ?? call);
+      }
+      continue;
+    }
+    if (!isAstNode(argument) || argument.type !== "ObjectExpression") {
+      invalid.push(argument ?? call);
+      continue;
+    }
+    for (const property of sqlArgument.properties) {
+      const value = propertyValue(argument, property);
+      if (!isSqlIdentifierLiteral(value)) {
+        invalid.push(value ?? argument);
+      }
+    }
+  }
+  return invalid;
+};
+
+// `LIMITS.name`, `POLARITY.UNKNOWN`: a member of a reviewed constant.
+const isReviewedConstant = (context: RuleContext, node: unknown): boolean => {
   let target = unwrapExpression(node);
   while (
     isAstNode(target) &&
@@ -311,41 +448,44 @@ const isConstantReference = (node: unknown): boolean => {
   ) {
     target = unwrapExpression(target.object);
   }
-  return isIdentifier(target) && CONSTANT_EXPORT_RE.test(target.name);
+  return (
+    isAstNode(target) &&
+    REVIEWED_SQL_CONSTANTS.some((constant) =>
+      isImportedFrom({
+        context,
+        node: target,
+        modules: constant.modules,
+        names: new Set([constant.name]),
+      }),
+    )
+  );
 };
 
-// `String(LIMIT)` or `String(LIMITS.name)`: a code constant rendered as text.
-const isConstantString = (node: AstNode): boolean =>
-  node.type === "CallExpression" &&
-  isIdentifier(unwrapExpression(node.callee), "String") &&
-  isConstantReference(firstArgument(node));
-
-type RawText = { parts: SqlPart[] } | { opaque: AstNode };
-
 /**
- * The text a raw-SQL argument can spell, or the node that makes it opaque.
- * Raw text is spliced into the statement unescaped, so every piece of it has
- * to be something the rule can read or enumerate.
+ * The text a raw-SQL argument can spell. Raw text is spliced into the
+ * statement unescaped, so every piece of it has to be something the rule can
+ * read or enumerate; anything else is recorded in `issues` and stands in as
+ * an opaque piece.
  */
-const rawText = (context: RuleContext, node: unknown, depth = 0): RawText => {
+const rawText = (
+  context: RuleContext,
+  node: unknown,
+  issues: ReportedIssue[],
+  depth = 0,
+): SqlPart[] => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
-    return { parts: [] };
+    return [];
   }
   if (depth > MAX_COMPOSITION_DEPTH) {
-    return { opaque: expression };
+    issues.push({ node: expression, messageId: "opaqueSql" });
+    return [{ kind: "opaque", node: expression }];
   }
   if (isStringLiteral(expression)) {
-    return {
-      parts: [{ kind: "text", text: expression.value, node: expression }],
-    };
+    return [{ kind: "text", text: expression.value, node: expression }];
   }
   if (expression.type === "Literal" && typeof expression.value === "number") {
-    return {
-      parts: [
-        { kind: "text", text: String(expression.value), node: expression },
-      ],
-    };
+    return [{ kind: "text", text: String(expression.value), node: expression }];
   }
   if (expression.type === "TemplateLiteral") {
     const parts: SqlPart[] = [];
@@ -360,50 +500,55 @@ const rawText = (context: RuleContext, node: unknown, depth = 0): RawText => {
       }
       const interpolated: unknown = expressions[index];
       if (isAstNode(interpolated)) {
-        const inner = rawText(context, interpolated, depth + 1);
-        if ("opaque" in inner) {
-          return inner;
-        }
-        parts.push(...inner.parts);
+        parts.push(...rawText(context, interpolated, issues, depth + 1));
       }
     }
-    return { parts };
+    return parts;
   }
   if (expression.type === "BinaryExpression" && expression.operator === "+") {
-    const left = rawText(context, expression.left, depth + 1);
-    if ("opaque" in left) {
-      return left;
-    }
-    const right = rawText(context, expression.right, depth + 1);
-    return "opaque" in right
-      ? right
-      : { parts: [...left.parts, ...right.parts] };
+    return [
+      ...rawText(context, expression.left, issues, depth + 1),
+      ...rawText(context, expression.right, issues, depth + 1),
+    ];
   }
-  if (isReviewedProducerCall(context, expression)) {
-    return { parts: [{ kind: "opaque", node: expression }] };
+  const producer = reviewedProducer(context, expression);
+  if (producer !== undefined) {
+    for (const invalid of invalidProducerArguments(
+      expression,
+      producer.sqlArguments,
+    )) {
+      issues.push({ node: invalid, messageId: "producerArgument" });
+    }
+    return [{ kind: "opaque", node: expression }];
+  }
+  if (
+    expression.type === "CallExpression" &&
+    isIdentifier(unwrapExpression(expression.callee), "String")
+  ) {
+    // `String(x)`: the text of `x`.
+    return rawText(context, firstArgument(expression), issues, depth + 1);
+  }
+  if (isReviewedConstant(context, expression)) {
+    return [{ kind: "opaque", node: expression }];
   }
   const values = literalUnionParameter(context, expression);
   if (values !== null) {
-    return { parts: [{ kind: "choice", values, node: expression }] };
+    return [{ kind: "choice", values, node: expression }];
   }
   const initializer = initializerOf(context, expression);
   if (initializer !== null) {
-    return rawText(context, initializer, depth + 1);
+    return rawText(context, initializer, issues, depth + 1);
   }
-  // An imported constant: reviewed code, but its text is not in this file,
-  // so it stays unreadable where a relation belongs.
-  if (isConstantString(expression) || isConstantReference(expression)) {
-    return { parts: [{ kind: "opaque", node: expression }] };
-  }
-  return { opaque: expression };
+  issues.push({ node: expression, messageId: "opaqueSql" });
+  return [{ kind: "opaque", node: expression }];
 };
 
 type Composition = {
   parts: SqlPart[];
   // Nodes this composition read in place of a separate statement.
   inlined: Set<AstNode>;
-  // Raw text the rule could not read.
-  opaque: AstNode[];
+  // Raw text the rule could not read, and producer arguments it refused.
+  issues: ReportedIssue[];
 };
 
 /**
@@ -416,18 +561,12 @@ const compose = (context: RuleContext, root: AstNode): Composition => {
   const composition: Composition = {
     parts: [],
     inlined: new Set(),
-    opaque: [],
+    issues: [],
   };
   const seen = new Set<AstNode>();
 
   const addRaw = (argument: unknown) => {
-    const text = rawText(context, argument);
-    if ("opaque" in text) {
-      composition.opaque.push(text.opaque);
-      composition.parts.push({ kind: "opaque", node: text.opaque });
-      return;
-    }
-    composition.parts.push(...text.parts);
+    composition.parts.push(...rawText(context, argument, composition.issues));
   };
 
   const addFragment = (node: AstNode, depth: number): boolean => {
@@ -544,7 +683,7 @@ const isWordStart = (char: string): boolean =>
   (char >= "a" && char <= "z") ||
   (char >= "A" && char <= "Z") ||
   char === "_" ||
-  char > "\u007f";
+  (char > "\u007f" && char !== "\uE000");
 
 const isWordChar = (char: string): boolean =>
   isWordStart(char) || (char >= "0" && char <= "9") || char === "$";
@@ -567,105 +706,148 @@ const dollarQuoteEnd = (text: string, start: number): number => {
   return close === -1 ? text.length : close + tag.length;
 };
 
+// Stands in for a non-text piece in the joined statement. A private-use
+// character never appears in SQL the files write.
+const PART_MARK = "\uE000";
+
 /**
- * One pass over a composed statement. Strings (with `''` and, in `E''`
- * strings, backslash escapes), quoted identifiers, dollar quotes and both
- * comment forms are consumed where they start, so none of them can hide or
- * forge a keyword.
+ * One pass over a composed statement, its text pieces joined so that
+ * concatenated text reads as one string and a string, quoted identifier,
+ * dollar quote or comment continues across a piece boundary. Each of those
+ * is consumed where it starts, so none can hide or forge a keyword. Every
+ * token keeps the piece its first character came from.
  */
 const tokenize = (parts: readonly SqlPart[]): SqlToken[] => {
-  const tokens: SqlToken[] = [];
+  let text = "";
+  const owners: SqlPart[] = [];
   for (const part of parts) {
-    if (part.kind !== "text") {
-      tokens.push({ kind: "part", owner: part });
-      continue;
+    const piece = part.kind === "text" ? part.text : PART_MARK;
+    text += piece;
+    owners.push(...Array.from({ length: piece.length }, () => part));
+  }
+  const tokens: SqlToken[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const char = text.charAt(index);
+    const next = text.charAt(index + 1);
+    const owner = owners[index];
+    if (owner === undefined) {
+      break;
     }
-    const text = part.text;
-    let index = 0;
-    while (index < text.length) {
-      const char = text.charAt(index);
-      const next = text.charAt(index + 1);
-      if (char === "-" && next === "-") {
-        const newline = text.indexOf("\n", index);
-        index = newline === -1 ? text.length : newline + 1;
-      } else if (char === "/" && next === "*") {
-        let depth = 1;
-        index += 2;
-        while (index < text.length && depth > 0) {
-          if (text.startsWith("/*", index)) {
-            depth += 1;
-            index += 2;
-          } else if (text.startsWith("*/", index)) {
-            depth -= 1;
-            index += 2;
-          } else {
-            index += 1;
-          }
-        }
-      } else if (char === "'") {
-        const escapes =
-          index > 0 &&
-          (text.charAt(index - 1) === "E" || text.charAt(index - 1) === "e") &&
-          (index < 2 || !isWordChar(text.charAt(index - 2)));
-        index += 1;
-        while (index < text.length) {
-          const inner = text.charAt(index);
-          if (escapes && inner === "\\") {
-            index += 2;
-          } else if (inner === "'" && text.charAt(index + 1) === "'") {
-            index += 2;
-          } else if (inner === "'") {
-            index += 1;
-            break;
-          } else {
-            index += 1;
-          }
-        }
-      } else if (char === '"') {
-        let value = "";
-        index += 1;
-        while (index < text.length) {
-          const inner = text.charAt(index);
-          if (inner === '"' && text.charAt(index + 1) === '"') {
-            value += '"';
-            index += 2;
-          } else if (inner === '"') {
-            index += 1;
-            break;
-          } else {
-            value += inner;
-            index += 1;
-          }
-        }
-        tokens.push({ kind: "quoted", value, owner: part });
-      } else if (char === "$" && !(next >= "0" && next <= "9")) {
-        const end = dollarQuoteEnd(text, index);
-        if (end === -1) {
-          tokens.push({ kind: "punct", value: char, owner: part });
-          index += 1;
+    if (char === PART_MARK && owner.kind !== "text") {
+      tokens.push({ kind: "part", owner });
+      index += 1;
+    } else if (char === "-" && next === "-") {
+      const newline = text.indexOf("\n", index);
+      index = newline === -1 ? text.length : newline + 1;
+    } else if (char === "/" && next === "*") {
+      let depth = 1;
+      index += 2;
+      while (index < text.length && depth > 0) {
+        if (text.startsWith("/*", index)) {
+          depth += 1;
+          index += 2;
+        } else if (text.startsWith("*/", index)) {
+          depth -= 1;
+          index += 2;
         } else {
-          index = end;
+          index += 1;
         }
-      } else if (isWordStart(char)) {
-        let end = index + 1;
-        while (end < text.length && isWordChar(text.charAt(end))) {
-          end += 1;
+      }
+    } else if (char === "'") {
+      const escapes =
+        index > 0 &&
+        (text.charAt(index - 1) === "E" || text.charAt(index - 1) === "e") &&
+        (index < 2 || !isWordChar(text.charAt(index - 2)));
+      index += 1;
+      while (index < text.length) {
+        const inner = text.charAt(index);
+        if (escapes && inner === "\\") {
+          index += 2;
+        } else if (inner === "'" && text.charAt(index + 1) === "'") {
+          index += 2;
+        } else if (inner === "'") {
+          index += 1;
+          break;
+        } else {
+          index += 1;
         }
-        tokens.push({
-          kind: "word",
-          value: text.slice(index, end).toLowerCase(),
-          owner: part,
-        });
-        index = end;
-      } else if (char.trim() === "") {
+      }
+    } else if (char === '"') {
+      let value = "";
+      index += 1;
+      while (index < text.length) {
+        const inner = text.charAt(index);
+        if (inner === '"' && text.charAt(index + 1) === '"') {
+          value += '"';
+          index += 2;
+        } else if (inner === '"') {
+          index += 1;
+          break;
+        } else {
+          value += inner;
+          index += 1;
+        }
+      }
+      tokens.push({ kind: "quoted", value, owner });
+    } else if (char === "$" && !(next >= "0" && next <= "9")) {
+      const end = dollarQuoteEnd(text, index);
+      if (end === -1) {
+        tokens.push({ kind: "punct", value: char, owner });
         index += 1;
       } else {
-        tokens.push({ kind: "punct", value: char, owner: part });
-        index += 1;
+        index = end;
       }
+    } else if (isWordStart(char)) {
+      let end = index + 1;
+      while (end < text.length && isWordChar(text.charAt(end))) {
+        end += 1;
+      }
+      tokens.push({
+        kind: "word",
+        value: text.slice(index, end).toLowerCase(),
+        owner,
+      });
+      index = end;
+    } else if (char.trim() === "") {
+      index += 1;
+    } else {
+      tokens.push({ kind: "punct", value: char, owner });
+      index += 1;
     }
   }
   return tokens;
+};
+
+/**
+ * The statement once per combination of its literal-union alternatives,
+ * each alternative read as text the choice's node answers for. Past
+ * `MAX_VARIANTS` combinations the choices stay opaque.
+ */
+const MAX_VARIANTS = 64;
+
+const statementVariants = (parts: readonly SqlPart[]): SqlPart[][] => {
+  let variants: SqlPart[][] = [[]];
+  for (const part of parts) {
+    if (part.kind !== "choice") {
+      for (const variant of variants) {
+        variant.push(part);
+      }
+      continue;
+    }
+    if (variants.length * part.values.length > MAX_VARIANTS) {
+      for (const variant of variants) {
+        variant.push({ kind: "opaque", node: part.node });
+      }
+      continue;
+    }
+    variants = variants.flatMap((variant) =>
+      part.values.map((value) =>
+        variant.concat({ kind: "text", text: value, node: part.node }),
+      ),
+    );
+  }
+  return variants;
 };
 
 // --- Relation scan ---------------------------------------------------------------
@@ -814,9 +996,9 @@ const tableReferences = (
 /** Every relation reference in a composed statement, and the CTEs it defines. */
 const statementReferences = (
   tokens: readonly SqlToken[],
-): { references: RelationReference[]; ctes: Set<string> } => {
+): { references: RelationReference[]; ctes: Map<string, SqlToken> } => {
   const references: RelationReference[] = [];
-  const ctes = new Set<string>();
+  const ctes = new Map<string, SqlToken>();
   // The function each open parenthesis belongs to, innermost last.
   const calls: (string | null)[] = [];
   for (const [index, token] of tokens.entries()) {
@@ -857,9 +1039,10 @@ const statementReferences = (
           }
           nameIndex -= 1;
         }
-        const name = nameOf(tokens[nameIndex]);
-        if (name !== null) {
-          ctes.add(name);
+        const nameToken = tokens[nameIndex];
+        const name = nameOf(nameToken);
+        if (name !== null && nameToken !== undefined) {
+          ctes.set(name, nameToken);
         }
       }
       continue;
@@ -888,7 +1071,7 @@ const statementReferences = (
 const isGrantedRelation = (
   schema: string | null,
   relation: string,
-  ctes: ReadonlySet<string>,
+  ctes: ReadonlyMap<string, SqlToken>,
 ): boolean => {
   if (schema !== null) {
     return (
@@ -944,8 +1127,12 @@ export default eslintCompatPlugin({
             "Public-law SQL may only read relations in the public-law relation map (`public-law-relations.ts`), a CTE the same statement defines, or a system catalog; '{{relation}}' is none of them.",
           uninspectableRelation:
             "Public-law SQL must name the relation it reads: a public schema table, a fragment written in this file, or a value the rule can enumerate.",
+          producerArgument:
+            "A reviewed SQL producer interpolates this argument verbatim; pass a literal identifier or qualified column.",
+          shadowingCte:
+            "A CTE in public-law SQL may not take the name of a schema table ('{{relation}}'); rename it.",
           opaqueSql:
-            "Raw SQL in a public-law read must be text the rule can read: a literal, a code constant, a literal-union parameter, or a reviewed producer in REVIEWED_SQL_PRODUCERS.",
+            "Raw SQL in a public-law read must be text the rule can read: a literal, a constant this file defines, a literal-union parameter, a constant in REVIEWED_SQL_CONSTANTS, or a producer in REVIEWED_SQL_PRODUCERS.",
         },
       },
       createOnce(context) {
@@ -958,54 +1145,57 @@ export default eslintCompatPlugin({
         let candidates: AstNode[] = [];
         let executedStrings: AstNode[] = [];
 
+        // One report per node, message and relation, however many
+        // statements or alternatives reach it.
+        let reported = new Set<string>();
+        const report = (
+          node: AstNode,
+          messageId:
+            | "unlistedRelation"
+            | "uninspectableRelation"
+            | "opaqueSql"
+            | "producerArgument"
+            | "shadowingCte",
+          relation = "",
+        ) => {
+          const key = `${String(node.range[0])}:${messageId}:${relation}`;
+          if (reported.has(key)) {
+            return;
+          }
+          reported.add(key);
+          context.report(
+            relation === ""
+              ? { node, messageId }
+              : { node, messageId, data: { relation } },
+          );
+        };
+
         const checkReference = (
           reference: RelationReference,
-          ctes: ReadonlySet<string>,
+          ctes: ReadonlyMap<string, SqlToken>,
         ) => {
           if (reference.kind === "name") {
             if (
               !isGrantedRelation(reference.schema, reference.relation, ctes)
             ) {
-              context.report({
-                node: reportNode(reference.token.owner),
-                messageId: "unlistedRelation",
-                data: {
-                  relation:
-                    reference.schema === null
-                      ? reference.relation
-                      : `${reference.schema}.${reference.relation}`,
-                },
-              });
+              report(
+                reportNode(reference.token.owner),
+                "unlistedRelation",
+                reference.schema === null
+                  ? reference.relation
+                  : `${reference.schema}.${reference.relation}`,
+              );
             }
             return;
           }
           const part = reference.part;
           if (part.kind === "table") {
             if (!part.public) {
-              context.report({
-                node: part.node,
-                messageId: "unlistedRelation",
-                data: { relation: part.name },
-              });
+              report(part.node, "unlistedRelation", part.name);
             }
             return;
           }
-          if (part.kind === "choice") {
-            for (const value of part.values) {
-              if (!isGrantedRelation(null, value.toLowerCase(), ctes)) {
-                context.report({
-                  node: part.node,
-                  messageId: "unlistedRelation",
-                  data: { relation: value },
-                });
-              }
-            }
-            return;
-          }
-          context.report({
-            node: part.node,
-            messageId: "uninspectableRelation",
-          });
+          report(part.node, "uninspectableRelation");
         };
 
         return {
@@ -1015,6 +1205,7 @@ export default eslintCompatPlugin({
             readsPublicLaw = false;
             candidates = [];
             executedStrings = [];
+            reported = new Set();
           },
           Program(node) {
             inBoundary =
@@ -1129,22 +1320,31 @@ export default eslintCompatPlugin({
                 inlined.add(node);
               }
             }
-            const reportedOpaque = new Set<AstNode>();
             for (const [root, composition] of compositions) {
-              for (const node of composition.opaque) {
-                if (!reportedOpaque.has(node)) {
-                  reportedOpaque.add(node);
-                  context.report({ node, messageId: "opaqueSql" });
-                }
+              for (const issue of composition.issues) {
+                report(issue.node, issue.messageId);
               }
               if (inlined.has(root)) {
                 continue;
               }
-              const { references, ctes } = statementReferences(
-                tokenize(composition.parts),
-              );
-              for (const reference of references) {
-                checkReference(reference, ctes);
+              for (const variant of statementVariants(composition.parts)) {
+                const { references, ctes } = statementReferences(
+                  tokenize(variant),
+                );
+                // A CTE named like a schema table hides it from some of the
+                // statement's references and not others; the rule does not
+                // model which, so the name is refused and every reference
+                // is read as the table.
+                const visible = new Map(ctes);
+                for (const [name, token] of ctes) {
+                  if (SCHEMA_TABLE_NAMES.has(name)) {
+                    visible.delete(name);
+                    report(reportNode(token.owner), "shadowingCte", name);
+                  }
+                }
+                for (const reference of references) {
+                  checkReference(reference, visible);
+                }
               }
             }
           },

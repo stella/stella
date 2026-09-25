@@ -1,6 +1,9 @@
 // Passive regression fixture for public-case-law-db-boundary. Importing the
 // public read connection puts this file inside the boundary.
 
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
+
 import {
   // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
   caseLawDecisions,
@@ -15,9 +18,15 @@ import {
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: namespace imports make the schema boundary unresolved
 import * as caseLawSchema from "@/api/db/schema";
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { polarityWeightSql } from "@/api/handlers/case-law/citation-score";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { LIMITS } from "@/api/lib/limits";
 
 declare const tx: {
   execute: (query: unknown) => unknown;
@@ -33,7 +42,6 @@ declare const sql: ((
 declare const getRelationName: () => keyof typeof tx.query;
 declare const relationFragment: unknown;
 declare const dynamicSql: string;
-declare const LIMITS: { pageSize: number };
 
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: private relation query crosses the boundary
 export const privateQuery = tx.query.caseLawMatterLinks.findMany();
@@ -143,7 +151,7 @@ export const runs = tx.execute("select 1 from legislation_index_jobs");
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 export const executedMapped = tx.execute("select 1 from case_law_decisions");
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
-export const constantRaw = sql.raw(String(LIMITS.pageSize));
+export const constantRaw = sql.raw(String(LIMITS.caseLawFacetLimit));
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 export const reviewedProducer = sql.raw(publishedCaseLawDecisionSqlFor("d"));
 
@@ -160,9 +168,35 @@ export const quotedKeyword = sql`select "from" from legislation_index_jobs`;
 export const dollarQuoted = sql`select $$ from x $$ from legislation_index_jobs`;
 // A CTE shadows a table only in the statement that defines it.
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
-export const ownCte = sql`with legislation_index_jobs as (select 1) select * from legislation_index_jobs`;
+export const ownCte = sql`with recent_jobs as (select 1) select * from recent_jobs`;
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a CTE of another statement does not cover this one
-export const otherStatement = sql`select * from legislation_index_jobs`;
+export const otherStatement = sql`select * from recent_jobs`;
+// A CTE may not take a schema table's name.
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- x2: fixture: the definition reads the table it shadows
+export const selfRead = sql`with legislation_index_jobs as (select * from legislation_index_jobs) select * from legislation_index_jobs`;
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a CTE named like a mapped relation
+export const mappedShadow = sql`with case_law_sources as (select 1) select * from case_law_sources`;
+
+// A reviewed producer's SQL arguments are literal identifiers or columns.
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const producerColumn = sql.raw(polarityWeightSql("c.polarity"));
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a subquery handed to a producer
+export const producerSubquery = sql.raw(polarityWeightSql("(select 1 from x)"));
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an argument the rule cannot read
+export const producerDynamic = sql.raw(polarityWeightSql(dynamicSql));
+
+// Raw text is read whole: concatenation, unions and constants.
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a keyword split across a concatenation
+export const split = sql.raw("select * fr" + "om legislation_index_jobs"); // oxlint-disable-line no-useless-concat -- fixture: the concatenation is the case
+export const wholeQuery = (
+  query: "select 1 from legislation_index_jobs" | "select 1",
+) =>
+  // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: one alternative is a whole unmapped query
+  sql.raw(query);
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an imported constant no contract covers
+export const importedConstant = sql.raw(DEFAULT_SEARCH_EXCERPT);
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const reviewedConstant = sql.raw(POLARITY.UNKNOWN);
 // A literal type is not SQL text.
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 export type OrganizationKind = "organization";
