@@ -50,6 +50,8 @@ import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/crea
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   executeFlowStep,
+  failFlowRunFromWorker,
+  FlowStepError,
   resolveFlowReviewGate as resolveFlowReviewGateWithDependencies,
 } from "@/api/lib/flows/flow-executor";
 import { fileFlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
@@ -685,5 +687,103 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         metadata: { flowName: "Gate-terminated flow" },
       },
     ]);
+  });
+
+  // An automated run whose author was deleted mid-flight has no actor to
+  // scope a write to. The worker still finalizes it, on the connection the
+  // host handed the worker, rather than leaving it non-terminal.
+  test("finalizes a failed automated run whose author is gone on the worker's connection", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Orphaned schedule flow",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "schedule" },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const { runId } = started.value;
+    const job = enqueuedSteps.pop();
+    expect(job).toEqual({ runId, stepIndex: 0 });
+    if (job === undefined) {
+      throw new Error("expected the run's first step to be enqueued");
+    }
+    await testDb
+      .update(flowDefinitions)
+      .set({ createdByUserId: null })
+      .where(eq(flowDefinitions.id, definitionId));
+
+    // The step itself refuses to run without an actor...
+    const stepError: unknown = await executeFlowStepWithTestModel(
+      job,
+      new AbortController().signal,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(stepError).toBeInstanceOf(FlowStepError);
+
+    // ...and the final-attempt handler records the failure.
+    const broadcasts: string[] = [];
+    await failFlowRunFromWorker(job, stepError, {
+      database:
+        asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
+          testDb,
+        ),
+      makeScopedDb,
+      broadcastUpdate: (broadcastWorkspaceId) => {
+        broadcasts.push(broadcastWorkspaceId);
+      },
+    });
+
+    const run = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { status: true, error: true, finishedAt: true },
+    });
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toContain("was removed");
+    expect(run?.finishedAt).toBeInstanceOf(Date);
+    const step = await testDb.query.flowRunSteps.findFirst({
+      where: { runId: { eq: runId }, index: { eq: 0 } },
+      columns: { status: true },
+    });
+    expect(step?.status).toBe("failed");
+    expect(broadcasts).toEqual([workspaceId]);
+    // Nobody is left to tell.
+    expect(
+      await testDb
+        .select({ id: notifications.id })
+        .from(notifications)
+        .where(eq(notifications.idempotencyKey, `flow-run-failed:${runId}`)),
+    ).toEqual([]);
+
+    // A redelivered final-attempt event finds the run terminal and does nothing.
+    await failFlowRunFromWorker(job, stepError, {
+      database:
+        asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
+          testDb,
+        ),
+      makeScopedDb,
+      broadcastUpdate: (broadcastWorkspaceId) => {
+        broadcasts.push(broadcastWorkspaceId);
+      },
+    });
+    expect(broadcasts).toEqual([workspaceId]);
   });
 });

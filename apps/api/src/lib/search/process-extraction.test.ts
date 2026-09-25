@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import JSZip from "jszip";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -165,6 +166,8 @@ const processExtraction: typeof processExtractionWithDependencies = async (
 // `createFileKey`, so the test states the key independently of the code that
 // builds it.
 const SOURCE_BYTES = "source document bytes";
+const WORD_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const sourceKey = (extension: string): string =>
   `${organizationId}/${workspaceId}/${fileContent.id}.${extension}`;
 
@@ -748,6 +751,101 @@ describe("processExtraction", () => {
         sourceFileId: fileContent.id,
       }),
     );
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the extraction's database", () => {
+  const run = {
+    entityId,
+    entityVersionId,
+    fieldId,
+    organizationId,
+    sourceFileId: fileContent.id,
+    sourceSha256Hex: fileContent.sha256Hex,
+    workspaceId,
+  };
+
+  // A textless PDF reaches every write the worker owns: the projection, the
+  // manual-OCR restore, and the automatic OCR request.
+  test("reaches the projection and both OCR collaborators", async () => {
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.ok(null),
+    );
+    seedSource("pdf");
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(persistProjectionSpy.mock.calls.map(([, handed]) => handed)).toEqual(
+      [extractionDatabase],
+    );
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+    expect(
+      restoreManualOcrRunAfterProjectionLossMock.mock.calls.map(
+        ([input]) => input.db,
+      ),
+    ).toEqual([extractionDatabase]);
+    expect(
+      requestAutomaticDocumentOcrMock.mock.calls.map(([input]) => input.db),
+    ).toEqual([extractionDatabase]);
+  });
+
+  test("stamps a DOCX-declared language on the same connection", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
+    );
+    zip.file(
+      "word/styles.xml",
+      `<w:styles xmlns:w="${WORD_NAMESPACE}"><w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="cs-CZ"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+    );
+    fake.put(
+      envBase.S3_BUCKET,
+      sourceKey("docx"),
+      new Uint8Array(await zip.generateAsync({ type: "arraybuffer" })),
+      DOCX_MIME_TYPE,
+    );
+    const docxContent = {
+      ...fileContent,
+      fileName: "memo.docx",
+      mimeType: DOCX_MIME_TYPE,
+    } satisfies FieldContent;
+
+    const outcome = await executeNativeExtraction({
+      fileField: docxContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(recordLanguageMock.mock.calls).toEqual([
+      [extractionDatabase, { entityVersionId, workspaceId, language: "CS" }],
+    ]);
+    // A DOCX needs no OCR, so the language stamp is its only other write.
+    expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
+  });
+
+  test("stops at a cancelled source before any other collaborator runs", async () => {
+    executeMock.mockResolvedValueOnce([]);
+    seedSource("pdf");
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("source_cancelled");
+    expect(persistProjectionSpy).toHaveBeenCalledTimes(1);
+    expect(recordLanguageMock).not.toHaveBeenCalled();
+    expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 });

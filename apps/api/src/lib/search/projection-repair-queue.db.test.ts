@@ -1,12 +1,15 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { organization } from "@/api/db/auth-schema";
+import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   entities,
+  entityVersions,
   searchProjectionRepairQueue,
   workspaceContacts,
   workspaces,
@@ -16,6 +19,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
+  createSearchProjectionRepairDeps,
   drainSearchProjectionRepairQueue,
   enqueueContactSearchRepairs,
   enqueueEntitySearchRepairs,
@@ -415,5 +419,76 @@ test("a flush repairs only the sources it was handed", async () => {
   expect((await queueRows()).map(({ kind }) => kind).toSorted()).toEqual([
     "contact",
     "entity",
+  ]);
+});
+
+// The production collaborators, not recording stand-ins: each kind's rebuild
+// must read and write through the connection the drain was handed. The
+// projections are asserted in this database, so a rebuild that reached for
+// any other connection leaves them missing here.
+test("a drain rebuilds every projection kind on the connection it is handed", async () => {
+  const party = await seedContact(contactId(20));
+  const matter = await seedWorkspace(workspaceId(1));
+  await db
+    .update(workspaces)
+    .set({ clientId: party })
+    .where(eq(workspaces.id, matter));
+  const document = await seedEntity(entityId(10), matter);
+  const version = toSafeId<"entityVersion">(uuid(30));
+  await db.insert(entityVersions).values({
+    createdAt: SEED_AT,
+    entityId: document,
+    id: version,
+    versionNumber: 1,
+    workspaceId: matter,
+  });
+  await db
+    .update(entities)
+    .set({ currentVersionId: version })
+    .where(eq(entities.id, document));
+
+  await enqueueContactSearchRepairs(asTx(), [party]);
+  await enqueueWorkspaceSearchRepairs(asTx(), [matter]);
+  await enqueueEntitySearchRepairs(asTx(), [document]);
+
+  // The rebuilds read through the relational API, so the handle carries the
+  // production relations over the same client. `execute` yields a result
+  // object on PGlite and a row array on the production driver; that is the
+  // one difference the transaction shim adapts.
+  const relational = drizzle({ client, relations: databaseRelations });
+  const handed = asTestRaw<
+    Parameters<typeof createSearchProjectionRepairDeps>[0]
+  >({
+    delete: relational.delete.bind(relational),
+    query: relational.query,
+    select: relational.select.bind(relational),
+    update: relational.update.bind(relational),
+    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+      await relational.transaction(
+        async (tx) =>
+          await run({
+            execute: async (query: SQL) => (await tx.execute(query)).rows,
+          }),
+      ),
+  });
+  expect(
+    await drainSearchProjectionRepairQueue({
+      deps: createSearchProjectionRepairDeps(handed),
+    }),
+  ).toEqual({ failed: 0, repaired: 3 });
+
+  expect(await queueRows()).toEqual([]);
+  const projected = await db.execute<{ kind: string; id: string }>(sql`
+    SELECT 'contact' AS kind, contact_id::text AS id FROM contact_search_documents
+    UNION ALL
+    SELECT 'workspace', workspace_id::text FROM workspace_search_documents
+    UNION ALL
+    SELECT 'entity', entity_id::text FROM search_documents
+    ORDER BY kind
+  `);
+  expect(projected.rows).toEqual([
+    { kind: "contact", id: party },
+    { kind: "entity", id: document },
+    { kind: "workspace", id: matter },
   ]);
 });
