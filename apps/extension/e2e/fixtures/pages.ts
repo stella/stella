@@ -16,6 +16,8 @@ export const INTRANET_SECRET = "Printer admin secret";
 export const TOGGLED_SECRET = "toggle-secret-4471";
 /** A password the containment fixture reveals by replacing its field. */
 export const REPLACED_SECRET = "replace-secret-2290";
+/** A password the user types into the containment fixture while it is theirs. */
+export const HANDOFF_SECRET = "typed during the hand-off";
 /** Text the containment fixture hides from view in every supported way. */
 export const HIDDEN_TEXT_MARKER = "Hidden instruction";
 
@@ -95,6 +97,10 @@ export const FIXTURE_PAGES: Record<string, string> = {
   <input id="vault-key" type="password" value="${REPLACED_SECRET}" aria-label="Vault key">
 </div>
 <button onclick="const shown = document.createElement('input'); shown.id = 'vault-key'; shown.type = 'text'; shown.value = document.getElementById('vault-key').value; shown.setAttribute('aria-label', 'Vault key'); document.getElementById('vault').replaceChildren(shown); const echo = document.createElement('p'); echo.textContent = 'Your vault key is ' + shown.value; document.getElementById('vault').append(echo);">Show vault key</button>
+<div id="handoff">
+  <input id="handoff-key" type="password" aria-label="Handoff key">
+</div>
+<button onclick="const typed = document.getElementById('handoff-key').value; const shown = document.createElement('input'); shown.id = 'handoff-key'; shown.value = typed; shown.setAttribute('aria-label', 'Handoff key'); document.getElementById('handoff').replaceChildren(shown); const echo = document.createElement('p'); echo.textContent = 'You typed ' + typed; document.getElementById('handoff').append(echo);">Show handoff key</button>
 <input name="hotplate" aria-label="Hotplate" value="warm plate">
 <input id="photoprint" aria-label="Photo print" value="glossy finish">
 <input name="userPassword" aria-label="Camel password" value="camel-secret-81">

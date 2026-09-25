@@ -45,8 +45,9 @@ type CommandIdentity = {
     url: string | undefined;
   } | null;
   /**
-   * For `open` and `go-back`: the tab's top document now, and as it was
-   * when the last command ended, which is what chat last saw a result for.
+   * For `open` and `go-back`: the tab's top document now, and the one chat
+   * last saw in a successful read. Failed and stopped commands do not
+   * change what chat saw.
    */
   navigation?: { live: TopDocument; settled: TopDocument | null };
   /** The tab and snapshot the web client last saw a result for. */
@@ -56,6 +57,23 @@ type CommandIdentity = {
 
 const sameDocument = (left: TopDocument, right: TopDocument): boolean =>
   left.documentId === right.documentId && left.url === right.url;
+
+/**
+ * Whether the tab still shows the page chat last read. A page that cannot
+ * be read (an error page, a blocked address) holds nothing to lose; chat
+ * may navigate away from it.
+ */
+const navigationMatchesSeenPage = (
+  navigation: CommandIdentity["navigation"],
+): boolean => {
+  if (navigation === undefined) {
+    return true;
+  }
+  const { live, settled } = navigation;
+  return (
+    live.documentId === null || settled === null || sameDocument(live, settled)
+  );
+};
 
 /**
  * Whether a command still addresses what the model saw. A read is always
@@ -103,11 +121,7 @@ export const checkCommandIdentity = ({
       ) {
         return { status: "stale-snapshot" };
       }
-      if (navigation === undefined) {
-        return { documentId: null, status: "ok" };
-      }
-      return navigation.settled === null ||
-        sameDocument(navigation.live, navigation.settled)
+      return navigationMatchesSeenPage(navigation)
         ? { documentId: null, status: "ok" }
         : { status: "stale-snapshot" };
     case BROWSER_CONTROL_ACTION.click:

@@ -13,6 +13,7 @@ import {
   ELSEWHERE_ORIGIN,
   FIXTURE_ORIGIN,
   FIXTURE_PAGES,
+  HANDOFF_SECRET,
   HIDDEN_TEXT_MARKER,
   INTRANET_ORIGIN,
   INTRANET_PAGE,
@@ -301,6 +302,23 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     expect(elementNamed(snapshot.elements, "Vault key").value).toBe(undefined);
     expect(JSON.stringify(snapshot)).not.toContain(REPLACED_SECRET);
 
+    // A password the user types after chat's last read, which the page then
+    // swaps into a plain field and prints, is still withheld.
+    const handoffPage = harness.context
+      .pages()
+      .find((candidate) => candidate.url() === snapshot.url);
+    if (!handoffPage) {
+      throw new TypeError("Controlled tab not found");
+    }
+    await handoffPage.getByLabel("Handoff key").fill(HANDOFF_SECRET);
+    await handoffPage.getByText("Show handoff key").click();
+    snapshot = successful(await send({ action: "snapshot" }));
+    expect(elementNamed(snapshot.elements, "Handoff key").value).toBe(
+      undefined,
+    );
+    expect(snapshot.text).toContain("You typed [hidden]");
+    expect(JSON.stringify(snapshot)).not.toContain(HANDOFF_SECRET);
+
     // Fields named like secrets, by whole words only.
     expect(elementNamed(snapshot.elements, "Hotplate").value).toBe(
       "warm plate",
@@ -405,10 +423,11 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await saveFromScript(controlledPage, "blob");
     await saveFromScript(controlledPage, "data");
     // A small file a cross-origin frame inside the controlled tab saves is
-    // traced to that frame, and gone even when it finished first, although
-    // the user has that frame's site open in a tab of their own.
+    // stopped before it is written, and so is one the user saves from their
+    // own tab on that same site: either could have started it, so it is
+    // stopped while it runs but never deleted.
     const userSiteTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(1500);
+    await harness.stella.waitForTimeout(500);
     await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
     await controlledPage
       .frameLocator("iframe[title='Tools frame']")
@@ -422,20 +441,29 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         document.body.append(link);
         link.click();
       });
+    await saveFromScript(userSiteTab, "blob");
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
         { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
         { saved: false, source: ELSEWHERE_ORIGIN },
+        { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
+    expect(
+      await harness.worker.evaluate(async () =>
+        (await chrome.downloads.search({}))
+          .filter(({ url }) => url.includes("elsewhere"))
+          .map(({ state }) => state),
+      ),
+    ).toEqual(["interrupted", "interrupted"]);
     // The toolbar icon counts the stopped downloads.
     expect(
       await harness.worker.evaluate(
         async () => await chrome.action.getBadgeText({}),
       ),
-    ).toBe("3");
+    ).toBe("4");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block

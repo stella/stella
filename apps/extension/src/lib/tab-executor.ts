@@ -572,6 +572,54 @@ const runPageOperation = async (
         }
       };
       rememberSensitiveFields(document);
+      // From the first injection on, secret values are learned as they
+      // change, not only when a command looks: a password typed while the
+      // user has the tab, then shown by a page that swaps or retypes the
+      // field, is still known. Installed once per document, in the
+      // extension's isolated world, where the page cannot remove it.
+      const WATCH_KEY = "stellaSecretWatch";
+      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
+        Reflect.set(globalThis, WATCH_KEY, true);
+        const learn = (node: unknown) => {
+          if (node instanceof Element) {
+            rememberSecretValue(node);
+          }
+        };
+        const onEdit = (event: Event) => {
+          learn(event.composedPath().at(0));
+        };
+        document.addEventListener("input", onEdit, true);
+        document.addEventListener("change", onEdit, true);
+        new MutationObserver((records) => {
+          for (const record of records) {
+            if (
+              record.type === "attributes" &&
+              record.attributeName === "type" &&
+              record.oldValue?.toLowerCase() === "password" &&
+              record.target instanceof Element
+            ) {
+              sensitiveHistory.add(record.target);
+            }
+            learn(record.target);
+            for (const removed of record.removedNodes) {
+              if (removed instanceof Element) {
+                learn(removed);
+                for (const field of removed.querySelectorAll(
+                  "input, textarea",
+                )) {
+                  learn(field);
+                }
+              }
+            }
+          }
+        }).observe(document, {
+          attributeFilter: ["autocomplete", "id", "name", "type"],
+          attributeOldValue: true,
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+      }
       // A rect(...) clip or a clip-path that leaves nothing to see.
       const clippedAway = (style: CSSStyleDeclaration) => {
         // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
@@ -1310,7 +1358,12 @@ const readSnapshot = async ({
     await writeControlledTabState({
       adopted: current?.adopted ?? false,
       controllerId,
-      settled: current?.settled ?? null,
+      // Chat has now seen this document: the one this read returned, not
+      // whatever the tab shows by the time the read is stored.
+      settled: {
+        documentId: top?.documentId ?? null,
+        url: top?.snapshot.url ?? null,
+      },
       snapshot: {
         documents: Object.fromEntries(
           frames.map(({ documentId, frameId }) => [
@@ -1461,30 +1514,29 @@ type ExecuteBrowserCommandOptions = {
 };
 
 /** The tab's top document now; see `TopDocument`. */
+/**
+ * The tab's top document now, read the way a snapshot reads it: Chrome's
+ * document id and the page's own URL from one injection. Both are null
+ * when the page cannot be read, such as an error page.
+ */
 const readTopDocument = async (tabId: number): Promise<TopDocument> => {
-  const tab = await chrome.tabs.get(tabId);
-  const documentId = await runPageOperation(
+  const location = await runPageOperation(
     { frameIds: [TOP_FRAME_ID], tabId },
     { kind: "locate" },
   ).then(
-    (results) => results.at(0)?.documentId ?? null,
+    (results) => {
+      const result = results.at(0);
+      const parsed = v.safeParse(frameLocationSchema, result?.result);
+      return result === undefined || !parsed.success
+        ? null
+        : {
+            documentId: result.documentId,
+            url: parsed.output.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+          };
+    },
     () => null,
   );
-  return { documentId, url: tab.url ?? null };
-};
-
-/** Records the document the command ended on, which chat now sees. */
-const recordSettledDocument = async (controllerId: string): Promise<void> => {
-  const state = await readControlledTabState();
-  if (state?.controllerId !== controllerId) {
-    return;
-  }
-  const settled = await readTopDocument(state.tabId).catch(() => null);
-  // Re-read: the command may have replaced the stored snapshot meanwhile.
-  const current = await readControlledTabState();
-  if (current?.tabId === state.tabId && settled !== null) {
-    await writeControlledTabState({ ...current, settled });
-  }
+  return location ?? { documentId: null, url: null };
 };
 
 const budgetExceeded = (message: string): BrowserControlResult =>
@@ -1509,22 +1561,7 @@ export const executeBrowserCommand = async (
   options: ExecuteBrowserCommandOptions,
 ): Promise<BrowserControlResult> => {
   const progress = { dispatched: false };
-  const result = await runBrowserCommand(
-    controllerId,
-    command,
-    options,
-    progress,
-  );
-  // What chat sees next is the page this command read or left behind. A
-  // command refused before it acted shows chat nothing new, so a page the
-  // user moved to meanwhile stays unseen.
-  if (
-    progress.dispatched ||
-    command.action === BROWSER_CONTROL_ACTION.snapshot
-  ) {
-    await recordSettledDocument(controllerId).catch(() => undefined);
-  }
-  return result;
+  return await runBrowserCommand(controllerId, command, options, progress);
 };
 
 const runBrowserCommand = async (

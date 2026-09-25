@@ -138,6 +138,21 @@ describe("browser command identity", () => {
     }
   });
 
+  test("a page that cannot be read may be navigated away from", () => {
+    expect(
+      checkCommandIdentity({
+        command: { action: "open", url: URL_A },
+        controlledTab,
+        navigation: {
+          live: { documentId: null, url: null },
+          settled: { documentId: "document-top", url: URL_A },
+        },
+        observedTab,
+        snapshot,
+      }),
+    ).toEqual({ documentId: null, status: "ok" });
+  });
+
   test("going back needs a snapshot of the page it leaves", () => {
     expect(
       checkCommandIdentity({
