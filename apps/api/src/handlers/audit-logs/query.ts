@@ -87,11 +87,11 @@ export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
 export const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
   const conditions: SQL[] = [];
 
-  /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- org-scoped compliance filter, not an ownership source */
+  /* oxlint-disable no-body-ownership-ids/no-body-ownership-ids -- org-scoped compliance filter, not an ownership source */
   if (query.workspaceId) {
     conditions.push(eq(auditLogs.workspaceId, query.workspaceId));
   }
-  /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
+  /* oxlint-enable no-body-ownership-ids/no-body-ownership-ids */
   if (query.action) {
     conditions.push(eq(auditLogs.action, query.action));
   }

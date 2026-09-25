@@ -132,7 +132,7 @@ describe("renderEmailHtml", () => {
     expect(html).not.toContain("<script");
     expect(html).not.toContain("alert(1)");
     expect(html).not.toContain("onclick");
-    // eslint-disable-next-line no-script-url -- asserting the scheme was stripped
+    // oxlint-disable-next-line no-script-url -- asserting the scheme was stripped
     expect(html).not.toContain("javascript:");
   });
 
@@ -155,7 +155,7 @@ describe("renderEmailHtml", () => {
     expect(html).toContain(">link text</a>");
     expect(html).not.toContain("<base");
     expect(html).not.toContain("attacker.example");
-    // eslint-disable-next-line no-script-url -- asserting the scheme was stripped
+    // oxlint-disable-next-line no-script-url -- asserting the scheme was stripped
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("vbscript:");
     expect(html).not.toContain("<svg");

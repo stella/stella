@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
   afterEach,
@@ -141,7 +141,7 @@ const parseSearchBody = (init: RequestInit | undefined): SearchBody => {
   );
   // The mock feeds back exactly what the adapter serialized; the assertions
   // below are what actually check its shape.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test-local narrowing of the adapter's own request body
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-local narrowing of the adapter's own request body
   return body as SearchBody;
 };
 

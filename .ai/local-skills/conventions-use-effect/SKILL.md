@@ -217,9 +217,9 @@ response is discarded instead of applied:
 const seededDataRef = useRef(data);
 if (data !== undefined && seededData !== data) {
   setSeededData(data);
-  /* eslint-disable react/refs -- render-time ref write closes the commit→effect race window for the stale-response guard */
+  /* oxlint-disable react/refs -- render-time ref write closes the commit→effect race window for the stale-response guard */
   seededDataRef.current = data;
-  /* eslint-enable react/refs */
+  /* oxlint-enable react/refs */
 }
 
 const loadOlder = useCallback(async () => {

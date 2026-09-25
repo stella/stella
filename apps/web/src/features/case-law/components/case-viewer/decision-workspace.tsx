@@ -630,7 +630,7 @@ const AnalysisLoader = () => {
         </span>
       </div>
       {[0.6, 0.8, 0.5, 0.7, 0.45, 0.65].map((width, index) => (
-        // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder widths, never reorders
+        // oxlint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder widths, never reorders
         <div className="flex flex-col gap-1.5" key={index}>
           <Skeleton
             className="h-2.5"

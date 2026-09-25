@@ -165,7 +165,7 @@ export const fillHandler = async ({
       : "success";
 
   // Best-effort analytics; don't block the download.
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   scopedDb((tx) => {
     // audit: skip — anonymous template-fill analytics counter; the input
     // DOCX is supplied directly in the request body and is not persisted

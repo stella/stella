@@ -116,7 +116,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
     // and matches the prod schema by construction.
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
     fixtures.push(raw as CaseLawFixture);
   }
   fixtures.sort((a, b) =>

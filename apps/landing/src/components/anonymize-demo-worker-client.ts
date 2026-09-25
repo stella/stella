@@ -117,7 +117,7 @@ const ensureWorker = (): Worker => {
   return created;
 };
 
-// eslint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
+// oxlint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
 export const runAnonymizeDemo = (text: string): Promise<ChatAnonResult> => {
   const w = ensureWorker();
   nextRequestId += 1;
@@ -128,7 +128,7 @@ export const runAnonymizeDemo = (text: string): Promise<ChatAnonResult> => {
     }, REQUEST_TIMEOUT_MS);
     pendingRequests.set(id, { resolve, reject, timer });
     const request: DemoRequest = { id, text };
-    // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin param (window-only)
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin param (window-only)
     w.postMessage(request);
   });
 };

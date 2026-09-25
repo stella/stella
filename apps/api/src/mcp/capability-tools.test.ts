@@ -50,7 +50,7 @@ const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
 
 type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
-// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
 const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
   const item = result.content.at(0);
   if (!item || item.type !== "text") {

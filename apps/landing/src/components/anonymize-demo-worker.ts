@@ -41,7 +41,7 @@ const describeError = (error: unknown): string =>
 
 let enginePromise: Promise<DemoEngine> | null = null;
 
-// eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
+// oxlint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
 const getEngine = (): Promise<DemoEngine> => {
   enginePromise ??= loadDemoEngine();
   return enginePromise;
@@ -86,7 +86,7 @@ if (!isDedicatedWorkerScope(globalThis)) {
 const scope = globalThis;
 
 const post = (message: DemoResponse): void => {
-  // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
   scope.postMessage(message);
 };
 

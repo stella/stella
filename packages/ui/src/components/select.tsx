@@ -1,6 +1,6 @@
 "use client";
 
-/* eslint-disable react/no-react-children -- children-walking/slot primitive; the React.Children traversal IS the component's API */
+/* oxlint-disable react/no-react-children -- children-walking/slot primitive; the React.Children traversal IS the component's API */
 
 import * as React from "react";
 

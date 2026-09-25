@@ -108,7 +108,7 @@ describe("credential file round-trip (tmp XDG dir)", () => {
     );
 
     const stats = await stat(credentialsFilePath(configDir));
-    // eslint-disable-next-line no-bitwise -- masking the permission bits out of `stat().mode` requires `&`; there is no non-bitwise API for this
+    // oxlint-disable-next-line no-bitwise -- masking the permission bits out of `stat().mode` requires `&`; there is no non-bitwise API for this
     expect(stats.mode & 0o777).toBe(0o600);
   });
 
@@ -128,7 +128,7 @@ describe("credential file round-trip (tmp XDG dir)", () => {
     );
 
     const stats = await stat(credentialsFilePath(configDir));
-    // eslint-disable-next-line no-bitwise -- masking the permission bits out of `stat().mode` requires `&`; there is no non-bitwise API for this
+    // oxlint-disable-next-line no-bitwise -- masking the permission bits out of `stat().mode` requires `&`; there is no non-bitwise API for this
     expect(stats.mode & 0o777).toBe(0o600);
   });
 

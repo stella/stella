@@ -114,7 +114,7 @@ const createMiddlewareContext = ({
   // plain context fields above, never the capability machinery.
   // SAFETY: stub registry; `CapabilityRegistry` is not publicly constructible
   // and the hooks never touch `capabilities`/`get`/`getOptional`/`provide`.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   capabilities: {} as unknown as ChatMiddlewareContext["capabilities"],
   get: () => {
     throw new Error("capability access is not exercised in these tests");

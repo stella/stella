@@ -97,7 +97,7 @@ export const createTrailingSingleFlight = ({
         // The returned trigger below can set `queued = true` while `run()`
         // above is in flight; the checker only sees the straight-line reset
         // on the line above and misses that concurrent path.
-        // eslint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
       } while (queued);
     } finally {
       active = false;
@@ -109,7 +109,7 @@ export const createTrailingSingleFlight = ({
   // `async` would add a redundant microtask and could let a trigger observe
   // a settled promise before `drain` has synchronously registered it as
   // active.
-  // eslint-disable-next-line typescript/promise-function-async
+  // oxlint-disable-next-line typescript/promise-function-async
   return () => {
     const settled = new Promise<void>((resolve) => {
       // Runs synchronously: the resolver is registered before the

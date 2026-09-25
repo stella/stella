@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 /**
  * What happens to the rows a source already has when its adapter learns the
  * publisher's document id.

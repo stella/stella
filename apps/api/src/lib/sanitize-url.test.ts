@@ -16,7 +16,7 @@ describe("sanitizeUrl", () => {
   });
 
   test("rejects javascript: protocol", () => {
-    // eslint-disable-next-line no-script-url -- testing rejection of unsafe protocol
+    // oxlint-disable-next-line no-script-url -- testing rejection of unsafe protocol
     expect(sanitizeUrl("javascript:alert(1)")).toBeUndefined();
   });
 

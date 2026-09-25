@@ -138,10 +138,10 @@ try {
   await runOnlineMigrations({
     reserve: async () => await Promise.resolve(onlineConnection),
   });
-  // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
+  // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");
 } catch (error) {
-  // eslint-disable-next-line no-console -- migrate CLI entrypoint; surface the failure to the deploy log
+  // oxlint-disable-next-line no-console -- migrate CLI entrypoint; surface the failure to the deploy log
   console.error("[migrate] failed:", error);
   process.exitCode = 1;
 } finally {

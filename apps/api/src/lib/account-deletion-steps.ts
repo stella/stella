@@ -215,7 +215,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   email,
 }: RevokeAuthCredentialsParams): Promise<void> => {
   await tx.delete(account).where(eq(account.userId, currentUserId));
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
+  // oxlint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
   await tx.delete(session).where(eq(session.userId, currentUserId));
   await tx.delete(twoFactor).where(eq(twoFactor.userId, currentUserId));
   await tx.delete(apikey).where(eq(apikey.referenceId, currentUserId));
@@ -238,11 +238,11 @@ export const revokeOAuthTokensAndGrants = async (
   tx: Transaction,
   currentUserId: string,
 ): Promise<void> => {
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth access tokens.
+  // oxlint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth access tokens.
   await tx
     .delete(oauthAccessToken)
     .where(eq(oauthAccessToken.userId, currentUserId));
-  // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth refresh tokens.
+  // oxlint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth refresh tokens.
   await tx
     .delete(oauthRefreshToken)
     .where(eq(oauthRefreshToken.userId, currentUserId));

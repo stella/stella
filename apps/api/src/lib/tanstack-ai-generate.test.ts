@@ -614,7 +614,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-opus-4-8",
       modelOptions: {},
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -642,7 +642,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-sonnet-4-6",
       modelOptions: { thinking: { type: "adaptive" } },
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -673,7 +673,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -699,7 +699,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gpt-5.5",
       modelOptions: {},
       provider: "openai",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -735,7 +735,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "google/gemini-3.5-flash",
       modelOptions: { temperature: 0 },
       provider: "openrouter",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -771,7 +771,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gemini-3.1-pro-preview",
       modelOptions: { temperature: 0 },
       provider: "google",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1523,7 +1523,7 @@ describe("Anthropic extended-thinking budgets", () => {
             modelId,
             modelOptions,
             provider: "anthropic",
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
           } as ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {

@@ -698,7 +698,7 @@ const logIngestionFailures = async (
     return;
   }
   // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   await scopedDb((tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     return tx.insert(caseLawIngestionFailures).values([...failures]);

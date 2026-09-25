@@ -23,7 +23,7 @@ const captureSearchRequest = (): {
   ): Promise<Response> => {
     const rawBody = typeof init?.body === "string" ? init.body : "{}";
     const payload =
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- request body built by client.ts's own JSON.stringify(payload); shape asserted by the expectations below
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- request body built by client.ts's own JSON.stringify(payload); shape asserted by the expectations below
       JSON.parse(rawBody) as Record<string, unknown>;
     captured.pocet = payload["pocet"];
     captured.signal = init?.signal;

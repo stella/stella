@@ -14,7 +14,7 @@ const readFixture = async (name: string): Promise<DenueResponse> => {
   const value: unknown = await Bun.file(new URL(name, FIXTURE_DIR)).json();
   // SAFETY: fixtures are committed JSON payloads shaped like DENUE
   // responses; parser tests below assert the important fields.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as DenueResponse;
 };
 

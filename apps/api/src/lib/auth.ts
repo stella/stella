@@ -775,7 +775,7 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // eslint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
+        // oxlint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
           if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
             return;
@@ -1108,7 +1108,7 @@ const createAuth = () => {
               }
 
               if (env.isDev) {
-                // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+                // oxlint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
                 console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
                 stashDevOtp(email, otp);
                 return;
@@ -1232,7 +1232,7 @@ const createAuth = () => {
         async sendInvitationEmail(data, request) {
           const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
           if (env.isDev) {
-            // eslint-disable-next-line no-console -- dev-only invitation-link echo for local testing
+            // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
             console.log(
               `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
             );

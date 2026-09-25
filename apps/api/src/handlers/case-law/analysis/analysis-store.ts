@@ -13,7 +13,7 @@ import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 // SAFETY: rootDb is used here because a case-law analysis is global, not
 // workspace-scoped, and because the generation path writes from a
 // fire-and-forget background task whose request scope has already ended.
-// eslint-disable-next-line no-restricted-imports -- global corpus state; background writes outlive the request scope
+// oxlint-disable-next-line no-restricted-imports -- global corpus state; background writes outlive the request scope
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";

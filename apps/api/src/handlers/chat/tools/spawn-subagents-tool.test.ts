@@ -183,7 +183,7 @@ const buildTool = (
   });
   // SAFETY: test invokes the server tool's execute directly with a stub
   // call context, same pattern as template-tools.test.ts.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return tools.spawn_subagents.execute as unknown as (
     input: { subagents: { task: string }[] },
     ctx: { abortSignal?: AbortSignal },

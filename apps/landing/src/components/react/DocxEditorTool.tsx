@@ -99,7 +99,7 @@ export const DocxEditorTool = () => {
       // "folio" namespace for this isolated island's `IntlProvider` scope, not
       // the app's catalog — same reasoning EditorLiveDemo uses for the same
       // mismatch.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       messages={FOLIO_MESSAGES as never}
     >
       <div

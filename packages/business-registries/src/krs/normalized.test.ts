@@ -6,7 +6,7 @@ import { parseEntity } from "./parse.js";
 import type { KrsLookupResponse } from "./types.js";
 
 // SAFETY: captured official fixture is consumed by the defensive parser.
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const raw = fixture as unknown as KrsLookupResponse;
 
 describe("KRS normalized projection", () => {

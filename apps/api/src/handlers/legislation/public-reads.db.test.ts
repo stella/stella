@@ -670,7 +670,7 @@ const expectPage = (result: unknown): StatutePage => {
     throw new Error(`expected a page, got ${JSON.stringify(result)}`);
   }
 
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
   return result as StatutePage;
 };
 
@@ -690,7 +690,7 @@ const expectHistoryPage = (result: unknown): ProvisionHistoryPage => {
     throw new Error(`expected a page, got ${JSON.stringify(result)}`);
   }
 
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
   return result as ProvisionHistoryPage;
 };
 

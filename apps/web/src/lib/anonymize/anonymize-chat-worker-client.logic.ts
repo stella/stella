@@ -161,7 +161,7 @@ export const createAnonymizeChatWorkerClient = ({
       const workerRequest: AnonymizeChatWorkerRequest = { id, ...request };
       const postResult = Result.try({
         try: () => {
-          // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin parameter
+          // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin parameter
           activeWorker.postMessage(workerRequest);
         },
         catch: (cause) =>

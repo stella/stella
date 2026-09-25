@@ -135,7 +135,7 @@ const ensurePluginOption = (option: unknown, label: string): PluginOption => {
 // into its dist entry; the package's own Vite plugin anchors on the same
 // text for `vite build` rewrites.
 const ANONYMIZE_WASM_ASSET_URL_BASE =
-  // eslint-disable-next-line no-template-curly-in-string -- matches the literal `${NATIVE_ASSET_DIR}` text in the compiled dist entry, not an interpolation site
+  // oxlint-disable-next-line no-template-curly-in-string -- matches the literal `${NATIVE_ASSET_DIR}` text in the compiled dist entry, not an interpolation site
   "new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url)";
 
 /**
@@ -166,7 +166,7 @@ const anonymizeWasmDevAssetBasePlugin = (): Plugin => ({
     return {
       code: code.replace(
         ANONYMIZE_WASM_ASSET_URL_BASE,
-        // eslint-disable-next-line no-template-curly-in-string -- emits the same literal template text back into the module, opted out of Vite's analysis
+        // oxlint-disable-next-line no-template-curly-in-string -- emits the same literal template text back into the module, opted out of Vite's analysis
         "new URL(/* @vite-ignore */ `./${NATIVE_ASSET_DIR}/`, import.meta.url)",
       ),
       map: null,

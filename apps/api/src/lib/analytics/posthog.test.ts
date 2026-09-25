@@ -80,7 +80,7 @@ describe("PostHog server analytics adapter", () => {
       distinctId: "user_123",
       event: "$autocapture",
       properties: { clicked: "secret-button" },
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Deliberately bypasses the public type to exercise the runtime guard.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Deliberately bypasses the public type to exercise the runtime guard.
     } as unknown as ServerAnalyticsCaptureParams);
 
     expect(clientCaptureMock).toHaveBeenCalledTimes(1);

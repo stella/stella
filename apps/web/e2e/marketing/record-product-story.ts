@@ -52,7 +52,7 @@ const SUPPLIER_AGREEMENT_FILE_NAME = "Supplier_Agreement.docx";
 // shares one source of truth with the recorder.
 const NAV_VIEWPORT = { height: 720, width: 1280 } as const;
 const MANIFEST_PATH = path.join(REPO_ROOT, RECORDINGS_MANIFEST_PATH);
-// eslint-disable-next-line typescript/strict-void-return -- promisify resolves execFile via its custom `__promisify__` overload; the rule matches the generic void-callback overload instead
+// oxlint-disable-next-line typescript/strict-void-return -- promisify resolves execFile via its custom `__promisify__` overload; the rule matches the generic void-callback overload instead
 const execFileAsync = promisify(execFile);
 
 // Whether the fake cursor overlay is injected for a scene. "visible" scenes
@@ -660,7 +660,7 @@ const scenes = [
 
 // Join the shared capture matrix (viewports, watched paths) with this file's
 // per-scene routes and choreography.
-// eslint-disable-next-line no-map-spread -- merges each capture definition with its scene into a new record; neither source object may be mutated, and the array is tiny
+// oxlint-disable-next-line no-map-spread -- merges each capture definition with its scene into a new record; neither source object may be mutated, and the array is tiny
 const captures: readonly StoryCapture[] = captureDefinitions.map(
   (definition) => {
     const scene = scenes.find(({ id }) => id === definition.sceneId);

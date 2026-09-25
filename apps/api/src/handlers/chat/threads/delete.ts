@@ -134,7 +134,7 @@ const deleteThread = createSafeRootHandler(
       // SAFETY: storage deletion must succeed before the corresponding bounded page of rows is removed.
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one delete per page of the keyset walk, already an inArray over the whole page, and ordered after that page's storage delete
       yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — file-row cleanup is part of the thread delete, which emits the CHAT_THREAD audit row below
           return tx.delete(userFiles).where(

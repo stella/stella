@@ -529,7 +529,7 @@ const WithOpenEntityButton = ({
     // anywhere in the cell pushes that cell's justification onto
     // the open tab. Keyboard users have a fully equivalent path via
     // the inline Preview button rendered below.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- see comment above
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- see comment above
     <div className="w-full min-w-0 text-start" onClick={handleCellClick}>
       {children}
       <div

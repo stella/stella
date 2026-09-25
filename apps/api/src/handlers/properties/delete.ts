@@ -23,7 +23,7 @@ const config = {
 
 const deleteProperty = createSafeHandler(
   config,
-  // eslint-disable-next-line require-yield -- manual Result.isError checks preserve foreign-key error mapping
+  // oxlint-disable-next-line require-yield -- manual Result.isError checks preserve foreign-key error mapping
   async function* ({
     safeDb,
     workspaceId,

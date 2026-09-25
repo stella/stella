@@ -29,7 +29,7 @@ export const useOverlayRects = (
 
   const scale = usePDFStore((s) => s.pages.get(pageId)?.viewport.scale);
 
-  // eslint-disable-next-line typescript-eslint/promise-function-async -- store selector returns promise as value, not as async result
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- store selector returns promise as value, not as async result
   const renderPromise = usePDFStore((s) => s.renderPromises.get(pageId));
 
   type NormalizedRectsCache = {

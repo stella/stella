@@ -236,7 +236,7 @@ const buildStubScopedDb = (): ScopedDb => {
     });
   // SAFETY: the fill's registry dispatch only reads
   // `businessRegistryCredentials.findMany`; the fixture has no stored keys.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrows a stub to the real ScopedDb signature
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrows a stub to the real ScopedDb signature
   return run as unknown as ScopedDb;
 };
 

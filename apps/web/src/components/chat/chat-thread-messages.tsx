@@ -235,7 +235,7 @@ export const ChatThreadMessages = ({
     if (!container) {
       return;
     }
-    // eslint-disable-next-line react/immutability -- adjust the forwarded DOM node after a prepend to preserve the viewport anchor
+    // oxlint-disable-next-line react/immutability -- adjust the forwarded DOM node after a prepend to preserve the viewport anchor
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [firstMessageId, scrollRef]);
 
@@ -311,7 +311,7 @@ export const ChatThreadMessages = ({
             {message.parts.map((part, partIndex) =>
               part.type === "text" ? (
                 <UserMessageText
-                  // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
+                  // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                   key={`${message.id}-user-text-${partIndex}`}
                   restorationPairs={getFollowingAssistantRestorations(
                     messages,
@@ -510,7 +510,7 @@ const StickyUserTurn = ({
     if (!container || !sentinel) {
       return;
     }
-    // eslint-disable-next-line react/immutability -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
+    // oxlint-disable-next-line react/immutability -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
     container.scrollTop +=
       sentinel.getBoundingClientRect().top -
       container.getBoundingClientRect().top;
@@ -600,7 +600,7 @@ const StickyUserTurn = ({
                 {headerMessage.parts.map((part, partIndex) =>
                   part.type === "text" ? (
                     <UserMessageText
-                      // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
+                      // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                       key={`${headerMessage.id}-user-text-${partIndex}`}
                       restorationPairs={restorationPairs}
                       text={normalizeUserMessageTextForDisplay(part.content)}

@@ -235,7 +235,7 @@ export const loadChatMessagePrefixOnTx = async ({
     )
     // SAFETY: bounded by the prefix [start..target] of one thread; a fork
     // copies history up to it, so every row is needed.
-    // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the copied prefix up to the target row; see SAFETY above
+    // oxlint-disable-next-line require-query-limit/require-query-limit -- bounded by the copied prefix up to the target row; see SAFETY above
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
   return prefix.length === 0 ? null : prefix;
 };
@@ -296,7 +296,7 @@ export const resolveTruncationTarget = async ({
       )
       // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a
       // replay discards after the target, which the caller deletes.
-      // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the replayed-away tail after the target row; see SAFETY above
+      // oxlint-disable-next-line require-query-limit/require-query-limit -- bounded by the replayed-away tail after the target row; see SAFETY above
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
     return {
