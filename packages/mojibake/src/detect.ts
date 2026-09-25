@@ -450,6 +450,37 @@ const signatureSpans = (
   return { occurrences, samples };
 };
 
+/**
+ * Scripts a word's letters can be told apart by. A letter in none of them
+ * counts as a script of its own.
+ */
+const SCRIPTS = [
+  /\p{Script=Latin}/u,
+  /\p{Script=Greek}/u,
+  /\p{Script=Cyrillic}/u,
+  /\p{Script=Arabic}/u,
+  /\p{Script=Hebrew}/u,
+  /\p{Script=Armenian}/u,
+  /\p{Script=Georgian}/u,
+];
+
+/**
+ * Whether every letter of a word is in one script. Two capitals written in
+ * windows-1252 can happen to be a valid UTF-8 sequence (Slovak "KÚŽP" is
+ * bytes DA 8E, Arabic "ڎ"), and a word does not change script in its middle.
+ */
+const writtenInOneScript = (word: string): boolean => {
+  const scripts = new Set<number>();
+  for (const char of word) {
+    if (!isLetter(char) || /\p{M}/u.test(char)) {
+      continue;
+    }
+    const script = SCRIPTS.findIndex((pattern) => pattern.test(char));
+    scripts.add(script);
+  }
+  return scripts.size <= 1;
+};
+
 const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
   ["windows-1252", "iso-8859-1"] satisfies Charset[]
 ).map((assumed) => ({ actual: "utf-8", assumed }));
@@ -476,7 +507,8 @@ const utf8Signature = (
         ) &&
         !Array.from(undone.text).some((char) =>
           isControlOrReplacement(char.codePointAt(0) ?? 0),
-        ),
+        ) &&
+        writtenInOneScript(undone.text),
     );
     if (repaired === undefined) {
       continue;
